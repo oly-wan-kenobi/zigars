@@ -8,6 +8,7 @@ const tool_registry = zigar.tool_registry;
 const tool_handlers = @import("tool_handlers.zig");
 
 const resources = @import("tools/resources.zig");
+const resource_errors = zigar.resource_errors;
 
 const App = runtime_mod.App;
 
@@ -99,7 +100,15 @@ pub fn registerPrompts(server: *mcp.Server, runtime: *App) !void {
 fn resourceHandler(comptime handler: *const fn (*App, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return struct {
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
-            const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.Unknown));
+            const runtime: *App = @ptrCast(@alignCast(user_data orelse return resource_errors.jsonContentFromError(allocator, .{
+                .uri = uri,
+                .resource = "registered_resource",
+                .operation = "dispatch_resource",
+                .phase = "resolve_runtime",
+                .code = "missing_runtime",
+                .category = "internal_contract",
+                .resolution = "Restart the MCP server; resource handlers must be registered with zigar runtime user_data.",
+            }, error.MissingRuntime)));
             return handler(runtime, allocator, uri);
         }
     }.call;
@@ -108,7 +117,7 @@ fn resourceHandler(comptime handler: *const fn (*App, std.mem.Allocator, []const
 fn promptHandler(comptime handler: *const fn (*App, std.mem.Allocator, ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     return struct {
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
-            const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.Unknown));
+            const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.GenerationFailed));
             return handler(runtime, allocator, args);
         }
     }.call;

@@ -20,6 +20,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkLineBudgets(allocator, io)) and ok;
     ok = (try checkForbiddenTokens(allocator, io)) and ok;
     ok = (try checkToolErrorContract(allocator, io)) and ok;
+    ok = (try checkResourceErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -326,6 +327,30 @@ const tool_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+const resource_error_contract_paths = [_][]const u8{
+    "src/server.zig",
+    "src/tools/resources.zig",
+};
+
+const resource_error_contract_tokens = [_]ToolErrorContractToken{
+    .{
+        .token = "return error.Unknown",
+        .reason = "public resource/prompt handlers must preserve actionable context instead of generic Unknown",
+    },
+    .{
+        .token = "catch return error.Unknown",
+        .reason = "public resource/prompt handlers must map expected failures to structured resource_error payloads",
+    },
+    .{
+        .token = "return error.ReadFailed",
+        .reason = "public resources must return structured resource_error payloads for expected read failures",
+    },
+    .{
+        .token = "catch return error.ReadFailed",
+        .reason = "public resources must preserve read failure context instead of collapsing catches",
+    },
+};
+
 const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",
@@ -383,6 +408,25 @@ fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
         for (tool_error_contract_tokens) |rule| {
             if (std.mem.indexOf(u8, bytes, rule.token) != null) {
                 try stderrPrint(io, "tool-error-contract violation in {s}: `{s}` ({s})\n", .{ path, rule.token, rule.reason });
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    for (resource_error_contract_paths) |path| {
+        const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "resource-error-contract check could not read {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        for (resource_error_contract_tokens) |rule| {
+            if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+                try stderrPrint(io, "resource-error-contract violation in {s}: `{s}` ({s})\n", .{ path, rule.token, rule.reason });
                 ok = false;
             }
         }
