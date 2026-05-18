@@ -1,7 +1,8 @@
 const std = @import("std");
+const definitions = @import("backend_catalog/definitions.zig");
 
-pub const supported_zig_version = "0.16.0";
-
+pub const supported_zig_version = definitions.supported_zig_version;
+pub const Backend = definitions.Backend;
 pub const Paths = struct {
     zig_path: []const u8 = "zig",
     zls_path: []const u8 = "zls",
@@ -9,82 +10,7 @@ pub const Paths = struct {
     zflame_path: []const u8 = "zflame",
     diff_folded_path: []const u8 = "diff-folded",
 };
-
-pub const Backend = struct {
-    name: []const u8,
-    optional: bool,
-    path_flag: []const u8,
-    default_path: []const u8,
-    purpose: []const u8,
-    compatibility: []const u8,
-    install_strategy: []const u8,
-    tools: []const []const u8,
-    probe_argv: []const []const u8,
-    verify: []const []const u8,
-};
-
-pub const backends = [_]Backend{
-    .{
-        .name = "zig",
-        .optional = false,
-        .path_flag = "--zig-path",
-        .default_path = "zig",
-        .purpose = "required Zig compiler and formatter backend",
-        .compatibility = "must be Zig " ++ supported_zig_version,
-        .install_strategy = "Install with a version manager or package manager that can pin Zig " ++ supported_zig_version ++ "; pass an absolute path in CI and MCP client config.",
-        .tools = &.{ "zig_build", "zig_test", "zig_check", "zig_format", "zig_env", "zig_targets" },
-        .probe_argv = &.{ "zig", "version" },
-        .verify = &.{ "zig version", "zig env", "zigar_doctor {\"probe_backends\":true}" },
-    },
-    .{
-        .name = "zls",
-        .optional = true,
-        .path_flag = "--zls-path",
-        .default_path = "zls",
-        .purpose = "language-server-backed diagnostics, symbols, hover, references, completion, rename, and code actions",
-        .compatibility = "keep ZLS on the same Zig release line as Zig " ++ supported_zig_version,
-        .install_strategy = "Install or build ZLS for Zig " ++ supported_zig_version ++ "; pin it in the project dev shell or CI image and pass --zls-path.",
-        .tools = &.{ "zig_diagnostics", "zig_hover", "zig_definition", "zig_references", "zig_completion", "zig_rename", "zig_code_actions" },
-        .probe_argv = &.{ "zls", "--version" },
-        .verify = &.{ "zls --version", "zigar_doctor {\"probe_backends\":true}" },
-    },
-    .{
-        .name = "zwanzig",
-        .optional = true,
-        .path_flag = "--zwanzig-path",
-        .default_path = "zwanzig",
-        .purpose = "optional lint, SARIF, rule listing, and analysis graph backend",
-        .compatibility = "build with the same Zig release used by the workspace when source builds are required",
-        .install_strategy = "Pin a zwanzig executable in the project toolchain, dev shell, or CI image; use a wrapper script when environment variables are required.",
-        .tools = &.{ "zig_lint", "zig_lint_sarif", "zig_lint_rules", "zig_analysis_graphs" },
-        .probe_argv = &.{ "zwanzig", "--help" },
-        .verify = &.{ "zwanzig --help", "zig_lint_rules" },
-    },
-    .{
-        .name = "zflame",
-        .optional = true,
-        .path_flag = "--zflame-path",
-        .default_path = "zflame",
-        .purpose = "optional flamegraph SVG renderer for captured profiler data",
-        .compatibility = "accepts folded stacks or another zflame-supported input format produced outside zigar",
-        .install_strategy = "Pin a zflame executable in the project toolchain, dev shell, or CI image; keep profiler capture tooling separate from rendering.",
-        .tools = &.{ "zig_flamegraph", "zig_flamegraph_diff" },
-        .probe_argv = &.{ "zflame", "--help" },
-        .verify = &.{ "zflame --help", "zflame guess folded.txt > flame.svg" },
-    },
-    .{
-        .name = "diff-folded",
-        .optional = true,
-        .path_flag = "--diff-folded-path",
-        .default_path = "diff-folded",
-        .purpose = "optional folded-stack differ used before zflame renders differential flamegraphs",
-        .compatibility = "expects two folded-stack inputs and writes a folded-stack delta to stdout",
-        .install_strategy = "Pin a diff-folded executable beside zflame when differential flamegraphs are part of the project workflow.",
-        .tools = &.{"zig_flamegraph_diff"},
-        .probe_argv = &.{ "diff-folded", "--help" },
-        .verify = &.{ "diff-folded before.folded after.folded > delta.folded", "zig_flamegraph_diff" },
-    },
-};
+pub const backends = definitions.backends;
 
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;

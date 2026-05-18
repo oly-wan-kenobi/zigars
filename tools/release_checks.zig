@@ -118,8 +118,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/backend_catalog.zig",
-        .max_lines = 180,
-        .reason = "backend setup packaging metadata should remain compact and auditable",
+        .max_lines = 120,
+        .reason = "backend setup catalog rendering should remain separate from packaged backend definitions",
+    },
+    .{
+        .path = "src/backend_catalog/definitions.zig",
+        .max_lines = 140,
+        .reason = "backend setup metadata should remain compact and auditable",
     },
     .{
         .path = "src/tools/common.zig",
@@ -128,8 +133,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/agent.zig",
-        .max_lines = 750,
-        .reason = "agent workflow handlers should remain focused and delegate shared parsing/diagnostics",
+        .max_lines = 340,
+        .reason = "agent workflow handlers should remain focused and delegate value-building helpers",
+    },
+    .{
+        .path = "src/tools/agent_values.zig",
+        .max_lines = 540,
+        .reason = "agent workflow value builders should remain separate from public tool handlers",
     },
     .{
         .path = "src/tools/edit_zls.zig",
@@ -188,13 +198,18 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/lsp/client.zig",
-        .max_lines = 700,
-        .reason = "LSP client must stay focused on transport lifecycle; caches and parsing helpers belong in focused modules",
+        .max_lines = 520,
+        .reason = "LSP client must stay focused on transport lifecycle; caches, tests, and parsing helpers belong in focused modules",
     },
     .{
         .path = "src/lsp/client_test_support.zig",
         .max_lines = 100,
         .reason = "LSP test support should stay compact and separate from client runtime logic",
+    },
+    .{
+        .path = "src/lsp/client_tests.zig",
+        .max_lines = 260,
+        .reason = "black-box LSP client tests should stay separate from runtime transport logic",
     },
     .{
         .path = "src/lsp/diagnostics_cache.zig",
@@ -223,8 +238,8 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/zigar_tools.zig",
-        .max_lines = 800,
-        .reason = "tool dispatcher must delegate large release-check helpers to focused modules",
+        .max_lines = 220,
+        .reason = "tool dispatcher must remain a small command router over focused helpers",
     },
     .{
         .path = "tools/cli_io.zig",
@@ -235,6 +250,21 @@ const line_budgets = [_]LineBudget{
         .path = "tools/dist.zig",
         .max_lines = 550,
         .reason = "release packaging should stay a focused helper, not a second build system",
+    },
+    .{
+        .path = "tools/http_smoke.zig",
+        .max_lines = 260,
+        .reason = "HTTP smoke tests should stay focused on transport-level release assertions",
+    },
+    .{
+        .path = "tools/stdio_fixtures.zig",
+        .max_lines = 430,
+        .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
+    },
+    .{
+        .path = "tools/smoke_support.zig",
+        .max_lines = 180,
+        .reason = "shared smoke-test utilities should remain a small helper module",
     },
     .{
         .path = "tools/release_targets.zig",
@@ -399,9 +429,20 @@ fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
         if (lines > budget.max_lines) {
             try stderrPrint(io, "line budget exceeded: {s} has {d} lines, max {d} ({s})\n", .{ budget.path, lines, budget.max_lines, budget.reason });
             ok = false;
+            continue;
+        }
+        const headroom = budget.max_lines - lines;
+        const required_headroom = minLineBudgetHeadroom(budget.max_lines);
+        if (headroom < required_headroom) {
+            try stderrPrint(io, "line budget headroom too small: {s} has {d} lines, max {d}, headroom {d}, required {d} ({s})\n", .{ budget.path, lines, budget.max_lines, headroom, required_headroom, budget.reason });
+            ok = false;
         }
     }
     return ok;
+}
+
+fn minLineBudgetHeadroom(max_lines: usize) usize {
+    return @min(@as(usize, 50), @max(@as(usize, 10), max_lines / 10));
 }
 
 fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
@@ -536,4 +577,10 @@ test "lineCount handles empty trailing and unterminated text" {
     try std.testing.expectEqual(@as(usize, 1), lineCount("one\n"));
     try std.testing.expectEqual(@as(usize, 2), lineCount("one\ntwo"));
     try std.testing.expectEqual(@as(usize, 2), lineCount("one\ntwo\n"));
+}
+
+test "line budget headroom scales for small and large files" {
+    try std.testing.expectEqual(@as(usize, 10), minLineBudgetHeadroom(80));
+    try std.testing.expectEqual(@as(usize, 18), minLineBudgetHeadroom(180));
+    try std.testing.expectEqual(@as(usize, 50), minLineBudgetHeadroom(800));
 }
