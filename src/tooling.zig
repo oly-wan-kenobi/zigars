@@ -60,8 +60,8 @@ pub fn hintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "from")) return .{ .description = "Workspace-relative source file used to resolve a relative import.", .path_kind = "input_file" };
     if (std.mem.eql(u8, name, "content")) return .{ .description = "Complete source text to preview, analyze, or sync in memory." };
     if (std.mem.eql(u8, name, "apply")) return .{ .description = "Must be true before a tool writes source or workspace artifacts.", .default_bool = false };
-    if (std.mem.eql(u8, name, "timeout_ms")) return .{ .description = "Per-call timeout in milliseconds, clamped by zigar.", .minimum = 1 };
-    if (std.mem.eql(u8, name, "wait_ms")) return .{ .description = "How long to wait for asynchronous ZLS diagnostics.", .default_int = 200, .minimum = 0 };
+    if (std.mem.eql(u8, name, "timeout_ms")) return .{ .description = "Per-call timeout in milliseconds; values must be positive and may be clamped by zigar.", .minimum = 1 };
+    if (std.mem.eql(u8, name, "wait_ms")) return .{ .description = "How long to wait for asynchronous ZLS diagnostics.", .default_int = 500, .minimum = 0 };
     if (std.mem.eql(u8, name, "limit")) return .{ .description = "Maximum number of records to return.", .minimum = 1 };
     if (std.mem.eql(u8, name, "line") or std.mem.eql(u8, name, "start_line") or std.mem.eql(u8, name, "end_line")) return .{ .description = "Zero-based line number.", .minimum = 0 };
     if (std.mem.eql(u8, name, "character") or std.mem.eql(u8, name, "start_char") or std.mem.eql(u8, name, "end_char")) return .{ .description = "Zero-based UTF-16 character offset.", .minimum = 0 };
@@ -77,6 +77,16 @@ pub fn hintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "include_declaration")) return .{ .description = "Include the declaration location in reference results.", .default_bool = true };
     if (std.mem.eql(u8, name, "hash")) return .{ .description = "Enable zflame hash coloring when supported.", .default_bool = false };
     return .{ .description = "Tool argument." };
+}
+
+pub fn boolDefault(name: []const u8, fallback: bool) bool {
+    const hint = hintFor(.{ name, "boolean", false });
+    return hint.default_bool orelse fallback;
+}
+
+pub fn intDefault(name: []const u8, fallback: i64) i64 {
+    const hint = hintFor(.{ name, "integer", false });
+    return hint.default_int orelse fallback;
 }
 
 fn applyFieldHint(allocator: std.mem.Allocator, property: *std.json.ObjectMap, field: SchemaField) !void {
@@ -121,4 +131,12 @@ test "input schema includes discovery hints" {
     try std.testing.expectEqualStrings("input_file", file.get("x-zigar-path-kind").?.string);
     const apply = s.properties.?.object.get("apply").?.object;
     try std.testing.expect(!apply.get("default").?.bool);
+}
+
+test "field hints expose reusable runtime defaults" {
+    try std.testing.expect(!boolDefault("probe_managers", true));
+    try std.testing.expect(!boolDefault("stop_on_failure", true));
+    try std.testing.expect(boolDefault("unknown", true));
+    try std.testing.expectEqual(@as(i64, 500), intDefault("wait_ms", 0));
+    try std.testing.expectEqual(@as(i64, 42), intDefault("unknown", 42));
 }

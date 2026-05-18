@@ -6,6 +6,7 @@ const catalog = zigar.catalog;
 const command = zigar.command;
 const doctor = zigar.doctor;
 const tool_metadata = zigar.tool_metadata;
+const tooling = zigar.tooling;
 const common = @import("common.zig");
 const static_analysis = @import("static_analysis.zig");
 
@@ -214,7 +215,8 @@ pub fn zigToolchainResolve(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     try obj.put(allocator, "version_match", .{ .bool = version_match });
     try obj.put(allocator, "zig_hint_count", .{ .integer = @intCast(zig_hint_count) });
     try obj.put(allocator, "version_status", .{ .string = version_status });
-    try obj.put(allocator, "managers", try versionManagersValue(allocator, a, argBool(args, "probe_managers", true), timeout_ms));
+    const probe_managers = argBool(args, "probe_managers", tooling.boolDefault("probe_managers", false));
+    try obj.put(allocator, "managers", try versionManagersValue(allocator, a, probe_managers, timeout_ms));
     try obj.put(allocator, "issues", .{ .array = issues });
     try obj.put(allocator, "resolution", .{ .string = "Use an existing manager such as mise, asdf, zvm, or zigup to install/select the expected Zig version, then restart zigar with matching --zig-path and --zls-path." });
     return structured(allocator, .{ .object = obj });

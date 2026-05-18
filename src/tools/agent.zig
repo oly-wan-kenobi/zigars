@@ -5,6 +5,7 @@ const zigar = @import("zigar");
 const analysis = zigar.analysis;
 const command = zigar.command;
 const json_result = zigar.json_result;
+const tooling = zigar.tooling;
 const common = @import("common.zig");
 const static_analysis = @import("static_analysis.zig");
 const core = @import("core.zig");
@@ -91,7 +92,7 @@ pub fn zigarAgentGuide(_: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 pub fn zigarValidatePatch(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = argString(args, "mode") orelse "standard";
     const timeout_ms = toolTimeout(a, args);
-    const stop_on_failure = argBool(args, "stop_on_failure", true);
+    const stop_on_failure = argBool(args, "stop_on_failure", tooling.boolDefault("stop_on_failure", false));
     var paths = changedPathList(allocator, a, argString(args, "changed_files"), timeout_ms) catch return error.OutOfMemory;
     defer paths.deinit(allocator);
     defer freeStringList(allocator, paths.items);

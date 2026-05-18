@@ -32,6 +32,7 @@ const statusLinePath = common.statusLinePath;
 const zigarSchema = discovery.zigarSchema;
 const zigCommandPlan = discovery.zigCommandPlan;
 const zigToolPlan = discovery.zigToolPlan;
+const zigToolchainResolve = discovery.zigToolchainResolve;
 const ZigVersionHintStatus = discovery.ZigVersionHintStatus;
 const zigVersionHintStatus = discovery.zigVersionHintStatus;
 const versionMeetsMinimum = discovery.versionMeetsMinimum;
@@ -298,6 +299,21 @@ test "tool argument validation returns structured errors" {
     var valid_obj = std.json.ObjectMap.empty;
     try valid_obj.put(allocator, "file", .{ .string = "src/main.zig" });
     try std.testing.expect((try tool_registry.validateToolArgs(allocator, spec, .{ .object = valid_obj })) == null);
+}
+
+test "toolchain resolver defaults to cheap manager checks" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var app = try testAppForCommandPlanning(allocator);
+
+    const result = try zigToolchainResolve(&app, allocator, null);
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, result.content[0].text.text, .{});
+    const managers = parsed.value.object.get("managers").?.array;
+    try std.testing.expect(managers.items.len > 0);
+    const first = managers.items[0].object;
+    try std.testing.expect(first.get("available").? == .null);
+    try std.testing.expect(first.get("version_output").? == .null);
 }
 
 test "command error value declares output limit policy" {
