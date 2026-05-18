@@ -1,5 +1,24 @@
 {
   "required_tools": ["zigar_schema", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff"],
+  "tools_list_schema_paths": {
+    "zig_format": {
+      "inputSchema.type": "object",
+      "inputSchema.properties.file.type": "string",
+      "inputSchema.properties.file.x-zigar-path-kind": "input_file",
+      "inputSchema.properties.apply.type": "boolean",
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.required.0": "file"
+    },
+    "zigar_next_action": {
+      "inputSchema.properties.goal.type": "string",
+      "inputSchema.required.0": "goal"
+    },
+    "zig_toolchain_resolve": {
+      "inputSchema.properties.probe_managers.type": "boolean",
+      "inputSchema.properties.probe_managers.default": false,
+      "inputSchema.properties.timeout_ms.minimum": 1
+    }
+  },
   "schema_paths": {
     "registry_tool_arguments.zig_format.required.file": "string",
     "registry_tool_arguments.zig_format.optional.apply": "boolean",

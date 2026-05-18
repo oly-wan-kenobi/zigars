@@ -6,10 +6,11 @@ planning metadata, and handler references are generated from
 `src/tool_manifest.zig`; the public MCP tool/resource response adds static
 safety notes and common intents from `src/tool_catalog.json`.
 
-`mcp.zig` 0.0.4 currently returns a generic `{"type":"object"}` input schema
-from `tools/list`. `zigar_schema` and the `zigar://tools/schema` resource carry
-compact required and optional argument hints, so clients should query one of
-those surfaces when `tools/list` is not descriptive enough.
+Standard MCP discovery is the first-class path: `tools/list` publishes each
+registered `inputSchema` with `properties`, `required` fields, defaults, enums,
+and zigar path hints. `zigar_schema` and the `zigar://tools/schema` resource
+remain compact catalog views for grouping, risk, planning, and discovery
+keywords.
 
 [tool-index.generated.md](tool-index.generated.md) is generated from
 the typed manifest and static catalog notes. CI runs `zig build docs-check` so

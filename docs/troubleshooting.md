@@ -80,7 +80,8 @@ an `argument_error` structured result with:
 - `field`: the relevant argument name, or `null` for a non-object payload
 - `expected` and `actual`: compact JSON type names
 
-Call `zigar_schema` to inspect compact argument hints before retrying.
+Inspect the `tools/list` `inputSchema` or call `zigar_schema` for compact
+catalog hints before retrying.
 
 ## Stale Package Or Cache State
 

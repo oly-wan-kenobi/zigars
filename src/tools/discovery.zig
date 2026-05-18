@@ -60,7 +60,8 @@ pub fn zigarDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
         .zls_last_failure = a.zls_last_failure,
         .timeout_ms = a.config.timeout_ms,
         .zls_timeout_ms = a.config.zls_timeout_ms,
-        .mcp_dependency = "mcp.zig 0.0.4",
+        .mcp_dependency = "mcp.zig 0.0.4+57b3f9b",
+        .tools_list_schema_rich = true,
         .http_available = true,
         .zig_probe = if (probe_backends) probeBackend(a, allocator, "zig", &.{ a.config.zig_path, "version" }, probe_timeout_ms) else null,
         .zls_probe = if (probe_backends) probeBackend(a, allocator, "zls", &.{ a.config.zls_path, "--version" }, probe_timeout_ms) else null,
@@ -85,7 +86,7 @@ pub fn zigarHttpStatus(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     obj.put(allocator, "host", .{ .string = a.config.host }) catch return error.OutOfMemory;
     obj.put(allocator, "port", .{ .integer = a.config.port }) catch return error.OutOfMemory;
     obj.put(allocator, "http_available", .{ .bool = true }) catch return error.OutOfMemory;
-    obj.put(allocator, "reason", .{ .string = "HTTP transport is enabled through mcp.zig 0.0.4; stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
+    obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 

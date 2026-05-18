@@ -33,5 +33,5 @@
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
   "tool_argument_scope": "Compact high-signal argument and planning hints are generated from src/tool_manifest.zig at build and runtime.",
-  "tools_list_schema_note": "mcp.zig 0.0.4 may expose only a generic object schema in tools/list. zigar_schema and zigar://tools/schema include compact argument hints and discovery keywords for clients that need stronger hooks."
+  "tools_list_schema_note": "tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords."
 }

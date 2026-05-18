@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .mcp = .{
-            .url = "https://github.com/muhammad-fiaz/mcp.zig/archive/refs/tags/0.0.4.tar.gz",
-            .hash = "mcp-0.0.4-cIUFg-GLAwDmuduQojtH63H2zelYSz20fEgnIB2ljTTm",
+            .url = "https://github.com/muhammad-fiaz/mcp.zig/archive/57b3f9b33f5b5e56b13cbcff91cfa51a01e93183.tar.gz",
+            .hash = "mcp-0.0.4-cIUFgz6SAwCPc1QqRxsGlrYE1b8Nz1WjWjUsYTEArUL3",
         },
     },
     .paths = .{

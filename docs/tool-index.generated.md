@@ -256,4 +256,4 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
 - `zigar_workspace_info`: `pure_analysis` read-only analysis
 
-mcp.zig 0.0.4 may expose only a generic object schema in tools/list. zigar_schema and zigar://tools/schema include compact argument hints and discovery keywords for clients that need stronger hooks.
+tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords.

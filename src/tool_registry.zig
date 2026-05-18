@@ -127,7 +127,7 @@ fn argumentErrorResult(
     }
     try obj.put(allocator, "expected", .{ .string = expected });
     try obj.put(allocator, "actual", .{ .string = actual });
-    try obj.put(allocator, "resolution", .{ .string = "Call zigar_schema for compact argument hints, then retry with the registered argument names and JSON types." });
+    try obj.put(allocator, "resolution", .{ .string = "Inspect the tools/list inputSchema or zigar_schema catalog, then retry with the registered argument names and JSON types." });
     return json_result.structured(allocator, .{ .object = obj });
 }
 

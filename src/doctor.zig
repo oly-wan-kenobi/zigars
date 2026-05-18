@@ -15,6 +15,7 @@ pub const Input = struct {
     timeout_ms: i64,
     zls_timeout_ms: i64,
     mcp_dependency: []const u8,
+    tools_list_schema_rich: bool = false,
     http_available: bool,
     zig_probe: ?Probe = null,
     zls_probe: ?Probe = null,
@@ -44,6 +45,16 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
             "start with --strict-workspace to reject existing symlink escapes",
     ));
     try checks.append(try checkValue(allocator, "mcp_dependency", std.mem.indexOf(u8, input.mcp_dependency, "0.0.4") != null, input.mcp_dependency, "use mcp.zig 0.0.4 or newer"));
+    try checks.append(try checkValue(
+        allocator,
+        "mcp_tools_list_schema",
+        input.tools_list_schema_rich,
+        if (input.tools_list_schema_rich) "rich" else "generic",
+        if (input.tools_list_schema_rich)
+            "tools/list publishes registered inputSchema properties and required fields"
+        else
+            "pin mcp.zig to a revision that serializes registered InputSchema values",
+    ));
     try checks.append(try checkValue(
         allocator,
         "http_transport",
@@ -120,6 +131,7 @@ test "doctor report includes checks" {
         .timeout_ms = 30_000,
         .zls_timeout_ms = 30_000,
         .mcp_dependency = "mcp.zig 0.0.4",
+        .tools_list_schema_rich = true,
         .http_available = false,
         .zig_probe = .{ .ok = true, .status = "ok", .resolution = "backend command completed" },
         .zls_probe = .{ .ok = false, .status = "FileNotFound", .resolution = "confirm the configured backend path and executable permissions" },
@@ -128,12 +140,15 @@ test "doctor report includes checks" {
     try std.testing.expect(checks.items.len >= 2);
     var saw_zig_probe = false;
     var saw_zls_probe = false;
+    var saw_tools_schema = false;
     for (checks.items) |check| {
         const obj = check.object;
         const name = obj.get("name").?.string;
         if (std.mem.eql(u8, name, "zig_probe")) saw_zig_probe = true;
         if (std.mem.eql(u8, name, "zls_probe")) saw_zls_probe = true;
+        if (std.mem.eql(u8, name, "mcp_tools_list_schema")) saw_tools_schema = true;
     }
     try std.testing.expect(saw_zig_probe);
     try std.testing.expect(saw_zls_probe);
+    try std.testing.expect(saw_tools_schema);
 }
