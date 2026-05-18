@@ -222,8 +222,8 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/cli_io.zig",
-        .max_lines = 80,
-        .reason = "tooling CLI IO helpers should remain a compact shared utility",
+        .max_lines = 120,
+        .reason = "tooling CLI IO and argument diagnostics should remain a compact shared utility",
     },
     .{
         .path = "tools/dist.zig",

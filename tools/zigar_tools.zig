@@ -15,11 +15,15 @@ const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
 const valueAt = json_query.valueAt;
 const executableName = cli_io.executableName;
+const failUsage = cli_io.failUsage;
+const flagValue = cli_io.flagValue;
 const jsonStringifyAlloc = cli_io.jsonStringifyAlloc;
 const parseJsonFile = cli_io.parseJsonFile;
 const readFileAlloc = cli_io.readFileAlloc;
+const reportInvalidArguments = cli_io.reportInvalidArguments;
 const stderrPrint = cli_io.stderrPrint;
 const stdoutWrite = cli_io.stdoutWrite;
+const unexpectedArgument = cli_io.unexpectedArgument;
 const writeFile = cli_io.writeFile;
 
 test {
@@ -51,14 +55,16 @@ pub fn main(init: std.process.Init) !void {
 
     if (args.len < 2) {
         try usage(io);
-        return error.InvalidArguments;
+        return failUsage(io, "zigar-tools", "", "missing command", .{});
     }
 
     const cmd = args[1];
     if (std.mem.eql(u8, cmd, "version")) {
         try dist.printVersion(io);
     } else if (std.mem.eql(u8, cmd, "generate-tool-index")) {
-        try tool_index.generate(allocator, io, args[2..]);
+        tool_index.generate(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "generate-tool-index [--check]", err);
+        };
     } else if (std.mem.eql(u8, cmd, "check-json")) {
         try checkJson(allocator, io, args[2..]);
     } else if (std.mem.eql(u8, cmd, "http-smoke")) {
@@ -66,16 +72,24 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, cmd, "stdio-fixtures")) {
         try stdioFixtures(allocator, io, args[0], args[2..]);
     } else if (std.mem.eql(u8, cmd, "coverage")) {
-        try coverage.run(allocator, io, args[2..]);
+        coverage.run(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "coverage [--out-dir <path>] [--zig <path>] [--min-tests <count>] [--no-build] [--require-kcov] [--allow-kcov-failure]", err);
+        };
     } else if (std.mem.eql(u8, cmd, "dist")) {
-        try dist.buildArchives(allocator, io, args[2..]);
+        dist.buildArchives(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "dist --package <name> --exe <name> --binary <path>...", err);
+        };
     } else if (std.mem.eql(u8, cmd, "dist-smoke")) {
-        try dist.smoke(allocator, io, args[2..]);
+        dist.smoke(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "dist-smoke [--assets-dir <path>] [--version <version>]", err);
+        };
     } else if (std.mem.eql(u8, cmd, "artifact-hygiene")) {
-        try release_checks.artifactHygiene(allocator, io, args[2..]);
+        release_checks.artifactHygiene(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "artifact-hygiene", err);
+        };
     } else {
         try usage(io);
-        return error.InvalidArguments;
+        return failUsage(io, "zigar-tools", "", "unknown command `{s}`", .{cmd});
     }
 }
 
@@ -98,7 +112,7 @@ fn usage(io: Io) !void {
 }
 
 fn checkJson(allocator: Allocator, io: Io, args: []const []const u8) !void {
-    if (args.len == 0) return error.InvalidArguments;
+    if (args.len == 0) return failUsage(io, "check-json", "check-json <path>...", "expected at least one JSON path", .{});
     for (args) |path| {
         const parsed = try parseJsonFile(allocator, io, path);
         parsed.deinit();
@@ -116,19 +130,13 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
         if (std.mem.eql(u8, args[i], "--binary")) {
-            i += 1;
-            if (i >= args.len) return error.InvalidArguments;
-            options.binary = args[i];
+            options.binary = try flagValue(args, &i, io, "http-smoke", "--binary", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
         } else if (std.mem.eql(u8, args[i], "--workspace")) {
-            i += 1;
-            if (i >= args.len) return error.InvalidArguments;
-            options.workspace = args[i];
+            options.workspace = try flagValue(args, &i, io, "http-smoke", "--workspace", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
         } else if (std.mem.eql(u8, args[i], "--expect")) {
-            i += 1;
-            if (i >= args.len) return error.InvalidArguments;
-            options.expect = args[i];
+            options.expect = try flagValue(args, &i, io, "http-smoke", "--expect", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
         } else {
-            return error.InvalidArguments;
+            return unexpectedArgument(io, "http-smoke", args[i], "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
         }
     }
 
@@ -160,7 +168,7 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
         const workspace = valueAt(parsed.value, "workspace").?.string;
         const abs_workspace = try absolutePath(allocator, io, options.workspace);
         defer allocator.free(abs_workspace);
-        try expectStringEq(workspace, abs_workspace, "doctor.workspace");
+        try expectStringEq(io, workspace, abs_workspace, "doctor.workspace");
     }
     scenarios += 1;
     try assertToolPaths(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected.value, "argument_error_paths", &scenarios);
@@ -230,7 +238,7 @@ fn waitForInitialize(allocator: Allocator, io: Io, port: u16, child: *std.proces
         const parsed = try std.json.parseFromSlice(JsonValue, allocator, init_response, .{});
         defer parsed.deinit();
         const name = valueAt(parsed.value, "result.serverInfo.name").?.string;
-        try expectStringEq(name, "zigar", "initialize serverInfo.name");
+        try expectStringEq(io, name, "zigar", "initialize serverInfo.name");
         return;
     }
 }
@@ -379,9 +387,9 @@ fn expectJsonEq(io: Io, actual: JsonValue, expected: JsonValue, path: []const u8
     }
 }
 
-fn expectStringEq(actual: []const u8, expected: []const u8, label: []const u8) !void {
+fn expectStringEq(io: Io, actual: []const u8, expected: []const u8, label: []const u8) !void {
     if (!std.mem.eql(u8, actual, expected)) {
-        std.debug.print("{s}: expected `{s}`, got `{s}`\n", .{ label, expected, actual });
+        try stderrPrint(io, "{s}: expected `{s}`, got `{s}`\n", .{ label, expected, actual });
         return error.AssertionFailed;
     }
 }
@@ -396,15 +404,11 @@ fn stdioFixtures(allocator: Allocator, io: Io, self_arg0: []const u8, args: []co
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
         if (std.mem.eql(u8, args[i], "--binary")) {
-            i += 1;
-            if (i >= args.len) return error.InvalidArguments;
-            options.binary = args[i];
+            options.binary = try flagValue(args, &i, io, "stdio-fixtures", "--binary", "stdio-fixtures [--binary <path>] [--zig-path <path>]");
         } else if (std.mem.eql(u8, args[i], "--zig-path")) {
-            i += 1;
-            if (i >= args.len) return error.InvalidArguments;
-            options.zig_path = args[i];
+            options.zig_path = try flagValue(args, &i, io, "stdio-fixtures", "--zig-path", "stdio-fixtures [--binary <path>] [--zig-path <path>]");
         } else {
-            return error.InvalidArguments;
+            return unexpectedArgument(io, "stdio-fixtures", args[i], "stdio-fixtures [--binary <path>] [--zig-path <path>]");
         }
     }
 
@@ -512,7 +516,7 @@ const StdioClient = struct {
         {
             const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, init, .{});
             defer parsed.deinit();
-            try expectStringEq(valueAt(parsed.value, "serverInfo.name").?.string, "zigar", "stdio initialize serverInfo.name");
+            try expectStringEq(self.io, valueAt(parsed.value, "serverInfo.name").?.string, "zigar", "stdio initialize serverInfo.name");
         }
         try self.notify("notifications/initialized", null);
 
@@ -540,7 +544,7 @@ const StdioClient = struct {
         try self.expectPathBool(preview, "applied", false);
         const after_preview = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);
         defer self.allocator.free(after_preview);
-        try expectStringEq(after_preview, before, "zig_format preview source unchanged");
+        try expectStringEq(self.io, after_preview, before, "zig_format preview source unchanged");
         if (std.mem.indexOf(u8, preview, "const x = 1;") == null) return error.AssertionFailed;
 
         const applied = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":true}");
@@ -596,7 +600,7 @@ const StdioClient = struct {
         try expectFileStartsWith(self.allocator, self.io, workspace, "diff.svg", "<svg");
         const folded = try joinedRead(self.allocator, self.io, workspace, ".zigar-cache/profile/diff-0.folded");
         defer self.allocator.free(folded);
-        try expectStringEq(std.mem.trim(u8, folded, " \t\r\n"), "main;delta 2", "diff folded output");
+        try expectStringEq(self.io, std.mem.trim(u8, folded, " \t\r\n"), "main;delta 2", "diff folded output");
         try assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 

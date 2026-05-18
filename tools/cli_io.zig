@@ -5,6 +5,57 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
 
+pub fn failUsage(
+    io: Io,
+    command: []const u8,
+    usage_hint: []const u8,
+    comptime fmt: []const u8,
+    args: anytype,
+) error{InvalidArguments} {
+    stderrPrint(io, "zigar-tools {s}: ", .{command}) catch {};
+    stderrPrint(io, fmt ++ "\n", args) catch {};
+    if (usage_hint.len > 0) {
+        stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch {};
+    }
+    return error.InvalidArguments;
+}
+
+pub fn missingFlagValue(io: Io, command: []const u8, flag: []const u8, usage_hint: []const u8) error{InvalidArguments} {
+    return failUsage(io, command, usage_hint, "missing value for {s}", .{flag});
+}
+
+pub fn unexpectedArgument(io: Io, command: []const u8, arg: []const u8, usage_hint: []const u8) error{InvalidArguments} {
+    return failUsage(io, command, usage_hint, "unexpected argument `{s}`", .{arg});
+}
+
+pub fn flagValue(
+    args: []const []const u8,
+    index: *usize,
+    io: Io,
+    command: []const u8,
+    flag: []const u8,
+    usage_hint: []const u8,
+) error{InvalidArguments}![]const u8 {
+    index.* += 1;
+    if (index.* >= args.len) return missingFlagValue(io, command, flag, usage_hint);
+    return args[index.*];
+}
+
+pub fn reportInvalidArguments(
+    io: Io,
+    command: []const u8,
+    usage_hint: []const u8,
+    err: anyerror,
+) anyerror {
+    if (err == error.InvalidArguments) {
+        stderrPrint(io, "zigar-tools {s}: invalid arguments\n", .{command}) catch {};
+        if (usage_hint.len > 0) {
+            stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch {};
+        }
+    }
+    return err;
+}
+
 pub fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
