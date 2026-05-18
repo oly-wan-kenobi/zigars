@@ -29,6 +29,9 @@ Known limitations:
 - Optional: `zwanzig` for linting/static-analysis backend tools
 - Optional: `zflame` and `diff-folded` for flamegraphs and flamegraph diffs
 
+Optional backend setup, verification commands, and failure triage are documented
+in [docs/backends.md](docs/backends.md).
+
 ## Install
 
 Download the archive for your platform from the GitHub release, verify it against
@@ -68,10 +71,12 @@ The binary is written to:
 zig-out/bin/zigar
 ```
 
-`zig build test` includes unit coverage for CLI parsing, workspace sandboxing,
-command parsing, JSON serialization, diagnostics parsing, source-write gating,
-strict symlink rejection, command output-limit metadata, ZLS timeout/EOF
-behavior, a fake-ZLS LSP roundtrip, and the Zig helper used by release checks.
+`zig build test` includes unit coverage for executable startup helpers, CLI
+parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics
+retention, source-write gating, strict symlink rejection, command output-limit
+metadata, ZLS timeout/EOF behavior, a fake-ZLS LSP roundtrip, and the Zig helper
+used by release checks. The release coverage summary enforces non-zero floors for
+the library, executable, and tooling test binaries.
 
 Integration and coverage helpers are available as build steps:
 
@@ -276,6 +281,9 @@ zig_format_check
 Confirm `--zls-path` points to a working `zls` binary compatible with your Zig
 version. Command-backed tools such as `zig_check`, `zig_build`, and `zig_test`
 continue to work without ZLS.
+
+For install paths, wrapper-script configuration, and zwanzig/zflame/diff-folded
+checks, see [docs/backends.md](docs/backends.md).
 
 Run `zigar_doctor` for a compact health report that includes workspace,
 dependency, transport, timeout, ZLS status, and optional backend paths. Pass
