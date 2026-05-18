@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const cli_io = @import("cli_io.zig");
 const coverage = @import("coverage.zig");
 const coverage_config = @import("coverage_config.zig");
 const dist = @import("dist.zig");
@@ -13,9 +14,17 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
 const valueAt = json_query.valueAt;
+const executableName = cli_io.executableName;
+const jsonStringifyAlloc = cli_io.jsonStringifyAlloc;
+const parseJsonFile = cli_io.parseJsonFile;
+const readFileAlloc = cli_io.readFileAlloc;
+const stderrPrint = cli_io.stderrPrint;
+const stdoutWrite = cli_io.stdoutWrite;
+const writeFile = cli_io.writeFile;
 
 test {
     _ = coverage;
+    _ = cli_io;
     _ = dist;
     _ = json_query;
     _ = json_util;
@@ -86,46 +95,6 @@ fn usage(io: Io) !void {
         \\  artifact-hygiene
         \\
     , .{});
-}
-
-fn stdoutWrite(io: Io, bytes: []const u8) !void {
-    try Io.File.stdout().writeStreamingAll(io, bytes);
-}
-
-fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
-    var buffer: [4096]u8 = undefined;
-    var writer = Io.File.stderr().writer(io, &buffer);
-    try writer.interface.print(fmt, args);
-    try writer.interface.flush();
-}
-
-fn executableName(path: []const u8) []const u8 {
-    var name = std.fs.path.basename(path);
-    if (builtin.os.tag == .windows and std.mem.endsWith(u8, name, ".exe")) {
-        name = name[0 .. name.len - 4];
-    }
-    return name;
-}
-
-fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
-    return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
-}
-
-fn writeFile(io: Io, path: []const u8, bytes: []const u8) !void {
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes });
-}
-
-fn jsonStringifyAlloc(allocator: Allocator, value: JsonValue, options: std.json.Stringify.Options) ![]u8 {
-    var aw: Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
-    try std.json.Stringify.value(value, options, &aw.writer);
-    return try aw.toOwnedSlice();
-}
-
-fn parseJsonFile(allocator: Allocator, io: Io, path: []const u8) !std.json.Parsed(JsonValue) {
-    const bytes = try readFileAlloc(allocator, io, path, 16 * 1024 * 1024);
-    defer allocator.free(bytes);
-    return try std.json.parseFromSlice(JsonValue, allocator, bytes, .{});
 }
 
 fn checkJson(allocator: Allocator, io: Io, args: []const []const u8) !void {
