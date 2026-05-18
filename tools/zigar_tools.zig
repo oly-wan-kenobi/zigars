@@ -188,6 +188,7 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
         try expectStringEq(workspace, abs_workspace, "doctor.workspace");
     }
     try assertToolPaths(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected.value, "argument_error_paths");
+    try assertToolPaths(allocator, io, port, 26, "zig_format", "{\"file\":\"missing.zig\"}", expected.value, "format_missing_file_paths");
     try assertToolPaths(allocator, io, port, 6, "zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\nsrc/main.zig:1:2: note: fixture note\\n\"}", expected.value, "compile_error_index_paths");
     try assertToolPaths(allocator, io, port, 7, "zig_target_matrix_plan", "{\"targets\":\"native wasm32-freestanding\",\"steps\":\"build\"}", expected.value, "target_matrix_paths");
     try assertToolPaths(allocator, io, port, 8, "zig_toolchain_resolve", "{\"probe_managers\":false}", expected.value, "toolchain_paths");

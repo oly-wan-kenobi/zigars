@@ -1,8 +1,8 @@
 const std = @import("std");
 const mcp = @import("mcp");
 
-const json_result = @import("json_result.zig");
 const runtime_mod = @import("runtime.zig");
+const tool_errors = @import("tool_errors.zig");
 const tool_metadata = @import("tool_metadata.zig");
 const tooling = @import("tooling.zig");
 
@@ -114,21 +114,7 @@ fn argumentErrorResult(
     expected: []const u8,
     actual: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "argument_error" });
-    try obj.put(allocator, "ok", .{ .bool = false });
-    try obj.put(allocator, "tool", .{ .string = tool_name });
-    try obj.put(allocator, "code", .{ .string = code });
-    if (field) |field_name| {
-        try obj.put(allocator, "field", .{ .string = field_name });
-    } else {
-        try obj.put(allocator, "field", .null);
-    }
-    try obj.put(allocator, "expected", .{ .string = expected });
-    try obj.put(allocator, "actual", .{ .string = actual });
-    try obj.put(allocator, "resolution", .{ .string = "Inspect the tools/list inputSchema or zigar_schema catalog, then retry with the registered argument names and JSON types." });
-    return json_result.structured(allocator, .{ .object = obj });
+    return tool_errors.argument(allocator, tool_name, code, field, expected, actual);
 }
 
 test "finds schema fields" {

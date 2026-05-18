@@ -19,6 +19,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     }
     ok = (try checkLineBudgets(allocator, io)) and ok;
     ok = (try checkForbiddenTokens(allocator, io)) and ok;
+    ok = (try checkToolErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -92,6 +93,12 @@ const LineBudget = struct {
 };
 
 const ForbiddenToken = struct {
+    path: []const u8,
+    token: []const u8,
+    reason: []const u8,
+};
+
+const ToolErrorContractRule = struct {
     path: []const u8,
     token: []const u8,
     reason: []const u8,
@@ -178,6 +185,39 @@ const forbidden_tokens = [_]ForbiddenToken{
     },
 };
 
+const tool_error_contract_rules = [_]ToolErrorContractRule{
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "return error.InvalidArguments",
+        .reason = "edit/ZLS tools must return structured argument_error or tool_error payloads for expected user-facing failures",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "return error.ExecutionFailed",
+        .reason = "edit/ZLS tools must explain operation, phase, cause, and resolution instead of collapsing expected failures",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "return error.ResourceNotFound",
+        .reason = "edit/ZLS file misses must include the tool, phase, file, and not_found classification",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "catch return error.ExecutionFailed",
+        .reason = "edit/ZLS catches must preserve the underlying error in a structured tool_error",
+    },
+    .{
+        .path = "src/tools/docs.zig",
+        .token = "return error.ExecutionFailed",
+        .reason = "docs search failures must identify environment/search phase and resolution",
+    },
+    .{
+        .path = "src/tools/docs.zig",
+        .token = "catch return error.ExecutionFailed",
+        .reason = "docs search catches must preserve the underlying error in a structured tool_error",
+    },
+};
+
 const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",
@@ -217,6 +257,23 @@ fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
         defer allocator.free(bytes);
         if (std.mem.indexOf(u8, bytes, rule.token) != null) {
             try stderrPrint(io, "forbidden token in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    for (tool_error_contract_rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 8 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "tool-error-contract check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+            try stderrPrint(io, "tool-error-contract violation in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
             ok = false;
         }
     }

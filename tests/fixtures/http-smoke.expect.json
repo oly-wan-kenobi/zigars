@@ -46,6 +46,16 @@
     "code": "invalid_type",
     "field": "file"
   },
+  "format_missing_file_paths": {
+    "kind": "tool_error",
+    "tool": "zig_format",
+    "operation": "format_preview",
+    "phase": "read_source",
+    "code": "read_failed",
+    "category": "filesystem",
+    "error_kind": "not_found",
+    "file": "missing.zig"
+  },
   "compile_error_index_paths": {
     "kind": "zig_compile_error_index",
     "summary.error_count": 1,
