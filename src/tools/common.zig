@@ -1,10 +1,10 @@
 const shared_core = @import("shared_core.zig");
+const tool_result_errors = @import("tool_result_errors.zig");
 const zls_common = @import("zls_common.zig");
 
 pub const App = shared_core.App;
 pub const BackendProbeCache = shared_core.BackendProbeCache;
 pub const LspClient = shared_core.LspClient;
-pub const errorText = shared_core.errorText;
 pub const structured = shared_core.structured;
 pub const structuredOwned = shared_core.structuredOwned;
 pub const putOwnedKey = shared_core.putOwnedKey;
@@ -25,6 +25,8 @@ pub const argvValue = shared_core.argvValue;
 pub const commandTermValue = shared_core.commandTermValue;
 pub const commandResultValue = shared_core.commandResultValue;
 pub const commandErrorValue = shared_core.commandErrorValue;
+pub const commandRunErrorResult = tool_result_errors.commandRunErrorResult;
+pub const commandResultErrorResult = tool_result_errors.commandResultErrorResult;
 pub const failureSummaryValue = shared_core.failureSummaryValue;
 pub const commandErrorSummaryValue = shared_core.commandErrorSummaryValue;
 pub const likelyFailureScopeValue = shared_core.likelyFailureScopeValue;

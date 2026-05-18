@@ -6,13 +6,13 @@ const command = zigar.command;
 const common = @import("common.zig");
 
 const App = common.App;
-const errorText = common.errorText;
 const structured = common.structured;
 const argString = common.argString;
 const missingArgumentResult = common.missingArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const commandResultValue = common.commandResultValue;
+const commandRunErrorResult = common.commandRunErrorResult;
 const splitToolArgs = common.splitToolArgs;
 const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const freeArgList = common.freeArgList;
@@ -22,7 +22,20 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_ci_annotations", file, err);
     defer allocator.free(resolved);
     a.command_calls += 1;
-    const result = command.run(allocator, a.io, a.workspace.root, &.{ a.config.zig_path, "ast-check", resolved }, toolTimeout(a, args)) catch |err| return errorText(allocator, @errorName(err));
+    const timeout_ms = toolTimeout(a, args);
+    const argv = &.{ a.config.zig_path, "ast-check", resolved };
+    const result = command.run(allocator, a.io, a.workspace.root, argv, timeout_ms) catch |err| return commandRunErrorResult(allocator, .{
+        .tool = "zig_ci_annotations",
+        .operation = "run_ast_check",
+        .phase = "execute_backend",
+        .code = "ast_check_command_failed",
+        .backend = "zig",
+        .argv = argv,
+        .cwd = a.workspace.root,
+        .timeout_ms = timeout_ms,
+        .err = err,
+        .resolution = "Confirm --zig-path points to an executable Zig binary and retry with a readable workspace file.",
+    });
     defer result.deinit(allocator);
     var annotations = std.json.Array.init(allocator);
     tryParseAnnotations(allocator, &annotations, file, result.stderr) catch return error.OutOfMemory;
@@ -30,7 +43,7 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     errdefer obj.deinit(allocator);
     obj.put(allocator, "ok", .{ .bool = result.succeeded() }) catch return error.OutOfMemory;
     obj.put(allocator, "annotations", .{ .array = annotations }) catch return error.OutOfMemory;
-    obj.put(allocator, "raw", commandResultValue(allocator, "zig ast-check", &.{ a.config.zig_path, "ast-check", resolved }, a.workspace.root, toolTimeout(a, args), result) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj.put(allocator, "raw", commandResultValue(allocator, "zig ast-check", argv, a.workspace.root, timeout_ms, result) catch return error.OutOfMemory) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -103,7 +116,19 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mc
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
     a.command_calls += 1;
-    const result = command.run(allocator, a.io, a.workspace.root, list.items, toolTimeout(a, args)) catch |err| return errorText(allocator, @errorName(err));
+    const timeout_ms = toolTimeout(a, args);
+    const result = command.run(allocator, a.io, a.workspace.root, list.items, timeout_ms) catch |err| return commandRunErrorResult(allocator, .{
+        .tool = "zig_junit",
+        .operation = "run_tests",
+        .phase = "execute_backend",
+        .code = "test_command_failed",
+        .backend = "zig",
+        .argv = list.items,
+        .cwd = a.workspace.root,
+        .timeout_ms = timeout_ms,
+        .err = err,
+        .resolution = "Confirm --zig-path points to an executable Zig binary and retry with a valid test target.",
+    });
     defer result.deinit(allocator);
     const stdout_xml = xmlEscape(allocator, result.stdout) catch return error.OutOfMemory;
     defer allocator.free(stdout_xml);
@@ -130,7 +155,7 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mc
     errdefer obj.deinit(allocator);
     obj.put(allocator, "ok", .{ .bool = result.succeeded() }) catch return error.OutOfMemory;
     obj.put(allocator, "junit_xml", .{ .string = xml }) catch return error.OutOfMemory;
-    obj.put(allocator, "command", commandResultValue(allocator, "zig test", list.items, a.workspace.root, toolTimeout(a, args), result) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj.put(allocator, "command", commandResultValue(allocator, "zig test", list.items, a.workspace.root, timeout_ms, result) catch return error.OutOfMemory) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 

@@ -15,7 +15,6 @@ const static_analysis = @import("static_analysis.zig");
 
 const App = common.App;
 const LspClient = common.LspClient;
-const errorText = common.errorText;
 const structured = common.structured;
 const structuredOwned = common.structuredOwned;
 const putOwnedKey = common.putOwnedKey;
@@ -30,6 +29,7 @@ const runAndFormatTimeout = common.runAndFormatTimeout;
 const toolTimeout = common.toolTimeout;
 const commandResultValue = common.commandResultValue;
 const backendErrorResult = common.backendErrorResult;
+const commandResultErrorResult = common.commandResultErrorResult;
 const structuredText = common.structuredText;
 const requireZlsCapability = common.requireZlsCapability;
 const zlsUnavailable = common.zlsUnavailable;
@@ -71,9 +71,18 @@ pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) m
     };
     defer fmt.deinit(allocator);
     if (!fmt.succeeded()) {
-        const output = command.formatRunResult(allocator, "zig fmt preview failed", fmt) catch return error.OutOfMemory;
-        defer allocator.free(output);
-        return errorText(allocator, output);
+        return commandResultErrorResult(allocator, .{
+            .tool = "zig_format",
+            .operation = "format_preview",
+            .phase = "run_zig_fmt",
+            .code = "zig_fmt_preview_failed",
+            .backend = "zig",
+            .argv = &.{ a.config.zig_path, "fmt", preview_abs },
+            .cwd = a.workspace.root,
+            .timeout_ms = a.config.timeout_ms,
+            .result = fmt,
+            .resolution = "Inspect stdout/stderr, fix the preview source so zig fmt can parse it, then retry.",
+        });
     }
     const formatted = a.workspace.readFileAlloc(a.io, preview_path, 4 * 1024 * 1024) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "read_formatted_preview", "formatted_preview_read_failed", "filesystem", preview_path, err, "Retry after confirming zig fmt wrote the preview file.");
     defer allocator.free(formatted);

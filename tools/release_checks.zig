@@ -135,6 +135,11 @@ const line_budgets = [_]LineBudget{
         .reason = "shared command/compiler/path helpers must not become a replacement server monolith",
     },
     .{
+        .path = "src/tools/tool_result_errors.zig",
+        .max_lines = 160,
+        .reason = "structured tool-result error helpers should stay focused on command failure mapping",
+    },
+    .{
         .path = "src/tools/static_core.zig",
         .max_lines = 900,
         .reason = "static-analysis helpers should stay below a reviewable module size",
@@ -231,6 +236,7 @@ const forbidden_tokens = [_]ForbiddenToken{
 
 const tool_error_contract_paths = [_][]const u8{
     "src/tool_registry.zig",
+    "src/tools/common.zig",
     "src/tools/agent.zig",
     "src/tools/ci.zig",
     "src/tools/core.zig",
@@ -240,11 +246,21 @@ const tool_error_contract_paths = [_][]const u8{
     "src/tools/profiling.zig",
     "src/tools/static_core.zig",
     "src/tools/static_tests.zig",
+    "src/tools/shared_core.zig",
+    "src/tools/tool_result_errors.zig",
     "src/tools/zls_common.zig",
     "src/tools/zwanzig.zig",
 };
 
 const tool_error_contract_tokens = [_]ToolErrorContractToken{
+    .{
+        .token = "mcp.tools.errorResult",
+        .reason = "tool handlers must use structured tool_errors/json_result helpers instead of raw text MCP errors",
+    },
+    .{
+        .token = "errorText",
+        .reason = "raw text error helpers must not bypass the structured tool error contract",
+    },
     .{
         .token = "return error.InvalidArguments",
         .reason = "tool handlers must return structured argument_error payloads for expected user-facing argument failures",

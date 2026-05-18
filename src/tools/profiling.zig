@@ -6,7 +6,6 @@ const command = zigar.command;
 const common = @import("common.zig");
 
 const App = common.App;
-const errorText = common.errorText;
 const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
@@ -17,6 +16,7 @@ const workspacePathErrorResult = common.workspacePathErrorResult;
 const runAndFormatTimeout = common.runAndFormatTimeout;
 const toolTimeout = common.toolTimeout;
 const backendErrorResult = common.backendErrorResult;
+const commandResultErrorResult = common.commandResultErrorResult;
 const splitToolArgs = common.splitToolArgs;
 const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const structuredText = common.structuredText;
@@ -79,9 +79,18 @@ pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     };
     defer result.deinit(allocator);
     if (!result.succeeded()) {
-        const run_output = command.formatRunResult(allocator, "zflame failed", result) catch return error.OutOfMemory;
-        defer allocator.free(run_output);
-        return errorText(allocator, run_output);
+        return commandResultErrorResult(allocator, .{
+            .tool = "zig_flamegraph",
+            .operation = "render_flamegraph",
+            .phase = "run_zflame",
+            .code = "zflame_command_failed",
+            .backend = "zflame",
+            .argv = list.items,
+            .cwd = a.workspace.root,
+            .timeout_ms = a.config.timeout_ms,
+            .result = result,
+            .resolution = "Inspect stdout/stderr, confirm the profiler input format is correct, and retry with a supported zflame invocation.",
+        });
     }
     a.workspace.writeFile(a.io, output, result.stdout) catch |err| return toolErrorFromError(allocator, .{
         .tool = "zig_flamegraph",
@@ -122,9 +131,18 @@ pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     };
     defer diff.deinit(allocator);
     if (!diff.succeeded()) {
-        const run_output = command.formatRunResult(allocator, "diff-folded failed", diff) catch return error.OutOfMemory;
-        defer allocator.free(run_output);
-        return errorText(allocator, run_output);
+        return commandResultErrorResult(allocator, .{
+            .tool = "zig_flamegraph_diff",
+            .operation = "diff_folded_stacks",
+            .phase = "run_diff_folded",
+            .code = "diff_folded_command_failed",
+            .backend = "diff-folded",
+            .argv = &.{ a.config.diff_folded_path, before_abs, after_abs },
+            .cwd = a.workspace.root,
+            .timeout_ms = a.config.timeout_ms,
+            .result = diff,
+            .resolution = "Inspect stdout/stderr, confirm both folded-stack inputs are readable, and retry with a working diff-folded backend.",
+        });
     }
     a.workspace.writeFile(a.io, folded_out, diff.stdout) catch |err| return toolErrorFromError(allocator, .{
         .tool = "zig_flamegraph_diff",
