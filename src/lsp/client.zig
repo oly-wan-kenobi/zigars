@@ -670,12 +670,16 @@ test "disconnect on already disconnected client is safe" {
 const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
 
 fn testPipe() !TestPipe {
-    var fds: [2]std.c.fd_t = undefined;
-    if (std.c.pipe(&fds) != 0) return error.SystemResources;
-    return .{
-        .read_end = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
-        .write_end = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
-    };
+    switch (@import("builtin").os.tag) {
+        .windows => return error.SkipZigTest,
+        else => {
+            const fds = try std.Io.Threaded.pipe2(.{});
+            return .{
+                .read_end = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
+                .write_end = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
+            };
+        },
+    }
 }
 
 const FakeZls = struct {
