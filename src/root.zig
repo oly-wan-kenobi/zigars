@@ -11,6 +11,7 @@ pub const tool_metadata = @import("tool_metadata.zig");
 pub const tool_registry = @import("tool_registry.zig");
 pub const version = @import("version.zig");
 pub const lsp_client = @import("lsp/client.zig");
+pub const lsp_edits = @import("lsp/edits.zig");
 pub const lsp_transport = @import("lsp/transport.zig");
 pub const lsp_types = @import("lsp/types.zig");
 pub const document_state = @import("state/documents.zig");
@@ -33,6 +34,7 @@ test {
     _ = tool_registry;
     _ = version;
     _ = lsp_client;
+    _ = lsp_edits;
     _ = lsp_transport;
     _ = lsp_types;
     _ = document_state;
