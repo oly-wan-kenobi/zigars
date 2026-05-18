@@ -108,6 +108,16 @@ const line_budgets = [_]LineBudget{
         .max_lines = 800,
         .reason = "tool dispatcher must delegate large release-check helpers to focused modules",
     },
+    .{
+        .path = "tools/dist.zig",
+        .max_lines = 550,
+        .reason = "release packaging should stay a focused helper, not a second build system",
+    },
+    .{
+        .path = "tools/release_targets.zig",
+        .max_lines = 120,
+        .reason = "release target metadata should remain a compact shared table",
+    },
 };
 
 const forbidden_tokens = [_]ForbiddenToken{
