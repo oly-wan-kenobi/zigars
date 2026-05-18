@@ -104,6 +104,46 @@ const line_budgets = [_]LineBudget{
         .reason = "main must stay a small startup/lifecycle entrypoint",
     },
     .{
+        .path = "src/server.zig",
+        .max_lines = 450,
+        .reason = "MCP server wiring must stay a dispatcher; tool behavior belongs in src/tools modules",
+    },
+    .{
+        .path = "src/tools/common.zig",
+        .max_lines = 160,
+        .reason = "shared tool helpers must stay a small facade over focused helper modules",
+    },
+    .{
+        .path = "src/tools/agent.zig",
+        .max_lines = 750,
+        .reason = "agent workflow handlers should remain focused and delegate shared parsing/diagnostics",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .max_lines = 900,
+        .reason = "edit and ZLS handlers should remain focused around language-server workflows",
+    },
+    .{
+        .path = "src/tools/shared_core.zig",
+        .max_lines = 750,
+        .reason = "shared command/compiler/path helpers must not become a replacement server monolith",
+    },
+    .{
+        .path = "src/tools/static_core.zig",
+        .max_lines = 900,
+        .reason = "static-analysis helpers should stay below a reviewable module size",
+    },
+    .{
+        .path = "src/tools/static_tests.zig",
+        .max_lines = 700,
+        .reason = "test/cache/public-API analysis helpers should stay below a reviewable module size",
+    },
+    .{
+        .path = "src/tools/zls_common.zig",
+        .max_lines = 650,
+        .reason = "shared ZLS/LSP helpers should stay below a reviewable module size",
+    },
+    .{
         .path = "tools/zigar_tools.zig",
         .max_lines = 800,
         .reason = "tool dispatcher must delegate large release-check helpers to focused modules",

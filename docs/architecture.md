@@ -7,6 +7,11 @@ auditable:
 - `src/main.zig` owns CLI parsing, runtime setup, transport startup, and the
   package version surfaced from `build.zig.zon` through `src/version.zig`.
 - `src/server.zig` wires MCP tools, resources, prompts, and handler dispatch.
+  It should stay a dispatcher; tool behavior lives under `src/tools/`.
+- `src/tools/*.zig` groups MCP tool handlers by workflow area: discovery,
+  agent workflows, core Zig commands, edit/ZLS operations, docs, static
+  analysis, CI, linting, profiling, and resources. `src/tools/common.zig` is a
+  small compatibility facade over focused shared helper modules.
 - `src/runtime.zig` owns process-local runtime state such as workspace config,
   ZLS session pointers, counters, backend probes, and heuristic analysis caches.
 - `src/tool_metadata.zig` is the typed tool registry: tool ids, names,
@@ -34,7 +39,8 @@ When adding or changing a tool:
 2. Add or update `riskFor` if the tool writes source, writes artifacts, mutates
    LSP state, executes project code, executes a user command, or invokes an
    external backend.
-3. Add the handler mapping in `src/server.zig`.
+3. Add the handler in the appropriate `src/tools/*.zig` module and map it in
+   `src/server.zig`.
 4. Add discovery grouping/keywords in `src/tool_catalog.json`.
 5. Regenerate docs with `zig build tool-index`.
 6. Add focused tests for argument validation, risk metadata, and any parsing or

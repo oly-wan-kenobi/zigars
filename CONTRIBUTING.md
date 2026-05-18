@@ -46,6 +46,9 @@ Optional runtime backends:
 - Keep `src/main.zig` as a small startup/lifecycle entrypoint and keep
   `tools/zigar_tools.zig` as a dispatcher; move large helper logic into focused
   Zig modules.
+- Keep `src/server.zig` as MCP registration and dispatch only. Tool behavior
+  belongs in the focused `src/tools/*.zig` handler modules, with shared code
+  behind the small `src/tools/common.zig` facade.
 - Add or update tests for path handling, parser behavior, command arguments,
   diagnostics conversion, and source-write gating when those areas change.
 
@@ -65,4 +68,4 @@ representative `tools/call`.
 
 For local release-style verification, run `zig build release-check`. This also
 checks generated artifact hygiene, pure-Zig helper policy, and size budgets for
-the entrypoint and release-tool dispatcher.
+the entrypoint, MCP dispatcher, focused tool modules, and release-tool dispatcher.
