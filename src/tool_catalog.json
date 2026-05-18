@@ -20,6 +20,7 @@
     {"intent": "check formatting without writing", "prefer": "zig_format_check", "keywords": ["fmt check", "zig fmt --check", "style check"]},
     {"intent": "understand compiler errors", "prefer": "zig_explain_errors", "keywords": ["compiler errors", "fix build", "diagnostics"]},
     {"intent": "group compiler errors by file", "prefer": "zig_compile_error_index", "keywords": ["compile error index", "diagnostics", "file errors"]},
+    {"intent": "inspect planning support for a tool", "prefer": "zig_tool_plan", "keywords": ["plan", "planning", "argv", "zls request", "tool discovery"]},
     {"intent": "resolve Zig toolchain mismatch", "prefer": "zig_toolchain_resolve", "keywords": ["toolchain", "zig version", "zls version", "mise", "asdf", "zvm", "zigup"]},
     {"intent": "plan checks for dirty files", "prefer": "zig_changed_files_plan", "keywords": ["changed files", "git status", "minimal checks"]},
     {"intent": "select focused tests", "prefer": "zig_test_select", "keywords": ["test select", "impacted tests", "focused tests"]},
@@ -31,6 +32,6 @@
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
-  "tool_argument_scope": "Compact high-signal hints are generated from src/tool_manifest.zig at build and runtime.",
+  "tool_argument_scope": "Compact high-signal argument and planning hints are generated from src/tool_manifest.zig at build and runtime.",
   "tools_list_schema_note": "mcp.zig 0.0.4 may expose only a generic object schema in tools/list. zigar_schema and zigar://tools/schema include compact argument hints and discovery keywords for clients that need stronger hooks."
 }

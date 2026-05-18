@@ -31,6 +31,7 @@ const compilerInsightsValue = common.compilerInsightsValue;
 const statusLinePath = common.statusLinePath;
 const zigarSchema = discovery.zigarSchema;
 const zigCommandPlan = discovery.zigCommandPlan;
+const zigToolPlan = discovery.zigToolPlan;
 const ZigVersionHintStatus = discovery.ZigVersionHintStatus;
 const zigVersionHintStatus = discovery.zigVersionHintStatus;
 const versionMeetsMinimum = discovery.versionMeetsMinimum;
@@ -182,11 +183,68 @@ test "zig_command_plan exposes registry risk metadata" {
     const risk = root.get("risk").?.object;
 
     try std.testing.expectEqualStrings("zig_test", root.get("tool").?.string);
+    try std.testing.expect(root.get("supported").?.bool);
+    try std.testing.expectEqualStrings("exact_command", root.get("plan_kind").?.string);
+    try std.testing.expect(root.get("argv_exact").?.bool);
     try std.testing.expectEqualStrings("medium", root.get("risk_level").?.string);
     try std.testing.expectEqualStrings("medium", risk.get("level").?.string);
     try std.testing.expect(risk.get("executes_project_code").?.bool);
     try std.testing.expect(risk.get("writes_artifacts").?.bool);
     try std.testing.expect(!root.get("writes_source").?.bool);
+}
+
+test "zig_command_plan reports known non-command tools without invalid argument errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var app = try testAppForCommandPlanning(allocator);
+
+    var args = std.json.ObjectMap.empty;
+    try args.put(allocator, "tool", .{ .string = "zig_hover" });
+    const result = try zigCommandPlan(&app, allocator, .{ .object = args });
+    const body = result.content[0].text.text;
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
+    const root = parsed.value.object;
+
+    try std.testing.expectEqualStrings("zig_hover", root.get("tool").?.string);
+    try std.testing.expect(!root.get("supported").?.bool);
+    try std.testing.expectEqualStrings("zls_request", root.get("plan_kind").?.string);
+    try std.testing.expectEqualStrings("zig_tool_plan", root.get("use").?.string);
+    const supported_tools = root.get("supported_tools").?.array;
+    try std.testing.expect(jsonArrayContainsString(supported_tools, "zig_build"));
+    try std.testing.expect(jsonArrayContainsString(supported_tools, "zig_format_check"));
+}
+
+test "zig_tool_plan exposes broad planning support for ZLS tools" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var app = try testAppForCommandPlanning(allocator);
+
+    var args = std.json.ObjectMap.empty;
+    try args.put(allocator, "tool", .{ .string = "zig_hover" });
+    const result = try zigToolPlan(&app, allocator, .{ .object = args });
+    const body = result.content[0].text.text;
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
+    const root = parsed.value.object;
+
+    try std.testing.expectEqualStrings("zig_tool_plan", root.get("kind").?.string);
+    try std.testing.expectEqualStrings("zig_hover", root.get("tool").?.string);
+    try std.testing.expect(root.get("supported").?.bool);
+    try std.testing.expectEqualStrings("zls_request", root.get("plan_kind").?.string);
+    try std.testing.expectEqualStrings("zls", root.get("backend").?.string);
+    try std.testing.expectEqualStrings("textDocument/hover", root.get("method").?.string);
+    try std.testing.expect(root.get("requires_document_sync").?.bool);
+}
+
+fn jsonArrayContainsString(array: std.json.Array, needle: []const u8) bool {
+    for (array.items) |item| {
+        switch (item) {
+            .string => |value| if (std.mem.eql(u8, value, needle)) return true,
+            else => {},
+        }
+    }
+    return false;
 }
 
 test "explain command setup errors use the calling tool name" {

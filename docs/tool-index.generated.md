@@ -10,7 +10,7 @@ Deterministic Zig development MCP server. No AI generation. Source writes requir
 
 ### discovery
 
-Tools: `zigar_capabilities`, `zigar_tool_index`, `zigar_schema`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`, `zig_command_plan`, `zig_toolchain_resolve`
+Tools: `zigar_capabilities`, `zigar_tool_index`, `zigar_schema`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`, `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
 
 Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace`, `context pack`, `agent guide`, `next action`, `toolchain`, `version manager`, `mise`, `asdf`, `zvm`, `zigup`, `fmt`, `formatter`, `formatting`, `zig fmt`
 
@@ -79,6 +79,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - check formatting without writing: prefer `zig_format_check`
 - understand compiler errors: prefer `zig_explain_errors`
 - group compiler errors by file: prefer `zig_compile_error_index`
+- inspect planning support for a tool: prefer `zig_tool_plan`
 - resolve Zig toolchain mismatch: prefer `zig_toolchain_resolve`
 - plan checks for dirty files: prefer `zig_changed_files_plan`
 - select focused tests: prefer `zig_test_select`
@@ -149,6 +150,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zig_test_failure_triage`: optional `text: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_map`: optional `limit: integer`
 - `zig_test_select`: optional `files: string`, `symbols: string`, `limit: integer`
+- `zig_tool_plan`: required `tool: string`; optional `file: string`, `path: string`, `input: string`, `output: string`, `command: string`, `args: string`, `timeout_ms: integer`
 - `zig_toolchain_resolve`: optional `probe_managers: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
@@ -162,5 +164,96 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zigar_patch_guard`: optional `files: string`, `patch: string`
 - `zigar_project_profile`: optional `apply: boolean`, `content: string`
 - `zigar_validate_patch`: optional `mode: string`, `changed_files: string`, `stop_on_failure: boolean`, `timeout_ms: integer`
+
+## Planning Support
+
+- `zig_allocations`: `pure_analysis` read-only analysis
+- `zig_analysis_graphs`: `workspace_artifact` explicit workspace artifact
+- `zig_build`: `exact_command` exact argv
+- `zig_build_graph`: `pure_analysis` read-only analysis
+- `zig_build_options`: `pure_analysis` read-only analysis
+- `zig_build_targets`: `pure_analysis` read-only analysis
+- `zig_builtin_doc`: `pure_analysis` read-only analysis
+- `zig_builtin_list`: `pure_analysis` read-only analysis
+- `zig_builtin_list_json`: `pure_analysis` read-only analysis
+- `zig_changed_files_plan`: `dynamic_command` runtime-dependent backend plan
+- `zig_check`: `exact_command` exact argv
+- `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
+- `zig_code_action_apply`: `apply_gated_mutation` preview/apply mutation
+- `zig_code_actions`: `zls_request` `textDocument/codeAction`
+- `zig_command_plan`: `pure_analysis` read-only analysis
+- `zig_compile_error_index`: `dynamic_command` runtime-dependent backend plan
+- `zig_completion`: `zls_request` `textDocument/completion`
+- `zig_dead_decl_candidates`: `pure_analysis` read-only analysis
+- `zig_decl_summary`: `pure_analysis` read-only analysis
+- `zig_decl_summary_json`: `pure_analysis` read-only analysis
+- `zig_definition`: `zls_request` `textDocument/definition`
+- `zig_dependency_inspect`: `pure_analysis` read-only analysis
+- `zig_diagnostics`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
+- `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic plus ast-check fallback`
+- `zig_diagnostics_workspace`: `pure_analysis` read-only analysis
+- `zig_document_change`: `zls_request` `textDocument/didChange`
+- `zig_document_close`: `zls_request` `textDocument/didClose`
+- `zig_document_open`: `zls_request` `textDocument/didOpen`
+- `zig_document_status`: `pure_analysis` read-only analysis
+- `zig_document_symbols`: `zls_request` `textDocument/documentSymbol`
+- `zig_env`: `exact_command` exact argv
+- `zig_error_sets`: `pure_analysis` read-only analysis
+- `zig_explain_errors`: `dynamic_command` runtime-dependent backend plan
+- `zig_file_owner`: `pure_analysis` read-only analysis
+- `zig_flamegraph`: `workspace_artifact` explicit workspace artifact
+- `zig_flamegraph_diff`: `workspace_artifact` explicit workspace artifact
+- `zig_format`: `apply_gated_mutation` preview/apply mutation
+- `zig_format_check`: `exact_command` exact argv
+- `zig_hover`: `zls_request` `textDocument/hover`
+- `zig_import_graph`: `pure_analysis` read-only analysis
+- `zig_import_graph_json`: `pure_analysis` read-only analysis
+- `zig_import_resolve`: `pure_analysis` read-only analysis
+- `zig_junit`: `dynamic_command` runtime-dependent backend plan
+- `zig_lang_ref_search`: `pure_analysis` read-only analysis
+- `zig_lint`: `dynamic_command` runtime-dependent backend plan
+- `zig_lint_rules`: `dynamic_command` runtime-dependent backend plan
+- `zig_lint_sarif`: `dynamic_command` runtime-dependent backend plan
+- `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
+- `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
+- `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
+- `zig_profile_plan`: `pure_analysis` read-only analysis
+- `zig_profile_run`: `dynamic_command` runtime-dependent backend plan
+- `zig_public_api`: `pure_analysis` read-only analysis
+- `zig_public_api_diff`: `dynamic_command` runtime-dependent backend plan
+- `zig_references`: `zls_request` `textDocument/references`
+- `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_signature_help`: `zls_request` `textDocument/signatureHelp`
+- `zig_std_item`: `pure_analysis` read-only analysis
+- `zig_std_search`: `pure_analysis` read-only analysis
+- `zig_std_search_json`: `pure_analysis` read-only analysis
+- `zig_target_matrix_plan`: `pure_analysis` read-only analysis
+- `zig_targets`: `exact_command` exact argv
+- `zig_test`: `exact_command` exact argv
+- `zig_test_discover`: `pure_analysis` read-only analysis
+- `zig_test_failure_triage`: `dynamic_command` runtime-dependent backend plan
+- `zig_test_map`: `pure_analysis` read-only analysis
+- `zig_test_select`: `pure_analysis` read-only analysis
+- `zig_tool_plan`: `pure_analysis` read-only analysis
+- `zig_toolchain_resolve`: `dynamic_command` runtime-dependent backend plan
+- `zig_translate_c`: `exact_command` exact argv
+- `zig_version`: `dynamic_command` runtime-dependent backend plan
+- `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
+- `zig_workspace_symbols`: `zls_request` `workspace/symbol`
+- `zigar_agent_guide`: `pure_analysis` read-only analysis
+- `zigar_capabilities`: `pure_analysis` read-only analysis
+- `zigar_context_pack`: `pure_analysis` read-only analysis
+- `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
+- `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
+- `zigar_http_status`: `pure_analysis` read-only analysis
+- `zigar_impact`: `pure_analysis` read-only analysis
+- `zigar_metrics`: `pure_analysis` read-only analysis
+- `zigar_next_action`: `pure_analysis` read-only analysis
+- `zigar_patch_guard`: `pure_analysis` read-only analysis
+- `zigar_project_profile`: `apply_gated_mutation` preview/apply mutation
+- `zigar_schema`: `pure_analysis` read-only analysis
+- `zigar_tool_index`: `pure_analysis` read-only analysis
+- `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
+- `zigar_workspace_info`: `pure_analysis` read-only analysis
 
 mcp.zig 0.0.4 may expose only a generic object schema in tools/list. zigar_schema and zigar://tools/schema include compact argument hints and discovery keywords for clients that need stronger hooks.

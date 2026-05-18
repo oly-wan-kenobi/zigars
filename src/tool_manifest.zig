@@ -59,6 +59,23 @@ pub const CommandPlan = union(enum) {
     required_path: []const []const u8,
 };
 
+pub const ZlsPlan = struct {
+    method: []const u8,
+    requires_document_sync: bool = false,
+    mutates_document_state: bool = false,
+    required_capability: ?[]const u8 = null,
+};
+
+pub const PlanPolicy = union(enum) {
+    exact_command: CommandPlan,
+    dynamic_command: []const u8,
+    zls_request: ZlsPlan,
+    apply_gated_mutation: []const u8,
+    workspace_artifact: []const u8,
+    pure_analysis: []const u8,
+    not_plannable: []const u8,
+};
+
 pub const ToolDefinition = struct {
     description: []const u8,
     input_schema: tooling.SchemaSpec = schema(&.{}),
@@ -66,7 +83,7 @@ pub const ToolDefinition = struct {
     group: ToolGroup,
     risk: ToolRisk = .{},
     handler: HandlerRef,
-    command_plan: ?CommandPlan = null,
+    plan: PlanPolicy,
 };
 
 pub const ToolMeta = struct {
@@ -84,7 +101,7 @@ pub const ToolEntry = struct {
     group: ToolGroup,
     risk: ToolRisk,
     handler: HandlerRef,
-    command_plan: ?CommandPlan,
+    plan: PlanPolicy,
 };
 
 pub const GroupSpec = struct {
@@ -111,6 +128,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigarCapabilities"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_tool_index = tool(.{
         .description = "Return a compact searchable zigar tool index with aliases for fmt, formatter, formatting, zig fmt, docs, ZLS, lint, and profiling.",
@@ -118,6 +136,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigarCapabilities"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_schema = tool(.{
         .description = "Return zigar's compact tool catalog and schema-discovery hints.",
@@ -125,6 +144,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigarSchema"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_doctor = tool(.{
         .description = "Diagnose common zigar MCP configuration, workspace, backend, and transport problems.",
@@ -133,6 +153,7 @@ pub const definitions = struct {
         .group = .discovery,
         .risk = .{ .executes_backend = true },
         .handler = handler(.discovery, "zigarDoctor"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zigar_workspace_info = tool(.{
         .description = "Return workspace and configured backend paths.",
@@ -140,6 +161,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "workspaceInfo"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_metrics = tool(.{
         .description = "Return zigar process counters and backend health.",
@@ -147,6 +169,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigarMetrics"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_http_status = tool(.{
         .description = "Report HTTP transport support and configured endpoint.",
@@ -154,6 +177,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigarHttpStatus"),
+        .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
     pub const zigar_context_pack = tool(.{
         .description = "Return a compact deterministic Zig project context pack for agent orientation.",
@@ -161,6 +185,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarContextPack"),
+        .plan = .{ .pure_analysis = "Agent-orientation snapshot; reads workspace files and manifest metadata without executing tools." },
     });
     pub const zigar_next_action = tool(.{
         .description = "Route a Zig development goal to the next deterministic zigar tool calls.",
@@ -168,6 +193,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarNextAction"),
+        .plan = .{ .pure_analysis = "Goal router; returns deterministic next tool suggestions without executing tools." },
     });
     pub const zigar_agent_guide = tool(.{
         .description = "Return compact Codex/Claude/generic instructions for using zigar efficiently.",
@@ -175,6 +201,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarAgentGuide"),
+        .plan = .{ .pure_analysis = "Client guidance lookup; returns deterministic instructions without executing tools." },
     });
     pub const zigar_validate_patch = tool(.{
         .description = "Run an agent-friendly changed-file validation loop and return structured blockers.",
@@ -183,6 +210,7 @@ pub const definitions = struct {
         .group = .agent_workflows,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.agent, "zigarValidatePatch"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zigar_failure_fusion = tool(.{
         .description = "Fuse compiler/test output, primary failure data, impact hints, and suggested zigar tools.",
@@ -191,6 +219,7 @@ pub const definitions = struct {
         .group = .agent_workflows,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.agent, "zigarFailureFusion"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zigar_impact = tool(.{
         .description = "Analyze affected imports, tests, public API, and validation commands for files or symbols.",
@@ -198,6 +227,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarImpact"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zigar_project_profile = tool(.{
         .description = "Read or explicitly write a workspace-local deterministic zigar project profile.",
@@ -206,6 +236,7 @@ pub const definitions = struct {
         .group = .agent_workflows,
         .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true },
         .handler = handler(.agent, "zigarProjectProfile"),
+        .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
     pub const zigar_patch_guard = tool(.{
         .description = "Validate proposed patch/file paths against zigar workspace and generated-path safety rules.",
@@ -213,13 +244,23 @@ pub const definitions = struct {
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarPatchGuard"),
+        .plan = .{ .pure_analysis = "Workspace safety check; validates paths and patch text without applying changes." },
     });
     pub const zig_command_plan = tool(.{
-        .description = "Preview the exact argv/cwd/timeout for a deterministic zigar command workflow.",
+        .description = "Preview the exact argv/cwd/timeout for a deterministic zigar command workflow; use zig_tool_plan for non-command-backed tools.",
         .input_schema = schema(&.{ .{ "tool", "string", true }, .{ "file", "string", false }, .{ "path", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
         .read_only = true,
         .group = .discovery,
         .handler = handler(.discovery, "zigCommandPlan"),
+        .plan = .{ .pure_analysis = "Returns exact argv plans only for command-backed tools; reports known non-command tools as unsupported instead of executing." },
+    });
+    pub const zig_tool_plan = tool(.{
+        .description = "Return manifest-derived planning support for any registered zigar tool, including exact commands, dynamic backends, ZLS requests, and pure analysis tools.",
+        .input_schema = schema(&.{ .{ "tool", "string", true }, .{ "file", "string", false }, .{ "path", "string", false }, .{ "input", "string", false }, .{ "output", "string", false }, .{ "command", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
+        .read_only = true,
+        .group = .discovery,
+        .handler = handler(.discovery, "zigToolPlan"),
+        .plan = .{ .pure_analysis = "Returns manifest-derived planning metadata; does not execute commands or mutate workspace state." },
     });
     pub const zig_toolchain_resolve = tool(.{
         .description = "Detect active Zig/ZLS versions, project version hints, and installed Zig version managers.",
@@ -228,6 +269,7 @@ pub const definitions = struct {
         .group = .discovery,
         .risk = .{ .executes_backend = true },
         .handler = handler(.discovery, "zigToolchainResolve"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_version = tool(.{
         .description = "Return Zig and ZLS version information.",
@@ -236,6 +278,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.core, "zigVersion"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_env = tool(.{
         .description = "Run `zig env`.",
@@ -244,6 +287,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.core, "zigEnv"),
+        .plan = .{ .exact_command = .{ .argv = &.{"env"} } },
     });
     pub const zig_targets = tool(.{
         .description = "Run `zig targets`.",
@@ -252,6 +296,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.core, "zigTargets"),
+        .plan = .{ .exact_command = .{ .argv = &.{"targets"} } },
     });
     pub const zig_build = tool(.{
         .description = "Run `zig build` in the workspace.",
@@ -260,7 +305,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.core, "zigBuild"),
-        .command_plan = .{ .argv = &.{"build"} },
+        .plan = .{ .exact_command = .{ .argv = &.{"build"} } },
     });
     pub const zig_test = tool(.{
         .description = "Run Zig tests. Uses `zig test <file>` when file is provided, otherwise `zig build test`.",
@@ -269,7 +314,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.core, "zigTest"),
-        .command_plan = .{ .optional_file = .{ .file_args = &.{"test"}, .fallback_args = &.{ "build", "test" } } },
+        .plan = .{ .exact_command = .{ .optional_file = .{ .file_args = &.{"test"}, .fallback_args = &.{ "build", "test" } } } },
     });
     pub const zig_check = tool(.{
         .description = "Run `zig ast-check` on a workspace Zig file.",
@@ -278,7 +323,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.core, "zigCheck"),
-        .command_plan = .{ .required_file = &.{"ast-check"} },
+        .plan = .{ .exact_command = .{ .required_file = &.{"ast-check"} } },
     });
     pub const zig_compile_error_index = tool(.{
         .description = "Parse compiler output or run a focused Zig command and return grouped compile diagnostics.",
@@ -287,6 +332,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.core, "zigCompileErrorIndex"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_explain_errors = tool(.{
         .description = "Run a focused Zig command and return parsed compiler findings plus deterministic next actions.",
@@ -295,6 +341,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.core, "zigExplainErrors"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_translate_c = tool(.{
         .description = "Run `zig translate-c` on a workspace C header/source file.",
@@ -303,6 +350,7 @@ pub const definitions = struct {
         .group = .core_zig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.core, "zigTranslateC"),
+        .plan = .{ .exact_command = .{ .required_file = &.{"translate-c"} } },
     });
     pub const zig_format = tool(.{
         .description = "Format a Zig file. Returns preview by default; writes only with apply=true.",
@@ -311,6 +359,7 @@ pub const definitions = struct {
         .group = .formatting_and_edits,
         .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigFormat"),
+        .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
     pub const zig_format_check = tool(.{
         .description = "Run `zig fmt --check` on a workspace file or directory.",
@@ -319,7 +368,7 @@ pub const definitions = struct {
         .group = .formatting_and_edits,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigFormatCheck"),
-        .command_plan = .{ .required_path = &.{ "fmt", "--check" } },
+        .plan = .{ .exact_command = .{ .required_path = &.{ "fmt", "--check" } } },
     });
     pub const zig_patch_preview = tool(.{
         .description = "Preview a replacement-content patch with hashes and unified diff; writes only with apply=true.",
@@ -328,6 +377,7 @@ pub const definitions = struct {
         .group = .formatting_and_edits,
         .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
         .handler = handler(.edit_zls, "zigPatchPreview"),
+        .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
     pub const zig_rename = tool(.{
         .description = "Request a ZLS workspace edit for a symbol rename. Returns preview by default; writes only with apply=true.",
@@ -336,6 +386,7 @@ pub const definitions = struct {
         .group = .formatting_and_edits,
         .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigRename"),
+        .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
     pub const zig_code_actions = tool(.{
         .description = "Get ZLS code actions for a range.",
@@ -343,6 +394,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .formatting_and_edits,
         .handler = handler(.edit_zls, "zigCodeActions"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/codeAction", .requires_document_sync = true, .required_capability = "codeActionProvider" } },
     });
     pub const zig_code_action_apply = tool(.{
         .description = "Preview or apply one ZLS code action by index. Writes only with apply=true.",
@@ -351,6 +403,7 @@ pub const definitions = struct {
         .group = .formatting_and_edits,
         .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigCodeActionApply"),
+        .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
     pub const zig_document_open = tool(.{
         .description = "Open or replace an in-memory Zig document in the ZLS session.",
@@ -359,6 +412,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDocumentOpen"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/didOpen", .requires_document_sync = true, .mutates_document_state = true } },
     });
     pub const zig_document_change = tool(.{
         .description = "Replace an already-open in-memory Zig document in the ZLS session.",
@@ -367,6 +421,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDocumentOpen"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/didChange", .requires_document_sync = true, .mutates_document_state = true } },
     });
     pub const zig_document_close = tool(.{
         .description = "Close a Zig document in the ZLS session.",
@@ -375,6 +430,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDocumentClose"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/didClose", .mutates_document_state = true } },
     });
     pub const zig_document_status = tool(.{
         .description = "Return tracked ZLS document version/hash/dirty metadata.",
@@ -382,6 +438,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .zls,
         .handler = handler(.edit_zls, "zigDocumentStatus"),
+        .plan = .{ .pure_analysis = "Reads process-local ZLS document state without sending backend requests." },
     });
     pub const zig_diagnostics = tool(.{
         .description = "Open a Zig file in ZLS and return the latest publishDiagnostics notification when available, with ast-check fallback.",
@@ -390,6 +447,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigDiagnostics"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/publishDiagnostics with ast-check fallback", .requires_document_sync = true } },
     });
     pub const zig_diagnostics_all = tool(.{
         .description = "Aggregate diagnostics from ZLS publish/pull diagnostics and `zig ast-check`.",
@@ -398,6 +456,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigDiagnosticsAll"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic plus ast-check fallback", .requires_document_sync = true } },
     });
     pub const zig_diagnostics_workspace = tool(.{
         .description = "Return cached workspace diagnostics grouped by file and severity.",
@@ -405,6 +464,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .zls,
         .handler = handler(.edit_zls, "zigDiagnosticsWorkspace"),
+        .plan = .{ .pure_analysis = "Reads cached workspace diagnostics collected from the active ZLS session." },
     });
     pub const zig_hover = tool(.{
         .description = "Get ZLS hover information for a Zig symbol.",
@@ -413,6 +473,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigHover"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/hover", .requires_document_sync = true, .required_capability = "hoverProvider" } },
     });
     pub const zig_definition = tool(.{
         .description = "Get ZLS definition location for a Zig symbol.",
@@ -421,6 +482,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigDefinition"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/definition", .requires_document_sync = true, .required_capability = "definitionProvider" } },
     });
     pub const zig_references = tool(.{
         .description = "Find ZLS references for a Zig symbol.",
@@ -429,6 +491,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigReferences"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/references", .requires_document_sync = true, .required_capability = "referencesProvider" } },
     });
     pub const zig_completion = tool(.{
         .description = "Get ZLS completions at a Zig source position.",
@@ -437,6 +500,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigCompletion"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/completion", .requires_document_sync = true, .required_capability = "completionProvider" } },
     });
     pub const zig_signature_help = tool(.{
         .description = "Get ZLS signature help at a Zig source position.",
@@ -445,6 +509,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigSignatureHelp"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/signatureHelp", .requires_document_sync = true, .required_capability = "signatureHelpProvider" } },
     });
     pub const zig_document_symbols = tool(.{
         .description = "List ZLS document symbols for a Zig source file.",
@@ -453,6 +518,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigDocumentSymbols"),
+        .plan = .{ .zls_request = .{ .method = "textDocument/documentSymbol", .requires_document_sync = true, .required_capability = "documentSymbolProvider" } },
     });
     pub const zig_workspace_symbols = tool(.{
         .description = "Search ZLS workspace symbols matching a query.",
@@ -461,6 +527,7 @@ pub const definitions = struct {
         .group = .zls,
         .risk = .{ .executes_backend = true },
         .handler = handler(.edit_zls, "zigWorkspaceSymbols"),
+        .plan = .{ .zls_request = .{ .method = "workspace/symbol", .required_capability = "workspaceSymbolProvider" } },
     });
     pub const zig_builtin_list = tool(.{
         .description = "List curated Zig builtin docs bundled with zigar.",
@@ -468,6 +535,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigBuiltinList"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_builtin_list_json = tool(.{
         .description = "Return curated Zig builtin docs as JSON-native records.",
@@ -475,6 +543,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigBuiltinListJson"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_builtin_doc = tool(.{
         .description = "Search curated Zig builtin docs.",
@@ -482,6 +551,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigBuiltinDoc"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_std_search = tool(.{
         .description = "Search local Zig standard library source for a query.",
@@ -489,6 +559,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigStdSearch"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_std_search_json = tool(.{
         .description = "Search local Zig standard library source and return JSON-native records.",
@@ -496,6 +567,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigStdSearchJson"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_std_item = tool(.{
         .description = "Search local Zig standard library source for a fully qualified item string.",
@@ -503,6 +575,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigStdItem"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_lang_ref_search = tool(.{
         .description = "Search Zig's installed documentation sources.",
@@ -510,6 +583,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .docs,
         .handler = handler(.docs, "zigLangRefSearch"),
+        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_import_graph = tool(.{
         .description = "Build a heuristic import graph from workspace Zig files.",
@@ -517,6 +591,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportGraph"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_import_graph_json = tool(.{
         .description = "Build a JSON-native heuristic import graph from workspace Zig files.",
@@ -524,6 +599,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportGraphJson"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_decl_summary = tool(.{
         .description = "Summarize declarations in a Zig file.",
@@ -531,6 +607,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeclSummary"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_decl_summary_json = tool(.{
         .description = "Return JSON-native declaration summary for a Zig file.",
@@ -538,6 +615,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeclSummaryJson"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_allocations = tool(.{
         .description = "Find allocation-related call sites in a Zig file.",
@@ -545,6 +623,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigAllocations"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_error_sets = tool(.{
         .description = "Find error-related sites in a Zig file.",
@@ -552,6 +631,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigErrorSets"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_public_api = tool(.{
         .description = "Find public API declarations in a Zig file.",
@@ -559,6 +639,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigPublicApi"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_dead_decl_candidates = tool(.{
         .description = "List private declaration candidates that need reference checks before deletion.",
@@ -566,6 +647,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeadDeclCandidates"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_build_graph = tool(.{
         .description = "Parse build.zig/build.zig.zon heuristically into modules, dependencies, build steps, and artifacts.",
@@ -573,6 +655,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildGraph"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_build_targets = tool(.{
         .description = "Return build steps, artifacts, modules, and suggested zig build commands.",
@@ -580,6 +663,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildTargets"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_build_options = tool(.{
         .description = "Discover available `zig build -D...` options from build.zig and standard Zig build knobs.",
@@ -587,6 +671,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildOptions"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_file_owner = tool(.{
         .description = "Map a workspace Zig file to likely build module/artifact/test commands.",
@@ -594,6 +679,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigFileOwner"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_import_resolve = tool(.{
         .description = "Resolve a Zig @import string against workspace modules, packages, stdlib, or a source file.",
@@ -601,6 +687,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportResolve"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_test_discover = tool(.{
         .description = "Discover Zig test declarations and runnable test commands.",
@@ -608,6 +695,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestDiscover"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_changed_files_plan = tool(.{
         .description = "Inspect git changes and recommend the smallest useful Zig validation commands.",
@@ -616,6 +704,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigChangedFilesPlan"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_dependency_inspect = tool(.{
         .description = "Inspect build.zig.zon dependencies, hashes, local package/cache state, and dependency wiring risks.",
@@ -623,6 +712,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDependencyInspect"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_target_matrix_plan = tool(.{
         .description = "Plan cross-target Zig build/test matrix commands without running them.",
@@ -630,6 +720,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTargetMatrixPlan"),
+        .plan = .{ .pure_analysis = "Command matrix planner; returns candidate build/test commands without running them." },
     });
     pub const zig_test_failure_triage = tool(.{
         .description = "Parse Zig test output or run tests and return failing tests, panic clues, and rerun commands.",
@@ -638,6 +729,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.static_analysis, "zigTestFailureTriage"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_workspace_symbol_cache = tool(.{
         .description = "Build or inspect a cached heuristic workspace symbol/import index for repeated MCP calls.",
@@ -645,6 +737,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigWorkspaceSymbolCache"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_package_cache_doctor = tool(.{
         .description = "Diagnose Zig package/cache directories, git-tracked generated artifacts, and package hash risks.",
@@ -653,6 +746,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigPackageCacheDoctor"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_test_map = tool(.{
         .description = "Build a deterministic map of Zig test declarations, files, likely symbols, and test commands.",
@@ -660,6 +754,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestMap"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_test_select = tool(.{
         .description = "Select focused Zig test commands for changed files or symbols.",
@@ -667,6 +762,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestSelect"),
+        .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_public_api_diff = tool(.{
         .description = "Compare public Zig declarations from git baseline/text/current file and report likely breaking changes.",
@@ -675,6 +771,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigPublicApiDiff"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_ci_annotations = tool(.{
         .description = "Convert diagnostics/check output into CI annotation records.",
@@ -683,6 +780,7 @@ pub const definitions = struct {
         .group = .ci_artifacts,
         .risk = .{ .executes_backend = true },
         .handler = handler(.ci, "zigCiAnnotations"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_junit = tool(.{
         .description = "Run Zig tests and return a minimal JUnit XML artifact.",
@@ -691,6 +789,7 @@ pub const definitions = struct {
         .group = .ci_artifacts,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.ci, "zigJunit"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_matrix_check = tool(.{
         .description = "Run build/test checks across configured Zig binaries.",
@@ -699,6 +798,7 @@ pub const definitions = struct {
         .group = .ci_artifacts,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true, .executes_backend = true },
         .handler = handler(.ci, "zigMatrixCheck"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_lint = tool(.{
         .description = "Run zwanzig as optional Zig static-analysis backend with JSON output by default.",
@@ -707,6 +807,7 @@ pub const definitions = struct {
         .group = .zwanzig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLint"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_lint_sarif = tool(.{
         .description = "Run zwanzig with SARIF output.",
@@ -715,6 +816,7 @@ pub const definitions = struct {
         .group = .zwanzig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLintSarif"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_lint_rules = tool(.{
         .description = "List zwanzig rules when the backend is installed.",
@@ -723,6 +825,7 @@ pub const definitions = struct {
         .group = .zwanzig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLintRules"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_analysis_graphs = tool(.{
         .description = "Run zwanzig graph/visualization options, writing only to an explicit workspace output path.",
@@ -731,6 +834,7 @@ pub const definitions = struct {
         .group = .zwanzig,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },
         .handler = handler(.zwanzig, "zigAnalysisGraphs"),
+        .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
     });
     pub const zig_profile_plan = tool(.{
         .description = "Return platform-specific profiling capture suggestions for the workspace.",
@@ -738,6 +842,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .profiling,
         .handler = handler(.profiling, "zigProfilePlan"),
+        .plan = .{ .pure_analysis = "Profiling command planner; returns platform-specific capture suggestions without running profilers." },
     });
     pub const zig_profile_run = tool(.{
         .description = "Run a user-specified profiler command in the workspace.",
@@ -746,6 +851,7 @@ pub const definitions = struct {
         .group = .profiling,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true },
         .handler = handler(.profiling, "zigProfileRun"),
+        .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_flamegraph = tool(.{
         .description = "Convert profiler output to SVG through zflame.",
@@ -754,6 +860,7 @@ pub const definitions = struct {
         .group = .profiling,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },
         .handler = handler(.profiling, "zigFlamegraph"),
+        .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
     });
     pub const zig_flamegraph_diff = tool(.{
         .description = "Create a differential folded stack file through diff-folded, then render it through zflame.",
@@ -762,6 +869,7 @@ pub const definitions = struct {
         .group = .profiling,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },
         .handler = handler(.profiling, "zigFlamegraphDiff"),
+        .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
     });
 };
 
@@ -803,7 +911,7 @@ fn buildEntries() [definition_decls.len]ToolEntry {
             .group = definition.group,
             .risk = definition.risk,
             .handler = definition.handler,
-            .command_plan = definition.command_plan,
+            .plan = definition.plan,
         };
     }
     return result;
@@ -852,8 +960,27 @@ pub fn riskFor(id: ToolId) ToolRisk {
     return entryFor(id).risk;
 }
 
+pub fn planFor(id: ToolId) PlanPolicy {
+    return entryFor(id).plan;
+}
+
 pub fn commandPlanFor(id: ToolId) ?CommandPlan {
-    return entryFor(id).command_plan;
+    return switch (planFor(id)) {
+        .exact_command => |plan| plan,
+        else => null,
+    };
+}
+
+pub fn planKind(plan: PlanPolicy) []const u8 {
+    return switch (plan) {
+        .exact_command => "exact_command",
+        .dynamic_command => "dynamic_command",
+        .zls_request => "zls_request",
+        .apply_gated_mutation => "apply_gated_mutation",
+        .workspace_artifact => "workspace_artifact",
+        .pure_analysis => "pure_analysis",
+        .not_plannable => "not_plannable",
+    };
 }
 
 pub fn riskLevel(risk: ToolRisk) []const u8 {
@@ -925,6 +1052,16 @@ test "tool schemas use validator-supported JSON field types" {
             try std.testing.expect(std.mem.eql(u8, field[1], "string") or
                 std.mem.eql(u8, field[1], "boolean") or
                 std.mem.eql(u8, field[1], "integer"));
+        }
+    }
+}
+
+test "tool planning policies expose exact command plans only for exact commands" {
+    for (entries) |entry| {
+        try std.testing.expect(planKind(entry.plan).len > 0);
+        switch (entry.plan) {
+            .exact_command => try std.testing.expect(commandPlanFor(entry.id) != null),
+            else => try std.testing.expect(commandPlanFor(entry.id) == null),
         }
     }
 }

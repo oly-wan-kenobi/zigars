@@ -368,8 +368,30 @@ pub fn versionManagersValue(allocator: std.mem.Allocator, a: *App, probe: bool, 
 
 pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
-    const spec = tool_metadata.find(tool_name) orelse return error.InvalidArguments;
-    const plan = tool_metadata.commandPlanFor(spec.id) orelse return error.InvalidArguments;
+    const entry = tool_metadata.findEntry(tool_name) orelse return error.InvalidArguments;
+    const plan = tool_metadata.commandPlanFor(entry.id) orelse {
+        return commandPlanUnsupportedResult(allocator, entry);
+    };
+    return exactCommandPlanResult(a, allocator, args, entry, plan, "zig_command_plan");
+}
+
+pub fn zigToolPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
+    const entry = tool_metadata.findEntry(tool_name) orelse return error.InvalidArguments;
+    return switch (entry.plan) {
+        .exact_command => |plan| exactCommandPlanResult(a, allocator, args, entry, plan, "zig_tool_plan"),
+        else => toolPlanPolicyResult(allocator, entry),
+    };
+}
+
+fn exactCommandPlanResult(
+    a: *App,
+    allocator: std.mem.Allocator,
+    args: ?std.json.Value,
+    entry: tool_metadata.ToolEntry,
+    plan: tool_metadata.CommandPlan,
+    planner_name: []const u8,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
     var resolved_path: ?[]const u8 = null;
@@ -380,7 +402,7 @@ pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
         .argv => |argv| list.appendSlice(allocator, argv) catch return error.OutOfMemory,
         .optional_file => |file_plan| {
             if (argString(args, "file")) |file| {
-                resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
+                resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, planner_name, file, err);
                 list.appendSlice(allocator, file_plan.file_args) catch return error.OutOfMemory;
                 list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
             } else {
@@ -388,14 +410,18 @@ pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
             }
         },
         .required_file => |argv| {
-            const file = argString(args, "file") orelse return error.InvalidArguments;
-            resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
+            const file = argString(args, "file") orelse {
+                return missingPlanningArgumentResult(allocator, planner_name, entry, "file");
+            };
+            resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, planner_name, file, err);
             list.appendSlice(allocator, argv) catch return error.OutOfMemory;
             list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
         },
         .required_path => |argv| {
-            const path = argString(args, "path") orelse return error.InvalidArguments;
-            resolved_path = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", path, err);
+            const path = argString(args, "path") orelse {
+                return missingPlanningArgumentResult(allocator, planner_name, entry, "path");
+            };
+            resolved_path = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, planner_name, path, err);
             list.appendSlice(allocator, argv) catch return error.OutOfMemory;
             list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
         },
@@ -406,13 +432,131 @@ pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    obj.put(allocator, "tool", .{ .string = tool_name }) catch return error.OutOfMemory;
+    putPlanningBase(allocator, &obj, planner_name, entry, true) catch return error.OutOfMemory;
+    obj.put(allocator, "command_backed", .{ .bool = true }) catch return error.OutOfMemory;
+    obj.put(allocator, "argv_exact", .{ .bool = true }) catch return error.OutOfMemory;
     obj.put(allocator, "cwd", .{ .string = a.workspace.root }) catch return error.OutOfMemory;
     obj.put(allocator, "argv", argvValue(allocator, list.items) catch return error.OutOfMemory) catch return error.OutOfMemory;
     obj.put(allocator, "timeout_ms", .{ .integer = toolTimeout(a, args) }) catch return error.OutOfMemory;
-    const risk = tool_metadata.riskFor(spec.id);
-    obj.put(allocator, "risk", tool_metadata.riskValue(allocator, spec) catch return error.OutOfMemory) catch return error.OutOfMemory;
-    obj.put(allocator, "risk_level", .{ .string = tool_metadata.riskLevel(risk) }) catch return error.OutOfMemory;
-    obj.put(allocator, "writes_source", .{ .bool = risk.writes_source }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
+}
+
+fn commandPlanUnsupportedResult(allocator: std.mem.Allocator, entry: tool_metadata.ToolEntry) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    putPlanningBase(allocator, &obj, "zig_command_plan", entry, false) catch return error.OutOfMemory;
+    obj.put(allocator, "command_backed", .{ .bool = false }) catch return error.OutOfMemory;
+    obj.put(allocator, "argv_exact", .{ .bool = false }) catch return error.OutOfMemory;
+    obj.put(allocator, "reason", .{ .string = "zig_command_plan only returns exact argv/cwd/timeout plans for command-backed tools." }) catch return error.OutOfMemory;
+    obj.put(allocator, "use", .{ .string = "zig_tool_plan" }) catch return error.OutOfMemory;
+    obj.put(allocator, "supported_tools", supportedCommandToolsValue(allocator) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    return structured(allocator, .{ .object = obj });
+}
+
+fn toolPlanPolicyResult(allocator: std.mem.Allocator, entry: tool_metadata.ToolEntry) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    const supported = switch (entry.plan) {
+        .not_plannable => false,
+        else => true,
+    };
+    putPlanningBase(allocator, &obj, "zig_tool_plan", entry, supported) catch return error.OutOfMemory;
+    putPlanPolicyDetails(allocator, &obj, entry) catch return error.OutOfMemory;
+    return structured(allocator, .{ .object = obj });
+}
+
+fn missingPlanningArgumentResult(
+    allocator: std.mem.Allocator,
+    planner_name: []const u8,
+    entry: tool_metadata.ToolEntry,
+    field: []const u8,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    putPlanningBase(allocator, &obj, planner_name, entry, false) catch return error.OutOfMemory;
+    obj.put(allocator, "error_kind", .{ .string = "argument_error" }) catch return error.OutOfMemory;
+    obj.put(allocator, "code", .{ .string = "missing_required_argument" }) catch return error.OutOfMemory;
+    obj.put(allocator, "field", .{ .string = field }) catch return error.OutOfMemory;
+    obj.put(allocator, "expected", .{ .string = "non-empty workspace-relative path" }) catch return error.OutOfMemory;
+    obj.put(allocator, "resolution", .{ .string = "Provide the required argument or use zig_tool_plan on non-command tools to inspect planning support without producing argv." }) catch return error.OutOfMemory;
+    return structured(allocator, .{ .object = obj });
+}
+
+fn putPlanningBase(
+    allocator: std.mem.Allocator,
+    obj: *std.json.ObjectMap,
+    planner_name: []const u8,
+    entry: tool_metadata.ToolEntry,
+    supported: bool,
+) !void {
+    const risk = tool_metadata.riskFor(entry.id);
+    try obj.put(allocator, "kind", .{ .string = planner_name });
+    try obj.put(allocator, "tool", .{ .string = entry.name });
+    try obj.put(allocator, "registered", .{ .bool = true });
+    try obj.put(allocator, "supported", .{ .bool = supported });
+    try obj.put(allocator, "plan_kind", .{ .string = tool_metadata.planKind(entry.plan) });
+    try obj.put(allocator, "group", .{ .string = tool_metadata.groupName(entry.group) });
+    try obj.put(allocator, "description", .{ .string = entry.meta.description });
+    try obj.put(allocator, "read_only", .{ .bool = entry.meta.read_only });
+    try obj.put(allocator, "risk", try tool_metadata.riskValue(allocator, entry.meta));
+    try obj.put(allocator, "risk_level", .{ .string = tool_metadata.riskLevel(risk) });
+    try obj.put(allocator, "writes_source", .{ .bool = risk.writes_source });
+}
+
+fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, entry: tool_metadata.ToolEntry) !void {
+    switch (entry.plan) {
+        .exact_command => unreachable,
+        .dynamic_command => |reason| {
+            try obj.put(allocator, "command_backed", .{ .bool = true });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .zls_request => |plan| {
+            try obj.put(allocator, "command_backed", .{ .bool = false });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "backend", .{ .string = "zls" });
+            try obj.put(allocator, "method", .{ .string = plan.method });
+            try obj.put(allocator, "requires_document_sync", .{ .bool = plan.requires_document_sync });
+            try obj.put(allocator, "mutates_document_state", .{ .bool = plan.mutates_document_state });
+            if (plan.required_capability) |capability| {
+                try obj.put(allocator, "required_capability", .{ .string = capability });
+            } else {
+                try obj.put(allocator, "required_capability", .null);
+            }
+        },
+        .apply_gated_mutation => |reason| {
+            try obj.put(allocator, "command_backed", .{ .bool = entry.risk.executes_backend });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "apply_gated", .{ .bool = true });
+            try obj.put(allocator, "preview_by_default", .{ .bool = entry.risk.preview_by_default });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .workspace_artifact => |reason| {
+            try obj.put(allocator, "command_backed", .{ .bool = entry.risk.executes_backend });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "writes_artifact", .{ .bool = true });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .pure_analysis => |reason| {
+            try obj.put(allocator, "command_backed", .{ .bool = false });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .not_plannable => |reason| {
+            try obj.put(allocator, "command_backed", .{ .bool = false });
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+    }
+}
+
+fn supportedCommandToolsValue(allocator: std.mem.Allocator) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (tool_metadata.entries) |entry| {
+        if (tool_metadata.commandPlanFor(entry.id) != null) {
+            try array.append(.{ .string = entry.name });
+        }
+    }
+    return .{ .array = array };
 }

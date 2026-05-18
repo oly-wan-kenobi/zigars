@@ -2,7 +2,7 @@
 
 `zigar_capabilities`, `zigar_tool_index`, and `zigar_schema` expose the same
 catalog. Tool grouping, discovery keywords, argument schemas, risk metadata,
-command-plan metadata, and handler references are generated from
+planning metadata, and handler references are generated from
 `src/tool_manifest.zig`; the public MCP tool/resource response adds static
 safety notes and common intents from `src/tool_catalog.json`.
 
@@ -25,6 +25,13 @@ Registry-derived argument hints also include a `risk` object. The MCP
 specific: source writes, artifact writes, apply-gated writes, preview-by-default
 behavior, LSP-state mutation, backend execution, project-code execution, and
 arbitrary user-command execution are tracked independently.
+
+Planning support is also registry-derived. Use `zig_tool_plan` for the broad
+answer for any registered tool: exact command, runtime-dependent backend, ZLS
+request, apply-gated mutation, workspace artifact, pure analysis, or explicitly
+unsupported. `zig_command_plan` is intentionally narrower: it returns exact
+`argv`/`cwd`/`timeout_ms` only for command-backed tools and returns a structured
+unsupported response for other known tools instead of `InvalidArguments`.
 
 `zigar_doctor` accepts optional `probe_backends` and `timeout_ms` arguments. Use
 backend probes when a client reports `PermissionDenied`, missing formatter/ZLS

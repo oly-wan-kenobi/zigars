@@ -15,16 +15,17 @@ auditable:
 - `src/runtime.zig` owns process-local runtime state such as workspace config,
   ZLS session pointers, counters, backend probes, and heuristic analysis caches.
 - `src/tool_manifest.zig` is the typed tool manifest: ids, names, descriptions,
-  argument schemas, grouping, discovery keywords, handler references, command
-  plans, MCP read-only annotations, and risk metadata. `src/tool_metadata.zig`
-  is a compatibility facade for consumers that still use the older name.
+  argument schemas, grouping, discovery keywords, handler references, planning
+  policies, MCP read-only annotations, and risk metadata.
+  `src/tool_metadata.zig` is a compatibility facade for consumers that still
+  use the older name.
 - `src/tool_handlers.zig` resolves manifest handler references to functions by
   handler module namespace. It does not map individual tools.
 - `src/tool_registry.zig` adapts typed metadata to `mcp.zig` tools and validates
   JSON arguments before handlers run.
 - `src/catalog.zig` merges static safety/common-intent text with manifest-derived
-  groups, discovery keywords, argument hints, and risk metadata for public
-  schema/capability responses.
+  groups, discovery keywords, argument hints, planning support, and risk
+  metadata for public schema/capability responses.
 - `src/json_result.zig` centralizes structured JSON result serialization for MCP
   tool responses and deep-clones structured content into the request allocator.
 - `src/analysis.zig` contains heuristic source scanners. Every heuristic result
@@ -41,8 +42,8 @@ auditable:
 When adding or changing a tool:
 
 1. Add or update one entry in `src/tool_manifest.zig`. That entry names the
-   schema, group, keywords through the group table, handler reference, command
-   plan when applicable, read-only annotation, and risk flags.
+   schema, group, keywords through the group table, handler reference, planning
+   policy, read-only annotation, and risk flags.
 2. Add the handler implementation in the appropriate `src/tools/*.zig` module.
    Only add a new namespace to `src/tool_handlers.zig` when introducing a new
    handler module, not for routine tool additions.

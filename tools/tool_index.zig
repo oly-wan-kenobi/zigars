@@ -118,6 +118,27 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
         try out.writer.writeAll("\n");
     }
 
+    try out.writer.writeAll("\n## Planning Support\n\n");
+    var plan_keys: std.ArrayList([]const u8) = .empty;
+    defer plan_keys.deinit(allocator);
+    for (tool_metadata.entries) |entry| try plan_keys.append(allocator, entry.name);
+    std.mem.sort([]const u8, plan_keys.items, {}, stringLessThan);
+
+    for (plan_keys.items) |tool_name| {
+        const entry = tool_metadata.findEntry(tool_name).?;
+        try out.writer.print("- `{s}`: `{s}`", .{ tool_name, tool_metadata.planKind(entry.plan) });
+        switch (entry.plan) {
+            .exact_command => try out.writer.writeAll(" exact argv"),
+            .dynamic_command => try out.writer.writeAll(" runtime-dependent backend plan"),
+            .zls_request => |plan| try out.writer.print(" `{s}`", .{plan.method}),
+            .apply_gated_mutation => try out.writer.writeAll(" preview/apply mutation"),
+            .workspace_artifact => try out.writer.writeAll(" explicit workspace artifact"),
+            .pure_analysis => try out.writer.writeAll(" read-only analysis"),
+            .not_plannable => try out.writer.writeAll(" unsupported"),
+        }
+        try out.writer.writeAll("\n");
+    }
+
     try out.writer.print("\n{s}\n", .{obj.get("tools_list_schema_note").?.string});
     return try out.toOwnedSlice();
 }
