@@ -52,4 +52,5 @@ test {
     _ = workspace;
     _ = zls_process;
     _ = zls_session;
+    _ = @import("lsp/client_tests.zig");
 }
