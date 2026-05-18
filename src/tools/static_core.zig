@@ -12,6 +12,9 @@ const App = common.App;
 const structured = common.structured;
 const argString = common.argString;
 const argInt = common.argInt;
+const missingArgumentResult = common.missingArgumentResult;
+const toolErrorResult = common.toolErrorResult;
+const toolErrorFromError = common.toolErrorFromError;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const backendErrorResult = common.backendErrorResult;
@@ -22,20 +25,55 @@ const appendWorkspaceFormatCheckCommand = common.appendWorkspaceFormatCheckComma
 const appendUniqueCommand = common.appendUniqueCommand;
 const readSourceArg = docs_tools.readSourceArg;
 
+fn readSourceArgError(a: *App, allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return switch (err) {
+        error.InvalidArguments, error.MissingFile => missingArgumentResult(allocator, tool_name, "file", "workspace-relative Zig source path"),
+        error.PathOutsideWorkspace, error.EmptyPath => if (argString(args, "file")) |file|
+            workspacePathErrorResult(a, allocator, tool_name, file, err)
+        else
+            missingArgumentResult(allocator, tool_name, "file", "workspace-relative Zig source path"),
+        error.OutOfMemory => error.OutOfMemory,
+        else => workspaceFileError(allocator, tool_name, argString(args, "file") orelse "<missing>", err, "Pass a readable workspace file or provide the content through a tool that explicitly supports inline content."),
+    };
+}
+
+fn analysisToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return toolErrorFromError(allocator, .{
+        .tool = tool_name,
+        .operation = operation,
+        .phase = "static_analysis",
+        .code = "analysis_failed",
+        .category = "analysis",
+        .resolution = "Retry with a smaller limit or inspect the workspace files for syntax that the heuristic analyzer cannot scan.",
+    }, err);
+}
+
+fn workspaceFileError(allocator: std.mem.Allocator, tool_name: []const u8, file: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return toolErrorFromError(allocator, .{
+        .tool = tool_name,
+        .operation = "read_workspace_file",
+        .phase = "workspace_read",
+        .code = "read_failed",
+        .category = "filesystem",
+        .resolution = resolution,
+        .details = &.{.{ .key = "file", .value = .{ .string = file } }},
+    }, err);
+}
+
 pub fn zigImportGraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const output = analysis.importGraph(allocator, a.io, a.workspace.root, @intCast(@max(1, argInt(args, "limit", 200)))) catch return error.ExecutionFailed;
+    const output = analysis.importGraph(allocator, a.io, a.workspace.root, @intCast(@max(1, argInt(args, "limit", 200)))) catch |err| return analysisToolError(allocator, "zig_import_graph", "scan_import_graph", err);
     defer allocator.free(output);
     return structuredText(allocator, "zig_import_graph", output);
 }
 
 pub fn zigImportGraphJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const limit: usize = @intCast(@max(1, argInt(args, "limit", 200)));
-    const value = analysis.importGraphJson(allocator, a.io, a.workspace.root, limit) catch return error.ExecutionFailed;
+    const value = analysis.importGraphJson(allocator, a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_import_graph_json", "scan_import_graph_json", err);
     return structured(allocator, value);
 }
 
 pub fn zigDeclSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_decl_summary", args, err);
     defer allocator.free(source.bytes);
     const output = analysis.declSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
@@ -43,7 +81,7 @@ pub fn zigDeclSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 }
 
 pub fn zigDeclSummaryJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_decl_summary_json", args, err);
     defer allocator.free(source.bytes);
     const value = analysis.declSummaryJson(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     return structured(allocator, value);
@@ -72,7 +110,7 @@ pub fn lineAtLocal(text_value: []const u8, index: usize) []const u8 {
 }
 
 pub fn zigAllocations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_allocations", args, err);
     defer allocator.free(source.bytes);
     const output = analysis.allocationSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
@@ -80,7 +118,7 @@ pub fn zigAllocations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 }
 
 pub fn zigErrorSets(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_error_sets", args, err);
     defer allocator.free(source.bytes);
     const output = analysis.errorSetSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
@@ -88,7 +126,7 @@ pub fn zigErrorSets(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 }
 
 pub fn zigPublicApi(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_public_api", args, err);
     defer allocator.free(source.bytes);
     const output = analysis.publicApiSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
@@ -96,7 +134,7 @@ pub fn zigPublicApi(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 }
 
 pub fn zigDeadDeclCandidates(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const source = readSourceArg(a, allocator, args) catch return error.InvalidArguments;
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_dead_decl_candidates", args, err);
     defer allocator.free(source.bytes);
     const output = analysis.deadDeclCandidates(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
@@ -111,7 +149,14 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     const graph = buildWorkspaceValue(allocator, a) catch return error.OutOfMemory;
     const graph_obj = switch (graph) {
         .object => |o| o,
-        else => return error.ExecutionFailed,
+        else => return toolErrorResult(allocator, .{
+            .tool = "zig_build_targets",
+            .operation = "inspect_build_graph",
+            .phase = "decode_graph",
+            .code = "unexpected_build_graph_shape",
+            .category = "internal_contract",
+            .resolution = "Run zigar_workspace_info and zig_build_graph to inspect the workspace graph, then report this mismatch with the captured response.",
+        }),
     };
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -119,7 +164,14 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     if (graph_obj.get("build_zig")) |build_zig| {
         const build_obj = switch (build_zig) {
             .object => |o| o,
-            else => return error.ExecutionFailed,
+            else => return toolErrorResult(allocator, .{
+                .tool = "zig_build_targets",
+                .operation = "inspect_build_graph",
+                .phase = "decode_build_zig",
+                .code = "unexpected_build_zig_shape",
+                .category = "internal_contract",
+                .resolution = "Run zig_build_graph and report the malformed build_zig section with the zigar version.",
+            }),
         };
         obj.put(allocator, "modules", build_obj.get("modules") orelse .null) catch return error.OutOfMemory;
         obj.put(allocator, "artifacts", build_obj.get("artifacts") orelse .null) catch return error.OutOfMemory;
@@ -132,7 +184,7 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
 }
 
 pub fn zigBuildOptions(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const bytes = a.workspace.readFileAlloc(a.io, "build.zig", 1024 * 1024) catch return error.ResourceNotFound;
+    const bytes = a.workspace.readFileAlloc(a.io, "build.zig", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_build_options", "build.zig", err, "Create a build.zig file in the workspace root or call zig_build_graph for a nullable workspace summary.");
     defer allocator.free(bytes);
     var options = std.json.Array.init(allocator);
     var commands = std.json.Array.init(allocator);
@@ -194,7 +246,7 @@ pub fn optionTypeFromLine(line: []const u8) ?[]const u8 {
 }
 
 pub fn zigFileOwner(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_file_owner", "file", "workspace-relative Zig file path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_file_owner", file, err);
     defer allocator.free(resolved);
     const rel = a.workspace.relative(resolved);
@@ -204,7 +256,7 @@ pub fn zigFileOwner(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 }
 
 pub fn zigImportResolve(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const import_name = argString(args, "import") orelse return error.InvalidArguments;
+    const import_name = argString(args, "import") orelse return missingArgumentResult(allocator, "zig_import_resolve", "import", "Zig import name");
     const from = argString(args, "from");
     const graph = buildWorkspaceValue(allocator, a) catch return error.OutOfMemory;
     const resolved = importResolveValue(allocator, a, graph, import_name, from) catch return error.OutOfMemory;
@@ -590,7 +642,7 @@ pub fn appendLineRecord(allocator: std.mem.Allocator, array: *std.json.Array, li
 
 pub fn zigTestDiscover(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const limit: usize = @intCast(@max(1, argInt(args, "limit", 500)));
-    const value = analysis.testDiscoverJson(allocator, a.io, a.workspace.root, limit) catch return error.ExecutionFailed;
+    const value = analysis.testDiscoverJson(allocator, a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_test_discover", "scan_test_declarations", err);
     return structured(allocator, value);
 }
 
@@ -659,7 +711,7 @@ pub fn workspacePathExists(allocator: std.mem.Allocator, a: *App, path: []const 
 }
 
 pub fn zigDependencyInspect(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const bytes = a.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch return error.ResourceNotFound;
+    const bytes = a.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_dependency_inspect", "build.zig.zon", err, "Create build.zig.zon or use zig_build_graph for a nullable workspace summary.");
     defer allocator.free(bytes);
     const value = dependencyInspectionValue(allocator, a, bytes) catch return error.OutOfMemory;
     return structured(allocator, value);

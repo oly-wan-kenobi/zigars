@@ -101,3 +101,19 @@ fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
 }
+
+test "executable embeds package version" {
+    try std.testing.expect(version.len > 0);
+    try std.testing.expect(std.mem.indexOfScalar(u8, version, '.') != null);
+}
+
+test "executable module links runtime lifecycle types" {
+    try std.testing.expect(@sizeOf(App) > 0);
+    try std.testing.expect(@sizeOf(LspClient) > 0);
+    try std.testing.expect(@sizeOf(DocumentState) > 0);
+    try std.testing.expect(@sizeOf(ZlsProcess) > 0);
+}
+
+test "executable usage names the command" {
+    try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigar") != null);
+}

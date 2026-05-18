@@ -24,10 +24,13 @@ zig build dist release-asset-smoke
 ## Unit Tests
 
 `zig build test` runs the library, executable, and release-helper test suites.
-The suites cover CLI parsing and deinit ownership, workspace sandboxing, strict
+All three suites have non-zero floors in `tools/coverage_config.zig`, including
+the executable module, so the release summary cannot pass with an untested
+installed binary entrypoint. The suites cover CLI startup helpers and embedded
+version wiring, CLI parsing and deinit ownership, workspace sandboxing, strict
 symlink rejection, command execution, argument validation, tool risk metadata,
 output-limit handling, docs/index metadata, source-write gating, diagnostics
-parsing, ZLS session behavior with a fake LSP server, heuristic analysis
+retention, ZLS session behavior with a fake LSP server, heuristic analysis
 fixtures, and the pure-Zig release helper.
 
 ## MCP Smoke Tests

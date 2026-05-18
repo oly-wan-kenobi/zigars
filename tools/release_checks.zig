@@ -98,8 +98,7 @@ const ForbiddenToken = struct {
     reason: []const u8,
 };
 
-const ToolErrorContractRule = struct {
-    path: []const u8,
+const ToolErrorContractToken = struct {
     token: []const u8,
     reason: []const u8,
 };
@@ -151,6 +150,36 @@ const line_budgets = [_]LineBudget{
         .reason = "shared ZLS/LSP helpers should stay below a reviewable module size",
     },
     .{
+        .path = "src/lsp/client.zig",
+        .max_lines = 720,
+        .reason = "LSP client must stay focused on transport lifecycle; caches and parsing helpers belong in focused modules",
+    },
+    .{
+        .path = "src/lsp/diagnostics_cache.zig",
+        .max_lines = 340,
+        .reason = "diagnostics retention policy should stay small enough to audit independently",
+    },
+    .{
+        .path = "src/tool_manifest.zig",
+        .max_lines = 320,
+        .reason = "tool manifest facade must stay focused on derived tables and public lookup helpers",
+    },
+    .{
+        .path = "src/tool_manifest/types.zig",
+        .max_lines = 150,
+        .reason = "manifest type definitions should remain a compact schema vocabulary",
+    },
+    .{
+        .path = "src/tool_manifest/definitions.zig",
+        .max_lines = 850,
+        .reason = "the generated-style tool definition list should remain reviewable and avoid helper logic",
+    },
+    .{
+        .path = "src/tool_manifest/groups.zig",
+        .max_lines = 80,
+        .reason = "tool group keyword metadata should remain a compact manifest adjunct",
+    },
+    .{
         .path = "tools/zigar_tools.zig",
         .max_lines = 800,
         .reason = "tool dispatcher must delegate large release-check helpers to focused modules",
@@ -200,36 +229,49 @@ const forbidden_tokens = [_]ForbiddenToken{
     },
 };
 
-const tool_error_contract_rules = [_]ToolErrorContractRule{
+const tool_error_contract_paths = [_][]const u8{
+    "src/tool_registry.zig",
+    "src/tools/agent.zig",
+    "src/tools/ci.zig",
+    "src/tools/core.zig",
+    "src/tools/discovery.zig",
+    "src/tools/docs.zig",
+    "src/tools/edit_zls.zig",
+    "src/tools/profiling.zig",
+    "src/tools/static_core.zig",
+    "src/tools/static_tests.zig",
+    "src/tools/zls_common.zig",
+    "src/tools/zwanzig.zig",
+};
+
+const tool_error_contract_tokens = [_]ToolErrorContractToken{
     .{
-        .path = "src/tools/edit_zls.zig",
         .token = "return error.InvalidArguments",
-        .reason = "edit/ZLS tools must return structured argument_error or tool_error payloads for expected user-facing failures",
+        .reason = "tool handlers must return structured argument_error payloads for expected user-facing argument failures",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .token = "catch return error.InvalidArguments",
+        .reason = "tool handlers must preserve argument parse context instead of collapsing catches",
+    },
+    .{
         .token = "return error.ExecutionFailed",
-        .reason = "edit/ZLS tools must explain operation, phase, cause, and resolution instead of collapsing expected failures",
+        .reason = "tool handlers must explain operation, phase, cause, and resolution instead of collapsing expected failures",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .token = "catch return error.ExecutionFailed",
+        .reason = "tool handlers must preserve the underlying error in a structured tool_error",
+    },
+    .{
         .token = "return error.ResourceNotFound",
-        .reason = "edit/ZLS file misses must include the tool, phase, file, and not_found classification",
+        .reason = "tool handlers must include the tool, phase, resource, and not_found classification for misses",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
-        .token = "catch return error.ExecutionFailed",
-        .reason = "edit/ZLS catches must preserve the underlying error in a structured tool_error",
+        .token = "catch return error.ResourceNotFound",
+        .reason = "tool handlers must preserve not_found context instead of collapsing catches",
     },
     .{
-        .path = "src/tools/docs.zig",
-        .token = "return error.ExecutionFailed",
-        .reason = "docs search failures must identify environment/search phase and resolution",
-    },
-    .{
-        .path = "src/tools/docs.zig",
-        .token = "catch return error.ExecutionFailed",
-        .reason = "docs search catches must preserve the underlying error in a structured tool_error",
+        .token = "try splitToolArgs(",
+        .reason = "extra-argument parsing must map InvalidArguments to structured argument_error results at the handler boundary",
     },
 };
 
@@ -280,16 +322,18 @@ fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
 
 fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
-    for (tool_error_contract_rules) |rule| {
-        const bytes = readFileAlloc(allocator, io, rule.path, 8 * 1024 * 1024) catch |err| {
-            try stderrPrint(io, "tool-error-contract check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+    for (tool_error_contract_paths) |path| {
+        const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "tool-error-contract check could not read {s}: {s}\n", .{ path, @errorName(err) });
             ok = false;
             continue;
         };
         defer allocator.free(bytes);
-        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
-            try stderrPrint(io, "tool-error-contract violation in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
-            ok = false;
+        for (tool_error_contract_tokens) |rule| {
+            if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+                try stderrPrint(io, "tool-error-contract violation in {s}: `{s}` ({s})\n", .{ path, rule.token, rule.reason });
+                ok = false;
+            }
         }
     }
     return ok;

@@ -609,7 +609,7 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-lib-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 120,
+            .tests = 122,
             .min_tests = 115,
             .tests_ok = true,
             .stdout_bytes = 100,
@@ -620,8 +620,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-exe-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 0,
-            .min_tests = 0,
+            .tests = 3,
+            .min_tests = 3,
             .tests_ok = true,
             .stdout_bytes = 20,
             .stderr_bytes = 0,
@@ -631,7 +631,7 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-tools-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 11,
+            .tests = 14,
             .min_tests = 10,
             .tests_ok = true,
             .stdout_bytes = 40,
@@ -641,8 +641,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
     const summary = try renderCoverageSummary(std.testing.allocator, std.testing.io, .{
         .ok = true,
         .zig_version = "0.16.0",
-        .total_tests = 131,
-        .min_total_tests = 125,
+        .total_tests = 139,
+        .min_total_tests = 135,
         .total_tests_ok = true,
         .suite_tests_ok = true,
         .tests = &results,
@@ -668,9 +668,10 @@ test "renderCoverageSummary includes suite floors and coverage details" {
     defer parsed.deinit();
     try std.testing.expectEqualStrings("test_summary", valueAt(parsed.value, "kind").?.string);
     try std.testing.expectEqual(@as(usize, 3), valueAt(parsed.value, "tests").?.array.items.len);
-    try std.testing.expectEqual(@as(i64, 125), valueAt(parsed.value, "min_total_tests").?.integer);
+    try std.testing.expectEqual(@as(i64, 135), valueAt(parsed.value, "min_total_tests").?.integer);
     try std.testing.expect(valueAt(parsed.value, "suite_tests_ok").?.bool);
     try std.testing.expectEqual(@as(i64, 115), valueAt(parsed.value, "tests.0.min_tests").?.integer);
+    try std.testing.expectEqual(@as(i64, 3), valueAt(parsed.value, "tests.1.min_tests").?.integer);
     try std.testing.expect(valueAt(parsed.value, "tests.2.tests_ok").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.measured").?.bool);
     try std.testing.expectEqual(@as(i64, 8), valueAt(parsed.value, "coverage.covered_lines").?.integer);

@@ -7,9 +7,11 @@ const common = @import("common.zig");
 
 const App = common.App;
 const argString = common.argString;
+const missingArgumentResult = common.missingArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const runAndFormat = common.runAndFormat;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const freeArgList = common.freeArgList;
 
 pub fn zigLint(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -45,7 +47,8 @@ pub fn runZwanzig(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, 
     const resolved_path = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_lint", path, err);
     defer allocator.free(resolved_path);
     list.append(allocator, resolved_path) catch return error.OutOfMemory;
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_lint", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
     return runAndFormat(a, allocator, list.items, "zwanzig");
@@ -56,13 +59,14 @@ pub fn zigLintRules(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) m
 }
 
 pub fn zigAnalysisGraphs(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const path = argString(args, "path") orelse return error.InvalidArguments;
-    const output = argString(args, "output") orelse return error.InvalidArguments;
+    const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_analysis_graphs", "path", "workspace-relative Zig source path");
+    const output = argString(args, "output") orelse return missingArgumentResult(allocator, "zig_analysis_graphs", "output", "workspace-relative DOT output path");
     const resolved_path = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_analysis_graphs", path, err);
     defer allocator.free(resolved_path);
     const resolved_output = a.workspace.resolveOutput(output) catch |err| return workspacePathErrorResult(a, allocator, "zig_analysis_graphs", output, err);
     defer allocator.free(resolved_output);
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_analysis_graphs", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     const base = &.{ a.config.zwanzig_path, "--dot", resolved_output, resolved_path };
     const argv = command.joinArgv(allocator, base, extra) catch return error.OutOfMemory;

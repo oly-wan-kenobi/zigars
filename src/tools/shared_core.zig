@@ -90,6 +90,32 @@ pub const toolErrorFromError = tool_errors.fromError;
 pub const missingArgumentResult = tool_errors.missingArgument;
 pub const invalidArgumentResult = tool_errors.invalidArgument;
 
+pub fn splitToolArgsErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return switch (err) {
+        error.InvalidArguments => tool_errors.invalidArgument(
+            allocator,
+            tool_name,
+            field,
+            "shell-style argument string",
+            actual,
+            "Quote arguments the same way you would in a shell command, or omit the field when no extra arguments are needed.",
+        ),
+        error.OutOfMemory => error.OutOfMemory,
+        else => tool_errors.fromError(allocator, .{
+            .tool = tool_name,
+            .operation = "parse_arguments",
+            .phase = "split_extra_arguments",
+            .code = "argument_parse_failed",
+            .category = "argument",
+            .resolution = "Inspect the extra argument string and retry with valid shell-style quoting.",
+            .details = &.{
+                .{ .key = "field", .value = .{ .string = field } },
+                .{ .key = "actual", .value = .{ .string = actual } },
+            },
+        }, err),
+    };
+}
+
 pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, root: []const u8, err: anyerror) ![]u8 {
     if (err == error.EmptyPath) {
         return std.fmt.allocPrint(

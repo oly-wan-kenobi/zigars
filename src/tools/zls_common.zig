@@ -13,8 +13,10 @@ const argString = core.argString;
 const workspacePathErrorResult = core.workspacePathErrorResult;
 const backendErrorResult = core.backendErrorResult;
 const missingArgumentResult = core.missingArgumentResult;
+const invalidArgumentResult = core.invalidArgumentResult;
 const toolErrorFromError = core.toolErrorFromError;
 const splitToolArgs = core.splitToolArgs;
+const splitToolArgsErrorResult = core.splitToolArgsErrorResult;
 const classifyDiagnosticMessage = core.classifyDiagnosticMessage;
 const backendProbeCacheValue = core.backendProbeCacheValue;
 const ownedString = core.ownedString;
@@ -159,7 +161,7 @@ pub const ExplainCommand = struct {
     mode: []const u8,
 };
 
-const ExplainCommandError = mcp.tools.ToolError || error{WorkspacePathRejected};
+const ExplainCommandError = mcp.tools.ToolError || error{ WorkspacePathRejected, MissingFile, UnsupportedCommand, InvalidExtraArgs };
 
 pub fn buildExplainCommand(allocator: std.mem.Allocator, args: ?std.json.Value, a: *App) ExplainCommandError!ExplainCommand {
     const mode = argString(args, "command") orelse if (argString(args, "file") != null) "check" else "build-test";
@@ -173,7 +175,7 @@ pub fn buildExplainCommand(allocator: std.mem.Allocator, args: ?std.json.Value, 
     list.append(allocator, a.config.zig_path) catch return error.OutOfMemory;
 
     if (std.mem.eql(u8, mode, "check")) {
-        const file = argString(args, "file") orelse return error.InvalidArguments;
+        const file = argString(args, "file") orelse return error.MissingFile;
         const resolved = a.workspace.resolve(file) catch return error.WorkspacePathRejected;
         owned_paths.append(allocator, resolved) catch return error.OutOfMemory;
         list.append(allocator, "ast-check") catch return error.OutOfMemory;
@@ -201,10 +203,14 @@ pub fn buildExplainCommand(allocator: std.mem.Allocator, args: ?std.json.Value, 
         list.append(allocator, "--check") catch return error.OutOfMemory;
         list.append(allocator, resolved) catch return error.OutOfMemory;
     } else {
-        return error.InvalidArguments;
+        return error.UnsupportedCommand;
     }
 
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => error.InvalidExtraArgs,
+    };
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
     return .{ .argv = list, .owned_paths = owned_paths, .mode = mode };
@@ -216,9 +222,18 @@ pub fn explainCommandSetupError(a: *App, allocator: std.mem.Allocator, tool_name
             workspacePathErrorResult(a, allocator, tool_name, file, error.PathOutsideWorkspace)
         else
             error.PermissionDenied,
-        error.InvalidArguments => error.InvalidArguments,
+        error.MissingFile => missingArgumentResult(allocator, tool_name, "file", "workspace-relative Zig source path"),
+        error.UnsupportedCommand => invalidArgumentResult(allocator, tool_name, "command", "check|test|build|build-test|fmt-check", argString(args, "command") orelse "<invalid args>", "Use one of the supported command modes, or omit command to let zigar choose build-test/check from the provided arguments."),
+        error.InvalidExtraArgs => splitToolArgsErrorResult(allocator, tool_name, "args", argString(args, "args") orelse "", error.InvalidArguments),
         error.OutOfMemory => error.OutOfMemory,
-        else => error.ExecutionFailed,
+        else => toolErrorFromError(allocator, .{
+            .tool = tool_name,
+            .operation = "prepare_zig_command",
+            .phase = "command_setup",
+            .code = "command_setup_failed",
+            .category = "argument",
+            .resolution = "Inspect command, file, and args fields, then retry with valid workspace paths and shell-style extra arguments.",
+        }, err),
     };
 }
 
@@ -232,7 +247,7 @@ pub fn zlsFileUri(a: *App, allocator: std.mem.Allocator, file: []const u8) ![]co
 }
 
 pub fn zlsFileUriFromArgs(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) ![]const u8 {
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return error.MissingFile;
     if (argString(args, "content")) |content| {
         try zls_session.ensureReady(a);
         const client = a.lsp_client orelse return error.NotConnected;
@@ -246,7 +261,7 @@ pub fn zlsFileUriFromArgs(a: *App, allocator: std.mem.Allocator, args: ?std.json
 
 pub fn zlsSetupErrorResult(a: *App, allocator: std.mem.Allocator, operation: []const u8, file: ?[]const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     switch (err) {
-        error.InvalidArguments => return missingArgumentResult(allocator, operation, "file", "string"),
+        error.InvalidArguments, error.MissingFile => return missingArgumentResult(allocator, operation, "file", "string"),
         error.PathOutsideWorkspace, error.EmptyPath => {
             if (file) |path| return workspacePathErrorResult(a, allocator, operation, path, err);
             return missingArgumentResult(allocator, operation, "file", "string");

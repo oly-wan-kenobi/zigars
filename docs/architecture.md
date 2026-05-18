@@ -14,9 +14,13 @@ auditable:
   small compatibility facade over focused shared helper modules.
 - `src/runtime.zig` owns process-local runtime state such as workspace config,
   ZLS session pointers, counters, backend probes, and heuristic analysis caches.
-- `src/tool_manifest.zig` is the typed tool manifest: ids, names, descriptions,
-  argument schemas, grouping, discovery keywords, handler references, planning
-  policies, MCP read-only annotations, and risk metadata.
+- `src/tool_manifest.zig` is the typed tool manifest facade. It derives ids,
+  tables, and lookup helpers from focused manifest modules:
+  `src/tool_manifest/types.zig` defines the schema vocabulary,
+  `src/tool_manifest/definitions.zig` lists tool definitions, and
+  `src/tool_manifest/groups.zig` owns group keyword metadata. Together these hold
+  names, descriptions, argument schemas, grouping, discovery keywords, handler
+  references, planning policies, MCP read-only annotations, and risk metadata.
   `src/tool_metadata.zig` is a compatibility facade for consumers that still
   use the older name.
 - `src/tool_handlers.zig` resolves manifest handler references to functions by
@@ -31,9 +35,12 @@ auditable:
 - `src/analysis.zig` contains heuristic source scanners. Every heuristic result
   should state its analysis kind and confidence.
 - `src/state/documents.zig`, `src/lsp/*`, and `src/zls/*` own the ZLS session
-  boundary. Document-state locks should protect state transitions only; file I/O
-  and LSP sends should run outside the mutex. Unsaved document content is retained
-  in process memory so ZLS restarts reopen the same buffer content clients sent.
+  boundary. `src/lsp/client.zig` owns request/response correlation, pipe
+  lifecycle, shutdown, and reader threads. `src/lsp/diagnostics_cache.zig` owns
+  diagnostics retention, bounded eviction, snapshot ordering, and cache counters.
+  Document-state locks should protect state transitions only; file I/O and LSP
+  sends should run outside the mutex. Unsaved document content is retained in
+  process memory so ZLS restarts reopen the same buffer content clients sent.
 - `tools/zigar_tools.zig` is the pure-Zig helper executable used by build steps.
   Shared helper concerns live beside it in `tools/*.zig`.
 
@@ -41,15 +48,25 @@ auditable:
 
 When adding or changing a tool:
 
-1. Add or update one entry in `src/tool_manifest.zig`. That entry names the
-   schema, group, keywords through the group table, handler reference, planning
-   policy, read-only annotation, and risk flags.
+1. Add or update one entry in `src/tool_manifest/definitions.zig`. That entry
+   names the schema, group, handler reference, planning policy, read-only
+   annotation, and risk flags. Add or update group-level discovery keywords in
+   `src/tool_manifest/groups.zig` only when the tool introduces a new searchable
+   intent.
 2. Add the handler implementation in the appropriate `src/tools/*.zig` module.
    Only add a new namespace to `src/tool_handlers.zig` when introducing a new
    handler module, not for routine tool additions.
 3. Regenerate docs with `zig build tool-index`.
 4. Add focused tests for argument validation, risk metadata, and any parsing or
    workspace-safety behavior.
+
+Tool handlers must not return bare expected failures. Validation, workspace-path
+rejections, optional backend failures, parsing failures, write failures, and
+known unsupported operations should return structured `argument_error`,
+`workspace_path_error`, `backend_error`, or `tool_error` payloads through the
+shared helpers. `zig build release-check` scans the public handler modules for
+raw `InvalidArguments`, `ExecutionFailed`, `ResourceNotFound`, and unchecked
+`splitToolArgs` propagation so new tools keep the same error contract.
 
 `read_only` is the MCP annotation. It does not mean "no side effects at all":
 `zig_build`, `zig_test`, `zigar_validate_patch`, failure-triage tools, and
