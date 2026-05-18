@@ -83,9 +83,11 @@ zig build dist release-asset-smoke
 ```
 
 `zig build coverage` writes `coverage/summary.json` with the installed library,
-executable, and tooling test binary results. It adds kcov output when `kcov` is
-available on `PATH`; kcov failures are recorded in the summary without blocking
-the default local release gate.
+executable, and tooling test binary results, including per-suite floors. It adds
+kcov output and Cobertura-derived line coverage when `kcov` is available on
+`PATH`; kcov failures are recorded in the portable summary without blocking the
+default local release gate. The hard quality gate is the configured test and
+smoke-scenario floor, not an unreliable line-coverage claim.
 
 `zig build dist` creates ReleaseSafe archives and `zigar-checksums.txt` under
 `dist/assets`. `zig build release-asset-smoke` verifies checksums, archive

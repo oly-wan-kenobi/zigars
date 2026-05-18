@@ -1,7 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const coverage = @import("coverage.zig");
+const coverage_config = @import("coverage_config.zig");
 const dist = @import("dist.zig");
+const json_query = @import("json_query.zig");
 const json_util = @import("json_util.zig");
 const release_checks = @import("release_checks.zig");
 const release_targets = @import("release_targets.zig");
@@ -10,10 +12,12 @@ const tool_index = @import("tool_index.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
+const valueAt = json_query.valueAt;
 
 test {
     _ = coverage;
     _ = dist;
+    _ = json_query;
     _ = json_util;
     _ = release_checks;
     _ = release_targets;
@@ -163,6 +167,7 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     defer expected.deinit();
 
     const port = pickSmokePort(io);
+    var scenarios: usize = 0;
     var port_buf: [16]u8 = undefined;
     const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
     var child = try std.process.spawn(io, .{
@@ -174,9 +179,10 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
 
     try waitForInitialize(allocator, io, port, &child);
     try assertRequiredTools(allocator, io, port, expected.value);
+    scenarios += 1;
 
-    try assertToolPaths(allocator, io, port, 3, "zigar_schema", "{}", expected.value, "schema_paths");
-    try assertToolPaths(allocator, io, port, 4, "zigar_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths");
+    try assertToolPaths(allocator, io, port, 3, "zigar_schema", "{}", expected.value, "schema_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 4, "zigar_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths", &scenarios);
     {
         const doctor_json = try callToolJson(allocator, io, port, 40, "zigar_doctor", "{\"probe_backends\":false}");
         defer allocator.free(doctor_json);
@@ -187,29 +193,31 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
         defer allocator.free(abs_workspace);
         try expectStringEq(workspace, abs_workspace, "doctor.workspace");
     }
-    try assertToolPaths(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected.value, "argument_error_paths");
-    try assertToolPaths(allocator, io, port, 26, "zig_format", "{\"file\":\"missing.zig\"}", expected.value, "format_missing_file_paths");
-    try assertToolPaths(allocator, io, port, 6, "zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\nsrc/main.zig:1:2: note: fixture note\\n\"}", expected.value, "compile_error_index_paths");
-    try assertToolPaths(allocator, io, port, 7, "zig_target_matrix_plan", "{\"targets\":\"native wasm32-freestanding\",\"steps\":\"build\"}", expected.value, "target_matrix_paths");
-    try assertToolPaths(allocator, io, port, 8, "zig_toolchain_resolve", "{\"probe_managers\":false}", expected.value, "toolchain_paths");
-    try assertToolPaths(allocator, io, port, 9, "zig_dependency_inspect", "{}", expected.value, "dependency_paths");
-    try assertToolPaths(allocator, io, port, 10, "zig_build_options", "{}", expected.value, "build_options_paths");
-    try assertToolPaths(allocator, io, port, 11, "zig_changed_files_plan", "{}", expected.value, "changed_files_plan_paths");
-    try assertToolPaths(allocator, io, port, 12, "zig_test_failure_triage", "{\"text\":\"1/1 test.foo...FAIL (TestExpectedEqual)\\nexpected 1, found 2\\n\"}", expected.value, "test_failure_triage_paths");
-    try assertToolPaths(allocator, io, port, 13, "zig_workspace_symbol_cache", "{\"query\":\"main\",\"limit\":20}", expected.value, "workspace_symbol_cache_paths");
-    try assertToolPaths(allocator, io, port, 14, "zig_package_cache_doctor", "{\"timeout_ms\":1000}", expected.value, "package_cache_doctor_paths");
-    try assertToolPaths(allocator, io, port, 15, "zigar_context_pack", "{\"mode\":\"tiny\"}", expected.value, "context_pack_paths");
-    try assertToolPaths(allocator, io, port, 16, "zigar_next_action", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected.value, "next_action_paths");
-    try assertToolPaths(allocator, io, port, 17, "zigar_agent_guide", "{\"client\":\"codex\",\"task\":\"patch\"}", expected.value, "agent_guide_paths");
-    try assertToolPaths(allocator, io, port, 18, "zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/bin/zigar\"}", expected.value, "patch_guard_paths");
-    try assertToolPaths(allocator, io, port, 19, "zigar_failure_fusion", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\n1/1 test.foo...FAIL\\n\"}", expected.value, "failure_fusion_paths");
-    try assertToolPaths(allocator, io, port, 20, "zigar_impact", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected.value, "impact_paths");
-    try assertToolPaths(allocator, io, port, 21, "zig_test_map", "{\"limit\":20}", expected.value, "test_map_paths");
-    try assertToolPaths(allocator, io, port, 22, "zig_test_select", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected.value, "test_select_paths");
-    try assertToolPaths(allocator, io, port, 23, "zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}", expected.value, "public_api_diff_paths");
-    try assertToolPaths(allocator, io, port, 24, "zigar_project_profile", "{}", expected.value, "project_profile_paths");
-    try assertToolPaths(allocator, io, port, 25, "zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\",\"stop_on_failure\":true}", expected.value, "validate_patch_paths");
+    scenarios += 1;
+    try assertToolPaths(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected.value, "argument_error_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 26, "zig_format", "{\"file\":\"missing.zig\"}", expected.value, "format_missing_file_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 6, "zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\nsrc/main.zig:1:2: note: fixture note\\n\"}", expected.value, "compile_error_index_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 7, "zig_target_matrix_plan", "{\"targets\":\"native wasm32-freestanding\",\"steps\":\"build\"}", expected.value, "target_matrix_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 8, "zig_toolchain_resolve", "{\"probe_managers\":false}", expected.value, "toolchain_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 9, "zig_dependency_inspect", "{}", expected.value, "dependency_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 10, "zig_build_options", "{}", expected.value, "build_options_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 11, "zig_changed_files_plan", "{}", expected.value, "changed_files_plan_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 12, "zig_test_failure_triage", "{\"text\":\"1/1 test.foo...FAIL (TestExpectedEqual)\\nexpected 1, found 2\\n\"}", expected.value, "test_failure_triage_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 13, "zig_workspace_symbol_cache", "{\"query\":\"main\",\"limit\":20}", expected.value, "workspace_symbol_cache_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 14, "zig_package_cache_doctor", "{\"timeout_ms\":1000}", expected.value, "package_cache_doctor_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 15, "zigar_context_pack", "{\"mode\":\"tiny\"}", expected.value, "context_pack_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 16, "zigar_next_action", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected.value, "next_action_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 17, "zigar_agent_guide", "{\"client\":\"codex\",\"task\":\"patch\"}", expected.value, "agent_guide_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 18, "zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/bin/zigar\"}", expected.value, "patch_guard_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 19, "zigar_failure_fusion", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\n1/1 test.foo...FAIL\\n\"}", expected.value, "failure_fusion_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 20, "zigar_impact", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected.value, "impact_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 21, "zig_test_map", "{\"limit\":20}", expected.value, "test_map_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 22, "zig_test_select", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected.value, "test_select_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 23, "zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}", expected.value, "public_api_diff_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 24, "zigar_project_profile", "{}", expected.value, "project_profile_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 25, "zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\",\"stop_on_failure\":true}", expected.value, "validate_patch_paths", &scenarios);
 
+    try assertMinimumCount(io, "http-smoke scenarios", scenarios, coverage_config.min_http_smoke_scenarios);
     try stdoutWrite(io, "http smoke ok\n");
 }
 
@@ -315,6 +323,7 @@ fn assertToolPaths(
     args_json: []const u8,
     expected_root: JsonValue,
     expected_key: []const u8,
+    scenario_count: *usize,
 ) !void {
     const tool_json = try callToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);
@@ -329,6 +338,7 @@ fn assertToolPaths(
         };
         try expectJsonEq(io, actual, entry.value_ptr.*, entry.key_ptr.*);
     }
+    scenario_count.* += 1;
 }
 
 fn callToolJson(allocator: Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8) ![]u8 {
@@ -380,30 +390,6 @@ fn rpc(allocator: Allocator, io: Io, port: u16, body: []const u8) ![]u8 {
         return error.HttpFailure;
     }
     return allocator.dupe(u8, response_body);
-}
-
-fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
-    var current = value;
-    var parts = std.mem.splitScalar(u8, path, '.');
-    while (parts.next()) |part| {
-        if (part.len == 0) return null;
-        if (isDigits(part)) {
-            if (current != .array) return null;
-            const index = std.fmt.parseInt(usize, part, 10) catch return null;
-            if (index >= current.array.items.len) return null;
-            current = current.array.items[index];
-        } else {
-            if (current != .object) return null;
-            current = current.object.get(part) orelse return null;
-        }
-    }
-    return current;
-}
-
-fn isDigits(text: []const u8) bool {
-    if (text.len == 0) return false;
-    for (text) |c| if (c < '0' or c > '9') return false;
-    return true;
 }
 
 fn expectJsonEq(io: Io, actual: JsonValue, expected: JsonValue, path: []const u8) !void {
@@ -501,6 +487,7 @@ fn stdioFixtures(allocator: Allocator, io: Io, self_arg0: []const u8, args: []co
         .io = io,
         .child = &child,
         .next_id = 1,
+        .tool_calls = 0,
     };
     try client.runFixture(workspace);
     try stdoutWrite(io, "stdio fixtures ok\n");
@@ -548,6 +535,7 @@ const StdioClient = struct {
     io: Io,
     child: *std.process.Child,
     next_id: i64,
+    tool_calls: usize,
 
     fn runFixture(self: *StdioClient, workspace: []const u8) !void {
         const init = try self.request("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"zigar-stdio-fixtures\",\"version\":\"0\"}}");
@@ -640,6 +628,7 @@ const StdioClient = struct {
         const folded = try joinedRead(self.allocator, self.io, workspace, ".zigar-cache/profile/diff-0.folded");
         defer self.allocator.free(folded);
         try expectStringEq(std.mem.trim(u8, folded, " \t\r\n"), "main;delta 2", "diff folded output");
+        try assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 
     fn request(self: *StdioClient, method: []const u8, params: ?[]const u8) ![]u8 {
@@ -677,6 +666,7 @@ const StdioClient = struct {
     fn callTool(self: *StdioClient, name: []const u8, args_json: []const u8) ![]u8 {
         const params = try std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"arguments\":{s}}}", .{ name, args_json });
         defer self.allocator.free(params);
+        self.tool_calls += 1;
         const result_json = try self.request("tools/call", params);
         defer self.allocator.free(result_json);
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, result_json, .{});
@@ -759,6 +749,12 @@ const StdioClient = struct {
     }
 };
 
+fn assertMinimumCount(io: Io, label: []const u8, actual: usize, expected: usize) !void {
+    if (actual >= expected) return;
+    try stderrPrint(io, "{s}: expected at least {d}, got {d}\n", .{ label, expected, actual });
+    return error.AssertionFailed;
+}
+
 fn joinedRead(allocator: Allocator, io: Io, workspace: []const u8, rel: []const u8) ![]u8 {
     const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workspace, rel });
     defer allocator.free(path);
@@ -769,18 +765,6 @@ fn expectFileStartsWith(allocator: Allocator, io: Io, workspace: []const u8, rel
     const bytes = try joinedRead(allocator, io, workspace, rel);
     defer allocator.free(bytes);
     if (!std.mem.startsWith(u8, bytes, prefix)) return error.AssertionFailed;
-}
-
-test "valueAt traverses object and array paths" {
-    const parsed = try std.json.parseFromSlice(JsonValue, std.testing.allocator,
-        \\{"result":{"tools":[{"name":"zig_format"},{"name":"zig_test"}],"ok":true}}
-    , .{});
-    defer parsed.deinit();
-
-    try std.testing.expectEqualStrings("zig_test", valueAt(parsed.value, "result.tools.1.name").?.string);
-    try std.testing.expect(valueAt(parsed.value, "result.ok").?.bool);
-    try std.testing.expect(valueAt(parsed.value, "result.tools.2.name") == null);
-    try std.testing.expect(valueAt(parsed.value, "result..ok") == null);
 }
 
 test "json util escapes JSON control characters" {

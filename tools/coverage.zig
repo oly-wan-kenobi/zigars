@@ -6,6 +6,8 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
 
+const percent_scale: u32 = 100;
+
 fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
@@ -33,8 +35,40 @@ const TestResult = struct {
     ok: bool,
     exit_code: i64,
     tests: ?i64,
+    min_tests: i64,
+    tests_ok: bool,
     stdout_bytes: usize,
     stderr_bytes: usize,
+};
+
+const CoverageStats = struct {
+    covered_lines: u64 = 0,
+    total_lines: u64 = 0,
+    src_covered_lines: u64 = 0,
+    src_total_lines: u64 = 0,
+    tools_covered_lines: u64 = 0,
+    tools_total_lines: u64 = 0,
+
+    fn lineRateBasisPoints(self: CoverageStats) ?u32 {
+        return rateBasisPoints(self.covered_lines, self.total_lines);
+    }
+
+    fn srcLineRateBasisPoints(self: CoverageStats) ?u32 {
+        return rateBasisPoints(self.src_covered_lines, self.src_total_lines);
+    }
+
+    fn toolsLineRateBasisPoints(self: CoverageStats) ?u32 {
+        return rateBasisPoints(self.tools_covered_lines, self.tools_total_lines);
+    }
+};
+
+const KcovInput = struct {
+    available: bool,
+    path: ?[]const u8,
+    required: bool,
+    ran: bool,
+    error_message: ?[]const u8,
+    stats: ?CoverageStats,
 };
 
 pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
@@ -82,7 +116,7 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     defer test_paths.deinit(allocator);
     for (coverage_config.test_binaries) |binary| {
         const path = binary.path();
-        try test_results.append(allocator, try runTestBinary(allocator, io, path, binary.name));
+        try test_results.append(allocator, try runTestBinary(allocator, io, path, binary));
         try test_paths.append(allocator, path);
     }
 
@@ -96,23 +130,28 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
 
     var ok = true;
     var total_tests: i64 = 0;
+    var suite_tests_ok = true;
     for (test_results.items) |result| {
         ok = ok and result.ok;
+        suite_tests_ok = suite_tests_ok and result.tests_ok;
         total_tests += result.tests orelse 0;
     }
+    ok = ok and suite_tests_ok;
     const total_tests_ok = total_tests >= options.min_tests;
     ok = ok and total_tests_ok;
+
     var kcov_ran = false;
     var kcov_error: ?[]const u8 = null;
+    var coverage_stats: ?CoverageStats = null;
     if (kcov_path) |kcov| {
         kcov_ran = true;
-        const ran_ok = runKcov(allocator, io, kcov, options.out_dir, test_paths.items) catch |err| blk: {
-            kcov_error = try std.fmt.allocPrint(allocator, "kcov exited with {s}", .{@errorName(err)});
-            break :blk false;
+        coverage_stats = runKcov(allocator, io, kcov, options.out_dir, test_paths.items, &kcov_error) catch |err| blk: {
+            if (kcov_error == null) kcov_error = try std.fmt.allocPrint(allocator, "kcov exited with {s}", .{@errorName(err)});
+            break :blk null;
         };
-        if (!ran_ok) {
+        if (coverage_stats == null and !options.allow_kcov_failure) {
             if (kcov_error == null) kcov_error = try allocator.dupe(u8, "kcov exited unsuccessfully");
-            if (!options.allow_kcov_failure) ok = false;
+            ok = false;
         }
     } else if (options.require_kcov) {
         kcov_error = try allocator.dupe(u8, "kcov was required but is not available on PATH");
@@ -128,33 +167,40 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
         .total_tests = total_tests,
         .min_total_tests = options.min_tests,
         .total_tests_ok = total_tests_ok,
+        .suite_tests_ok = suite_tests_ok,
         .tests = test_results.items,
-        .kcov_available = kcov_path != null,
-        .kcov_path = kcov_path,
-        .kcov_required = options.require_kcov,
-        .kcov_ran = kcov_ran,
-        .kcov_error = kcov_error,
+        .kcov = .{
+            .available = kcov_path != null,
+            .path = kcov_path,
+            .required = options.require_kcov,
+            .ran = kcov_ran,
+            .error_message = kcov_error,
+            .stats = coverage_stats,
+        },
     });
     defer allocator.free(summary);
     try writeFile(io, summary_path, summary);
-    const message = try std.fmt.allocPrint(allocator, "coverage summary written to {s}\n", .{summary_path});
+    const message = try std.fmt.allocPrint(allocator, "test and coverage summary written to {s}\n", .{summary_path});
     defer allocator.free(message);
     try stdoutWrite(io, message);
     if (!ok) return error.CoverageFailed;
 }
 
-fn runTestBinary(allocator: Allocator, io: Io, path: []const u8, name: []const u8) !TestResult {
+fn runTestBinary(allocator: Allocator, io: Io, path: []const u8, binary: coverage_config.TestBinary) !TestResult {
     const result = try std.process.run(allocator, io, .{ .argv = &.{path} });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
     const combined = try std.mem.concat(allocator, u8, &.{ result.stdout, result.stderr });
     defer allocator.free(combined);
+    const tests = parseTestCount(combined);
     return .{
-        .name = try allocator.dupe(u8, name),
+        .name = try allocator.dupe(u8, binary.name),
         .path = try allocator.dupe(u8, path),
         .ok = termOk(result.term),
         .exit_code = termExitCode(result.term),
-        .tests = parseTestCount(combined),
+        .tests = tests,
+        .min_tests = binary.min_tests,
+        .tests_ok = if (tests) |count| count >= binary.min_tests else false,
         .stdout_bytes = result.stdout.len,
         .stderr_bytes = result.stderr.len,
     };
@@ -207,19 +253,184 @@ fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
     return try allocator.dupe(u8, name);
 }
 
-fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, tests: []const []const u8) !bool {
+fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, tests: []const []const u8, error_message: *?[]const u8) !CoverageStats {
+    const kcov_root = try std.fmt.allocPrint(allocator, "{s}/kcov", .{out_dir});
+    defer allocator.free(kcov_root);
+    try Io.Dir.cwd().createDirPath(io, kcov_root);
+
+    var result_dirs: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (result_dirs.items) |dir| allocator.free(dir);
+        result_dirs.deinit(allocator);
+    }
+
     for (tests) |test_path| {
         const stem = std.fs.path.stem(test_path);
         const target_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/{s}", .{ out_dir, stem });
-        defer allocator.free(target_dir);
+        errdefer allocator.free(target_dir);
+        const include_arg = "--include-path=" ++ coverage_config.kcov_include_path;
+        const exclude_arg = "--exclude-path=" ++ coverage_config.kcov_exclude_path;
         const result = try std.process.run(allocator, io, .{
-            .argv = &.{ kcov, "--include-path=src", target_dir, test_path },
+            .argv = &.{ kcov, "--clean", include_arg, exclude_arg, target_dir, test_path },
         });
         defer allocator.free(result.stdout);
         defer allocator.free(result.stderr);
-        if (!termOk(result.term)) return false;
+        if (!termOk(result.term)) {
+            try recordCommandFailure(allocator, error_message, "kcov", result.stdout, result.stderr);
+            return error.KcovFailed;
+        }
+        try result_dirs.append(allocator, target_dir);
     }
-    return true;
+
+    const report_dir = if (result_dirs.items.len == 1) result_dirs.items[0] else blk: {
+        const merged_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/merged", .{out_dir});
+        errdefer allocator.free(merged_dir);
+        var argv: std.ArrayList([]const u8) = .empty;
+        defer argv.deinit(allocator);
+        try argv.appendSlice(allocator, &.{ kcov, "--merge", merged_dir });
+        try argv.appendSlice(allocator, result_dirs.items);
+        const result = try std.process.run(allocator, io, .{ .argv = argv.items });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+        if (!termOk(result.term)) {
+            try recordCommandFailure(allocator, error_message, "kcov merge", result.stdout, result.stderr);
+            return error.KcovMergeFailed;
+        }
+        try result_dirs.append(allocator, merged_dir);
+        break :blk merged_dir;
+    };
+
+    const xml = try readCoberturaXml(allocator, io, report_dir);
+    defer allocator.free(xml);
+    const stats = try parseCobertura(xml);
+    if (stats.total_lines == 0) return error.EmptyCoverageReport;
+    return stats;
+}
+
+fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 {
+    const direct = try std.fmt.allocPrint(allocator, "{s}/cobertura.xml", .{report_dir});
+    defer allocator.free(direct);
+    if (Io.Dir.cwd().readFileAlloc(io, direct, allocator, .limited(32 * 1024 * 1024))) |xml| {
+        return xml;
+    } else |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    }
+
+    var dir = try Io.Dir.cwd().openDir(io, report_dir, .{ .iterate = true });
+    defer dir.close(io);
+    var walker = try dir.walk(allocator);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or !std.mem.eql(u8, std.fs.path.basename(entry.path), "cobertura.xml")) continue;
+        const report_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ report_dir, entry.path });
+        defer allocator.free(report_path);
+        return try Io.Dir.cwd().readFileAlloc(io, report_path, allocator, .limited(32 * 1024 * 1024));
+    }
+    return error.FileNotFound;
+}
+
+fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase: []const u8, stdout: []const u8, stderr: []const u8) !void {
+    if (error_message.* != null) return;
+    const stderr_text = std.mem.trim(u8, stderr, " \t\r\n");
+    const stdout_text = std.mem.trim(u8, stdout, " \t\r\n");
+    const detail = if (stderr_text.len > 0) stderr_text else stdout_text;
+    if (detail.len == 0) {
+        error_message.* = try std.fmt.allocPrint(allocator, "{s} exited unsuccessfully without output", .{phase});
+        return;
+    }
+    const limit = @min(detail.len, 2048);
+    error_message.* = try std.fmt.allocPrint(allocator, "{s} exited unsuccessfully: {s}", .{ phase, detail[0..limit] });
+}
+
+fn rateBasisPoints(covered: u64, total: u64) ?u32 {
+    if (total == 0) return null;
+    return @intCast((covered * 100 * percent_scale) / total);
+}
+
+fn parseCobertura(xml: []const u8) !CoverageStats {
+    var stats: CoverageStats = .{};
+    var pos: usize = 0;
+    while (std.mem.indexOfPos(u8, xml, pos, "<class")) |class_start| {
+        const tag_end = std.mem.indexOfScalarPos(u8, xml, class_start, '>') orelse return error.InvalidCoverageReport;
+        const tag = xml[class_start .. tag_end + 1];
+        const filename = attributeValue(tag, "filename") orelse {
+            pos = tag_end + 1;
+            continue;
+        };
+        const body_start = tag_end + 1;
+        const class_end = std.mem.indexOfPos(u8, xml, body_start, "</class>") orelse body_start;
+        const body = xml[body_start..class_end];
+        const scope = coverageScope(filename);
+        if (scope == .ignored) {
+            pos = class_end + "</class>".len;
+            continue;
+        }
+
+        var line_pos: usize = 0;
+        while (std.mem.indexOfPos(u8, body, line_pos, "<line")) |line_start| {
+            const line_tag_end = std.mem.indexOfScalarPos(u8, body, line_start, '>') orelse return error.InvalidCoverageReport;
+            const line_tag = body[line_start .. line_tag_end + 1];
+            const hits_text = attributeValue(line_tag, "hits") orelse {
+                line_pos = line_tag_end + 1;
+                continue;
+            };
+            const covered = (std.fmt.parseInt(u64, hits_text, 10) catch 0) > 0;
+            stats.total_lines += 1;
+            if (covered) stats.covered_lines += 1;
+            switch (scope) {
+                .src => {
+                    stats.src_total_lines += 1;
+                    if (covered) stats.src_covered_lines += 1;
+                },
+                .tools => {
+                    stats.tools_total_lines += 1;
+                    if (covered) stats.tools_covered_lines += 1;
+                },
+                .ignored => {},
+            }
+            line_pos = line_tag_end + 1;
+        }
+        pos = if (class_end == body_start) body_start else class_end + "</class>".len;
+    }
+    return stats;
+}
+
+const CoverageScope = enum { src, tools, ignored };
+
+fn coverageScope(filename: []const u8) CoverageScope {
+    if (isScopePath(filename, "src")) return .src;
+    if (isScopePath(filename, "tools")) return .tools;
+    return .ignored;
+}
+
+fn isScopePath(filename: []const u8, scope: []const u8) bool {
+    if (std.mem.eql(u8, filename, scope)) return true;
+    if (std.mem.startsWith(u8, filename, scope) and filename.len > scope.len and isPathSep(filename[scope.len])) return true;
+    const needle = if (std.mem.eql(u8, scope, "src")) "/src/" else "/tools/";
+    return std.mem.indexOf(u8, filename, needle) != null;
+}
+
+fn isPathSep(byte: u8) bool {
+    return byte == '/' or byte == '\\';
+}
+
+fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
+    var pos: usize = 0;
+    while (std.mem.indexOfPos(u8, tag, pos, name)) |idx| {
+        const before_ok = idx == 0 or std.ascii.isWhitespace(tag[idx - 1]) or tag[idx - 1] == '<';
+        const after = idx + name.len;
+        if (before_ok and after < tag.len and tag[after] == '=') {
+            if (after + 1 >= tag.len) return null;
+            const quote = tag[after + 1];
+            if (quote != '"' and quote != '\'') return null;
+            const value_start = after + 2;
+            const value_end = std.mem.indexOfScalarPos(u8, tag, value_start, quote) orelse return null;
+            return tag[value_start..value_end];
+        }
+        pos = after;
+    }
+    return null;
 }
 
 const CoverageSummaryInput = struct {
@@ -228,18 +439,16 @@ const CoverageSummaryInput = struct {
     total_tests: i64,
     min_total_tests: i64,
     total_tests_ok: bool,
+    suite_tests_ok: bool,
     tests: []const TestResult,
-    kcov_available: bool,
-    kcov_path: ?[]const u8,
-    kcov_required: bool,
-    kcov_ran: bool,
-    kcov_error: ?[]const u8,
+    kcov: KcovInput,
 };
 
 fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInput) ![]u8 {
     var aw: Io.Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
     try aw.writer.writeAll("{\n");
+    try aw.writer.writeAll("  \"kind\": \"test_summary\",\n");
     try aw.writer.print("  \"ok\": {},\n", .{input.ok});
     try aw.writer.print("  \"generated_at_unix_ns\": {d},\n", .{nowNs(io)});
     try aw.writer.writeAll("  \"root\": ");
@@ -251,32 +460,61 @@ fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInp
     try aw.writer.print("  \"total_tests\": {d},\n", .{input.total_tests});
     try aw.writer.print("  \"min_total_tests\": {d},\n", .{input.min_total_tests});
     try aw.writer.print("  \"total_tests_ok\": {},\n", .{input.total_tests_ok});
+    try aw.writer.print("  \"suite_tests_ok\": {},\n", .{input.suite_tests_ok});
     try aw.writer.writeAll("  \"tests\": [\n");
     for (input.tests, 0..) |result, i| {
         if (i > 0) try aw.writer.writeAll(",\n");
         try renderTestResult(&aw.writer, result, "    ");
     }
     try aw.writer.writeAll("\n  ],\n");
-    try aw.writer.writeAll("  \"kcov\": {\n");
-    try aw.writer.print("    \"available\": {},\n", .{input.kcov_available});
-    if (input.kcov_path) |path| {
-        try aw.writer.writeAll("    \"path\": ");
-        try json_util.writeString(&aw.writer, path);
-        try aw.writer.writeAll(",\n");
-    } else {
-        try aw.writer.writeAll("    \"path\": null,\n");
-    }
-    try aw.writer.print("    \"required\": {},\n", .{input.kcov_required});
-    try aw.writer.print("    \"ran\": {}", .{input.kcov_ran});
-    if (input.kcov_error) |err| {
-        try aw.writer.writeAll(",\n    \"error\": ");
-        try json_util.writeString(&aw.writer, err);
-        try aw.writer.writeAll("\n");
-    } else {
-        try aw.writer.writeAll("\n");
-    }
-    try aw.writer.writeAll("  }\n}\n");
+    try renderCoverageObject(&aw.writer, input.kcov);
+    try aw.writer.writeAll("\n}\n");
     return try aw.toOwnedSlice();
+}
+
+fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
+    try writer.writeAll("  \"coverage\": {\n");
+    try writer.print("    \"measured\": {},\n", .{input.stats != null});
+    try writer.print("    \"available\": {},\n", .{input.available});
+    if (input.path) |path| {
+        try writer.writeAll("    \"path\": ");
+        try json_util.writeString(writer, path);
+        try writer.writeAll(",\n");
+    } else {
+        try writer.writeAll("    \"path\": null,\n");
+    }
+    try writer.print("    \"required\": {},\n", .{input.required});
+    try writer.print("    \"ran\": {},\n", .{input.ran});
+    try writer.writeAll("    \"include_path\": ");
+    try json_util.writeString(writer, coverage_config.kcov_include_path);
+    try writer.writeAll(",\n");
+    try writer.writeAll("    \"exclude_path\": ");
+    try json_util.writeString(writer, coverage_config.kcov_exclude_path);
+    if (input.stats) |stats| {
+        try writer.writeAll(",\n    \"covered_lines\": ");
+        try writer.print("{d}", .{stats.covered_lines});
+        try writer.writeAll(",\n    \"total_lines\": ");
+        try writer.print("{d}", .{stats.total_lines});
+        try writer.writeAll(",\n    \"line_coverage_percent\": ");
+        try writeOptionalPercent(writer, stats.lineRateBasisPoints());
+        try writer.writeAll(",\n    \"src_line_coverage_percent\": ");
+        try writeOptionalPercent(writer, stats.srcLineRateBasisPoints());
+        try writer.writeAll(",\n    \"tools_line_coverage_percent\": ");
+        try writeOptionalPercent(writer, stats.toolsLineRateBasisPoints());
+    }
+    if (input.error_message) |err| {
+        try writer.writeAll(",\n    \"error\": ");
+        try json_util.writeString(writer, err);
+    }
+    try writer.writeAll("\n  }");
+}
+
+fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
+    if (value) |bp| {
+        try writer.print("{d}.{d:0>2}", .{ bp / percent_scale, bp % percent_scale });
+    } else {
+        try writer.writeAll("null");
+    }
 }
 
 fn renderTestResult(writer: *Io.Writer, result: TestResult, indent: []const u8) !void {
@@ -291,10 +529,12 @@ fn renderTestResult(writer: *Io.Writer, result: TestResult, indent: []const u8) 
         try writer.print("{s}  \"tests\": null,\n", .{indent});
     }
     try writer.print(
+        \\{s}  "min_tests": {d},
+        \\{s}  "tests_ok": {},
         \\{s}  "stdout_bytes": {d},
         \\{s}  "stderr_bytes": {d}
         \\{s}}}
-    , .{ indent, result.stdout_bytes, indent, result.stderr_bytes, indent });
+    , .{ indent, result.min_tests, indent, result.tests_ok, indent, result.stdout_bytes, indent, result.stderr_bytes, indent });
 }
 
 fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
@@ -328,14 +568,50 @@ test "parseTestCount extracts Zig test runner totals" {
     try std.testing.expectEqual(@as(?i64, null), parseTestCount("All tests passed.\n"));
 }
 
-test "renderCoverageSummary includes every configured test binary" {
+test "parseCobertura counts src and tools lines" {
+    const xml =
+        \\<?xml version="1.0" ?>
+        \\<coverage>
+        \\  <packages>
+        \\    <class filename="src/root.zig">
+        \\      <lines>
+        \\        <line number="1" hits="1"/>
+        \\        <line number="2" hits="0"/>
+        \\      </lines>
+        \\    </class>
+        \\    <class filename="/repo/tools/coverage.zig">
+        \\      <lines>
+        \\        <line number="1" hits="3"/>
+        \\      </lines>
+        \\    </class>
+        \\    <class filename="zig-pkg/mcp.zig">
+        \\      <lines>
+        \\        <line number="1" hits="1"/>
+        \\      </lines>
+        \\    </class>
+        \\  </packages>
+        \\</coverage>
+    ;
+    const stats = try parseCobertura(xml);
+    try std.testing.expectEqual(@as(u64, 2), stats.covered_lines);
+    try std.testing.expectEqual(@as(u64, 3), stats.total_lines);
+    try std.testing.expectEqual(@as(u64, 1), stats.src_covered_lines);
+    try std.testing.expectEqual(@as(u64, 2), stats.src_total_lines);
+    try std.testing.expectEqual(@as(u32, 6666), stats.lineRateBasisPoints().?);
+    try std.testing.expectEqual(@as(u32, 5000), stats.srcLineRateBasisPoints().?);
+    try std.testing.expectEqual(@as(u32, 10000), stats.toolsLineRateBasisPoints().?);
+}
+
+test "renderCoverageSummary includes suite floors and coverage details" {
     const results = [_]TestResult{
         .{
             .name = "zigar-lib-tests",
             .path = "zig-out/test-bin/zigar-lib-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 10,
+            .tests = 120,
+            .min_tests = 115,
+            .tests_ok = true,
             .stdout_bytes = 100,
             .stderr_bytes = 0,
         },
@@ -344,8 +620,10 @@ test "renderCoverageSummary includes every configured test binary" {
             .path = "zig-out/test-bin/zigar-exe-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 11,
-            .stdout_bytes = 110,
+            .tests = 0,
+            .min_tests = 0,
+            .tests_ok = true,
+            .stdout_bytes = 20,
             .stderr_bytes = 0,
         },
         .{
@@ -353,7 +631,9 @@ test "renderCoverageSummary includes every configured test binary" {
             .path = "zig-out/test-bin/zigar-tools-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 4,
+            .tests = 11,
+            .min_tests = 10,
+            .tests_ok = true,
             .stdout_bytes = 40,
             .stderr_bytes = 0,
         },
@@ -361,25 +641,37 @@ test "renderCoverageSummary includes every configured test binary" {
     const summary = try renderCoverageSummary(std.testing.allocator, std.testing.io, .{
         .ok = true,
         .zig_version = "0.16.0",
-        .total_tests = 25,
-        .min_total_tests = 20,
+        .total_tests = 131,
+        .min_total_tests = 125,
         .total_tests_ok = true,
+        .suite_tests_ok = true,
         .tests = &results,
-        .kcov_available = true,
-        .kcov_path = "kcov",
-        .kcov_required = false,
-        .kcov_ran = true,
-        .kcov_error = "kcov exited unsuccessfully",
+        .kcov = .{
+            .available = true,
+            .path = "kcov",
+            .required = true,
+            .ran = true,
+            .error_message = null,
+            .stats = .{
+                .covered_lines = 8,
+                .total_lines = 10,
+                .src_covered_lines = 5,
+                .src_total_lines = 7,
+                .tools_covered_lines = 3,
+                .tools_total_lines = 3,
+            },
+        },
     });
     defer std.testing.allocator.free(summary);
 
     const parsed = try std.json.parseFromSlice(JsonValue, std.testing.allocator, summary, .{});
     defer parsed.deinit();
+    try std.testing.expectEqualStrings("test_summary", valueAt(parsed.value, "kind").?.string);
     try std.testing.expectEqual(@as(usize, 3), valueAt(parsed.value, "tests").?.array.items.len);
-    try std.testing.expectEqual(@as(i64, 25), valueAt(parsed.value, "total_tests").?.integer);
-    try std.testing.expectEqual(@as(i64, 20), valueAt(parsed.value, "min_total_tests").?.integer);
-    try std.testing.expect(valueAt(parsed.value, "total_tests_ok").?.bool);
-    try std.testing.expectEqualStrings("zigar-tools-tests", valueAt(parsed.value, "tests.2.name").?.string);
-    try std.testing.expectEqualStrings("kcov", valueAt(parsed.value, "kcov.path").?.string);
-    try std.testing.expectEqualStrings("kcov exited unsuccessfully", valueAt(parsed.value, "kcov.error").?.string);
+    try std.testing.expectEqual(@as(i64, 125), valueAt(parsed.value, "min_total_tests").?.integer);
+    try std.testing.expect(valueAt(parsed.value, "suite_tests_ok").?.bool);
+    try std.testing.expectEqual(@as(i64, 115), valueAt(parsed.value, "tests.0.min_tests").?.integer);
+    try std.testing.expect(valueAt(parsed.value, "tests.2.tests_ok").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "coverage.measured").?.bool);
+    try std.testing.expectEqual(@as(i64, 8), valueAt(parsed.value, "coverage.covered_lines").?.integer);
 }
