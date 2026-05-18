@@ -6,18 +6,18 @@ const analysis = zigar.analysis;
 const command = zigar.command;
 const json_result = zigar.json_result;
 const lsp_edits = zigar.lsp_edits;
-const tooling = zigar.tooling;
 const uri_util = zigar.uri;
 const zls_session = zigar.zls_session;
 const common = @import("common.zig");
 const core = @import("core.zig");
+const edit_diagnostics = @import("edit_zls_diagnostics.zig");
+const edit_edits = @import("edit_zls_edits.zig");
 const static_analysis = @import("static_analysis.zig");
 
 const App = common.App;
 const LspClient = common.LspClient;
 const structured = common.structured;
 const structuredOwned = common.structuredOwned;
-const putOwnedKey = common.putOwnedKey;
 const argString = common.argString;
 const argBool = common.argBool;
 const argInt = common.argInt;
@@ -38,10 +38,14 @@ const zlsSetupErrorResult = common.zlsSetupErrorResult;
 const lspStructuredValue = common.lspStructuredValue;
 const lspStructuredTool = common.lspStructuredTool;
 const lspHasError = common.lspHasError;
-const lspDiagnosticsInsightsValue = common.lspDiagnosticsInsightsValue;
 const responseResult = common.responseResult;
 const zigCheck = core.zigCheck;
 const zigDeclSummary = static_analysis.zigDeclSummary;
+const diagnosticWaitMs = edit_diagnostics.diagnosticWaitMs;
+const diagnosticsStructuredValue = edit_diagnostics.diagnosticsStructuredValue;
+const waitForDiagnostics = edit_diagnostics.waitForDiagnostics;
+const textEditToolValue = edit_edits.textEditToolValue;
+const workspaceEditValue = edit_edits.workspaceEditValue;
 
 pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_format", "file", "string");
@@ -645,216 +649,12 @@ pub fn zigFormatZls(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     return structuredOwned(allocator, value);
 }
 
-pub fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wait_ms: i64) void {
-    var elapsed: i64 = 0;
-    while (elapsed <= wait_ms) : (elapsed += 50) {
-        if (client.getDiagnostics(a.allocator, file_uri) catch null) |diagnostics| {
-            a.allocator.free(diagnostics);
-            return;
-        }
-        if (elapsed == wait_ms) return;
-        const step_ms = @min(@as(i64, 50), wait_ms - elapsed);
-        if (step_ms <= 0) return;
-        std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(step_ms), .clock = .awake } }, a.io) catch return;
-    }
-}
-
-fn diagnosticWaitMs(args: ?std.json.Value) i64 {
-    return @max(0, @min(argInt(args, "wait_ms", tooling.intDefault("wait_ms", 500)), 5000));
-}
-
-pub fn diagnosticsStructuredValue(allocator: std.mem.Allocator, notification: []const u8) !std.json.Value {
-    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, notification, .{});
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "method", .{ .string = "textDocument/publishDiagnostics" });
-    try obj.put(allocator, "ok", .{ .bool = true });
-
-    const notification_obj = switch (parsed.value) {
-        .object => |o| o,
-        else => {
-            try obj.put(allocator, "raw", parsed.value);
-            return .{ .object = obj };
-        },
-    };
-    const params = notification_obj.get("params") orelse .null;
-    try obj.put(allocator, "result", params);
-    try obj.put(allocator, "diagnostics", try lspDiagnosticsInsightsValue(allocator, params));
-    return .{ .object = obj };
-}
-
-pub fn textEditToolValue(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8, apply: bool) !std.json.Value {
-    const path = try uri_util.uriToPath(allocator, file_uri);
-    defer allocator.free(path);
-    const safe_path = try a.workspace.resolve(path);
-    defer allocator.free(safe_path);
-    const rel_view = a.workspace.relative(safe_path);
-    const rel = try allocator.dupe(u8, rel_view);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
-    defer allocator.free(source);
-
-    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
-    defer parsed.deinit();
-    const result = responseResult(parsed.value) orelse .null;
-    const updated = if (result == .null) try allocator.dupe(u8, source) else try lsp_edits.applyTextEdits(allocator, source, result);
-    var updated_moved = false;
-    defer if (!updated_moved) allocator.free(updated);
-    const diff = try lsp_edits.unifiedDiff(allocator, rel, source, updated);
-    if (apply) try a.workspace.writeFile(a.io, rel, updated);
-
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try putOwnedKey(allocator, &obj, "applied", .{ .bool = apply });
-    try putOwnedKey(allocator, &obj, "file", .{ .string = rel });
-    try putOwnedKey(allocator, &obj, "edit_count", .{ .integer = @intCast(lsp_edits.textEditCount(result)) });
-    try putOwnedKey(allocator, &obj, "source_hash", .{ .string = try lsp_edits.hashHex(allocator, source) });
-    try putOwnedKey(allocator, &obj, "updated_hash", .{ .string = try lsp_edits.hashHex(allocator, updated) });
-    try putOwnedKey(allocator, &obj, "diff", .{ .string = diff });
-    try putOwnedKey(allocator, &obj, "edits", try json_result.cloneValue(allocator, result));
-    if (!apply) {
-        try putOwnedKey(allocator, &obj, "formatted", .{ .string = updated });
-        updated_moved = true;
-    }
-    return .{ .object = obj };
-}
-
-pub fn previewTextEditResponse(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8) ![]u8 {
-    const path = try uri_util.uriToPath(allocator, file_uri);
-    defer allocator.free(path);
-    const safe_path = try a.workspace.resolve(path);
-    defer allocator.free(safe_path);
-    const rel = a.workspace.relative(safe_path);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
-    defer allocator.free(source);
-
-    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
-    defer parsed.deinit();
-    const result = responseResult(parsed.value) orelse return allocator.dupe(u8, source);
-    if (result == .null) return allocator.dupe(u8, source);
-    return lsp_edits.applyTextEdits(allocator, source, result);
-}
-
-pub fn applyTextEditResponseToFile(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8) ![]u8 {
-    const path = try uri_util.uriToPath(allocator, file_uri);
-    defer allocator.free(path);
-    const safe_path = try a.workspace.resolve(path);
-    defer allocator.free(safe_path);
-    const rel = a.workspace.relative(safe_path);
-    const updated = try previewTextEditResponse(a, allocator, file_uri, response);
-    defer allocator.free(updated);
-    try a.workspace.writeFile(a.io, rel, updated);
-    return std.fmt.allocPrint(allocator, "applied edits to {s}\n", .{rel});
-}
-
 pub fn workspaceEditToolResult(a: *App, allocator: std.mem.Allocator, response: []const u8, apply: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "parse_response", "malformed_backend_response", err, "Retry after checking the ZLS session; the workspace edit response was not valid JSON.");
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse .null;
     const value = workspaceEditValue(a, allocator, result, apply) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the workspace edit and retry with paths that remain inside the zigar workspace.");
     return structuredOwned(allocator, value);
-}
-
-pub fn workspaceEditValue(a: *App, allocator: std.mem.Allocator, result: std.json.Value, apply: bool) !std.json.Value {
-    if (result == .null) {
-        var empty = std.json.ObjectMap.empty;
-        try putOwnedKey(allocator, &empty, "applied", .{ .bool = apply });
-        try putOwnedKey(allocator, &empty, "affected_files", .{ .array = std.json.Array.init(allocator) });
-        try putOwnedKey(allocator, &empty, "total_edits", .{ .integer = 0 });
-        try putOwnedKey(allocator, &empty, "edit", .null);
-        return .{ .object = empty };
-    }
-    const edit_obj = switch (result) {
-        .object => |o| o,
-        else => return error.InvalidTextEdit,
-    };
-
-    var files = std.json.Array.init(allocator);
-    var total_edits: usize = 0;
-
-    if (edit_obj.get("changes")) |changes| {
-        if (changes == .object) {
-            var it = changes.object.iterator();
-            while (it.next()) |entry| {
-                total_edits += lsp_edits.textEditCount(entry.value_ptr.*);
-                try files.append(try workspaceEditFileValue(a, allocator, entry.key_ptr.*, entry.value_ptr.*, apply));
-            }
-        }
-    }
-
-    if (edit_obj.get("documentChanges")) |document_changes| {
-        if (document_changes == .array) {
-            for (document_changes.array.items) |change| {
-                const change_obj = switch (change) {
-                    .object => |o| o,
-                    else => continue,
-                };
-                const text_doc = switch (change_obj.get("textDocument") orelse .null) {
-                    .object => |o| o,
-                    else => continue,
-                };
-                const uri = switch (text_doc.get("uri") orelse .null) {
-                    .string => |s| s,
-                    else => continue,
-                };
-                const edits = change_obj.get("edits") orelse continue;
-                total_edits += lsp_edits.textEditCount(edits);
-                try files.append(try workspaceEditFileValue(a, allocator, uri, edits, apply));
-            }
-        }
-    }
-
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try putOwnedKey(allocator, &obj, "applied", .{ .bool = apply });
-    try putOwnedKey(allocator, &obj, "affected_files", .{ .array = files });
-    try putOwnedKey(allocator, &obj, "total_edits", .{ .integer = @intCast(total_edits) });
-    try putOwnedKey(allocator, &obj, "edit", try json_result.cloneValue(allocator, result));
-    return .{ .object = obj };
-}
-
-pub fn workspaceEditFileValue(a: *App, allocator: std.mem.Allocator, uri: []const u8, edits: std.json.Value, apply: bool) !std.json.Value {
-    const path = try uri_util.uriToPath(allocator, uri);
-    defer allocator.free(path);
-    const safe_path = try a.workspace.resolve(path);
-    defer allocator.free(safe_path);
-    const rel_view = a.workspace.relative(safe_path);
-    const rel = try allocator.dupe(u8, rel_view);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
-    defer allocator.free(source);
-    const updated = try lsp_edits.applyTextEdits(allocator, source, edits);
-    defer allocator.free(updated);
-    const diff = try lsp_edits.unifiedDiff(allocator, rel, source, updated);
-    if (apply) {
-        try a.workspace.writeFile(a.io, rel, updated);
-        if (a.lsp_client) |client| {
-            if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch {};
-        }
-    }
-
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try putOwnedKey(allocator, &obj, "file", .{ .string = rel });
-    try putOwnedKey(allocator, &obj, "edit_count", .{ .integer = @intCast(lsp_edits.textEditCount(edits)) });
-    try putOwnedKey(allocator, &obj, "source_hash", .{ .string = try lsp_edits.hashHex(allocator, source) });
-    try putOwnedKey(allocator, &obj, "updated_hash", .{ .string = try lsp_edits.hashHex(allocator, updated) });
-    try putOwnedKey(allocator, &obj, "diff", .{ .string = diff });
-    return .{ .object = obj };
-}
-
-pub fn applyEditsForUri(a: *App, allocator: std.mem.Allocator, uri: []const u8, edits: std.json.Value) !void {
-    const path = try uri_util.uriToPath(allocator, uri);
-    defer allocator.free(path);
-    const safe_path = try a.workspace.resolve(path);
-    defer allocator.free(safe_path);
-    const rel = a.workspace.relative(safe_path);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
-    defer allocator.free(source);
-    const updated = try lsp_edits.applyTextEdits(allocator, source, edits);
-    defer allocator.free(updated);
-    try a.workspace.writeFile(a.io, rel, updated);
-    if (a.lsp_client) |client| {
-        if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch {};
-    }
 }
 
 pub fn zigWorkspaceSymbols(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
