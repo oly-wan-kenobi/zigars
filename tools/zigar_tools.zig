@@ -24,8 +24,10 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
-    const args = try init.minimal.args.toSlice(allocator);
-    defer allocator.free(args);
+    var args_arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer args_arena_state.deinit();
+    const args_arena = args_arena_state.allocator();
+    const args = try init.minimal.args.toSlice(args_arena);
 
     if (args.len > 0) {
         const invoked = executableName(args[0]);
