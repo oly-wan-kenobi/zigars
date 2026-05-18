@@ -126,13 +126,28 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/edit_zls.zig",
-        .max_lines = 900,
-        .reason = "edit and ZLS handlers should remain focused around language-server workflows",
+        .max_lines = 760,
+        .reason = "edit and ZLS handlers must delegate diagnostics and edit application helpers",
+    },
+    .{
+        .path = "src/tools/edit_zls_diagnostics.zig",
+        .max_lines = 100,
+        .reason = "ZLS diagnostics shaping should remain a focused helper",
+    },
+    .{
+        .path = "src/tools/edit_zls_edits.zig",
+        .max_lines = 240,
+        .reason = "ZLS text/workspace edit application should remain independently reviewable",
     },
     .{
         .path = "src/tools/shared_core.zig",
-        .max_lines = 750,
-        .reason = "shared command/compiler/path helpers must not become a replacement server monolith",
+        .max_lines = 500,
+        .reason = "shared command/compiler/path helpers must stay a facade over focused helper modules",
+    },
+    .{
+        .path = "src/tools/command_result.zig",
+        .max_lines = 380,
+        .reason = "command result and compiler diagnostic shaping should stay focused and testable",
     },
     .{
         .path = "src/tools/tool_result_errors.zig",
@@ -141,8 +156,18 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/static_core.zig",
-        .max_lines = 900,
-        .reason = "static-analysis helpers should stay below a reviewable module size",
+        .max_lines = 520,
+        .reason = "static-analysis tool handlers should delegate scanner implementation details",
+    },
+    .{
+        .path = "src/tools/static_build.zig",
+        .max_lines = 450,
+        .reason = "build graph scanning should stay independently reviewable",
+    },
+    .{
+        .path = "src/tools/static_dependencies.zig",
+        .max_lines = 180,
+        .reason = "dependency inspection should stay independently reviewable",
     },
     .{
         .path = "src/tools/static_tests.zig",
@@ -156,8 +181,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/lsp/client.zig",
-        .max_lines = 720,
+        .max_lines = 700,
         .reason = "LSP client must stay focused on transport lifecycle; caches and parsing helpers belong in focused modules",
+    },
+    .{
+        .path = "src/lsp/client_test_support.zig",
+        .max_lines = 100,
+        .reason = "LSP test support should stay compact and separate from client runtime logic",
     },
     .{
         .path = "src/lsp/diagnostics_cache.zig",
@@ -188,6 +218,11 @@ const line_budgets = [_]LineBudget{
         .path = "tools/zigar_tools.zig",
         .max_lines = 800,
         .reason = "tool dispatcher must delegate large release-check helpers to focused modules",
+    },
+    .{
+        .path = "tools/cli_io.zig",
+        .max_lines = 80,
+        .reason = "tooling CLI IO helpers should remain a compact shared utility",
     },
     .{
         .path = "tools/dist.zig",
