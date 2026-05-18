@@ -3,8 +3,9 @@
 `zigar_capabilities`, `zigar_tool_index`, and `zigar_schema` expose the same
 catalog. Tool grouping, discovery keywords, argument schemas, risk metadata,
 planning metadata, and handler references are generated from
-`src/tool_manifest.zig`; the public MCP tool/resource response adds static
-safety notes and common intents from `src/tool_catalog.json`.
+the typed manifest under `src/tool_manifest/`; the public MCP tool/resource
+response adds static safety notes and common intents from
+`src/tool_catalog.json`.
 
 Standard MCP discovery is the first-class path: `tools/list` publishes each
 registered `inputSchema` with `properties`, `required` fields, defaults, enums,
@@ -20,6 +21,15 @@ schemas.
 Tool calls are validated before handler execution. Invalid arguments return a
 structured `argument_error` result with a stable `code`, `field`, `expected`,
 `actual`, and `resolution`.
+
+Handlers preserve that contract after validation too. Expected user-facing
+failures such as missing workspace files, unsupported planning targets, malformed
+extra arguments, unavailable optional backends, failed writes, and analysis-cache
+decode failures are returned as MCP error results with structured payloads. The
+payload names the tool, operation, phase, machine-readable code, category,
+underlying error when available, and a resolution. Bare `InvalidArguments`,
+`ExecutionFailed`, and `ResourceNotFound` are treated as release-check failures in
+the public tool-handler modules.
 
 Registry-derived argument hints also include a `risk` object. The MCP
 `readOnlyHint` remains useful for client UI, but zigar's risk fields are more

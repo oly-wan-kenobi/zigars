@@ -1,0 +1,16 @@
+const types = @import("types.zig");
+
+const GroupSpec = types.GroupSpec;
+
+pub const group_specs = [_]GroupSpec{
+    .{ .group = .discovery, .keywords = &.{ "capabilities", "tool index", "schema", "doctor", "health", "workspace", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt" } },
+    .{ .group = .agent_workflows, .keywords = &.{ "agent", "codex", "claude", "context pack", "next action", "validate patch", "failure fusion", "impact analysis", "project profile", "patch guard", "done check", "readiness" } },
+    .{ .group = .core_zig, .keywords = &.{ "zig", "build", "test", "check", "ast-check", "compiler diagnostics", "compile error index", "translate-c" } },
+    .{ .group = .formatting_and_edits, .keywords = &.{ "fmt", "formatter", "formatting", "zig fmt", "patch preview", "unified diff", "rename", "code action", "apply=true" } },
+    .{ .group = .zls, .keywords = &.{ "zls", "lsp", "diagnostics", "hover", "definition", "references", "completion", "symbols", "unsaved document" } },
+    .{ .group = .docs, .keywords = &.{ "docs", "stdlib", "builtin", "langref", "language reference" } },
+    .{ .group = .static_analysis, .keywords = &.{ "heuristic", "confidence", "imports", "declarations", "allocation", "error set", "public api", "api diff", "breaking change", "build graph", "build options", "test discovery", "test map", "test select", "changed files", "dependency inspector", "target matrix", "test failure triage", "symbol cache", "package cache doctor" } },
+    .{ .group = .ci_artifacts, .keywords = &.{ "ci", "annotations", "junit", "matrix", "multiple zig versions", "test report" } },
+    .{ .group = .zwanzig, .keywords = &.{ "zwanzig", "lint", "linter", "static analysis", "sarif", "rules", "dot graph" } },
+    .{ .group = .profiling, .keywords = &.{ "profile", "profiling", "perf", "dtrace", "sample", "xctrace", "vtune", "zflame", "flamegraph", "diff flamegraph" } },
+};
