@@ -8,11 +8,12 @@ const zls_session = zigar.zls_session;
 const core = @import("shared_core.zig");
 
 const App = core.App;
-const errorText = core.errorText;
 const structured = core.structured;
 const argString = core.argString;
 const workspacePathErrorResult = core.workspacePathErrorResult;
 const backendErrorResult = core.backendErrorResult;
+const missingArgumentResult = core.missingArgumentResult;
+const toolErrorFromError = core.toolErrorFromError;
 const splitToolArgs = core.splitToolArgs;
 const classifyDiagnosticMessage = core.classifyDiagnosticMessage;
 const backendProbeCacheValue = core.backendProbeCacheValue;
@@ -242,14 +243,28 @@ pub fn zlsFileUriFromArgs(a: *App, allocator: std.mem.Allocator, args: ?std.json
 
 pub fn zlsSetupErrorResult(a: *App, allocator: std.mem.Allocator, operation: []const u8, file: ?[]const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     switch (err) {
-        error.InvalidArguments => return error.InvalidArguments,
+        error.InvalidArguments => return missingArgumentResult(allocator, operation, "file", "string"),
         error.PathOutsideWorkspace, error.EmptyPath => {
             if (file) |path| return workspacePathErrorResult(a, allocator, operation, path, err);
-            return error.InvalidArguments;
+            return missingArgumentResult(allocator, operation, "file", "string");
         },
         error.NotConnected => return zlsUnavailable(a, allocator),
-        error.DocumentTooLarge => return errorText(allocator, "ZLS document sync rejected content larger than zigar's per-document memory budget. Save the file on disk and call a file-based tool, or send a smaller unsaved document."),
-        error.OpenDocumentLimitExceeded => return errorText(allocator, "ZLS document sync rejected the document because zigar reached its open-document budget. Close unused documents with zig_document_close and retry."),
+        error.DocumentTooLarge => return toolErrorFromError(allocator, .{
+            .tool = operation,
+            .operation = "sync_document",
+            .phase = "document_size_limit",
+            .code = "document_too_large",
+            .category = "document_state",
+            .resolution = "Save the file on disk and call a file-based tool, or send a smaller unsaved document.",
+        }, err),
+        error.OpenDocumentLimitExceeded => return toolErrorFromError(allocator, .{
+            .tool = operation,
+            .operation = "sync_document",
+            .phase = "open_document_limit",
+            .code = "open_document_limit_exceeded",
+            .category = "document_state",
+            .resolution = "Close unused documents with zig_document_close and retry.",
+        }, err),
         else => return backendErrorResult(
             allocator,
             "zls",
@@ -482,7 +497,14 @@ pub fn lspStructuredValue(allocator: std.mem.Allocator, method: []const u8, resp
 }
 
 pub fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const value = lspStructuredValue(allocator, method, response) catch return error.ExecutionFailed;
+    const value = lspStructuredValue(allocator, method, response) catch |err| return toolErrorFromError(allocator, .{
+        .tool = method,
+        .operation = method,
+        .phase = "parse_response",
+        .code = "malformed_backend_response",
+        .category = "lsp",
+        .resolution = "Retry after checking the ZLS session; the backend response could not be parsed as structured JSON.",
+    }, err);
     return structured(allocator, value);
 }
 

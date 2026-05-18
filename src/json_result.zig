@@ -2,6 +2,14 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structuredWithErrorFlag(allocator, value, false);
+}
+
+pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structuredWithErrorFlag(allocator, value, true);
+}
+
+fn structuredWithErrorFlag(allocator: std.mem.Allocator, value: std.json.Value, is_error: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
     errdefer allocator.free(bytes);
 
@@ -14,6 +22,7 @@ pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools
     return .{
         .content = content,
         .structuredContent = structured_value,
+        .is_error = is_error,
     };
 }
 

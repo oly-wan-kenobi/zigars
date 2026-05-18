@@ -7,6 +7,7 @@ const command = zigar.command;
 const doctor = zigar.doctor;
 const json_result = zigar.json_result;
 const runtime_mod = zigar.runtime;
+const tool_errors = zigar.tool_errors;
 
 pub const App = runtime_mod.App;
 pub const BackendProbeCache = runtime_mod.BackendProbeCache;
@@ -44,27 +45,50 @@ pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
 
 pub fn workspacePathErrorResult(a: *App, allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => {
-            const message = workspacePathErrorMessage(allocator, tool_name, path, a.workspace.root, err) catch return error.OutOfMemory;
-            defer allocator.free(message);
-            return errorText(allocator, message);
-        },
-        error.InvalidArguments => return error.InvalidArguments,
+        error.PathOutsideWorkspace, error.EmptyPath => return tool_errors.workspacePath(allocator, tool_name, path, a.workspace.root, err),
+        error.InvalidArguments => return tool_errors.invalidArgument(
+            allocator,
+            tool_name,
+            "path",
+            "workspace-relative path",
+            path,
+            "Pass a non-empty path string that resolves inside the configured zigar workspace.",
+        ),
         error.NotConnected => return zlsUnavailable(a, allocator),
-        error.DocumentTooLarge => return errorText(allocator, "ZLS document sync rejected content larger than zigar's per-document memory budget. Save the file on disk and call a file-based tool, or send a smaller unsaved document."),
-        error.OpenDocumentLimitExceeded => return errorText(allocator, "ZLS document sync rejected the document because zigar reached its open-document budget. Close unused documents with zig_document_close and retry."),
-        error.ExecutionFailed => return error.ExecutionFailed,
-        else => {
-            const message = std.fmt.allocPrint(
-                allocator,
-                "{s}: rejected path `{s}` while resolving it inside the configured workspace: {s}.",
-                .{ tool_name, path, @errorName(err) },
-            ) catch return error.OutOfMemory;
-            defer allocator.free(message);
-            return errorText(allocator, message);
-        },
+        error.DocumentTooLarge => return tool_errors.fromError(allocator, .{
+            .tool = tool_name,
+            .operation = "sync_document",
+            .phase = "document_size_limit",
+            .code = "document_too_large",
+            .category = "document_state",
+            .resolution = "Save the file on disk and call a file-based tool, or send a smaller unsaved document.",
+            .details = &.{.{ .key = "path", .value = .{ .string = path } }},
+        }, err),
+        error.OpenDocumentLimitExceeded => return tool_errors.fromError(allocator, .{
+            .tool = tool_name,
+            .operation = "sync_document",
+            .phase = "open_document_limit",
+            .code = "open_document_limit_exceeded",
+            .category = "document_state",
+            .resolution = "Close unused documents with zig_document_close and retry.",
+            .details = &.{.{ .key = "path", .value = .{ .string = path } }},
+        }, err),
+        else => return tool_errors.fromError(allocator, .{
+            .tool = tool_name,
+            .operation = "resolve_workspace_path",
+            .phase = "resolve_path",
+            .code = "path_resolution_failed",
+            .category = "workspace_path",
+            .resolution = "Confirm the path exists inside the configured zigar workspace and retry.",
+            .details = &.{.{ .key = "path", .value = .{ .string = path } }},
+        }, err),
     }
 }
+
+pub const toolErrorResult = tool_errors.result;
+pub const toolErrorFromError = tool_errors.fromError;
+pub const missingArgumentResult = tool_errors.missingArgument;
+pub const invalidArgumentResult = tool_errors.invalidArgument;
 
 pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, root: []const u8, err: anyerror) ![]u8 {
     if (err == error.EmptyPath) {

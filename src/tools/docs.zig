@@ -10,12 +10,35 @@ const structured = common.structured;
 const argString = common.argString;
 const argInt = common.argInt;
 const structuredText = common.structuredText;
+const toolErrorFromError = common.toolErrorFromError;
+const missingArgumentResult = common.missingArgumentResult;
 const ownedString = common.ownedString;
 const zigEnvValue = common.zigEnvValue;
 const makeArgs2 = common.makeArgs2;
 const asciiLowerAllocLocal = common.asciiLowerAllocLocal;
 const lineNumberLocal = common.lineNumberLocal;
 const lineAtLocal = common.lineAtLocal;
+
+fn docsError(
+    allocator: std.mem.Allocator,
+    tool: []const u8,
+    operation: []const u8,
+    phase: []const u8,
+    code: []const u8,
+    err: anyerror,
+    query: []const u8,
+    resolution: []const u8,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return toolErrorFromError(allocator, .{
+        .tool = tool,
+        .operation = operation,
+        .phase = phase,
+        .code = code,
+        .category = "docs",
+        .resolution = resolution,
+        .details = &.{.{ .key = "query", .value = .{ .string = query } }},
+    }, err);
+}
 
 pub fn zigBuiltinList(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const output = docs.builtinList(allocator) catch return error.OutOfMemory;
@@ -39,24 +62,24 @@ pub fn zigBuiltinListJson(_: *App, allocator: std.mem.Allocator, _: ?std.json.Va
 }
 
 pub fn zigBuiltinDoc(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const query = argString(args, "query") orelse return error.InvalidArguments;
+    const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_builtin_doc", "query", "string");
     const output = docs.builtinDoc(allocator, query) catch return error.OutOfMemory;
     defer allocator.free(output);
     return structuredText(allocator, "zig_builtin_doc", output);
 }
 
 pub fn zigStdSearch(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const query = argString(args, "query") orelse return error.InvalidArguments;
-    const std_dir = zigEnvValue(a, allocator, "std_dir") catch return error.ExecutionFailed;
+    const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_std_search", "query", "string");
+    const std_dir = zigEnvValue(a, allocator, "std_dir") catch |err| return docsError(allocator, "zig_std_search", "zig env", "resolve_std_dir", "zig_env_failed", err, query, "Confirm --zig-path points to a Zig executable that can report std_dir.");
     defer allocator.free(std_dir);
-    const output = docs.searchStd(allocator, a.io, std_dir, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch return error.ExecutionFailed;
+    const output = docs.searchStd(allocator, a.io, std_dir, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch |err| return docsError(allocator, "zig_std_search", "search_std", "scan_std_sources", "search_failed", err, query, "Confirm the Zig standard-library directory is readable, then retry with a narrower query if needed.");
     defer allocator.free(output);
     return structuredText(allocator, "zig_std_search", output);
 }
 
 pub fn zigStdSearchJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const query = argString(args, "query") orelse return error.InvalidArguments;
-    const std_dir = zigEnvValue(a, allocator, "std_dir") catch return error.ExecutionFailed;
+    const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_std_search_json", "query", "string");
+    const std_dir = zigEnvValue(a, allocator, "std_dir") catch |err| return docsError(allocator, "zig_std_search_json", "zig env", "resolve_std_dir", "zig_env_failed", err, query, "Confirm --zig-path points to a Zig executable that can report std_dir.");
     defer allocator.free(std_dir);
     return searchZigFilesJson(allocator, a.io, std_dir, "std", query, @intCast(@max(1, argInt(args, "limit", 20))));
 }
@@ -65,9 +88,9 @@ pub fn searchZigFilesJson(allocator: std.mem.Allocator, io: std.Io, root: []cons
     const lower_query = asciiLowerAllocLocal(allocator, query) catch return error.OutOfMemory;
     defer allocator.free(lower_query);
     var matches = std.json.Array.init(allocator);
-    var dir = std.Io.Dir.openDirAbsolute(io, root, .{ .iterate = true }) catch return error.ExecutionFailed;
+    var dir = std.Io.Dir.openDirAbsolute(io, root, .{ .iterate = true }) catch |err| return docsError(allocator, "zig_std_search_json", "search_std_json", "open_root", "docs_root_open_failed", err, query, "Confirm the Zig standard-library directory exists and is readable.");
     defer dir.close(io);
-    var walker = dir.walk(allocator) catch return error.ExecutionFailed;
+    var walker = dir.walk(allocator) catch |err| return docsError(allocator, "zig_std_search_json", "search_std_json", "walk_root", "docs_root_walk_failed", err, query, "Confirm the Zig standard-library directory can be traversed.");
     defer walker.deinit();
     var count: usize = 0;
     var skipped_files: usize = 0;
@@ -108,15 +131,15 @@ pub fn searchZigFilesJson(allocator: std.mem.Allocator, io: std.Io, root: []cons
 }
 
 pub fn zigStdItem(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const name = argString(args, "name") orelse return error.InvalidArguments;
+    const name = argString(args, "name") orelse return missingArgumentResult(allocator, "zig_std_item", "name", "string");
     return zigStdSearch(a, allocator, makeArgs2(allocator, "query", name, "limit", argInt(args, "limit", 20)) catch return error.OutOfMemory);
 }
 
 pub fn zigLangRefSearch(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const query = argString(args, "query") orelse return error.InvalidArguments;
-    const lib_dir = zigEnvValue(a, allocator, "lib_dir") catch return error.ExecutionFailed;
+    const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_lang_ref_search", "query", "string");
+    const lib_dir = zigEnvValue(a, allocator, "lib_dir") catch |err| return docsError(allocator, "zig_lang_ref_search", "zig env", "resolve_lib_dir", "zig_env_failed", err, query, "Confirm --zig-path points to a Zig executable that can report lib_dir.");
     defer allocator.free(lib_dir);
-    const output = docs.langRefSearch(allocator, a.io, lib_dir, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch return error.ExecutionFailed;
+    const output = docs.langRefSearch(allocator, a.io, lib_dir, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch |err| return docsError(allocator, "zig_lang_ref_search", "search_langref", "scan_langref", "search_failed", err, query, "Confirm the Zig language reference is readable, then retry with a narrower query if needed.");
     defer allocator.free(output);
     return structuredText(allocator, "zig_lang_ref_search", output);
 }
