@@ -1085,7 +1085,7 @@ fn zigarFailureFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     if (argString(args, "text")) |raw_text| {
         return structured(allocator, failureFusionValue(allocator, raw_text, "", &.{ "zig", "build", "test" }, false) catch return error.OutOfMemory);
     }
-    var list = buildExplainCommand(allocator, args, a) catch |err| return explainCommandSetupError(a, allocator, "zig_compile_error_index", args, err);
+    var list = buildExplainCommand(allocator, args, a) catch |err| return explainCommandSetupError(a, allocator, "zigar_failure_fusion", args, err);
     defer {
         for (list.owned_paths.items) |path| allocator.free(path);
         list.owned_paths.deinit(allocator);
@@ -1930,6 +1930,7 @@ fn versionManagersValue(allocator: std.mem.Allocator, a: *App, probe: bool, time
 
 fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
+    const spec = tool_metadata.find(tool_name) orelse return error.InvalidArguments;
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
     var owned_path: ?[]u8 = null;
@@ -1977,7 +1978,10 @@ fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) 
     obj.put(allocator, "cwd", .{ .string = a.workspace.root }) catch return error.OutOfMemory;
     obj.put(allocator, "argv", argvValue(allocator, list.items) catch return error.OutOfMemory) catch return error.OutOfMemory;
     obj.put(allocator, "timeout_ms", .{ .integer = toolTimeout(a, args) }) catch return error.OutOfMemory;
-    obj.put(allocator, "writes_source", .{ .bool = false }) catch return error.OutOfMemory;
+    const risk = tool_metadata.riskFor(spec.id);
+    obj.put(allocator, "risk", tool_metadata.riskValue(allocator, spec) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj.put(allocator, "risk_level", .{ .string = tool_metadata.riskLevel(risk) }) catch return error.OutOfMemory;
+    obj.put(allocator, "writes_source", .{ .bool = risk.writes_source }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -2033,7 +2037,7 @@ fn zigCompileErrorIndex(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
         const value = compilerErrorIndexValue(allocator, raw_text, "", &.{a.config.zig_path}) catch return error.OutOfMemory;
         return structured(allocator, value);
     }
-    var list = buildExplainCommand(allocator, args, a) catch |err| return explainCommandSetupError(a, allocator, "zig_explain_errors", args, err);
+    var list = buildExplainCommand(allocator, args, a) catch |err| return explainCommandSetupError(a, allocator, "zig_compile_error_index", args, err);
     defer {
         for (list.owned_paths.items) |path| allocator.free(path);
         list.owned_paths.deinit(allocator);
@@ -2186,7 +2190,7 @@ fn compilerErrorIndexValue(allocator: std.mem.Allocator, stderr: []const u8, std
 }
 
 fn zigExplainErrors(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    var list = buildExplainCommand(allocator, args, a) catch return error.InvalidArguments;
+    var list = buildExplainCommand(allocator, args, a) catch |err| return explainCommandSetupError(a, allocator, "zig_explain_errors", args, err);
     defer {
         for (list.owned_paths.items) |path| allocator.free(path);
         list.owned_paths.deinit(allocator);
@@ -5444,6 +5448,57 @@ test "zigar_schema exposes registry-derived risk metadata" {
     const args = parsed.value.object.get("registry_tool_arguments").?.object;
     const validate_patch = args.get("zigar_validate_patch").?.object;
     try std.testing.expect(validate_patch.get("risk").?.object.get("executes_project_code").?.bool);
+}
+
+fn testAppForCommandPlanning(allocator: std.mem.Allocator) !App {
+    return .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .config = .{ .workspace = "/tmp", .zig_path = "zig" },
+        .workspace = try workspace_mod.Workspace.init(allocator, std.testing.io, "/tmp", null, false),
+    };
+}
+
+test "zig_command_plan exposes registry risk metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var app = try testAppForCommandPlanning(allocator);
+
+    var args = std.json.ObjectMap.empty;
+    try args.put(allocator, "tool", .{ .string = "zig_test" });
+    const result = try zigCommandPlan(&app, allocator, .{ .object = args });
+    const body = result.content[0].text.text;
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
+    const root = parsed.value.object;
+    const risk = root.get("risk").?.object;
+
+    try std.testing.expectEqualStrings("zig_test", root.get("tool").?.string);
+    try std.testing.expectEqualStrings("medium", root.get("risk_level").?.string);
+    try std.testing.expectEqualStrings("medium", risk.get("level").?.string);
+    try std.testing.expect(risk.get("executes_project_code").?.bool);
+    try std.testing.expect(risk.get("writes_artifacts").?.bool);
+    try std.testing.expect(!root.get("writes_source").?.bool);
+}
+
+test "explain command setup errors use the calling tool name" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var app = try testAppForCommandPlanning(allocator);
+
+    var args = std.json.ObjectMap.empty;
+    try args.put(allocator, "command", .{ .string = "check" });
+    try args.put(allocator, "file", .{ .string = "/zigar-outside-workspace.zig" });
+
+    const explain = try zigExplainErrors(&app, allocator, .{ .object = args });
+    try std.testing.expect(std.mem.indexOf(u8, explain.content[0].text.text, "zig_explain_errors") != null);
+
+    const index = try zigCompileErrorIndex(&app, allocator, .{ .object = args });
+    try std.testing.expect(std.mem.indexOf(u8, index.content[0].text.text, "zig_compile_error_index") != null);
+
+    const fusion = try zigarFailureFusion(&app, allocator, .{ .object = args });
+    try std.testing.expect(std.mem.indexOf(u8, fusion.content[0].text.text, "zigar_failure_fusion") != null);
 }
 
 test "catalog derives compact argument hints from registry metadata" {
