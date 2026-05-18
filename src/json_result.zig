@@ -17,6 +17,13 @@ pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools
     };
 }
 
+pub fn structuredOwned(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Use only with JSON trees whose object keys and owned string payloads were
+    // allocated by this allocator, or with values produced by cloneValue.
+    defer deinitOwnedValue(allocator, value);
+    return structured(allocator, value);
+}
+
 pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
     return switch (value) {
         .null => .null,
@@ -49,6 +56,10 @@ pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json
             break :blk .{ .object = cloned };
         },
     };
+}
+
+pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    deinitClonedValue(allocator, value);
 }
 
 fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
@@ -179,4 +190,19 @@ test "cloneValue owns nested strings" {
     const cloned_obj = cloned.object;
     try std.testing.expectEqualStrings("zigar", cloned_obj.get("name").?.string);
     try std.testing.expectEqualStrings("fmt", cloned_obj.get("keywords").?.array.items[0].string);
+}
+
+test "structuredOwned releases input value after cloning result" {
+    const allocator = std.testing.allocator;
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, try allocator.dupe(u8, "name"), .{ .string = try allocator.dupe(u8, "zigar") });
+
+    const result = try structuredOwned(allocator, .{ .object = obj });
+    defer {
+        if (result.structuredContent) |structured_content| deinitOwnedValue(allocator, structured_content);
+        allocator.free(result.content[0].text.text);
+        allocator.free(result.content);
+    }
+
+    try std.testing.expectEqualStrings("zigar", result.structuredContent.?.object.get("name").?.string);
 }
