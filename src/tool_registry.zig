@@ -76,6 +76,7 @@ pub fn validateToolArgs(allocator: std.mem.Allocator, spec: tool_metadata.ToolMe
         if (!schemaTypeMatches(field[1], entry.value_ptr.*)) {
             return try argumentErrorResult(allocator, spec.name, "invalid_type", field[0], field[1], jsonTypeName(entry.value_ptr.*));
         }
+        if (try validateFieldHint(allocator, spec.name, field, entry.value_ptr.*)) |validation_error| return validation_error;
     }
 
     for (spec.input_schema.fields) |field| {
@@ -99,6 +100,64 @@ fn schemaTypeMatches(expected: []const u8, value: std.json.Value) bool {
     if (std.mem.eql(u8, expected, "boolean")) return value == .bool;
     if (std.mem.eql(u8, expected, "integer")) return value == .integer;
     return true;
+}
+
+fn validateFieldHint(
+    allocator: std.mem.Allocator,
+    tool_name: []const u8,
+    field: tooling.SchemaField,
+    value: std.json.Value,
+) mcp.tools.ToolError!?mcp.tools.ToolResult {
+    const hint = tooling.hintFor(field);
+    switch (value) {
+        .string => |actual| {
+            if (hint.enum_values.len > 0 and !containsString(hint.enum_values, actual)) {
+                const expected = enumExpectedString(allocator, hint.enum_values) catch return error.OutOfMemory;
+                defer allocator.free(expected);
+                return try argumentErrorResult(allocator, tool_name, "invalid_enum_value", field[0], expected, actual);
+            }
+        },
+        .integer => |actual| {
+            if (hint.minimum) |minimum| {
+                if (actual < minimum) {
+                    const expected = std.fmt.allocPrint(allocator, "integer >= {d}", .{minimum}) catch return error.OutOfMemory;
+                    defer allocator.free(expected);
+                    const actual_text = std.fmt.allocPrint(allocator, "{d}", .{actual}) catch return error.OutOfMemory;
+                    defer allocator.free(actual_text);
+                    return try argumentErrorResult(allocator, tool_name, "below_minimum", field[0], expected, actual_text);
+                }
+            }
+            if (hint.maximum) |maximum| {
+                if (actual > maximum) {
+                    const expected = std.fmt.allocPrint(allocator, "integer <= {d}", .{maximum}) catch return error.OutOfMemory;
+                    defer allocator.free(expected);
+                    const actual_text = std.fmt.allocPrint(allocator, "{d}", .{actual}) catch return error.OutOfMemory;
+                    defer allocator.free(actual_text);
+                    return try argumentErrorResult(allocator, tool_name, "above_maximum", field[0], expected, actual_text);
+                }
+            }
+        },
+        else => {},
+    }
+    return null;
+}
+
+fn containsString(values: []const []const u8, needle: []const u8) bool {
+    for (values) |value| {
+        if (std.mem.eql(u8, value, needle)) return true;
+    }
+    return false;
+}
+
+fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, "one of: ");
+    for (values, 0..) |value, index| {
+        if (index > 0) try out.appendSlice(allocator, ", ");
+        try out.appendSlice(allocator, value);
+    }
+    return out.toOwnedSlice(allocator);
 }
 
 fn jsonTypeName(value: std.json.Value) []const u8 {
@@ -137,4 +196,41 @@ test "accepts empty argument object for no-argument tool" {
     defer obj.deinit(std.testing.allocator);
     const result = try validateToolArgs(std.testing.allocator, spec, .{ .object = obj });
     try std.testing.expect(result == null);
+}
+
+test "rejects enum arguments outside schema hints" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const spec = tool_metadata.find("zigar_context_pack").?;
+
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "mode", .{ .string = "sideways" });
+    const result = (try validateToolArgs(allocator, spec, .{ .object = obj })).?;
+    const err = result.structuredContent.?.object;
+
+    try std.testing.expectEqualStrings("argument_error", err.get("kind").?.string);
+    try std.testing.expectEqualStrings("invalid_enum_value", err.get("code").?.string);
+    try std.testing.expectEqualStrings("mode", err.get("field").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, err.get("expected").?.string, "standard") != null);
+    try std.testing.expectEqualStrings("sideways", err.get("actual").?.string);
+}
+
+test "rejects integer arguments below schema minimum" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const spec = tool_metadata.find("zig_std_search").?;
+
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "query", .{ .string = "ArrayList" });
+    try obj.put(allocator, "limit", .{ .integer = 0 });
+    const result = (try validateToolArgs(allocator, spec, .{ .object = obj })).?;
+    const err = result.structuredContent.?.object;
+
+    try std.testing.expectEqualStrings("argument_error", err.get("kind").?.string);
+    try std.testing.expectEqualStrings("below_minimum", err.get("code").?.string);
+    try std.testing.expectEqualStrings("limit", err.get("field").?.string);
+    try std.testing.expectEqualStrings("integer >= 1", err.get("expected").?.string);
+    try std.testing.expectEqualStrings("0", err.get("actual").?.string);
 }

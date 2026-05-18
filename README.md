@@ -12,7 +12,7 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 ## Status
 
 `zigar` is ready for early public use with Zig 0.16.0 and stdio MCP transport.
-The current release is `0.1.0`; see [CHANGELOG.md](CHANGELOG.md).
+The current package version is `0.1.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
 
@@ -34,21 +34,7 @@ in [docs/backends.md](docs/backends.md).
 
 ## Install
 
-Download the archive for your platform from the GitHub release, verify it against
-`zigar-checksums.txt`, and put `zigar` on `PATH`. GitHub release attestations
-are generated from the same checksum file.
-
-Release archives are named:
-
-```text
-zigar-x86_64-linux-musl.tar.gz
-zigar-aarch64-linux-musl.tar.gz
-zigar-x86_64-macos.tar.gz
-zigar-aarch64-macos.tar.gz
-zigar-x86_64-windows.tar.gz
-```
-
-To build from source instead:
+Build from source:
 
 ```sh
 git clone https://github.com/oly-wan-kenobi/zigar.git
@@ -56,6 +42,21 @@ cd zigar
 zig build -Doptimize=ReleaseSafe
 install -m 0755 zig-out/bin/zigar ~/.local/bin/zigar
 zigar --version
+```
+
+When a tagged GitHub release is published, download the archive for your
+platform from that release, verify it against `zigar-checksums.txt`, and put
+`zigar` on `PATH`. GitHub release attestations are generated from the same
+checksum file.
+
+Published release archives are named:
+
+```text
+zigar-x86_64-linux-musl.tar.gz
+zigar-aarch64-linux-musl.tar.gz
+zigar-x86_64-macos.tar.gz
+zigar-aarch64-macos.tar.gz
+zigar-x86_64-windows.tar.gz
 ```
 
 ## Build

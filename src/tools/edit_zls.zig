@@ -6,6 +6,7 @@ const analysis = zigar.analysis;
 const command = zigar.command;
 const json_result = zigar.json_result;
 const lsp_edits = zigar.lsp_edits;
+const tooling = zigar.tooling;
 const uri_util = zigar.uri;
 const zls_session = zigar.zls_session;
 const common = @import("common.zig");
@@ -466,7 +467,7 @@ pub fn zigDiagnostics(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
         }
     }
 
-    const wait_ms = @max(0, @min(argInt(args, "wait_ms", 500), 5000));
+    const wait_ms = diagnosticWaitMs(args);
     waitForDiagnostics(a, client, file_uri, wait_ms);
     if (client.getDiagnostics(allocator, file_uri) catch null) |diagnostics| {
         defer allocator.free(diagnostics);
@@ -495,7 +496,7 @@ pub fn zigDiagnosticsAll(a: *App, allocator: std.mem.Allocator, args: ?std.json.
             sources.append(lspStructuredValue(allocator, "textDocument/diagnostic", response) catch |err| return lspToolError(allocator, "zig_diagnostics_all", "textDocument/diagnostic", "parse_response", "malformed_backend_response", err, "Retry after checking the ZLS session; the diagnostics response was not valid structured JSON.")) catch return error.OutOfMemory;
         }
 
-        const wait_ms = @max(0, @min(argInt(args, "wait_ms", 500), 5000));
+        const wait_ms = diagnosticWaitMs(args);
         waitForDiagnostics(a, client, file_uri, wait_ms);
         if (client.getDiagnostics(allocator, file_uri) catch null) |diagnostics| {
             defer allocator.free(diagnostics);
@@ -647,6 +648,10 @@ pub fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wai
         if (step_ms <= 0) return;
         std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(step_ms), .clock = .awake } }, a.io) catch return;
     }
+}
+
+fn diagnosticWaitMs(args: ?std.json.Value) i64 {
+    return @max(0, @min(argInt(args, "wait_ms", tooling.intDefault("wait_ms", 500)), 5000));
 }
 
 pub fn diagnosticsStructuredValue(allocator: std.mem.Allocator, notification: []const u8) !std.json.Value {
