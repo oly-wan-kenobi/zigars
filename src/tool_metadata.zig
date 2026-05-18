@@ -295,6 +295,23 @@ pub fn riskLevel(risk: ToolRisk) []const u8 {
     return "none";
 }
 
+pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
+    const risk = riskFor(spec.id);
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "level", .{ .string = riskLevel(risk) });
+    try obj.put(allocator, "mcp_read_only_hint", .{ .bool = spec.read_only });
+    try obj.put(allocator, "writes_source", .{ .bool = risk.writes_source });
+    try obj.put(allocator, "writes_artifacts", .{ .bool = risk.writes_artifacts });
+    try obj.put(allocator, "writes_require_apply", .{ .bool = risk.writes_require_apply });
+    try obj.put(allocator, "preview_by_default", .{ .bool = risk.preview_by_default });
+    try obj.put(allocator, "mutates_lsp_state", .{ .bool = risk.mutates_lsp_state });
+    try obj.put(allocator, "executes_project_code", .{ .bool = risk.executes_project_code });
+    try obj.put(allocator, "executes_user_command", .{ .bool = risk.executes_user_command });
+    try obj.put(allocator, "executes_backend", .{ .bool = risk.executes_backend });
+    return .{ .object = obj };
+}
+
 pub fn destructiveHintFor(spec: ToolMeta) bool {
     const risk = riskFor(spec.id);
     if (risk.writes_require_apply and risk.preview_by_default) return false;
