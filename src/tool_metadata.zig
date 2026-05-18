@@ -423,6 +423,26 @@ pub fn riskLevel(risk: ToolRisk) []const u8 {
     return "none";
 }
 
+pub fn readOnlyHintFor(spec: ToolMeta) bool {
+    const risk = riskFor(spec.id);
+    return spec.read_only and
+        !risk.writes_source and
+        !risk.writes_artifacts and
+        !risk.mutates_lsp_state and
+        !risk.executes_project_code and
+        !risk.executes_user_command;
+}
+
+pub fn idempotentHintFor(spec: ToolMeta) bool {
+    const risk = riskFor(spec.id);
+    return readOnlyHintFor(spec) and
+        !risk.writes_source and
+        !risk.writes_artifacts and
+        !risk.mutates_lsp_state and
+        !risk.executes_project_code and
+        !risk.executes_user_command;
+}
+
 pub fn destructiveHintFor(spec: ToolMeta) bool {
     const risk = riskFor(spec.id);
     if (risk.writes_require_apply and risk.preview_by_default) return false;
@@ -453,10 +473,14 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     const profile_risk = riskFor(.zig_profile_run);
     try std.testing.expect(profile_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(profile_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_profile_run").?));
+    try std.testing.expect(!idempotentHintFor(find("zig_profile_run").?));
 
     const build_risk = riskFor(.zig_build);
     try std.testing.expect(build_risk.executes_project_code);
     try std.testing.expectEqualStrings("medium", riskLevel(build_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_build").?));
+    try std.testing.expect(!idempotentHintFor(find("zig_build").?));
 
     const validation_risk = riskFor(.zigar_validate_patch);
     try std.testing.expect(validation_risk.executes_project_code);
@@ -469,8 +493,13 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expect(riskFor(.zig_format).writes_require_apply);
     try std.testing.expect(riskFor(.zig_format).writes_artifacts);
     try std.testing.expect(!destructiveHintFor(fmt));
+    try std.testing.expect(!readOnlyHintFor(fmt));
 
     const matrix_risk = riskFor(.zig_matrix_check);
     try std.testing.expect(matrix_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(matrix_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_matrix_check").?));
+
+    try std.testing.expect(readOnlyHintFor(find("zig_version").?));
+    try std.testing.expect(idempotentHintFor(find("zig_version").?));
 }
