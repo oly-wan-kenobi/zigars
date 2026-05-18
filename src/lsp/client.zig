@@ -16,6 +16,8 @@ const PendingRequest = struct {
 /// - Main thread calls sendRequest() which blocks until reader thread delivers the response.
 /// - Reader thread runs readerLoop() reading ZLS stdout and dispatching responses/notifications.
 pub const LspClient = struct {
+    pub const default_max_diagnostics_bytes: usize = 16 * 1024 * 1024;
+
     zls_stdin: ?std.Io.File,
     zls_stdout: ?std.Io.File,
     next_id: std.atomic.Value(i64) = std.atomic.Value(i64).init(1),
@@ -24,6 +26,8 @@ pub const LspClient = struct {
     write_mutex: Mutex = .{},
     diagnostics: std.StringHashMapUnmanaged([]const u8),
     diagnostics_mutex: Mutex = .{},
+    retained_diagnostics_bytes: usize = 0,
+    max_diagnostics_bytes: usize = default_max_diagnostics_bytes,
     last_error: ?[]const u8 = null,
     last_error_mutex: Mutex = .{},
     reader_thread: ?std.Thread = null,
@@ -243,10 +247,20 @@ pub const LspClient = struct {
         defer self.diagnostics_mutex.unlock();
 
         if (self.diagnostics.fetchRemove(uri)) |old| {
+            self.subtractDiagnosticsBytesLocked(old.value.len);
             self.allocator.free(old.key);
             self.allocator.free(old.value);
         }
+        if (value.len > self.max_diagnostics_bytes) {
+            self.allocator.free(key);
+            self.allocator.free(value);
+            return;
+        }
+        if (self.retained_diagnostics_bytes > self.max_diagnostics_bytes - value.len) {
+            self.clearDiagnosticsLocked();
+        }
         try self.diagnostics.put(self.allocator, key, value);
+        self.retained_diagnostics_bytes += value.len;
     }
 
     pub fn getDiagnostics(self: *LspClient, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
@@ -270,6 +284,22 @@ pub const LspClient = struct {
             try list.append(allocator, try allocator.dupe(u8, entry.value_ptr.*));
         }
         return try list.toOwnedSlice(allocator);
+    }
+
+    pub const DiagnosticsStatus = struct {
+        files: usize,
+        retained_bytes: usize,
+        max_bytes: usize,
+    };
+
+    pub fn diagnosticsStatus(self: *LspClient) DiagnosticsStatus {
+        self.diagnostics_mutex.lock();
+        defer self.diagnostics_mutex.unlock();
+        return .{
+            .files = self.diagnostics.count(),
+            .retained_bytes = self.retained_diagnostics_bytes,
+            .max_bytes = self.max_diagnostics_bytes,
+        };
     }
 
     pub fn lastError(self: *LspClient, allocator: std.mem.Allocator) !?[]const u8 {
@@ -385,6 +415,8 @@ pub const LspClient = struct {
             self.allocator.free(entry.value_ptr.*);
         }
         self.diagnostics.deinit(self.allocator);
+        self.diagnostics = .empty;
+        self.retained_diagnostics_bytes = 0;
 
         if (self.last_error) |err| {
             self.allocator.free(err);
@@ -401,6 +433,25 @@ pub const LspClient = struct {
         defer self.last_error_mutex.unlock();
         if (self.last_error) |old| self.allocator.free(old);
         self.last_error = try self.allocator.dupe(u8, value);
+    }
+
+    fn clearDiagnosticsLocked(self: *LspClient) void {
+        var it = self.diagnostics.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.diagnostics.deinit(self.allocator);
+        self.diagnostics = .empty;
+        self.retained_diagnostics_bytes = 0;
+    }
+
+    fn subtractDiagnosticsBytesLocked(self: *LspClient, bytes: usize) void {
+        if (bytes <= self.retained_diagnostics_bytes) {
+            self.retained_diagnostics_bytes -= bytes;
+        } else {
+            self.retained_diagnostics_bytes = 0;
+        }
     }
 };
 
@@ -540,6 +591,50 @@ test "duplicate LSP response replaces pending response buffer" {
     try std.testing.expect(std.mem.indexOf(u8, removed.response.?, "second") != null);
 }
 
+test "LspClient bounds retained diagnostics cache" {
+    const alloc = std.testing.allocator;
+    const io = testIo();
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    const first =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
+    ;
+    const second =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[]}}
+    ;
+    client.max_diagnostics_bytes = first.len + 8;
+
+    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
+    defer parsed_first.deinit();
+    const first_obj = switch (parsed_first.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(first_obj, first);
+    try std.testing.expectEqual(@as(usize, 1), client.diagnosticsStatus().files);
+    try std.testing.expectEqual(first.len, client.diagnosticsStatus().retained_bytes);
+
+    const parsed_second = try std.json.parseFromSlice(std.json.Value, alloc, second, .{});
+    defer parsed_second.deinit();
+    const second_obj = switch (parsed_second.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(second_obj, second);
+    try std.testing.expectEqual(@as(usize, 1), client.diagnosticsStatus().files);
+    try std.testing.expectEqual(second.len, client.diagnosticsStatus().retained_bytes);
+    try std.testing.expect((try client.getDiagnostics(alloc, "file:///tmp/a.zig")) == null);
+    const stored_second = (try client.getDiagnostics(alloc, "file:///tmp/b.zig")) orelse return error.TestUnexpectedResult;
+    defer alloc.free(stored_second);
+    try std.testing.expectEqualStrings(second, stored_second);
+
+    client.max_diagnostics_bytes = second.len - 1;
+    try client.storeDiagnostics(second_obj, second);
+    try std.testing.expectEqual(@as(usize, 0), client.diagnosticsStatus().files);
+    try std.testing.expectEqual(@as(usize, 0), client.diagnosticsStatus().retained_bytes);
+}
+
 test "reader EOF stops LSP client and records EndOfStream" {
     const alloc = std.testing.allocator;
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
@@ -575,12 +670,16 @@ test "disconnect on already disconnected client is safe" {
 const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
 
 fn testPipe() !TestPipe {
-    var fds: [2]std.c.fd_t = undefined;
-    if (std.c.pipe(&fds) != 0) return error.SystemResources;
-    return .{
-        .read_end = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
-        .write_end = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
-    };
+    switch (@import("builtin").os.tag) {
+        .windows => return error.SkipZigTest,
+        else => {
+            const fds = try std.Io.Threaded.pipe2(.{});
+            return .{
+                .read_end = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
+                .write_end = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
+            };
+        },
+    }
 }
 
 const FakeZls = struct {

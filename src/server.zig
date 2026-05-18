@@ -1562,6 +1562,12 @@ fn zlsStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     try obj.put(allocator, "restart_attempts", .{ .integer = @intCast(a.zls_restart_attempts) });
     try obj.put(allocator, "running", .{ .bool = running });
     try obj.put(allocator, "document_sync", .{ .bool = a.doc_state != null });
+    if (a.lsp_client) |client| {
+        const diagnostics = client.diagnosticsStatus();
+        try obj.put(allocator, "diagnostics_cached_files", .{ .integer = @intCast(diagnostics.files) });
+        try obj.put(allocator, "diagnostics_retained_bytes", .{ .integer = @intCast(diagnostics.retained_bytes) });
+        try obj.put(allocator, "max_diagnostics_bytes", .{ .integer = @intCast(diagnostics.max_bytes) });
+    }
     try obj.put(allocator, "initialize_response_present", .{ .bool = a.zls_initialize_response != null });
     if (a.zls_last_failure) |failure| {
         try obj.put(allocator, "last_failure", .{ .string = failure });
@@ -2644,6 +2650,7 @@ fn zigDocumentStatus(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
             obj.put(allocator, "retained_content_bytes", .{ .integer = @intCast(status.retained_content_bytes) }) catch return error.OutOfMemory;
             obj.put(allocator, "open_documents", .{ .integer = @intCast(status.open_documents) }) catch return error.OutOfMemory;
             obj.put(allocator, "max_document_bytes", .{ .integer = @intCast(status.max_document_bytes) }) catch return error.OutOfMemory;
+            obj.put(allocator, "max_retained_content_bytes", .{ .integer = @intCast(status.max_retained_content_bytes) }) catch return error.OutOfMemory;
             obj.put(allocator, "max_open_documents", .{ .integer = @intCast(status.max_open_documents) }) catch return error.OutOfMemory;
             obj.put(allocator, "last_reopen", reopenSummaryValue(allocator, status.last_reopen) catch return error.OutOfMemory) catch return error.OutOfMemory;
             return structured(allocator, .{ .object = obj });
