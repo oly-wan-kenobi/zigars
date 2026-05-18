@@ -9,6 +9,7 @@ const Mutex = @import("../sync.zig").Mutex;
 /// Sends didOpen/didClose notifications as needed.
 pub const DocumentState = struct {
     pub const default_max_document_bytes: usize = 10 * 1024 * 1024;
+    pub const default_max_retained_content_bytes: usize = 64 * 1024 * 1024;
     pub const default_max_open_documents: usize = 256;
 
     open_docs: std.StringHashMapUnmanaged(DocInfo),
@@ -18,6 +19,7 @@ pub const DocumentState = struct {
     mutex: Mutex = .{},
     retained_content_bytes: usize = 0,
     max_document_bytes: usize = default_max_document_bytes,
+    max_retained_content_bytes: usize = default_max_retained_content_bytes,
     max_open_documents: usize = default_max_open_documents,
     last_reopen: ReopenSummary = .{},
 
@@ -36,6 +38,7 @@ pub const DocumentState = struct {
         retained_content_bytes: usize,
         open_documents: usize,
         max_document_bytes: usize,
+        max_retained_content_bytes: usize,
         max_open_documents: usize,
         last_reopen: ReopenSummary,
     };
@@ -159,7 +162,9 @@ pub const DocumentState = struct {
             defer self.mutex.unlock();
             break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
                 const previous = info.*;
-                self.retained_content_bytes = self.retained_content_bytes - contentLen(previous) + content.len;
+                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, contentLen(previous), content.len) orelse return error.RetainedContentLimitExceeded;
+                if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
+                self.retained_content_bytes = next_retained;
                 info.version += 1;
                 info.content_hash = std.hash.Wyhash.hash(0, content);
                 info.dirty = true;
@@ -168,6 +173,8 @@ pub const DocumentState = struct {
                 break :existing Notification{ .method = "textDocument/didChange", .version = info.version, .did_open = false, .previous = previous };
             } else new_doc: {
                 if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
+                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, 0, content.len) orelse return error.RetainedContentLimitExceeded;
+                if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 const stored_uri = try self.allocator.dupe(u8, file_uri);
                 errdefer self.allocator.free(stored_uri);
                 try self.open_docs.put(self.allocator, stored_uri, .{
@@ -176,7 +183,7 @@ pub const DocumentState = struct {
                     .dirty = true,
                     .content = stored_content,
                 });
-                self.retained_content_bytes += content.len;
+                self.retained_content_bytes = next_retained;
                 content_moved = true;
                 break :new_doc Notification{ .method = "textDocument/didOpen", .version = 1, .did_open = true };
             };
@@ -237,6 +244,7 @@ pub const DocumentState = struct {
             .retained_content_bytes = self.retained_content_bytes,
             .open_documents = self.open_docs.count(),
             .max_document_bytes = self.max_document_bytes,
+            .max_retained_content_bytes = self.max_retained_content_bytes,
             .max_open_documents = self.max_open_documents,
             .last_reopen = self.last_reopen,
         };
@@ -380,6 +388,11 @@ fn contentLen(info: DocumentState.DocInfo) usize {
     return if (info.content) |content| content.len else 0;
 }
 
+fn retainedBytesAfterReplace(retained: usize, old_len: usize, new_len: usize) ?usize {
+    if (old_len > retained) return null;
+    return std.math.add(usize, retained - old_len, new_len) catch null;
+}
+
 // ── Tests ──
 
 test "DocumentState init and deinit" {
@@ -449,6 +462,44 @@ test "DocumentState enforces open document budget" {
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
 
+test "DocumentState enforces retained content budget for new sync documents" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    ds.max_retained_content_bytes = 4;
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.RetainedContentLimitExceeded, ds.syncText(&client, "/tmp/new.zig", "const x = 1;\n", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
+test "DocumentState enforces retained content budget for replacements" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    ds.max_retained_content_bytes = 5;
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    const content = try alloc.dupe(u8, "abc");
+    ds.retained_content_bytes = content.len;
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 3,
+        .content_hash = std.hash.Wyhash.hash(0, content),
+        .dirty = true,
+        .content = content,
+    });
+
+    try std.testing.expectError(error.RetainedContentLimitExceeded, ds.syncText(&client, "/tmp/main.zig", "abcdef", alloc));
+    const info = ds.open_docs.get("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqual(@as(i64, 3), info.version);
+    try std.testing.expectEqualStrings("abc", info.content.?);
+    try std.testing.expectEqual(@as(usize, 3), ds.retained_content_bytes);
+}
+
 test "DocumentState tracks retained content bytes" {
     const alloc = std.testing.allocator;
     var ds = DocumentState.init(alloc, "/tmp");
@@ -467,6 +518,7 @@ test "DocumentState tracks retained content bytes" {
     const status = ds.statusForUri("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
     try std.testing.expectEqual(content.len, status.content_bytes);
     try std.testing.expectEqual(content.len, status.retained_content_bytes);
+    try std.testing.expectEqual(DocumentState.default_max_retained_content_bytes, status.max_retained_content_bytes);
     try std.testing.expectEqual(@as(usize, 1), status.open_documents);
 }
 

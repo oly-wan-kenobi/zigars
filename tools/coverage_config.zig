@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+pub const min_total_tests: i64 = 100;
+
 pub const TestBinary = struct {
     name: []const u8,
     unix_path: []const u8,
@@ -36,4 +38,8 @@ test "test binaries have stable paths" {
     for (test_binaries) |binary| {
         try std.testing.expect(std.mem.startsWith(u8, binary.path(), "zig-out/test-bin/"));
     }
+}
+
+test "coverage test floor is positive" {
+    try std.testing.expect(min_total_tests > 0);
 }

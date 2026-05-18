@@ -45,8 +45,12 @@ SVG output, and diff-folded flamegraph generation.
 
 `zig build coverage` installs the Zig test binaries, runs them directly, and
 writes `coverage/summary.json`. The summary records pass/fail status for the
-library, executable, and tooling test binaries, test counts, Zig version, and
-whether kcov ran.
+library, executable, and tooling test binaries, test counts, the configured
+minimum total test count, Zig version, and whether kcov ran. The default
+minimum test count is defined in `tools/coverage_config.zig`; use
+`zig-out/bin/zigar-tools coverage --min-tests <count>` after
+`zig build install-test-bins` to run the coverage helper with a different
+floor.
 
 If `kcov` is on `PATH`, the Zig coverage helper also writes per-binary coverage
 output under `coverage/kcov/`. Without kcov, the summary is still produced. The
