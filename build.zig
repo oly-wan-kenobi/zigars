@@ -1,19 +1,6 @@
 const std = @import("std");
 const package = @import("build.zig.zon");
-
-const ReleaseTarget = struct {
-    triple: []const u8,
-    package_name: []const u8,
-    exe_name: []const u8 = "zigar",
-};
-
-const release_targets = [_]ReleaseTarget{
-    .{ .triple = "x86_64-linux-musl", .package_name = "zigar-x86_64-linux-musl" },
-    .{ .triple = "aarch64-linux-musl", .package_name = "zigar-aarch64-linux-musl" },
-    .{ .triple = "x86_64-macos", .package_name = "zigar-x86_64-macos" },
-    .{ .triple = "aarch64-macos", .package_name = "zigar-aarch64-macos" },
-    .{ .triple = "x86_64-windows", .package_name = "zigar-x86_64-windows", .exe_name = "zigar.exe" },
-};
+const release_targets = @import("tools/release_targets.zig");
 
 pub fn build(b: *std.Build) void {
     const version = package.version;
@@ -160,7 +147,7 @@ pub fn build(b: *std.Build) void {
 
     const dist_cmd = b.addRunArtifact(tools_exe);
     dist_cmd.addArgs(&.{ "dist", "--out-dir", "dist", "--version", version });
-    for (release_targets) |release_target| {
+    for (release_targets.all) |release_target| {
         const dist_target = resolveReleaseTarget(b, release_target.triple);
         const dist_mcp_dep = b.dependency("mcp", .{
             .target = dist_target,
