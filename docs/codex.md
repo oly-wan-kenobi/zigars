@@ -44,8 +44,8 @@ capabilities:
 When working on Zig code, prefer the zigar MCP tools for Zig version/env,
 build, check, test, formatting, ZLS diagnostics, symbols, references, docs,
 static analysis, and profiling before falling back to direct shell commands.
-Source writes require apply=true. Query zigar_schema if tools/list shows only
-generic input schemas.
+Source writes require apply=true. Use standard tools/list schemas for arguments;
+query zigar_schema when you need grouping, risk, planning, or discovery keywords.
 ```
 
 ## Health Checks

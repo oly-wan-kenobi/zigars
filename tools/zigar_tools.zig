@@ -276,6 +276,33 @@ fn assertRequiredTools(allocator: Allocator, io: Io, port: u16, expected: JsonVa
             return error.AssertionFailed;
         }
     }
+    try assertToolsListSchemas(io, tools, expected);
+}
+
+fn assertToolsListSchemas(io: Io, tools: []JsonValue, expected: JsonValue) !void {
+    const expected_schemas = expected.object.get("tools_list_schema_paths") orelse return;
+    var tool_it = expected_schemas.object.iterator();
+    while (tool_it.next()) |tool_entry| {
+        const tool = findTool(tools, tool_entry.key_ptr.*) orelse {
+            try stderrPrint(io, "missing tool schema target: {s}\n", .{tool_entry.key_ptr.*});
+            return error.AssertionFailed;
+        };
+        var path_it = tool_entry.value_ptr.object.iterator();
+        while (path_it.next()) |path_entry| {
+            const actual = valueAt(tool, path_entry.key_ptr.*) orelse {
+                try stderrPrint(io, "{s}: missing tools/list schema path {s}\n", .{ tool_entry.key_ptr.*, path_entry.key_ptr.* });
+                return error.AssertionFailed;
+            };
+            try expectJsonEq(io, actual, path_entry.value_ptr.*, path_entry.key_ptr.*);
+        }
+    }
+}
+
+fn findTool(tools: []JsonValue, name: []const u8) ?JsonValue {
+    for (tools) |tool| {
+        if (std.mem.eql(u8, tool.object.get("name").?.string, name)) return tool;
+    }
+    return null;
 }
 
 fn assertToolPaths(
@@ -540,6 +567,10 @@ const StdioClient = struct {
         try self.expectTool(tools, "zigar_context_pack");
         try self.expectTool(tools, "zigar_validate_patch");
         try self.expectTool(tools, "zig_test_select");
+        try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.type", "string");
+        try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.x-zigar-path-kind", "input_file");
+        try self.expectToolPathBool(tools, "zig_format", "inputSchema.properties.apply.default", false);
+        try self.expectToolPathString(tools, "zig_format", "inputSchema.required.0", "file");
 
         const source = try std.fmt.allocPrint(self.allocator, "{s}/src/main.zig", .{workspace});
         defer self.allocator.free(source);
@@ -687,6 +718,22 @@ const StdioClient = struct {
             if (std.mem.eql(u8, tool.object.get("name").?.string, name)) return;
         }
         return error.AssertionFailed;
+    }
+
+    fn expectToolPathString(self: *StdioClient, tools_json: []const u8, name: []const u8, path: []const u8, expected: []const u8) !void {
+        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, tools_json, .{});
+        defer parsed.deinit();
+        const tool = findTool(parsed.value.object.get("tools").?.array.items, name) orelse return error.AssertionFailed;
+        const value = valueAt(tool, path) orelse return error.AssertionFailed;
+        if (value != .string or !std.mem.eql(u8, value.string, expected)) return error.AssertionFailed;
+    }
+
+    fn expectToolPathBool(self: *StdioClient, tools_json: []const u8, name: []const u8, path: []const u8, expected: bool) !void {
+        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, tools_json, .{});
+        defer parsed.deinit();
+        const tool = findTool(parsed.value.object.get("tools").?.array.items, name) orelse return error.AssertionFailed;
+        const value = valueAt(tool, path) orelse return error.AssertionFailed;
+        if (value != .bool or value.bool != expected) return error.AssertionFailed;
     }
 
     fn expectPathBool(self: *StdioClient, json: []const u8, path: []const u8, expected: bool) !void {
