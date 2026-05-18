@@ -3,7 +3,7 @@ const types = @import("types.zig");
 const GroupSpec = types.GroupSpec;
 
 pub const group_specs = [_]GroupSpec{
-    .{ .group = .discovery, .keywords = &.{ "capabilities", "tool index", "schema", "doctor", "health", "workspace", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt" } },
+    .{ .group = .discovery, .keywords = &.{ "capabilities", "tool index", "schema", "doctor", "health", "workspace", "backend setup", "backend catalog", "optional backends", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt" } },
     .{ .group = .agent_workflows, .keywords = &.{ "agent", "codex", "claude", "context pack", "next action", "validate patch", "failure fusion", "impact analysis", "project profile", "patch guard", "done check", "readiness" } },
     .{ .group = .core_zig, .keywords = &.{ "zig", "build", "test", "check", "ast-check", "compiler diagnostics", "compile error index", "translate-c" } },
     .{ .group = .formatting_and_edits, .keywords = &.{ "fmt", "formatter", "formatting", "zig fmt", "patch preview", "unified diff", "rename", "code action", "apply=true" } },

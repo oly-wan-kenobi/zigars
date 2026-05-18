@@ -11,6 +11,7 @@ const common = @import("common.zig");
 const static_analysis = @import("static_analysis.zig");
 
 const App = common.App;
+const backend_catalog = zigar.backend_catalog;
 const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
@@ -37,6 +38,18 @@ pub fn zigarCapabilities(_: *App, allocator: std.mem.Allocator, _: ?std.json.Val
 
 pub fn zigarSchema(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return catalogToolResult(allocator);
+}
+
+pub fn zigarBackendCatalog(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const include_configured_paths = argBool(args, "include_configured_paths", true);
+    const value = backend_catalog.value(allocator, .{
+        .zig_path = a.config.zig_path,
+        .zls_path = a.config.zls_path,
+        .zwanzig_path = a.config.zwanzig_path,
+        .zflame_path = a.config.zflame_path,
+        .diff_folded_path = a.config.diff_folded_path,
+    }, include_configured_paths) catch return error.OutOfMemory;
+    return structured(allocator, value);
 }
 
 pub fn catalogToolResult(allocator: std.mem.Allocator) mcp.tools.ToolError!mcp.tools.ToolResult {

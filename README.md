@@ -30,7 +30,9 @@ Known limitations:
 - Optional: `zflame` and `diff-folded` for flamegraphs and flamegraph diffs
 
 Optional backend setup, verification commands, and failure triage are documented
-in [docs/backends.md](docs/backends.md).
+in [docs/backends.md](docs/backends.md). The same backend setup contract is
+available at runtime through `zigar_backend_catalog` and in `zigar_schema` under
+`backend_setup`.
 
 ## Install
 

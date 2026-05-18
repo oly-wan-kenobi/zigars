@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const backend_catalog = @import("backend_catalog.zig");
 const json_result = @import("json_result.zig");
 const tool_metadata = @import("tool_metadata.zig");
 const tooling = @import("tooling.zig");
@@ -16,6 +17,7 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     try obj.put(catalog_allocator, "groups", try groupsValue(catalog_allocator));
     try obj.put(catalog_allocator, "registry_tool_arguments", try toolArgumentsValue(catalog_allocator));
     try obj.put(catalog_allocator, "registry_tool_planning", try toolPlanningValue(catalog_allocator));
+    try obj.put(catalog_allocator, "backend_setup", try backend_catalog.value(catalog_allocator, .{}, false));
     try obj.put(catalog_allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
     try obj.put(catalog_allocator, "registry_tool_schema_source", .{ .string = "generated from src/tool_manifest.zig" });
     return catalog;

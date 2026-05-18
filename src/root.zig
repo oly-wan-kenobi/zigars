@@ -1,4 +1,5 @@
 pub const analysis = @import("analysis.zig");
+pub const backend_catalog = @import("backend_catalog.zig");
 pub const catalog = @import("catalog.zig");
 pub const command = @import("command.zig");
 pub const config = @import("config.zig");
@@ -26,6 +27,7 @@ pub const zls_session = @import("zls/session.zig");
 
 test {
     _ = analysis;
+    _ = backend_catalog;
     _ = catalog;
     _ = command;
     _ = config;

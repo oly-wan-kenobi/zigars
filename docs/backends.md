@@ -16,6 +16,18 @@ configured binary is missing, not a generic MCP failure.
   CI image when reproducibility matters.
 - Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
 
+## Packaged Setup Catalog
+
+zigar ships a structured backend setup catalog in the server binary. Call
+`zigar_backend_catalog` from an MCP client before configuring optional tools. It
+returns every backend's path flag, default command, current configured path,
+probe argv, compatibility rule, related zigar tools, and install strategy.
+
+The same catalog is embedded in `zigar_schema` under `backend_setup`, so release
+archives include a machine-readable setup contract instead of only prose setup
+notes. Use it to generate project docs, dev-shell checks, or CI bootstrap output
+without scraping this document.
+
 ## Configuration
 
 All backend path flags are optional:
@@ -49,7 +61,9 @@ Run cheap local probes before relying on optional tools:
 ```
 
 Send that to `zigar_doctor`. Probe results are cached for the current server
-process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
+process and surfaced through `zigar_workspace_info` and `zigar_metrics`. If a
+probe fails, call `zigar_backend_catalog` and compare the configured path and
+probe argv with the command you run by hand.
 
 Direct shell checks are also useful:
 

@@ -160,6 +160,7 @@ fn httpSmoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
 
     try assertToolPaths(allocator, io, port, 3, "zigar_schema", "{}", expected.value, "schema_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 4, "zigar_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 41, "zigar_backend_catalog", "{}", expected.value, "backend_catalog_paths", &scenarios);
     {
         const doctor_json = try callToolJson(allocator, io, port, 40, "zigar_doctor", "{\"probe_backends\":false}");
         defer allocator.free(doctor_json);

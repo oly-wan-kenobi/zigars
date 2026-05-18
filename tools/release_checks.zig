@@ -117,6 +117,11 @@ const line_budgets = [_]LineBudget{
         .reason = "MCP server wiring must stay a dispatcher; tool behavior belongs in src/tools modules",
     },
     .{
+        .path = "src/backend_catalog.zig",
+        .max_lines = 180,
+        .reason = "backend setup packaging metadata should remain compact and auditable",
+    },
+    .{
         .path = "src/tools/common.zig",
         .max_lines = 160,
         .reason = "shared tool helpers must stay a small facade over focused helper modules",
