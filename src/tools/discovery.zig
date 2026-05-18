@@ -20,7 +20,6 @@ const invalidArgumentResult = common.invalidArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const argvValue = common.argvValue;
-const backendErrorResult = common.backendErrorResult;
 const splitToolArgs = common.splitToolArgs;
 const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const jsonTextOnly = common.jsonTextOnly;
@@ -114,28 +113,6 @@ pub fn workspaceInfo(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) 
     obj.put(allocator, "zls_timeout_ms", .{ .integer = a.config.zls_timeout_ms }) catch return error.OutOfMemory;
     obj.put(allocator, "strict_workspace", .{ .bool = a.config.strict_workspace }) catch return error.OutOfMemory;
     obj.put(allocator, "backend_probe_cache", backendProbeCacheValue(allocator, a.backend_probe_cache) catch return error.OutOfMemory) catch return error.OutOfMemory;
-    return structured(allocator, .{ .object = obj });
-}
-
-pub fn zigVersion(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const zig = command.run(allocator, a.io, a.workspace.root, &.{ a.config.zig_path, "version" }, a.config.timeout_ms) catch |err| {
-        return backendErrorResult(allocator, "zig", "version", err, "confirm --zig-path points to an executable Zig 0.16.0 binary");
-    };
-    defer zig.deinit(allocator);
-    const zls = command.run(allocator, a.io, a.workspace.root, &.{ a.config.zls_path, "--version" }, a.config.timeout_ms) catch null;
-    defer if (zls) |r| r.deinit(allocator);
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    obj.put(allocator, "zig", .{ .string = std.mem.trim(u8, zig.stdout, " \t\r\n") }) catch return error.OutOfMemory;
-    obj.put(allocator, "zig_ok", .{ .bool = zig.succeeded() }) catch return error.OutOfMemory;
-    if (zls) |r| {
-        obj.put(allocator, "zls", .{ .string = std.mem.trim(u8, r.stdout, " \t\r\n") }) catch return error.OutOfMemory;
-        obj.put(allocator, "zls_ok", .{ .bool = r.succeeded() }) catch return error.OutOfMemory;
-    } else {
-        obj.put(allocator, "zls", .{ .string = "unavailable" }) catch return error.OutOfMemory;
-        obj.put(allocator, "zls_ok", .{ .bool = false }) catch return error.OutOfMemory;
-    }
-    obj.put(allocator, "zls_status", .{ .string = a.zls_status }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 
