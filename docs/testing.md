@@ -34,32 +34,38 @@ fixtures, and the pure-Zig release helper.
 
 `zig build smoke` starts zigar over HTTP and checks `initialize`,
 `tools/list`, `zigar_schema`, `zigar_doctor`, and representative tool calls
-against `tests/fixtures/http-smoke.expect.json`.
+against `tests/fixtures/http-smoke.expect.json`. The helper also enforces a
+minimum scenario floor from `tools/coverage_config.zig` so this integration
+gate cannot silently shrink.
 
 `zig build stdio-fixtures` starts zigar over stdio and uses a temporary
 workspace with Zig-backed fake optional backends. It checks newline-delimited
 JSON-RPC, formatter preview/apply behavior, zwanzig SARIF passthrough, zflame
-SVG output, and diff-folded flamegraph generation.
+SVG output, and diff-folded flamegraph generation. The fixture enforces the
+configured minimum `tools/call` count before it reports success.
 
 ## Coverage
 
 `zig build coverage` installs the Zig test binaries, runs them directly, and
 writes `coverage/summary.json`. The summary records pass/fail status for the
-library, executable, and tooling test binaries, test counts, the configured
-minimum total test count, Zig version, and whether kcov ran. The default
-minimum test count is defined in `tools/coverage_config.zig`; use
+library, executable, and tooling test binaries, per-suite test floors, the
+configured minimum total test count, Zig version, and coverage status. The
+floors are defined in `tools/coverage_config.zig`; use
 `zig-out/bin/zigar-tools coverage --min-tests <count>` after
-`zig build install-test-bins` to run the coverage helper with a different
-floor.
+`zig build install-test-bins` to override only the aggregate test-count floor.
 
-If `kcov` is on `PATH`, the Zig coverage helper also writes per-binary coverage
-output under `coverage/kcov/`. Without kcov, the summary is still produced. The
-default build step records kcov failures in the summary without failing the
-release gate; run `zig-out/bin/zigar-tools coverage --require-kcov` after
-`zig build install-test-bins` when kcov must be mandatory.
+If `kcov` is on `PATH`, the coverage helper writes per-binary reports under
+`coverage/kcov/`, merges them, parses Cobertura XML, and records total, `src/`,
+and `tools/` line-coverage percentages in `coverage/summary.json`. Without
+kcov, the portable `zig build coverage` step still produces the test summary and
+records why line coverage was not measured.
 
-CI runs `zig build release-check` on Ubuntu and uploads the complete `coverage/`
-directory as the `zigar-coverage` artifact from a dedicated coverage job. A
+Line coverage is intentionally advisory for now. Docker validation against
+Ubuntu 22.04 kcov 38 and Zig 0.16.0 produced project source entries with zero
+executed project hits, so CI does not treat that signal as a release gate. The
+hard CI signal is the unit-test pass/fail result, per-suite test floors, HTTP
+and stdio smoke scenario floors, and release hygiene. The coverage job uploads
+the complete `coverage/` directory as the `zigar-coverage` artifact. A
 build/test/ReleaseSafe plus HTTP/stdio transport smoke matrix runs on macOS and
 Windows to catch path, process, transport, and executable suffix issues.
 

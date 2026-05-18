@@ -59,13 +59,13 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run zigar");
     run_step.dependOn(&run_cmd.step);
 
-    const lib_tests = b.addTest(.{ .name = "zigar-lib-tests", .root_module = zigar_mod });
+    const lib_tests = b.addTest(.{ .name = "zigar-lib-tests", .root_module = zigar_mod, .use_llvm = true });
     const run_lib_tests = b.addRunArtifact(lib_tests);
 
-    const exe_tests = b.addTest(.{ .name = "zigar-exe-tests", .root_module = exe_mod });
+    const exe_tests = b.addTest(.{ .name = "zigar-exe-tests", .root_module = exe_mod, .use_llvm = true });
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
-    const tools_tests = b.addTest(.{ .name = "zigar-tools-tests", .root_module = tools_mod });
+    const tools_tests = b.addTest(.{ .name = "zigar-tools-tests", .root_module = tools_mod, .use_llvm = true });
     const run_tools_tests = b.addRunArtifact(tools_tests);
 
     const test_step = b.step("test", "Run unit tests");
@@ -112,7 +112,7 @@ pub fn build(b: *std.Build) void {
 
     const coverage_cmd = addCoverageCommand(b, tools_exe);
     coverage_cmd.step.dependOn(install_test_bins_step);
-    const coverage_step = b.step("coverage", "Run test binaries and write coverage/summary.json; uses kcov when available");
+    const coverage_step = b.step("coverage", "Run test binaries and write coverage/summary.json; measures kcov when available");
     coverage_step.dependOn(&coverage_cmd.step);
 
     const release_smoke_cmd = addHttpSmokeCommand(b, tools_exe, release_exe.getEmittedBin());

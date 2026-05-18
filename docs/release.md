@@ -15,9 +15,10 @@ generation, and artifact hygiene. The HTTP JSON-RPC smoke test covers
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
 output, and diff-folded flamegraph flow with fake backend executables.
 
-CI also uploads a `zigar-coverage` artifact. The artifact always includes
+CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
-binary results and includes kcov HTML output when kcov is available.
+binary results, per-suite floors, and advisory kcov coverage details when kcov
+produces a usable project-source report.
 
 `release-check` includes `zig build artifact-hygiene`, which fails if known
 generated directories such as `.zig-cache/`, `zig-out/`, `zig-pkg/`, `dist/`, or

@@ -36,7 +36,7 @@ jobs:
           grep -q "zigar ${expected_version}" /tmp/zigar-version.err
 
   coverage:
-    name: Coverage summary
+    name: Test quality summary
     runs-on: ubuntu-latest
 
     steps:
@@ -50,12 +50,7 @@ jobs:
         with:
           version: 0.16.0
 
-      - name: Install kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y kcov || true
-
-      - name: Run coverage
+      - name: Run test quality summary
         run: zig build coverage
 
       - name: Upload coverage artifact
