@@ -26,8 +26,8 @@ pub fn addTool(
         .title = spec.name,
         .inputSchema = schema_value,
         .annotations = .{
-            .readOnlyHint = spec.read_only,
-            .idempotentHint = spec.read_only,
+            .readOnlyHint = tool_metadata.readOnlyHintFor(spec),
+            .idempotentHint = tool_metadata.idempotentHintFor(spec),
             .destructiveHint = tool_metadata.destructiveHintFor(spec),
             .openWorldHint = false,
         },
