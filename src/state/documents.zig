@@ -1,6 +1,7 @@
 const std = @import("std");
 const LspClient = @import("../lsp/client.zig").LspClient;
 const LspTransport = @import("../lsp/transport.zig").LspTransport;
+const logging = @import("../logging.zig");
 const lsp_types = @import("../lsp/types.zig");
 const uri_util = @import("../types/uri.zig");
 const Mutex = @import("../sync.zig").Mutex;
@@ -16,6 +17,7 @@ pub const DocumentState = struct {
     allocator: std.mem.Allocator,
     workspace_path: []const u8,
     io: ?std.Io = null,
+    logger: logging.Logger = .disabled(),
     mutex: Mutex = .{},
     retained_content_bytes: usize = 0,
     max_document_bytes: usize = default_max_document_bytes,
@@ -55,6 +57,7 @@ pub const DocumentState = struct {
             .open_docs = .empty,
             .allocator = allocator,
             .workspace_path = workspace_path,
+            .logger = .disabled(),
         };
     }
 
@@ -64,8 +67,13 @@ pub const DocumentState = struct {
             .allocator = allocator,
             .workspace_path = workspace_path,
             .io = io,
+            .logger = logging.Logger.stderr(io),
             .mutex = Mutex.init(io),
         };
+    }
+
+    pub fn setLogger(self: *DocumentState, logger: logging.Logger) void {
+        self.logger = logger;
     }
 
     /// Ensure a file is open in ZLS. Reads file content and sends didOpen if not already open.
@@ -266,7 +274,7 @@ pub const DocumentState = struct {
             lsp_client.sendNotification(arena.allocator(), "textDocument/didClose", lsp_types.DidCloseTextDocumentParams{
                 .textDocument = .{ .uri = file_uri },
             }) catch |err| {
-                std.debug.print("[zigar/docs] didClose notification failed: {}\n", .{err});
+                self.logger.warn("docs", "didClose notification failed: {}", .{err});
             };
         }
     }
@@ -321,7 +329,7 @@ pub const DocumentState = struct {
             const content = doc.content orelse blk: {
                 const io = self.io orelse continue;
                 disk_content = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch {
-                    std.debug.print("[zigar/docs] Failed to re-read {s} for reopen\n", .{path});
+                    self.logger.warn("docs", "failed to re-read {s} for reopen", .{path});
                     summary.failed += 1;
                     continue;
                 };
@@ -339,7 +347,7 @@ pub const DocumentState = struct {
                     .text = content,
                 },
             }) catch |err| {
-                std.debug.print("[zigar/docs] Failed to reopen {s}: {}\n", .{ path, err });
+                self.logger.warn("docs", "failed to reopen {s}: {}", .{ path, err });
                 summary.failed += 1;
                 continue;
             };

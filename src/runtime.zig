@@ -2,6 +2,7 @@ const std = @import("std");
 
 const config_mod = @import("config.zig");
 const doctor = @import("doctor.zig");
+const logging = @import("logging.zig");
 const workspace_mod = @import("workspace.zig");
 const LspClient = @import("lsp/client.zig").LspClient;
 const DocumentState = @import("state/documents.zig").DocumentState;
@@ -30,6 +31,7 @@ pub const AnalysisCache = struct {
 pub const App = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
+    logger: logging.Logger = .disabled(),
     config: config_mod.Config,
     workspace: workspace_mod.Workspace,
     zls_process_slot: ?*?ZlsProcess = null,

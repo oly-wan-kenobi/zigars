@@ -78,6 +78,9 @@ pub fn zlsStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
         try obj.put(allocator, "diagnostics_cached_files", .{ .integer = @intCast(diagnostics.files) });
         try obj.put(allocator, "diagnostics_retained_bytes", .{ .integer = @intCast(diagnostics.retained_bytes) });
         try obj.put(allocator, "max_diagnostics_bytes", .{ .integer = @intCast(diagnostics.max_bytes) });
+        try obj.put(allocator, "diagnostics_evicted_files", .{ .integer = @intCast(diagnostics.evicted_files) });
+        try obj.put(allocator, "diagnostics_evicted_bytes", .{ .integer = @intCast(diagnostics.evicted_bytes) });
+        try obj.put(allocator, "diagnostics_dropped_oversized", .{ .integer = @intCast(diagnostics.dropped_oversized) });
     }
     try obj.put(allocator, "initialize_response_present", .{ .bool = a.zls_initialize_response != null });
     if (a.zls_last_failure) |failure| {

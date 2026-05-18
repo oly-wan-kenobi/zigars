@@ -28,6 +28,7 @@ pub fn start(runtime: *App, proc_slot: *?ZlsProcess, client_slot: *?LspClient, d
     const stderr = proc_slot.*.?.getStderr();
 
     client_slot.* = LspClient.initWithTimeout(runtime.allocator, runtime.io, runtime.config.zls_timeout_ms);
+    client_slot.*.?.setLogger(runtime.logger);
     errdefer {
         if (client_slot.*) |*client| client.deinit();
         client_slot.* = null;
@@ -45,6 +46,7 @@ pub fn start(runtime: *App, proc_slot: *?ZlsProcess, client_slot: *?LspClient, d
     if (docs_slot.* == null) {
         docs_slot.* = DocumentState.initWithIo(runtime.allocator, runtime.workspace.root, runtime.io);
     }
+    docs_slot.*.?.setLogger(runtime.logger);
 
     runtime.zls_process = &(proc_slot.*.?);
     runtime.lsp_client = &(client_slot.*.?);

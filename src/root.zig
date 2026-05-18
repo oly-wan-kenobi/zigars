@@ -5,6 +5,7 @@ pub const config = @import("config.zig");
 pub const docs = @import("docs.zig");
 pub const doctor = @import("doctor.zig");
 pub const json_result = @import("json_result.zig");
+pub const logging = @import("logging.zig");
 pub const runtime = @import("runtime.zig");
 pub const tooling = @import("tooling.zig");
 pub const tool_errors = @import("tool_errors.zig");
@@ -30,6 +31,7 @@ test {
     _ = docs;
     _ = doctor;
     _ = json_result;
+    _ = logging;
     _ = runtime;
     _ = tooling;
     _ = tool_errors;
