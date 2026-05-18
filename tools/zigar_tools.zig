@@ -4,6 +4,7 @@ const coverage = @import("coverage.zig");
 const dist = @import("dist.zig");
 const json_util = @import("json_util.zig");
 const release_checks = @import("release_checks.zig");
+const release_targets = @import("release_targets.zig");
 const tool_index = @import("tool_index.zig");
 
 const Io = std.Io;
@@ -14,6 +15,8 @@ test {
     _ = coverage;
     _ = dist;
     _ = json_util;
+    _ = release_checks;
+    _ = release_targets;
     _ = tool_index;
 }
 
