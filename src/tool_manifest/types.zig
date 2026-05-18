@@ -95,6 +95,14 @@ pub fn schema(comptime fields: []const tooling.SchemaField) tooling.SchemaSpec {
     return tooling.schema(fields);
 }
 
+pub fn schemaWithHints(comptime fields: []const tooling.SchemaField, comptime field_hints: []const tooling.SchemaFieldHint) tooling.SchemaSpec {
+    return tooling.schemaWithHints(fields, field_hints);
+}
+
+pub fn fieldHint(comptime field_name: []const u8, comptime hint: tooling.FieldHint) tooling.SchemaFieldHint {
+    return .{ .field_name = field_name, .hint = hint };
+}
+
 pub fn tool(definition: ToolDefinition) ToolDefinition {
     return definition;
 }

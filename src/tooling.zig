@@ -4,7 +4,14 @@ const mcp = @import("mcp");
 pub const catalog_json = @embedFile("tool_catalog.json");
 
 pub const SchemaField = struct { []const u8, []const u8, bool };
-pub const SchemaSpec = struct { fields: []const SchemaField };
+pub const SchemaFieldHint = struct {
+    field_name: []const u8,
+    hint: FieldHint,
+};
+pub const SchemaSpec = struct {
+    fields: []const SchemaField,
+    field_hints: []const SchemaFieldHint = &.{},
+};
 
 pub const FieldHint = struct {
     description: []const u8,
@@ -21,6 +28,10 @@ pub fn schema(comptime fields: []const SchemaField) SchemaSpec {
     return .{ .fields = fields };
 }
 
+pub fn schemaWithHints(comptime fields: []const SchemaField, comptime field_hints: []const SchemaFieldHint) SchemaSpec {
+    return .{ .fields = fields, .field_hints = field_hints };
+}
+
 pub fn buildInputSchema(allocator: std.mem.Allocator, spec: SchemaSpec) !mcp.types.InputSchema {
     var properties = std.json.ObjectMap.empty;
     var required = std.ArrayList([]const u8).empty;
@@ -33,7 +44,7 @@ pub fn buildInputSchema(allocator: std.mem.Allocator, spec: SchemaSpec) !mcp.typ
         var property = std.json.ObjectMap.empty;
         errdefer property.deinit(allocator);
         try property.put(allocator, "type", .{ .string = field[1] });
-        try applyFieldHint(allocator, &property, field);
+        try applyFieldHint(allocator, &property, spec, field);
         try properties.put(allocator, field[0], .{ .object = property });
         if (field[2]) try required.append(allocator, field[0]);
     }
@@ -49,7 +60,14 @@ pub fn buildInputSchema(allocator: std.mem.Allocator, spec: SchemaSpec) !mcp.typ
     };
 }
 
-pub fn hintFor(field: SchemaField) FieldHint {
+pub fn hintFor(spec: SchemaSpec, field: SchemaField) FieldHint {
+    for (spec.field_hints) |override| {
+        if (std.mem.eql(u8, override.field_name, field[0])) return override.hint;
+    }
+    return defaultHintFor(field);
+}
+
+fn defaultHintFor(field: SchemaField) FieldHint {
     const name = field[0];
     if (std.mem.eql(u8, name, "file")) return .{ .description = "Workspace-relative source file path.", .path_kind = "input_file" };
     if (std.mem.eql(u8, name, "path")) return .{ .description = "Workspace-relative path.", .path_kind = "input_path" };
@@ -68,9 +86,9 @@ pub fn hintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "args")) return .{ .description = "Extra whitespace-split argv fragments. zigar does not invoke a shell." };
     if (std.mem.eql(u8, name, "command")) return .{ .description = "Command name or argv text accepted by the specific tool." };
     if (std.mem.eql(u8, name, "query")) return .{ .description = "Search query." };
-    if (std.mem.eql(u8, name, "mode")) return .{ .description = "Tool-specific mode selector.", .enum_values = &.{ "tiny", "standard", "deep", "quick", "full", "check", "test", "fmt-check" } };
-    if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile.", .enum_values = &.{ "codex", "claude", "generic" } };
-    if (std.mem.eql(u8, name, "format")) return .{ .description = "Profiler input format passed to zflame.", .default_string = "guess", .enum_values = &.{ "perf", "dtrace", "sample", "vtune", "xctrace", "recursive", "guess" } };
+    if (std.mem.eql(u8, name, "mode")) return .{ .description = "Tool-specific mode selector." };
+    if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile." };
+    if (std.mem.eql(u8, name, "format")) return .{ .description = "Tool-specific format selector." };
     if (std.mem.eql(u8, name, "probe_backends") or std.mem.eql(u8, name, "probe_managers")) return .{ .description = "Run extra backend probes instead of using cheap static checks.", .default_bool = false };
     if (std.mem.eql(u8, name, "include_configured_paths")) return .{ .description = "Include the server's currently configured backend paths in setup catalog output.", .default_bool = true };
     if (std.mem.eql(u8, name, "refresh")) return .{ .description = "Rebuild the cached workspace index.", .default_bool = false };
@@ -80,18 +98,27 @@ pub fn hintFor(field: SchemaField) FieldHint {
     return .{ .description = "Tool argument." };
 }
 
-pub fn boolDefault(name: []const u8, fallback: bool) bool {
-    const hint = hintFor(.{ name, "boolean", false });
+pub fn boolDefault(spec: SchemaSpec, name: []const u8, fallback: bool) bool {
+    const field = findField(spec, name) orelse return fallback;
+    const hint = hintFor(spec, field);
     return hint.default_bool orelse fallback;
 }
 
-pub fn intDefault(name: []const u8, fallback: i64) i64 {
-    const hint = hintFor(.{ name, "integer", false });
+pub fn intDefault(spec: SchemaSpec, name: []const u8, fallback: i64) i64 {
+    const field = findField(spec, name) orelse return fallback;
+    const hint = hintFor(spec, field);
     return hint.default_int orelse fallback;
 }
 
-fn applyFieldHint(allocator: std.mem.Allocator, property: *std.json.ObjectMap, field: SchemaField) !void {
-    const hint = hintFor(field);
+fn findField(spec: SchemaSpec, name: []const u8) ?SchemaField {
+    for (spec.fields) |field| {
+        if (std.mem.eql(u8, field[0], name)) return field;
+    }
+    return null;
+}
+
+fn applyFieldHint(allocator: std.mem.Allocator, property: *std.json.ObjectMap, spec: SchemaSpec, field: SchemaField) !void {
+    const hint = hintFor(spec, field);
     try property.put(allocator, "description", .{ .string = hint.description });
     if (hint.default_bool) |value| try property.put(allocator, "default", .{ .bool = value });
     if (hint.default_int) |value| try property.put(allocator, "default", .{ .integer = value });
@@ -135,9 +162,35 @@ test "input schema includes discovery hints" {
 }
 
 test "field hints expose reusable runtime defaults" {
-    try std.testing.expect(!boolDefault("probe_managers", true));
-    try std.testing.expect(!boolDefault("stop_on_failure", true));
-    try std.testing.expect(boolDefault("unknown", true));
-    try std.testing.expectEqual(@as(i64, 500), intDefault("wait_ms", 0));
-    try std.testing.expectEqual(@as(i64, 42), intDefault("unknown", 42));
+    const spec = schema(&.{
+        .{ "probe_managers", "boolean", false },
+        .{ "stop_on_failure", "boolean", false },
+        .{ "wait_ms", "integer", false },
+    });
+    try std.testing.expect(!boolDefault(spec, "probe_managers", true));
+    try std.testing.expect(!boolDefault(spec, "stop_on_failure", true));
+    try std.testing.expect(boolDefault(spec, "unknown", true));
+    try std.testing.expectEqual(@as(i64, 500), intDefault(spec, "wait_ms", 0));
+    try std.testing.expectEqual(@as(i64, 42), intDefault(spec, "unknown", 42));
+}
+
+test "field hints can be scoped to one schema" {
+    const context = schemaWithHints(&.{.{ "mode", "string", false }}, &.{
+        .{ .field_name = "mode", .hint = .{ .description = "Context-pack depth.", .enum_values = &.{ "tiny", "standard", "deep" } } },
+    });
+    const validate = schemaWithHints(&.{.{ "mode", "string", false }}, &.{
+        .{ .field_name = "mode", .hint = .{ .description = "Validation depth.", .enum_values = &.{ "quick", "standard", "full" } } },
+    });
+
+    try std.testing.expect(containsString(hintFor(context, context.fields[0]).enum_values, "deep"));
+    try std.testing.expect(!containsString(hintFor(context, context.fields[0]).enum_values, "quick"));
+    try std.testing.expect(containsString(hintFor(validate, validate.fields[0]).enum_values, "quick"));
+    try std.testing.expect(!containsString(hintFor(validate, validate.fields[0]).enum_values, "deep"));
+}
+
+fn containsString(values: []const []const u8, needle: []const u8) bool {
+    for (values) |value| {
+        if (std.mem.eql(u8, value, needle)) return true;
+    }
+    return false;
 }

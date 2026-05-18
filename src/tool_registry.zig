@@ -76,7 +76,7 @@ pub fn validateToolArgs(allocator: std.mem.Allocator, spec: tool_metadata.ToolMe
         if (!schemaTypeMatches(field[1], entry.value_ptr.*)) {
             return try argumentErrorResult(allocator, spec.name, "invalid_type", field[0], field[1], jsonTypeName(entry.value_ptr.*));
         }
-        if (try validateFieldHint(allocator, spec.name, field, entry.value_ptr.*)) |validation_error| return validation_error;
+        if (try validateFieldHint(allocator, spec.name, spec.input_schema, field, entry.value_ptr.*)) |validation_error| return validation_error;
     }
 
     for (spec.input_schema.fields) |field| {
@@ -105,10 +105,11 @@ fn schemaTypeMatches(expected: []const u8, value: std.json.Value) bool {
 fn validateFieldHint(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
+    input_schema: tooling.SchemaSpec,
     field: tooling.SchemaField,
     value: std.json.Value,
 ) mcp.tools.ToolError!?mcp.tools.ToolResult {
-    const hint = tooling.hintFor(field);
+    const hint = tooling.hintFor(input_schema, field);
     switch (value) {
         .string => |actual| {
             if (hint.enum_values.len > 0 and !containsString(hint.enum_values, actual)) {
@@ -214,6 +215,34 @@ test "rejects enum arguments outside schema hints" {
     try std.testing.expectEqualStrings("mode", err.get("field").?.string);
     try std.testing.expect(std.mem.indexOf(u8, err.get("expected").?.string, "standard") != null);
     try std.testing.expectEqualStrings("sideways", err.get("actual").?.string);
+}
+
+test "validates enum hints in tool context" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const context_spec = tool_metadata.find("zigar_context_pack").?;
+    const validate_spec = tool_metadata.find("zigar_validate_patch").?;
+
+    var context_obj = std.json.ObjectMap.empty;
+    try context_obj.put(allocator, "mode", .{ .string = "quick" });
+    const context_result = (try validateToolArgs(allocator, context_spec, .{ .object = context_obj })).?;
+    const context_err = context_result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("invalid_enum_value", context_err.get("code").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, context_err.get("expected").?.string, "deep") != null);
+    try std.testing.expect(std.mem.indexOf(u8, context_err.get("expected").?.string, "quick") == null);
+
+    var validate_obj = std.json.ObjectMap.empty;
+    try validate_obj.put(allocator, "mode", .{ .string = "quick" });
+    try std.testing.expect((try validateToolArgs(allocator, validate_spec, .{ .object = validate_obj })) == null);
+
+    var invalid_validate_obj = std.json.ObjectMap.empty;
+    try invalid_validate_obj.put(allocator, "mode", .{ .string = "deep" });
+    const validate_result = (try validateToolArgs(allocator, validate_spec, .{ .object = invalid_validate_obj })).?;
+    const validate_err = validate_result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("invalid_enum_value", validate_err.get("code").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, validate_err.get("expected").?.string, "quick") != null);
+    try std.testing.expect(std.mem.indexOf(u8, validate_err.get("expected").?.string, "deep") == null);
 }
 
 test "rejects integer arguments below schema minimum" {
