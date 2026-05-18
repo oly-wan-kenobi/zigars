@@ -6,6 +6,9 @@ pub const min_http_smoke_scenarios: usize = 25;
 pub const min_stdio_fixture_tool_calls: usize = 12;
 pub const kcov_include_path = "src,tools";
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist";
+pub const min_line_coverage_basis_points: u32 = 9000;
+pub const min_src_line_coverage_basis_points: u32 = 9000;
+pub const min_tools_line_coverage_basis_points: u32 = 9000;
 
 pub const TestBinary = struct {
     name: []const u8,
@@ -53,4 +56,7 @@ test "coverage test floor is positive" {
     try std.testing.expect(min_total_tests > 0);
     try std.testing.expect(min_http_smoke_scenarios > 0);
     try std.testing.expect(min_stdio_fixture_tool_calls > 0);
+    try std.testing.expect(min_line_coverage_basis_points > 0);
+    try std.testing.expect(min_src_line_coverage_basis_points > 0);
+    try std.testing.expect(min_tools_line_coverage_basis_points > 0);
 }

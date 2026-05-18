@@ -29,8 +29,7 @@ This checklist is for release reviews and MCP-client integration changes.
 - Stdio fixture tests cover transport framing, formatter write gating, optional
   backend command wiring, and workspace-local generated outputs.
 - Coverage summaries are generated from installed Zig test binaries, including
-  the pure-Zig release helper, with kcov artifacts collected in CI when
-  available.
+  the pure-Zig release helper, with required kcov line-coverage floors in CI.
 - Generated docs are checked against the manifest-derived catalog.
 
 ## Known Trust Boundaries
