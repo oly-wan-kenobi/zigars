@@ -1,0 +1,124 @@
+const std = @import("std");
+const mcp = @import("mcp");
+const zigar = @import("zigar");
+
+const command = zigar.command;
+const common = @import("common.zig");
+
+const App = common.App;
+const errorText = common.errorText;
+const structured = common.structured;
+const argString = common.argString;
+const argBool = common.argBool;
+const workspacePathErrorResult = common.workspacePathErrorResult;
+const runAndFormatTimeout = common.runAndFormatTimeout;
+const toolTimeout = common.toolTimeout;
+const backendErrorResult = common.backendErrorResult;
+const splitToolArgs = common.splitToolArgs;
+const structuredText = common.structuredText;
+const freeArgList = common.freeArgList;
+
+pub fn zigProfilePlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const binary = argString(args, "binary") orelse "zig-out/bin/<app>";
+    const msg = std.fmt.allocPrint(allocator,
+        \\Profiling plan for {s}
+        \\
+        \\1. Build with symbols: zig build -Doptimize=ReleaseFast
+        \\2. Capture with the platform profiler:
+        \\   macOS: xcrun xctrace record --template "Time Profiler" --launch -- {s}
+        \\   Linux: perf record -F 997 -g -- {s}
+        \\3. Convert profiler output to a supported zflame input.
+        \\4. Use zig_flamegraph with format=guess|perf|dtrace|sample|vtune|xctrace.
+        \\5. For comparisons, generate folded stacks for before/after and call zig_flamegraph_diff.
+        \\
+    , .{ binary, binary, binary }) catch return error.OutOfMemory;
+    defer allocator.free(msg);
+    return structuredText(allocator, "zig_profile_plan", msg);
+}
+
+pub fn zigProfileRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const cmd = argString(args, "command") orelse return error.InvalidArguments;
+    const split = try splitToolArgs(allocator, cmd);
+    defer freeArgList(allocator, split);
+    if (split.len == 0) return error.InvalidArguments;
+    return runAndFormatTimeout(a, allocator, split, "profile command", toolTimeout(a, args));
+}
+
+pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const format = argString(args, "format") orelse "guess";
+    const input = argString(args, "input") orelse return error.InvalidArguments;
+    const output = argString(args, "output") orelse return error.InvalidArguments;
+    const input_abs = a.workspace.resolve(input) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", input, err);
+    defer allocator.free(input_abs);
+    const output_abs = a.workspace.resolveOutput(output) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", output, err);
+    defer allocator.free(output_abs);
+
+    var list: std.ArrayList([]const u8) = .empty;
+    defer list.deinit(allocator);
+    list.appendSlice(allocator, &.{ a.config.zflame_path, format }) catch return error.OutOfMemory;
+    if (argString(args, "title")) |title_value| {
+        list.appendSlice(allocator, &.{ "--title", title_value }) catch return error.OutOfMemory;
+    }
+    if (argString(args, "palette")) |palette| {
+        list.appendSlice(allocator, &.{ "--palette", palette }) catch return error.OutOfMemory;
+    }
+    if (argString(args, "min_width")) |min_width| {
+        list.appendSlice(allocator, &.{ "--min-width", min_width }) catch return error.OutOfMemory;
+    }
+    if (argBool(args, "hash", false)) {
+        list.append(allocator, "--hash") catch return error.OutOfMemory;
+    }
+    list.append(allocator, input_abs) catch return error.OutOfMemory;
+
+    const result = command.run(allocator, a.io, a.workspace.root, list.items, a.config.timeout_ms) catch |err| {
+        return backendErrorResult(allocator, "zflame", "render", err, "confirm --zflame-path points to an executable zflame binary and that profiler input is readable");
+    };
+    defer result.deinit(allocator);
+    if (!result.succeeded()) {
+        const run_output = command.formatRunResult(allocator, "zflame failed", result) catch return error.OutOfMemory;
+        defer allocator.free(run_output);
+        return errorText(allocator, run_output);
+    }
+    a.workspace.writeFile(a.io, output, result.stdout) catch return error.ExecutionFailed;
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    obj.put(allocator, "kind", .{ .string = "zig_flamegraph" }) catch return error.OutOfMemory;
+    obj.put(allocator, "output", .{ .string = output }) catch return error.OutOfMemory;
+    obj.put(allocator, "output_abs", .{ .string = output_abs }) catch return error.OutOfMemory;
+    obj.put(allocator, "format", .{ .string = format }) catch return error.OutOfMemory;
+    obj.put(allocator, "bytes", .{ .integer = @intCast(result.stdout.len) }) catch return error.OutOfMemory;
+    return structured(allocator, .{ .object = obj });
+}
+
+pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const before = argString(args, "before") orelse return error.InvalidArguments;
+    const after = argString(args, "after") orelse return error.InvalidArguments;
+    const output = argString(args, "output") orelse return error.InvalidArguments;
+    const before_abs = a.workspace.resolve(before) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", before, err);
+    defer allocator.free(before_abs);
+    const after_abs = a.workspace.resolve(after) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", after, err);
+    defer allocator.free(after_abs);
+    const temp_id = a.temp_counter.fetchAdd(1, .monotonic);
+    const folded_name = std.fmt.allocPrint(allocator, "diff-{d}.folded", .{temp_id}) catch return error.OutOfMemory;
+    defer allocator.free(folded_name);
+    const folded_out = std.fs.path.join(allocator, &.{ ".zigar-cache", "profile", folded_name }) catch return error.OutOfMemory;
+    defer allocator.free(folded_out);
+    const folded_abs = a.workspace.resolveOutput(folded_out) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", folded_out, err);
+    defer allocator.free(folded_abs);
+    const diff = command.run(allocator, a.io, a.workspace.root, &.{ a.config.diff_folded_path, before_abs, after_abs }, a.config.timeout_ms) catch |err| {
+        return backendErrorResult(allocator, "diff-folded", "diff", err, "confirm --diff-folded-path points to an executable diff-folded binary and both folded inputs are readable");
+    };
+    defer diff.deinit(allocator);
+    if (!diff.succeeded()) {
+        const run_output = command.formatRunResult(allocator, "diff-folded failed", diff) catch return error.OutOfMemory;
+        defer allocator.free(run_output);
+        return errorText(allocator, run_output);
+    }
+    a.workspace.writeFile(a.io, folded_out, diff.stdout) catch return error.ExecutionFailed;
+    var obj = std.json.ObjectMap.empty;
+    obj.put(allocator, "input", .{ .string = folded_out }) catch return error.OutOfMemory;
+    obj.put(allocator, "output", .{ .string = output }) catch return error.OutOfMemory;
+    if (argString(args, "title")) |title_value| obj.put(allocator, "title", .{ .string = title_value }) catch return error.OutOfMemory;
+    const tmp_args = std.json.Value{ .object = obj };
+    return zigFlamegraph(a, allocator, tmp_args);
+}

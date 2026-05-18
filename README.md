@@ -166,7 +166,8 @@ Source writes require apply=true.
 
 - Discovery/meta: `zigar_capabilities`, `zigar_tool_index`,
   `zigar_schema`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`,
-  `zigar_http_status`, `zig_command_plan`, `zig_toolchain_resolve`
+  `zigar_http_status`, `zig_command_plan`, `zig_tool_plan`,
+  `zig_toolchain_resolve`
 - Agent workflows: `zigar_context_pack`, `zigar_next_action`,
   `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`,
   `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`

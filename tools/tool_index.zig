@@ -3,7 +3,9 @@ const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
-const tool_metadata = @import("zigar").tool_metadata;
+const zigar = @import("zigar");
+const catalog_mod = zigar.catalog;
+const tool_metadata = zigar.tool_metadata;
 
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
@@ -20,12 +22,6 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
-fn parseJsonFile(allocator: Allocator, io: Io, path: []const u8) !std.json.Parsed(JsonValue) {
-    const bytes = try readFileAlloc(allocator, io, path, 16 * 1024 * 1024);
-    defer allocator.free(bytes);
-    return try std.json.parseFromSlice(JsonValue, allocator, bytes, .{});
-}
-
 pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var check = false;
     for (args) |arg| {
@@ -36,9 +32,8 @@ pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
         }
     }
 
-    const catalog_path = "src/tool_catalog.json";
     const output_path = "docs/tool-index.generated.md";
-    const parsed = try parseJsonFile(allocator, io, catalog_path);
+    const parsed = try catalog_mod.parsed(allocator);
     defer parsed.deinit();
 
     const rendered = try renderToolIndex(allocator, parsed.value);
@@ -119,6 +114,27 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
             if (wrote_fragment) try out.writer.writeAll("; ");
             try out.writer.writeAll("optional ");
             try renderArgumentFields(&out.writer, spec, false);
+        }
+        try out.writer.writeAll("\n");
+    }
+
+    try out.writer.writeAll("\n## Planning Support\n\n");
+    var plan_keys: std.ArrayList([]const u8) = .empty;
+    defer plan_keys.deinit(allocator);
+    for (tool_metadata.entries) |entry| try plan_keys.append(allocator, entry.name);
+    std.mem.sort([]const u8, plan_keys.items, {}, stringLessThan);
+
+    for (plan_keys.items) |tool_name| {
+        const entry = tool_metadata.findEntry(tool_name).?;
+        try out.writer.print("- `{s}`: `{s}`", .{ tool_name, tool_metadata.planKind(entry.plan) });
+        switch (entry.plan) {
+            .exact_command => try out.writer.writeAll(" exact argv"),
+            .dynamic_command => try out.writer.writeAll(" runtime-dependent backend plan"),
+            .zls_request => |plan| try out.writer.print(" `{s}`", .{plan.method}),
+            .apply_gated_mutation => try out.writer.writeAll(" preview/apply mutation"),
+            .workspace_artifact => try out.writer.writeAll(" explicit workspace artifact"),
+            .pure_analysis => try out.writer.writeAll(" read-only analysis"),
+            .not_plannable => try out.writer.writeAll(" unsupported"),
         }
         try out.writer.writeAll("\n");
     }

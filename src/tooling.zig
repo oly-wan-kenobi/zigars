@@ -96,10 +96,10 @@ fn applyFieldHint(allocator: std.mem.Allocator, property: *std.json.ObjectMap, f
     }
 }
 
-test "catalog exposes formatter discovery keywords" {
-    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"zig_format\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"fmt\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"zig fmt\"") != null);
+test "static catalog declares generated manifest sections" {
+    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"tool_argument_scope\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"tools_list_schema_note\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, catalog_json, "\"source_write_gate\"") != null);
 }
 
 test "input schema includes discovery hints" {

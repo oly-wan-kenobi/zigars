@@ -9,15 +9,15 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     var catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
     errdefer catalog.deinit();
 
-    switch (catalog.value) {
-        .object => |*obj| {
-            try obj.put(allocator, "version", .{ .string = version.string });
-            try obj.put(allocator, "registry_tool_arguments", try toolArgumentsValue(allocator));
-            try obj.put(allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
-            try obj.put(allocator, "registry_tool_schema_source", .{ .string = "generated from zigar tool registry" });
-        },
-        else => return error.InvalidCatalog,
-    }
+    if (catalog.value != .object) return error.InvalidCatalog;
+    const catalog_allocator = catalog.arena.allocator();
+    var obj = &catalog.value.object;
+    try obj.put(catalog_allocator, "version", .{ .string = version.string });
+    try obj.put(catalog_allocator, "groups", try groupsValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registry_tool_arguments", try toolArgumentsValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registry_tool_planning", try toolPlanningValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
+    try obj.put(catalog_allocator, "registry_tool_schema_source", .{ .string = "generated from src/tool_manifest.zig" });
     return catalog;
 }
 
@@ -36,6 +36,45 @@ pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
         try obj.put(allocator, spec.name, try toolArgumentValue(allocator, spec));
     }
     return .{ .object = obj };
+}
+
+pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    for (tool_metadata.entries) |entry| {
+        try obj.put(allocator, entry.name, try planningValue(allocator, entry));
+    }
+    return .{ .object = obj };
+}
+
+fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
+    var groups = std.json.Array.init(allocator);
+    errdefer groups.deinit();
+    for (tool_metadata.group_specs) |group_spec| {
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "name", .{ .string = tool_metadata.groupName(group_spec.group) });
+        try obj.put(allocator, "tools", try groupToolsValue(allocator, group_spec.group));
+        try obj.put(allocator, "keywords", try stringArrayValue(allocator, group_spec.keywords));
+        try groups.append(.{ .object = obj });
+    }
+    return .{ .array = groups };
+}
+
+fn groupToolsValue(allocator: std.mem.Allocator, group: tool_metadata.ToolGroup) !std.json.Value {
+    var tools = std.json.Array.init(allocator);
+    errdefer tools.deinit();
+    for (tool_metadata.entries) |entry| {
+        if (entry.group == group) try tools.append(.{ .string = entry.name });
+    }
+    return .{ .array = tools };
+}
+
+fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (values) |value| try array.append(.{ .string = value });
+    return .{ .array = array };
 }
 
 fn toolArgumentValue(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta) !std.json.Value {
@@ -60,6 +99,57 @@ fn toolArgumentValue(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta)
 
 fn toolRiskValue(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta) !std.json.Value {
     return tool_metadata.riskValue(allocator, spec);
+}
+
+fn planningValue(allocator: std.mem.Allocator, entry: tool_metadata.ToolEntry) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = tool_metadata.planKind(entry.plan) });
+    try obj.put(allocator, "group", .{ .string = tool_metadata.groupName(entry.group) });
+    try obj.put(allocator, "exact_command", .{ .bool = tool_metadata.commandPlanFor(entry.id) != null });
+    try obj.put(allocator, "supported", .{ .bool = switch (entry.plan) {
+        .not_plannable => false,
+        else => true,
+    } });
+    try obj.put(allocator, "risk_level", .{ .string = tool_metadata.riskLevel(entry.risk) });
+    switch (entry.plan) {
+        .exact_command => {
+            try obj.put(allocator, "argv_exact", .{ .bool = true });
+            try obj.put(allocator, "command_backed", .{ .bool = true });
+        },
+        .dynamic_command => |reason| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "command_backed", .{ .bool = true });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .zls_request => |plan| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "backend", .{ .string = "zls" });
+            try obj.put(allocator, "method", .{ .string = plan.method });
+            try obj.put(allocator, "requires_document_sync", .{ .bool = plan.requires_document_sync });
+            try obj.put(allocator, "mutates_document_state", .{ .bool = plan.mutates_document_state });
+        },
+        .apply_gated_mutation => |reason| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "apply_gated", .{ .bool = true });
+            try obj.put(allocator, "preview_by_default", .{ .bool = entry.risk.preview_by_default });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .workspace_artifact => |reason| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "writes_artifact", .{ .bool = true });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .pure_analysis => |reason| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+        .not_plannable => |reason| {
+            try obj.put(allocator, "argv_exact", .{ .bool = false });
+            try obj.put(allocator, "reason", .{ .string = reason });
+        },
+    }
+    return .{ .object = obj };
 }
 
 fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, required: bool) !std.json.Value {
@@ -120,14 +210,22 @@ test "registry arguments include risk metadata" {
     try std.testing.expect(format.get("risk").?.object.get("writes_artifacts").?.bool);
     const matrix = args.get("zig_matrix_check").?.object;
     try std.testing.expect(matrix.get("risk").?.object.get("executes_user_command").?.bool);
+
+    const planning = catalog.value.object.get("registry_tool_planning").?.object;
+    const hover = planning.get("zig_hover").?.object;
+    try std.testing.expectEqualStrings("zls_request", hover.get("kind").?.string);
+    try std.testing.expectEqualStrings("textDocument/hover", hover.get("method").?.string);
+    const build = planning.get("zig_build").?.object;
+    try std.testing.expectEqualStrings("exact_command", build.get("kind").?.string);
+    try std.testing.expect(build.get("exact_command").?.bool);
 }
 
-test "static catalog group membership covers registry exactly once" {
+test "manifest-generated catalog group membership covers registry exactly once" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const parsed_catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    const parsed_catalog = try parsed(allocator);
     const groups = parsed_catalog.value.object.get("groups").?.array;
     var seen = std.StringHashMap(void).init(allocator);
 
@@ -147,12 +245,12 @@ test "static catalog group membership covers registry exactly once" {
     try std.testing.expectEqual(tool_metadata.specs.len, seen.count());
 }
 
-test "static catalog groups match typed registry groups" {
+test "manifest-generated catalog groups match typed registry groups" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const parsed_catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    const parsed_catalog = try parsed(allocator);
     const groups = parsed_catalog.value.object.get("groups").?.array;
 
     for (tool_metadata.specs) |spec| {

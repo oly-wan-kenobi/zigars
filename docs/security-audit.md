@@ -31,7 +31,7 @@ This checklist is for release reviews and MCP-client integration changes.
 - Coverage summaries are generated from installed Zig test binaries, including
   the pure-Zig release helper, with kcov artifacts collected in CI when
   available.
-- Generated docs are checked against `src/tool_catalog.json`.
+- Generated docs are checked against the manifest-derived catalog.
 
 ## Known Trust Boundaries
 
