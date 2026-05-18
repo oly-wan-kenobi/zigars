@@ -1,8 +1,12 @@
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
+const diagnostics_cache = @import("diagnostics_cache.zig");
 const json_rpc = @import("../types/json_rpc.zig");
 const logging = @import("../logging.zig");
 const Mutex = @import("../sync.zig").Mutex;
+
+pub const DiagnosticsCache = diagnostics_cache.DiagnosticsCache;
+pub const DiagnosticsStatus = DiagnosticsCache.Status;
 
 /// Pending request waiting for a response from ZLS.
 const PendingRequest = struct {
@@ -11,23 +15,13 @@ const PendingRequest = struct {
     allocator: std.mem.Allocator,
 };
 
-const DiagnosticEntry = struct {
-    value: []const u8,
-    sequence: u64,
-};
-
-const DiagnosticsSnapshotEntry = struct {
-    value: []const u8,
-    sequence: u64,
-};
-
 /// LSP Client: manages request/response correlation with the ZLS child process.
 ///
 /// Architecture:
 /// - Main thread calls sendRequest() which blocks until reader thread delivers the response.
 /// - Reader thread runs readerLoop() reading ZLS stdout and dispatching responses/notifications.
 pub const LspClient = struct {
-    pub const default_max_diagnostics_bytes: usize = 16 * 1024 * 1024;
+    pub const default_max_diagnostics_bytes: usize = DiagnosticsCache.default_max_bytes;
     pub const default_shutdown_timeout_ms: i64 = 500;
 
     zls_stdin: ?std.Io.File,
@@ -36,14 +30,7 @@ pub const LspClient = struct {
     pending: std.AutoHashMapUnmanaged(i64, *PendingRequest),
     pending_mutex: Mutex = .{},
     write_mutex: Mutex = .{},
-    diagnostics: std.StringHashMapUnmanaged(DiagnosticEntry),
-    diagnostics_mutex: Mutex = .{},
-    retained_diagnostics_bytes: usize = 0,
-    max_diagnostics_bytes: usize = default_max_diagnostics_bytes,
-    diagnostics_sequence: u64 = 0,
-    diagnostics_evicted_files: usize = 0,
-    diagnostics_evicted_bytes: usize = 0,
-    diagnostics_dropped_oversized: usize = 0,
+    diagnostics: DiagnosticsCache,
     last_error: ?[]const u8 = null,
     last_error_mutex: Mutex = .{},
     reader_thread: ?std.Thread = null,
@@ -68,8 +55,7 @@ pub const LspClient = struct {
             .pending = .empty,
             .pending_mutex = Mutex.init(io),
             .write_mutex = Mutex.init(io),
-            .diagnostics = .empty,
-            .diagnostics_mutex = Mutex.init(io),
+            .diagnostics = DiagnosticsCache.init(allocator, io, default_max_diagnostics_bytes),
             .last_error_mutex = Mutex.init(io),
             .allocator = allocator,
             .io = io,
@@ -251,7 +237,7 @@ pub const LspClient = struct {
                     else => continue,
                 };
                 if (std.mem.eql(u8, method, "textDocument/publishDiagnostics")) {
-                    self.storeDiagnostics(obj, data) catch |err| {
+                    self.diagnostics.storeNotification(obj, data) catch |err| {
                         self.logger.warn("lsp", "failed to store diagnostics: {}", .{err});
                     };
                 }
@@ -259,98 +245,16 @@ pub const LspClient = struct {
         }
     }
 
-    fn storeDiagnostics(self: *LspClient, obj: std.json.ObjectMap, data: []const u8) !void {
-        const params = switch (obj.get("params") orelse return) {
-            .object => |o| o,
-            else => return,
-        };
-        const uri = switch (params.get("uri") orelse return) {
-            .string => |s| s,
-            else => return,
-        };
-
-        self.diagnostics_mutex.lock();
-        defer self.diagnostics_mutex.unlock();
-
-        if (self.diagnostics.fetchRemove(uri)) |old| self.freeDiagnosticLocked(old.key, old.value);
-        if (data.len > self.max_diagnostics_bytes) {
-            self.diagnostics_dropped_oversized += 1;
-            return;
-        }
-
-        const key = try self.allocator.dupe(u8, uri);
-        errdefer self.allocator.free(key);
-        const value = try self.allocator.dupe(u8, data);
-        errdefer self.allocator.free(value);
-
-        if (self.retained_diagnostics_bytes > self.max_diagnostics_bytes - value.len) {
-            self.evictDiagnosticsUntilFitsLocked(value.len);
-        }
-        self.diagnostics_sequence +%= 1;
-        try self.diagnostics.put(self.allocator, key, .{
-            .value = value,
-            .sequence = self.diagnostics_sequence,
-        });
-        self.retained_diagnostics_bytes += value.len;
-    }
-
     pub fn getDiagnostics(self: *LspClient, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
-        self.diagnostics_mutex.lock();
-        defer self.diagnostics_mutex.unlock();
-        const stored = self.diagnostics.get(uri) orelse return null;
-        return try allocator.dupe(u8, stored.value);
+        return self.diagnostics.get(allocator, uri);
     }
 
     pub fn diagnosticsSnapshot(self: *LspClient, allocator: std.mem.Allocator) ![]const []const u8 {
-        self.diagnostics_mutex.lock();
-        defer self.diagnostics_mutex.unlock();
-
-        var list: std.ArrayList(DiagnosticsSnapshotEntry) = .empty;
-        errdefer {
-            for (list.items) |item| allocator.free(item.value);
-            list.deinit(allocator);
-        }
-        var it = self.diagnostics.iterator();
-        while (it.next()) |entry| {
-            const value = try allocator.dupe(u8, entry.value_ptr.value);
-            errdefer allocator.free(value);
-            try list.append(allocator, .{
-                .value = value,
-                .sequence = entry.value_ptr.sequence,
-            });
-        }
-        std.mem.sort(DiagnosticsSnapshotEntry, list.items, {}, struct {
-            fn lessThan(_: void, a: DiagnosticsSnapshotEntry, b: DiagnosticsSnapshotEntry) bool {
-                return a.sequence < b.sequence;
-            }
-        }.lessThan);
-
-        const snapshot = try allocator.alloc([]const u8, list.items.len);
-        for (list.items, 0..) |item, index| snapshot[index] = item.value;
-        list.deinit(allocator);
-        return snapshot;
+        return self.diagnostics.snapshot(allocator);
     }
 
-    pub const DiagnosticsStatus = struct {
-        files: usize,
-        retained_bytes: usize,
-        max_bytes: usize,
-        evicted_files: usize,
-        evicted_bytes: usize,
-        dropped_oversized: usize,
-    };
-
     pub fn diagnosticsStatus(self: *LspClient) DiagnosticsStatus {
-        self.diagnostics_mutex.lock();
-        defer self.diagnostics_mutex.unlock();
-        return .{
-            .files = self.diagnostics.count(),
-            .retained_bytes = self.retained_diagnostics_bytes,
-            .max_bytes = self.max_diagnostics_bytes,
-            .evicted_files = self.diagnostics_evicted_files,
-            .evicted_bytes = self.diagnostics_evicted_bytes,
-            .dropped_oversized = self.diagnostics_dropped_oversized,
-        };
+        return self.diagnostics.status();
     }
 
     pub fn lastError(self: *LspClient, allocator: std.mem.Allocator) !?[]const u8 {
@@ -472,14 +376,7 @@ pub const LspClient = struct {
         }
         self.pending.deinit(self.allocator);
 
-        var diag_it = self.diagnostics.iterator();
-        while (diag_it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.value);
-        }
-        self.diagnostics.deinit(self.allocator);
-        self.diagnostics = .empty;
-        self.retained_diagnostics_bytes = 0;
+        self.diagnostics.deinit();
 
         if (self.last_error) |err| {
             self.allocator.free(err);
@@ -492,57 +389,6 @@ pub const LspClient = struct {
         defer self.last_error_mutex.unlock();
         if (self.last_error) |old| self.allocator.free(old);
         self.last_error = try self.allocator.dupe(u8, value);
-    }
-
-    fn clearDiagnosticsLocked(self: *LspClient) void {
-        var it = self.diagnostics.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.value);
-        }
-        self.diagnostics.deinit(self.allocator);
-        self.diagnostics = .empty;
-        self.retained_diagnostics_bytes = 0;
-    }
-
-    fn subtractDiagnosticsBytesLocked(self: *LspClient, bytes: usize) void {
-        if (bytes <= self.retained_diagnostics_bytes) {
-            self.retained_diagnostics_bytes -= bytes;
-        } else {
-            self.retained_diagnostics_bytes = 0;
-        }
-    }
-
-    fn evictDiagnosticsUntilFitsLocked(self: *LspClient, incoming_bytes: usize) void {
-        while (self.retained_diagnostics_bytes > self.max_diagnostics_bytes - incoming_bytes) {
-            if (!self.evictOldestDiagnosticLocked()) return;
-        }
-    }
-
-    fn evictOldestDiagnosticLocked(self: *LspClient) bool {
-        var oldest_key: ?[]const u8 = null;
-        var oldest_sequence: u64 = 0;
-
-        var it = self.diagnostics.iterator();
-        while (it.next()) |entry| {
-            if (oldest_key == null or entry.value_ptr.sequence < oldest_sequence) {
-                oldest_key = entry.key_ptr.*;
-                oldest_sequence = entry.value_ptr.sequence;
-            }
-        }
-
-        const key = oldest_key orelse return false;
-        const removed = self.diagnostics.fetchRemove(key) orelse return false;
-        self.diagnostics_evicted_files += 1;
-        self.diagnostics_evicted_bytes += removed.value.value.len;
-        self.freeDiagnosticLocked(removed.key, removed.value);
-        return true;
-    }
-
-    fn freeDiagnosticLocked(self: *LspClient, key: []const u8, entry: DiagnosticEntry) void {
-        self.subtractDiagnosticsBytesLocked(entry.value.len);
-        self.allocator.free(key);
-        self.allocator.free(entry.value);
     }
 };
 
@@ -680,134 +526,6 @@ test "duplicate LSP response replaces pending response buffer" {
     defer alloc.destroy(removed);
     defer if (removed.response) |response| alloc.free(response);
     try std.testing.expect(std.mem.indexOf(u8, removed.response.?, "second") != null);
-}
-
-test "LspClient bounds retained diagnostics cache" {
-    const alloc = std.testing.allocator;
-    const io = testIo();
-    var client = LspClient.init(alloc, io);
-    defer client.deinit();
-
-    const first =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
-    ;
-    const second =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[]}}
-    ;
-    client.max_diagnostics_bytes = first.len + 8;
-
-    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
-    defer parsed_first.deinit();
-    const first_obj = switch (parsed_first.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(first_obj, first);
-    try std.testing.expectEqual(@as(usize, 1), client.diagnosticsStatus().files);
-    try std.testing.expectEqual(first.len, client.diagnosticsStatus().retained_bytes);
-
-    const parsed_second = try std.json.parseFromSlice(std.json.Value, alloc, second, .{});
-    defer parsed_second.deinit();
-    const second_obj = switch (parsed_second.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(second_obj, second);
-    const evicted_status = client.diagnosticsStatus();
-    try std.testing.expectEqual(@as(usize, 1), evicted_status.files);
-    try std.testing.expectEqual(second.len, evicted_status.retained_bytes);
-    try std.testing.expectEqual(@as(usize, 1), evicted_status.evicted_files);
-    try std.testing.expectEqual(first.len, evicted_status.evicted_bytes);
-    try std.testing.expect((try client.getDiagnostics(alloc, "file:///tmp/a.zig")) == null);
-    const stored_second = (try client.getDiagnostics(alloc, "file:///tmp/b.zig")) orelse return error.TestUnexpectedResult;
-    defer alloc.free(stored_second);
-    try std.testing.expectEqualStrings(second, stored_second);
-
-    client.max_diagnostics_bytes = second.len - 1;
-    try client.storeDiagnostics(second_obj, second);
-    const oversized_status = client.diagnosticsStatus();
-    try std.testing.expectEqual(@as(usize, 0), oversized_status.files);
-    try std.testing.expectEqual(@as(usize, 0), oversized_status.retained_bytes);
-    try std.testing.expectEqual(@as(usize, 1), oversized_status.dropped_oversized);
-}
-
-test "oversized diagnostics do not clear unrelated cached diagnostics" {
-    const alloc = std.testing.allocator;
-    const io = testIo();
-    var client = LspClient.init(alloc, io);
-    defer client.deinit();
-
-    const first =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
-    ;
-    const oversized =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[{"message":"this notification is intentionally too large for the cache budget"}]}}
-    ;
-    client.max_diagnostics_bytes = first.len + 4;
-
-    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
-    defer parsed_first.deinit();
-    const first_obj = switch (parsed_first.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(first_obj, first);
-
-    const parsed_oversized = try std.json.parseFromSlice(std.json.Value, alloc, oversized, .{});
-    defer parsed_oversized.deinit();
-    const oversized_obj = switch (parsed_oversized.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(oversized_obj, oversized);
-
-    const status = client.diagnosticsStatus();
-    try std.testing.expectEqual(@as(usize, 1), status.files);
-    try std.testing.expectEqual(first.len, status.retained_bytes);
-    try std.testing.expectEqual(@as(usize, 1), status.dropped_oversized);
-    const stored_first = (try client.getDiagnostics(alloc, "file:///tmp/a.zig")) orelse return error.TestUnexpectedResult;
-    defer alloc.free(stored_first);
-    try std.testing.expectEqualStrings(first, stored_first);
-    try std.testing.expect((try client.getDiagnostics(alloc, "file:///tmp/b.zig")) == null);
-}
-
-test "diagnostics snapshot is ordered by update sequence" {
-    const alloc = std.testing.allocator;
-    const io = testIo();
-    var client = LspClient.init(alloc, io);
-    defer client.deinit();
-
-    const first =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[]}}
-    ;
-    const second =
-        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
-    ;
-
-    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
-    defer parsed_first.deinit();
-    const first_obj = switch (parsed_first.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(first_obj, first);
-
-    const parsed_second = try std.json.parseFromSlice(std.json.Value, alloc, second, .{});
-    defer parsed_second.deinit();
-    const second_obj = switch (parsed_second.value) {
-        .object => |o| o,
-        else => return error.TestUnexpectedResult,
-    };
-    try client.storeDiagnostics(second_obj, second);
-
-    const snapshot = try client.diagnosticsSnapshot(alloc);
-    defer {
-        for (snapshot) |item| alloc.free(item);
-        alloc.free(snapshot);
-    }
-    try std.testing.expectEqual(@as(usize, 2), snapshot.len);
-    try std.testing.expectEqualStrings(first, snapshot[0]);
-    try std.testing.expectEqualStrings(second, snapshot[1]);
 }
 
 test "reader EOF stops LSP client and records EndOfStream" {
