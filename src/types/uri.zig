@@ -172,7 +172,9 @@ test "resolvePath joins relative to workspace" {
     const allocator = std.testing.allocator;
     const result = try resolvePath(allocator, "/workspace", "src/main.zig");
     defer allocator.free(result);
-    try std.testing.expectEqualStrings("/workspace/src/main.zig", result);
+    const expected = try std.fs.path.join(allocator, &.{ "/workspace", "src/main.zig" });
+    defer allocator.free(expected);
+    try std.testing.expectEqualStrings(expected, result);
 }
 
 test "uri with spaces" {
