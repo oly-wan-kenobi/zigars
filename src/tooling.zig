@@ -72,6 +72,7 @@ pub fn hintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile.", .enum_values = &.{ "codex", "claude", "generic" } };
     if (std.mem.eql(u8, name, "format")) return .{ .description = "Profiler input format passed to zflame.", .default_string = "guess", .enum_values = &.{ "perf", "dtrace", "sample", "vtune", "xctrace", "recursive", "guess" } };
     if (std.mem.eql(u8, name, "probe_backends") or std.mem.eql(u8, name, "probe_managers")) return .{ .description = "Run extra backend probes instead of using cheap static checks.", .default_bool = false };
+    if (std.mem.eql(u8, name, "include_configured_paths")) return .{ .description = "Include the server's currently configured backend paths in setup catalog output.", .default_bool = true };
     if (std.mem.eql(u8, name, "refresh")) return .{ .description = "Rebuild the cached workspace index.", .default_bool = false };
     if (std.mem.eql(u8, name, "stop_on_failure")) return .{ .description = "Stop validation after the first failed phase.", .default_bool = false };
     if (std.mem.eql(u8, name, "include_declaration")) return .{ .description = "Include the declaration location in reference results.", .default_bool = true };

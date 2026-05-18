@@ -30,6 +30,7 @@
     {"intent": "search Zig docs", "prefer": "zig_builtin_doc, zig_std_search, zig_lang_ref_search", "keywords": ["docs", "stdlib", "builtin", "langref"]},
     {"intent": "lint Zig code", "prefer": "zig_lint", "keywords": ["zwanzig", "lint", "linter", "sarif"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
+    {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zwanzig", "zflame", "diff-folded"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
   "tool_argument_scope": "Compact high-signal argument and planning hints are generated from the typed manifest under src/tool_manifest/ at build and runtime.",

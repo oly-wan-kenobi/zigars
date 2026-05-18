@@ -29,6 +29,16 @@ pub const definitions = struct {
         .handler = handler(.discovery, "zigarSchema"),
         .plan = .{ .pure_analysis = "Manifest/catalog lookup; does not execute backends or mutate workspace state." },
     });
+    pub const zigar_backend_catalog = tool(.{
+        .description = "Return packaged setup metadata for Zig, ZLS, zwanzig, zflame, and diff-folded backends.",
+        .input_schema = schema(&.{
+            .{ "include_configured_paths", "boolean", false },
+        }),
+        .read_only = true,
+        .group = .discovery,
+        .handler = handler(.discovery, "zigarBackendCatalog"),
+        .plan = .{ .pure_analysis = "Backend setup catalog lookup; does not execute tools or mutate workspace state." },
+    });
     pub const zigar_doctor = tool(.{
         .description = "Diagnose common zigar MCP configuration, workspace, backend, and transport problems.",
         .input_schema = schema(&.{ .{ "probe_backends", "boolean", false }, .{ "timeout_ms", "integer", false } }),

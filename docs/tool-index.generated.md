@@ -10,9 +10,9 @@ Deterministic Zig development MCP server. No AI generation. Source writes requir
 
 ### discovery
 
-Tools: `zigar_capabilities`, `zigar_tool_index`, `zigar_schema`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`, `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
+Tools: `zigar_capabilities`, `zigar_tool_index`, `zigar_schema`, `zigar_backend_catalog`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`, `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
 
-Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace`, `context pack`, `agent guide`, `next action`, `toolchain`, `version manager`, `mise`, `asdf`, `zvm`, `zigup`, `fmt`, `formatter`, `formatting`, `zig fmt`
+Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace`, `backend setup`, `backend catalog`, `optional backends`, `context pack`, `agent guide`, `next action`, `toolchain`, `version manager`, `mise`, `asdf`, `zvm`, `zigup`, `fmt`, `formatter`, `formatting`, `zig fmt`
 
 ### agent_workflows
 
@@ -89,6 +89,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - search Zig docs: prefer `zig_builtin_doc, zig_std_search, zig_lang_ref_search`
 - lint Zig code: prefer `zig_lint`
 - make a flamegraph: prefer `zig_flamegraph`
+- install optional backends: prefer `zigar_backend_catalog`
 - diagnose zigar setup: prefer `zigar_doctor`
 
 ## Compact Argument Hints
@@ -156,6 +157,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
+- `zigar_backend_catalog`: optional `include_configured_paths: boolean`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
 - `zigar_doctor`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
@@ -241,6 +243,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
+- `zigar_backend_catalog`: `pure_analysis` read-only analysis
 - `zigar_capabilities`: `pure_analysis` read-only analysis
 - `zigar_context_pack`: `pure_analysis` read-only analysis
 - `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
