@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const config_mod = zigar.config;
+const logging = zigar.logging;
 const runtime_mod = zigar.runtime;
 const workspace_mod = zigar.workspace;
 const zls_session = zigar.zls_session;
@@ -24,18 +25,19 @@ pub fn main(init: std.process.Init) !void {
 
     var cfg = config_mod.parse(allocator, init.io, args) catch |err| switch (err) {
         error.HelpRequested => {
-            std.debug.print("{s}", .{config_mod.usage()});
+            try stderrPrint(init.io, "{s}", .{config_mod.usage()});
             return;
         },
         error.VersionRequested => {
-            std.debug.print("zigar " ++ version ++ "\n", .{});
+            try stderrPrint(init.io, "zigar " ++ version ++ "\n", .{});
             return;
         },
         else => {
-            std.debug.print("zigar: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
+            try stderrPrint(init.io, "zigar: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
             return err;
         },
     };
+    const logger = logging.Logger.stderr(init.io);
     var cfg_owned = true;
     defer if (cfg_owned) cfg.deinit(allocator);
 
@@ -52,6 +54,7 @@ pub fn main(init: std.process.Init) !void {
     var runtime = App{
         .allocator = allocator,
         .io = init.io,
+        .logger = logger,
         .config = cfg,
         .workspace = ws,
         .zls_process_slot = &zls_proc,
@@ -61,14 +64,14 @@ pub fn main(init: std.process.Init) !void {
     cfg_owned = false;
     defer runtime.deinit();
 
-    std.debug.print("[zigar] workspace: {s}\n", .{ws.root});
+    runtime.logger.info("main", "workspace: {s}", .{ws.root});
     zls_session.start(&runtime, &zls_proc, &lsp_client, &doc_state) catch |err| {
         runtime.zls_status = @errorName(err);
         runtime.zls_last_failure = @errorName(err);
-        std.debug.print("[zigar] zls disabled: {}\n", .{err});
+        runtime.logger.warn("main", "zls disabled: {}", .{err});
     };
     if (runtime.lsp_client != null) {
-        std.debug.print("[zigar] zls session: {s}\n", .{runtime.zls_status});
+        runtime.logger.info("main", "zls session: {s}", .{runtime.zls_status});
     }
 
     var server = mcp.Server.init(allocator, .{
@@ -90,4 +93,11 @@ pub fn main(init: std.process.Init) !void {
         .stdio => try server.run(init.io, allocator, .stdio),
         .http => try server.run(init.io, allocator, .{ .http = .{ .host = cfg.host, .port = cfg.port } }),
     }
+}
+
+fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = std.Io.File.stderr().writer(io, &buffer);
+    try writer.interface.print(fmt, args);
+    try writer.interface.flush();
 }

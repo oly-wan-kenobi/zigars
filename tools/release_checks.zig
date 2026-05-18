@@ -179,9 +179,24 @@ const forbidden_tokens = [_]ForbiddenToken{
         .reason = "MCP handlers must receive runtime through user_data, not globals",
     },
     .{
+        .path = "src/main.zig",
+        .token = "std.debug.print",
+        .reason = "runtime logs and CLI messages must use the project logging/stderr helpers",
+    },
+    .{
         .path = "src/server.zig",
         .token = "active_app",
         .reason = "server handlers must not reintroduce global runtime state",
+    },
+    .{
+        .path = "src/lsp/client.zig",
+        .token = "std.debug.print",
+        .reason = "LSP lifecycle logs must go through the project logger",
+    },
+    .{
+        .path = "src/state/documents.zig",
+        .token = "std.debug.print",
+        .reason = "document-session logs must go through the project logger",
     },
 };
 

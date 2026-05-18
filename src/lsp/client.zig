@@ -1,6 +1,7 @@
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
 const json_rpc = @import("../types/json_rpc.zig");
+const logging = @import("../logging.zig");
 const Mutex = @import("../sync.zig").Mutex;
 
 /// Pending request waiting for a response from ZLS.
@@ -10,6 +11,16 @@ const PendingRequest = struct {
     allocator: std.mem.Allocator,
 };
 
+const DiagnosticEntry = struct {
+    value: []const u8,
+    sequence: u64,
+};
+
+const DiagnosticsSnapshotEntry = struct {
+    value: []const u8,
+    sequence: u64,
+};
+
 /// LSP Client: manages request/response correlation with the ZLS child process.
 ///
 /// Architecture:
@@ -17,6 +28,7 @@ const PendingRequest = struct {
 /// - Reader thread runs readerLoop() reading ZLS stdout and dispatching responses/notifications.
 pub const LspClient = struct {
     pub const default_max_diagnostics_bytes: usize = 16 * 1024 * 1024;
+    pub const default_shutdown_timeout_ms: i64 = 500;
 
     zls_stdin: ?std.Io.File,
     zls_stdout: ?std.Io.File,
@@ -24,19 +36,26 @@ pub const LspClient = struct {
     pending: std.AutoHashMapUnmanaged(i64, *PendingRequest),
     pending_mutex: Mutex = .{},
     write_mutex: Mutex = .{},
-    diagnostics: std.StringHashMapUnmanaged([]const u8),
+    diagnostics: std.StringHashMapUnmanaged(DiagnosticEntry),
     diagnostics_mutex: Mutex = .{},
     retained_diagnostics_bytes: usize = 0,
     max_diagnostics_bytes: usize = default_max_diagnostics_bytes,
+    diagnostics_sequence: u64 = 0,
+    diagnostics_evicted_files: usize = 0,
+    diagnostics_evicted_bytes: usize = 0,
+    diagnostics_dropped_oversized: usize = 0,
     last_error: ?[]const u8 = null,
     last_error_mutex: Mutex = .{},
     reader_thread: ?std.Thread = null,
     allocator: std.mem.Allocator,
     io: std.Io,
     request_timeout_ms: i64 = 30_000,
+    shutdown_timeout_ms: i64 = default_shutdown_timeout_ms,
     running: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    closing: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     stderr_thread: ?std.Thread = null,
     zls_stderr: ?std.Io.File = null,
+    logger: logging.Logger = .disabled(),
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io) LspClient {
         return initWithTimeout(allocator, io, 30_000);
@@ -55,7 +74,13 @@ pub const LspClient = struct {
             .allocator = allocator,
             .io = io,
             .request_timeout_ms = @max(1, request_timeout_ms),
+            .shutdown_timeout_ms = default_shutdown_timeout_ms,
+            .logger = logging.Logger.stderr(io),
         };
+    }
+
+    pub fn setLogger(self: *LspClient, logger: logging.Logger) void {
+        self.logger = logger;
     }
 
     /// Connect to ZLS pipes and start reader thread.
@@ -63,6 +88,7 @@ pub const LspClient = struct {
         self.zls_stdin = stdin;
         self.zls_stdout = stdout;
         self.zls_stderr = stderr;
+        self.closing.store(false, .release);
         self.running.store(true, .release);
 
         self.reader_thread = try std.Thread.spawn(.{}, readerLoop, .{self});
@@ -139,6 +165,10 @@ pub const LspClient = struct {
 
     /// Send a pre-serialized LSP request message and wait for the response.
     fn sendRawRequest(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8) ![]const u8 {
+        return self.sendRawRequestWithTimeout(allocator, id, msg, self.request_timeout_ms, "RequestTimeout");
+    }
+
+    fn sendRawRequestWithTimeout(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8) ![]const u8 {
         const stdin = self.zls_stdin orelse return error.NotConnected;
 
         const pending = try self.allocator.create(PendingRequest);
@@ -153,8 +183,8 @@ pub const LspClient = struct {
 
         try self.writeMessage(stdin, msg);
 
-        pending.event.waitTimeout(self.io, .{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(self.request_timeout_ms), .clock = .awake } }) catch {
-            self.setLastError("RequestTimeout") catch {};
+        pending.event.waitTimeout(self.io, .{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(@max(1, timeout_ms)), .clock = .awake } }) catch {
+            self.setLastError(timeout_label) catch {};
             self.removePending(id);
             return error.RequestTimeout;
         };
@@ -176,14 +206,15 @@ pub const LspClient = struct {
 
         while (self.running.load(.acquire)) {
             const msg = reader.readMessage(self.allocator) catch |err| {
-                if (!self.running.load(.acquire)) return;
-                log("LSP reader error: {}", .{err});
+                if (!self.running.load(.acquire) or self.closing.load(.acquire)) return;
+                self.logger.warn("lsp", "reader error: {}", .{err});
                 self.setLastError(@errorName(err)) catch {};
                 self.running.store(false, .release);
                 self.signalAllPending();
                 return;
             };
             if (msg == null) {
+                if (self.closing.load(.acquire)) return;
                 self.setLastError("EndOfStream") catch {};
                 self.running.store(false, .release);
                 self.signalAllPending();
@@ -194,7 +225,7 @@ pub const LspClient = struct {
 
             // Parse to check if it's a response (has "id") or notification (has "method")
             const parsed = std.json.parseFromSlice(std.json.Value, self.allocator, data, .{}) catch {
-                log("Failed to parse LSP message", .{});
+                self.logger.warn("lsp", "failed to parse LSP message", .{});
                 continue;
             };
             defer parsed.deinit();
@@ -221,7 +252,7 @@ pub const LspClient = struct {
                 };
                 if (std.mem.eql(u8, method, "textDocument/publishDiagnostics")) {
                     self.storeDiagnostics(obj, data) catch |err| {
-                        log("failed to store diagnostics: {}", .{err});
+                        self.logger.warn("lsp", "failed to store diagnostics: {}", .{err});
                     };
                 }
             }
@@ -238,28 +269,28 @@ pub const LspClient = struct {
             else => return,
         };
 
+        self.diagnostics_mutex.lock();
+        defer self.diagnostics_mutex.unlock();
+
+        if (self.diagnostics.fetchRemove(uri)) |old| self.freeDiagnosticLocked(old.key, old.value);
+        if (data.len > self.max_diagnostics_bytes) {
+            self.diagnostics_dropped_oversized += 1;
+            return;
+        }
+
         const key = try self.allocator.dupe(u8, uri);
         errdefer self.allocator.free(key);
         const value = try self.allocator.dupe(u8, data);
         errdefer self.allocator.free(value);
 
-        self.diagnostics_mutex.lock();
-        defer self.diagnostics_mutex.unlock();
-
-        if (self.diagnostics.fetchRemove(uri)) |old| {
-            self.subtractDiagnosticsBytesLocked(old.value.len);
-            self.allocator.free(old.key);
-            self.allocator.free(old.value);
-        }
-        if (value.len > self.max_diagnostics_bytes) {
-            self.allocator.free(key);
-            self.allocator.free(value);
-            return;
-        }
         if (self.retained_diagnostics_bytes > self.max_diagnostics_bytes - value.len) {
-            self.clearDiagnosticsLocked();
+            self.evictDiagnosticsUntilFitsLocked(value.len);
         }
-        try self.diagnostics.put(self.allocator, key, value);
+        self.diagnostics_sequence +%= 1;
+        try self.diagnostics.put(self.allocator, key, .{
+            .value = value,
+            .sequence = self.diagnostics_sequence,
+        });
         self.retained_diagnostics_bytes += value.len;
     }
 
@@ -267,29 +298,46 @@ pub const LspClient = struct {
         self.diagnostics_mutex.lock();
         defer self.diagnostics_mutex.unlock();
         const stored = self.diagnostics.get(uri) orelse return null;
-        return try allocator.dupe(u8, stored);
+        return try allocator.dupe(u8, stored.value);
     }
 
     pub fn diagnosticsSnapshot(self: *LspClient, allocator: std.mem.Allocator) ![]const []const u8 {
         self.diagnostics_mutex.lock();
         defer self.diagnostics_mutex.unlock();
 
-        var list: std.ArrayList([]const u8) = .empty;
+        var list: std.ArrayList(DiagnosticsSnapshotEntry) = .empty;
         errdefer {
-            for (list.items) |item| allocator.free(item);
+            for (list.items) |item| allocator.free(item.value);
             list.deinit(allocator);
         }
         var it = self.diagnostics.iterator();
         while (it.next()) |entry| {
-            try list.append(allocator, try allocator.dupe(u8, entry.value_ptr.*));
+            const value = try allocator.dupe(u8, entry.value_ptr.value);
+            errdefer allocator.free(value);
+            try list.append(allocator, .{
+                .value = value,
+                .sequence = entry.value_ptr.sequence,
+            });
         }
-        return try list.toOwnedSlice(allocator);
+        std.mem.sort(DiagnosticsSnapshotEntry, list.items, {}, struct {
+            fn lessThan(_: void, a: DiagnosticsSnapshotEntry, b: DiagnosticsSnapshotEntry) bool {
+                return a.sequence < b.sequence;
+            }
+        }.lessThan);
+
+        const snapshot = try allocator.alloc([]const u8, list.items.len);
+        for (list.items, 0..) |item, index| snapshot[index] = item.value;
+        list.deinit(allocator);
+        return snapshot;
     }
 
     pub const DiagnosticsStatus = struct {
         files: usize,
         retained_bytes: usize,
         max_bytes: usize,
+        evicted_files: usize,
+        evicted_bytes: usize,
+        dropped_oversized: usize,
     };
 
     pub fn diagnosticsStatus(self: *LspClient) DiagnosticsStatus {
@@ -299,6 +347,9 @@ pub const LspClient = struct {
             .files = self.diagnostics.count(),
             .retained_bytes = self.retained_diagnostics_bytes,
             .max_bytes = self.max_diagnostics_bytes,
+            .evicted_files = self.diagnostics_evicted_files,
+            .evicted_bytes = self.diagnostics_evicted_bytes,
+            .dropped_oversized = self.diagnostics_dropped_oversized,
         };
     }
 
@@ -315,7 +366,7 @@ pub const LspClient = struct {
         while (true) {
             const n = stderr.readStreaming(self.io, &.{&buf}) catch return;
             if (n == 0) return;
-            log("ZLS stderr: {s}", .{buf[0..n]});
+            self.logger.debug("lsp", "ZLS stderr: {s}", .{buf[0..n]});
         }
     }
 
@@ -363,8 +414,12 @@ pub const LspClient = struct {
     }
 
     pub fn disconnect(self: *LspClient) void {
-        self.shutdown() catch {};
+        self.closing.store(true, .release);
+        self.shutdownWithTimeout(self.shutdown_timeout_ms) catch |err| {
+            self.setLastError(if (err == error.RequestTimeout) "ShutdownTimeout" else @errorName(err)) catch {};
+        };
         self.running.store(false, .release);
+        self.signalAllPending();
         // Close all pipes to signal ZLS to exit and unblock reader threads
         if (self.zls_stdin) |stdin| {
             stdin.close(self.io);
@@ -387,11 +442,19 @@ pub const LspClient = struct {
             t.join();
             self.stderr_thread = null;
         }
+        self.closing.store(false, .release);
     }
 
     pub fn shutdown(self: *LspClient) !void {
+        return self.shutdownWithTimeout(self.request_timeout_ms);
+    }
+
+    fn shutdownWithTimeout(self: *LspClient, timeout_ms: i64) !void {
         if (self.zls_stdin == null or !self.running.load(.acquire)) return;
-        const response = self.sendRequest(self.allocator, "shutdown", .{}) catch return;
+        const id = self.next_id.fetchAdd(1, .monotonic);
+        const msg = try json_rpc.writeRequest(self.allocator, .{ .integer = id }, "shutdown", .{});
+        defer self.allocator.free(msg);
+        const response = self.sendRawRequestWithTimeout(self.allocator, id, msg, timeout_ms, "ShutdownTimeout") catch return;
         self.allocator.free(response);
         self.sendRawNotification(self.allocator, "exit") catch {};
         self.running.store(false, .release);
@@ -412,7 +475,7 @@ pub const LspClient = struct {
         var diag_it = self.diagnostics.iterator();
         while (diag_it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
+            self.allocator.free(entry.value_ptr.value);
         }
         self.diagnostics.deinit(self.allocator);
         self.diagnostics = .empty;
@@ -422,10 +485,6 @@ pub const LspClient = struct {
             self.allocator.free(err);
             self.last_error = null;
         }
-    }
-
-    fn log(comptime fmt: []const u8, args: anytype) void {
-        std.debug.print("[zigar/lsp] " ++ fmt ++ "\n", args);
     }
 
     fn setLastError(self: *LspClient, value: []const u8) !void {
@@ -439,7 +498,7 @@ pub const LspClient = struct {
         var it = self.diagnostics.iterator();
         while (it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
+            self.allocator.free(entry.value_ptr.value);
         }
         self.diagnostics.deinit(self.allocator);
         self.diagnostics = .empty;
@@ -452,6 +511,38 @@ pub const LspClient = struct {
         } else {
             self.retained_diagnostics_bytes = 0;
         }
+    }
+
+    fn evictDiagnosticsUntilFitsLocked(self: *LspClient, incoming_bytes: usize) void {
+        while (self.retained_diagnostics_bytes > self.max_diagnostics_bytes - incoming_bytes) {
+            if (!self.evictOldestDiagnosticLocked()) return;
+        }
+    }
+
+    fn evictOldestDiagnosticLocked(self: *LspClient) bool {
+        var oldest_key: ?[]const u8 = null;
+        var oldest_sequence: u64 = 0;
+
+        var it = self.diagnostics.iterator();
+        while (it.next()) |entry| {
+            if (oldest_key == null or entry.value_ptr.sequence < oldest_sequence) {
+                oldest_key = entry.key_ptr.*;
+                oldest_sequence = entry.value_ptr.sequence;
+            }
+        }
+
+        const key = oldest_key orelse return false;
+        const removed = self.diagnostics.fetchRemove(key) orelse return false;
+        self.diagnostics_evicted_files += 1;
+        self.diagnostics_evicted_bytes += removed.value.value.len;
+        self.freeDiagnosticLocked(removed.key, removed.value);
+        return true;
+    }
+
+    fn freeDiagnosticLocked(self: *LspClient, key: []const u8, entry: DiagnosticEntry) void {
+        self.subtractDiagnosticsBytesLocked(entry.value.len);
+        self.allocator.free(key);
+        self.allocator.free(entry.value);
     }
 };
 
@@ -622,8 +713,11 @@ test "LspClient bounds retained diagnostics cache" {
         else => return error.TestUnexpectedResult,
     };
     try client.storeDiagnostics(second_obj, second);
-    try std.testing.expectEqual(@as(usize, 1), client.diagnosticsStatus().files);
-    try std.testing.expectEqual(second.len, client.diagnosticsStatus().retained_bytes);
+    const evicted_status = client.diagnosticsStatus();
+    try std.testing.expectEqual(@as(usize, 1), evicted_status.files);
+    try std.testing.expectEqual(second.len, evicted_status.retained_bytes);
+    try std.testing.expectEqual(@as(usize, 1), evicted_status.evicted_files);
+    try std.testing.expectEqual(first.len, evicted_status.evicted_bytes);
     try std.testing.expect((try client.getDiagnostics(alloc, "file:///tmp/a.zig")) == null);
     const stored_second = (try client.getDiagnostics(alloc, "file:///tmp/b.zig")) orelse return error.TestUnexpectedResult;
     defer alloc.free(stored_second);
@@ -631,8 +725,89 @@ test "LspClient bounds retained diagnostics cache" {
 
     client.max_diagnostics_bytes = second.len - 1;
     try client.storeDiagnostics(second_obj, second);
-    try std.testing.expectEqual(@as(usize, 0), client.diagnosticsStatus().files);
-    try std.testing.expectEqual(@as(usize, 0), client.diagnosticsStatus().retained_bytes);
+    const oversized_status = client.diagnosticsStatus();
+    try std.testing.expectEqual(@as(usize, 0), oversized_status.files);
+    try std.testing.expectEqual(@as(usize, 0), oversized_status.retained_bytes);
+    try std.testing.expectEqual(@as(usize, 1), oversized_status.dropped_oversized);
+}
+
+test "oversized diagnostics do not clear unrelated cached diagnostics" {
+    const alloc = std.testing.allocator;
+    const io = testIo();
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    const first =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
+    ;
+    const oversized =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[{"message":"this notification is intentionally too large for the cache budget"}]}}
+    ;
+    client.max_diagnostics_bytes = first.len + 4;
+
+    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
+    defer parsed_first.deinit();
+    const first_obj = switch (parsed_first.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(first_obj, first);
+
+    const parsed_oversized = try std.json.parseFromSlice(std.json.Value, alloc, oversized, .{});
+    defer parsed_oversized.deinit();
+    const oversized_obj = switch (parsed_oversized.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(oversized_obj, oversized);
+
+    const status = client.diagnosticsStatus();
+    try std.testing.expectEqual(@as(usize, 1), status.files);
+    try std.testing.expectEqual(first.len, status.retained_bytes);
+    try std.testing.expectEqual(@as(usize, 1), status.dropped_oversized);
+    const stored_first = (try client.getDiagnostics(alloc, "file:///tmp/a.zig")) orelse return error.TestUnexpectedResult;
+    defer alloc.free(stored_first);
+    try std.testing.expectEqualStrings(first, stored_first);
+    try std.testing.expect((try client.getDiagnostics(alloc, "file:///tmp/b.zig")) == null);
+}
+
+test "diagnostics snapshot is ordered by update sequence" {
+    const alloc = std.testing.allocator;
+    const io = testIo();
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    const first =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[]}}
+    ;
+    const second =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
+    ;
+
+    const parsed_first = try std.json.parseFromSlice(std.json.Value, alloc, first, .{});
+    defer parsed_first.deinit();
+    const first_obj = switch (parsed_first.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(first_obj, first);
+
+    const parsed_second = try std.json.parseFromSlice(std.json.Value, alloc, second, .{});
+    defer parsed_second.deinit();
+    const second_obj = switch (parsed_second.value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try client.storeDiagnostics(second_obj, second);
+
+    const snapshot = try client.diagnosticsSnapshot(alloc);
+    defer {
+        for (snapshot) |item| alloc.free(item);
+        alloc.free(snapshot);
+    }
+    try std.testing.expectEqual(@as(usize, 2), snapshot.len);
+    try std.testing.expectEqualStrings(first, snapshot[0]);
+    try std.testing.expectEqualStrings(second, snapshot[1]);
 }
 
 test "reader EOF stops LSP client and records EndOfStream" {
@@ -665,6 +840,30 @@ test "disconnect on already disconnected client is safe" {
     // Should not crash
     client.disconnect();
     client.disconnect();
+}
+
+test "disconnect uses teardown timeout instead of request timeout" {
+    const alloc = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const to_server = try testPipe();
+    defer to_server.read_end.close(io);
+
+    var client = LspClient.initWithTimeout(alloc, io, 60_000);
+    defer client.deinit();
+    client.zls_stdin = to_server.write_end;
+    client.running.store(true, .release);
+    client.shutdown_timeout_ms = 1;
+
+    const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
+    client.disconnect();
+    const elapsed_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
+
+    try std.testing.expect(elapsed_ns < std.time.ns_per_s);
+    try std.testing.expect(!client.running.load(.acquire));
+    try std.testing.expect(client.zls_stdin == null);
+    try std.testing.expectEqual(@as(u32, 0), client.pending.count());
 }
 
 const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
