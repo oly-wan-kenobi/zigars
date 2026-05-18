@@ -1,0 +1,91 @@
+const std = @import("std");
+const mcp = @import("mcp");
+const zigar = @import("zigar");
+
+const config_mod = zigar.config;
+const runtime_mod = zigar.runtime;
+const workspace_mod = zigar.workspace;
+const zls_session = zigar.zls_session;
+const server_mod = @import("server.zig");
+
+const version = zigar.version.string;
+const App = runtime_mod.App;
+const LspClient = zigar.lsp_client.LspClient;
+const DocumentState = zigar.document_state.DocumentState;
+const ZlsProcess = zigar.zls_process.ZlsProcess;
+
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+
+    const args = try init.minimal.args.toSlice(allocator);
+    defer allocator.free(args);
+
+    var cfg = config_mod.parse(allocator, init.io, args) catch |err| switch (err) {
+        error.HelpRequested => {
+            std.debug.print("{s}", .{config_mod.usage()});
+            return;
+        },
+        error.VersionRequested => {
+            std.debug.print("zigar " ++ version ++ "\n", .{});
+            return;
+        },
+        else => {
+            std.debug.print("zigar: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
+            return err;
+        },
+    };
+    var cfg_owned = true;
+    defer if (cfg_owned) cfg.deinit(allocator);
+
+    var ws = try workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir, cfg.strict_workspace);
+    defer ws.deinit();
+
+    var zls_proc: ?ZlsProcess = null;
+    defer if (zls_proc) |*proc| proc.deinit();
+    var lsp_client: ?LspClient = null;
+    defer if (lsp_client) |*client| client.deinit();
+    var doc_state: ?DocumentState = null;
+    defer if (doc_state) |*docs_state| docs_state.deinit();
+
+    var runtime = App{
+        .allocator = allocator,
+        .io = init.io,
+        .config = cfg,
+        .workspace = ws,
+        .zls_process_slot = &zls_proc,
+        .lsp_client_slot = &lsp_client,
+        .doc_state_slot = &doc_state,
+    };
+    cfg_owned = false;
+    defer runtime.deinit();
+
+    std.debug.print("[zigar] workspace: {s}\n", .{ws.root});
+    zls_session.start(&runtime, &zls_proc, &lsp_client, &doc_state) catch |err| {
+        runtime.zls_status = @errorName(err);
+        runtime.zls_last_failure = @errorName(err);
+        std.debug.print("[zigar] zls disabled: {}\n", .{err});
+    };
+    if (runtime.lsp_client != null) {
+        std.debug.print("[zigar] zls session: {s}\n", .{runtime.zls_status});
+    }
+
+    var server = mcp.Server.init(allocator, .{
+        .name = "zigar",
+        .version = version,
+        .title = "Zigar",
+        .description = "Comprehensive deterministic MCP server for Zig application development.",
+        .instructions = "Use zigar tools for Zig docs, build/test/check, formatting, static analysis, linting, profiling, and flamegraph workflows. Source writes require apply=true.",
+    });
+    defer server.deinit();
+
+    server.enableLogging();
+    server.enableTasks();
+    try server_mod.registerTools(&server, &runtime);
+    try server_mod.registerResources(&server, &runtime);
+    try server_mod.registerPrompts(&server, &runtime);
+
+    switch (cfg.transport) {
+        .stdio => try server.run(init.io, allocator, .stdio),
+        .http => try server.run(init.io, allocator, .{ .http = .{ .host = cfg.host, .port = cfg.port } }),
+    }
+}

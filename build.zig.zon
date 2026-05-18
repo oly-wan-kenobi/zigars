@@ -1,0 +1,28 @@
+.{
+    .name = .zigar,
+    .version = "0.1.0",
+    .fingerprint = 0xbc1b20a9cf1aba50, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .mcp = .{
+            .url = "https://github.com/muhammad-fiaz/mcp.zig/archive/refs/tags/0.0.4.tar.gz",
+            .hash = "mcp-0.0.4-cIUFg-GLAwDmuduQojtH63H2zelYSz20fEgnIB2ljTTm",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "src/tool_catalog.json",
+        "tools",
+        "tests",
+        "examples",
+        "docs",
+        "README.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "NOTICE.md",
+        "SECURITY.md",
+    },
+}

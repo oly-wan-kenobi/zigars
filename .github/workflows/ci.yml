@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  zig:
+    name: Zig 0.16.0
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Release gate
+        run: zig build release-check
+
+      - name: CLI smoke
+        run: |
+          zig build -Doptimize=ReleaseSafe
+          expected_version="$(zig build version)"
+          zig-out/bin/zigar --help >/tmp/zigar-help.out 2>/tmp/zigar-help.err
+          test ! -s /tmp/zigar-help.out
+          grep -q "deterministic Zig development MCP server" /tmp/zigar-help.err
+          zig-out/bin/zigar --version >/tmp/zigar-version.out 2>/tmp/zigar-version.err
+          test ! -s /tmp/zigar-version.out
+          grep -q "zigar ${expected_version}" /tmp/zigar-version.err
+
+  coverage:
+    name: Coverage summary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Install kcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kcov || true
+
+      - name: Run coverage
+        run: zig build coverage
+
+      - name: Upload coverage artifact
+        if: always()
+        # actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zigar-coverage
+          path: coverage
+
+  cross-platform:
+    name: ${{ matrix.os }} smoke
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Check formatting
+        run: zig build fmt-check
+
+      - name: Test
+        run: zig build test
+
+      - name: ReleaseSafe build
+        run: zig build release-safe
+
+      - name: Transport smoke
+        run: zig build smoke stdio-fixtures

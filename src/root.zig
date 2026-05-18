@@ -1,0 +1,43 @@
+pub const analysis = @import("analysis.zig");
+pub const catalog = @import("catalog.zig");
+pub const command = @import("command.zig");
+pub const config = @import("config.zig");
+pub const docs = @import("docs.zig");
+pub const doctor = @import("doctor.zig");
+pub const json_result = @import("json_result.zig");
+pub const runtime = @import("runtime.zig");
+pub const tooling = @import("tooling.zig");
+pub const tool_metadata = @import("tool_metadata.zig");
+pub const tool_registry = @import("tool_registry.zig");
+pub const version = @import("version.zig");
+pub const lsp_client = @import("lsp/client.zig");
+pub const lsp_transport = @import("lsp/transport.zig");
+pub const lsp_types = @import("lsp/types.zig");
+pub const document_state = @import("state/documents.zig");
+pub const uri = @import("types/uri.zig");
+pub const workspace = @import("workspace.zig");
+pub const zls_process = @import("zls/process.zig");
+pub const zls_session = @import("zls/session.zig");
+
+test {
+    _ = analysis;
+    _ = catalog;
+    _ = command;
+    _ = config;
+    _ = docs;
+    _ = doctor;
+    _ = json_result;
+    _ = runtime;
+    _ = tooling;
+    _ = tool_metadata;
+    _ = tool_registry;
+    _ = version;
+    _ = lsp_client;
+    _ = lsp_transport;
+    _ = lsp_types;
+    _ = document_state;
+    _ = uri;
+    _ = workspace;
+    _ = zls_process;
+    _ = zls_session;
+}

@@ -1,0 +1,11 @@
+/.zig-cache/
+/zig-out/
+/.zigar-cache/
+/zig-pkg/
+/dist/
+/coverage/
+
+.DS_Store
+*.swp
+*.swo
+*~

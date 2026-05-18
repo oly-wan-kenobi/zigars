@@ -1,0 +1,571 @@
+const std = @import("std");
+const LspClient = @import("../lsp/client.zig").LspClient;
+const LspTransport = @import("../lsp/transport.zig").LspTransport;
+const lsp_types = @import("../lsp/types.zig");
+const uri_util = @import("../types/uri.zig");
+const Mutex = @import("../sync.zig").Mutex;
+
+/// Tracks which documents are open in the LSP session.
+/// Sends didOpen/didClose notifications as needed.
+pub const DocumentState = struct {
+    pub const default_max_document_bytes: usize = 10 * 1024 * 1024;
+    pub const default_max_open_documents: usize = 256;
+
+    open_docs: std.StringHashMapUnmanaged(DocInfo),
+    allocator: std.mem.Allocator,
+    workspace_path: []const u8,
+    io: ?std.Io = null,
+    mutex: Mutex = .{},
+    retained_content_bytes: usize = 0,
+    max_document_bytes: usize = default_max_document_bytes,
+    max_open_documents: usize = default_max_open_documents,
+    last_reopen: ReopenSummary = .{},
+
+    pub const DocInfo = struct {
+        version: i64,
+        content_hash: u64,
+        dirty: bool,
+        content: ?[]u8 = null,
+    };
+
+    pub const DocStatus = struct {
+        version: i64,
+        content_hash: u64,
+        dirty: bool,
+        content_bytes: usize,
+        retained_content_bytes: usize,
+        open_documents: usize,
+        max_document_bytes: usize,
+        max_open_documents: usize,
+        last_reopen: ReopenSummary,
+    };
+
+    pub const ReopenSummary = struct {
+        attempted: usize = 0,
+        succeeded: usize = 0,
+        skipped: usize = 0,
+        failed: usize = 0,
+    };
+
+    pub fn init(allocator: std.mem.Allocator, workspace_path: []const u8) DocumentState {
+        return .{
+            .open_docs = .empty,
+            .allocator = allocator,
+            .workspace_path = workspace_path,
+        };
+    }
+
+    pub fn initWithIo(allocator: std.mem.Allocator, workspace_path: []const u8, io: std.Io) DocumentState {
+        return .{
+            .open_docs = .empty,
+            .allocator = allocator,
+            .workspace_path = workspace_path,
+            .io = io,
+            .mutex = Mutex.init(io),
+        };
+    }
+
+    /// Ensure a file is open in ZLS. Reads file content and sends didOpen if not already open.
+    /// `file_path` can be relative (resolved against workspace) or absolute.
+    /// Returns a URI allocated with `ret_allocator` (caller must free).
+    pub fn ensureOpen(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
+        const abs_path = try uri_util.resolvePath(self.allocator, self.workspace_path, file_path);
+        defer self.allocator.free(abs_path);
+
+        const file_uri = try uri_util.pathToUri(self.allocator, abs_path);
+        defer self.allocator.free(file_uri);
+
+        // Fast path: check under lock, return immediately if already open
+        {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            if (self.open_docs.get(file_uri)) |_| {
+                return try ret_allocator.dupe(u8, file_uri);
+            }
+        }
+
+        // Slow path: read file content outside the lock (no mutex held during I/O)
+        const io = self.io orelse return error.FileReadError;
+        const content = std.Io.Dir.cwd().readFileAlloc(io, abs_path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch |err| {
+            return switch (err) {
+                error.FileNotFound => error.FileNotFound,
+                else => error.FileReadError,
+            };
+        };
+        defer self.allocator.free(content);
+
+        // Re-acquire lock, double-check, then reserve the open document.
+        {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            // Double-check: another thread may have opened it while we were reading
+            if (self.open_docs.get(file_uri)) |_| {
+                return try ret_allocator.dupe(u8, file_uri);
+            }
+
+            const stored_uri = try self.allocator.dupe(u8, file_uri);
+            errdefer self.allocator.free(stored_uri);
+            try self.open_docs.put(self.allocator, stored_uri, .{
+                .version = 1,
+                .content_hash = std.hash.Wyhash.hash(0, content),
+                .dirty = false,
+                .content = null,
+            });
+        }
+
+        // Send didOpen without holding the document mutex.
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+
+        lsp_client.sendNotification(arena.allocator(), "textDocument/didOpen", lsp_types.DidOpenTextDocumentParams{
+            .textDocument = .{
+                .uri = file_uri,
+                .languageId = "zig",
+                .version = 1,
+                .text = content,
+            },
+        }) catch |err| {
+            self.removeReserved(file_uri);
+            return err;
+        };
+
+        return try ret_allocator.dupe(u8, file_uri);
+    }
+
+    /// Open or replace an in-memory document in ZLS.
+    /// This is used by MCP clients that want diagnostics/hover/code actions for
+    /// unsaved text while still keeping all paths scoped to the workspace.
+    pub fn syncText(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
+        if (content.len > self.max_document_bytes) return error.DocumentTooLarge;
+
+        const abs_path = try uri_util.resolvePath(self.allocator, self.workspace_path, file_path);
+        defer self.allocator.free(abs_path);
+
+        const file_uri = try uri_util.pathToUri(self.allocator, abs_path);
+        defer self.allocator.free(file_uri);
+
+        const Notification = struct {
+            method: []const u8,
+            version: i64,
+            did_open: bool,
+            previous: ?DocInfo = null,
+        };
+        const stored_content = try self.allocator.dupe(u8, content);
+        var content_moved = false;
+        errdefer if (!content_moved) self.allocator.free(stored_content);
+        const notification: Notification = blk: {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
+                const previous = info.*;
+                self.retained_content_bytes = self.retained_content_bytes - contentLen(previous) + content.len;
+                info.version += 1;
+                info.content_hash = std.hash.Wyhash.hash(0, content);
+                info.dirty = true;
+                info.content = stored_content;
+                content_moved = true;
+                break :existing Notification{ .method = "textDocument/didChange", .version = info.version, .did_open = false, .previous = previous };
+            } else new_doc: {
+                if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
+                const stored_uri = try self.allocator.dupe(u8, file_uri);
+                errdefer self.allocator.free(stored_uri);
+                try self.open_docs.put(self.allocator, stored_uri, .{
+                    .version = 1,
+                    .content_hash = std.hash.Wyhash.hash(0, content),
+                    .dirty = true,
+                    .content = stored_content,
+                });
+                self.retained_content_bytes += content.len;
+                content_moved = true;
+                break :new_doc Notification{ .method = "textDocument/didOpen", .version = 1, .did_open = true };
+            };
+        };
+
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        if (!notification.did_open) {
+            const Change = struct { text: []const u8 };
+            const Params = struct {
+                textDocument: lsp_types.VersionedTextDocumentIdentifier,
+                contentChanges: []const Change,
+            };
+            const changes = [_]Change{.{ .text = content }};
+            lsp_client.sendNotification(arena.allocator(), notification.method, Params{
+                .textDocument = .{ .uri = file_uri, .version = notification.version },
+                .contentChanges = &changes,
+            }) catch |err| {
+                if (notification.previous) |previous| self.restoreDoc(file_uri, previous);
+                return err;
+            };
+            if (notification.previous) |previous| {
+                if (previous.content) |previous_content| self.allocator.free(previous_content);
+            }
+        } else {
+            lsp_client.sendNotification(arena.allocator(), notification.method, lsp_types.DidOpenTextDocumentParams{
+                .textDocument = .{
+                    .uri = file_uri,
+                    .languageId = "zig",
+                    .version = notification.version,
+                    .text = content,
+                },
+            }) catch |err| {
+                if (notification.did_open) self.removeReserved(file_uri);
+                return err;
+            };
+        }
+
+        return try ret_allocator.dupe(u8, file_uri);
+    }
+
+    pub fn versionForUri(self: *DocumentState, file_uri: []const u8) ?i64 {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        if (self.open_docs.get(file_uri)) |info| return info.version;
+        return null;
+    }
+
+    pub fn statusForUri(self: *DocumentState, file_uri: []const u8) ?DocStatus {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const info = self.open_docs.get(file_uri) orelse return null;
+        return .{
+            .version = info.version,
+            .content_hash = info.content_hash,
+            .dirty = info.dirty,
+            .content_bytes = contentLen(info),
+            .retained_content_bytes = self.retained_content_bytes,
+            .open_documents = self.open_docs.count(),
+            .max_document_bytes = self.max_document_bytes,
+            .max_open_documents = self.max_open_documents,
+            .last_reopen = self.last_reopen,
+        };
+    }
+
+    /// Close a document in ZLS.
+    pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
+        self.mutex.lock();
+        const removed = self.open_docs.fetchRemove(file_uri);
+        if (removed) |kv| self.retained_content_bytes -= contentLen(kv.value);
+        self.mutex.unlock();
+
+        if (removed) |kv| {
+            defer self.allocator.free(kv.key);
+            defer if (kv.value.content) |content| self.allocator.free(content);
+
+            var arena = std.heap.ArenaAllocator.init(self.allocator);
+            defer arena.deinit();
+            lsp_client.sendNotification(arena.allocator(), "textDocument/didClose", lsp_types.DidCloseTextDocumentParams{
+                .textDocument = .{ .uri = file_uri },
+            }) catch |err| {
+                std.debug.print("[zigar/docs] didClose notification failed: {}\n", .{err});
+            };
+        }
+    }
+
+    /// Reopen all tracked documents in a new ZLS session (after reconnect).
+    pub fn reopenAll(self: *DocumentState, lsp_client: *LspClient) ReopenSummary {
+        const ReopenDoc = struct {
+            uri: []u8,
+            version: i64,
+            content: ?[]u8,
+        };
+        var summary: ReopenSummary = .{};
+        var docs: std.ArrayList(ReopenDoc) = .empty;
+        defer {
+            for (docs.items) |doc| {
+                self.allocator.free(doc.uri);
+                if (doc.content) |content| self.allocator.free(content);
+            }
+            docs.deinit(self.allocator);
+        }
+
+        self.mutex.lock();
+        var it = self.open_docs.iterator();
+        while (it.next()) |entry| {
+            const uri = self.allocator.dupe(u8, entry.key_ptr.*) catch {
+                summary.skipped += 1;
+                continue;
+            };
+            const content = if (entry.value_ptr.content) |stored|
+                self.allocator.dupe(u8, stored) catch {
+                    self.allocator.free(uri);
+                    summary.skipped += 1;
+                    continue;
+                }
+            else
+                null;
+            docs.append(self.allocator, .{ .uri = uri, .version = entry.value_ptr.version, .content = content }) catch {
+                self.allocator.free(uri);
+                if (content) |bytes| self.allocator.free(bytes);
+                summary.skipped += 1;
+                continue;
+            };
+        }
+        self.mutex.unlock();
+
+        for (docs.items) |doc| {
+            summary.attempted += 1;
+            const path = uri_util.stripFilePrefix(doc.uri);
+
+            var disk_content: ?[]u8 = null;
+            defer if (disk_content) |content| self.allocator.free(content);
+            const content = doc.content orelse blk: {
+                const io = self.io orelse continue;
+                disk_content = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch {
+                    std.debug.print("[zigar/docs] Failed to re-read {s} for reopen\n", .{path});
+                    summary.failed += 1;
+                    continue;
+                };
+                break :blk disk_content.?;
+            };
+
+            var arena = std.heap.ArenaAllocator.init(self.allocator);
+            defer arena.deinit();
+
+            lsp_client.sendNotification(arena.allocator(), "textDocument/didOpen", lsp_types.DidOpenTextDocumentParams{
+                .textDocument = .{
+                    .uri = doc.uri,
+                    .languageId = "zig",
+                    .version = doc.version,
+                    .text = content,
+                },
+            }) catch |err| {
+                std.debug.print("[zigar/docs] Failed to reopen {s}: {}\n", .{ path, err });
+                summary.failed += 1;
+                continue;
+            };
+            summary.succeeded += 1;
+        }
+        self.mutex.lock();
+        self.last_reopen = summary;
+        self.mutex.unlock();
+        return summary;
+    }
+
+    fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        if (self.open_docs.fetchRemove(file_uri)) |kv| {
+            self.allocator.free(kv.key);
+            self.retained_content_bytes -= contentLen(kv.value);
+            if (kv.value.content) |content| self.allocator.free(content);
+        }
+    }
+
+    fn restoreDoc(self: *DocumentState, file_uri: []const u8, info: DocInfo) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        if (self.open_docs.getPtr(file_uri)) |current| {
+            self.retained_content_bytes = self.retained_content_bytes - contentLen(current.*) + contentLen(info);
+            if (current.content) |content| {
+                if (info.content == null or content.ptr != info.content.?.ptr) self.allocator.free(content);
+            }
+            current.* = info;
+        }
+    }
+
+    pub fn deinit(self: *DocumentState) void {
+        var it = self.open_docs.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            if (entry.value_ptr.content) |content| self.allocator.free(content);
+        }
+        self.open_docs.deinit(self.allocator);
+        self.retained_content_bytes = 0;
+    }
+};
+
+fn contentLen(info: DocumentState.DocInfo) usize {
+    return if (info.content) |content| content.len else 0;
+}
+
+// ── Tests ──
+
+test "DocumentState init and deinit" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp/workspace");
+    defer ds.deinit();
+
+    try std.testing.expectEqualStrings("/tmp/workspace", ds.workspace_path);
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
+test "DocumentState double deinit on empty is safe" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    ds.deinit();
+    // Re-init to avoid use-after-free on implicit deinit
+    ds = DocumentState.init(alloc, "/tmp");
+    ds.deinit();
+}
+
+test "DocumentState removes reserved document entries" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    try ds.open_docs.put(alloc, uri, .{ .version = 1, .content_hash = 1, .dirty = false });
+    ds.removeReserved("file:///tmp/main.zig");
+
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
+test "DocumentState removes new sync entry when didOpen fails" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.NotConnected, ds.syncText(&client, "/tmp/new.zig", "pub fn main() void {}\n", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
+test "DocumentState rejects oversized unsaved content before LSP write" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    ds.max_document_bytes = 4;
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.DocumentTooLarge, ds.syncText(&client, "/tmp/new.zig", "const too_big = true;\n", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
+test "DocumentState enforces open document budget" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    ds.max_open_documents = 0;
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.OpenDocumentLimitExceeded, ds.syncText(&client, "/tmp/new.zig", "const x = 1;\n", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
+test "DocumentState tracks retained content bytes" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    const content = try alloc.dupe(u8, "const unsaved = true;\n");
+    ds.retained_content_bytes = content.len;
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 1,
+        .content_hash = std.hash.Wyhash.hash(0, content),
+        .dirty = true,
+        .content = content,
+    });
+
+    const status = ds.statusForUri("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqual(content.len, status.content_bytes);
+    try std.testing.expectEqual(content.len, status.retained_content_bytes);
+    try std.testing.expectEqual(@as(usize, 1), status.open_documents);
+}
+
+test "DocumentState rolls back existing sync entry when didChange fails" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    try ds.open_docs.put(alloc, uri, .{ .version = 3, .content_hash = 111, .dirty = false });
+
+    try std.testing.expectError(error.NotConnected, ds.syncText(&client, "/tmp/main.zig", "const changed = true;\n", alloc));
+    const info = ds.open_docs.get("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqual(@as(i64, 3), info.version);
+    try std.testing.expectEqual(@as(u64, 111), info.content_hash);
+    try std.testing.expect(!info.dirty);
+}
+
+test "DocumentState public status omits retained content" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    const content = try alloc.dupe(u8, "const unsaved = true;\n");
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 9,
+        .content_hash = std.hash.Wyhash.hash(0, content),
+        .dirty = true,
+        .content = content,
+    });
+
+    const status = ds.statusForUri("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqual(@as(i64, 9), status.version);
+    try std.testing.expect(status.dirty);
+    try std.testing.expect(!@hasField(@TypeOf(status), "content"));
+}
+
+test "DocumentState reopens retained unsaved content" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
+
+    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer alloc.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
+    defer alloc.free(base_z);
+    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
+    defer alloc.free(root);
+    const abs = try std.fs.path.join(alloc, &.{ root, "main.zig" });
+    defer alloc.free(abs);
+    const uri = try uri_util.pathToUri(alloc, abs);
+    errdefer alloc.free(uri);
+    const unsaved = try alloc.dupe(u8, "const unsaved = true;\n");
+    errdefer alloc.free(unsaved);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 7,
+        .content_hash = std.hash.Wyhash.hash(0, unsaved),
+        .dirty = true,
+        .content = unsaved,
+    });
+
+    const pipe = try testPipe();
+    defer pipe.read_end.close(io);
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    client.zls_stdin = pipe.write_end;
+
+    const summary = ds.reopenAll(&client);
+    try std.testing.expectEqual(@as(usize, 1), summary.attempted);
+    try std.testing.expectEqual(@as(usize, 1), summary.succeeded);
+    try std.testing.expectEqual(@as(usize, 0), summary.failed);
+    pipe.write_end.close(io);
+    client.zls_stdin = null;
+
+    var reader = LspTransport.Reader.init(pipe.read_end, io);
+    const msg = (try reader.readMessage(alloc)) orelse return error.TestUnexpectedResult;
+    defer alloc.free(msg);
+    try std.testing.expect(std.mem.indexOf(u8, msg, "unsaved") != null);
+    try std.testing.expect(std.mem.indexOf(u8, msg, "disk") == null);
+}
+
+const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
+
+fn testPipe() !TestPipe {
+    var fds: [2]std.c.fd_t = undefined;
+    if (std.c.pipe(&fds) != 0) return error.SystemResources;
+    return .{
+        .read_end = .{ .handle = fds[0], .flags = .{ .nonblocking = false } },
+        .write_end = .{ .handle = fds[1], .flags = .{ .nonblocking = false } },
+    };
+}

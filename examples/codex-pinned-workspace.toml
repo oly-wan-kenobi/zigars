@@ -1,0 +1,10 @@
+[mcp_servers.zigar]
+command = "/absolute/path/to/zigar"
+args = [
+  "--transport", "stdio",
+  "--workspace", "/absolute/path/to/your/zig/project",
+  "--strict-workspace",
+  "--zig-path", "/absolute/path/to/zig",
+  "--zls-path", "/absolute/path/to/zls"
+]
+startup_timeout_sec = 10.0
