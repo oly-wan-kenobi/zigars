@@ -17,8 +17,10 @@ const ZlsProcess = zigar.zls_process.ZlsProcess;
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
 
-    const args = try init.minimal.args.toSlice(allocator);
-    defer allocator.free(args);
+    var args_arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer args_arena_state.deinit();
+    const args_arena = args_arena_state.allocator();
+    const args = try init.minimal.args.toSlice(args_arena);
 
     var cfg = config_mod.parse(allocator, init.io, args) catch |err| switch (err) {
         error.HelpRequested => {
