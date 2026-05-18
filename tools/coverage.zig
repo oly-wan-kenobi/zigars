@@ -27,6 +27,9 @@ const CoverageOptions = struct {
     no_build: bool = false,
     require_kcov: bool = false,
     allow_kcov_failure: bool = false,
+    min_line_coverage: u32 = coverage_config.min_line_coverage_basis_points,
+    min_src_line_coverage: u32 = coverage_config.min_src_line_coverage_basis_points,
+    min_tools_line_coverage: u32 = coverage_config.min_tools_line_coverage_basis_points,
 };
 
 const TestResult = struct {
@@ -69,6 +72,10 @@ const KcovInput = struct {
     ran: bool,
     error_message: ?[]const u8,
     stats: ?CoverageStats,
+    min_line_coverage: u32,
+    min_src_line_coverage: u32,
+    min_tools_line_coverage: u32,
+    floors_ok: bool,
 };
 
 pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
@@ -157,6 +164,11 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
         kcov_error = try allocator.dupe(u8, "kcov was required but is not available on PATH");
         ok = false;
     }
+    const coverage_ok = coverageMeetsFloors(coverage_stats, options);
+    if (!coverage_ok) {
+        ok = false;
+        if (kcov_error == null) kcov_error = try coverageFloorMessage(allocator, options);
+    }
     defer if (kcov_error) |e| allocator.free(e);
 
     const summary_path = try std.fmt.allocPrint(allocator, "{s}/summary.json", .{options.out_dir});
@@ -176,6 +188,10 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
             .ran = kcov_ran,
             .error_message = kcov_error,
             .stats = coverage_stats,
+            .min_line_coverage = options.min_line_coverage,
+            .min_src_line_coverage = options.min_src_line_coverage,
+            .min_tools_line_coverage = options.min_tools_line_coverage,
+            .floors_ok = coverage_ok,
         },
     });
     defer allocator.free(summary);
@@ -348,6 +364,32 @@ fn rateBasisPoints(covered: u64, total: u64) ?u32 {
     return @intCast((covered * 100 * percent_scale) / total);
 }
 
+fn coverageMeetsFloors(stats: ?CoverageStats, options: CoverageOptions) bool {
+    const measured = stats orelse return !options.require_kcov;
+    return meetsFloor(measured.lineRateBasisPoints(), options.min_line_coverage) and
+        meetsFloor(measured.srcLineRateBasisPoints(), options.min_src_line_coverage) and
+        meetsFloor(measured.toolsLineRateBasisPoints(), options.min_tools_line_coverage);
+}
+
+fn meetsFloor(actual: ?u32, minimum: u32) bool {
+    return if (actual) |value| value >= minimum else false;
+}
+
+fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "line coverage did not meet configured floors: total >= {d}.{d:0>2}%, src >= {d}.{d:0>2}%, tools >= {d}.{d:0>2}%",
+        .{
+            options.min_line_coverage / percent_scale,
+            options.min_line_coverage % percent_scale,
+            options.min_src_line_coverage / percent_scale,
+            options.min_src_line_coverage % percent_scale,
+            options.min_tools_line_coverage / percent_scale,
+            options.min_tools_line_coverage % percent_scale,
+        },
+    );
+}
+
 fn parseCobertura(xml: []const u8) !CoverageStats {
     var stats: CoverageStats = .{};
     var pos: usize = 0;
@@ -485,6 +527,14 @@ fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
     }
     try writer.print("    \"required\": {},\n", .{input.required});
     try writer.print("    \"ran\": {},\n", .{input.ran});
+    try writer.print("    \"floors_ok\": {},\n", .{input.floors_ok});
+    try writer.writeAll("    \"min_line_coverage_percent\": ");
+    try writePercent(writer, input.min_line_coverage);
+    try writer.writeAll(",\n    \"min_src_line_coverage_percent\": ");
+    try writePercent(writer, input.min_src_line_coverage);
+    try writer.writeAll(",\n    \"min_tools_line_coverage_percent\": ");
+    try writePercent(writer, input.min_tools_line_coverage);
+    try writer.writeAll(",\n");
     try writer.writeAll("    \"include_path\": ");
     try json_util.writeString(writer, coverage_config.kcov_include_path);
     try writer.writeAll(",\n");
@@ -501,12 +551,22 @@ fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
         try writeOptionalPercent(writer, stats.srcLineRateBasisPoints());
         try writer.writeAll(",\n    \"tools_line_coverage_percent\": ");
         try writeOptionalPercent(writer, stats.toolsLineRateBasisPoints());
+        try writer.writeAll(",\n    \"line_coverage_ok\": ");
+        try writer.print("{}", .{meetsFloor(stats.lineRateBasisPoints(), input.min_line_coverage)});
+        try writer.writeAll(",\n    \"src_line_coverage_ok\": ");
+        try writer.print("{}", .{meetsFloor(stats.srcLineRateBasisPoints(), input.min_src_line_coverage)});
+        try writer.writeAll(",\n    \"tools_line_coverage_ok\": ");
+        try writer.print("{}", .{meetsFloor(stats.toolsLineRateBasisPoints(), input.min_tools_line_coverage)});
     }
     if (input.error_message) |err| {
         try writer.writeAll(",\n    \"error\": ");
         try json_util.writeString(writer, err);
     }
     try writer.writeAll("\n  }");
+}
+
+fn writePercent(writer: *Io.Writer, value: u32) !void {
+    try writer.print("{d}.{d:0>2}", .{ value / percent_scale, value % percent_scale });
 }
 
 fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
@@ -602,6 +662,19 @@ test "parseCobertura counts src and tools lines" {
     try std.testing.expectEqual(@as(u32, 10000), stats.toolsLineRateBasisPoints().?);
 }
 
+test "coverage floors require measured kcov data when configured" {
+    try std.testing.expect(!coverageMeetsFloors(null, .{ .require_kcov = true }));
+    try std.testing.expect(coverageMeetsFloors(null, .{}));
+    try std.testing.expect(!coverageMeetsFloors(.{
+        .covered_lines = 8,
+        .total_lines = 10,
+        .src_covered_lines = 8,
+        .src_total_lines = 10,
+        .tools_covered_lines = 8,
+        .tools_total_lines = 10,
+    }, .{}));
+}
+
 test "renderCoverageSummary includes suite floors and coverage details" {
     const results = [_]TestResult{
         .{
@@ -660,6 +733,10 @@ test "renderCoverageSummary includes suite floors and coverage details" {
                 .tools_covered_lines = 3,
                 .tools_total_lines = 3,
             },
+            .min_line_coverage = 7000,
+            .min_src_line_coverage = 7000,
+            .min_tools_line_coverage = 9000,
+            .floors_ok = true,
         },
     });
     defer std.testing.allocator.free(summary);
@@ -674,5 +751,9 @@ test "renderCoverageSummary includes suite floors and coverage details" {
     try std.testing.expectEqual(@as(i64, 3), valueAt(parsed.value, "tests.1.min_tests").?.integer);
     try std.testing.expect(valueAt(parsed.value, "tests.2.tests_ok").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.measured").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "coverage.floors_ok").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "coverage.line_coverage_ok").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "coverage.src_line_coverage_ok").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "coverage.tools_line_coverage_ok").?.bool);
     try std.testing.expectEqual(@as(i64, 8), valueAt(parsed.value, "coverage.covered_lines").?.integer);
 }

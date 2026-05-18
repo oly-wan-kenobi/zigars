@@ -49,28 +49,23 @@ configured minimum `tools/call` count before it reports success.
 
 ## Coverage
 
-`zig build coverage` installs the Zig test binaries, runs them directly, and
-writes `coverage/summary.json`. The summary records pass/fail status for the
-library, executable, and tooling test binaries, per-suite test floors, the
-configured minimum total test count, Zig version, and coverage status. The
-floors are defined in `tools/coverage_config.zig`; use
-`zig-out/bin/zigar-tools coverage --min-tests <count>` after
-`zig build install-test-bins` to override only the aggregate test-count floor.
+`zig build coverage` installs the Zig test binaries, requires `kcov` on `PATH`,
+runs the binaries directly under kcov, and writes `coverage/summary.json`. The
+summary records pass/fail status for the library, executable, and tooling test
+binaries, per-suite test floors, the configured minimum total test count, Zig
+version, measured total/`src`/`tools` line coverage, configured line-coverage
+floors, and per-floor pass/fail fields. The floors are defined in
+`tools/coverage_config.zig`; use `zig-out/bin/zigar-tools coverage --min-tests
+<count>` after `zig build install-test-bins` to override only the aggregate
+test-count floor.
 
-If `kcov` is on `PATH`, the coverage helper writes per-binary reports under
-`coverage/kcov/`, merges them, parses Cobertura XML, and records total, `src/`,
-and `tools/` line-coverage percentages in `coverage/summary.json`. Without
-kcov, the portable `zig build coverage` step still produces the test summary and
-records why line coverage was not measured.
-
-Line coverage is intentionally advisory for now. Docker validation against
-Ubuntu 22.04 kcov 38 and Zig 0.16.0 produced project source entries with zero
-executed project hits, so CI does not treat that signal as a release gate. The
-hard CI signal is the unit-test pass/fail result, per-suite test floors, HTTP
-and stdio smoke scenario floors, and release hygiene. The coverage job uploads
-the complete `coverage/` directory as the `zigar-coverage` artifact. A
-build/test/ReleaseSafe plus HTTP/stdio transport smoke matrix runs on macOS and
-Windows to catch path, process, transport, and executable suffix issues.
+The coverage helper writes per-binary reports under `coverage/kcov/`, merges
+them, parses Cobertura XML, and fails when kcov is unavailable, produces no
+project-source report, or total, `src/`, or `tools` line coverage falls below the
+configured floors. The coverage job uploads the complete `coverage/` directory
+as the `zigar-coverage` artifact. A build/test/ReleaseSafe plus HTTP/stdio
+transport smoke matrix runs on macOS and Windows to catch path, process,
+transport, and executable suffix issues.
 
 ## Release Assets
 

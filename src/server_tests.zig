@@ -21,7 +21,6 @@ const App = common.App;
 const workspacePathErrorMessage = common.workspacePathErrorMessage;
 const commandErrorValue = common.commandErrorValue;
 const backendErrorValue = common.backendErrorValue;
-const errorText = common.errorText;
 const parseCompilerLine = common.parseCompilerLine;
 const classifyDiagnosticMessage = common.classifyDiagnosticMessage;
 const appendPatchPaths = common.appendPatchPaths;
@@ -336,23 +335,6 @@ test "backend error value uses stable structured fields" {
     try std.testing.expectEqualStrings("zls", obj.get("backend").?.string);
     try std.testing.expectEqualStrings("textDocument/hover", obj.get("operation").?.string);
     try std.testing.expectEqualStrings("timeout", obj.get("error_kind").?.string);
-}
-
-test "errorText owns borrowed message bytes" {
-    var result = try errorText(std.testing.allocator, "borrowed diagnostic error");
-    defer {
-        if (result.structuredContent) |*structured_value| {
-            switch (structured_value.*) {
-                .object => |*object| object.deinit(std.testing.allocator),
-                else => {},
-            }
-        }
-        std.testing.allocator.free(result.content[0].text.text);
-        std.testing.allocator.free(result.content);
-    }
-
-    try std.testing.expect(result.is_error);
-    try std.testing.expectEqualStrings("borrowed diagnostic error", result.content[0].text.text);
 }
 
 test "skipWorkspacePath ignores generated and vendored paths" {

@@ -8,11 +8,11 @@ zig build dist release-asset-smoke
 ```
 
 The gate includes formatting, generated docs/JSON checks, unit tests,
-ReleaseSafe compilation, HTTP and stdio MCP smoke tests, coverage-summary
-generation, and artifact hygiene. The default GitHub Actions PR/main workflow
-then runs `zig build dist release-asset-smoke` in the same Zig job, so archive
-shape, checksums, and native archive runtime behavior are verified before a tag
-workflow can publish anything. The HTTP JSON-RPC smoke test covers
+ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
+coverage floors, and artifact hygiene. The default GitHub Actions PR/main
+workflow then runs `zig build dist release-asset-smoke` in the same Zig job, so
+archive shape, checksums, and native archive runtime behavior are verified
+before a tag workflow can publish anything. The HTTP JSON-RPC smoke test covers
 `initialize`, `tools/list`, `zigar_schema`, and `zigar_doctor` using
 `tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
@@ -20,8 +20,8 @@ output, and diff-folded flamegraph flow with fake backend executables.
 
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
-binary results, per-suite floors, and advisory kcov coverage details when kcov
-produces a usable project-source report.
+binary results, per-suite floors, measured kcov coverage, configured coverage
+floors, and floor pass/fail fields.
 
 `release-check` includes `zig build artifact-hygiene`, which fails if known
 generated directories such as `.zig-cache/`, `zig-out/`, `zig-pkg/`, `dist/`, or

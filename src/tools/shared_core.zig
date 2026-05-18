@@ -13,10 +13,6 @@ pub const App = runtime_mod.App;
 pub const BackendProbeCache = runtime_mod.BackendProbeCache;
 pub const LspClient = zigar.lsp_client.LspClient;
 
-pub fn errorText(allocator: std.mem.Allocator, value: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return mcp.tools.errorResult(allocator, value) catch return error.OutOfMemory;
-}
-
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return json_result.structured(allocator, value);
 }

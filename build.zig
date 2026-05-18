@@ -112,7 +112,7 @@ pub fn build(b: *std.Build) void {
 
     const coverage_cmd = addCoverageCommand(b, tools_exe);
     coverage_cmd.step.dependOn(install_test_bins_step);
-    const coverage_step = b.step("coverage", "Run test binaries and write coverage/summary.json; measures kcov when available");
+    const coverage_step = b.step("coverage", "Run test binaries, require kcov, and enforce line coverage floors");
     coverage_step.dependOn(&coverage_cmd.step);
 
     const release_smoke_cmd = addHttpSmokeCommand(b, tools_exe, release_exe.getEmittedBin());
@@ -209,7 +209,7 @@ fn addStdioFixturesCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile, bi
 
 fn addCoverageCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile) *std.Build.Step.Run {
     const cmd = b.addRunArtifact(tools_exe);
-    cmd.addArgs(&.{ "coverage", "--no-build", "--allow-kcov-failure" });
+    cmd.addArgs(&.{ "coverage", "--no-build", "--require-kcov" });
     return cmd;
 }
 
