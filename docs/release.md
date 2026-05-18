@@ -39,7 +39,8 @@ and runs `zigar --version` from it.
 2. Confirm `zig build version` matches the intended release version.
 3. Run `zig build release-check`.
 4. Run `zig build dist release-asset-smoke`.
-5. Tag the release:
+5. Confirm the tag and GitHub release do not already exist.
+6. Tag the release:
 
 ```sh
 version="$(zig build version)"
@@ -53,6 +54,16 @@ archives, publishes `zigar-checksums.txt` with SHA-256 checksums, and creates
 GitHub provenance attestations from the checksum file. GitHub Actions are pinned
 to commit SHAs in the workflow; update the adjacent tag comments when bumping an
 action.
+
+A version is public only after the tag workflow finishes and the GitHub release
+contains all expected archives, `zigar-checksums.txt`, and provenance
+attestations. Do not advertise archive installation for a version until that
+verification is complete.
+
+```sh
+version="$(zig build version)"
+gh release view "v${version}" --json tagName,assets
+```
 
 Release assets are named:
 

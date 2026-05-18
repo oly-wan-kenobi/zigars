@@ -2,7 +2,7 @@
 
 ## 0.1.0 - 2026-05-17
 
-Initial public release.
+Initial `0.1.0` package baseline.
 
 - Zig 0.16.0 executable MCP server using stdio transport.
 - Workspace-sandboxed command tools for Zig version/env/targets/build/test/check

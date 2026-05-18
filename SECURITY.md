@@ -2,9 +2,9 @@
 
 ## Supported Versions
 
-Security fixes target the latest tagged `0.x` release and the current `main`
-branch. Until `1.0`, older `0.x` releases may receive fixes at maintainer
-discretion when a low-risk backport is practical.
+Security fixes target the current `main` branch and the latest published `0.x`
+release tag when one exists. Until `1.0`, older `0.x` releases may receive
+fixes at maintainer discretion when a low-risk backport is practical.
 
 ## Reporting a Vulnerability
 
