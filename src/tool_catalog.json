@@ -10,58 +10,6 @@
     "argument_validation": "typed metadata before handler execution",
     "free_form_args": "split into argv without shell execution"
   },
-  "groups": [
-    {
-      "name": "discovery",
-      "tools": ["zigar_capabilities", "zigar_tool_index", "zigar_schema", "zigar_doctor", "zigar_workspace_info", "zigar_metrics", "zigar_http_status", "zig_command_plan", "zig_toolchain_resolve"],
-      "keywords": ["capabilities", "tool index", "schema", "doctor", "health", "workspace", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt"]
-    },
-    {
-      "name": "agent_workflows",
-      "tools": ["zigar_context_pack", "zigar_next_action", "zigar_agent_guide", "zigar_validate_patch", "zigar_failure_fusion", "zigar_impact", "zigar_project_profile", "zigar_patch_guard"],
-      "keywords": ["agent", "codex", "claude", "context pack", "next action", "validate patch", "failure fusion", "impact analysis", "project profile", "patch guard", "done check", "readiness"]
-    },
-    {
-      "name": "core_zig",
-      "tools": ["zig_version", "zig_env", "zig_targets", "zig_build", "zig_test", "zig_check", "zig_compile_error_index", "zig_explain_errors", "zig_translate_c"],
-      "keywords": ["zig", "build", "test", "check", "ast-check", "compiler diagnostics", "compile error index", "translate-c"]
-    },
-    {
-      "name": "formatting_and_edits",
-      "tools": ["zig_format", "zig_format_check", "zig_patch_preview", "zig_rename", "zig_code_actions", "zig_code_action_apply"],
-      "keywords": ["fmt", "formatter", "formatting", "zig fmt", "patch preview", "unified diff", "rename", "code action", "apply=true"]
-    },
-    {
-      "name": "zls",
-      "tools": ["zig_diagnostics", "zig_diagnostics_all", "zig_diagnostics_workspace", "zig_hover", "zig_definition", "zig_references", "zig_completion", "zig_signature_help", "zig_document_symbols", "zig_workspace_symbols", "zig_document_open", "zig_document_change", "zig_document_close", "zig_document_status"],
-      "keywords": ["zls", "lsp", "diagnostics", "hover", "definition", "references", "completion", "symbols", "unsaved document"]
-    },
-    {
-      "name": "docs",
-      "tools": ["zig_builtin_list", "zig_builtin_doc", "zig_builtin_list_json", "zig_std_search", "zig_std_search_json", "zig_std_item", "zig_lang_ref_search"],
-      "keywords": ["docs", "stdlib", "builtin", "langref", "language reference"]
-    },
-    {
-      "name": "static_analysis",
-      "tools": ["zig_import_graph", "zig_import_graph_json", "zig_decl_summary", "zig_decl_summary_json", "zig_allocations", "zig_error_sets", "zig_public_api", "zig_public_api_diff", "zig_dead_decl_candidates", "zig_build_graph", "zig_build_targets", "zig_build_options", "zig_file_owner", "zig_import_resolve", "zig_test_discover", "zig_test_map", "zig_test_select", "zig_changed_files_plan", "zig_dependency_inspect", "zig_target_matrix_plan", "zig_test_failure_triage", "zig_workspace_symbol_cache", "zig_package_cache_doctor"],
-      "keywords": ["heuristic", "confidence", "imports", "declarations", "allocation", "error set", "public api", "api diff", "breaking change", "build graph", "build options", "test discovery", "test map", "test select", "changed files", "dependency inspector", "target matrix", "test failure triage", "symbol cache", "package cache doctor"]
-    },
-    {
-      "name": "ci_artifacts",
-      "tools": ["zig_ci_annotations", "zig_junit", "zig_matrix_check"],
-      "keywords": ["ci", "annotations", "junit", "matrix", "multiple zig versions", "test report"]
-    },
-    {
-      "name": "zwanzig",
-      "tools": ["zig_lint", "zig_lint_sarif", "zig_lint_rules", "zig_analysis_graphs"],
-      "keywords": ["zwanzig", "lint", "linter", "static analysis", "sarif", "rules", "dot graph"]
-    },
-    {
-      "name": "profiling",
-      "tools": ["zig_profile_plan", "zig_profile_run", "zig_flamegraph", "zig_flamegraph_diff"],
-      "keywords": ["profile", "profiling", "perf", "dtrace", "sample", "xctrace", "vtune", "zflame", "flamegraph", "diff flamegraph"]
-    }
-  ],
   "common_intents": [
     {"intent": "format a Zig file", "prefer": "zig_format", "keywords": ["fmt", "formatter", "formatting", "zig fmt"]},
     {"intent": "orient an agent in a Zig repo", "prefer": "zigar_context_pack", "keywords": ["context pack", "repo summary", "codex", "claude", "agent"]},
@@ -83,6 +31,6 @@
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
-  "tool_argument_scope": "Compact high-signal hints are generated from the registered tool metadata at build and runtime.",
+  "tool_argument_scope": "Compact high-signal hints are generated from src/tool_manifest.zig at build and runtime.",
   "tools_list_schema_note": "mcp.zig 0.0.4 may expose only a generic object schema in tools/list. zigar_schema and zigar://tools/schema include compact argument hints and discovery keywords for clients that need stronger hooks."
 }

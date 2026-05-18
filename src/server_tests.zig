@@ -81,16 +81,16 @@ test "workspace path error messages distinguish empty and outside paths" {
 }
 
 test "capabilities index exposes formatting discovery keywords" {
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, tooling.catalog_json, .{});
-    defer parsed.deinit();
+    const body = try catalog.text(std.testing.allocator);
+    defer std.testing.allocator.free(body);
 
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"zig_format\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"zig_format_check\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"zigar_schema\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"zigar_doctor\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"fmt\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"formatter\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tooling.catalog_json, "\"zig fmt\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zig_format\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zig_format_check\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigar_schema\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigar_doctor\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"fmt\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"formatter\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zig fmt\"") != null);
 }
 
 test "catalog groups match tool registry" {

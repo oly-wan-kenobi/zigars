@@ -34,19 +34,19 @@ Keywords: `fmt`, `formatter`, `formatting`, `zig fmt`, `patch preview`, `unified
 
 ### zls
 
-Tools: `zig_diagnostics`, `zig_diagnostics_all`, `zig_diagnostics_workspace`, `zig_hover`, `zig_definition`, `zig_references`, `zig_completion`, `zig_signature_help`, `zig_document_symbols`, `zig_workspace_symbols`, `zig_document_open`, `zig_document_change`, `zig_document_close`, `zig_document_status`
+Tools: `zig_document_open`, `zig_document_change`, `zig_document_close`, `zig_document_status`, `zig_diagnostics`, `zig_diagnostics_all`, `zig_diagnostics_workspace`, `zig_hover`, `zig_definition`, `zig_references`, `zig_completion`, `zig_signature_help`, `zig_document_symbols`, `zig_workspace_symbols`
 
 Keywords: `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`, `completion`, `symbols`, `unsaved document`
 
 ### docs
 
-Tools: `zig_builtin_list`, `zig_builtin_doc`, `zig_builtin_list_json`, `zig_std_search`, `zig_std_search_json`, `zig_std_item`, `zig_lang_ref_search`
+Tools: `zig_builtin_list`, `zig_builtin_list_json`, `zig_builtin_doc`, `zig_std_search`, `zig_std_search_json`, `zig_std_item`, `zig_lang_ref_search`
 
 Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`
 
 ### static_analysis
 
-Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_public_api_diff`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_test_map`, `zig_test_select`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`
+Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`
 
 Keywords: `heuristic`, `confidence`, `imports`, `declarations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test map`, `test select`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`
 

@@ -369,42 +369,36 @@ pub fn versionManagersValue(allocator: std.mem.Allocator, a: *App, probe: bool, 
 pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
     const spec = tool_metadata.find(tool_name) orelse return error.InvalidArguments;
+    const plan = tool_metadata.commandPlanFor(spec.id) orelse return error.InvalidArguments;
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
-    var owned_path: ?[]u8 = null;
-    defer if (owned_path) |path| allocator.free(path);
+    var resolved_path: ?[]const u8 = null;
+    defer if (resolved_path) |path| allocator.free(path);
     list.append(allocator, a.config.zig_path) catch return error.OutOfMemory;
 
-    if (std.mem.eql(u8, tool_name, "zig_build")) {
-        list.append(allocator, "build") catch return error.OutOfMemory;
-    } else if (std.mem.eql(u8, tool_name, "zig_test")) {
-        if (argString(args, "file")) |file| {
-            const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
-            defer allocator.free(resolved);
-            owned_path = allocator.dupe(u8, resolved) catch return error.OutOfMemory;
-            list.append(allocator, "test") catch return error.OutOfMemory;
-            list.append(allocator, owned_path.?) catch return error.OutOfMemory;
-        } else {
-            list.append(allocator, "build") catch return error.OutOfMemory;
-            list.append(allocator, "test") catch return error.OutOfMemory;
-        }
-    } else if (std.mem.eql(u8, tool_name, "zig_check")) {
-        const file = argString(args, "file") orelse return error.InvalidArguments;
-        const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
-        defer allocator.free(resolved);
-        owned_path = allocator.dupe(u8, resolved) catch return error.OutOfMemory;
-        list.append(allocator, "ast-check") catch return error.OutOfMemory;
-        list.append(allocator, owned_path.?) catch return error.OutOfMemory;
-    } else if (std.mem.eql(u8, tool_name, "zig_format_check")) {
-        const path = argString(args, "path") orelse return error.InvalidArguments;
-        const resolved = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", path, err);
-        defer allocator.free(resolved);
-        owned_path = allocator.dupe(u8, resolved) catch return error.OutOfMemory;
-        list.append(allocator, "fmt") catch return error.OutOfMemory;
-        list.append(allocator, "--check") catch return error.OutOfMemory;
-        list.append(allocator, owned_path.?) catch return error.OutOfMemory;
-    } else {
-        return error.InvalidArguments;
+    switch (plan) {
+        .argv => |argv| list.appendSlice(allocator, argv) catch return error.OutOfMemory,
+        .optional_file => |file_plan| {
+            if (argString(args, "file")) |file| {
+                resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
+                list.appendSlice(allocator, file_plan.file_args) catch return error.OutOfMemory;
+                list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
+            } else {
+                list.appendSlice(allocator, file_plan.fallback_args) catch return error.OutOfMemory;
+            }
+        },
+        .required_file => |argv| {
+            const file = argString(args, "file") orelse return error.InvalidArguments;
+            resolved_path = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", file, err);
+            list.appendSlice(allocator, argv) catch return error.OutOfMemory;
+            list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
+        },
+        .required_path => |argv| {
+            const path = argString(args, "path") orelse return error.InvalidArguments;
+            resolved_path = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_command_plan", path, err);
+            list.appendSlice(allocator, argv) catch return error.OutOfMemory;
+            list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
+        },
     }
     const extra = try splitToolArgs(allocator, argString(args, "args"));
     defer freeArgList(allocator, extra);

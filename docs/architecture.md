@@ -6,20 +6,25 @@ auditable:
 
 - `src/main.zig` owns CLI parsing, runtime setup, transport startup, and the
   package version surfaced from `build.zig.zon` through `src/version.zig`.
-- `src/server.zig` wires MCP tools, resources, prompts, and handler dispatch.
-  It should stay a dispatcher; tool behavior lives under `src/tools/`.
+- `src/server.zig` wires MCP tools, resources, and prompts. Tool registration is
+  driven by the manifest; server code should not grow per-tool switches.
 - `src/tools/*.zig` groups MCP tool handlers by workflow area: discovery,
   agent workflows, core Zig commands, edit/ZLS operations, docs, static
   analysis, CI, linting, profiling, and resources. `src/tools/common.zig` is a
   small compatibility facade over focused shared helper modules.
 - `src/runtime.zig` owns process-local runtime state such as workspace config,
   ZLS session pointers, counters, backend probes, and heuristic analysis caches.
-- `src/tool_metadata.zig` is the typed tool registry: tool ids, names,
-  descriptions, argument schemas, MCP read-only annotations, and risk metadata.
+- `src/tool_manifest.zig` is the typed tool manifest: ids, names, descriptions,
+  argument schemas, grouping, discovery keywords, handler references, command
+  plans, MCP read-only annotations, and risk metadata. `src/tool_metadata.zig`
+  is a compatibility facade for consumers that still use the older name.
+- `src/tool_handlers.zig` resolves manifest handler references to functions by
+  handler module namespace. It does not map individual tools.
 - `src/tool_registry.zig` adapts typed metadata to `mcp.zig` tools and validates
   JSON arguments before handlers run.
-- `src/catalog.zig` merges the static discovery catalog with registry-derived
-  argument and risk metadata for public schema/capability responses.
+- `src/catalog.zig` merges static safety/common-intent text with manifest-derived
+  groups, discovery keywords, argument hints, and risk metadata for public
+  schema/capability responses.
 - `src/json_result.zig` centralizes structured JSON result serialization for MCP
   tool responses and deep-clones structured content into the request allocator.
 - `src/analysis.zig` contains heuristic source scanners. Every heuristic result
@@ -35,15 +40,14 @@ auditable:
 
 When adding or changing a tool:
 
-1. Add the `ToolId` and `ToolMeta` entry in `src/tool_metadata.zig`.
-2. Add or update `riskFor` if the tool writes source, writes artifacts, mutates
-   LSP state, executes project code, executes a user command, or invokes an
-   external backend.
-3. Add the handler in the appropriate `src/tools/*.zig` module and map it in
-   `src/server.zig`.
-4. Add discovery grouping/keywords in `src/tool_catalog.json`.
-5. Regenerate docs with `zig build tool-index`.
-6. Add focused tests for argument validation, risk metadata, and any parsing or
+1. Add or update one entry in `src/tool_manifest.zig`. That entry names the
+   schema, group, keywords through the group table, handler reference, command
+   plan when applicable, read-only annotation, and risk flags.
+2. Add the handler implementation in the appropriate `src/tools/*.zig` module.
+   Only add a new namespace to `src/tool_handlers.zig` when introducing a new
+   handler module, not for routine tool additions.
+3. Regenerate docs with `zig build tool-index`.
+4. Add focused tests for argument validation, risk metadata, and any parsing or
    workspace-safety behavior.
 
 `read_only` is the MCP annotation. It does not mean "no side effects at all":

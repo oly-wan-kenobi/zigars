@@ -9,15 +9,14 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     var catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
     errdefer catalog.deinit();
 
-    switch (catalog.value) {
-        .object => |*obj| {
-            try obj.put(allocator, "version", .{ .string = version.string });
-            try obj.put(allocator, "registry_tool_arguments", try toolArgumentsValue(allocator));
-            try obj.put(allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
-            try obj.put(allocator, "registry_tool_schema_source", .{ .string = "generated from zigar tool registry" });
-        },
-        else => return error.InvalidCatalog,
-    }
+    if (catalog.value != .object) return error.InvalidCatalog;
+    const catalog_allocator = catalog.arena.allocator();
+    var obj = &catalog.value.object;
+    try obj.put(catalog_allocator, "version", .{ .string = version.string });
+    try obj.put(catalog_allocator, "groups", try groupsValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registry_tool_arguments", try toolArgumentsValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
+    try obj.put(catalog_allocator, "registry_tool_schema_source", .{ .string = "generated from src/tool_manifest.zig" });
     return catalog;
 }
 
@@ -36,6 +35,36 @@ pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
         try obj.put(allocator, spec.name, try toolArgumentValue(allocator, spec));
     }
     return .{ .object = obj };
+}
+
+fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
+    var groups = std.json.Array.init(allocator);
+    errdefer groups.deinit();
+    for (tool_metadata.group_specs) |group_spec| {
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "name", .{ .string = tool_metadata.groupName(group_spec.group) });
+        try obj.put(allocator, "tools", try groupToolsValue(allocator, group_spec.group));
+        try obj.put(allocator, "keywords", try stringArrayValue(allocator, group_spec.keywords));
+        try groups.append(.{ .object = obj });
+    }
+    return .{ .array = groups };
+}
+
+fn groupToolsValue(allocator: std.mem.Allocator, group: tool_metadata.ToolGroup) !std.json.Value {
+    var tools = std.json.Array.init(allocator);
+    errdefer tools.deinit();
+    for (tool_metadata.entries) |entry| {
+        if (entry.group == group) try tools.append(.{ .string = entry.name });
+    }
+    return .{ .array = tools };
+}
+
+fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (values) |value| try array.append(.{ .string = value });
+    return .{ .array = array };
 }
 
 fn toolArgumentValue(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta) !std.json.Value {
@@ -122,12 +151,12 @@ test "registry arguments include risk metadata" {
     try std.testing.expect(matrix.get("risk").?.object.get("executes_user_command").?.bool);
 }
 
-test "static catalog group membership covers registry exactly once" {
+test "manifest-generated catalog group membership covers registry exactly once" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const parsed_catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    const parsed_catalog = try parsed(allocator);
     const groups = parsed_catalog.value.object.get("groups").?.array;
     var seen = std.StringHashMap(void).init(allocator);
 
@@ -147,12 +176,12 @@ test "static catalog group membership covers registry exactly once" {
     try std.testing.expectEqual(tool_metadata.specs.len, seen.count());
 }
 
-test "static catalog groups match typed registry groups" {
+test "manifest-generated catalog groups match typed registry groups" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const parsed_catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    const parsed_catalog = try parsed(allocator);
     const groups = parsed_catalog.value.object.get("groups").?.array;
 
     for (tool_metadata.specs) |spec| {

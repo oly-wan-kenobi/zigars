@@ -3,7 +3,9 @@ const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
-const tool_metadata = @import("zigar").tool_metadata;
+const zigar = @import("zigar");
+const catalog_mod = zigar.catalog;
+const tool_metadata = zigar.tool_metadata;
 
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
@@ -20,12 +22,6 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
-fn parseJsonFile(allocator: Allocator, io: Io, path: []const u8) !std.json.Parsed(JsonValue) {
-    const bytes = try readFileAlloc(allocator, io, path, 16 * 1024 * 1024);
-    defer allocator.free(bytes);
-    return try std.json.parseFromSlice(JsonValue, allocator, bytes, .{});
-}
-
 pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var check = false;
     for (args) |arg| {
@@ -36,9 +32,8 @@ pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
         }
     }
 
-    const catalog_path = "src/tool_catalog.json";
     const output_path = "docs/tool-index.generated.md";
-    const parsed = try parseJsonFile(allocator, io, catalog_path);
+    const parsed = try catalog_mod.parsed(allocator);
     defer parsed.deinit();
 
     const rendered = try renderToolIndex(allocator, parsed.value);

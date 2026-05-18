@@ -10,7 +10,7 @@ const SchemaSpec = tooling.SchemaSpec;
 
 const App = runtime_mod.App;
 
-pub const ToolHandler = *const fn (*App, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult;
+pub const ToolHandler = tool_metadata.ToolHandler;
 
 pub fn addTool(
     server: *mcp.Server,
