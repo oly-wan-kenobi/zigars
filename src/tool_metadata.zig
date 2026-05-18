@@ -99,6 +99,19 @@ pub const ToolMeta = struct {
     read_only: bool,
 };
 
+pub const ToolGroup = enum {
+    discovery,
+    agent_workflows,
+    core_zig,
+    formatting_and_edits,
+    zls,
+    docs,
+    static_analysis,
+    ci_artifacts,
+    zwanzig,
+    profiling,
+};
+
 pub const ToolRisk = struct {
     writes_source: bool = false,
     writes_artifacts: bool = false,
@@ -211,6 +224,121 @@ pub fn find(name: []const u8) ?ToolMeta {
     return null;
 }
 
+pub fn groupFor(id: ToolId) ToolGroup {
+    return switch (id) {
+        .zigar_capabilities,
+        .zigar_tool_index,
+        .zigar_schema,
+        .zigar_doctor,
+        .zigar_workspace_info,
+        .zigar_metrics,
+        .zigar_http_status,
+        .zig_command_plan,
+        .zig_toolchain_resolve,
+        => .discovery,
+
+        .zigar_context_pack,
+        .zigar_next_action,
+        .zigar_agent_guide,
+        .zigar_validate_patch,
+        .zigar_failure_fusion,
+        .zigar_impact,
+        .zigar_project_profile,
+        .zigar_patch_guard,
+        => .agent_workflows,
+
+        .zig_version,
+        .zig_env,
+        .zig_targets,
+        .zig_build,
+        .zig_test,
+        .zig_check,
+        .zig_compile_error_index,
+        .zig_explain_errors,
+        .zig_translate_c,
+        => .core_zig,
+
+        .zig_format,
+        .zig_format_check,
+        .zig_patch_preview,
+        .zig_rename,
+        .zig_code_actions,
+        .zig_code_action_apply,
+        => .formatting_and_edits,
+
+        .zig_diagnostics,
+        .zig_diagnostics_all,
+        .zig_diagnostics_workspace,
+        .zig_hover,
+        .zig_definition,
+        .zig_references,
+        .zig_completion,
+        .zig_signature_help,
+        .zig_document_symbols,
+        .zig_workspace_symbols,
+        .zig_document_open,
+        .zig_document_change,
+        .zig_document_close,
+        .zig_document_status,
+        => .zls,
+
+        .zig_builtin_list,
+        .zig_builtin_list_json,
+        .zig_builtin_doc,
+        .zig_std_search,
+        .zig_std_search_json,
+        .zig_std_item,
+        .zig_lang_ref_search,
+        => .docs,
+
+        .zig_import_graph,
+        .zig_import_graph_json,
+        .zig_decl_summary,
+        .zig_decl_summary_json,
+        .zig_allocations,
+        .zig_error_sets,
+        .zig_public_api,
+        .zig_dead_decl_candidates,
+        .zig_build_graph,
+        .zig_build_targets,
+        .zig_build_options,
+        .zig_file_owner,
+        .zig_import_resolve,
+        .zig_test_discover,
+        .zig_changed_files_plan,
+        .zig_dependency_inspect,
+        .zig_target_matrix_plan,
+        .zig_test_failure_triage,
+        .zig_workspace_symbol_cache,
+        .zig_package_cache_doctor,
+        .zig_test_map,
+        .zig_test_select,
+        .zig_public_api_diff,
+        => .static_analysis,
+
+        .zig_ci_annotations,
+        .zig_junit,
+        .zig_matrix_check,
+        => .ci_artifacts,
+
+        .zig_lint,
+        .zig_lint_sarif,
+        .zig_lint_rules,
+        .zig_analysis_graphs,
+        => .zwanzig,
+
+        .zig_profile_plan,
+        .zig_profile_run,
+        .zig_flamegraph,
+        .zig_flamegraph_diff,
+        => .profiling,
+    };
+}
+
+pub fn groupName(group: ToolGroup) []const u8 {
+    return @tagName(group);
+}
+
 pub fn riskFor(id: ToolId) ToolRisk {
     return switch (id) {
         .zig_format,
@@ -300,7 +428,7 @@ pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "level", .{ .string = riskLevel(risk) });
-    try obj.put(allocator, "mcp_read_only_hint", .{ .bool = spec.read_only });
+    try obj.put(allocator, "mcp_read_only_hint", .{ .bool = readOnlyHintFor(spec) });
     try obj.put(allocator, "writes_source", .{ .bool = risk.writes_source });
     try obj.put(allocator, "writes_artifacts", .{ .bool = risk.writes_artifacts });
     try obj.put(allocator, "writes_require_apply", .{ .bool = risk.writes_require_apply });
@@ -310,6 +438,26 @@ pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     try obj.put(allocator, "executes_user_command", .{ .bool = risk.executes_user_command });
     try obj.put(allocator, "executes_backend", .{ .bool = risk.executes_backend });
     return .{ .object = obj };
+}
+
+pub fn readOnlyHintFor(spec: ToolMeta) bool {
+    const risk = riskFor(spec.id);
+    return spec.read_only and
+        !risk.writes_source and
+        !risk.writes_artifacts and
+        !risk.mutates_lsp_state and
+        !risk.executes_project_code and
+        !risk.executes_user_command;
+}
+
+pub fn idempotentHintFor(spec: ToolMeta) bool {
+    const risk = riskFor(spec.id);
+    return readOnlyHintFor(spec) and
+        !risk.writes_source and
+        !risk.writes_artifacts and
+        !risk.mutates_lsp_state and
+        !risk.executes_project_code and
+        !risk.executes_user_command;
 }
 
 pub fn destructiveHintFor(spec: ToolMeta) bool {
@@ -342,10 +490,14 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     const profile_risk = riskFor(.zig_profile_run);
     try std.testing.expect(profile_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(profile_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_profile_run").?));
+    try std.testing.expect(!idempotentHintFor(find("zig_profile_run").?));
 
     const build_risk = riskFor(.zig_build);
     try std.testing.expect(build_risk.executes_project_code);
     try std.testing.expectEqualStrings("medium", riskLevel(build_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_build").?));
+    try std.testing.expect(!idempotentHintFor(find("zig_build").?));
 
     const validation_risk = riskFor(.zigar_validate_patch);
     try std.testing.expect(validation_risk.executes_project_code);
@@ -358,8 +510,13 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expect(riskFor(.zig_format).writes_require_apply);
     try std.testing.expect(riskFor(.zig_format).writes_artifacts);
     try std.testing.expect(!destructiveHintFor(fmt));
+    try std.testing.expect(!readOnlyHintFor(fmt));
 
     const matrix_risk = riskFor(.zig_matrix_check);
     try std.testing.expect(matrix_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(matrix_risk));
+    try std.testing.expect(!readOnlyHintFor(find("zig_matrix_check").?));
+
+    try std.testing.expect(readOnlyHintFor(find("zig_version").?));
+    try std.testing.expect(idempotentHintFor(find("zig_version").?));
 }

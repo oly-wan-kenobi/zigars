@@ -7,6 +7,14 @@ help, document/workspace symbols, rename, code actions, and in-memory document
 sync. Configure it with `--zls-path` and tune request waits with
 `--zls-timeout-ms`.
 
+Long-running sessions retain bounded ZLS state in process memory. In-memory
+document sync keeps at most 10 MiB per document, 64 MiB of aggregate retained
+document text, and 256 open documents by default. Cached publish-diagnostics
+notifications are capped at 16 MiB total; oversized diagnostics are dropped and
+the cache is cleared before storing the next notification that would exceed the
+aggregate budget. `zig_document_status` and the ZLS status resource expose the
+current retained byte counts and limits.
+
 ## zwanzig
 
 zwanzig powers `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`, and

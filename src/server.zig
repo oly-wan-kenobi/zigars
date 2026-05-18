@@ -15,6 +15,7 @@ const tooling = zigar.tooling;
 const workspace_mod = zigar.workspace;
 const zls_session = zigar.zls_session;
 const LspClient = zigar.lsp_client.LspClient;
+const lsp_edits = zigar.lsp_edits;
 const uri_util = zigar.uri;
 
 const App = runtime_mod.App;
@@ -387,6 +388,16 @@ fn errorText(allocator: std.mem.Allocator, value: []const u8) mcp.tools.ToolErro
 
 fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return json_result.structured(allocator, value);
+}
+
+fn structuredOwned(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return json_result.structuredOwned(allocator, value);
+}
+
+fn putOwnedKey(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
+    const owned_key = try allocator.dupe(u8, key);
+    errdefer allocator.free(owned_key);
+    try obj.put(allocator, owned_key, value);
 }
 
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
@@ -1562,6 +1573,12 @@ fn zlsStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     try obj.put(allocator, "restart_attempts", .{ .integer = @intCast(a.zls_restart_attempts) });
     try obj.put(allocator, "running", .{ .bool = running });
     try obj.put(allocator, "document_sync", .{ .bool = a.doc_state != null });
+    if (a.lsp_client) |client| {
+        const diagnostics = client.diagnosticsStatus();
+        try obj.put(allocator, "diagnostics_cached_files", .{ .integer = @intCast(diagnostics.files) });
+        try obj.put(allocator, "diagnostics_retained_bytes", .{ .integer = @intCast(diagnostics.retained_bytes) });
+        try obj.put(allocator, "max_diagnostics_bytes", .{ .integer = @intCast(diagnostics.max_bytes) });
+    }
     try obj.put(allocator, "initialize_response_present", .{ .bool = a.zls_initialize_response != null });
     if (a.zls_last_failure) |failure| {
         try obj.put(allocator, "last_failure", .{ .string = failure });
@@ -2247,14 +2264,14 @@ fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.t
     }
     const formatted = a.workspace.readFileAlloc(a.io, preview_path, 4 * 1024 * 1024) catch return error.ExecutionFailed;
     defer allocator.free(formatted);
-    const diff = unifiedDiff(allocator, file, input, formatted) catch return error.ExecutionFailed;
+    const diff = lsp_edits.unifiedDiff(allocator, file, input, formatted) catch return error.ExecutionFailed;
     defer allocator.free(diff);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     obj.put(allocator, "applied", .{ .bool = false }) catch return error.OutOfMemory;
     obj.put(allocator, "file", .{ .string = file }) catch return error.OutOfMemory;
-    obj.put(allocator, "source_hash", .{ .string = hashHex(allocator, input) catch return error.OutOfMemory }) catch return error.OutOfMemory;
-    obj.put(allocator, "updated_hash", .{ .string = hashHex(allocator, formatted) catch return error.OutOfMemory }) catch return error.OutOfMemory;
+    obj.put(allocator, "source_hash", .{ .string = lsp_edits.hashHex(allocator, input) catch return error.OutOfMemory }) catch return error.OutOfMemory;
+    obj.put(allocator, "updated_hash", .{ .string = lsp_edits.hashHex(allocator, formatted) catch return error.OutOfMemory }) catch return error.OutOfMemory;
     obj.put(allocator, "diff", .{ .string = diff }) catch return error.OutOfMemory;
     obj.put(allocator, "formatted", .{ .string = formatted }) catch return error.OutOfMemory;
     obj.put(allocator, "preview_retained", .{ .bool = false }) catch return error.OutOfMemory;
@@ -2277,7 +2294,7 @@ fn zigPatchPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     const rel = a.workspace.relative(resolved);
     const source = a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024) catch return error.ResourceNotFound;
     defer allocator.free(source);
-    const diff = unifiedDiff(allocator, rel, source, content) catch return error.ExecutionFailed;
+    const diff = lsp_edits.unifiedDiff(allocator, rel, source, content) catch return error.ExecutionFailed;
     defer allocator.free(diff);
     if (apply) a.workspace.writeFile(a.io, rel, content) catch return error.ExecutionFailed;
 
@@ -2288,8 +2305,8 @@ fn zigPatchPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     try obj.put(allocator, "preview_only", .{ .bool = !apply });
     try obj.put(allocator, "requires_apply", .{ .bool = !apply });
     try obj.put(allocator, "file", .{ .string = rel });
-    try obj.put(allocator, "source_hash", .{ .string = try hashHex(allocator, source) });
-    try obj.put(allocator, "updated_hash", .{ .string = try hashHex(allocator, content) });
+    try obj.put(allocator, "source_hash", .{ .string = try lsp_edits.hashHex(allocator, source) });
+    try obj.put(allocator, "updated_hash", .{ .string = try lsp_edits.hashHex(allocator, content) });
     try obj.put(allocator, "changed", .{ .bool = !std.mem.eql(u8, source, content) });
     try obj.put(allocator, "would_write", .{ .bool = !apply and !std.mem.eql(u8, source, content) });
     try obj.put(allocator, "diff", .{ .string = diff });
@@ -2648,6 +2665,7 @@ fn zigDocumentStatus(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
             obj.put(allocator, "retained_content_bytes", .{ .integer = @intCast(status.retained_content_bytes) }) catch return error.OutOfMemory;
             obj.put(allocator, "open_documents", .{ .integer = @intCast(status.open_documents) }) catch return error.OutOfMemory;
             obj.put(allocator, "max_document_bytes", .{ .integer = @intCast(status.max_document_bytes) }) catch return error.OutOfMemory;
+            obj.put(allocator, "max_retained_content_bytes", .{ .integer = @intCast(status.max_retained_content_bytes) }) catch return error.OutOfMemory;
             obj.put(allocator, "max_open_documents", .{ .integer = @intCast(status.max_open_documents) }) catch return error.OutOfMemory;
             obj.put(allocator, "last_reopen", reopenSummaryValue(allocator, status.last_reopen) catch return error.OutOfMemory) catch return error.OutOfMemory;
             return structured(allocator, .{ .object = obj });
@@ -2870,18 +2888,12 @@ fn zigFormatZls(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, ap
     if (apply) {
         const value = textEditToolValue(a, allocator, file_uri, response, true) catch return error.ExecutionFailed;
         doc_state.closeDoc(client, file_uri) catch {};
-        return structured(allocator, value);
+        return structuredOwned(allocator, value);
     }
 
     const value = textEditToolValue(a, allocator, file_uri, response, false) catch return error.ExecutionFailed;
-    return structured(allocator, value);
+    return structuredOwned(allocator, value);
 }
-
-const TextEdit = struct {
-    start: usize,
-    end: usize,
-    new_text: []const u8,
-};
 
 fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wait_ms: i64) void {
     var elapsed: i64 = 0;
@@ -3095,28 +3107,36 @@ fn lspNextActions(allocator: std.mem.Allocator, uri: ?[]const u8, line_no: ?i64,
 
 fn textEditToolValue(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8, apply: bool) !std.json.Value {
     const path = try uri_util.uriToPath(allocator, file_uri);
+    defer allocator.free(path);
     const safe_path = try a.workspace.resolve(path);
+    defer allocator.free(safe_path);
     const rel_view = a.workspace.relative(safe_path);
     const rel = try allocator.dupe(u8, rel_view);
     const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+    defer allocator.free(source);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse .null;
-    const updated = if (result == .null) try allocator.dupe(u8, source) else try applyTextEdits(allocator, source, result);
-    const diff = try unifiedDiff(allocator, rel, source, updated);
+    const updated = if (result == .null) try allocator.dupe(u8, source) else try lsp_edits.applyTextEdits(allocator, source, result);
+    var updated_moved = false;
+    defer if (!updated_moved) allocator.free(updated);
+    const diff = try lsp_edits.unifiedDiff(allocator, rel, source, updated);
     if (apply) try a.workspace.writeFile(a.io, rel, updated);
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "applied", .{ .bool = apply });
-    try obj.put(allocator, "file", .{ .string = rel });
-    try obj.put(allocator, "edit_count", .{ .integer = @intCast(textEditCount(result)) });
-    try obj.put(allocator, "source_hash", .{ .string = try hashHex(allocator, source) });
-    try obj.put(allocator, "updated_hash", .{ .string = try hashHex(allocator, updated) });
-    try obj.put(allocator, "diff", .{ .string = diff });
-    try obj.put(allocator, "edits", try json_result.cloneValue(allocator, result));
-    if (!apply) try obj.put(allocator, "formatted", .{ .string = updated });
+    try putOwnedKey(allocator, &obj, "applied", .{ .bool = apply });
+    try putOwnedKey(allocator, &obj, "file", .{ .string = rel });
+    try putOwnedKey(allocator, &obj, "edit_count", .{ .integer = @intCast(lsp_edits.textEditCount(result)) });
+    try putOwnedKey(allocator, &obj, "source_hash", .{ .string = try lsp_edits.hashHex(allocator, source) });
+    try putOwnedKey(allocator, &obj, "updated_hash", .{ .string = try lsp_edits.hashHex(allocator, updated) });
+    try putOwnedKey(allocator, &obj, "diff", .{ .string = diff });
+    try putOwnedKey(allocator, &obj, "edits", try json_result.cloneValue(allocator, result));
+    if (!apply) {
+        try putOwnedKey(allocator, &obj, "formatted", .{ .string = updated });
+        updated_moved = true;
+    }
     return .{ .object = obj };
 }
 
@@ -3133,7 +3153,7 @@ fn previewTextEditResponse(a: *App, allocator: std.mem.Allocator, file_uri: []co
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse return allocator.dupe(u8, source);
     if (result == .null) return allocator.dupe(u8, source);
-    return applyTextEdits(allocator, source, result);
+    return lsp_edits.applyTextEdits(allocator, source, result);
 }
 
 fn applyTextEditResponseToFile(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8) ![]u8 {
@@ -3153,16 +3173,16 @@ fn workspaceEditToolResult(a: *App, allocator: std.mem.Allocator, response: []co
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse .null;
     const value = workspaceEditValue(a, allocator, result, apply) catch return error.ExecutionFailed;
-    return structured(allocator, value);
+    return structuredOwned(allocator, value);
 }
 
 fn workspaceEditValue(a: *App, allocator: std.mem.Allocator, result: std.json.Value, apply: bool) !std.json.Value {
     if (result == .null) {
         var empty = std.json.ObjectMap.empty;
-        try empty.put(allocator, "applied", .{ .bool = apply });
-        try empty.put(allocator, "affected_files", .{ .array = std.json.Array.init(allocator) });
-        try empty.put(allocator, "total_edits", .{ .integer = 0 });
-        try empty.put(allocator, "edit", .null);
+        try putOwnedKey(allocator, &empty, "applied", .{ .bool = apply });
+        try putOwnedKey(allocator, &empty, "affected_files", .{ .array = std.json.Array.init(allocator) });
+        try putOwnedKey(allocator, &empty, "total_edits", .{ .integer = 0 });
+        try putOwnedKey(allocator, &empty, "edit", .null);
         return .{ .object = empty };
     }
     const edit_obj = switch (result) {
@@ -3177,7 +3197,7 @@ fn workspaceEditValue(a: *App, allocator: std.mem.Allocator, result: std.json.Va
         if (changes == .object) {
             var it = changes.object.iterator();
             while (it.next()) |entry| {
-                total_edits += textEditCount(entry.value_ptr.*);
+                total_edits += lsp_edits.textEditCount(entry.value_ptr.*);
                 try files.append(try workspaceEditFileValue(a, allocator, entry.key_ptr.*, entry.value_ptr.*, apply));
             }
         }
@@ -3199,7 +3219,7 @@ fn workspaceEditValue(a: *App, allocator: std.mem.Allocator, result: std.json.Va
                     else => continue,
                 };
                 const edits = change_obj.get("edits") orelse continue;
-                total_edits += textEditCount(edits);
+                total_edits += lsp_edits.textEditCount(edits);
                 try files.append(try workspaceEditFileValue(a, allocator, uri, edits, apply));
             }
         }
@@ -3207,21 +3227,25 @@ fn workspaceEditValue(a: *App, allocator: std.mem.Allocator, result: std.json.Va
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "applied", .{ .bool = apply });
-    try obj.put(allocator, "affected_files", .{ .array = files });
-    try obj.put(allocator, "total_edits", .{ .integer = @intCast(total_edits) });
-    try obj.put(allocator, "edit", try json_result.cloneValue(allocator, result));
+    try putOwnedKey(allocator, &obj, "applied", .{ .bool = apply });
+    try putOwnedKey(allocator, &obj, "affected_files", .{ .array = files });
+    try putOwnedKey(allocator, &obj, "total_edits", .{ .integer = @intCast(total_edits) });
+    try putOwnedKey(allocator, &obj, "edit", try json_result.cloneValue(allocator, result));
     return .{ .object = obj };
 }
 
 fn workspaceEditFileValue(a: *App, allocator: std.mem.Allocator, uri: []const u8, edits: std.json.Value, apply: bool) !std.json.Value {
     const path = try uri_util.uriToPath(allocator, uri);
+    defer allocator.free(path);
     const safe_path = try a.workspace.resolve(path);
+    defer allocator.free(safe_path);
     const rel_view = a.workspace.relative(safe_path);
     const rel = try allocator.dupe(u8, rel_view);
     const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
-    const updated = try applyTextEdits(allocator, source, edits);
-    const diff = try unifiedDiff(allocator, rel, source, updated);
+    defer allocator.free(source);
+    const updated = try lsp_edits.applyTextEdits(allocator, source, edits);
+    defer allocator.free(updated);
+    const diff = try lsp_edits.unifiedDiff(allocator, rel, source, updated);
     if (apply) {
         try a.workspace.writeFile(a.io, rel, updated);
         if (a.lsp_client) |client| {
@@ -3231,11 +3255,11 @@ fn workspaceEditFileValue(a: *App, allocator: std.mem.Allocator, uri: []const u8
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "file", .{ .string = rel });
-    try obj.put(allocator, "edit_count", .{ .integer = @intCast(textEditCount(edits)) });
-    try obj.put(allocator, "source_hash", .{ .string = try hashHex(allocator, source) });
-    try obj.put(allocator, "updated_hash", .{ .string = try hashHex(allocator, updated) });
-    try obj.put(allocator, "diff", .{ .string = diff });
+    try putOwnedKey(allocator, &obj, "file", .{ .string = rel });
+    try putOwnedKey(allocator, &obj, "edit_count", .{ .integer = @intCast(lsp_edits.textEditCount(edits)) });
+    try putOwnedKey(allocator, &obj, "source_hash", .{ .string = try lsp_edits.hashHex(allocator, source) });
+    try putOwnedKey(allocator, &obj, "updated_hash", .{ .string = try lsp_edits.hashHex(allocator, updated) });
+    try putOwnedKey(allocator, &obj, "diff", .{ .string = diff });
     return .{ .object = obj };
 }
 
@@ -3247,7 +3271,7 @@ fn applyEditsForUri(a: *App, allocator: std.mem.Allocator, uri: []const u8, edit
     const rel = a.workspace.relative(safe_path);
     const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
     defer allocator.free(source);
-    const updated = try applyTextEdits(allocator, source, edits);
+    const updated = try lsp_edits.applyTextEdits(allocator, source, edits);
     defer allocator.free(updated);
     try a.workspace.writeFile(a.io, rel, updated);
     if (a.lsp_client) |client| {
@@ -3261,164 +3285,6 @@ fn responseResult(value: std.json.Value) ?std.json.Value {
         else => return null,
     };
     return obj.get("result");
-}
-
-fn textEditCount(value: std.json.Value) usize {
-    return switch (value) {
-        .array => |a| a.items.len,
-        else => 0,
-    };
-}
-
-fn hashHex(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
-    return std.fmt.allocPrint(allocator, "{x:0>16}", .{std.hash.Wyhash.hash(0, bytes)});
-}
-
-fn collectLines(allocator: std.mem.Allocator, text_value: []const u8) ![][]const u8 {
-    var lines: std.ArrayList([]const u8) = .empty;
-    errdefer lines.deinit(allocator);
-    var it = std.mem.splitScalar(u8, text_value, '\n');
-    while (it.next()) |line| try lines.append(allocator, line);
-    return lines.toOwnedSlice(allocator);
-}
-
-fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []const u8, after: []const u8) ![]u8 {
-    if (std.mem.eql(u8, before, after)) return allocator.dupe(u8, "");
-
-    const before_lines = try collectLines(allocator, before);
-    defer allocator.free(before_lines);
-    const after_lines = try collectLines(allocator, after);
-    defer allocator.free(after_lines);
-
-    var prefix: usize = 0;
-    while (prefix < before_lines.len and prefix < after_lines.len and std.mem.eql(u8, before_lines[prefix], after_lines[prefix])) : (prefix += 1) {}
-
-    var suffix: usize = 0;
-    while (suffix < before_lines.len - prefix and suffix < after_lines.len - prefix) : (suffix += 1) {
-        const old_idx = before_lines.len - suffix - 1;
-        const new_idx = after_lines.len - suffix - 1;
-        if (!std.mem.eql(u8, before_lines[old_idx], after_lines[new_idx])) break;
-    }
-
-    const old_change_end = before_lines.len - suffix;
-    const new_change_end = after_lines.len - suffix;
-    const context_before = @min(prefix, 3);
-    const context_after = @min(suffix, 3);
-    const old_hunk_start = prefix - context_before;
-    const new_hunk_start = prefix - context_before;
-    const old_hunk_end = @min(before_lines.len, old_change_end + context_after);
-    const new_hunk_end = @min(after_lines.len, new_change_end + context_after);
-    const old_count = old_hunk_end - old_hunk_start;
-    const new_count = new_hunk_end - new_hunk_start;
-
-    var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
-    try out.writer.print("--- a/{s}\n+++ b/{s}\n@@ -{d},{d} +{d},{d} @@\n", .{
-        path,
-        path,
-        old_hunk_start + 1,
-        old_count,
-        new_hunk_start + 1,
-        new_count,
-    });
-    var i: usize = old_hunk_start;
-    while (i < prefix) : (i += 1) {
-        try out.writer.print(" {s}\n", .{before_lines[i]});
-    }
-    i = prefix;
-    while (i < old_change_end) : (i += 1) {
-        try out.writer.print("-{s}\n", .{before_lines[i]});
-    }
-    i = prefix;
-    while (i < new_change_end) : (i += 1) {
-        try out.writer.print("+{s}\n", .{after_lines[i]});
-    }
-    i = old_change_end;
-    while (i < old_hunk_end) : (i += 1) {
-        try out.writer.print(" {s}\n", .{before_lines[i]});
-    }
-    return try out.toOwnedSlice();
-}
-
-fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_value: std.json.Value) ![]u8 {
-    const edits_json = switch (edits_value) {
-        .array => |a| a,
-        else => return allocator.dupe(u8, source),
-    };
-    if (edits_json.items.len == 0) return allocator.dupe(u8, source);
-
-    var edits: std.ArrayList(TextEdit) = .empty;
-    defer edits.deinit(allocator);
-    for (edits_json.items) |item| {
-        const obj = switch (item) {
-            .object => |o| o,
-            else => continue,
-        };
-        const range = switch (obj.get("range") orelse .null) {
-            .object => |o| o,
-            else => continue,
-        };
-        const start = try positionOffset(source, range.get("start") orelse .null);
-        const end = try positionOffset(source, range.get("end") orelse .null);
-        const new_text = switch (obj.get("newText") orelse .null) {
-            .string => |s| s,
-            else => "",
-        };
-        if (end < start) return error.InvalidTextEdit;
-        try edits.append(allocator, .{ .start = start, .end = end, .new_text = new_text });
-    }
-
-    std.mem.sort(TextEdit, edits.items, {}, struct {
-        fn lessThan(_: void, a: TextEdit, b: TextEdit) bool {
-            return a.start < b.start;
-        }
-    }.lessThan);
-
-    var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
-    var cursor: usize = 0;
-    for (edits.items) |edit| {
-        if (edit.start < cursor or edit.end > source.len) return error.InvalidTextEdit;
-        try out.writer.writeAll(source[cursor..edit.start]);
-        try out.writer.writeAll(edit.new_text);
-        cursor = edit.end;
-    }
-    try out.writer.writeAll(source[cursor..]);
-    return try out.toOwnedSlice();
-}
-
-fn positionOffset(source: []const u8, position: std.json.Value) !usize {
-    const obj = switch (position) {
-        .object => |o| o,
-        else => return error.InvalidTextEdit,
-    };
-    const line: usize = switch (obj.get("line") orelse .null) {
-        .integer => |i| if (i >= 0) @intCast(i) else return error.InvalidTextEdit,
-        else => return error.InvalidTextEdit,
-    };
-    const character: usize = switch (obj.get("character") orelse .null) {
-        .integer => |i| if (i >= 0) @intCast(i) else return error.InvalidTextEdit,
-        else => return error.InvalidTextEdit,
-    };
-
-    var current_line: usize = 0;
-    var line_start: usize = 0;
-    var i: usize = 0;
-    while (i < source.len and current_line < line) : (i += 1) {
-        if (source[i] == '\n') {
-            current_line += 1;
-            line_start = i + 1;
-        }
-    }
-    if (current_line != line) return error.InvalidTextEdit;
-
-    var offset = line_start;
-    var chars_seen: usize = 0;
-    while (offset < source.len and source[offset] != '\n' and chars_seen < character) : (offset += 1) {
-        chars_seen += 1;
-    }
-    if (chars_seen != character) return error.InvalidTextEdit;
-    return offset;
 }
 
 fn zigBuiltinList(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -5705,28 +5571,6 @@ test "errorText owns borrowed message bytes" {
 
     try std.testing.expect(result.is_error);
     try std.testing.expectEqualStrings("borrowed diagnostic error", result.content[0].text.text);
-}
-
-test "applyTextEdits rejects overlapping edits" {
-    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator,
-        \\[
-        \\  {"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":2}},"newText":"x"},
-        \\  {"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":3}},"newText":"y"}
-        \\]
-    , .{});
-    defer parsed.deinit();
-
-    try std.testing.expectError(error.InvalidTextEdit, applyTextEdits(std.testing.allocator, "abc\n", parsed.value));
-}
-
-test "unifiedDiff emits hunk header and focused edits" {
-    const diff = try unifiedDiff(std.testing.allocator, "src/main.zig", "a\nb\nc\n", "a\nx\nc\n");
-    defer std.testing.allocator.free(diff);
-
-    try std.testing.expect(std.mem.indexOf(u8, diff, "--- a/src/main.zig") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff, "@@ -1,") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff, "-b\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, diff, "+x\n") != null);
 }
 
 test "skipWorkspacePath ignores generated and vendored paths" {

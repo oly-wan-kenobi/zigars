@@ -76,7 +76,7 @@ fn usage(io: Io) !void {
         \\  check-json <path>...
         \\  http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]
         \\  stdio-fixtures [--binary <path>] [--zig-path <path>]
-        \\  coverage [--out-dir <path>] [--zig <path>] [--no-build] [--require-kcov] [--allow-kcov-failure]
+        \\  coverage [--out-dir <path>] [--zig <path>] [--min-tests <count>] [--no-build] [--require-kcov] [--allow-kcov-failure]
         \\  dist --package <name> --exe <name> --binary <path>...
         \\  dist-smoke [--assets-dir <path>] [--version <version>]
         \\  artifact-hygiene

@@ -146,3 +146,30 @@ test "static catalog group membership covers registry exactly once" {
     }
     try std.testing.expectEqual(tool_metadata.specs.len, seen.count());
 }
+
+test "static catalog groups match typed registry groups" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed_catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    const groups = parsed_catalog.value.object.get("groups").?.array;
+
+    for (tool_metadata.specs) |spec| {
+        const expected = tool_metadata.groupName(tool_metadata.groupFor(spec.id));
+        const actual = catalogGroupForTool(groups, spec.name) orelse return error.MissingCatalogGroup;
+        try std.testing.expectEqualStrings(expected, actual);
+    }
+}
+
+fn catalogGroupForTool(groups: std.json.Array, tool_name: []const u8) ?[]const u8 {
+    for (groups.items) |group_value| {
+        const group = group_value.object;
+        const group_name = group.get("name").?.string;
+        const tools = group.get("tools").?.array;
+        for (tools.items) |tool_value| {
+            if (std.mem.eql(u8, tool_value.string, tool_name)) return group_name;
+        }
+    }
+    return null;
+}

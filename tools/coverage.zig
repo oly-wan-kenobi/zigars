@@ -21,6 +21,7 @@ fn nowNs(io: Io) i96 {
 const CoverageOptions = struct {
     out_dir: []const u8 = "coverage",
     zig: []const u8 = "zig",
+    min_tests: i64 = coverage_config.min_total_tests,
     no_build: bool = false,
     require_kcov: bool = false,
     allow_kcov_failure: bool = false,
@@ -48,6 +49,11 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
             i += 1;
             if (i >= args.len) return error.InvalidArguments;
             options.zig = args[i];
+        } else if (std.mem.eql(u8, args[i], "--min-tests")) {
+            i += 1;
+            if (i >= args.len) return error.InvalidArguments;
+            options.min_tests = try std.fmt.parseInt(i64, args[i], 10);
+            if (options.min_tests < 0) return error.InvalidArguments;
         } else if (std.mem.eql(u8, args[i], "--no-build")) {
             options.no_build = true;
         } else if (std.mem.eql(u8, args[i], "--require-kcov")) {
@@ -94,6 +100,8 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
         ok = ok and result.ok;
         total_tests += result.tests orelse 0;
     }
+    const total_tests_ok = total_tests >= options.min_tests;
+    ok = ok and total_tests_ok;
     var kcov_ran = false;
     var kcov_error: ?[]const u8 = null;
     if (kcov_path) |kcov| {
@@ -118,6 +126,8 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
         .ok = ok,
         .zig_version = zig_version,
         .total_tests = total_tests,
+        .min_total_tests = options.min_tests,
+        .total_tests_ok = total_tests_ok,
         .tests = test_results.items,
         .kcov_available = kcov_path != null,
         .kcov_path = kcov_path,
@@ -216,6 +226,8 @@ const CoverageSummaryInput = struct {
     ok: bool,
     zig_version: []const u8,
     total_tests: i64,
+    min_total_tests: i64,
+    total_tests_ok: bool,
     tests: []const TestResult,
     kcov_available: bool,
     kcov_path: ?[]const u8,
@@ -237,6 +249,8 @@ fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInp
     try json_util.writeString(&aw.writer, input.zig_version);
     try aw.writer.writeAll(",\n");
     try aw.writer.print("  \"total_tests\": {d},\n", .{input.total_tests});
+    try aw.writer.print("  \"min_total_tests\": {d},\n", .{input.min_total_tests});
+    try aw.writer.print("  \"total_tests_ok\": {},\n", .{input.total_tests_ok});
     try aw.writer.writeAll("  \"tests\": [\n");
     for (input.tests, 0..) |result, i| {
         if (i > 0) try aw.writer.writeAll(",\n");
@@ -348,6 +362,8 @@ test "renderCoverageSummary includes every configured test binary" {
         .ok = true,
         .zig_version = "0.16.0",
         .total_tests = 25,
+        .min_total_tests = 20,
+        .total_tests_ok = true,
         .tests = &results,
         .kcov_available = true,
         .kcov_path = "kcov",
@@ -361,6 +377,8 @@ test "renderCoverageSummary includes every configured test binary" {
     defer parsed.deinit();
     try std.testing.expectEqual(@as(usize, 3), valueAt(parsed.value, "tests").?.array.items.len);
     try std.testing.expectEqual(@as(i64, 25), valueAt(parsed.value, "total_tests").?.integer);
+    try std.testing.expectEqual(@as(i64, 20), valueAt(parsed.value, "min_total_tests").?.integer);
+    try std.testing.expect(valueAt(parsed.value, "total_tests_ok").?.bool);
     try std.testing.expectEqualStrings("zigar-tools-tests", valueAt(parsed.value, "tests.2.name").?.string);
     try std.testing.expectEqualStrings("kcov", valueAt(parsed.value, "kcov.path").?.string);
     try std.testing.expectEqualStrings("kcov exited unsuccessfully", valueAt(parsed.value, "kcov.error").?.string);
