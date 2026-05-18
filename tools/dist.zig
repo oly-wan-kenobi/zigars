@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const release_targets = @import("release_targets.zig");
 const zigar = @import("zigar");
 
 const Io = std.Io;
@@ -10,19 +10,6 @@ const PackageInput = struct {
     name: []const u8,
     exe_name: []const u8,
     binary_path: []const u8,
-};
-
-const ReleasePackage = struct {
-    name: []const u8,
-    exe_name: []const u8 = "zigar",
-};
-
-const release_packages = [_]ReleasePackage{
-    .{ .name = "zigar-x86_64-linux-musl" },
-    .{ .name = "zigar-aarch64-linux-musl" },
-    .{ .name = "zigar-x86_64-macos" },
-    .{ .name = "zigar-aarch64-macos" },
-    .{ .name = "zigar-x86_64-windows", .exe_name = "zigar.exe" },
 };
 
 const ReleaseItem = struct {
@@ -59,6 +46,7 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
     var options = try parseDistOptions(allocator, args);
     defer options.deinit(allocator);
     if (options.packages.items.len == 0) return error.InvalidArguments;
+    try validateReleasePackageInputs(io, options.packages.items);
 
     if (dirExists(io, options.out_dir)) try Io.Dir.cwd().deleteTree(io, options.out_dir);
     const assets_dir = try std.fs.path.join(allocator, &.{ options.out_dir, "assets" });
@@ -95,11 +83,43 @@ pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     }
 
     try verifyChecksums(allocator, io, assets_dir);
-    for (release_packages) |package| {
+    for (release_targets.all) |package| {
         try verifyArchiveList(allocator, io, assets_dir, package);
     }
     try runNativeArchive(allocator, io, assets_dir, version);
     try stdoutPrint(io, "release asset smoke ok\n", .{});
+}
+
+fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
+    if (packages.len != release_targets.all.len) {
+        if (io) |output| try stderrPrint(output, "dist expected {d} release packages, got {d}\n", .{ release_targets.all.len, packages.len });
+        return error.InvalidArguments;
+    }
+
+    var seen = [_]bool{false} ** release_targets.all.len;
+    for (packages) |package| {
+        const index = release_targets.indexByPackageName(package.name) orelse {
+            if (io) |output| try stderrPrint(output, "dist package is not a configured release target: {s}\n", .{package.name});
+            return error.InvalidArguments;
+        };
+        if (seen[index]) {
+            if (io) |output| try stderrPrint(output, "dist package was provided more than once: {s}\n", .{package.name});
+            return error.InvalidArguments;
+        }
+        const expected = release_targets.all[index];
+        if (!std.mem.eql(u8, package.exe_name, expected.exe_name)) {
+            if (io) |output| try stderrPrint(output, "dist package {s} expected executable {s}, got {s}\n", .{ package.name, expected.exe_name, package.exe_name });
+            return error.InvalidArguments;
+        }
+        seen[index] = true;
+    }
+
+    for (release_targets.all, 0..) |target, i| {
+        if (!seen[i]) {
+            if (io) |output| try stderrPrint(output, "dist package missing release target: {s}\n", .{target.package_name});
+            return error.InvalidArguments;
+        }
+    }
 }
 
 fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions {
@@ -277,27 +297,39 @@ fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
     const checksums = try readFileAlloc(allocator, io, checksums_path, 1024 * 1024);
     defer allocator.free(checksums);
 
-    for (release_packages) |package| {
-        const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.name});
+    const line_count = countNonEmptyLines(checksums);
+    if (line_count != release_targets.all.len) {
+        try stderrPrint(io, "checksum file expected {d} entries, got {d}\n", .{ release_targets.all.len, line_count });
+        return error.ChecksumMismatch;
+    }
+
+    for (release_targets.all) |package| {
+        const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
         defer allocator.free(archive_name);
         const archive_path = try std.fs.path.join(allocator, &.{ assets_dir, archive_name });
         defer allocator.free(archive_path);
         const hex = try archiveSha256(allocator, io, archive_path);
         const line = try std.fmt.allocPrint(allocator, "{s}  {s}", .{ hex[0..], archive_name });
         defer allocator.free(line);
-        if (!containsLine(checksums, line)) return error.ChecksumMismatch;
+        if (!containsLine(checksums, line)) {
+            try stderrPrint(io, "checksum file missing or stale for {s}\n", .{archive_name});
+            return error.ChecksumMismatch;
+        }
     }
 }
 
-fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, package: ReleasePackage) !void {
-    const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.name});
+fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, package: release_targets.Target) !void {
+    const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
     defer allocator.free(archive_name);
     const archive_path = try std.fs.path.join(allocator, &.{ assets_dir, archive_name });
     defer allocator.free(archive_path);
     const result = try std.process.run(allocator, io, .{ .argv = &.{ "tar", "-tzf", archive_path } });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
-    if (!termOk(result.term)) return error.ArchiveListFailed;
+    if (!termOk(result.term)) {
+        try stderrPrint(io, "tar failed to list {s}: {s}\n", .{ archive_name, result.stderr });
+        return error.ArchiveListFailed;
+    }
 
     const required = [_][]const u8{
         package.exe_name,
@@ -308,15 +340,18 @@ fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, packa
         "examples/tool-calls.jsonl",
     };
     for (required) |rel| {
-        const entry = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ package.name, rel });
+        const entry = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ package.package_name, rel });
         defer allocator.free(entry);
-        if (!containsLine(result.stdout, entry)) return error.ArchiveMissingRequiredFile;
+        if (!containsLine(result.stdout, entry)) {
+            try stderrPrint(io, "{s} is missing required file {s}\n", .{ archive_name, rel });
+            return error.ArchiveMissingRequiredFile;
+        }
     }
 }
 
 fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, version: []const u8) !void {
-    const package = nativePackage() orelse return;
-    const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.name});
+    const package = release_targets.native() orelse return;
+    const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
     defer allocator.free(archive_name);
     const archive_path = try std.fs.path.join(allocator, &.{ assets_dir, archive_name });
     defer allocator.free(archive_path);
@@ -329,7 +364,7 @@ fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, versio
     defer allocator.free(extract.stderr);
     if (!termOk(extract.term)) return error.ArchiveExtractFailed;
 
-    const binary = try std.fs.path.join(allocator, &.{ scratch, package.name, package.exe_name });
+    const binary = try std.fs.path.join(allocator, &.{ scratch, package.package_name, package.exe_name });
     defer allocator.free(binary);
     const version_result = try std.process.run(allocator, io, .{ .argv = &.{ binary, "--version" } });
     defer allocator.free(version_result.stdout);
@@ -340,26 +375,6 @@ fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, versio
     defer allocator.free(expected);
     const stderr = std.mem.trim(u8, version_result.stderr, " \t\r\n");
     if (!std.mem.eql(u8, stderr, expected)) return error.NativeArchiveVersionMismatch;
-}
-
-fn nativePackage() ?ReleasePackage {
-    return switch (builtin.os.tag) {
-        .linux => switch (builtin.cpu.arch) {
-            .x86_64 => .{ .name = "zigar-x86_64-linux-musl" },
-            .aarch64 => .{ .name = "zigar-aarch64-linux-musl" },
-            else => null,
-        },
-        .macos => switch (builtin.cpu.arch) {
-            .x86_64 => .{ .name = "zigar-x86_64-macos" },
-            .aarch64 => .{ .name = "zigar-aarch64-macos" },
-            else => null,
-        },
-        .windows => switch (builtin.cpu.arch) {
-            .x86_64 => .{ .name = "zigar-x86_64-windows", .exe_name = "zigar.exe" },
-            else => null,
-        },
-        else => null,
-    };
 }
 
 fn archiveSha256(allocator: Allocator, io: Io, path: []const u8) ![Sha256.digest_length * 2]u8 {
@@ -403,6 +418,15 @@ fn containsLine(haystack: []const u8, needle: []const u8) bool {
     return false;
 }
 
+fn countNonEmptyLines(bytes: []const u8) usize {
+    var count: usize = 0;
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    while (lines.next()) |raw| {
+        if (std.mem.trim(u8, raw, " \t\r").len != 0) count += 1;
+    }
+    return count;
+}
+
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -421,7 +445,42 @@ fn stdoutPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
+fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
+    var buffer: [4096]u8 = undefined;
+    var writer = Io.File.stderr().writer(io, &buffer);
+    try writer.interface.print(fmt, args);
+    try writer.interface.flush();
+}
+
 test "containsLine matches complete lines only" {
     try std.testing.expect(containsLine("a\nb\n", "b"));
     try std.testing.expect(!containsLine("abc\n", "b"));
+}
+
+test "dist package validation requires the configured release set" {
+    const packages = [_]PackageInput{
+        .{ .name = "zigar-x86_64-linux-musl", .exe_name = "zigar", .binary_path = "bin/linux-x64" },
+        .{ .name = "zigar-aarch64-linux-musl", .exe_name = "zigar", .binary_path = "bin/linux-arm64" },
+        .{ .name = "zigar-x86_64-macos", .exe_name = "zigar", .binary_path = "bin/macos-x64" },
+        .{ .name = "zigar-aarch64-macos", .exe_name = "zigar", .binary_path = "bin/macos-arm64" },
+        .{ .name = "zigar-x86_64-windows", .exe_name = "zigar.exe", .binary_path = "bin/windows-x64" },
+    };
+    try validateReleasePackageInputs(null, &packages);
+
+    var missing = packages[0 .. packages.len - 1].*;
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &missing));
+
+    var duplicate = packages;
+    duplicate[1].name = duplicate[0].name;
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &duplicate));
+
+    var wrong_exe = packages;
+    wrong_exe[4].exe_name = "zigar";
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &wrong_exe));
+}
+
+test "countNonEmptyLines ignores trailing blank lines" {
+    try std.testing.expectEqual(@as(usize, 0), countNonEmptyLines(""));
+    try std.testing.expectEqual(@as(usize, 1), countNonEmptyLines("one\n\n"));
+    try std.testing.expectEqual(@as(usize, 2), countNonEmptyLines("one\r\ntwo\n"));
 }
