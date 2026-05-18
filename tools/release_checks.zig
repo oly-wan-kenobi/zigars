@@ -21,6 +21,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkForbiddenTokens(allocator, io)) and ok;
     ok = (try checkToolErrorContract(allocator, io)) and ok;
     ok = (try checkResourceErrorContract(allocator, io)) and ok;
+    ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -351,6 +352,25 @@ const resource_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+const cli_error_contract_paths = [_][]const u8{
+    "tools/zigar_tools.zig",
+};
+
+const cli_error_contract_tokens = [_]ToolErrorContractToken{
+    .{
+        .token = "std.debug.print",
+        .reason = "developer helper diagnostics must use CLI stderr helpers so output stays consistent and testable",
+    },
+    .{
+        .token = "return error.InvalidArguments",
+        .reason = "developer helper commands must print an actionable argument diagnostic before returning InvalidArguments",
+    },
+    .{
+        .token = "catch return error.InvalidArguments",
+        .reason = "developer helper commands must preserve argument context instead of collapsing catches",
+    },
+};
+
 const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",
@@ -427,6 +447,25 @@ fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
         for (resource_error_contract_tokens) |rule| {
             if (std.mem.indexOf(u8, bytes, rule.token) != null) {
                 try stderrPrint(io, "resource-error-contract violation in {s}: `{s}` ({s})\n", .{ path, rule.token, rule.reason });
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+fn checkCliErrorContract(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    for (cli_error_contract_paths) |path| {
+        const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "cli-error-contract check could not read {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        for (cli_error_contract_tokens) |rule| {
+            if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+                try stderrPrint(io, "cli-error-contract violation in {s}: `{s}` ({s})\n", .{ path, rule.token, rule.reason });
                 ok = false;
             }
         }
