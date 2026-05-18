@@ -39,7 +39,14 @@ pub fn addTool(
 fn mcpHandler(comptime spec: tool_metadata.ToolMeta, comptime handler: ToolHandler) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return struct {
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-            const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.ExecutionFailed));
+            const runtime: *App = @ptrCast(@alignCast(user_data orelse return tool_errors.result(allocator, .{
+                .tool = spec.name,
+                .operation = "dispatch_tool",
+                .phase = "runtime_lookup",
+                .code = "runtime_unavailable",
+                .category = "server_state",
+                .resolution = "Restart zigar; the MCP server registered this tool without attaching runtime state.",
+            })));
             if (try validateToolArgs(allocator, spec, args)) |validation_error| return validation_error;
             return handler(runtime, allocator, args);
         }

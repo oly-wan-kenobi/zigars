@@ -17,6 +17,7 @@ pub const toolErrorResult = shared_core.toolErrorResult;
 pub const toolErrorFromError = shared_core.toolErrorFromError;
 pub const missingArgumentResult = shared_core.missingArgumentResult;
 pub const invalidArgumentResult = shared_core.invalidArgumentResult;
+pub const splitToolArgsErrorResult = shared_core.splitToolArgsErrorResult;
 pub const runAndFormat = shared_core.runAndFormat;
 pub const runAndFormatTimeout = shared_core.runAndFormatTimeout;
 pub const toolTimeout = shared_core.toolTimeout;

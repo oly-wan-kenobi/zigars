@@ -18,6 +18,9 @@ const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const backendErrorResult = common.backendErrorResult;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
+const toolErrorFromError = common.toolErrorFromError;
+const toolErrorResult = common.toolErrorResult;
 const commandString = common.commandString;
 const argvContains = common.argvContains;
 const ownedString = common.ownedString;
@@ -36,6 +39,17 @@ const workspacePathExists = static_core.workspacePathExists;
 const dependencyInspectionValue = static_core.dependencyInspectionValue;
 const cachePathStatusValue = static_core.cachePathStatusValue;
 const countTopLevelEntries = static_core.countTopLevelEntries;
+
+fn symbolCacheError(allocator: std.mem.Allocator, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return toolErrorFromError(allocator, .{
+        .tool = "zig_workspace_symbol_cache",
+        .operation = "maintain_symbol_cache",
+        .phase = phase,
+        .code = "symbol_cache_failed",
+        .category = "analysis_cache",
+        .resolution = "Retry with refresh=true and a smaller limit; if it repeats, inspect the workspace for unreadable Zig files.",
+    }, err);
+}
 
 pub fn zigTestFailureTriage(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (argString(args, "text")) |raw_text| {
@@ -58,7 +72,8 @@ pub fn zigTestFailureTriage(a: *App, allocator: std.mem.Allocator, args: ?std.js
         try list.append(allocator, "build");
         try list.append(allocator, "test");
     }
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_test_failure_triage", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     try list.appendSlice(allocator, extra);
     a.command_calls += 1;
@@ -102,10 +117,10 @@ pub fn collectTestFailureLines(allocator: std.mem.Allocator, failures: *std.json
 
 pub fn zigWorkspaceSymbolCache(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const limit: usize = @intCast(@max(1, argInt(args, "limit", 500)));
-    const signature = workspaceSymbolSignature(allocator, a, limit) catch return error.ExecutionFailed;
+    const signature = workspaceSymbolSignature(allocator, a, limit) catch |err| return symbolCacheError(allocator, "build_signature", err);
     const refresh = argBool(args, "refresh", false) or a.analysis_cache.index_json == null or a.analysis_cache.signature != signature;
     if (refresh) {
-        const index = workspaceSymbolIndexValue(allocator, a, limit) catch return error.ExecutionFailed;
+        const index = workspaceSymbolIndexValue(allocator, a, limit) catch |err| return symbolCacheError(allocator, "build_index", err);
         var bytes_list: std.ArrayList(u8) = .empty;
         json_result.serializeValue(allocator, &bytes_list, index) catch return error.OutOfMemory;
         const bytes = bytes_list.toOwnedSlice(allocator) catch return error.OutOfMemory;
@@ -117,11 +132,18 @@ pub fn zigWorkspaceSymbolCache(a: *App, allocator: std.mem.Allocator, args: ?std
         a.analysis_cache.hits += 1;
     }
 
-    const parsed = std.json.parseFromSlice(std.json.Value, allocator, a.analysis_cache.index_json.?, .{}) catch return error.ExecutionFailed;
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, a.analysis_cache.index_json.?, .{}) catch |err| return symbolCacheError(allocator, "parse_cache", err);
     defer parsed.deinit();
     const cached_obj = switch (parsed.value) {
         .object => |o| o,
-        else => return error.ExecutionFailed,
+        else => return toolErrorResult(allocator, .{
+            .tool = "zig_workspace_symbol_cache",
+            .operation = "read_symbol_cache",
+            .phase = "decode_cache",
+            .code = "unexpected_cache_shape",
+            .category = "internal_contract",
+            .resolution = "Refresh the cache with refresh=true; if it repeats, report the workspace_symbol_cache response with the zigar version.",
+        }),
     };
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);

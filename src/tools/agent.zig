@@ -14,6 +14,9 @@ const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
 const argInt = common.argInt;
+const missingArgumentResult = common.missingArgumentResult;
+const invalidArgumentResult = common.invalidArgumentResult;
+const toolErrorFromError = common.toolErrorFromError;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const commandResultValue = common.commandResultValue;
@@ -67,7 +70,7 @@ pub fn zigarContextPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 }
 
 pub fn zigarNextAction(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const goal = argString(args, "goal") orelse return error.InvalidArguments;
+    const goal = argString(args, "goal") orelse return missingArgumentResult(allocator, "zigar_next_action", "goal", "short task or failure description");
     return structured(allocator, nextActionPlanValue(allocator, goal, argString(args, "changed_files"), argString(args, "last_error")) catch return error.OutOfMemory);
 }
 
@@ -169,7 +172,7 @@ pub fn zigarImpact(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
 pub fn zigarProjectProfile(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const profile_path = ".zigar/profile.json";
     const generated = if (argString(args, "content")) |content| blk: {
-        const parsed = std.json.parseFromSlice(std.json.Value, allocator, content, .{}) catch return error.InvalidArguments;
+        const parsed = std.json.parseFromSlice(std.json.Value, allocator, content, .{}) catch return invalidArgumentResult(allocator, "zigar_project_profile", "content", "valid JSON object", "invalid_json", "Pass a JSON object produced by zigar_project_profile or omit content to regenerate the profile.");
         defer parsed.deinit();
         break :blk json_result.cloneValue(allocator, parsed.value) catch return error.OutOfMemory;
     } else try generatedProjectProfileValue(allocator, a);
@@ -182,7 +185,15 @@ pub fn zigarProjectProfile(a: *App, allocator: std.mem.Allocator, args: ?std.jso
         a.workspace.writeFile(a.io, profile_path, out.items) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.PathOutsideWorkspace, error.EmptyPath, error.AccessDenied, error.PermissionDenied => return workspacePathErrorResult(a, allocator, "zigar_project_profile", profile_path, err),
-            else => return error.ExecutionFailed,
+            else => return toolErrorFromError(allocator, .{
+                .tool = "zigar_project_profile",
+                .operation = "write_project_profile",
+                .phase = "workspace_write",
+                .code = "write_failed",
+                .category = "filesystem",
+                .resolution = "Confirm .zigar/profile.json can be created or overwritten inside the workspace, then retry with apply=true.",
+                .details = &.{.{ .key = "path", .value = .{ .string = profile_path } }},
+            }, err),
         };
     }
 

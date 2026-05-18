@@ -10,11 +10,15 @@ const errorText = common.errorText;
 const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
+const missingArgumentResult = common.missingArgumentResult;
+const invalidArgumentResult = common.invalidArgumentResult;
+const toolErrorFromError = common.toolErrorFromError;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const runAndFormatTimeout = common.runAndFormatTimeout;
 const toolTimeout = common.toolTimeout;
 const backendErrorResult = common.backendErrorResult;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const structuredText = common.structuredText;
 const freeArgList = common.freeArgList;
 
@@ -37,17 +41,17 @@ pub fn zigProfilePlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 }
 
 pub fn zigProfileRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const cmd = argString(args, "command") orelse return error.InvalidArguments;
-    const split = try splitToolArgs(allocator, cmd);
+    const cmd = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_profile_run", "command", "shell-style command string");
+    const split = splitToolArgs(allocator, cmd) catch |err| return splitToolArgsErrorResult(allocator, "zig_profile_run", "command", cmd, err);
     defer freeArgList(allocator, split);
-    if (split.len == 0) return error.InvalidArguments;
+    if (split.len == 0) return invalidArgumentResult(allocator, "zig_profile_run", "command", "non-empty command string", cmd, "Pass the executable and arguments to run under the profiler.");
     return runAndFormatTimeout(a, allocator, split, "profile command", toolTimeout(a, args));
 }
 
 pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const format = argString(args, "format") orelse "guess";
-    const input = argString(args, "input") orelse return error.InvalidArguments;
-    const output = argString(args, "output") orelse return error.InvalidArguments;
+    const input = argString(args, "input") orelse return missingArgumentResult(allocator, "zig_flamegraph", "input", "workspace-relative profiler input path");
+    const output = argString(args, "output") orelse return missingArgumentResult(allocator, "zig_flamegraph", "output", "workspace-relative SVG output path");
     const input_abs = a.workspace.resolve(input) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", input, err);
     defer allocator.free(input_abs);
     const output_abs = a.workspace.resolveOutput(output) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", output, err);
@@ -79,7 +83,15 @@ pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
         defer allocator.free(run_output);
         return errorText(allocator, run_output);
     }
-    a.workspace.writeFile(a.io, output, result.stdout) catch return error.ExecutionFailed;
+    a.workspace.writeFile(a.io, output, result.stdout) catch |err| return toolErrorFromError(allocator, .{
+        .tool = "zig_flamegraph",
+        .operation = "write_output",
+        .phase = "workspace_write",
+        .code = "write_failed",
+        .category = "filesystem",
+        .resolution = "Choose an output path inside the workspace that zigar can create or overwrite.",
+        .details = &.{.{ .key = "output", .value = .{ .string = output } }},
+    }, err);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     obj.put(allocator, "kind", .{ .string = "zig_flamegraph" }) catch return error.OutOfMemory;
@@ -91,9 +103,9 @@ pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 }
 
 pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const before = argString(args, "before") orelse return error.InvalidArguments;
-    const after = argString(args, "after") orelse return error.InvalidArguments;
-    const output = argString(args, "output") orelse return error.InvalidArguments;
+    const before = argString(args, "before") orelse return missingArgumentResult(allocator, "zig_flamegraph_diff", "before", "workspace-relative folded stack path");
+    const after = argString(args, "after") orelse return missingArgumentResult(allocator, "zig_flamegraph_diff", "after", "workspace-relative folded stack path");
+    const output = argString(args, "output") orelse return missingArgumentResult(allocator, "zig_flamegraph_diff", "output", "workspace-relative SVG output path");
     const before_abs = a.workspace.resolve(before) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", before, err);
     defer allocator.free(before_abs);
     const after_abs = a.workspace.resolve(after) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", after, err);
@@ -114,7 +126,15 @@ pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
         defer allocator.free(run_output);
         return errorText(allocator, run_output);
     }
-    a.workspace.writeFile(a.io, folded_out, diff.stdout) catch return error.ExecutionFailed;
+    a.workspace.writeFile(a.io, folded_out, diff.stdout) catch |err| return toolErrorFromError(allocator, .{
+        .tool = "zig_flamegraph_diff",
+        .operation = "write_intermediate_diff",
+        .phase = "workspace_write",
+        .code = "write_failed",
+        .category = "filesystem",
+        .resolution = "Confirm the .zigar-cache/profile directory can be created inside the workspace and retry.",
+        .details = &.{.{ .key = "output", .value = .{ .string = folded_out } }},
+    }, err);
     var obj = std.json.ObjectMap.empty;
     obj.put(allocator, "input", .{ .string = folded_out }) catch return error.OutOfMemory;
     obj.put(allocator, "output", .{ .string = output }) catch return error.OutOfMemory;

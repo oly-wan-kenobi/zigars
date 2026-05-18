@@ -8,6 +8,7 @@ const common = @import("common.zig");
 const App = common.App;
 const structured = common.structured;
 const argString = common.argString;
+const missingArgumentResult = common.missingArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const runAndFormat = common.runAndFormat;
 const runAndFormatTimeout = common.runAndFormatTimeout;
@@ -15,6 +16,7 @@ const toolTimeout = common.toolTimeout;
 const commandResultValue = common.commandResultValue;
 const backendErrorResult = common.backendErrorResult;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const compilerInsightsValue = common.compilerInsightsValue;
 const ownedString = common.ownedString;
 const buildExplainCommand = common.buildExplainCommand;
@@ -52,7 +54,8 @@ pub fn zigTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp
 }
 
 pub fn zigBuild(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_build", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     const argv = command.joinArgv(allocator, &.{ a.config.zig_path, "build" }, extra) catch return error.OutOfMemory;
     defer allocator.free(argv);
@@ -77,14 +80,15 @@ pub fn zigTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp
         list.append(allocator, "build") catch return error.OutOfMemory;
         list.append(allocator, "test") catch return error.OutOfMemory;
     }
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_test", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
     return runAndFormatTimeout(a, allocator, list.items, "zig test", toolTimeout(a, args));
 }
 
 pub fn zigCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_check", "file", "workspace-relative Zig source path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_check", file, err);
     defer allocator.free(resolved);
     return runAndFormatTimeout(a, allocator, &.{ a.config.zig_path, "ast-check", resolved }, "zig ast-check", toolTimeout(a, args));
@@ -208,10 +212,11 @@ pub fn zigExplainErrors(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 }
 
 pub fn zigTranslateC(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_translate_c", "file", "workspace-relative C source path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_translate_c", file, err);
     defer allocator.free(resolved);
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_translate_c", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     const base = &.{ a.config.zig_path, "translate-c", resolved };
     const argv = command.joinArgv(allocator, base, extra) catch return error.OutOfMemory;

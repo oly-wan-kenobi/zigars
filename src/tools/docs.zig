@@ -146,7 +146,7 @@ pub fn zigLangRefSearch(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
 pub fn readSourceArg(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !struct { name: []const u8, bytes: []u8 } {
     _ = allocator;
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return error.MissingFile;
     const bytes = try a.workspace.readFileAlloc(a.io, file, 4 * 1024 * 1024);
     return .{ .name = file, .bytes = bytes };
 }

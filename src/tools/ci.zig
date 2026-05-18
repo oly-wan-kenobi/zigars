@@ -9,14 +9,16 @@ const App = common.App;
 const errorText = common.errorText;
 const structured = common.structured;
 const argString = common.argString;
+const missingArgumentResult = common.missingArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const commandResultValue = common.commandResultValue;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const freeArgList = common.freeArgList;
 
 pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const file = argString(args, "file") orelse return error.InvalidArguments;
+    const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_ci_annotations", "file", "workspace-relative Zig source path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_ci_annotations", file, err);
     defer allocator.free(resolved);
     a.command_calls += 1;
@@ -96,7 +98,8 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mc
         list.append(allocator, "build") catch return error.OutOfMemory;
         list.append(allocator, "test") catch return error.OutOfMemory;
     }
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_junit", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
     a.command_calls += 1;
@@ -136,7 +139,8 @@ pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     var paths = std.mem.tokenizeAny(u8, paths_text, ", \t\r\n");
     var results = std.json.Array.init(allocator);
     while (paths.next()) |zig_path| {
-        const extra = try splitToolArgs(allocator, argString(args, "args"));
+        const raw_extra_args = argString(args, "args") orelse "";
+        const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, "zig_matrix_check", "args", raw_extra_args, err);
         defer freeArgList(allocator, extra);
         const argv = command.joinArgv(allocator, &.{ zig_path, "build", "test" }, extra) catch return error.OutOfMemory;
         defer allocator.free(argv);

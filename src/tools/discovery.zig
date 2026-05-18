@@ -14,11 +14,14 @@ const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
 const argInt = common.argInt;
+const missingArgumentResult = common.missingArgumentResult;
+const invalidArgumentResult = common.invalidArgumentResult;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const argvValue = common.argvValue;
 const backendErrorResult = common.backendErrorResult;
 const splitToolArgs = common.splitToolArgs;
+const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const jsonTextOnly = common.jsonTextOnly;
 const probeBackend = common.probeBackend;
 const backendProbeCacheValue = common.backendProbeCacheValue;
@@ -368,8 +371,8 @@ pub fn versionManagersValue(allocator: std.mem.Allocator, a: *App, probe: bool, 
 }
 
 pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
-    const entry = tool_metadata.findEntry(tool_name) orelse return error.InvalidArguments;
+    const tool_name = argString(args, "tool") orelse return missingArgumentResult(allocator, "zig_command_plan", "tool", "registered tool name");
+    const entry = tool_metadata.findEntry(tool_name) orelse return invalidArgumentResult(allocator, "zig_command_plan", "tool", "registered tool name", tool_name, "Call zigar_capabilities or zigar_schema to inspect the registered tool names, then retry with one of those names.");
     const plan = tool_metadata.commandPlanFor(entry.id) orelse {
         return commandPlanUnsupportedResult(allocator, entry);
     };
@@ -377,8 +380,8 @@ pub fn zigCommandPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 }
 
 pub fn zigToolPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const tool_name = argString(args, "tool") orelse return error.InvalidArguments;
-    const entry = tool_metadata.findEntry(tool_name) orelse return error.InvalidArguments;
+    const tool_name = argString(args, "tool") orelse return missingArgumentResult(allocator, "zig_tool_plan", "tool", "registered tool name");
+    const entry = tool_metadata.findEntry(tool_name) orelse return invalidArgumentResult(allocator, "zig_tool_plan", "tool", "registered tool name", tool_name, "Call zigar_capabilities or zigar_schema to inspect the registered tool names, then retry with one of those names.");
     return switch (entry.plan) {
         .exact_command => |plan| exactCommandPlanResult(a, allocator, args, entry, plan, "zig_tool_plan"),
         else => toolPlanPolicyResult(allocator, entry),
@@ -427,7 +430,8 @@ fn exactCommandPlanResult(
             list.append(allocator, resolved_path.?) catch return error.OutOfMemory;
         },
     }
-    const extra = try splitToolArgs(allocator, argString(args, "args"));
+    const raw_extra_args = argString(args, "args") orelse "";
+    const extra = splitToolArgs(allocator, raw_extra_args) catch |err| return splitToolArgsErrorResult(allocator, planner_name, "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
 
