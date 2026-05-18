@@ -1,5 +1,4 @@
 const std = @import("std");
-const zigar = @import("zigar");
 
 const common = @import("common.zig");
 
@@ -7,7 +6,6 @@ const App = common.App;
 const LspClient = common.LspClient;
 const argInt = common.argInt;
 const lspDiagnosticsInsightsValue = common.lspDiagnosticsInsightsValue;
-const tooling = zigar.tooling;
 
 pub fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wait_ms: i64) void {
     var elapsed: i64 = 0;
@@ -24,7 +22,7 @@ pub fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wai
 }
 
 pub fn diagnosticWaitMs(args: ?std.json.Value) i64 {
-    return @max(0, @min(argInt(args, "wait_ms", tooling.intDefault("wait_ms", 500)), 5000));
+    return @max(0, @min(argInt(args, "wait_ms", 500), 5000));
 }
 
 pub fn diagnosticsStructuredValue(allocator: std.mem.Allocator, notification: []const u8) !std.json.Value {

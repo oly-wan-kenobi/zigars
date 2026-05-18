@@ -169,13 +169,13 @@ fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.Sch
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     for (input_schema.fields) |field| {
-        try obj.put(allocator, field[0], try richSchemaFieldValue(allocator, field));
+        try obj.put(allocator, field[0], try richSchemaFieldValue(allocator, input_schema, field));
     }
     return .{ .object = obj };
 }
 
-fn richSchemaFieldValue(allocator: std.mem.Allocator, field: tooling.SchemaField) !std.json.Value {
-    const hint = tooling.hintFor(field);
+fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, field: tooling.SchemaField) !std.json.Value {
+    const hint = tooling.hintFor(input_schema, field);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "type", .{ .string = field[1] });

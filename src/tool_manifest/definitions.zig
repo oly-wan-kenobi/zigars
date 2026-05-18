@@ -1,8 +1,10 @@
 const types = @import("types.zig");
 
 const schema = types.schema;
+const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const handler = types.handler;
+const fieldHint = types.fieldHint;
 
 pub const definitions = struct {
     pub const zigar_capabilities = tool(.{
@@ -74,7 +76,9 @@ pub const definitions = struct {
     });
     pub const zigar_context_pack = tool(.{
         .description = "Return a compact deterministic Zig project context pack for agent orientation.",
-        .input_schema = schema(&.{ .{ "mode", "string", false }, .{ "token_budget", "integer", false }, .{ "include", "string", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "token_budget", "integer", false }, .{ "include", "string", false } }, &.{
+            fieldHint("mode", .{ .description = "Context-pack depth.", .default_string = "standard", .enum_values = &.{ "tiny", "standard", "deep" } }),
+        }),
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarContextPack"),
@@ -90,7 +94,9 @@ pub const definitions = struct {
     });
     pub const zigar_agent_guide = tool(.{
         .description = "Return compact Codex/Claude/generic instructions for using zigar efficiently.",
-        .input_schema = schema(&.{ .{ "client", "string", false }, .{ "task", "string", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "client", "string", false }, .{ "task", "string", false } }, &.{
+            fieldHint("client", .{ .description = "Agent/client profile.", .default_string = "generic", .enum_values = &.{ "codex", "claude", "generic" } }),
+        }),
         .read_only = true,
         .group = .agent_workflows,
         .handler = handler(.agent, "zigarAgentGuide"),
@@ -98,7 +104,9 @@ pub const definitions = struct {
     });
     pub const zigar_validate_patch = tool(.{
         .description = "Run an agent-friendly changed-file validation loop and return structured blockers.",
-        .input_schema = schema(&.{ .{ "mode", "string", false }, .{ "changed_files", "string", false }, .{ "stop_on_failure", "boolean", false }, .{ "timeout_ms", "integer", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "changed_files", "string", false }, .{ "stop_on_failure", "boolean", false }, .{ "timeout_ms", "integer", false } }, &.{
+            fieldHint("mode", .{ .description = "Validation depth.", .default_string = "standard", .enum_values = &.{ "quick", "standard", "full" } }),
+        }),
         .read_only = true,
         .group = .agent_workflows,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
@@ -107,7 +115,9 @@ pub const definitions = struct {
     });
     pub const zigar_failure_fusion = tool(.{
         .description = "Fuse compiler/test output, primary failure data, impact hints, and suggested zigar tools.",
-        .input_schema = schema(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }, &.{
+            fieldHint("command", .{ .description = "Focused Zig command mode.", .enum_values = &.{ "check", "test", "build", "build-test", "fmt-check" } }),
+        }),
         .read_only = true,
         .group = .agent_workflows,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
@@ -220,7 +230,9 @@ pub const definitions = struct {
     });
     pub const zig_compile_error_index = tool(.{
         .description = "Parse compiler output or run a focused Zig command and return grouped compile diagnostics.",
-        .input_schema = schema(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }, &.{
+            fieldHint("command", .{ .description = "Focused Zig command mode.", .enum_values = &.{ "check", "test", "build", "build-test", "fmt-check" } }),
+        }),
         .read_only = true,
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
@@ -229,7 +241,9 @@ pub const definitions = struct {
     });
     pub const zig_explain_errors = tool(.{
         .description = "Run a focused Zig command and return parsed compiler findings plus deterministic next actions.",
-        .input_schema = schema(&.{ .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }, &.{
+            fieldHint("command", .{ .description = "Focused Zig command mode.", .enum_values = &.{ "check", "test", "build", "build-test", "fmt-check" } }),
+        }),
         .read_only = true,
         .group = .core_zig,
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
@@ -748,7 +762,9 @@ pub const definitions = struct {
     });
     pub const zig_flamegraph = tool(.{
         .description = "Convert profiler output to SVG through zflame.",
-        .input_schema = schema(&.{ .{ "format", "string", false }, .{ "input", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "palette", "string", false }, .{ "min_width", "string", false }, .{ "hash", "boolean", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "format", "string", false }, .{ "input", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "palette", "string", false }, .{ "min_width", "string", false }, .{ "hash", "boolean", false } }, &.{
+            fieldHint("format", .{ .description = "Profiler input format passed to zflame.", .default_string = "guess", .enum_values = &.{ "perf", "dtrace", "sample", "vtune", "xctrace", "recursive", "guess" } }),
+        }),
         .read_only = false,
         .group = .profiling,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },
