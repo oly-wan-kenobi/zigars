@@ -1,9 +1,9 @@
 # zigar
 
-`zigar` is a deterministic MCP server for Zig development. It gives MCP clients
-such as Codex a structured Zig workbench: compiler commands, formatting, ZLS
-code intelligence, local docs lookup, static analysis summaries, zwanzig
-linting, and zflame profiling helpers.
+`zigar` is a deterministic MCP server for Zig development. It gives MCP-capable
+agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
+compiler commands, formatting, ZLS code intelligence, local docs lookup, static
+analysis summaries, zwanzig linting, and zflame profiling helpers.
 
 `zigar` is intentionally not an AI code generator. It exposes tools that inspect,
 run, format, and analyze Zig projects. Any source write requires an explicit
@@ -133,10 +133,20 @@ Options:
 --strict-workspace
 ```
 
-Use `--transport stdio` for Codex. `--transport http` is available for clients
-that need an HTTP endpoint.
+Use `--transport stdio` for local agent clients. `--transport http` is available
+for clients or wrappers that need an HTTP endpoint.
 
-## Codex Configuration
+## Agent Client Configuration
+
+Zigar works with any MCP client that can launch a local stdio server. Client
+config shapes vary, but the zigar command stays the same: use an absolute
+`command`, pass `--transport stdio`, and pin `--workspace` unless the client
+starts servers from the active project directory.
+
+For Claude, Gemini CLI, Hermes, and generic client guidance, see
+[docs/agent-clients.md](docs/agent-clients.md).
+
+### Codex
 
 Add a server entry to `~/.codex/config.toml`:
 
@@ -227,9 +237,9 @@ The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.
 is built from `src/tool_catalog.json` plus the typed registry metadata and
 checked in CI.
 
-For Codex/Claude-oriented workflows, see
-[docs/agent-workflows.md](docs/agent-workflows.md). The short version is:
-start with `zigar_context_pack`, route uncertain work through
+For agent workflows, see [docs/agent-workflows.md](docs/agent-workflows.md).
+The short version is: start with `zigar_context_pack`, ask
+`zigar_agent_guide` for the client profile, route uncertain work through
 `zigar_next_action`, and finish with `zigar_validate_patch`.
 
 ## Safety Model
@@ -250,8 +260,10 @@ start with `zigar_context_pack`, route uncertain work through
 
 More detail:
 
-- [Codex setup](docs/codex.md): stdio configuration, first calls, and health
-  checks.
+- [Agent clients](docs/agent-clients.md): Codex, Claude, Gemini CLI, Hermes, and
+  generic MCP client setup.
+- [Codex setup](docs/codex.md): focused Codex stdio configuration, first calls,
+  and health checks.
 - [Agent workflows](docs/agent-workflows.md): context, planning, validation, and
   failure-triage loops for MCP clients.
 - [Tool discovery](docs/tools.md) and
@@ -333,7 +345,7 @@ zig build smoke stdio-fixtures coverage
 To verify the release archive path too, run
 `zig build dist release-asset-smoke`.
 
-Example Codex configs and sample tool calls live in [examples](examples).
+Example agent configs and sample tool calls live in [examples](examples).
 
 ## License
 

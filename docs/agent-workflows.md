@@ -1,7 +1,7 @@
 # Agent Workflows
 
-Zigar exposes deterministic workflow tools so Codex, Claude, and other MCP
-clients can avoid guessing which low-level Zig command to run next.
+Zigar exposes deterministic workflow tools so Codex, Claude, Gemini CLI, Hermes,
+and other MCP clients can avoid guessing which low-level Zig command to run next.
 
 ## Start Here
 
@@ -14,8 +14,9 @@ Common goals such as `fix compile error`, `fix failing tests`, `format`, `review
 and `profile` route to concrete zigar tools.
 
 Use `zigar_agent_guide` when a client needs compact operating instructions. It
-includes Codex/Claude-friendly rules, workflow hints, and common aliases such as
-`fmt -> zig_format` and `done -> zigar_validate_patch`.
+includes Codex, Claude, Gemini, Hermes, and generic rules, workflow hints, and
+common aliases such as `fmt -> zig_format` and
+`done -> zigar_validate_patch`.
 
 ## Finish Gate
 

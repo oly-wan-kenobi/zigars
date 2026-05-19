@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "zigar": {
+      "type": "stdio",
+      "command": "/absolute/path/to/zigar",
+      "args": [
+        "--transport",
+        "stdio",
+        "--workspace",
+        "/absolute/path/to/zig/project",
+        "--strict-workspace",
+        "--zig-path",
+        "/absolute/path/to/zig",
+        "--zls-path",
+        "/absolute/path/to/zls"
+      ],
+      "env": {}
+    }
+  }
+}
