@@ -1,4 +1,5 @@
 const types = @import("types.zig");
+const backend_contracts = @import("../backend_contracts.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
@@ -739,8 +740,11 @@ pub const definitions = struct {
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_analysis_graphs = tool(.{
-        .description = "Run zwanzig graph/visualization options, writing only to an explicit workspace output path.",
-        .input_schema = schema(&.{ .{ "path", "string", true }, .{ "output", "string", true }, .{ "args", "string", false } }),
+        .description = "Run a typed zwanzig graph dump mode, writing DOT files under an explicit workspace output directory.",
+        .input_schema = schemaWithHints(&.{ .{ "mode", "string", true }, .{ "path", "string", true }, .{ "output", "string", true }, .{ "args", "string", false } }, &.{
+            fieldHint("mode", .{ .description = "zwanzig graph dump mode.", .enum_values = backend_contracts.zwanzig_graph_mode_names[0..] }),
+            fieldHint("output", .{ .description = "Workspace-relative graph output directory.", .path_kind = "output_path" }),
+        }),
         .read_only = false,
         .group = .zwanzig,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },

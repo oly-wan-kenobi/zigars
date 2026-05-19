@@ -144,6 +144,12 @@ through zigar and is the fastest end-to-end check. For SARIF, call
 `zig_lint_sarif` and upload the returned SARIF in CI if your platform supports
 SARIF ingestion.
 
+`zig_analysis_graphs` is mode-based. Use one of `cfg`, `exploded_graph`,
+`annotated_cfg`, or `path_trace`; zigar maps that to zwanzig's corresponding
+`--dump-*` flag, creates the requested workspace-local output directory, and
+verifies that the backend wrote DOT files there. Raw graph flags are not part of
+the public zigar schema.
+
 ## zflame And diff-folded
 
 zflame powers `zig_flamegraph`. diff-folded powers the first stage of

@@ -95,7 +95,7 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 ## Compact Argument Hints
 
 - `zig_allocations`: required `file: string`
-- `zig_analysis_graphs`: required `path: string`, `output: string`; optional `args: string`
+- `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
 - `zig_build`: optional `args: string`, `timeout_ms: integer`
 - `zig_builtin_doc`: required `query: string`
 - `zig_changed_files_plan`: optional `timeout_ms: integer`
