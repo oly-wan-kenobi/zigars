@@ -211,7 +211,7 @@ Source writes require apply=true.
   `zig_document_close`, `zig_document_status`
 - Docs: `zig_builtin_list`, `zig_builtin_doc`, `zig_builtin_list_json`,
   `zig_std_search`, `zig_std_search_json`, `zig_std_item`,
-  `zig_lang_ref_search`
+  `zig_lang_ref_search` for language-reference sections
 - Static analysis: `zig_import_graph`, `zig_import_graph_json`,
   `zig_decl_summary`, `zig_decl_summary_json`, `zig_allocations`,
   `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`,

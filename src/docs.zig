@@ -1,10 +1,14 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const langref = @import("docs/langref.zig");
 
 pub const BuiltinDoc = struct {
     name: []const u8,
     signature: []const u8,
     summary: []const u8,
 };
+
+pub const LangRefSection = langref.Section;
 
 pub const builtins = [_]BuiltinDoc{
     .{ .name = "@import", .signature = "@import(comptime path: []const u8) type", .summary = "Imports a Zig source file or package module at comptime." },
@@ -31,6 +35,8 @@ pub const builtins = [_]BuiltinDoc{
     .{ .name = "@src", .signature = "@src() std.builtin.SourceLocation", .summary = "Returns source location information." },
     .{ .name = "@panic", .signature = "@panic(message: []const u8) noreturn", .summary = "Terminates execution with a panic message." },
 };
+
+pub const langref_sections = langref.sections;
 
 pub fn builtinList(allocator: std.mem.Allocator) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
@@ -116,9 +122,7 @@ pub fn searchStd(
 }
 
 pub fn langRefSearch(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8, query: []const u8, limit: usize) ![]u8 {
-    const docs_dir = try std.fs.path.join(allocator, &.{ lib_dir, "docs" });
-    defer allocator.free(docs_dir);
-    return searchStd(allocator, io, docs_dir, query, limit);
+    return langref.search(allocator, io, lib_dir, query, limit);
 }
 
 fn asciiLowerAlloc(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
@@ -147,4 +151,37 @@ test "builtin docs find import" {
     const text = try builtinDoc(std.testing.allocator, "import");
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "@import") != null);
+}
+
+test {
+    _ = langref;
+}
+
+test "std search ignores non-zig documentation files" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "std");
+    try tmp.dir.writeFile(io, .{ .sub_path = "std/readme.md", .data = "docs_only_token\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "std/main.zig", .data = "pub const x = 1;\n" });
+
+    const std_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "std");
+    defer allocator.free(std_dir);
+    const text = try searchStd(allocator, io, std_dir, "docs_only_token", 10);
+    defer allocator.free(text);
+
+    try std.testing.expect(std.mem.indexOf(u8, text, "No stdlib matches") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "readme.md") == null);
+}
+
+fn tmpAbs(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8, child: []const u8) ![]u8 {
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp_sub_path });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    return std.fs.path.join(allocator, &.{ base_z[0..], child });
 }

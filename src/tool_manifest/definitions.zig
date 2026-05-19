@@ -486,7 +486,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
     });
     pub const zig_lang_ref_search = tool(.{
-        .description = "Search Zig's installed documentation sources.",
+        .description = "Search Zig language-reference sections from installed langref HTML or zigar's bundled fallback index.",
         .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }),
         .read_only = true,
         .group = .docs,
