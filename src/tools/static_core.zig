@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const analysis = zigar.analysis;
+const analysis_contract = zigar.analysis_contract;
 const command = zigar.command;
 const docs = zigar.docs;
 const common = @import("common.zig");
@@ -189,6 +190,7 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     obj.put(allocator, "workspace", .{ .string = a.workspace.root }) catch return error.OutOfMemory;
+    analysis_contract.putMetadata(allocator, &obj, "zig_build_targets") catch return error.OutOfMemory;
     if (graph_obj.get("build_zig")) |build_zig| {
         const build_obj = switch (build_zig) {
             .object => |o| o,
@@ -242,8 +244,7 @@ pub fn zigBuildOptions(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_build_options" });
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_build_option_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_build_options");
     try obj.put(allocator, "options", .{ .array = options });
     try obj.put(allocator, "commands", .{ .array = commands });
     return structured(allocator, .{ .object = obj });
@@ -348,6 +349,7 @@ pub fn zigChangedFilesPlan(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_changed_files_plan" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_changed_files_plan");
     try obj.put(allocator, "ok", .{ .bool = result.succeeded() });
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "commands", .{ .array = commands });
@@ -399,6 +401,7 @@ pub fn zigTargetMatrixPlan(_: *App, allocator: std.mem.Allocator, args: ?std.jso
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_target_matrix_plan" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_target_matrix_plan");
     try obj.put(allocator, "matrix", .{ .array = matrix });
     try obj.put(allocator, "resolution", .{ .string = "Use zig_matrix_check when you have concrete Zig binaries to execute; this tool only plans commands." });
     return structured(allocator, .{ .object = obj });

@@ -11,6 +11,17 @@ fixes at maintainer discretion when a low-risk backport is practical.
 Please report vulnerabilities privately to the maintainers rather than opening a
 public issue first.
 
+Preferred channel:
+
+- Use GitHub private vulnerability reporting for this repository:
+  <https://github.com/oly-wan-kenobi/zigar/security/advisories/new>
+
+Fallback channel:
+
+- If GitHub private reporting is unavailable because of repository visibility or
+  account settings, email `oliver.guenthardt@digitecgalaxus.ch` with the subject
+  prefix `[zigar security]`.
+
 Include:
 
 - Affected zigar version or commit.
@@ -20,6 +31,17 @@ Include:
 - Whether the issue can read or write files outside `--workspace`, execute
   unexpected commands, corrupt source files without `apply=true`, or leak data
   through stdout.
+
+Do not include exploit details in a public issue or discussion before maintainers
+have acknowledged and triaged the report.
+
+## Response Expectations
+
+Maintainers aim to acknowledge a private vulnerability report within 7 days and
+provide an initial triage assessment within 14 days. The expected fix and
+disclosure timeline depends on severity, available reproductions, and release
+risk. When a fix ships, release notes should describe the impact and affected
+versions without exposing unnecessary exploit detail.
 
 ## Security Boundaries
 

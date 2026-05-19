@@ -57,6 +57,8 @@ pub fn zigBuiltinListJson(_: *App, allocator: std.mem.Allocator, _: ?std.json.Va
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
+    obj.put(allocator, "source", docs.docs_source.value(allocator, docs.docs_source.curatedBuiltins()) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj.put(allocator, "count", .{ .integer = @intCast(docs.builtins.len) }) catch return error.OutOfMemory;
     obj.put(allocator, "builtins", .{ .array = items }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
@@ -123,7 +125,9 @@ pub fn searchZigFilesJson(allocator: std.mem.Allocator, io: std.Io, root: []cons
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
+    obj.put(allocator, "source", docs.docs_source.value(allocator, docs.docs_source.stdlibSource(root, null)) catch return error.OutOfMemory) catch return error.OutOfMemory;
     obj.put(allocator, "query", .{ .string = query }) catch return error.OutOfMemory;
+    obj.put(allocator, "limit", .{ .integer = @intCast(limit) }) catch return error.OutOfMemory;
     obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) }) catch return error.OutOfMemory;
     obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) }) catch return error.OutOfMemory;
     obj.put(allocator, "matches", .{ .array = matches }) catch return error.OutOfMemory;

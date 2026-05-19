@@ -50,6 +50,9 @@ zigar --zls-timeout-ms 60000
 Unsaved documents opened through `zig_document_open` or `zig_document_change` are
 retained in process memory and replayed if zigar restarts its ZLS session. Close
 documents with `zig_document_close` when a client no longer needs unsaved state.
+Use `zig_document_status` for a specific file, or `zigar_metrics` for aggregate
+open document count, dirty document count, retained bytes, limits, and last ZLS
+replay summary.
 
 ## Command Output Is Too Large
 
@@ -58,6 +61,13 @@ failures in structured results. zigar uses a `fail_on_limit` policy: if stdout
 or stderr exceeds the configured capture limit, it fails the command instead of
 returning partial output. If output limits are reached, run the underlying
 command directly or narrow the check with file-focused tools such as `zig_check`.
+
+## HTTP Host Is Rejected
+
+zigar's HTTP transport is local-only by default. Use stdio for normal agent
+clients, or bind HTTP to `127.0.0.1`, `localhost`, or `::1` when a local wrapper
+needs an HTTP endpoint. Non-loopback hosts such as `0.0.0.0` are rejected because
+zigar does not currently provide an authenticated remote HTTP mode.
 
 ## Quoted `args` Values
 

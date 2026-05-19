@@ -1,10 +1,11 @@
 const std = @import("std");
+const analysis_contract = @import("analysis_contract.zig");
 
 pub fn declSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# Declaration summary for {s}\n\n", .{file});
-    try out.appendSlice(allocator, "Confidence: heuristic text scan. Verify with ZLS or `zig ast-check` before making destructive edits.\n\n");
+    try out.appendSlice(allocator, "Confidence: medium heuristic text scan (orientation_only). Verify with ZLS or `zig ast-check` before making destructive edits.\n\n");
     var lines = std.mem.splitScalar(u8, contents, '\n');
     var line_no: usize = 1;
     var count: usize = 0;
@@ -27,7 +28,7 @@ pub fn allocationSummary(allocator: std.mem.Allocator, file: []const u8, content
         "ArrayList",
         "ArenaAllocator",
         "GeneralPurposeAllocator",
-    });
+    }, "Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
 }
 
 pub fn errorSetSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
@@ -37,7 +38,7 @@ pub fn errorSetSummary(allocator: std.mem.Allocator, file: []const u8, contents:
         "catch",
         "try ",
         "!",
-    });
+    }, "Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
 }
 
 pub fn publicApiSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
@@ -47,14 +48,14 @@ pub fn publicApiSummary(allocator: std.mem.Allocator, file: []const u8, contents
         "pub fn ",
         "pub extern ",
         "pub export ",
-    });
+    }, "Confidence: medium heuristic keyword scan (advisory). Verify public API changes with ZLS, compiler checks, and release review.\n\n");
 }
 
 pub fn deadDeclCandidates(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# Dead declaration candidates for {s}\n\n", .{file});
-    try out.appendSlice(allocator, "Confidence: low heuristic. Private declarations listed here still need reference checks before deletion.\n\n");
+    try out.appendSlice(allocator, "Confidence: low heuristic (orientation_only). Private declarations listed here still need reference checks before deletion.\n\n");
 
     var lines = std.mem.splitScalar(u8, contents, '\n');
     var line_no: usize = 1;
@@ -79,7 +80,7 @@ pub fn importGraph(
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.appendSlice(allocator, "# Import graph\n\n");
-    try out.appendSlice(allocator, "Confidence: heuristic string-literal @import scan.\n\n");
+    try out.appendSlice(allocator, "Confidence: medium heuristic string-literal @import scan (orientation_only).\n\n");
 
     var dir = try std.Io.Dir.openDirAbsolute(io, root, .{ .iterate = true });
     defer dir.close(io);
@@ -161,8 +162,7 @@ pub fn importGraphJson(
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_import_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_import_graph_json");
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "file_count", .{ .integer = @intCast(seen) });
     try obj.put(allocator, "skipped_files", .{ .array = skipped_files });
@@ -187,8 +187,7 @@ pub fn declSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents:
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "file", try ownedString(allocator, file));
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_declaration_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_decl_summary_json");
     try obj.put(allocator, "declarations", .{ .array = decls });
     return .{ .object = obj };
 }
@@ -233,8 +232,7 @@ pub fn testDiscoverJson(
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_test_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_test_discover");
     try obj.put(allocator, "tests", .{ .array = tests });
     try obj.put(allocator, "count", .{ .integer = @intCast(count) });
     try obj.put(allocator, "skipped_files", .{ .array = skipped_files });
@@ -256,11 +254,12 @@ fn keywordSummary(
     contents: []const u8,
     title: []const u8,
     keywords: []const []const u8,
+    confidence_line: []const u8,
 ) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# {s} for {s}\n\n", .{ title, file });
-    try out.appendSlice(allocator, "Confidence: heuristic keyword scan. Review matches before acting.\n\n");
+    try out.appendSlice(allocator, confidence_line);
 
     var lines = std.mem.splitScalar(u8, contents, '\n');
     var line_no: usize = 1;
@@ -349,8 +348,14 @@ test "heuristic JSON scans report skipped file count" {
     const root = root_z[0..];
 
     const imports = try importGraphJson(allocator, std.testing.io, root, 10);
+    try std.testing.expectEqualStrings("heuristic_import_scan", imports.object.get("analysis_kind").?.string);
+    try std.testing.expectEqualStrings("orientation_only", imports.object.get("confidence_class").?.string);
+    try std.testing.expect(imports.object.get("limitations").?.array.items.len > 0);
     try std.testing.expectEqual(@as(i64, 0), imports.object.get("skipped_file_count").?.integer);
 
     const tests = try testDiscoverJson(allocator, std.testing.io, root, 10);
+    try std.testing.expectEqualStrings("heuristic_test_scan", tests.object.get("analysis_kind").?.string);
+    try std.testing.expectEqualStrings("orientation_only", tests.object.get("confidence_class").?.string);
+    try std.testing.expect(tests.object.get("verify_with").?.array.items.len > 0);
     try std.testing.expectEqual(@as(i64, 0), tests.object.get("skipped_file_count").?.integer);
 }

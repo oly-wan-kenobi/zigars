@@ -45,6 +45,16 @@ pub const DocumentState = struct {
         last_reopen: ReopenSummary,
     };
 
+    pub const Summary = struct {
+        open_documents: usize,
+        dirty_documents: usize,
+        retained_content_bytes: usize,
+        max_document_bytes: usize,
+        max_retained_content_bytes: usize,
+        max_open_documents: usize,
+        last_reopen: ReopenSummary,
+    };
+
     pub const ReopenSummary = struct {
         attempted: usize = 0,
         succeeded: usize = 0,
@@ -271,6 +281,25 @@ pub const DocumentState = struct {
         };
     }
 
+    pub fn summary(self: *DocumentState) Summary {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        var dirty_documents: usize = 0;
+        var it = self.open_docs.valueIterator();
+        while (it.next()) |info| {
+            if (info.dirty) dirty_documents += 1;
+        }
+        return .{
+            .open_documents = self.open_docs.count(),
+            .dirty_documents = dirty_documents,
+            .retained_content_bytes = self.retained_content_bytes,
+            .max_document_bytes = self.max_document_bytes,
+            .max_retained_content_bytes = self.max_retained_content_bytes,
+            .max_open_documents = self.max_open_documents,
+            .last_reopen = self.last_reopen,
+        };
+    }
+
     /// Close a document in ZLS.
     pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
         self.mutex.lock();
@@ -299,7 +328,7 @@ pub const DocumentState = struct {
             version: i64,
             content: ?[]u8,
         };
-        var summary: ReopenSummary = .{};
+        var reopen_summary: ReopenSummary = .{};
         var docs: std.ArrayList(ReopenDoc) = .empty;
         defer {
             for (docs.items) |doc| {
@@ -313,13 +342,13 @@ pub const DocumentState = struct {
         var it = self.open_docs.iterator();
         while (it.next()) |entry| {
             const uri = self.allocator.dupe(u8, entry.key_ptr.*) catch {
-                summary.skipped += 1;
+                reopen_summary.skipped += 1;
                 continue;
             };
             const content = if (entry.value_ptr.content) |stored|
                 self.allocator.dupe(u8, stored) catch {
                     self.allocator.free(uri);
-                    summary.skipped += 1;
+                    reopen_summary.skipped += 1;
                     continue;
                 }
             else
@@ -327,17 +356,17 @@ pub const DocumentState = struct {
             docs.append(self.allocator, .{ .uri = uri, .version = entry.value_ptr.version, .content = content }) catch {
                 self.allocator.free(uri);
                 if (content) |bytes| self.allocator.free(bytes);
-                summary.skipped += 1;
+                reopen_summary.skipped += 1;
                 continue;
             };
         }
         self.mutex.unlock();
 
         for (docs.items) |doc| {
-            summary.attempted += 1;
+            reopen_summary.attempted += 1;
             const path = uri_util.uriToPath(self.allocator, doc.uri) catch {
                 self.logger.warn("docs", "failed to decode {s} for reopen", .{doc.uri});
-                summary.failed += 1;
+                reopen_summary.failed += 1;
                 continue;
             };
             defer self.allocator.free(path);
@@ -348,7 +377,7 @@ pub const DocumentState = struct {
                 const io = self.io orelse continue;
                 disk_content = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch {
                     self.logger.warn("docs", "failed to re-read {s} for reopen", .{path});
-                    summary.failed += 1;
+                    reopen_summary.failed += 1;
                     continue;
                 };
                 break :blk disk_content.?;
@@ -366,15 +395,15 @@ pub const DocumentState = struct {
                 },
             }) catch |err| {
                 self.logger.warn("docs", "failed to reopen {s}: {}", .{ path, err });
-                summary.failed += 1;
+                reopen_summary.failed += 1;
                 continue;
             };
-            summary.succeeded += 1;
+            reopen_summary.succeeded += 1;
         }
         self.mutex.lock();
-        self.last_reopen = summary;
+        self.last_reopen = reopen_summary;
         self.mutex.unlock();
-        return summary;
+        return reopen_summary;
     }
 
     fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
@@ -607,6 +636,38 @@ test "DocumentState public status omits retained content" {
     try std.testing.expectEqual(@as(i64, 9), status.version);
     try std.testing.expect(status.dirty);
     try std.testing.expect(!@hasField(@TypeOf(status), "content"));
+}
+
+test "DocumentState summary reports aggregate state without content" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    const dirty_uri = try alloc.dupe(u8, "file:///tmp/dirty.zig");
+    const dirty_content = try alloc.dupe(u8, "const dirty = true;\n");
+    const clean_uri = try alloc.dupe(u8, "file:///tmp/clean.zig");
+    ds.retained_content_bytes = dirty_content.len;
+    ds.last_reopen = .{ .attempted = 2, .succeeded = 1, .skipped = 0, .failed = 1 };
+    try ds.open_docs.put(alloc, dirty_uri, .{
+        .version = 1,
+        .content_hash = std.hash.Wyhash.hash(0, dirty_content),
+        .dirty = true,
+        .content = dirty_content,
+    });
+    try ds.open_docs.put(alloc, clean_uri, .{
+        .version = 1,
+        .content_hash = 1,
+        .dirty = false,
+        .content = null,
+    });
+
+    const summary = ds.summary();
+    try std.testing.expectEqual(@as(usize, 2), summary.open_documents);
+    try std.testing.expectEqual(@as(usize, 1), summary.dirty_documents);
+    try std.testing.expectEqual(dirty_content.len, summary.retained_content_bytes);
+    try std.testing.expectEqual(@as(usize, 2), summary.last_reopen.attempted);
+    try std.testing.expectEqual(@as(usize, 1), summary.last_reopen.failed);
+    try std.testing.expect(!@hasField(@TypeOf(summary), "content"));
 }
 
 test "DocumentState reopens retained unsaved content" {

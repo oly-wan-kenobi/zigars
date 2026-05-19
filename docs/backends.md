@@ -72,8 +72,8 @@ zig version
 zls --version
 zwanzig --help
 printf 'main 1\n' > /tmp/zigar.folded
-zflame guess /tmp/zigar.folded >/tmp/zigar.svg
-diff-folded /tmp/zigar.folded /tmp/zigar.folded >/tmp/zigar-diff.folded
+zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
+diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
 ```
 
 If a direct shell check fails, fix the backend before debugging zigar. If the
@@ -109,9 +109,10 @@ document sync keeps at most 10 MiB per document, 64 MiB of aggregate retained
 document text, and 256 open documents by default. Cached publish-diagnostics
 notifications are capped at 16 MiB total. Oversized diagnostics are dropped for
 their URI, and aggregate overflow evicts the oldest cached diagnostics until the
-new notification fits. `zig_document_status` and the ZLS status resource expose
-the current retained byte counts, limits, eviction count, and oversized-drop
-count.
+new notification fits. `zig_document_status` exposes per-file document state.
+The ZLS status resource and `zigar_metrics` expose aggregate document-sync
+state, including open and dirty document counts, retained byte counts, replay
+summary, limits, eviction count, and oversized-drop count.
 
 When ZLS is unavailable, command-backed tools such as `zig_build`, `zig_test`,
 `zig_check`, `zig_format`, docs search, and static-analysis summaries still work.
@@ -143,6 +144,19 @@ through zigar and is the fastest end-to-end check. For SARIF, call
 `zig_lint_sarif` and upload the returned SARIF in CI if your platform supports
 SARIF ingestion.
 
+`zig_analysis_graphs` is mode-based. Use one of `cfg`, `exploded_graph`,
+`annotated_cfg`, or `path_trace`; zigar maps that to zwanzig's corresponding
+`--dump-*` flag, creates the requested workspace-local output directory, and
+verifies that the backend wrote DOT files there. Raw graph flags are not part of
+the public zigar schema.
+
+The current graph mapping is:
+
+- `cfg`: `--dump-cfg <output-dir> <source>`
+- `exploded_graph`: `--dump-exploded-graph <output-dir> <source>`
+- `annotated_cfg`: `--dump-annotated-cfg <output-dir> <source>`
+- `path_trace`: `--dump-path-trace <output-dir> <source>`
+
 ## zflame And diff-folded
 
 zflame powers `zig_flamegraph`. diff-folded powers the first stage of
@@ -157,21 +171,30 @@ zflame powers `zig_flamegraph`. diff-folded powers the first stage of
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
    `.zigar-cache/profile/` and then renders the SVG through zflame.
 
-The zflame command shape zigar expects is:
+The zflame command shape zigar expects is explicit and does not use format
+guessing:
 
 ```sh
-zflame <format> [--title <title>] [--palette <palette>] [--min-width <n>] [--hash] <input> > flame.svg
+zflame <format> [--title=<title>] [--subtitle=<text>] [--colors=<palette>] [--width=<pixels>] [--min-width=<pixels>] [--hash] <input> > flame.svg
 ```
 
-The diff-folded command shape zigar expects is:
+Supported zflame formats are `perf`, `dtrace`, `sample`, `vtune`, `xctrace`,
+and `recursive`. zigar captures zflame stdout, verifies it looks like SVG, and
+writes the final artifact through its workspace file helper instead of asking
+zflame to write the SVG directly.
+
+The diff-folded command shape zigar expects writes an intermediate folded diff
+file explicitly:
 
 ```sh
-diff-folded before.folded after.folded > delta.folded
+diff-folded --output=delta.folded before.folded after.folded
 ```
 
-All zigar-generated SVG and DOT outputs must use explicit workspace-local output
-paths. This keeps profiler artifacts inspectable and prevents accidental writes
-outside the active workspace.
+`zig_flamegraph_diff` returns both the final SVG path and the intermediate
+folded diff path under `.zigar-cache/profile/`. All zigar-generated SVG and DOT
+outputs must use explicit workspace-local output paths. This keeps profiler
+artifacts inspectable and prevents accidental writes outside the active
+workspace.
 
 ## Failure Triage
 

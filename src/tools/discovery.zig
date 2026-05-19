@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const catalog = zigar.catalog;
+const backend_contracts = zigar.backend_contracts;
 const command = zigar.command;
 const doctor = zigar.doctor;
 const tool_metadata = zigar.tool_metadata;
@@ -25,6 +26,7 @@ const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const jsonTextOnly = common.jsonTextOnly;
 const probeBackend = common.probeBackend;
 const backendProbeCacheValue = common.backendProbeCacheValue;
+const cachedProbeValue = common.cachedProbeValue;
 const ownedString = common.ownedString;
 const metricsValue = common.metricsValue;
 const zlsStatusValue = common.zlsStatusValue;
@@ -77,11 +79,11 @@ pub fn zigarDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
         .mcp_dependency = "mcp.zig 0.0.4+57b3f9b",
         .tools_list_schema_rich = true,
         .http_available = true,
-        .zig_probe = if (probe_backends) probeBackend(a, allocator, "zig", &.{ a.config.zig_path, "version" }, probe_timeout_ms) else null,
-        .zls_probe = if (probe_backends) probeBackend(a, allocator, "zls", &.{ a.config.zls_path, "--version" }, probe_timeout_ms) else null,
-        .zwanzig_probe = if (probe_backends) probeBackend(a, allocator, "zwanzig", &.{ a.config.zwanzig_path, "--help" }, probe_timeout_ms) else null,
-        .zflame_probe = if (probe_backends) probeBackend(a, allocator, "zflame", &.{ a.config.zflame_path, "--help" }, probe_timeout_ms) else null,
-        .diff_folded_probe = if (probe_backends) probeBackend(a, allocator, "diff-folded", &.{ a.config.diff_folded_path, "--help" }, probe_timeout_ms) else null,
+        .zig_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zig.name(), &.{ a.config.zig_path, "version" }, probe_timeout_ms) else null,
+        .zls_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zls.name(), &.{ a.config.zls_path, "--version" }, probe_timeout_ms) else null,
+        .zwanzig_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zwanzig.name(), &.{ a.config.zwanzig_path, "--help" }, probe_timeout_ms) else null,
+        .zflame_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zflame.name(), &.{ a.config.zflame_path, "--help" }, probe_timeout_ms) else null,
+        .diff_folded_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.diff_folded.name(), &.{ a.config.diff_folded_path, "--help" }, probe_timeout_ms) else null,
     }) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
@@ -100,7 +102,7 @@ pub fn zigarHttpStatus(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     obj.put(allocator, "host", .{ .string = a.config.host }) catch return error.OutOfMemory;
     obj.put(allocator, "port", .{ .integer = a.config.port }) catch return error.OutOfMemory;
     obj.put(allocator, "http_available", .{ .bool = true }) catch return error.OutOfMemory;
-    obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
+    obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigar only supports loopback HTTP by default and stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -120,12 +122,54 @@ pub fn workspaceInfo(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) 
     }
     obj.put(allocator, "zwanzig", .{ .string = a.config.zwanzig_path }) catch return error.OutOfMemory;
     obj.put(allocator, "zflame", .{ .string = a.config.zflame_path }) catch return error.OutOfMemory;
+    obj.put(allocator, "diff_folded", .{ .string = a.config.diff_folded_path }) catch return error.OutOfMemory;
+    obj.put(allocator, "optional_backends", optionalBackendStatusValue(allocator, a) catch return error.OutOfMemory) catch return error.OutOfMemory;
     obj.put(allocator, "timeout_ms", .{ .integer = a.config.timeout_ms }) catch return error.OutOfMemory;
     obj.put(allocator, "zls_timeout_ms", .{ .integer = a.config.zls_timeout_ms }) catch return error.OutOfMemory;
     obj.put(allocator, "workspace_boundary", .{ .string = "realpath" }) catch return error.OutOfMemory;
     obj.put(allocator, "symlink_escapes", .{ .string = "rejected" }) catch return error.OutOfMemory;
     obj.put(allocator, "backend_probe_cache", backendProbeCacheValue(allocator, a.backend_probe_cache) catch return error.OutOfMemory) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
+}
+
+fn optionalBackendStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "zwanzig", try optionalBackendValue(allocator, .zwanzig, a.config.zwanzig_path, a.backend_probe_cache.zwanzig));
+    try obj.put(allocator, "zflame", try optionalBackendValue(allocator, .zflame, a.config.zflame_path, a.backend_probe_cache.zflame));
+    try obj.put(allocator, "diff_folded", try optionalBackendValue(allocator, .diff_folded, a.config.diff_folded_path, a.backend_probe_cache.diff_folded));
+    return .{ .object = obj };
+}
+
+fn optionalBackendValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId, configured_path: []const u8, probe: ?zigar.doctor.Probe) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "name", .{ .string = id.name() });
+    try obj.put(allocator, "configured_path", .{ .string = configured_path });
+    try obj.put(allocator, "probe_argv", try configuredProbeArgvValue(allocator, id, configured_path));
+    try obj.put(allocator, "capabilities", try backendCapabilitiesValue(allocator, id));
+    try obj.put(allocator, "probe", try cachedProbeValue(allocator, probe));
+    return .{ .object = obj };
+}
+
+fn configuredProbeArgvValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId, configured_path: []const u8) !std.json.Value {
+    const probe = backend_contracts.probeArgv(id);
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (probe, 0..) |arg, index| {
+        try array.append(.{ .string = if (index == 0) configured_path else arg });
+    }
+    return .{ .array = array };
+}
+
+fn backendCapabilitiesValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (backend_contracts.capabilities) |capability| {
+        if (capability.backend == id) try array.append(.{ .string = capability.tool });
+        if (id == .zflame and std.mem.eql(u8, capability.tool, "zig_flamegraph_diff")) try array.append(.{ .string = capability.tool });
+    }
+    return .{ .array = array };
 }
 
 pub fn zigToolchainResolve(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {

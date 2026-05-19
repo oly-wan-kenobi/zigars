@@ -134,7 +134,7 @@ Options:
 ```
 
 Use `--transport stdio` for local agent clients. `--transport http` is available
-for clients or wrappers that need an HTTP endpoint.
+only as a loopback endpoint for clients or wrappers that need local HTTP.
 
 ## Agent Client Configuration
 
@@ -222,6 +222,7 @@ Source writes require apply=true.
   `zig_changed_files_plan`, `zig_dependency_inspect`,
   `zig_target_matrix_plan`, `zig_test_failure_triage`,
   `zig_workspace_symbol_cache`, `zig_package_cache_doctor`
+  (heuristic results carry confidence, limitations, and verification guidance)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
   `zig_analysis_graphs`
@@ -276,9 +277,9 @@ More detail:
   setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
-- [Security model](docs/security-model.md) and
-  [security readiness audit](docs/security-audit.md): workspace boundaries and
-  remaining security posture.
+- [Security policy](SECURITY.md), [security model](docs/security-model.md), and
+  [security readiness audit](docs/security-audit.md): private vulnerability
+  reporting, workspace boundaries, and remaining security posture.
 - [Troubleshooting](docs/troubleshooting.md): common workspace, backend, and
   argument issues.
 - [Release checklist](docs/release.md): publication gates and archive

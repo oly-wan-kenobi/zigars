@@ -40,6 +40,7 @@ pub const ParseError = error{
     InvalidPort,
     InvalidTimeout,
     InvalidTransport,
+    UnsafeHttpHost,
 };
 
 pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const u8) !Config {
@@ -102,7 +103,15 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
         }
     }
 
+    if (result.transport == .http and !isLoopbackHttpHost(result.host)) return ParseError.UnsafeHttpHost;
     return result;
+}
+
+pub fn isLoopbackHttpHost(host: []const u8) bool {
+    return std.mem.eql(u8, host, "127.0.0.1") or
+        std.mem.eql(u8, host, "::1") or
+        std.mem.eql(u8, host, "[::1]") or
+        std.ascii.eqlIgnoreCase(host, "localhost");
 }
 
 fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
@@ -152,10 +161,10 @@ pub fn usage() []const u8 {
     \\  zigar [--workspace <path>] [--zig-path <path>] [--zls-path <path>]
     \\        [--zwanzig-path <path>] [--zflame-path <path>]
     \\        [--diff-folded-path <path>]
-    \\        [--transport stdio|http] [--host 127.0.0.1] [--port 8080]
+    \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]
     \\
-    \\stdio is the safest default for Codex. http is available for clients that need it.
+    \\stdio is the safest default for Codex. http is local-only and must bind loopback.
     \\stdout is reserved for MCP JSON-RPC. Logs, help, and version go to stderr.
     \\
     ;
@@ -190,6 +199,56 @@ test "parse explicit options" {
     try std.testing.expectEqual(@as(u16, 9090), cfg.port);
     try std.testing.expectEqual(@as(i64, 5), cfg.timeout_ms);
     try std.testing.expectEqual(@as(i64, 7), cfg.zls_timeout_ms);
+}
+
+test "parse accepts loopback http hosts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const hosts = [_][]const u8{ "127.0.0.1", "localhost", "::1", "[::1]" };
+    for (hosts) |host| {
+        const cfg = try parse(arena.allocator(), std.testing.io, &.{
+            "zigar",
+            "--transport",
+            "http",
+            "--host",
+            host,
+        });
+        try std.testing.expectEqual(Transport.http, cfg.transport);
+        try std.testing.expectEqualStrings(host, cfg.host);
+    }
+}
+
+test "parse rejects non-loopback http hosts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(ParseError.UnsafeHttpHost, parse(arena.allocator(), std.testing.io, &.{
+        "zigar",
+        "--transport",
+        "http",
+        "--host",
+        "0.0.0.0",
+    }));
+    try std.testing.expectError(ParseError.UnsafeHttpHost, parse(arena.allocator(), std.testing.io, &.{
+        "zigar",
+        "--host",
+        "192.168.1.20",
+        "--transport",
+        "http",
+    }));
+}
+
+test "parse allows unused non-loopback host for stdio" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const cfg = try parse(arena.allocator(), std.testing.io, &.{
+        "zigar",
+        "--transport",
+        "stdio",
+        "--host",
+        "0.0.0.0",
+    });
+    try std.testing.expectEqual(Transport.stdio, cfg.transport);
+    try std.testing.expectEqualStrings("0.0.0.0", cfg.host);
 }
 
 test "parse result can be deinitialized with general allocator" {

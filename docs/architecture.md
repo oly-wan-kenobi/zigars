@@ -32,8 +32,9 @@ auditable:
   metadata for public schema/capability responses.
 - `src/json_result.zig` centralizes structured JSON result serialization for MCP
   tool responses and deep-clones structured content into the request allocator.
-- `src/analysis.zig` contains heuristic source scanners. Every heuristic result
-  should state its analysis kind and confidence.
+- `src/analysis.zig` contains heuristic source scanners. `src/analysis_contract.zig`
+  owns the shared confidence vocabulary, limitations, and verification guidance
+  for static-analysis tools.
 - `src/state/documents.zig`, `src/lsp/*`, and `src/zls/*` own the ZLS session
   boundary. `src/lsp/client.zig` owns request/response correlation, pipe
   lifecycle, shutdown, and reader threads. `src/lsp/diagnostics_cache.zig` owns
@@ -66,6 +67,19 @@ owning schema instead of relying on a global field-name convention. A future too
 can reuse a field name such as `mode`, `command`, or `format` without inheriting
 another tool's valid values.
 
+Manifest review checklist:
+
+- Tool names, descriptions, schemas, annotations, risk, and plan policy are
+  public/client-visible contract.
+- Free-form `args` fields must disclose backend, project-code, or user-command
+  execution risk.
+- `output` fields must disclose workspace artifact writes.
+- Apply-gated mutations must advertise `writes_require_apply` and
+  `preview_by_default`.
+- Schema hints must target declared fields and match the field JSON type.
+- Reused field names such as `before`, `after`, `mode`, and `format` need
+  tool-local hints when the default meaning is not exact.
+
 Tool handlers must not return bare expected failures. Validation, workspace-path
 rejections, optional backend failures, parsing failures, write failures, and
 known unsupported operations should return structured `argument_error`,
@@ -86,5 +100,8 @@ preview workflows from default mutations.
 Heuristic scanners are useful for fast orientation, but they are not semantic
 Zig analysis. Keep them isolated in `src/analysis.zig` or a dedicated analysis
 module, include fixture tests, and prefer ZLS or Zig compiler-backed tools for
-actions that would modify source. JSON heuristic results should include skipped
-file counts when unreadable files are omitted.
+actions that would modify source. JSON heuristic results should include
+`analysis_kind`, `confidence`, `confidence_class`, `limitations`, `verify_with`,
+and skipped-file counts when unreadable files are omitted. The release hygiene
+check fails when a static-analysis tool is missing a contract or stops being
+source-read-only.

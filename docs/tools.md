@@ -50,15 +50,25 @@ unsupported. `zig_command_plan` is intentionally narrower: it returns exact
 `argv`/`cwd`/`timeout_ms` only for command-backed tools and returns a structured
 unsupported response for other known tools instead of `InvalidArguments`.
 
+Static-analysis tools use a shared confidence contract. Structured heuristic
+results include `analysis_kind`, `confidence`, `confidence_class`,
+`limitations`, and `verify_with`; text results state the same confidence in
+plain language. Treat `orientation_only` results as navigation aids, `advisory`
+results as review input, and verify release decisions with Zig compiler, ZLS, CI,
+or optional backend tools.
+
 `zigar_doctor` accepts optional `probe_backends` and `timeout_ms` arguments. Use
 backend probes when a client reports `PermissionDenied`, missing formatter/ZLS
 tools, or unclear executable-path failures. Probe results are cached for the
 server process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
 
-Docs tools are intentionally split by source. `zig_std_search` scans Zig
-standard-library `.zig` source files. `zig_lang_ref_search` searches
+Docs tools are intentionally split by source, and each source reports
+provenance/completeness. `zig_builtin_*` uses curated zigar data and is marked
+`partial_curated`. `zig_std_search` scans local Zig standard-library `.zig`
+source files and is marked `source_scan`. `zig_lang_ref_search` searches
 language-reference sections, reports whether it used `installed_langref_html` or
-`bundled_langref_index`, and does not scan Zig autodoc implementation files.
+`bundled_langref_index`, marks bundled fallback data as `partial_curated`, and
+does not scan Zig autodoc implementation files.
 
 High-signal discovery keywords include:
 

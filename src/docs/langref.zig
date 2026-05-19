@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const docs_source = @import("source.zig");
 
 pub const Section = struct {
     title: []const u8,
@@ -79,7 +80,10 @@ fn searchBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize) 
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
-    try out.print(allocator, "Language reference search source: bundled_langref_index\nQuery: `{s}`\n\n", .{query});
+    const source = docs_source.bundledLangref();
+    try out.print(allocator, "Language reference search source: {s}\n", .{source.id});
+    try docs_source.appendTextHeader(allocator, &out, source);
+    try out.print(allocator, "Query: `{s}`\n\n", .{query});
     var count = try appendBundledMatches(allocator, &out, lower_query, limit, .title);
     if (count < limit) {
         count += try appendBundledMatches(allocator, &out, lower_query, limit - count, .body);
@@ -134,7 +138,10 @@ fn searchHtml(allocator: std.mem.Allocator, path: []const u8, html: []const u8, 
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
-    try out.print(allocator, "Language reference search source: installed_langref_html\nPath: {s}\nQuery: `{s}`\n\n", .{ path, query });
+    const source = docs_source.installedLangref(path, null);
+    try out.print(allocator, "Language reference search source: {s}\n", .{source.id});
+    try docs_source.appendTextHeader(allocator, &out, source);
+    try out.print(allocator, "Query: `{s}`\n\n", .{query});
     var count: usize = 0;
     var pos: usize = 0;
     while (count < limit) {
@@ -268,6 +275,7 @@ test "uses bundled index when installed langref is absent" {
     const text = try search(std.testing.allocator, std.testing.io, "/definitely/missing/zig/lib", "defer", 3);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: partial_curated") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "### Defer (#defer)") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "errdefer") != null);
 }
@@ -353,6 +361,7 @@ test "uses installed language reference html when present" {
     defer allocator.free(text);
 
     try std.testing.expect(std.mem.indexOf(u8, text, "installed_langref_html") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: installed_complete") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "### defer (#defer)") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") == null);
 }

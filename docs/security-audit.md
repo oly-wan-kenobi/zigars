@@ -27,6 +27,8 @@ This checklist is for release reviews and MCP-client integration changes.
 - Backend failures use structured `backend_error` payloads.
 - ZLS failures preserve status, restart count, timeout, and last-failure data.
 - HTTP smoke tests cover `initialize`, `tools/list`, `zigar_schema`, and `zigar_doctor`.
+- HTTP transport rejects non-loopback bind hosts unless a future authenticated
+  remote mode is deliberately introduced.
 - Stdio fixture tests cover transport framing, formatter write gating, optional
   backend command wiring, and workspace-local generated outputs.
 - Coverage summaries are generated from installed Zig test binaries, including
@@ -41,6 +43,8 @@ This checklist is for release reviews and MCP-client integration changes.
   ancestors, but it does not protect against concurrent filesystem races by
   untrusted local processes.
 - MCP clients decide when to call tools and how to display structured results.
+- Vulnerabilities should be reported through `SECURITY.md`; confirm its private
+  reporting channel is still valid before a public release.
 
 ## Release Gate
 
