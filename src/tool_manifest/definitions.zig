@@ -769,9 +769,12 @@ pub const definitions = struct {
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_flamegraph = tool(.{
-        .description = "Convert profiler output to SVG through zflame.",
-        .input_schema = schemaWithHints(&.{ .{ "format", "string", false }, .{ "input", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "palette", "string", false }, .{ "min_width", "string", false }, .{ "hash", "boolean", false } }, &.{
-            fieldHint("format", .{ .description = "Profiler input format passed to zflame.", .default_string = "guess", .enum_values = &.{ "perf", "dtrace", "sample", "vtune", "xctrace", "recursive", "guess" } }),
+        .description = "Convert captured profiler output to SVG through zflame with an explicit input format.",
+        .input_schema = schemaWithHints(&.{ .{ "format", "string", true }, .{ "input", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{
+            fieldHint("format", .{ .description = "Explicit profiler input format passed to zflame.", .enum_values = backend_contracts.zflame_format_names[0..] }),
+            fieldHint("colors", .{ .description = "zflame color palette passed as --colors=<palette>." }),
+            fieldHint("width", .{ .description = "SVG width passed as --width=<pixels>.", .minimum = 1 }),
+            fieldHint("min_width", .{ .description = "Minimum frame width passed as --min-width=<pixels>.", .minimum = 1 }),
         }),
         .read_only = false,
         .group = .profiling,
@@ -781,7 +784,11 @@ pub const definitions = struct {
     });
     pub const zig_flamegraph_diff = tool(.{
         .description = "Create a differential folded stack file through diff-folded, then render it through zflame.",
-        .input_schema = schema(&.{ .{ "before", "string", true }, .{ "after", "string", true }, .{ "output", "string", true }, .{ "title", "string", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "before", "string", true }, .{ "after", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{
+            fieldHint("colors", .{ .description = "zflame color palette passed as --colors=<palette>." }),
+            fieldHint("width", .{ .description = "SVG width passed as --width=<pixels>.", .minimum = 1 }),
+            fieldHint("min_width", .{ .description = "Minimum frame width passed as --min-width=<pixels>.", .minimum = 1 }),
+        }),
         .read_only = false,
         .group = .profiling,
         .risk = .{ .writes_artifacts = true, .executes_backend = true },

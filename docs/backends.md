@@ -72,8 +72,8 @@ zig version
 zls --version
 zwanzig --help
 printf 'main 1\n' > /tmp/zigar.folded
-zflame guess /tmp/zigar.folded >/tmp/zigar.svg
-diff-folded /tmp/zigar.folded /tmp/zigar.folded >/tmp/zigar-diff.folded
+zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
+diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
 ```
 
 If a direct shell check fails, fix the backend before debugging zigar. If the
@@ -164,21 +164,30 @@ zflame powers `zig_flamegraph`. diff-folded powers the first stage of
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
    `.zigar-cache/profile/` and then renders the SVG through zflame.
 
-The zflame command shape zigar expects is:
+The zflame command shape zigar expects is explicit and does not use format
+guessing:
 
 ```sh
-zflame <format> [--title <title>] [--palette <palette>] [--min-width <n>] [--hash] <input> > flame.svg
+zflame <format> [--title=<title>] [--subtitle=<text>] [--colors=<palette>] [--width=<pixels>] [--min-width=<pixels>] [--hash] <input> > flame.svg
 ```
 
-The diff-folded command shape zigar expects is:
+Supported zflame formats are `perf`, `dtrace`, `sample`, `vtune`, `xctrace`,
+and `recursive`. zigar captures zflame stdout, verifies it looks like SVG, and
+writes the final artifact through its workspace file helper instead of asking
+zflame to write the SVG directly.
+
+The diff-folded command shape zigar expects writes an intermediate folded diff
+file explicitly:
 
 ```sh
-diff-folded before.folded after.folded > delta.folded
+diff-folded --output=delta.folded before.folded after.folded
 ```
 
-All zigar-generated SVG and DOT outputs must use explicit workspace-local output
-paths. This keeps profiler artifacts inspectable and prevents accidental writes
-outside the active workspace.
+`zig_flamegraph_diff` returns both the final SVG path and the intermediate
+folded diff path under `.zigar-cache/profile/`. All zigar-generated SVG and DOT
+outputs must use explicit workspace-local output paths. This keeps profiler
+artifacts inspectable and prevents accidental writes outside the active
+workspace.
 
 ## Failure Triage
 

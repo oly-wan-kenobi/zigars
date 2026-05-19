@@ -120,8 +120,8 @@ Keywords: `profile`, `profiling`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`
 - `zig_error_sets`: required `file: string`
 - `zig_explain_errors`: optional `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_file_owner`: required `file: string`
-- `zig_flamegraph`: required `input: string`, `output: string`; optional `format: string`, `title: string`, `palette: string`, `min_width: string`, `hash: boolean`
-- `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `title: string`
+- `zig_flamegraph`: required `format: string`, `input: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
+- `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
