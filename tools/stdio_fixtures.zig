@@ -149,6 +149,7 @@ const StdioClient = struct {
         try self.expectTool(tools, "zigar_context_pack");
         try self.expectTool(tools, "zigar_validate_patch");
         try self.expectTool(tools, "zig_test_select");
+        try self.expectTool(tools, "zig_lang_ref_search");
         try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.type", "string");
         try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.x-zigar-path-kind", "input_file");
         try self.expectToolPathBool(tools, "zig_format", "inputSchema.properties.apply.default", false);
@@ -187,6 +188,12 @@ const StdioClient = struct {
         defer self.allocator.free(context);
         try self.expectPathString(context, "kind", "zigar_context_pack");
         try self.expectPathBool(context, "workspace.zls_running", false);
+
+        const langref = try self.callTool("zig_lang_ref_search", "{\"query\":\"defer\",\"limit\":1}");
+        defer self.allocator.free(langref);
+        try self.expectPathString(langref, "kind", "zig_lang_ref_search");
+        if (std.mem.indexOf(u8, langref, "Language reference search source:") == null) return error.AssertionFailed;
+        if (std.mem.indexOf(u8, langref, "wasm/main.zig") != null) return error.AssertionFailed;
 
         const next_action = try self.callTool("zigar_next_action", "{\"goal\":\"fix compile error\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(next_action);
