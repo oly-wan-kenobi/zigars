@@ -22,9 +22,7 @@ jobs:
           version: 0.16.0
 
       - name: Install kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y kcov
+        run: bash .github/scripts/install-kcov.sh
 
       - name: Release gate
         run: zig build release-check
@@ -59,9 +57,7 @@ jobs:
           version: 0.16.0
 
       - name: Install kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y kcov
+        run: bash .github/scripts/install-kcov.sh
 
       - name: Run test quality summary
         run: zig build coverage
