@@ -12,7 +12,7 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 ## Status
 
 `zigar` is ready for early public use with Zig 0.16.0 over stdio and HTTP MCP
-transports. The current package version is `0.1.0`; see
+transports. The current package version is `0.2.0`; see
 [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
@@ -50,9 +50,9 @@ zigar --version
 Published archives are available from
 [GitHub Releases](https://github.com/oly-wan-kenobi/zigar/releases). Download
 the archive for your platform, verify its SHA-256 against `zigar-checksums.txt`,
-and put `zigar` on `PATH`. The `v0.1.0` release was built and verified locally
-while GitHub Actions were unavailable; its release notes list the source commit
-and local gates. Future tag-workflow releases attach GitHub provenance
+and put `zigar` on `PATH`. The initial `v0.1.0` release was built and verified
+locally while GitHub Actions were unavailable; its release notes list the source
+commit and local gates. Tag-workflow releases attach GitHub provenance
 attestations generated from the checksum file.
 
 Published release archives are named:

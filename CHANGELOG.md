@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.0 - 2026-05-19
+
+Adoption hardening release focused on safer defaults, clearer tool contracts,
+and more reliable docs discovery.
+
+- Enforced the realpath workspace boundary by default for inputs, outputs,
+  cache paths, and symlink targets that escape the workspace.
+- Hardened ZLS document lifecycle handling, edit-base synchronization, and tool
+  risk metadata for state-mutating LSP requests.
+- Refactored `zig_lang_ref_search` to search real language-reference sources
+  when present and fall back to a bundled language-reference section index
+  instead of scanning Zig docs implementation files.
+- Added agent-client setup guidance and discovery profiles for Codex, Claude,
+  Gemini CLI, and Hermes-style wrappers.
+- Added a backend setup catalog for Zig, ZLS, zwanzig, zflame, and diff-folded
+  installation and verification guidance.
+- Scoped schema hints by owning tool, strengthened structured error payloads for
+  resources and helper CLI failures, and added release-check guards for those
+  contracts.
+- Split more line-budget hotspots into focused modules to keep tool handlers,
+  release helpers, LSP tests, and static-analysis scanners maintainable.
+
 ## 0.1.0 - 2026-05-17
 
 Initial `0.1.0` package baseline.
