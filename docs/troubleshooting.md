@@ -50,6 +50,9 @@ zigar --zls-timeout-ms 60000
 Unsaved documents opened through `zig_document_open` or `zig_document_change` are
 retained in process memory and replayed if zigar restarts its ZLS session. Close
 documents with `zig_document_close` when a client no longer needs unsaved state.
+Use `zig_document_status` for a specific file, or `zigar_metrics` for aggregate
+open document count, dirty document count, retained bytes, limits, and last ZLS
+replay summary.
 
 ## Command Output Is Too Large
 

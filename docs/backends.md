@@ -109,9 +109,10 @@ document sync keeps at most 10 MiB per document, 64 MiB of aggregate retained
 document text, and 256 open documents by default. Cached publish-diagnostics
 notifications are capped at 16 MiB total. Oversized diagnostics are dropped for
 their URI, and aggregate overflow evicts the oldest cached diagnostics until the
-new notification fits. `zig_document_status` and the ZLS status resource expose
-the current retained byte counts, limits, eviction count, and oversized-drop
-count.
+new notification fits. `zig_document_status` exposes per-file document state.
+The ZLS status resource and `zigar_metrics` expose aggregate document-sync
+state, including open and dirty document counts, retained byte counts, replay
+summary, limits, eviction count, and oversized-drop count.
 
 When ZLS is unavailable, command-backed tools such as `zig_build`, `zig_test`,
 `zig_check`, `zig_format`, docs search, and static-analysis summaries still work.
