@@ -43,6 +43,8 @@ This checklist is for release reviews and MCP-client integration changes.
   ancestors, but it does not protect against concurrent filesystem races by
   untrusted local processes.
 - MCP clients decide when to call tools and how to display structured results.
+- Vulnerabilities should be reported through `SECURITY.md`; confirm its private
+  reporting channel is still valid before a public release.
 
 ## Release Gate
 

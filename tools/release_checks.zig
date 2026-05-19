@@ -23,6 +23,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkResourceErrorContract(allocator, io)) and ok;
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
+    ok = (try checkSecurityPolicy(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
 
@@ -523,6 +524,29 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (pure_zig_roots) |root| {
         ok = (try checkNoExtensionInTree(allocator, io, root, ".py")) and ok;
+    }
+    return ok;
+}
+
+fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
+    const path = "SECURITY.md";
+    const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
+        try stderrPrint(io, "security-policy check could not read {s}: {s}\n", .{ path, @errorName(err) });
+        return false;
+    };
+    defer allocator.free(bytes);
+    var ok = true;
+    const required = [_][]const u8{
+        "https://github.com/oly-wan-kenobi/zigar/security/advisories/new",
+        "oliver.guenthardt@digitecgalaxus.ch",
+        "acknowledge a private vulnerability report within 7 days",
+        "initial triage assessment within 14 days",
+    };
+    for (required) |needle| {
+        if (std.mem.indexOf(u8, bytes, needle) == null) {
+            try stderrPrint(io, "security-policy check missing `{s}` in {s}\n", .{ needle, path });
+            ok = false;
+        }
     }
     return ok;
 }

@@ -276,9 +276,9 @@ More detail:
   setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
-- [Security model](docs/security-model.md) and
-  [security readiness audit](docs/security-audit.md): workspace boundaries and
-  remaining security posture.
+- [Security policy](SECURITY.md), [security model](docs/security-model.md), and
+  [security readiness audit](docs/security-audit.md): private vulnerability
+  reporting, workspace boundaries, and remaining security posture.
 - [Troubleshooting](docs/troubleshooting.md): common workspace, backend, and
   argument issues.
 - [Release checklist](docs/release.md): publication gates and archive
