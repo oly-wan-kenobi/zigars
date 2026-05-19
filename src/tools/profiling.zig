@@ -109,7 +109,7 @@ pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     const temp_id = a.temp_counter.fetchAdd(1, .monotonic);
     const folded_name = std.fmt.allocPrint(allocator, "diff-{d}.folded", .{temp_id}) catch return error.OutOfMemory;
     defer allocator.free(folded_name);
-    const folded_out = std.fs.path.join(allocator, &.{ ".zigar-cache", "profile", folded_name }) catch return error.OutOfMemory;
+    const folded_out = std.fmt.allocPrint(allocator, ".zigar-cache/profile/{s}", .{folded_name}) catch return error.OutOfMemory;
     defer allocator.free(folded_out);
     const folded_abs = a.workspace.resolveOutput(folded_out) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph_diff", folded_out, err);
     defer allocator.free(folded_abs);
