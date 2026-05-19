@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const analysis = zigar.analysis;
+const analysis_contract = zigar.analysis_contract;
 const command = zigar.command;
 const json_result = zigar.json_result;
 const common = @import("common.zig");
@@ -94,6 +95,7 @@ pub fn testFailureTriageValue(allocator: std.mem.Allocator, stderr: []const u8, 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_test_failure_triage" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_test_failure_triage");
     try obj.put(allocator, "ok", .{ .bool = ok });
     try obj.put(allocator, "failures", .{ .array = failures });
     try obj.put(allocator, "panic_clues", .{ .array = panics });
@@ -235,8 +237,7 @@ pub fn workspaceSymbolIndexValue(allocator: std.mem.Allocator, a: *App, limit: u
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_workspace_symbol_cache" });
-    try obj.put(allocator, "analysis_kind", .{ .string = "cached_heuristic_symbol_import_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_workspace_symbol_cache");
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "file_count", .{ .integer = @intCast(seen) });
     try obj.put(allocator, "declaration_count", .{ .integer = @intCast(total_decls) });
@@ -319,6 +320,7 @@ pub fn zigPackageCacheDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.j
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_package_cache_doctor" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_package_cache_doctor");
     try obj.put(allocator, "paths", .{ .array = paths });
     try obj.put(allocator, "issues", .{ .array = issues });
     try obj.put(allocator, "resolution", .{ .string = "Cache directories should be workspace-local, ignored by git, and safe to delete/recreate when Zig package state becomes stale." });
@@ -419,8 +421,7 @@ pub fn testMapValue(allocator: std.mem.Allocator, a: *App, limit: usize) !std.js
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_test_map" });
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_test_declaration_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_test_map");
     try obj.put(allocator, "tests", .{ .array = tests });
     try obj.put(allocator, "test_files", .{ .array = files });
     try obj.put(allocator, "commands", .{ .array = commands });
@@ -477,6 +478,7 @@ pub fn testSelectValue(allocator: std.mem.Allocator, a: *App, files_text: ?[]con
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_test_select" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_test_select");
     try obj.put(allocator, "commands", .{ .array = commands });
     try obj.put(allocator, "reasons", .{ .array = reasons });
     try obj.put(allocator, "fallback", .{ .string = "zig build test" });
@@ -512,6 +514,7 @@ pub fn publicApiDiffValue(allocator: std.mem.Allocator, file: ?[]const u8, befor
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_public_api_diff" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_public_api_diff");
     if (file) |path| try obj.put(allocator, "file", try ownedString(allocator, path)) else try obj.put(allocator, "file", .null);
     try obj.put(allocator, "before", before_decls);
     try obj.put(allocator, "after", after_decls);

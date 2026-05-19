@@ -222,6 +222,7 @@ Source writes require apply=true.
   `zig_changed_files_plan`, `zig_dependency_inspect`,
   `zig_target_matrix_plan`, `zig_test_failure_triage`,
   `zig_workspace_symbol_cache`, `zig_package_cache_doctor`
+  (heuristic results carry confidence, limitations, and verification guidance)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
   `zig_analysis_graphs`

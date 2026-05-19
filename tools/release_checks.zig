@@ -1,4 +1,5 @@
 const std = @import("std");
+const zigar = @import("zigar");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -23,6 +24,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkResourceErrorContract(allocator, io)) and ok;
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
+    ok = (try checkStaticAnalysisContracts(io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -524,6 +526,27 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (pure_zig_roots) |root| {
         ok = (try checkNoExtensionInTree(allocator, io, root, ".py")) and ok;
+    }
+    return ok;
+}
+
+fn checkStaticAnalysisContracts(io: Io) !bool {
+    var ok = true;
+    for (zigar.tool_metadata.entries) |entry| {
+        if (entry.group != .static_analysis) continue;
+        const contract = zigar.analysis_contract.forTool(entry.name) orelse {
+            try stderrPrint(io, "static-analysis contract missing for tool: {s}\n", .{entry.name});
+            ok = false;
+            continue;
+        };
+        if (contract.analysis_kind.len == 0 or contract.limitations.len == 0 or contract.verify_with.len == 0) {
+            try stderrPrint(io, "static-analysis contract incomplete for tool: {s}\n", .{entry.name});
+            ok = false;
+        }
+        if (!entry.meta.read_only or entry.risk.writes_source) {
+            try stderrPrint(io, "static-analysis tool must stay source-read-only: {s}\n", .{entry.name});
+            ok = false;
+        }
     }
     return ok;
 }

@@ -1,5 +1,7 @@
 const std = @import("std");
+const zigar = @import("zigar");
 
+const analysis_contract = zigar.analysis_contract;
 const common = @import("common.zig");
 
 const App = common.App;
@@ -9,8 +11,7 @@ pub fn buildWorkspaceValue(allocator: std.mem.Allocator, a: *App) !std.json.Valu
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "workspace", .{ .string = a.workspace.root });
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_build_file_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_build_graph");
 
     if (a.workspace.readFileAlloc(a.io, "build.zig", 1024 * 1024) catch null) |build_bytes| {
         defer allocator.free(build_bytes);
@@ -247,6 +248,7 @@ pub fn fileOwnerValue(allocator: std.mem.Allocator, graph: std.json.Value, rel: 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "file", try ownedString(allocator, rel));
+    try analysis_contract.putMetadata(allocator, &obj, "zig_file_owner");
     try obj.put(allocator, "owners", .{ .array = owners });
     try obj.put(allocator, "owner_count", .{ .integer = @intCast(owners.items.len) });
     try obj.put(allocator, "likely_commands", .{ .array = commands });
@@ -264,6 +266,7 @@ pub fn importResolveValue(allocator: std.mem.Allocator, a: *App, graph: std.json
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "import", try ownedString(allocator, import_name));
+    try analysis_contract.putMetadata(allocator, &obj, "zig_import_resolve");
     if (from) |from_file| try obj.put(allocator, "from", try ownedString(allocator, from_file)) else try obj.put(allocator, "from", .null);
 
     if (std.mem.eql(u8, import_name, "std")) {

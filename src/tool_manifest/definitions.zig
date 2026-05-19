@@ -510,7 +510,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_decl_summary = tool(.{
-        .description = "Summarize declarations in a Zig file.",
+        .description = "Heuristically summarize declarations in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
         .read_only = true,
         .group = .static_analysis,
@@ -518,7 +518,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_decl_summary_json = tool(.{
-        .description = "Return JSON-native declaration summary for a Zig file.",
+        .description = "Return a JSON-native heuristic declaration summary for a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
         .read_only = true,
         .group = .static_analysis,
@@ -526,7 +526,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_allocations = tool(.{
-        .description = "Find allocation-related call sites in a Zig file.",
+        .description = "Find likely allocation-related call sites in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
         .read_only = true,
         .group = .static_analysis,
@@ -534,7 +534,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_error_sets = tool(.{
-        .description = "Find error-related sites in a Zig file.",
+        .description = "Find likely error-related sites in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
         .read_only = true,
         .group = .static_analysis,
@@ -542,7 +542,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_public_api = tool(.{
-        .description = "Find public API declarations in a Zig file.",
+        .description = "Find likely public API declarations in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
         .read_only = true,
         .group = .static_analysis,
@@ -566,7 +566,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_build_targets = tool(.{
-        .description = "Return build steps, artifacts, modules, and suggested zig build commands.",
+        .description = "Return likely build steps, artifacts, modules, and suggested zig build commands.",
         .input_schema = schema(&.{}),
         .read_only = true,
         .group = .static_analysis,
@@ -574,7 +574,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_build_options = tool(.{
-        .description = "Discover available `zig build -D...` options from build.zig and standard Zig build knobs.",
+        .description = "Heuristically discover available `zig build -D...` options from build.zig and standard Zig build knobs.",
         .input_schema = schema(&.{}),
         .read_only = true,
         .group = .static_analysis,
@@ -590,7 +590,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_import_resolve = tool(.{
-        .description = "Resolve a Zig @import string against workspace modules, packages, stdlib, or a source file.",
+        .description = "Heuristically resolve a Zig @import string against workspace modules, packages, stdlib, or a source file.",
         .input_schema = schema(&.{ .{ "import", "string", true }, .{ "from", "string", false } }),
         .read_only = true,
         .group = .static_analysis,
@@ -598,7 +598,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_test_discover = tool(.{
-        .description = "Discover Zig test declarations and runnable test commands.",
+        .description = "Heuristically discover Zig test declarations and runnable test commands.",
         .input_schema = schema(&.{.{ "limit", "integer", false }}),
         .read_only = true,
         .group = .static_analysis,
@@ -665,7 +665,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_test_select = tool(.{
-        .description = "Select focused Zig test commands for changed files or symbols.",
+        .description = "Recommend focused Zig test commands for changed files or symbols.",
         .input_schema = schema(&.{ .{ "files", "string", false }, .{ "symbols", "string", false }, .{ "limit", "integer", false } }),
         .read_only = true,
         .group = .static_analysis,
@@ -673,7 +673,7 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
     });
     pub const zig_public_api_diff = tool(.{
-        .description = "Compare public Zig declarations from git baseline/text/current file and report likely breaking changes.",
+        .description = "Compare heuristic public Zig declaration snapshots and report likely breaking changes.",
         .input_schema = schema(&.{ .{ "file", "string", false }, .{ "before", "string", false }, .{ "after", "string", false }, .{ "baseline_ref", "string", false } }),
         .read_only = true,
         .group = .static_analysis,

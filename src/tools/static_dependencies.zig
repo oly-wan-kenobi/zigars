@@ -1,5 +1,7 @@
 const std = @import("std");
+const zigar = @import("zigar");
 
+const analysis_contract = zigar.analysis_contract;
 const static_build = @import("static_build.zig");
 const common = @import("common.zig");
 
@@ -96,8 +98,7 @@ pub fn dependencyInspectionValue(allocator: std.mem.Allocator, a: *App, bytes: [
     try obj.put(allocator, "dependency_count", .{ .integer = @intCast(deps.items.len) });
     try obj.put(allocator, "issues", .{ .array = issues });
     try obj.put(allocator, "zig_pkg_cache", try cachePathStatusValue(allocator, a, "zig-pkg"));
-    try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_zon_dependency_scan" });
-    try obj.put(allocator, "confidence", .{ .string = "medium" });
+    try analysis_contract.putMetadata(allocator, &obj, "zig_dependency_inspect");
     return .{ .object = obj };
 }
 

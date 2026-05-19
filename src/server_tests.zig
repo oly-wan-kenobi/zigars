@@ -465,6 +465,9 @@ test "public api diff detects breaking removal and additions" {
         \\
     );
     const obj = value.object;
+    try std.testing.expectEqualStrings("heuristic_public_decl_diff", obj.get("analysis_kind").?.string);
+    try std.testing.expectEqualStrings("advisory", obj.get("confidence_class").?.string);
+    try std.testing.expect(obj.get("limitations").?.array.items.len > 0);
     try std.testing.expect(obj.get("breaking_change_risk").?.bool);
     try std.testing.expectEqual(@as(usize, 1), obj.get("removed").?.array.items.len);
     try std.testing.expectEqual(@as(usize, 1), obj.get("added").?.array.items.len);

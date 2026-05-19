@@ -50,6 +50,13 @@ unsupported. `zig_command_plan` is intentionally narrower: it returns exact
 `argv`/`cwd`/`timeout_ms` only for command-backed tools and returns a structured
 unsupported response for other known tools instead of `InvalidArguments`.
 
+Static-analysis tools use a shared confidence contract. Structured heuristic
+results include `analysis_kind`, `confidence`, `confidence_class`,
+`limitations`, and `verify_with`; text results state the same confidence in
+plain language. Treat `orientation_only` results as navigation aids, `advisory`
+results as review input, and verify release decisions with Zig compiler, ZLS, CI,
+or optional backend tools.
+
 `zigar_doctor` accepts optional `probe_backends` and `timeout_ms` arguments. Use
 backend probes when a client reports `PermissionDenied`, missing formatter/ZLS
 tools, or unclear executable-path failures. Probe results are cached for the
