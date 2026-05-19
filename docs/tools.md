@@ -55,6 +55,11 @@ backend probes when a client reports `PermissionDenied`, missing formatter/ZLS
 tools, or unclear executable-path failures. Probe results are cached for the
 server process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
 
+Docs tools are intentionally split by source. `zig_std_search` scans Zig
+standard-library `.zig` source files. `zig_lang_ref_search` searches
+language-reference sections, reports whether it used `installed_langref_html` or
+`bundled_langref_index`, and does not scan Zig autodoc implementation files.
+
 High-signal discovery keywords include:
 
 - `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`,
