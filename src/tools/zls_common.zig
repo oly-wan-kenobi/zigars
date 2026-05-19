@@ -6,6 +6,7 @@ const command = zigar.command;
 const json_result = zigar.json_result;
 const zls_session = zigar.zls_session;
 const core = @import("shared_core.zig");
+const zls_document = @import("zls_document.zig");
 
 const App = core.App;
 const structured = core.structured;
@@ -22,6 +23,10 @@ const backendProbeCacheValue = core.backendProbeCacheValue;
 const ownedString = core.ownedString;
 const workspacePathExists = core.workspacePathExists;
 const zlsUnavailable = core.zlsUnavailable;
+
+pub const ZlsDocumentSource = zls_document.Source;
+pub const ZlsDocument = zls_document.Document;
+pub const zlsDocumentFromArgs = zls_document.fromArgs;
 
 pub fn metricsValue(a: *App, allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;

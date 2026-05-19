@@ -13,6 +13,7 @@ const core = @import("core.zig");
 const edit_diagnostics = @import("edit_zls_diagnostics.zig");
 const edit_edits = @import("edit_zls_edits.zig");
 const static_analysis = @import("static_analysis.zig");
+const zls_document = @import("zls_document.zig");
 
 const App = common.App;
 const LspClient = common.LspClient;
@@ -34,6 +35,7 @@ const structuredText = common.structuredText;
 const requireZlsCapability = common.requireZlsCapability;
 const zlsUnavailable = common.zlsUnavailable;
 const zlsFileUriFromArgs = common.zlsFileUriFromArgs;
+const zlsDocumentFromArgs = common.zlsDocumentFromArgs;
 const zlsSetupErrorResult = common.zlsSetupErrorResult;
 const lspStructuredValue = common.lspStructuredValue;
 const lspStructuredTool = common.lspStructuredTool;
@@ -44,8 +46,8 @@ const zigDeclSummary = static_analysis.zigDeclSummary;
 const diagnosticWaitMs = edit_diagnostics.diagnosticWaitMs;
 const diagnosticsStructuredValue = edit_diagnostics.diagnosticsStructuredValue;
 const waitForDiagnostics = edit_diagnostics.waitForDiagnostics;
-const textEditToolValue = edit_edits.textEditToolValue;
-const workspaceEditValue = edit_edits.workspaceEditValue;
+const textEditToolValueForDocument = edit_edits.textEditToolValueForDocument;
+const workspaceEditValueForDocument = edit_edits.workspaceEditValueForDocument;
 
 pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_format", "file", "string");
@@ -233,8 +235,8 @@ pub fn zigCodeActions(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
 pub fn zigCodeActionApply(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (requireZlsCapability(a, allocator, "textDocument/codeAction")) |result| return result;
-    const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/codeAction", argString(args, "file"), err);
-    defer allocator.free(file_uri);
+    var doc = zlsDocumentFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/codeAction", argString(args, "file"), err);
+    defer doc.deinit(allocator);
     const client = a.lsp_client orelse return zlsUnavailable(a, allocator);
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -246,7 +248,7 @@ pub fn zigCodeActionApply(a: *App, allocator: std.mem.Allocator, args: ?std.json
     };
     a.zls_requests += 1;
     const response = client.sendRequest(allocator, "textDocument/codeAction", Params{
-        .textDocument = .{ .uri = file_uri },
+        .textDocument = .{ .uri = doc.uri },
         .range = .{
             .start = .{ .line = argInt(args, "start_line", 0), .character = argInt(args, "start_char", 0) },
             .end = .{ .line = argInt(args, "end_line", 0), .character = argInt(args, "end_char", 0) },
@@ -288,7 +290,9 @@ pub fn zigCodeActionApply(a: *App, allocator: std.mem.Allocator, args: ?std.json
     out.put(allocator, "applied", .{ .bool = argBool(args, "apply", false) }) catch return error.OutOfMemory;
 
     if (action_obj.get("edit")) |edit| {
-        out.put(allocator, "workspace_edit", workspaceEditValue(a, allocator, edit, argBool(args, "apply", false)) catch |err| return lspToolError(allocator, "zig_code_action_apply", "workspaceEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the code action edit and retry with paths that remain inside the zigar workspace.")) catch return error.OutOfMemory;
+        const apply = argBool(args, "apply", false);
+        if (apply and !doc.canApplyToDisk()) return zls_document.unsavedApplyError(allocator, "zig_code_action_apply", "workspaceEdit", doc);
+        out.put(allocator, "workspace_edit", workspaceEditValueForDocument(a, allocator, edit, apply, doc) catch |err| return lspToolError(allocator, "zig_code_action_apply", "workspaceEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the code action edit and retry with paths that remain inside the zigar workspace.")) catch return error.OutOfMemory;
     } else if (action_obj.get("command")) |cmd| {
         out.put(allocator, "command", json_result.cloneValue(allocator, cmd) catch return error.OutOfMemory) catch return error.OutOfMemory;
         const cmd_obj = switch (cmd) {
@@ -302,7 +306,9 @@ pub fn zigCodeActionApply(a: *App, allocator: std.mem.Allocator, args: ?std.json
             .string => |s| s,
             else => "",
         };
-        if (argBool(args, "apply", false) and isAllowedZlsCommand(command_name)) {
+        if (argBool(args, "apply", false) and !doc.canApplyToDisk()) {
+            return zls_document.unsavedApplyError(allocator, "zig_code_action_apply", "workspace/executeCommand", doc);
+        } else if (argBool(args, "apply", false) and isAllowedZlsCommand(command_name)) {
             const ExecuteParams = struct {
                 command: []const u8,
                 arguments: ?std.json.Value = null,
@@ -442,8 +448,8 @@ pub fn reopenSummaryValue(allocator: std.mem.Allocator, summary: zigar.document_
 pub fn zigRename(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (requireZlsCapability(a, allocator, "textDocument/rename")) |result| return result;
     const new_name = argString(args, "new_name") orelse return missingArgumentResult(allocator, "zig_rename", "new_name", "string");
-    const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/rename", argString(args, "file"), err);
-    defer allocator.free(file_uri);
+    var doc = zlsDocumentFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/rename", argString(args, "file"), err);
+    defer doc.deinit(allocator);
     const client = a.lsp_client orelse return zlsUnavailable(a, allocator);
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -452,17 +458,18 @@ pub fn zigRename(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) m
     };
     a.zls_requests += 1;
     const response = client.sendRequest(allocator, "textDocument/rename", Params{
-        .textDocument = .{ .uri = file_uri },
+        .textDocument = .{ .uri = doc.uri },
         .position = .{ .line = argInt(args, "line", 0), .character = argInt(args, "character", 0) },
         .newName = new_name,
     }) catch |err| return backendErrorResult(allocator, "zls", "textDocument/rename", err, "ZLS rename failed; confirm the symbol location and ZLS session status");
     defer allocator.free(response);
 
     if (argBool(args, "apply", false)) {
-        return workspaceEditToolResult(a, allocator, response, true);
+        if (!doc.canApplyToDisk()) return zls_document.unsavedApplyError(allocator, "zig_rename", "textDocument/rename", doc);
+        return workspaceEditToolResultForDocument(a, allocator, response, true, doc);
     }
 
-    return workspaceEditToolResult(a, allocator, response, false);
+    return workspaceEditToolResultForDocument(a, allocator, response, false, doc);
 }
 
 pub fn zigDiagnostics(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -624,8 +631,8 @@ pub fn zigDiagnosticsWorkspace(a: *App, allocator: std.mem.Allocator, _: ?std.js
 
 pub fn zigFormatZls(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, apply: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (requireZlsCapability(a, allocator, "textDocument/formatting")) |result| return result;
-    const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/formatting", argString(args, "file"), err);
-    defer allocator.free(file_uri);
+    var doc = zlsDocumentFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/formatting", argString(args, "file"), err);
+    defer doc.deinit(allocator);
     const client = a.lsp_client orelse return zlsUnavailable(a, allocator);
     const doc_state = a.doc_state orelse return zlsUnavailable(a, allocator);
     const Params = struct {
@@ -634,26 +641,31 @@ pub fn zigFormatZls(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     };
     a.zls_requests += 1;
     const response = client.sendRequest(allocator, "textDocument/formatting", Params{
-        .textDocument = .{ .uri = file_uri },
+        .textDocument = .{ .uri = doc.uri },
         .options = .{},
     }) catch |err| return backendErrorResult(allocator, "zls", "textDocument/formatting", err, "ZLS formatting failed; zig_format can fall back to zig fmt when the ZLS session is unavailable");
     defer allocator.free(response);
 
     if (apply) {
-        const value = textEditToolValue(a, allocator, file_uri, response, true) catch |err| return lspToolError(allocator, "zig_format", "textDocument/formatting", "apply_text_edits", "text_edit_apply_failed", err, "Retry with a ZLS-openable file whose URI resolves inside the zigar workspace.");
-        doc_state.closeDoc(client, file_uri) catch {};
+        if (!doc.canApplyToDisk()) return zls_document.unsavedApplyError(allocator, "zig_format", "textDocument/formatting", doc);
+        const value = textEditToolValueForDocument(a, allocator, doc, response, true) catch |err| return lspToolError(allocator, "zig_format", "textDocument/formatting", "apply_text_edits", "text_edit_apply_failed", err, "Retry with a ZLS-openable file whose URI resolves inside the zigar workspace.");
+        doc_state.closeDoc(client, doc.uri) catch {};
         return structuredOwned(allocator, value);
     }
 
-    const value = textEditToolValue(a, allocator, file_uri, response, false) catch |err| return lspToolError(allocator, "zig_format", "textDocument/formatting", "preview_text_edits", "text_edit_preview_failed", err, "Retry with a ZLS-openable file whose URI resolves inside the zigar workspace.");
+    const value = textEditToolValueForDocument(a, allocator, doc, response, false) catch |err| return lspToolError(allocator, "zig_format", "textDocument/formatting", "preview_text_edits", "text_edit_preview_failed", err, "Retry with a ZLS-openable file whose URI resolves inside the zigar workspace.");
     return structuredOwned(allocator, value);
 }
 
 pub fn workspaceEditToolResult(a: *App, allocator: std.mem.Allocator, response: []const u8, apply: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return workspaceEditToolResultForDocument(a, allocator, response, apply, null);
+}
+
+pub fn workspaceEditToolResultForDocument(a: *App, allocator: std.mem.Allocator, response: []const u8, apply: bool, primary_doc: ?common.ZlsDocument) mcp.tools.ToolError!mcp.tools.ToolResult {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "parse_response", "malformed_backend_response", err, "Retry after checking the ZLS session; the workspace edit response was not valid JSON.");
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse .null;
-    const value = workspaceEditValue(a, allocator, result, apply) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the workspace edit and retry with paths that remain inside the zigar workspace.");
+    const value = workspaceEditValueForDocument(a, allocator, result, apply, primary_doc) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the workspace edit and retry with paths that remain inside the zigar workspace.");
     return structuredOwned(allocator, value);
 }
 

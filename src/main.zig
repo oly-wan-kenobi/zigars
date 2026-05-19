@@ -117,3 +117,8 @@ test "executable module links runtime lifecycle types" {
 test "executable usage names the command" {
     try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigar") != null);
 }
+
+test {
+    _ = @import("tools/edit_zls_edits_tests.zig");
+    _ = @import("tools/zls_document.zig");
+}

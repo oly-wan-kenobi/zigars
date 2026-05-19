@@ -148,6 +148,16 @@ pub const DocumentState = struct {
     /// This is used by MCP clients that want diagnostics/hover/code actions for
     /// unsaved text while still keeping all paths scoped to the workspace.
     pub fn syncText(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
+        return self.syncTextInternal(lsp_client, file_path, content, ret_allocator, true);
+    }
+
+    /// Open or replace a document in ZLS using the current disk text without
+    /// retaining that text as an unsaved buffer.
+    pub fn syncDiskText(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
+        return self.syncTextInternal(lsp_client, file_path, content, ret_allocator, false);
+    }
+
+    fn syncTextInternal(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator, retain_content: bool) ![]const u8 {
         if (content.len > self.max_document_bytes) return error.DocumentTooLarge;
 
         const abs_path = try uri_util.resolvePath(self.allocator, self.workspace_path, file_path);
@@ -162,37 +172,40 @@ pub const DocumentState = struct {
             did_open: bool,
             previous: ?DocInfo = null,
         };
-        const stored_content = try self.allocator.dupe(u8, content);
+        const stored_content: ?[]u8 = if (retain_content) try self.allocator.dupe(u8, content) else null;
         var content_moved = false;
-        errdefer if (!content_moved) self.allocator.free(stored_content);
+        errdefer if (!content_moved) {
+            if (stored_content) |retained| self.allocator.free(retained);
+        };
+        const retained_len: usize = if (retain_content) content.len else 0;
         const notification: Notification = blk: {
             self.mutex.lock();
             defer self.mutex.unlock();
             break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
                 const previous = info.*;
-                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, contentLen(previous), content.len) orelse return error.RetainedContentLimitExceeded;
+                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, contentLen(previous), retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 self.retained_content_bytes = next_retained;
                 info.version += 1;
                 info.content_hash = std.hash.Wyhash.hash(0, content);
-                info.dirty = true;
+                info.dirty = retain_content;
                 info.content = stored_content;
-                content_moved = true;
+                if (stored_content != null) content_moved = true;
                 break :existing Notification{ .method = "textDocument/didChange", .version = info.version, .did_open = false, .previous = previous };
             } else new_doc: {
                 if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
-                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, 0, content.len) orelse return error.RetainedContentLimitExceeded;
+                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, 0, retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 const stored_uri = try self.allocator.dupe(u8, file_uri);
                 errdefer self.allocator.free(stored_uri);
                 try self.open_docs.put(self.allocator, stored_uri, .{
                     .version = 1,
                     .content_hash = std.hash.Wyhash.hash(0, content),
-                    .dirty = true,
+                    .dirty = retain_content,
                     .content = stored_content,
                 });
                 self.retained_content_bytes = next_retained;
-                content_moved = true;
+                if (stored_content != null) content_moved = true;
                 break :new_doc Notification{ .method = "textDocument/didOpen", .version = 1, .did_open = true };
             };
         };
@@ -322,7 +335,12 @@ pub const DocumentState = struct {
 
         for (docs.items) |doc| {
             summary.attempted += 1;
-            const path = uri_util.stripFilePrefix(doc.uri);
+            const path = uri_util.uriToPath(self.allocator, doc.uri) catch {
+                self.logger.warn("docs", "failed to decode {s} for reopen", .{doc.uri});
+                summary.failed += 1;
+                continue;
+            };
+            defer self.allocator.free(path);
 
             var disk_content: ?[]u8 = null;
             defer if (disk_content) |content| self.allocator.free(content);
@@ -530,6 +548,30 @@ test "DocumentState tracks retained content bytes" {
     try std.testing.expectEqual(@as(usize, 1), status.open_documents);
 }
 
+test "DocumentState disk sync does not retain clean disk content" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var ds = DocumentState.initWithIo(alloc, "/tmp", io);
+    defer ds.deinit();
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    const pipe = try testPipe();
+    defer pipe.read_end.close(io);
+    client.zls_stdin = pipe.write_end;
+
+    const uri = try ds.syncDiskText(&client, "/tmp/main.zig", "const disk = true;\n", alloc);
+    defer alloc.free(uri);
+    pipe.write_end.close(io);
+    client.zls_stdin = null;
+
+    const status = ds.statusForUri(uri) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(!status.dirty);
+    try std.testing.expectEqual(@as(usize, 0), status.content_bytes);
+    try std.testing.expectEqual(@as(usize, 0), status.retained_content_bytes);
+}
+
 test "DocumentState rolls back existing sync entry when didChange fails" {
     const alloc = std.testing.allocator;
     var ds = DocumentState.init(alloc, "/tmp");
@@ -617,6 +659,56 @@ test "DocumentState reopens retained unsaved content" {
     defer alloc.free(msg);
     try std.testing.expect(std.mem.indexOf(u8, msg, "unsaved") != null);
     try std.testing.expect(std.mem.indexOf(u8, msg, "disk") == null);
+}
+
+test "DocumentState reopens disk content from percent-encoded uri" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root/dir with spaces");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/dir with spaces/main file.zig", .data = "const disk_with_spaces = true;\n" });
+
+    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer alloc.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
+    defer alloc.free(base_z);
+    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
+    defer alloc.free(root);
+    const abs = try std.fs.path.join(alloc, &.{ root, "dir with spaces", "main file.zig" });
+    defer alloc.free(abs);
+    const uri = try uri_util.pathToUri(alloc, abs);
+    errdefer alloc.free(uri);
+    try std.testing.expect(std.mem.indexOf(u8, uri, "%20") != null);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 3,
+        .content_hash = 0,
+        .dirty = false,
+        .content = null,
+    });
+
+    const pipe = try testPipe();
+    defer pipe.read_end.close(io);
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    client.zls_stdin = pipe.write_end;
+
+    const summary = ds.reopenAll(&client);
+    try std.testing.expectEqual(@as(usize, 1), summary.attempted);
+    try std.testing.expectEqual(@as(usize, 1), summary.succeeded);
+    try std.testing.expectEqual(@as(usize, 0), summary.failed);
+    pipe.write_end.close(io);
+    client.zls_stdin = null;
+
+    var reader = LspTransport.Reader.init(pipe.read_end, io);
+    const msg = (try reader.readMessage(alloc)) orelse return error.TestUnexpectedResult;
+    defer alloc.free(msg);
+    try std.testing.expect(std.mem.indexOf(u8, msg, "disk_with_spaces") != null);
 }
 
 const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };

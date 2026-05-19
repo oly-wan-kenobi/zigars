@@ -264,7 +264,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "apply", "boolean", false }, .{ "content", "string", false } }),
         .read_only = false,
         .group = .formatting_and_edits,
-        .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
+        .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigFormat"),
         .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
@@ -291,7 +291,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true }, .{ "new_name", "string", true }, .{ "apply", "boolean", false } }),
         .read_only = false,
         .group = .formatting_and_edits,
-        .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
+        .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigRename"),
         .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
@@ -300,6 +300,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true } }),
         .read_only = true,
         .group = .formatting_and_edits,
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigCodeActions"),
         .plan = .{ .zls_request = .{ .method = "textDocument/codeAction", .requires_document_sync = true, .required_capability = "codeActionProvider" } },
     });
@@ -308,7 +309,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true }, .{ "action_index", "integer", true }, .{ "apply", "boolean", false } }),
         .read_only = false,
         .group = .formatting_and_edits,
-        .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
+        .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigCodeActionApply"),
         .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
     });
@@ -352,7 +353,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "wait_ms", "integer", false } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDiagnostics"),
         .plan = .{ .zls_request = .{ .method = "textDocument/publishDiagnostics with ast-check fallback", .requires_document_sync = true } },
     });
@@ -361,7 +362,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "wait_ms", "integer", false }, .{ "timeout_ms", "integer", false } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDiagnosticsAll"),
         .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic plus ast-check fallback", .requires_document_sync = true } },
     });
@@ -378,7 +379,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigHover"),
         .plan = .{ .zls_request = .{ .method = "textDocument/hover", .requires_document_sync = true, .required_capability = "hoverProvider" } },
     });
@@ -387,7 +388,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDefinition"),
         .plan = .{ .zls_request = .{ .method = "textDocument/definition", .requires_document_sync = true, .required_capability = "definitionProvider" } },
     });
@@ -396,7 +397,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true }, .{ "include_declaration", "boolean", false } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigReferences"),
         .plan = .{ .zls_request = .{ .method = "textDocument/references", .requires_document_sync = true, .required_capability = "referencesProvider" } },
     });
@@ -405,7 +406,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigCompletion"),
         .plan = .{ .zls_request = .{ .method = "textDocument/completion", .requires_document_sync = true, .required_capability = "completionProvider" } },
     });
@@ -414,7 +415,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigSignatureHelp"),
         .plan = .{ .zls_request = .{ .method = "textDocument/signatureHelp", .requires_document_sync = true, .required_capability = "signatureHelpProvider" } },
     });
@@ -423,7 +424,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false } }),
         .read_only = true,
         .group = .zls,
-        .risk = .{ .executes_backend = true },
+        .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
         .handler = handler(.edit_zls, "zigDocumentSymbols"),
         .plan = .{ .zls_request = .{ .method = "textDocument/documentSymbol", .requires_document_sync = true, .required_capability = "documentSymbolProvider" } },
     });
