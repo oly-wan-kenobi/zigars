@@ -27,6 +27,7 @@ pub const ZlsProcess = struct {
 
         var child = try std.process.spawn(self.io, .{
             .argv = &.{self.zls_path},
+            .cwd = .{ .path = self.workspace_path },
             .stdin = .pipe,
             .stdout = .pipe,
             .stderr = .pipe,
@@ -108,6 +109,7 @@ test "ZlsProcess init state" {
     try std.testing.expect(proc.getStdin() == null);
     try std.testing.expect(proc.getStdout() == null);
     try std.testing.expect(proc.getStderr() == null);
+    try std.testing.expectEqualStrings("/workspace", proc.workspace_path);
     try std.testing.expectEqual(@as(u32, 0), proc.restart_count);
 }
 
