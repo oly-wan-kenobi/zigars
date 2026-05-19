@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+pub const docs_source = @import("docs/source.zig");
 const langref = @import("docs/langref.zig");
 
 pub const BuiltinDoc = struct {
@@ -41,6 +42,7 @@ pub const langref_sections = langref.sections;
 pub fn builtinList(allocator: std.mem.Allocator) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
+    try docs_source.appendTextHeader(allocator, &out, docs_source.curatedBuiltins());
     try out.print(allocator, "Known Zig builtins ({d} curated entries):\n\n", .{builtins.len});
     for (builtins) |item| {
         try out.print(allocator, "- `{s}`: {s}\n", .{ item.signature, item.summary });
@@ -53,6 +55,9 @@ pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8) ![]u8 {
     errdefer out.deinit(allocator);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
+
+    try docs_source.appendTextHeader(allocator, &out, docs_source.curatedBuiltins());
+    try out.print(allocator, "Query: `{s}`\n\n", .{query});
 
     var found: usize = 0;
     for (builtins) |item| {
@@ -81,6 +86,8 @@ pub fn searchStd(
     errdefer out.deinit(allocator);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
+    try docs_source.appendTextHeader(allocator, &out, docs_source.stdlibSource(std_dir, null));
+    try out.print(allocator, "Query: `{s}`\n\n", .{query});
 
     var dir = try std.Io.Dir.openDirAbsolute(io, std_dir, .{ .iterate = true });
     defer dir.close(io);
@@ -151,6 +158,8 @@ test "builtin docs find import" {
     const text = try builtinDoc(std.testing.allocator, "import");
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "@import") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Docs source: curated_zigar_builtins") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: partial_curated") != null);
 }
 
 test {
@@ -176,6 +185,12 @@ test "std search ignores non-zig documentation files" {
 
     try std.testing.expect(std.mem.indexOf(u8, text, "No stdlib matches") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "readme.md") == null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Docs source: local_stdlib_zig_source") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: source_scan") != null);
+}
+
+test {
+    _ = docs_source;
 }
 
 fn tmpAbs(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8, child: []const u8) ![]u8 {
