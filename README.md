@@ -85,7 +85,7 @@ scans, and line-budget headroom checks.
 
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics
-retention, source-write gating, strict symlink rejection, command output-limit
+retention, source-write gating, symlink escape rejection, command output-limit
 metadata, ZLS timeout/EOF behavior, a fake-ZLS LSP roundtrip, and the Zig helper
 used by release checks.
 
@@ -130,7 +130,6 @@ Options:
 --cache-dir <path>
 --timeout-ms <n>
 --zls-timeout-ms <n>
---strict-workspace
 ```
 
 Use `--transport stdio` for local agent clients. `--transport http` is available
@@ -174,7 +173,7 @@ server from the active workspace:
 ```toml
 [mcp_servers.zigar]
 command = "/absolute/path/to/zigar"
-args = ["--transport", "stdio", "--strict-workspace"]
+args = ["--transport", "stdio"]
 startup_timeout_sec = 10.0
 ```
 
@@ -244,9 +243,10 @@ The short version is: start with `zigar_context_pack`, ask
 
 ## Safety Model
 
-- Every input and output path is resolved under `--workspace`.
-- `--strict-workspace` additionally checks real paths for existing files and
-  output parents to reject symlink escapes.
+- Every input and output path is resolved under the canonical `--workspace`.
+- Existing input paths, existing output paths, and the nearest existing output
+  parent are realpathed. Symlinks are supported only when the real target stays
+  inside the workspace; symlink escapes are rejected.
 - Source writes require `apply=true`.
 - Formatting, patch preview, and rename tools return previews/diffs by default.
 - Build, test, and profiling commands run with the workspace as cwd.

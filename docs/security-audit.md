@@ -15,8 +15,9 @@ This checklist is for release reviews and MCP-client integration changes.
 - Path inputs call `Workspace.resolve` before reading.
 - Output paths call `Workspace.resolveOutput` before writing.
 - Generated artifacts use explicit workspace-local output paths.
-- Strict workspace mode rejects symlinked output ancestors, including nested
-  outputs whose final parent directory does not exist yet.
+- The workspace resolver rejects symlink escapes for existing inputs, existing
+  outputs, and output ancestors, including nested outputs whose final parent
+  directory does not exist yet.
 - Mutating source tools stay preview-first and require `apply=true`.
 - Preview-capable edit tools return unified diffs and source/updated hashes
   before writes.
@@ -36,9 +37,9 @@ This checklist is for release reviews and MCP-client integration changes.
 
 - `zig build`, `zig test`, and build scripts can execute project code.
 - ZLS, zwanzig, zflame, diff-folded, and platform profilers are local executables.
-- `--strict-workspace` rejects symlink escapes through existing path ancestors,
-  but it does not protect against concurrent filesystem races by untrusted local
-  processes.
+- The workspace realpath boundary rejects symlink escapes through existing path
+  ancestors, but it does not protect against concurrent filesystem races by
+  untrusted local processes.
 - MCP clients decide when to call tools and how to display structured results.
 
 ## Release Gate
