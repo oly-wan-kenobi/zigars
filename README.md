@@ -134,7 +134,7 @@ Options:
 ```
 
 Use `--transport stdio` for local agent clients. `--transport http` is available
-for clients or wrappers that need an HTTP endpoint.
+only as a loopback endpoint for clients or wrappers that need local HTTP.
 
 ## Agent Client Configuration
 

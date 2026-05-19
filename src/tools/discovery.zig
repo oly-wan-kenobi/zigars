@@ -100,7 +100,7 @@ pub fn zigarHttpStatus(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
     obj.put(allocator, "host", .{ .string = a.config.host }) catch return error.OutOfMemory;
     obj.put(allocator, "port", .{ .integer = a.config.port }) catch return error.OutOfMemory;
     obj.put(allocator, "http_available", .{ .bool = true }) catch return error.OutOfMemory;
-    obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
+    obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigar only supports loopback HTTP by default and stdio remains the safest default for Codex" }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 

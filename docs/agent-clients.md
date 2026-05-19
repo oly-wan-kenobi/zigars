@@ -150,8 +150,9 @@ For wrappers that prefer an HTTP process, start zigar explicitly:
 zigar --transport http --host 127.0.0.1 --port 8080 --workspace /absolute/path/to/zig/project
 ```
 
-The HTTP transport accepts MCP JSON-RPC requests at `/`. Keep it bound to
-`127.0.0.1` unless a trusted local network integration requires otherwise.
+The HTTP transport accepts MCP JSON-RPC requests at `/`. zigar supports it as a
+local loopback endpoint; non-loopback bind hosts are rejected instead of being
+treated as an unauthenticated remote mode.
 
 Use:
 

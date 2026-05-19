@@ -59,6 +59,13 @@ or stderr exceeds the configured capture limit, it fails the command instead of
 returning partial output. If output limits are reached, run the underlying
 command directly or narrow the check with file-focused tools such as `zig_check`.
 
+## HTTP Host Is Rejected
+
+zigar's HTTP transport is local-only by default. Use stdio for normal agent
+clients, or bind HTTP to `127.0.0.1`, `localhost`, or `::1` when a local wrapper
+needs an HTTP endpoint. Non-loopback hosts such as `0.0.0.0` are rejected because
+zigar does not currently provide an authenticated remote HTTP mode.
+
 ## Quoted `args` Values
 
 Tools with an `args` string support shell-like single quotes, double quotes, and

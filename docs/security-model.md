@@ -23,4 +23,8 @@ Optional backends such as ZLS, zwanzig, zflame, and platform profilers are local
 processes. Configure their paths explicitly when using zigar in sensitive
 workspaces.
 
+HTTP transport is local-only by default. `--transport http` must bind a loopback
+host such as `127.0.0.1`, `localhost`, or `::1`; non-loopback hosts are rejected
+rather than exposed as an unauthenticated remote endpoint.
+
 See [security-audit.md](security-audit.md) for the release-review checklist.
