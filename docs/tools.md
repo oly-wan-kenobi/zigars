@@ -22,6 +22,12 @@ Tool calls are validated before handler execution. Invalid arguments return a
 structured `argument_error` result with a stable `code`, `field`, `expected`,
 `actual`, and `resolution`.
 
+Argument hints are scoped to the owning tool schema. Shared path/apply/timeout
+semantics are reused where they mean the same thing, but enum and default
+contracts live on the specific schema that owns the field. For example,
+`zigar_context_pack.mode` and `zigar_validate_patch.mode` can advertise
+different valid values without a global `mode` default leaking between tools.
+
 Handlers preserve that contract after validation too. Expected user-facing
 failures such as missing workspace files, unsupported planning targets, malformed
 extra arguments, unavailable optional backends, failed writes, and analysis-cache

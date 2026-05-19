@@ -48,6 +48,21 @@ Source writes require apply=true. Use standard tools/list schemas for arguments;
 query zigar_schema when you need grouping, risk, planning, or discovery keywords.
 ```
 
+## First Calls
+
+After the server connects, these calls give Codex enough project context without
+guessing from shell output:
+
+```text
+zigar_context_pack {"mode":"standard"}
+zigar_next_action {}
+zigar_validate_patch {"mode":"quick"}
+```
+
+Use `zigar_context_pack` before planning work, `zigar_next_action` when the next
+Zig-specific check is unclear, and `zigar_validate_patch` before handing a
+source change back.
+
 ## Health Checks
 
 Call `zigar_doctor` for configuration state. Call it with

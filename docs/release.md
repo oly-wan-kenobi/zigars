@@ -9,11 +9,12 @@ zig build dist release-asset-smoke
 
 The gate includes formatting, generated docs/JSON checks, unit tests,
 ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
-coverage floors, and artifact hygiene. The default GitHub Actions PR/main
-workflow then runs `zig build dist release-asset-smoke` in the same Zig job, so
-archive shape, checksums, and native archive runtime behavior are verified
-before a tag workflow can publish anything. The HTTP JSON-RPC smoke test covers
-`initialize`, `tools/list`, `zigar_schema`, and `zigar_doctor` using
+coverage floors, structured tool-error contract scans, line-budget headroom, and
+artifact hygiene. The default GitHub Actions PR/main workflow then runs
+`zig build dist release-asset-smoke` in the same Zig job, so archive shape,
+checksums, and native archive runtime behavior are verified before a tag workflow
+can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
+`tools/list`, `zigar_schema`, and `zigar_doctor` using
 `tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
 output, and diff-folded flamegraph flow with fake backend executables.
@@ -48,17 +49,23 @@ git tag -a "v${version}" -m "zigar ${version}"
 git push origin "v${version}"
 ```
 
-The tag workflow reruns `zig build release-check`, runs
+The normal tag workflow reruns `zig build release-check`, runs
 `zig build dist release-asset-smoke`, publishes Linux, macOS, and Windows
 archives, publishes `zigar-checksums.txt` with SHA-256 checksums, and creates
 GitHub provenance attestations from the checksum file. GitHub Actions are pinned
 to commit SHAs in the workflow; update the adjacent tag comments when bumping an
 action.
 
-A version is public only after the tag workflow finishes and the GitHub release
-contains all expected archives, `zigar-checksums.txt`, and provenance
-attestations. Do not advertise archive installation for a version until that
-verification is complete.
+A workflow-published version is public only after the tag workflow finishes and
+the GitHub release contains all expected archives, `zigar-checksums.txt`, and
+provenance attestations. Do not advertise archive installation for a version
+until that verification is complete.
+
+If GitHub Actions are unavailable and a manual release is unavoidable, the
+release notes must say so explicitly. Include the exact source commit, the local
+gates that passed, and the fact that the checksum file is the verification
+record for that release. Do not claim GitHub provenance attestations for a
+manual release unless they are actually attached to the release.
 
 ```sh
 version="$(zig build version)"
@@ -75,7 +82,8 @@ Release assets are named:
 
 ## Package Hygiene
 
-- `build.zig.zon` uses the URL dependency for `mcp.zig` 0.0.4.
+- `build.zig.zon` pins `mcp.zig` by archive URL and package hash; update both
+  intentionally when bumping the dependency.
 - Release targets are defined once in `tools/release_targets.zig`; update that
   table when adding or removing a published archive target.
 - `zig-pkg/`, `.zig-cache/`, `.zigar-cache/`, and `zig-out/` are local artifacts

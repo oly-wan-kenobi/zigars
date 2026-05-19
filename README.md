@@ -11,13 +11,14 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 
 ## Status
 
-`zigar` is ready for early public use with Zig 0.16.0 and stdio MCP transport.
-The current package version is `0.1.0`; see [CHANGELOG.md](CHANGELOG.md).
+`zigar` is ready for early public use with Zig 0.16.0 over stdio and HTTP MCP
+transports. The current package version is `0.1.0`; see
+[CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
 
-- `mcp.zig` is consumed as a URL dependency at version 0.0.4. `zig-pkg/` is a
-  local cache/artifact directory and is ignored.
+- `mcp.zig` is consumed as a pinned URL dependency. `zig-pkg/` is a local
+  cache/artifact directory and is ignored.
 - ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
   that need a missing backend return an explicit error.
 
@@ -46,10 +47,13 @@ install -m 0755 zig-out/bin/zigar ~/.local/bin/zigar
 zigar --version
 ```
 
-When a tagged GitHub release is published, download the archive for your
-platform from that release, verify it against `zigar-checksums.txt`, and put
-`zigar` on `PATH`. GitHub release attestations are generated from the same
-checksum file.
+Published archives are available from
+[GitHub Releases](https://github.com/oly-wan-kenobi/zigar/releases). Download
+the archive for your platform, verify its SHA-256 against `zigar-checksums.txt`,
+and put `zigar` on `PATH`. The `v0.1.0` release was built and verified locally
+while GitHub Actions were unavailable; its release notes list the source commit
+and local gates. Future tag-workflow releases attach GitHub provenance
+attestations generated from the checksum file.
 
 Published release archives are named:
 
@@ -74,12 +78,16 @@ The binary is written to:
 zig-out/bin/zigar
 ```
 
+`zig build release-check` is the adoption gate: it runs formatting, generated
+docs/JSON checks, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke
+fixtures, kcov line coverage floors, artifact hygiene, structured error-contract
+scans, and line-budget headroom checks.
+
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics
 retention, source-write gating, strict symlink rejection, command output-limit
 metadata, ZLS timeout/EOF behavior, a fake-ZLS LSP roundtrip, and the Zig helper
-used by release checks. The release coverage summary enforces non-zero floors for
-the library, executable, and tooling test binaries.
+used by release checks.
 
 Integration and coverage helpers are available as build steps:
 
@@ -175,9 +183,9 @@ Source writes require apply=true.
 ## Tool Groups
 
 - Discovery/meta: `zigar_capabilities`, `zigar_tool_index`,
-  `zigar_schema`, `zigar_doctor`, `zigar_workspace_info`, `zigar_metrics`,
-  `zigar_http_status`, `zig_command_plan`, `zig_tool_plan`,
-  `zig_toolchain_resolve`
+  `zigar_schema`, `zigar_backend_catalog`, `zigar_doctor`,
+  `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`,
+  `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
 - Agent workflows: `zigar_context_pack`, `zigar_next_action`,
   `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`,
   `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`
@@ -210,9 +218,10 @@ Source writes require apply=true.
 - Profiling/zflame: `zig_profile_plan`, `zig_profile_run`, `zig_flamegraph`,
   `zig_flamegraph_diff`
 
-`zigar_schema` includes registry-derived required and optional argument hints for
-argument-heavy tools. Use it when an MCP client shows only generic `tools/list`
-schemas.
+Standard MCP `tools/list` publishes each registered argument schema with
+properties, required fields, defaults, enums, and path hints. `zigar_schema`
+complements that with compact grouping, risk, planning, discovery keywords, and
+backend setup metadata.
 
 The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.md)
 is built from `src/tool_catalog.json` plus the typed registry metadata and
@@ -241,17 +250,26 @@ start with `zigar_context_pack`, route uncertain work through
 
 More detail:
 
-- [Tool discovery](docs/tools.md)
-- [Generated tool index](docs/tool-index.generated.md)
-- [Architecture notes](docs/architecture.md)
-- [Agent workflows](docs/agent-workflows.md)
-- [Codex setup](docs/codex.md)
-- [Security model](docs/security-model.md)
-- [Security readiness audit](docs/security-audit.md)
-- [Optional backends](docs/backends.md)
-- [Testing and coverage](docs/testing.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Release checklist](docs/release.md)
+- [Codex setup](docs/codex.md): stdio configuration, first calls, and health
+  checks.
+- [Agent workflows](docs/agent-workflows.md): context, planning, validation, and
+  failure-triage loops for MCP clients.
+- [Tool discovery](docs/tools.md) and
+  [generated tool index](docs/tool-index.generated.md): schema, risk, planning,
+  and keyword metadata for every registered tool.
+- [Architecture notes](docs/architecture.md): module boundaries, manifest rules,
+  and handler contracts.
+- [Optional backends](docs/backends.md): ZLS, zwanzig, zflame, and diff-folded
+  setup.
+- [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
+  coverage, and release assets.
+- [Security model](docs/security-model.md) and
+  [security readiness audit](docs/security-audit.md): workspace boundaries and
+  remaining security posture.
+- [Troubleshooting](docs/troubleshooting.md): common workspace, backend, and
+  argument issues.
+- [Release checklist](docs/release.md): publication gates and archive
+  verification.
 
 ## Troubleshooting
 
@@ -296,18 +314,24 @@ also visible through `zigar_workspace_info` and `zigar_metrics`.
 
 ## Development
 
-Before sending a change:
+Before sending a change, run the complete local gate when possible:
 
 ```sh
 zig fmt build.zig build.zig.zon src tools
+zig build release-check
+```
+
+For tighter loops while developing:
+
+```sh
 zig build docs-check json-check
 zig build test
 zig build -Doptimize=ReleaseSafe
 zig build smoke stdio-fixtures coverage
 ```
 
-For release-style verification, run `zig build release-check`. To verify the
-release archive path too, run `zig build dist release-asset-smoke`.
+To verify the release archive path too, run
+`zig build dist release-asset-smoke`.
 
 Example Codex configs and sample tool calls live in [examples](examples).
 

@@ -60,6 +60,12 @@ When adding or changing a tool:
 4. Add focused tests for argument validation, risk metadata, and any parsing or
    workspace-safety behavior.
 
+Argument schemas are part of the public client contract. When a field needs an
+enum, default, range, path hint, or special argument note, attach that hint to the
+owning schema instead of relying on a global field-name convention. A future tool
+can reuse a field name such as `mode`, `command`, or `format` without inheriting
+another tool's valid values.
+
 Tool handlers must not return bare expected failures. Validation, workspace-path
 rejections, optional backend failures, parsing failures, write failures, and
 known unsupported operations should return structured `argument_error`,

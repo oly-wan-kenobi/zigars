@@ -11,6 +11,11 @@ Run the same release-style gate used before publishing:
 zig build release-check
 ```
 
+`release-check` is intentionally broader than test execution. It also checks
+generated docs/JSON drift, ReleaseSafe compilation, HTTP/stdio transport smoke
+fixtures, kcov line coverage floors, artifact hygiene, structured tool-error
+contracts, and line-budget headroom for large implementation files.
+
 For targeted checks:
 
 ```sh
