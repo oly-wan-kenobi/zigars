@@ -1,6 +1,7 @@
 pub const analysis = @import("analysis.zig");
 pub const analysis_contract = @import("analysis_contract.zig");
 pub const backend_catalog = @import("backend_catalog.zig");
+pub const backend_contracts = @import("backend_contracts.zig");
 pub const catalog = @import("catalog.zig");
 pub const command = @import("command.zig");
 pub const config = @import("config.zig");
@@ -30,6 +31,7 @@ test {
     _ = analysis;
     _ = analysis_contract;
     _ = backend_catalog;
+    _ = backend_contracts;
     _ = catalog;
     _ = command;
     _ = config;
