@@ -18,7 +18,7 @@ Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace
 
 Tools: `zigar_context_pack`, `zigar_next_action`, `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`, `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`
 
-Keywords: `agent`, `codex`, `claude`, `context pack`, `next action`, `validate patch`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
+Keywords: `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`, `hermes`, `context pack`, `next action`, `validate patch`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
 
 ### core_zig
 

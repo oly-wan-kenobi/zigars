@@ -57,8 +57,9 @@ server process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
 
 High-signal discovery keywords include:
 
-- `agent`, `codex`, `claude`, `context pack`, `next action`,
-  `validate patch`, `failure fusion`, `impact analysis`
+- `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`,
+  `hermes`, `context pack`, `next action`, `validate patch`,
+  `failure fusion`, `impact analysis`
 - `fmt`, `formatter`, `formatting`, `zig fmt`
 - `toolchain`, `version manager`, `mise`, `asdf`, `zvm`, `zigup`
 - `doctor`, `health`, `workspace`, `PermissionDenied`

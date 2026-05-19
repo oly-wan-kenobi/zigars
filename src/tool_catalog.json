@@ -12,7 +12,7 @@
   },
   "common_intents": [
     {"intent": "format a Zig file", "prefer": "zig_format", "keywords": ["fmt", "formatter", "formatting", "zig fmt"]},
-    {"intent": "orient an agent in a Zig repo", "prefer": "zigar_context_pack", "keywords": ["context pack", "repo summary", "codex", "claude", "agent"]},
+    {"intent": "orient an agent in a Zig repo", "prefer": "zigar_context_pack", "keywords": ["context pack", "repo summary", "codex", "claude", "gemini", "hermes", "agent"]},
     {"intent": "choose the next Zig workflow step", "prefer": "zigar_next_action", "keywords": ["next action", "workflow", "what next", "plan"]},
     {"intent": "validate an agent patch", "prefer": "zigar_validate_patch", "keywords": ["validate patch", "done check", "readiness", "final gate"]},
     {"intent": "fuse compiler and test failures", "prefer": "zigar_failure_fusion", "keywords": ["failure fusion", "primary failure", "compiler test triage"]},

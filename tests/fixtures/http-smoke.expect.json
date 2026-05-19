@@ -21,6 +21,10 @@
     "zigar_backend_catalog": {
       "inputSchema.properties.include_configured_paths.type": "boolean",
       "inputSchema.properties.include_configured_paths.default": true
+    },
+    "zigar_agent_guide": {
+      "inputSchema.properties.client.enum.2": "gemini",
+      "inputSchema.properties.client.enum.3": "hermes"
     }
   },
   "schema_paths": {

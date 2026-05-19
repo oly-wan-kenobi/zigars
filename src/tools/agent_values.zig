@@ -138,6 +138,8 @@ pub fn agentRulesValue(allocator: std.mem.Allocator, client: []const u8, task: [
     try rules.append(try ownedString(allocator, "Source-writing zigar tools are preview-only unless apply=true is explicit."));
     if (std.mem.eql(u8, client, "claude")) try rules.append(try ownedString(allocator, "Prefer compact JSON fields over long command output when summarizing to the user."));
     if (std.mem.eql(u8, client, "codex")) try rules.append(try ownedString(allocator, "Prefer zigar_patch_guard before broad multi-file edits."));
+    if (std.mem.eql(u8, client, "gemini")) try rules.append(try ownedString(allocator, "Use tools/list schemas directly and keep trust/confirmation settings explicit in Gemini CLI."));
+    if (std.mem.eql(u8, client, "hermes")) try rules.append(try ownedString(allocator, "Prefer an MCP integration or thin skill wrapper that passes zigar JSON through without scraping human text."));
     if (std.mem.indexOf(u8, task, "profile") != null) try rules.append(try ownedString(allocator, "Use zig_profile_plan before capture and zflame-backed tools only for rendering existing profiler data."));
     return .{ .array = rules };
 }
