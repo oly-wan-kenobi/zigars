@@ -674,7 +674,10 @@ pub const definitions = struct {
     });
     pub const zig_public_api_diff = tool(.{
         .description = "Compare heuristic public Zig declaration snapshots and report likely breaking changes.",
-        .input_schema = schema(&.{ .{ "file", "string", false }, .{ "before", "string", false }, .{ "after", "string", false }, .{ "baseline_ref", "string", false } }),
+        .input_schema = schemaWithHints(&.{ .{ "file", "string", false }, .{ "before", "string", false }, .{ "after", "string", false }, .{ "baseline_ref", "string", false } }, &.{
+            .{ .field_name = "before", .hint = .{ .description = "Baseline public API source text. Omit this and pass file/baseline_ref to read from git." } },
+            .{ .field_name = "after", .hint = .{ .description = "Current public API source text. Omit this and pass file to read from the workspace." } },
+        }),
         .read_only = true,
         .group = .static_analysis,
         .risk = .{ .executes_backend = true },

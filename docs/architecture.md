@@ -67,6 +67,19 @@ owning schema instead of relying on a global field-name convention. A future too
 can reuse a field name such as `mode`, `command`, or `format` without inheriting
 another tool's valid values.
 
+Manifest review checklist:
+
+- Tool names, descriptions, schemas, annotations, risk, and plan policy are
+  public/client-visible contract.
+- Free-form `args` fields must disclose backend, project-code, or user-command
+  execution risk.
+- `output` fields must disclose workspace artifact writes.
+- Apply-gated mutations must advertise `writes_require_apply` and
+  `preview_by_default`.
+- Schema hints must target declared fields and match the field JSON type.
+- Reused field names such as `before`, `after`, `mode`, and `format` need
+  tool-local hints when the default meaning is not exact.
+
 Tool handlers must not return bare expected failures. Validation, workspace-path
 rejections, optional backend failures, parsing failures, write failures, and
 known unsupported operations should return structured `argument_error`,

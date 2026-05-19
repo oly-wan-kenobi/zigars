@@ -42,6 +42,7 @@ test {
     _ = tooling;
     _ = tool_errors;
     _ = tool_manifest;
+    _ = @import("tool_manifest_invariants.zig");
     _ = tool_metadata;
     _ = tool_registry;
     _ = version;
