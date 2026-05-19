@@ -57,16 +57,20 @@ fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !?[]u
             continue;
         };
         defer allocator.free(bytes);
-        if (looksLikeLangRef(bytes)) return path;
+        if (looksLikeLangRef(rel, bytes)) return path;
         allocator.free(path);
     }
     return null;
 }
 
-fn looksLikeLangRef(bytes: []const u8) bool {
-    return std.mem.indexOf(u8, bytes, "Language Reference") != null or
-        std.mem.indexOf(u8, bytes, "Zig Language Reference") != null or
-        std.mem.indexOf(u8, bytes, "langref") != null;
+fn looksLikeLangRef(rel_path: []const u8, bytes: []const u8) bool {
+    if (std.mem.indexOf(u8, bytes, "Language Reference") != null or
+        std.mem.indexOf(u8, bytes, "Zig Language Reference") != null)
+    {
+        return true;
+    }
+    if (std.mem.indexOf(u8, rel_path, "langref") == null) return false;
+    return std.mem.indexOf(u8, bytes, "Zig") != null or std.mem.indexOf(u8, bytes, "zig") != null;
 }
 
 fn searchBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize) ![]u8 {
@@ -290,6 +294,35 @@ test "does not scan docs implementation zig files" {
     try std.testing.expect(std.mem.indexOf(u8, text, "wasm/main.zig") == null);
     try std.testing.expect(std.mem.indexOf(u8, text, "docs_app_only_token") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "No language reference matches") != null);
+}
+
+test "does not treat installed autodoc index as language reference" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "lib/docs");
+    try tmp.dir.writeFile(io, .{
+        .sub_path = "lib/docs/index.html",
+        .data =
+        \\<!doctype html>
+        \\<html><head><title>Zig Documentation</title></head><body>
+        \\<h1 id="hdrName">defer</h1>
+        \\<p>Autodoc search result shell, not the language reference.</p>
+        \\</body></html>
+        ,
+    });
+
+    const lib_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "lib");
+    defer allocator.free(lib_dir);
+    const text = try search(allocator, io, lib_dir, "defer", 1);
+    defer allocator.free(text);
+
+    try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "installed_langref_html") == null);
 }
 
 test "uses installed language reference html when present" {
