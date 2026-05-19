@@ -3,6 +3,9 @@
 Use stdio transport for Codex. stdout is reserved for MCP JSON-RPC, and zigar
 prints logs/help/version information to stderr.
 
+For Claude, Gemini CLI, Hermes, and generic MCP client setup, see
+[Agent Clients](agent-clients.md).
+
 ## Pinned Workspace
 
 Use this when one zigar server should always serve one Zig repository:
@@ -55,7 +58,7 @@ guessing from shell output:
 
 ```text
 zigar_context_pack {"mode":"standard"}
-zigar_next_action {}
+zigar_next_action {"goal":"orient in this Zig repository"}
 zigar_validate_patch {"mode":"quick"}
 ```
 

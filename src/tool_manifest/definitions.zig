@@ -93,9 +93,9 @@ pub const definitions = struct {
         .plan = .{ .pure_analysis = "Goal router; returns deterministic next tool suggestions without executing tools." },
     });
     pub const zigar_agent_guide = tool(.{
-        .description = "Return compact Codex/Claude/generic instructions for using zigar efficiently.",
+        .description = "Return compact Codex/Claude/Gemini/Hermes/generic instructions for using zigar efficiently.",
         .input_schema = schemaWithHints(&.{ .{ "client", "string", false }, .{ "task", "string", false } }, &.{
-            fieldHint("client", .{ .description = "Agent/client profile.", .default_string = "generic", .enum_values = &.{ "codex", "claude", "generic" } }),
+            fieldHint("client", .{ .description = "Agent/client profile.", .default_string = "generic", .enum_values = &.{ "codex", "claude", "gemini", "hermes", "generic" } }),
         }),
         .read_only = true,
         .group = .agent_workflows,
