@@ -241,8 +241,20 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     const fmt = find("zig_format").?;
     try std.testing.expect(riskFor(.zig_format).writes_require_apply);
     try std.testing.expect(riskFor(.zig_format).writes_artifacts);
+    try std.testing.expect(riskFor(.zig_format).mutates_lsp_state);
     try std.testing.expect(!destructiveHintFor(fmt));
     try std.testing.expect(!readOnlyHintFor(fmt));
+
+    const hover = find("zig_hover").?;
+    try std.testing.expect(hover.read_only);
+    try std.testing.expect(riskFor(.zig_hover).mutates_lsp_state);
+    try std.testing.expect(!readOnlyHintFor(hover));
+    try std.testing.expect(!idempotentHintFor(hover));
+
+    const code_actions = find("zig_code_actions").?;
+    try std.testing.expect(code_actions.read_only);
+    try std.testing.expect(riskFor(.zig_code_actions).mutates_lsp_state);
+    try std.testing.expect(!readOnlyHintFor(code_actions));
 
     const matrix_risk = riskFor(.zig_matrix_check);
     try std.testing.expect(matrix_risk.executes_user_command);
