@@ -14,7 +14,7 @@ const zlsStatusValue = common.zlsStatusValue;
 const responseResult = common.responseResult;
 
 pub fn workspaceResource(a: *App, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
-    const body = std.fmt.allocPrint(allocator, "workspace={s}\ncache={s}\nzig={s}\nzwanzig={s}\nzflame={s}\n", .{ a.workspace.root, a.workspace.cache_root, a.config.zig_path, a.config.zwanzig_path, a.config.zflame_path }) catch return error.OutOfMemory;
+    const body = std.fmt.allocPrint(allocator, "workspace={s}\ncache={s}\nzig={s}\nzwanzig={s}\nzflame={s}\ndiff_folded={s}\n", .{ a.workspace.root, a.workspace.cache_root, a.config.zig_path, a.config.zwanzig_path, a.config.zflame_path, a.config.diff_folded_path }) catch return error.OutOfMemory;
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
 }
 

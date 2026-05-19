@@ -80,8 +80,8 @@ pub fn forTool(tool_name: []const u8) ?Contract {
     return null;
 }
 
-pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
-    const contract = forTool(tool_name) orelse return error.UnknownAnalysisContract;
+pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) error{OutOfMemory}!void {
+    const contract = forTool(tool_name) orelse unreachable;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
     try obj.put(allocator, "confidence", .{ .string = confidenceName(contract.confidence) });
     try obj.put(allocator, "confidence_class", .{ .string = classificationName(contract.classification) });

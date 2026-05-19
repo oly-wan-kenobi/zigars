@@ -154,11 +154,18 @@ const StdioClient = struct {
         try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.x-zigar-path-kind", "input_file");
         try self.expectToolPathBool(tools, "zig_format", "inputSchema.properties.apply.default", false);
         try self.expectToolPathString(tools, "zig_format", "inputSchema.required.0", "file");
+        try self.expectToolPathString(tools, "zig_analysis_graphs", "inputSchema.properties.mode.enum.0", "cfg");
+        try self.expectToolPathString(tools, "zig_flamegraph", "inputSchema.required.0", "format");
+        try self.expectToolPathString(tools, "zig_flamegraph", "inputSchema.properties.format.enum.5", "recursive");
 
         const source = try std.fmt.allocPrint(self.allocator, "{s}/src/main.zig", .{workspace});
         defer self.allocator.free(source);
         const before = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);
         defer self.allocator.free(before);
+
+        const workspace_info = try self.callTool("zigar_workspace_info", "{}");
+        defer self.allocator.free(workspace_info);
+        if (std.mem.indexOf(u8, workspace_info, "\"diff_folded\"") == null) return error.AssertionFailed;
 
         const preview = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":false}");
         defer self.allocator.free(preview);
@@ -211,10 +218,25 @@ const StdioClient = struct {
         defer self.allocator.free(validate);
         try self.expectPathString(validate, "kind", "zigar_validate_patch");
 
+        const lint = try self.callTool("zig_lint", "{\"path\":\"src\",\"config\":\"src/main.zig\",\"rules_do\":\"fake-rule\",\"rules_skip\":\"style\",\"args\":\"--verbose\"}");
+        defer self.allocator.free(lint);
+        try self.expectPathBool(lint, "ok", true);
+        if (std.mem.indexOf(u8, lint, "diagnostics") == null) return error.AssertionFailed;
+
         const sarif = try self.callTool("zig_lint_sarif", "{\"path\":\"src\",\"rules_do\":\"fake-rule\"}");
         defer self.allocator.free(sarif);
         try self.expectPathBool(sarif, "ok", true);
         if (std.mem.indexOf(u8, sarif, "fake-zwanzig") == null or std.mem.indexOf(u8, sarif, "--format") == null) return error.AssertionFailed;
+
+        const rules = try self.callTool("zig_lint_rules", "{}");
+        defer self.allocator.free(rules);
+        if (std.mem.indexOf(u8, rules, "--dump-cfg") == null) return error.AssertionFailed;
+
+        const graph = try self.callTool("zig_analysis_graphs", "{\"mode\":\"cfg\",\"path\":\"src/main.zig\",\"output\":\"graphs/cfg\"}");
+        defer self.allocator.free(graph);
+        try self.expectPathString(graph, "kind", "zig_analysis_graphs");
+        try self.expectPathString(graph, "mode", "cfg");
+        try expectFileStartsWith(self.allocator, self.io, workspace, "graphs/cfg/fake-cfg.dot", "digraph");
 
         const flame = try self.callTool("zig_flamegraph", "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\",\"title\":\"fixture\"}");
         defer self.allocator.free(flame);
@@ -223,7 +245,8 @@ const StdioClient = struct {
 
         const diff = try self.callTool("zig_flamegraph_diff", "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"title\":\"diff fixture\"}");
         defer self.allocator.free(diff);
-        try self.expectPathString(diff, "kind", "zig_flamegraph");
+        try self.expectPathString(diff, "kind", "zig_flamegraph_diff");
+        try self.expectPathString(diff, "intermediate", ".zigar-cache/profile/diff-0.folded");
         try expectFileStartsWith(self.allocator, self.io, workspace, "diff.svg", "<svg");
         const folded = try joinedRead(self.allocator, self.io, workspace, ".zigar-cache/profile/diff-0.folded");
         defer self.allocator.free(folded);

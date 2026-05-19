@@ -150,6 +150,13 @@ SARIF ingestion.
 verifies that the backend wrote DOT files there. Raw graph flags are not part of
 the public zigar schema.
 
+The current graph mapping is:
+
+- `cfg`: `--dump-cfg <output-dir> <source>`
+- `exploded_graph`: `--dump-exploded-graph <output-dir> <source>`
+- `annotated_cfg`: `--dump-annotated-cfg <output-dir> <source>`
+- `path_trace`: `--dump-path-trace <output-dir> <source>`
+
 ## zflame And diff-folded
 
 zflame powers `zig_flamegraph`. diff-folded powers the first stage of

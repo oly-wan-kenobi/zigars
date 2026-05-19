@@ -43,8 +43,8 @@ pub fn main(init: std.process.Init) !void {
     if (args.len > 0) {
         const invoked = executableName(args[0]);
         if (std.mem.startsWith(u8, invoked, "fake-zwanzig")) return release_checks.fakeZwanzig(io, args[1..]);
-        if (std.mem.startsWith(u8, invoked, "fake-zflame")) return release_checks.fakeZflame(io);
-        if (std.mem.startsWith(u8, invoked, "fake-diff-folded")) return release_checks.fakeDiffFolded(io);
+        if (std.mem.startsWith(u8, invoked, "fake-zflame")) return release_checks.fakeZflame(io, args[1..]);
+        if (std.mem.startsWith(u8, invoked, "fake-diff-folded")) return release_checks.fakeDiffFolded(io, args[1..]);
     }
 
     if (args.len < 2) {
