@@ -52,9 +52,11 @@ git push origin "v${version}"
 The normal tag workflow reruns `zig build release-check`, runs
 `zig build dist release-asset-smoke`, publishes Linux, macOS, and Windows
 archives, publishes `zigar-checksums.txt` with SHA-256 checksums, and creates
-GitHub provenance attestations from the checksum file. GitHub Actions are pinned
-to commit SHAs in the workflow; update the adjacent tag comments when bumping an
-action.
+GitHub provenance attestations from the checksum file when GitHub supports
+attestations for the repository. User-owned private repositories cannot persist
+GitHub attestations, so the workflow skips that step there and the release notes
+must not claim provenance attestations. GitHub Actions are pinned to commit SHAs
+in the workflow; update the adjacent tag comments when bumping an action.
 
 A workflow-published version is public only after the tag workflow finishes and
 the GitHub release contains all expected archives, `zigar-checksums.txt`, and

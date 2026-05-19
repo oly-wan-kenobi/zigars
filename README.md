@@ -53,7 +53,8 @@ the archive for your platform, verify its SHA-256 against `zigar-checksums.txt`,
 and put `zigar` on `PATH`. The initial `v0.1.0` release was built and verified
 locally while GitHub Actions were unavailable; its release notes list the source
 commit and local gates. Tag-workflow releases attach GitHub provenance
-attestations generated from the checksum file.
+attestations generated from the checksum file when GitHub supports attestations
+for the repository.
 
 Published release archives are named:
 
