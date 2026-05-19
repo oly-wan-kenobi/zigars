@@ -16,7 +16,6 @@ command = "/absolute/path/to/zigar"
 args = [
   "--transport", "stdio",
   "--workspace", "/absolute/path/to/your/zig/project",
-  "--strict-workspace",
   "--zig-path", "/opt/homebrew/bin/zig",
   "--zls-path", "/opt/homebrew/bin/zls"
 ]
@@ -31,7 +30,7 @@ process working directory:
 ```toml
 [mcp_servers.zigar]
 command = "/absolute/path/to/zigar"
-args = ["--transport", "stdio", "--strict-workspace"]
+args = ["--transport", "stdio"]
 startup_timeout_sec = 10.0
 ```
 

@@ -7,7 +7,6 @@
         "stdio",
         "--workspace",
         "/absolute/path/to/zig/project",
-        "--strict-workspace",
         "--zig-path",
         "/absolute/path/to/zig",
         "--zls-path",

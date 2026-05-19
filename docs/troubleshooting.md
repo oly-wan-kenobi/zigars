@@ -11,15 +11,10 @@ Call `zigar_capabilities`, `zigar_tool_index`, or `zigar_schema`, then search fo
 Call `zigar_workspace_info` and confirm that `workspace` is the Zig project you
 are editing. Prefer workspace-relative paths in tool arguments.
 
-For stronger symlink protection, start zigar with:
-
-```sh
-zigar --workspace /path/to/project --strict-workspace
-```
-
-Strict mode realpaths existing files and the nearest existing output parent
-before accepting them. This catches output paths such as
-`linked-dir/new/file.zig` when `linked-dir` is a symlink outside the workspace.
+zigar realpaths existing files, existing output paths, and the nearest existing
+output parent before accepting a path. Symlinks are allowed only when the real
+target stays inside the workspace. Paths such as `linked-dir/new/file.zig` are
+rejected when `linked-dir` is a symlink outside the workspace.
 
 ## ZLS Tools Are Unavailable
 

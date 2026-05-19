@@ -25,7 +25,7 @@ test "workspaceEditFileValueForDocument previews primary file against ZLS source
     defer alloc.free(base_z);
     const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
     defer alloc.free(root);
-    var workspace = try zigar.workspace.Workspace.init(alloc, io, root, null, false);
+    var workspace = try zigar.workspace.Workspace.init(alloc, io, root, null);
     defer workspace.deinit();
     var app = App{
         .allocator = alloc,

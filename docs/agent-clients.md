@@ -14,8 +14,7 @@ Prefer stdio for local agent integrations:
         "--transport",
         "stdio",
         "--workspace",
-        "/absolute/path/to/zig/project",
-        "--strict-workspace"
+        "/absolute/path/to/zig/project"
       ],
       "env": {}
     }
@@ -80,8 +79,7 @@ shape:
         "--transport",
         "stdio",
         "--workspace",
-        "/absolute/path/to/zig/project",
-        "--strict-workspace"
+        "/absolute/path/to/zig/project"
       ],
       "env": {}
     }
@@ -94,7 +92,7 @@ Template: [examples/claude-code.mcp.json](../examples/claude-code.mcp.json).
 The same server object can be added with `claude mcp add-json`:
 
 ```sh
-claude mcp add-json zigar '{"type":"stdio","command":"/absolute/path/to/zigar","args":["--transport","stdio","--workspace","/absolute/path/to/zig/project","--strict-workspace"],"env":{}}'
+claude mcp add-json zigar '{"type":"stdio","command":"/absolute/path/to/zigar","args":["--transport","stdio","--workspace","/absolute/path/to/zig/project"],"env":{}}'
 ```
 
 Claude Desktop uses the same `mcpServers` object shape in its desktop MCP config.
@@ -121,8 +119,7 @@ it `false` until the user understands zigar's workspace and source-write policy:
         "--transport",
         "stdio",
         "--workspace",
-        "/absolute/path/to/zig/project",
-        "--strict-workspace"
+        "/absolute/path/to/zig/project"
       ],
       "cwd": "/absolute/path/to/zig/project",
       "timeout": 600000,
@@ -150,7 +147,7 @@ JSON-RPC tool results through as structured data and avoid scraping human text.
 For wrappers that prefer an HTTP process, start zigar explicitly:
 
 ```sh
-zigar --transport http --host 127.0.0.1 --port 8080 --workspace /absolute/path/to/zig/project --strict-workspace
+zigar --transport http --host 127.0.0.1 --port 8080 --workspace /absolute/path/to/zig/project
 ```
 
 The HTTP transport accepts MCP JSON-RPC requests at `/`. Keep it bound to

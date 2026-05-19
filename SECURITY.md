@@ -26,9 +26,9 @@ Include:
 zigar's primary boundary is the configured workspace:
 
 - User-provided paths must resolve under `--workspace`.
-- `--strict-workspace` realpaths existing files and output parents before
-  accepting them, which rejects symlink escapes that resolve outside the
-  workspace.
+- Existing input paths, existing output paths, and the nearest existing output
+  parent are realpathed before acceptance. Symlinks are supported only when the
+  real target remains inside the workspace; symlink escapes are rejected.
 - Source writes require `apply=true`.
 - stdout is reserved for MCP JSON-RPC.
 - Command-backed tools run in the configured workspace.
