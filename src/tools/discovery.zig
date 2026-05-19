@@ -61,7 +61,6 @@ pub fn zigarDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     const value = doctor.report(allocator, .{
         .workspace = a.workspace.root,
         .cache = a.workspace.cache_root,
-        .strict_workspace = a.config.strict_workspace,
         .transport = switch (a.config.transport) {
             .stdio => "stdio",
             .http => "http",
@@ -123,7 +122,8 @@ pub fn workspaceInfo(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) 
     obj.put(allocator, "zflame", .{ .string = a.config.zflame_path }) catch return error.OutOfMemory;
     obj.put(allocator, "timeout_ms", .{ .integer = a.config.timeout_ms }) catch return error.OutOfMemory;
     obj.put(allocator, "zls_timeout_ms", .{ .integer = a.config.zls_timeout_ms }) catch return error.OutOfMemory;
-    obj.put(allocator, "strict_workspace", .{ .bool = a.config.strict_workspace }) catch return error.OutOfMemory;
+    obj.put(allocator, "workspace_boundary", .{ .string = "realpath" }) catch return error.OutOfMemory;
+    obj.put(allocator, "symlink_escapes", .{ .string = "rejected" }) catch return error.OutOfMemory;
     obj.put(allocator, "backend_probe_cache", backendProbeCacheValue(allocator, a.backend_probe_cache) catch return error.OutOfMemory) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }

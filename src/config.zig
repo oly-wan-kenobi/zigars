@@ -18,7 +18,6 @@ pub const Config = struct {
     cache_dir: ?[]const u8 = null,
     timeout_ms: i64 = 30_000,
     zls_timeout_ms: i64 = 30_000,
-    strict_workspace: bool = false,
 
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
         allocator.free(self.workspace);
@@ -98,8 +97,6 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
             defer allocator.free(value);
             result.zls_timeout_ms = std.fmt.parseInt(i64, value, 10) catch return ParseError.InvalidTimeout;
             if (result.zls_timeout_ms <= 0) return ParseError.InvalidTimeout;
-        } else if (std.mem.eql(u8, arg, "--strict-workspace")) {
-            result.strict_workspace = true;
         } else {
             return ParseError.UnknownArgument;
         }
@@ -157,7 +154,6 @@ pub fn usage() []const u8 {
     \\        [--diff-folded-path <path>]
     \\        [--transport stdio|http] [--host 127.0.0.1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]
-    \\        [--strict-workspace]
     \\
     \\stdio is the safest default for Codex. http is available for clients that need it.
     \\stdout is reserved for MCP JSON-RPC. Logs, help, and version go to stderr.
@@ -188,14 +184,12 @@ test "parse explicit options" {
         "5",
         "--zls-timeout-ms",
         "7",
-        "--strict-workspace",
     });
     try std.testing.expectEqualStrings("/tmp/project", cfg.workspace);
     try std.testing.expectEqual(Transport.http, cfg.transport);
     try std.testing.expectEqual(@as(u16, 9090), cfg.port);
     try std.testing.expectEqual(@as(i64, 5), cfg.timeout_ms);
     try std.testing.expectEqual(@as(i64, 7), cfg.zls_timeout_ms);
-    try std.testing.expect(cfg.strict_workspace);
 }
 
 test "parse result can be deinitialized with general allocator" {
@@ -212,4 +206,13 @@ test "parse result can be deinitialized with general allocator" {
 
     try std.testing.expectEqualStrings("/opt/zig", cfg.zig_path);
     try std.testing.expectEqualStrings(".zigar-cache", cfg.cache_dir.?);
+}
+
+test "parse rejects removed strict workspace flag" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(ParseError.UnknownArgument, parse(arena.allocator(), std.testing.io, &.{
+        "zigar",
+        "--strict-workspace",
+    }));
 }

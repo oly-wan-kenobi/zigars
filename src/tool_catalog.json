@@ -4,9 +4,9 @@
   "schema_version": 1,
   "safety": {
     "stdout": "MCP JSON-RPC only",
-    "path_boundary": "workspace",
+    "path_boundary": "realpath workspace boundary",
     "source_write_gate": "apply=true",
-    "strict_workspace_flag": "--strict-workspace",
+    "symlink_escapes": "rejected",
     "argument_validation": "typed metadata before handler execution",
     "free_form_args": "split into argv without shell execution"
   },

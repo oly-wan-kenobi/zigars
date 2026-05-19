@@ -32,7 +32,8 @@ pub fn contextWorkspaceValue(allocator: std.mem.Allocator, a: *App) !std.json.Va
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "root", .{ .string = a.workspace.root });
     try obj.put(allocator, "cache", .{ .string = a.workspace.cache_root });
-    try obj.put(allocator, "strict_workspace", .{ .bool = a.config.strict_workspace });
+    try obj.put(allocator, "workspace_boundary", .{ .string = "realpath" });
+    try obj.put(allocator, "symlink_escapes", .{ .string = "rejected" });
     try obj.put(allocator, "transport", .{ .string = switch (a.config.transport) {
         .stdio => "stdio",
         .http => "http",

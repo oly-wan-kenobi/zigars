@@ -3,7 +3,6 @@ const std = @import("std");
 pub const Input = struct {
     workspace: []const u8,
     cache: []const u8,
-    strict_workspace: bool,
     transport: []const u8,
     zig_path: []const u8,
     zls_path: []const u8,
@@ -36,13 +35,10 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     try checks.append(try checkValue(allocator, "cache", true, "configured", input.cache));
     try checks.append(try checkValue(
         allocator,
-        "strict_workspace",
+        "workspace_boundary",
         true,
-        if (input.strict_workspace) "enabled" else "disabled",
-        if (input.strict_workspace)
-            "realpath checks are enabled for existing paths"
-        else
-            "start with --strict-workspace to reject existing symlink escapes",
+        "realpath",
+        "workspace root, existing input paths, existing output files, and output parents are canonicalized; symlink escapes are rejected",
     ));
     try checks.append(try checkValue(allocator, "mcp_dependency", std.mem.indexOf(u8, input.mcp_dependency, "0.0.4") != null, input.mcp_dependency, "use mcp.zig 0.0.4 or newer"));
     try checks.append(try checkValue(
@@ -119,7 +115,6 @@ test "doctor report includes checks" {
     const value = try report(arena.allocator(), .{
         .workspace = "/tmp/project",
         .cache = "/tmp/project/.zigar-cache",
-        .strict_workspace = true,
         .transport = "stdio",
         .zig_path = "zig",
         .zls_path = "zls",

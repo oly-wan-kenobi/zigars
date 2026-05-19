@@ -41,7 +41,7 @@ pub fn main(init: std.process.Init) !void {
     var cfg_owned = true;
     defer if (cfg_owned) cfg.deinit(allocator);
 
-    var ws = try workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir, cfg.strict_workspace);
+    var ws = try workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir);
     defer ws.deinit();
 
     var zls_proc: ?ZlsProcess = null;

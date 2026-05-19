@@ -164,7 +164,7 @@ fn testAppForCommandPlanning(allocator: std.mem.Allocator) !App {
         .allocator = allocator,
         .io = std.testing.io,
         .config = .{ .workspace = "/tmp", .zig_path = "zig" },
-        .workspace = try workspace_mod.Workspace.init(allocator, std.testing.io, "/tmp", null, false),
+        .workspace = try workspace_mod.Workspace.init(allocator, std.testing.io, "/tmp", null),
     };
 }
 

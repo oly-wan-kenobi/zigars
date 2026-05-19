@@ -11,9 +11,8 @@ pub const Workspace = struct {
     io: std.Io,
     root: []const u8,
     cache_root: []const u8,
-    strict_realpath: bool,
 
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, root_input: []const u8, cache_input: ?[]const u8, strict_realpath: bool) !Workspace {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, root_input: []const u8, cache_input: ?[]const u8) !Workspace {
         var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd_len = try std.process.currentPath(io, &cwd_buf);
         const cwd = cwd_buf[0..cwd_len];
@@ -22,23 +21,19 @@ pub const Workspace = struct {
         else
             try std.fs.path.resolve(allocator, &.{ cwd, root_input });
         defer allocator.free(lexical_root);
-        const root = if (strict_realpath)
-            try realPathFileAbsoluteOwned(allocator, io, lexical_root)
-        else
-            try allocator.dupe(u8, lexical_root);
+        const root = try realPathFileAbsoluteOwned(allocator, io, lexical_root);
         errdefer allocator.free(root);
 
         const cache_root = if (cache_input) |cache|
-            try resolveOutputInsideRoot(allocator, io, root, cache, strict_realpath)
+            try resolveOutputInsideRoot(allocator, io, root, cache)
         else
-            try std.fs.path.join(allocator, &.{ root, ".zigar-cache" });
+            try resolveOutputInsideRoot(allocator, io, root, ".zigar-cache");
 
         return .{
             .allocator = allocator,
             .io = io,
             .root = root,
             .cache_root = cache_root,
-            .strict_realpath = strict_realpath,
         };
     }
 
@@ -48,11 +43,11 @@ pub const Workspace = struct {
     }
 
     pub fn resolve(self: Workspace, path: []const u8) ![]const u8 {
-        return resolveInsideRoot(self.allocator, self.io, self.root, path, self.strict_realpath);
+        return resolveInsideRoot(self.allocator, self.io, self.root, path);
     }
 
     pub fn resolveOutput(self: Workspace, path: []const u8) ![]const u8 {
-        return resolveOutputInsideRoot(self.allocator, self.io, self.root, path, self.strict_realpath);
+        return resolveOutputInsideRoot(self.allocator, self.io, self.root, path);
     }
 
     pub fn readFileAlloc(self: Workspace, io: std.Io, path: []const u8, max_bytes: usize) ![]u8 {
@@ -86,7 +81,7 @@ pub const Workspace = struct {
     }
 };
 
-fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8, strict_realpath: bool) ![]const u8 {
+fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
         try std.fs.path.resolve(allocator, &.{path})
@@ -97,14 +92,40 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
         allocator.free(resolved);
         return WorkspaceError.PathOutsideWorkspace;
     }
-    if (strict_realpath) {
-        const real = realPathFileAbsoluteOwned(allocator, io, resolved) catch |err| switch (err) {
-            error.OutOfMemory => {
-                allocator.free(resolved);
-                return error.OutOfMemory;
-            },
-            else => return resolved,
-        };
+    const real = realPathFileAbsoluteOwned(allocator, io, resolved) catch |err| switch (err) {
+        error.OutOfMemory => {
+            allocator.free(resolved);
+            return error.OutOfMemory;
+        },
+        else => return resolved,
+    };
+    allocator.free(resolved);
+    if (!isInside(root, real)) {
+        allocator.free(real);
+        return WorkspaceError.PathOutsideWorkspace;
+    }
+    return real;
+}
+
+fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
+    if (path.len == 0) return WorkspaceError.EmptyPath;
+    const resolved = if (std.fs.path.isAbsolute(path))
+        try std.fs.path.resolve(allocator, &.{path})
+    else
+        try std.fs.path.resolve(allocator, &.{ root, path });
+
+    if (!isInside(root, resolved)) {
+        allocator.free(resolved);
+        return WorkspaceError.PathOutsideWorkspace;
+    }
+    const existing_output = realPathFileAbsoluteOwned(allocator, io, resolved) catch |err| switch (err) {
+        error.OutOfMemory => {
+            allocator.free(resolved);
+            return error.OutOfMemory;
+        },
+        else => null,
+    };
+    if (existing_output) |real| {
         allocator.free(resolved);
         if (!isInside(root, real)) {
             allocator.free(real);
@@ -112,21 +133,6 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
         }
         return real;
     }
-    return resolved;
-}
-
-fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8, strict_realpath: bool) ![]const u8 {
-    if (path.len == 0) return WorkspaceError.EmptyPath;
-    const resolved = if (std.fs.path.isAbsolute(path))
-        try std.fs.path.resolve(allocator, &.{path})
-    else
-        try std.fs.path.resolve(allocator, &.{ root, path });
-
-    if (!isInside(root, resolved)) {
-        allocator.free(resolved);
-        return WorkspaceError.PathOutsideWorkspace;
-    }
-    if (!strict_realpath) return resolved;
 
     const parent = std.fs.path.dirname(resolved) orelse root;
     const real_parent = canonicalOutputParent(allocator, io, root, parent) catch |err| {
@@ -193,18 +199,50 @@ test "resolve keeps paths inside workspace" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const root = try std.fs.path.resolve(arena.allocator(), &.{"/tmp/zigar-root"});
-    const child = try resolveInsideRoot(arena.allocator(), std.testing.io, root, "src/main.zig", false);
+    const child = try resolveInsideRoot(arena.allocator(), std.testing.io, root, "src/main.zig");
     try std.testing.expect(isInside(root, child));
-    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, resolveInsideRoot(arena.allocator(), std.testing.io, root, "../outside.zig", false));
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, resolveInsideRoot(arena.allocator(), std.testing.io, root, "../outside.zig"));
 }
 
 test "workspace init canonicalizes relative root" {
-    var ws = try Workspace.init(std.testing.allocator, std.testing.io, ".", null, false);
+    var ws = try Workspace.init(std.testing.allocator, std.testing.io, ".", null);
     defer ws.deinit();
     try std.testing.expect(std.fs.path.isAbsolute(ws.root));
 }
 
-test "strict workspace rejects symlinked input outside root" {
+test "workspace allows symlinked input inside root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/main.zig", .data = "pub const internal = true;\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const target_file = try std.fs.path.join(allocator, &.{ root, "src", "main.zig" });
+    defer allocator.free(target_file);
+    const link_file = try std.fs.path.join(allocator, &.{ root, "link.zig" });
+    defer allocator.free(link_file);
+
+    try std.Io.Dir.symLinkAbsolute(io, target_file, link_file, .{});
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+    const resolved = try ws.resolve("link.zig");
+    defer allocator.free(resolved);
+    try std.testing.expectEqualStrings(target_file, resolved);
+}
+
+test "workspace rejects symlinked input outside root" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
     const allocator = std.testing.allocator;
@@ -230,12 +268,40 @@ test "strict workspace rejects symlinked input outside root" {
 
     try std.Io.Dir.symLinkAbsolute(io, outside_file, link_file, .{});
 
-    var ws = try Workspace.init(allocator, io, root, null, true);
+    var ws = try Workspace.init(allocator, io, root, null);
     defer ws.deinit();
     try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.resolve("link.zig"));
 }
 
-test "strict workspace rejects output through symlinked parent" {
+test "workspace rejects default cache symlink outside root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.createDirPath(io, "outside-cache");
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const outside_cache = try std.fs.path.join(allocator, &.{ base, "outside-cache" });
+    defer allocator.free(outside_cache);
+    const cache_link = try std.fs.path.join(allocator, &.{ root, ".zigar-cache" });
+    defer allocator.free(cache_link);
+
+    try std.Io.Dir.symLinkAbsolute(io, outside_cache, cache_link, .{ .is_directory = true });
+
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, Workspace.init(allocator, io, root, null));
+}
+
+test "workspace rejects output through symlinked parent" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
     const allocator = std.testing.allocator;
@@ -260,12 +326,12 @@ test "strict workspace rejects output through symlinked parent" {
 
     try std.Io.Dir.symLinkAbsolute(io, outside_dir, link_dir, .{ .is_directory = true });
 
-    var ws = try Workspace.init(allocator, io, root, null, true);
+    var ws = try Workspace.init(allocator, io, root, null);
     defer ws.deinit();
     try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.resolveOutput("outlink/generated.zig"));
 }
 
-test "strict workspace rejects output below missing directory under symlinked parent" {
+test "workspace rejects output below missing directory under symlinked parent" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
     const allocator = std.testing.allocator;
@@ -290,12 +356,108 @@ test "strict workspace rejects output below missing directory under symlinked pa
 
     try std.Io.Dir.symLinkAbsolute(io, outside_dir, link_dir, .{ .is_directory = true });
 
-    var ws = try Workspace.init(allocator, io, root, null, true);
+    var ws = try Workspace.init(allocator, io, root, null);
     defer ws.deinit();
     try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.resolveOutput("outlink/new/generated.zig"));
 }
 
-test "strict workspace allows output below missing directory under real parent" {
+test "workspace rejects existing output symlink outside root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.createDirPath(io, "outside");
+    try tmp.dir.writeFile(io, .{ .sub_path = "outside/generated.zig", .data = "pub const escaped = true;\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const outside_file = try std.fs.path.join(allocator, &.{ base, "outside", "generated.zig" });
+    defer allocator.free(outside_file);
+    const link_file = try std.fs.path.join(allocator, &.{ root, "generated.zig" });
+    defer allocator.free(link_file);
+
+    try std.Io.Dir.symLinkAbsolute(io, outside_file, link_file, .{});
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.resolveOutput("generated.zig"));
+}
+
+test "workspace allows output below symlinked parent inside root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/real");
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const real_dir = try std.fs.path.join(allocator, &.{ root, "real" });
+    defer allocator.free(real_dir);
+    const link_dir = try std.fs.path.join(allocator, &.{ root, "link" });
+    defer allocator.free(link_dir);
+
+    try std.Io.Dir.symLinkAbsolute(io, real_dir, link_dir, .{ .is_directory = true });
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+    const output = try ws.resolveOutput("link/new/generated.zig");
+    defer allocator.free(output);
+    const expected = try std.fs.path.join(allocator, &.{ real_dir, "new", "generated.zig" });
+    defer allocator.free(expected);
+    try std.testing.expectEqualStrings(expected, output);
+}
+
+test "workspace allows existing output symlink inside root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/real");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/real/generated.zig", .data = "pub const internal = true;\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const target_file = try std.fs.path.join(allocator, &.{ root, "real", "generated.zig" });
+    defer allocator.free(target_file);
+    const link_file = try std.fs.path.join(allocator, &.{ root, "generated.zig" });
+    defer allocator.free(link_file);
+
+    try std.Io.Dir.symLinkAbsolute(io, target_file, link_file, .{});
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+    const output = try ws.resolveOutput("generated.zig");
+    defer allocator.free(output);
+    try std.testing.expectEqualStrings(target_file, output);
+}
+
+test "workspace allows output below missing directory under real parent" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
     const allocator = std.testing.allocator;
@@ -312,7 +474,7 @@ test "strict workspace allows output below missing directory under real parent" 
     const root = try std.fs.path.join(allocator, &.{ base_z[0..], "root" });
     defer allocator.free(root);
 
-    var ws = try Workspace.init(allocator, io, root, null, true);
+    var ws = try Workspace.init(allocator, io, root, null);
     defer ws.deinit();
     const output = try ws.resolveOutput("safe/new/generated.zig");
     defer allocator.free(output);
