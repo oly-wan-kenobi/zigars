@@ -915,7 +915,11 @@ pub const Server = struct {
     }
 
     fn handleSubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
+        if (!self.resourceSubscriptionsSupported()) {
+            const error_response = jsonrpc.createInvalidParams(request.id, "Resource subscriptions are not supported by this server");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
@@ -923,11 +927,19 @@ pub const Server = struct {
     }
 
     fn handleUnsubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
+        if (!self.resourceSubscriptionsSupported()) {
+            const error_response = jsonrpc.createInvalidParams(request.id, "Resource subscriptions are not supported by this server");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn resourceSubscriptionsSupported(self: *Self) bool {
+        return if (self.capabilities.resources) |resources_cap| resources_cap.subscribe else false;
     }
 
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
@@ -1064,36 +1076,47 @@ pub const Server = struct {
     }
 
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        if (request.params) |params| {
-            if (params == .object) {
-                if (params.object.get("level")) |level_val| {
-                    if (level_val == .string) {
-                        const level_str = level_val.string;
-                        if (std.mem.eql(u8, level_str, "debug")) {
-                            self.log_level = .debug;
-                        } else if (std.mem.eql(u8, level_str, "info")) {
-                            self.log_level = .info;
-                        } else if (std.mem.eql(u8, level_str, "notice")) {
-                            self.log_level = .notice;
-                        } else if (std.mem.eql(u8, level_str, "warning")) {
-                            self.log_level = .warning;
-                        } else if (std.mem.eql(u8, level_str, "error")) {
-                            self.log_level = .@"error";
-                        } else if (std.mem.eql(u8, level_str, "critical")) {
-                            self.log_level = .critical;
-                        } else if (std.mem.eql(u8, level_str, "alert")) {
-                            self.log_level = .alert;
-                        } else if (std.mem.eql(u8, level_str, "emergency")) {
-                            self.log_level = .emergency;
-                        }
-                    }
-                }
-            }
+        const level_value = request.params orelse {
+            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        };
+        if (level_value != .object) {
+            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
         }
+        const level_json = level_value.object.get("level") orelse {
+            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        };
+        if (level_json != .string) {
+            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        }
+        self.log_level = parseLogLevel(level_json.string) orelse {
+            const error_response = jsonrpc.createInvalidParams(request.id, "Unsupported logging level");
+            try self.sendResponse(io, allocator, .{ .error_response = error_response });
+            return;
+        };
 
         const result: std.json.ObjectMap = .empty;
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn parseLogLevel(level: []const u8) ?protocol.LogLevel {
+        if (std.mem.eql(u8, level, "debug")) return .debug;
+        if (std.mem.eql(u8, level, "info")) return .info;
+        if (std.mem.eql(u8, level, "notice")) return .notice;
+        if (std.mem.eql(u8, level, "warning")) return .warning;
+        if (std.mem.eql(u8, level, "error")) return .@"error";
+        if (std.mem.eql(u8, level, "critical")) return .critical;
+        if (std.mem.eql(u8, level, "alert")) return .alert;
+        if (std.mem.eql(u8, level, "emergency")) return .emergency;
+        return null;
     }
 
     fn handleCompletion(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {

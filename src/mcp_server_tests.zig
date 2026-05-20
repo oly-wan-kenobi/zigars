@@ -304,6 +304,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "Tool not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resources\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resourceTemplates\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "Resource subscriptions are not supported") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"completion\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Method not found") != null);
@@ -350,6 +351,42 @@ test "Server discovery lists follow registration order" {
     try expectBefore(sent, "\"uri\":\"file:///z-first\"", "\"uri\":\"file:///a-second\"");
     try expectBefore(sent, "\"uriTemplate\":\"file:///z/{name}\"", "\"uriTemplate\":\"file:///a/{name}\"");
     try expectBefore(sent, "\"name\":\"prompt_z_first\"", "\"name\":\"prompt_a_second\"");
+}
+
+test "Server rejects unsupported subscriptions and invalid log levels" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server: Server = .init(allocator, .{
+        .name = "polish-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+    server.enableLogging();
+    try server.addResource(.{ .uri = "file:///resource", .name = "Resource", .handler = testResourceHandler });
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/subscribe\",\"params\":{\"uri\":\"file:///resource\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/unsubscribe\",\"params\":{\"uri\":\"file:///resource\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"logging/setLevel\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"logging/setLevel\",\"params\":{\"level\":7}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"trace\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"debug\"}}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    const sent = try joinedSent(allocator, &transport);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "Resource subscriptions are not supported") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "logging/setLevel requires params.level to be a string") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "Unsupported logging level") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"code\":-32602") != null);
+    try std.testing.expectEqual(mcp.protocol.LogLevel.debug, server.log_level);
 }
 
 test "protocol response builders release response allocations" {
