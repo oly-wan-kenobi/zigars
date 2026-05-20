@@ -5,7 +5,6 @@ const zigar = @import("zigar");
 const analysis = zigar.analysis;
 const analysis_contract = zigar.analysis_contract;
 const command = zigar.command;
-const docs = zigar.docs;
 const common = @import("common.zig");
 const docs_tools = @import("docs.zig");
 const static_build = @import("static_build.zig");
@@ -21,12 +20,12 @@ const toolErrorFromError = common.toolErrorFromError;
 const workspacePathErrorResult = common.workspacePathErrorResult;
 const toolTimeout = common.toolTimeout;
 const backendErrorResult = common.backendErrorResult;
-const structuredText = common.structuredText;
 const ownedString = common.ownedString;
 const statusLinePath = common.statusLinePath;
 const appendWorkspaceFormatCheckCommand = common.appendWorkspaceFormatCheckCommand;
 const appendUniqueCommand = common.appendUniqueCommand;
 const readSourceArg = docs_tools.readSourceArg;
+const scratchApp = common.scratchApp;
 
 pub const buildWorkspaceValue = static_build.buildWorkspaceValue;
 pub const buildZigSummaryValue = static_build.buildZigSummaryValue;
@@ -89,16 +88,34 @@ fn workspaceFileError(allocator: std.mem.Allocator, tool_name: []const u8, file:
     }, err);
 }
 
+fn staticTextResult(allocator: std.mem.Allocator, tool_name: []const u8, body: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(scratch, "kind", .{ .string = tool_name });
+    try analysis_contract.putMetadata(scratch, &obj, tool_name);
+    try obj.put(scratch, "text", .{ .string = body });
+    return structured(allocator, .{ .object = obj });
+}
+
+pub fn sourceJsonResult(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, file: []const u8, contents: []const u8, builder: *const fn (std.mem.Allocator, []const u8, []const u8) anyerror!std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    return structured(allocator, builder(arena.allocator(), file, contents) catch |err| return analysisToolError(allocator, tool_name, operation, err));
+}
+
 pub fn zigImportGraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const output = analysis.importGraph(allocator, a.io, a.workspace.root, @intCast(@max(1, argInt(args, "limit", 200)))) catch |err| return analysisToolError(allocator, "zig_import_graph", "scan_import_graph", err);
     defer allocator.free(output);
-    return structuredText(allocator, "zig_import_graph", output);
+    return staticTextResult(allocator, "zig_import_graph", output);
 }
 
 pub fn zigImportGraphJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const limit: usize = @intCast(@max(1, argInt(args, "limit", 200)));
-    const value = analysis.importGraphJson(allocator, a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_import_graph_json", "scan_import_graph_json", err);
-    return structured(allocator, value);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    return structured(allocator, analysis.importGraphJson(arena.allocator(), a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_import_graph_json", "scan_import_graph_json", err));
 }
 
 pub fn zigDeclSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -106,14 +123,25 @@ pub fn zigDeclSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     defer allocator.free(source.bytes);
     const output = analysis.declSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
-    return structuredText(allocator, "zig_decl_summary", output);
+    return staticTextResult(allocator, "zig_decl_summary", output);
 }
 
 pub fn zigDeclSummaryJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_decl_summary_json", args, err);
     defer allocator.free(source.bytes);
-    const value = analysis.declSummaryJson(allocator, source.name, source.bytes) catch return error.OutOfMemory;
-    return structured(allocator, value);
+    return sourceJsonResult(allocator, "zig_decl_summary_json", "scan_declarations_json", source.name, source.bytes, analysis.declSummaryJson);
+}
+
+pub fn zigAstImports(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_ast_imports", args, err);
+    defer allocator.free(source.bytes);
+    return sourceJsonResult(allocator, "zig_ast_imports", "parse_ast_imports", source.name, source.bytes, analysis.astImportsJson);
+}
+
+pub fn zigAstDeclSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_ast_decl_summary", args, err);
+    defer allocator.free(source.bytes);
+    return sourceJsonResult(allocator, "zig_ast_decl_summary", "parse_ast_declarations", source.name, source.bytes, analysis.astDeclSummaryJson);
 }
 
 pub fn asciiLowerAllocLocal(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
@@ -143,7 +171,7 @@ pub fn zigAllocations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     defer allocator.free(source.bytes);
     const output = analysis.allocationSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
-    return structuredText(allocator, "zig_allocations", output);
+    return staticTextResult(allocator, "zig_allocations", output);
 }
 
 pub fn zigErrorSets(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -151,7 +179,7 @@ pub fn zigErrorSets(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     defer allocator.free(source.bytes);
     const output = analysis.errorSetSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
-    return structuredText(allocator, "zig_error_sets", output);
+    return staticTextResult(allocator, "zig_error_sets", output);
 }
 
 pub fn zigPublicApi(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -159,7 +187,7 @@ pub fn zigPublicApi(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     defer allocator.free(source.bytes);
     const output = analysis.publicApiSummary(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
-    return structuredText(allocator, "zig_public_api", output);
+    return staticTextResult(allocator, "zig_public_api", output);
 }
 
 pub fn zigDeadDeclCandidates(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -167,15 +195,22 @@ pub fn zigDeadDeclCandidates(a: *App, allocator: std.mem.Allocator, args: ?std.j
     defer allocator.free(source.bytes);
     const output = analysis.deadDeclCandidates(allocator, source.name, source.bytes) catch return error.OutOfMemory;
     defer allocator.free(output);
-    return structuredText(allocator, "zig_dead_decl_candidates", output);
+    return staticTextResult(allocator, "zig_dead_decl_candidates", output);
 }
 
 pub fn zigBuildGraph(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, buildWorkspaceValue(allocator, a) catch return error.OutOfMemory);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    var scratch_app = scratchApp(a, arena.allocator());
+    return structured(allocator, buildWorkspaceValue(arena.allocator(), &scratch_app) catch return error.OutOfMemory);
 }
 
 pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const graph = buildWorkspaceValue(allocator, a) catch return error.OutOfMemory;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const graph = buildWorkspaceValue(scratch, &scratch_app) catch return error.OutOfMemory;
     const graph_obj = switch (graph) {
         .object => |o| o,
         else => return toolErrorResult(allocator, .{
@@ -188,9 +223,8 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
         }),
     };
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    obj.put(allocator, "workspace", .{ .string = a.workspace.root }) catch return error.OutOfMemory;
-    analysis_contract.putMetadata(allocator, &obj, "zig_build_targets") catch return error.OutOfMemory;
+    obj.put(scratch, "workspace", .{ .string = a.workspace.root }) catch return error.OutOfMemory;
+    analysis_contract.putMetadata(scratch, &obj, "zig_build_targets") catch return error.OutOfMemory;
     if (graph_obj.get("build_zig")) |build_zig| {
         const build_obj = switch (build_zig) {
             .object => |o| o,
@@ -203,21 +237,24 @@ pub fn zigBuildTargets(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
                 .resolution = "Run zig_build_graph and report the malformed build_zig section with the zigar version.",
             }),
         };
-        obj.put(allocator, "modules", build_obj.get("modules") orelse .null) catch return error.OutOfMemory;
-        obj.put(allocator, "artifacts", build_obj.get("artifacts") orelse .null) catch return error.OutOfMemory;
-        obj.put(allocator, "named_artifacts", build_obj.get("named_artifacts") orelse .null) catch return error.OutOfMemory;
-        obj.put(allocator, "tests", build_obj.get("tests") orelse .null) catch return error.OutOfMemory;
-        obj.put(allocator, "steps", build_obj.get("steps") orelse .null) catch return error.OutOfMemory;
-        obj.put(allocator, "commands", build_obj.get("commands") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "modules", build_obj.get("modules") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "artifacts", build_obj.get("artifacts") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "named_artifacts", build_obj.get("named_artifacts") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "tests", build_obj.get("tests") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "steps", build_obj.get("steps") orelse .null) catch return error.OutOfMemory;
+        obj.put(scratch, "commands", build_obj.get("commands") orelse .null) catch return error.OutOfMemory;
     }
     return structured(allocator, .{ .object = obj });
 }
 
 pub fn zigBuildOptions(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const bytes = a.workspace.readFileAlloc(a.io, "build.zig", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_build_options", "build.zig", err, "Create a build.zig file in the workspace root or call zig_build_graph for a nullable workspace summary.");
-    defer allocator.free(bytes);
-    var options = std.json.Array.init(allocator);
-    var commands = std.json.Array.init(allocator);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const bytes = scratch_app.workspace.readFileAlloc(a.io, "build.zig", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_build_options", "build.zig", err, "Create a build.zig file in the workspace root or call zig_build_graph for a nullable workspace summary.");
+    var options = std.json.Array.init(scratch);
+    var commands = std.json.Array.init(scratch);
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var line_no: usize = 1;
     var has_target = false;
@@ -226,27 +263,26 @@ pub fn zigBuildOptions(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value
         const trimmed = std.mem.trim(u8, line, " \t");
         if (std.mem.indexOf(u8, trimmed, "standardTargetOptions") != null) {
             has_target = true;
-            try options.append(try buildOptionValue(allocator, "target", "std.Build.ResolvedTarget", "standardTargetOptions", line_no, trimmed));
+            try options.append(try buildOptionValue(scratch, "target", "std.Build.ResolvedTarget", "standardTargetOptions", line_no, trimmed));
         }
         if (std.mem.indexOf(u8, trimmed, "standardOptimizeOption") != null) {
             has_optimize = true;
-            try options.append(try buildOptionValue(allocator, "optimize", "std.builtin.OptimizeMode", "standardOptimizeOption", line_no, trimmed));
+            try options.append(try buildOptionValue(scratch, "optimize", "std.builtin.OptimizeMode", "standardOptimizeOption", line_no, trimmed));
         }
         if (std.mem.indexOf(u8, trimmed, "b.option(")) |_| {
             const name = optionNameFromLine(trimmed) orelse continue;
             const type_name = optionTypeFromLine(trimmed) orelse "unknown";
-            try options.append(try buildOptionValue(allocator, name, type_name, "b.option", line_no, trimmed));
+            try options.append(try buildOptionValue(scratch, name, type_name, "b.option", line_no, trimmed));
         }
     }
-    try commands.append(try ownedString(allocator, "zig build --help"));
-    if (has_target) try commands.append(try ownedString(allocator, "zig build -Dtarget=<triple>"));
-    if (has_optimize) try commands.append(try ownedString(allocator, "zig build -Doptimize=Debug|ReleaseSafe|ReleaseFast|ReleaseSmall"));
+    try commands.append(try ownedString(scratch, "zig build --help"));
+    if (has_target) try commands.append(try ownedString(scratch, "zig build -Dtarget=<triple>"));
+    if (has_optimize) try commands.append(try ownedString(scratch, "zig build -Doptimize=Debug|ReleaseSafe|ReleaseFast|ReleaseSmall"));
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zig_build_options" });
-    try analysis_contract.putMetadata(allocator, &obj, "zig_build_options");
-    try obj.put(allocator, "options", .{ .array = options });
-    try obj.put(allocator, "commands", .{ .array = commands });
+    try obj.put(scratch, "kind", .{ .string = "zig_build_options" });
+    try analysis_contract.putMetadata(scratch, &obj, "zig_build_options");
+    try obj.put(scratch, "options", .{ .array = options });
+    try obj.put(scratch, "commands", .{ .array = commands });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -276,19 +312,26 @@ pub fn optionTypeFromLine(line: []const u8) ?[]const u8 {
 
 pub fn zigFileOwner(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_file_owner", "file", "workspace-relative Zig file path");
-    const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_file_owner", file, err);
-    defer allocator.free(resolved);
-    const rel = a.workspace.relative(resolved);
-    const graph = buildWorkspaceValue(allocator, a) catch return error.OutOfMemory;
-    const owner = fileOwnerValue(allocator, graph, rel) catch return error.OutOfMemory;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const resolved = scratch_app.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_file_owner", file, err);
+    const rel = scratch_app.workspace.relative(resolved);
+    const graph = buildWorkspaceValue(scratch, &scratch_app) catch return error.OutOfMemory;
+    const owner = fileOwnerValue(scratch, graph, rel) catch return error.OutOfMemory;
     return structured(allocator, owner);
 }
 
 pub fn zigImportResolve(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const import_name = argString(args, "import") orelse return missingArgumentResult(allocator, "zig_import_resolve", "import", "Zig import name");
     const from = argString(args, "from");
-    const graph = buildWorkspaceValue(allocator, a) catch return error.OutOfMemory;
-    const resolved = importResolveValue(allocator, a, graph, import_name, from) catch return error.OutOfMemory;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const graph = buildWorkspaceValue(scratch, &scratch_app) catch return error.OutOfMemory;
+    const resolved = importResolveValue(scratch, &scratch_app, graph, import_name, from) catch return error.OutOfMemory;
     return structured(allocator, resolved);
 }
 
@@ -301,18 +344,29 @@ pub fn appendLineRecord(allocator: std.mem.Allocator, array: *std.json.Array, li
 
 pub fn zigTestDiscover(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const limit: usize = @intCast(@max(1, argInt(args, "limit", 500)));
-    const value = analysis.testDiscoverJson(allocator, a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_test_discover", "scan_test_declarations", err);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const value = analysis.testDiscoverJson(arena.allocator(), a.io, a.workspace.root, limit) catch |err| return analysisToolError(allocator, "zig_test_discover", "scan_test_declarations", err);
     return structured(allocator, value);
 }
 
+pub fn zigAstTests(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const source = readSourceArg(a, allocator, args) catch |err| return readSourceArgError(a, allocator, "zig_ast_tests", args, err);
+    defer allocator.free(source.bytes);
+    return sourceJsonResult(allocator, "zig_ast_tests", "parse_ast_tests", source.name, source.bytes, analysis.astTestsJson);
+}
+
 pub fn zigChangedFilesPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const result = command.run(allocator, a.io, a.workspace.root, &.{ "git", "status", "--porcelain" }, toolTimeout(a, args)) catch |err| {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const result = command.run(scratch, a.io, a.workspace.root, &.{ "git", "status", "--porcelain" }, toolTimeout(a, args)) catch |err| {
         return backendErrorResult(allocator, "git", "status", err, "run this tool inside a git checkout or inspect changed files manually");
     };
-    defer result.deinit(allocator);
 
-    var files = std.json.Array.init(allocator);
-    var commands = std.json.Array.init(allocator);
+    var files = std.json.Array.init(scratch);
+    var commands = std.json.Array.init(scratch);
     var saw_zig = false;
     var saw_build = false;
     var lines = std.mem.splitScalar(u8, result.stdout, '\n');
@@ -321,39 +375,32 @@ pub fn zigChangedFilesPlan(a: *App, allocator: std.mem.Allocator, args: ?std.jso
         const path = statusLinePath(line);
         if (path.len == 0 or analysis.skipWorkspacePath(path)) continue;
         var item = std.json.ObjectMap.empty;
-        try item.put(allocator, "status", try ownedString(allocator, std.mem.trim(u8, line[0..2], " ")));
-        try item.put(allocator, "path", try ownedString(allocator, path));
+        try item.put(scratch, "status", try ownedString(scratch, std.mem.trim(u8, line[0..2], " ")));
+        try item.put(scratch, "path", try ownedString(scratch, path));
         try files.append(.{ .object = item });
-        if (std.mem.endsWith(u8, path, ".zig") and workspacePathExists(allocator, a, path)) {
+        if (std.mem.endsWith(u8, path, ".zig") and workspacePathExists(scratch, &scratch_app, path)) {
             saw_zig = true;
-            const fmt_cmd = try std.fmt.allocPrint(allocator, "zig fmt --check {s}", .{path});
-            defer allocator.free(fmt_cmd);
-            try appendUniqueCommand(allocator, &commands, fmt_cmd);
-            const check_cmd = try std.fmt.allocPrint(allocator, "zig ast-check {s}", .{path});
-            defer allocator.free(check_cmd);
-            try appendUniqueCommand(allocator, &commands, check_cmd);
-            const test_cmd = try std.fmt.allocPrint(allocator, "zig test {s}", .{path});
-            defer allocator.free(test_cmd);
-            try appendUniqueCommand(allocator, &commands, test_cmd);
+            try appendUniqueCommand(scratch, &commands, try std.fmt.allocPrint(scratch, "zig fmt --check {s}", .{path}));
+            try appendUniqueCommand(scratch, &commands, try std.fmt.allocPrint(scratch, "zig ast-check {s}", .{path}));
+            try appendUniqueCommand(scratch, &commands, try std.fmt.allocPrint(scratch, "zig test {s}", .{path}));
         }
-        if ((std.mem.eql(u8, path, "build.zig") or std.mem.eql(u8, path, "build.zig.zon")) and workspacePathExists(allocator, a, path)) saw_build = true;
+        if ((std.mem.eql(u8, path, "build.zig") or std.mem.eql(u8, path, "build.zig.zon")) and workspacePathExists(scratch, &scratch_app, path)) saw_build = true;
     }
     if (saw_build) {
-        try appendUniqueCommand(allocator, &commands, "zig build --help");
-        try appendUniqueCommand(allocator, &commands, "zig build test");
+        try appendUniqueCommand(scratch, &commands, "zig build --help");
+        try appendUniqueCommand(scratch, &commands, "zig build test");
     } else if (saw_zig) {
-        try appendUniqueCommand(allocator, &commands, "zig build test");
+        try appendUniqueCommand(scratch, &commands, "zig build test");
     }
-    try appendWorkspaceFormatCheckCommand(allocator, a, &commands);
+    try appendWorkspaceFormatCheckCommand(scratch, &scratch_app, &commands);
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zig_changed_files_plan" });
-    try analysis_contract.putMetadata(allocator, &obj, "zig_changed_files_plan");
-    try obj.put(allocator, "ok", .{ .bool = result.succeeded() });
-    try obj.put(allocator, "files", .{ .array = files });
-    try obj.put(allocator, "commands", .{ .array = commands });
-    try obj.put(allocator, "raw_status", .{ .string = result.stdout });
+    try obj.put(scratch, "kind", .{ .string = "zig_changed_files_plan" });
+    try analysis_contract.putMetadata(scratch, &obj, "zig_changed_files_plan");
+    try obj.put(scratch, "ok", .{ .bool = result.succeeded() });
+    try obj.put(scratch, "files", .{ .array = files });
+    try obj.put(scratch, "commands", .{ .array = commands });
+    try obj.put(scratch, "raw_status", .{ .string = result.stdout });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -371,39 +418,43 @@ pub fn workspacePathExists(allocator: std.mem.Allocator, a: *App, path: []const 
 }
 
 pub fn zigDependencyInspect(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const bytes = a.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_dependency_inspect", "build.zig.zon", err, "Create build.zig.zon or use zig_build_graph for a nullable workspace summary.");
-    defer allocator.free(bytes);
-    const value = dependencyInspectionValue(allocator, a, bytes) catch return error.OutOfMemory;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var scratch_app = scratchApp(a, scratch);
+    const bytes = scratch_app.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch |err| return workspaceFileError(allocator, "zig_dependency_inspect", "build.zig.zon", err, "Create build.zig.zon or use zig_build_graph for a nullable workspace summary.");
+    const value = dependencyInspectionValue(scratch, &scratch_app, bytes) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
 
 pub fn zigTargetMatrixPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
     const targets_text = argString(args, "targets") orelse "native x86_64-linux-gnu x86_64-macos-none aarch64-macos-none x86_64-windows-gnu wasm32-freestanding";
     const steps_text = argString(args, "steps") orelse "build test";
     var targets = std.mem.tokenizeAny(u8, targets_text, ", \t\r\n");
-    var matrix = std.json.Array.init(allocator);
+    var matrix = std.json.Array.init(scratch);
     while (targets.next()) |target| {
-        var commands = std.json.Array.init(allocator);
+        var commands = std.json.Array.init(scratch);
         var steps = std.mem.tokenizeAny(u8, steps_text, ", \t\r\n");
         while (steps.next()) |step| {
-            if (std.mem.eql(u8, target, "native")) {
-                try commands.append(.{ .string = try std.fmt.allocPrint(allocator, "zig build {s}", .{step}) });
-            } else {
-                try commands.append(.{ .string = try std.fmt.allocPrint(allocator, "zig build {s} -Dtarget={s}", .{ step, target }) });
-            }
+            if (std.mem.eql(u8, target, "native"))
+                try commands.append(.{ .string = try std.fmt.allocPrint(scratch, "zig build {s}", .{step}) })
+            else
+                try commands.append(.{ .string = try std.fmt.allocPrint(scratch, "zig build {s} -Dtarget={s}", .{ step, target }) });
         }
         var item = std.json.ObjectMap.empty;
-        try item.put(allocator, "target", try ownedString(allocator, target));
-        try item.put(allocator, "commands", .{ .array = commands });
-        try item.put(allocator, "note", .{ .string = targetMatrixNote(target) });
+        try item.put(scratch, "target", try ownedString(scratch, target));
+        try item.put(scratch, "commands", .{ .array = commands });
+        try item.put(scratch, "note", .{ .string = targetMatrixNote(target) });
         try matrix.append(.{ .object = item });
     }
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zig_target_matrix_plan" });
-    try analysis_contract.putMetadata(allocator, &obj, "zig_target_matrix_plan");
-    try obj.put(allocator, "matrix", .{ .array = matrix });
-    try obj.put(allocator, "resolution", .{ .string = "Use zig_matrix_check when you have concrete Zig binaries to execute; this tool only plans commands." });
+    try obj.put(scratch, "kind", .{ .string = "zig_target_matrix_plan" });
+    try analysis_contract.putMetadata(scratch, &obj, "zig_target_matrix_plan");
+    try obj.put(scratch, "matrix", .{ .array = matrix });
+    try obj.put(scratch, "resolution", .{ .string = "Use zig_matrix_check when you have concrete Zig binaries to execute; this tool only plans commands." });
     return structured(allocator, .{ .object = obj });
 }
 

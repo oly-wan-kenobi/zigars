@@ -14,6 +14,13 @@ pub const App = runtime_mod.App;
 pub const BackendProbeCache = runtime_mod.BackendProbeCache;
 pub const LspClient = zigar.lsp_client.LspClient;
 
+pub fn scratchApp(a: *App, allocator: std.mem.Allocator) App {
+    var copy = a.*;
+    copy.allocator = allocator;
+    copy.workspace.allocator = allocator;
+    return copy;
+}
+
 pub const commandTermValue = command_result.commandTermValue;
 pub const commandResultValue = command_result.commandResultValue;
 pub const commandErrorValue = command_result.commandErrorValue;

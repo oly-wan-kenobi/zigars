@@ -3,7 +3,9 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const backend_contracts = zigar.backend_contracts;
+const analysis_contract = zigar.analysis_contract;
 const command = zigar.command;
+const json_result = zigar.json_result;
 const common = @import("common.zig");
 
 const App = common.App;
@@ -14,9 +16,10 @@ const invalidArgumentResult = common.invalidArgumentResult;
 const toolErrorResult = common.toolErrorResult;
 const toolErrorFromError = common.toolErrorFromError;
 const workspacePathErrorResult = common.workspacePathErrorResult;
-const runAndFormat = common.runAndFormat;
 const backendErrorResult = common.backendErrorResult;
 const commandResultErrorResult = common.commandResultErrorResult;
+const commandResultValue = common.commandResultValue;
+const commandErrorValue = common.commandErrorValue;
 const splitToolArgs = common.splitToolArgs;
 const splitToolArgsErrorResult = common.splitToolArgsErrorResult;
 const freeArgList = common.freeArgList;
@@ -89,11 +92,38 @@ pub fn runZwanzig(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, 
         .extra = extra,
     }) catch return error.OutOfMemory;
     defer allocator.free(argv);
-    return runAndFormat(a, allocator, argv, "zwanzig lint");
+    return runZwanzigCommand(a, allocator, argv, "zwanzig lint", tool_name);
 }
 
 pub fn zigLintRules(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return runAndFormat(a, allocator, &.{ a.config.zwanzig_path, "--help" }, "zwanzig rules/help");
+    return runZwanzigCommand(a, allocator, &.{ a.config.zwanzig_path, "--help" }, "zwanzig rules/help", "zig_lint_rules");
+}
+
+fn runZwanzigCommand(a: *App, allocator: std.mem.Allocator, argv: []const []const u8, title: []const u8, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    a.command_calls += 1;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    const result = command.run(scratch, a.io, a.workspace.root, argv, a.config.timeout_ms) catch |err| {
+        a.tool_errors += 1;
+        const value = commandErrorValue(scratch, title, argv, a.workspace.root, a.config.timeout_ms, err) catch return error.OutOfMemory;
+        return zwanzigResultWithMetadata(allocator, scratch, value, tool_name);
+    };
+    defer result.deinit(scratch);
+    const value = commandResultValue(scratch, title, argv, a.workspace.root, a.config.timeout_ms, result) catch return error.OutOfMemory;
+    return zwanzigResultWithMetadata(allocator, scratch, value, tool_name);
+}
+
+fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, scratch: std.mem.Allocator, value: std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = switch (value) {
+        .object => |o| o,
+        else => return structured(allocator, value),
+    };
+    try obj.put(scratch, "tool", .{ .string = tool_name });
+    try obj.put(scratch, "backend", .{ .string = "zwanzig" });
+    try obj.put(scratch, "optional_backend", .{ .bool = true });
+    try analysis_contract.putMetadata(scratch, &obj, tool_name);
+    return structured(allocator, .{ .object = obj });
 }
 
 pub fn zigAnalysisGraphs(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -168,15 +198,19 @@ pub fn zigAnalysisGraphs(a: *App, allocator: std.mem.Allocator, args: ?std.json.
         .resolution = "The zwanzig command completed but no .dot graph files were found in the requested output directory.",
         .details = &.{.{ .key = "output", .value = .{ .string = output } }},
     });
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    obj.put(allocator, "kind", .{ .string = "zig_analysis_graphs" }) catch return error.OutOfMemory;
-    obj.put(allocator, "backend", .{ .string = "zwanzig" }) catch return error.OutOfMemory;
-    obj.put(allocator, "mode", .{ .string = mode.name() }) catch return error.OutOfMemory;
-    obj.put(allocator, "mode_flag", .{ .string = mode.flag() }) catch return error.OutOfMemory;
-    obj.put(allocator, "path", .{ .string = path }) catch return error.OutOfMemory;
-    obj.put(allocator, "output", .{ .string = output }) catch return error.OutOfMemory;
-    obj.put(allocator, "output_abs", .{ .string = resolved_output }) catch return error.OutOfMemory;
+    obj.put(scratch, "kind", .{ .string = "zig_analysis_graphs" }) catch return error.OutOfMemory;
+    obj.put(scratch, "backend", .{ .string = "zwanzig" }) catch return error.OutOfMemory;
+    obj.put(scratch, "optional_backend", .{ .bool = true }) catch return error.OutOfMemory;
+    analysis_contract.putMetadata(scratch, &obj, "zig_analysis_graphs") catch return error.OutOfMemory;
+    obj.put(scratch, "mode", .{ .string = mode.name() }) catch return error.OutOfMemory;
+    obj.put(scratch, "mode_flag", .{ .string = mode.flag() }) catch return error.OutOfMemory;
+    obj.put(scratch, "path", .{ .string = path }) catch return error.OutOfMemory;
+    obj.put(scratch, "output", .{ .string = output }) catch return error.OutOfMemory;
+    obj.put(scratch, "output_abs", .{ .string = resolved_output }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -223,4 +257,21 @@ test "zwanzig graph argv uses typed upstream dump flags" {
         try std.testing.expectEqualStrings("/workspace/.zigar-cache/graphs", argv[2]);
         try std.testing.expectEqualStrings("/workspace/src/main.zig", argv[3]);
     }
+}
+
+test "zwanzig command wrapper releases temporary command JSON tree" {
+    const allocator = std.testing.allocator;
+    var config = try zigar.config.parse(allocator, std.testing.io, &.{ "zigar", "--timeout-ms", "1" });
+    defer config.deinit(allocator);
+    var workspace = try zigar.workspace.Workspace.init(allocator, std.testing.io, ".", null);
+    defer workspace.deinit();
+    var app = App{ .allocator = allocator, .io = std.testing.io, .config = config, .workspace = workspace };
+
+    const result = try runZwanzigCommand(&app, allocator, &.{"/definitely/missing/zigar-zwanzig"}, "zwanzig lint", "zig_lint");
+    defer json_result.deinitToolResult(allocator, result);
+
+    const structured_value = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zwanzig_backed", structured_value.get("capability_tier").?.string);
+    try std.testing.expectEqualStrings("zwanzig", structured_value.get("backend").?.string);
+    try std.testing.expectEqual(@as(usize, 1), app.tool_errors);
 }

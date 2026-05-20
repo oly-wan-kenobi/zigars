@@ -3,6 +3,7 @@ const tool_result_errors = @import("tool_result_errors.zig");
 const zls_common = @import("zls_common.zig");
 
 pub const App = shared_core.App;
+pub const scratchApp = shared_core.scratchApp;
 pub const BackendProbeCache = shared_core.BackendProbeCache;
 pub const LspClient = shared_core.LspClient;
 pub const structured = shared_core.structured;
