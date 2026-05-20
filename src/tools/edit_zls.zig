@@ -42,6 +42,7 @@ const lspShapeError = common.lspShapeError;
 const zigDeclSummary = static_analysis.zigDeclSummary;
 const textEditToolValueForDocument = edit_edits.textEditToolValueForDocument;
 const workspaceEditValueForDocument = edit_edits.workspaceEditValueForDocument;
+const workspaceEditValueForDocumentWithProvenance = edit_edits.workspaceEditValueForDocumentWithProvenance;
 const source_read_limit = common.source_read_limit;
 
 pub const zigDocumentOpen = edit_documents.zigDocumentOpen;
@@ -382,10 +383,10 @@ pub fn zigRename(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) m
 
     if (argBool(args, "apply", false)) {
         if (!doc.canApplyToDisk()) return zls_document.unsavedApplyError(allocator, "zig_rename", "textDocument/rename", doc);
-        return workspaceEditToolResultForDocument(a, allocator, response, true, doc);
+        return workspaceEditToolResultForDocumentWithMethod(a, allocator, response, true, doc, "textDocument/rename");
     }
 
-    return workspaceEditToolResultForDocument(a, allocator, response, false, doc);
+    return workspaceEditToolResultForDocumentWithMethod(a, allocator, response, false, doc, "textDocument/rename");
 }
 
 pub fn zigFormatZls(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, apply: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -423,10 +424,17 @@ pub fn workspaceEditToolResult(a: *App, allocator: std.mem.Allocator, response: 
 }
 
 pub fn workspaceEditToolResultForDocument(a: *App, allocator: std.mem.Allocator, response: []const u8, apply: bool, primary_doc: ?common.ZlsDocument) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return workspaceEditToolResultForDocumentWithMethod(a, allocator, response, apply, primary_doc, "workspace/applyEdit");
+}
+
+pub fn workspaceEditToolResultForDocumentWithMethod(a: *App, allocator: std.mem.Allocator, response: []const u8, apply: bool, primary_doc: ?common.ZlsDocument, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "parse_response", "malformed_backend_response", err, "Retry after checking the ZLS session; the workspace edit response was not valid JSON.");
     defer parsed.deinit();
     const result = responseResult(parsed.value) orelse .null;
-    const value = workspaceEditValueForDocument(a, allocator, result, apply, primary_doc) catch |err| return lspToolError(allocator, "workspace_edit", "workspace/applyEdit", "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the workspace edit and retry with paths that remain inside the zigar workspace.");
+    const value = workspaceEditValueForDocumentWithProvenance(a, allocator, result, apply, primary_doc, .{
+        .backend = "zls",
+        .method = method,
+    }) catch |err| return lspToolError(allocator, "workspace_edit", method, "preview_or_apply_edit", "workspace_edit_failed", err, "Inspect the workspace edit and retry with paths that remain inside the zigar workspace.");
     return structuredOwned(allocator, value);
 }
 

@@ -89,8 +89,18 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/edit_zls_edits.zig",
-        .max_lines = 240,
-        .reason = "ZLS text/workspace edit application should remain independently reviewable",
+        .max_lines = 80,
+        .reason = "ZLS edit helpers should stay a facade over text and workspace edit modules",
+    },
+    .{
+        .path = "src/tools/edit_zls_text_edits.zig",
+        .max_lines = 160,
+        .reason = "ZLS text edit application should stay independently reviewable",
+    },
+    .{
+        .path = "src/tools/edit_zls_workspace_edits.zig",
+        .max_lines = 220,
+        .reason = "ZLS workspace edit application should stay independently reviewable",
     },
     .{
         .path = "src/tools/shared_core.zig",
@@ -442,7 +452,7 @@ pub const ignored_error_hygiene_tokens = [_]HygieneToken{
         .reason = "ZLS diagnostics workspace must count or report malformed cached notifications",
     },
     .{
-        .path = "src/tools/edit_zls_edits.zig",
+        .path = "src/tools/edit_zls_workspace_edits.zig",
         .token = "catch {};",
         .reason = "ZLS edit close failures after apply must be logged",
     },

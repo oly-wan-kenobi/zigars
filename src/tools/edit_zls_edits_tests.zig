@@ -9,6 +9,46 @@ const ZlsDocument = common.ZlsDocument;
 const uri_util = zigar.uri;
 const json_result = zigar.json_result;
 
+test "textEditToolValueForDocument owns ZLS provenance strings" {
+    const alloc = std.testing.allocator;
+    var app: App = undefined;
+    var doc = ZlsDocument{
+        .uri = try alloc.dupe(u8, "file:///tmp/main.zig"),
+        .rel_path = try alloc.dupe(u8, "main.zig"),
+        .source = try alloc.dupe(u8, "const value = 1;\n"),
+        .source_kind = .provided_content,
+        .content_matches_disk = false,
+    };
+    defer doc.deinit(alloc);
+
+    const value = try edit_edits.textEditToolValueForDocument(&app, alloc, doc, "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":null}", false);
+    defer json_result.deinitOwnedValue(alloc, value);
+
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqualStrings("zls", obj.get("backend").?.string);
+    try std.testing.expectEqualStrings("textDocument/formatting", obj.get("method").?.string);
+}
+
+test "workspaceEditValueForDocumentWithProvenance owns rename provenance strings" {
+    const alloc = std.testing.allocator;
+    var app: App = undefined;
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, "{\"changes\":{}}", .{});
+    defer parsed.deinit();
+
+    const value = try edit_edits.workspaceEditValueForDocumentWithProvenance(&app, alloc, parsed.value, false, null, .{ .method = "textDocument/rename" });
+    defer json_result.deinitOwnedValue(alloc, value);
+
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqualStrings("zls", obj.get("backend").?.string);
+    try std.testing.expectEqualStrings("textDocument/rename", obj.get("method").?.string);
+}
+
 test "workspaceEditFileValueForDocument previews primary file against ZLS source text" {
     if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
 

@@ -23,7 +23,9 @@ resolve_executable() {
 }
 
 zigar_binary="${ZIGAR_BINARY:-zig-out/bin/zigar}"
-if [[ ! -x "$zigar_binary" ]]; then
+if [[ "${ZIGAR_SKIP_BUILD:-0}" != "1" ]]; then
+  zig build -Doptimize=ReleaseSafe
+elif [[ ! -x "$zigar_binary" ]]; then
   zig build -Doptimize=ReleaseSafe
 fi
 
