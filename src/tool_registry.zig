@@ -1,6 +1,7 @@
 const std = @import("std");
 const mcp = @import("mcp");
 
+const json_result = @import("json_result.zig");
 const runtime_mod = @import("runtime.zig");
 const tool_errors = @import("tool_errors.zig");
 const tool_metadata = @import("tool_metadata.zig");
@@ -32,6 +33,7 @@ pub fn addTool(
             .openWorldHint = false,
         },
         .handler = mcpHandler(spec, handler),
+        .deinit_result = json_result.deinitToolResult,
         .user_data = runtime,
     });
 }

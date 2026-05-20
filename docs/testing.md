@@ -49,10 +49,11 @@ gate cannot silently shrink.
 `zig build stdio-fixtures` starts zigar over stdio and uses a temporary
 workspace with Zig-backed fake optional backends. It checks newline-delimited
 JSON-RPC, formatter preview/apply behavior, zwanzig JSON/SARIF/rule/graph
-flows, zflame SVG output, and diff-folded flamegraph generation. The fake
-backends are intentionally strict about supported argv shapes so stale flags or
-option syntax fail before release. The fixture enforces the configured minimum
-`tools/call` count before it reports success.
+flows, structured profiling plans, zflame SVG output metadata, and diff-folded
+flamegraph generation with intermediate metadata. The fake backends are
+intentionally strict about supported argv shapes so stale flags or option syntax
+fail before release. The fixture enforces the configured minimum `tools/call`
+count before it reports success.
 
 ## Coverage
 

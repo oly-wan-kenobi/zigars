@@ -6,6 +6,7 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const handler = types.handler;
 const fieldHint = types.fieldHint;
+const docs_plan = "Offline docs lookup; no network, ZLS, or optional backend.";
 
 pub const definitions = struct {
     pub const zigar_capabilities = tool(.{
@@ -438,62 +439,16 @@ pub const definitions = struct {
         .handler = handler(.edit_zls, "zigWorkspaceSymbols"),
         .plan = .{ .zls_request = .{ .method = "workspace/symbol", .required_capability = "workspaceSymbolProvider" } },
     });
-    pub const zig_builtin_list = tool(.{
-        .description = "List curated Zig builtin docs bundled with zigar.",
-        .input_schema = schema(&.{}),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigBuiltinList"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_builtin_list_json = tool(.{
-        .description = "Return curated Zig builtin docs as JSON-native records.",
-        .input_schema = schema(&.{}),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigBuiltinListJson"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_builtin_doc = tool(.{
-        .description = "Search curated Zig builtin docs.",
-        .input_schema = schema(&.{.{ "query", "string", true }}),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigBuiltinDoc"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_std_search = tool(.{
-        .description = "Search local Zig standard library source for a query.",
-        .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigStdSearch"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_std_search_json = tool(.{
-        .description = "Search local Zig standard library source and return JSON-native records.",
-        .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigStdSearchJson"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_std_item = tool(.{
-        .description = "Search local Zig standard library source for a fully qualified item string.",
-        .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigStdItem"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
-    pub const zig_lang_ref_search = tool(.{
-        .description = "Search Zig language-reference sections from installed langref HTML or zigar's bundled fallback index.",
-        .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }),
-        .read_only = true,
-        .group = .docs,
-        .handler = handler(.docs, "zigLangRefSearch"),
-        .plan = .{ .pure_analysis = "Documentation lookup; reads bundled or local Zig documentation without mutating workspace state." },
-    });
+    pub const zig_builtin_list = tool(.{ .description = "List bundled curated Zig builtin docs; source is partial curated zigar data.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinList"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_builtin_list_json = tool(.{ .description = "Return bundled curated Zig builtin docs with source, completeness, count, and ranking metadata.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinListJson"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_builtin_doc = tool(.{ .description = "Search bundled curated Zig builtin docs; text output includes partial-curated source metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinDoc"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_builtin_doc_json = tool(.{ .description = "Search bundled curated Zig builtin docs with source, completeness, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinDocJson"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_std_search = tool(.{ .description = "Search local Zig stdlib .zig source files; this is source scanning, not rendered stdlib documentation.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdSearch"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_std_search_json = tool(.{ .description = "Search local Zig stdlib .zig source files with source-scan provenance, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdSearchJson"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_std_item = tool(.{ .description = "Look up exact Zig stdlib declaration-name matches in local .zig source; not rendered stdlib documentation.", .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdItem"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_std_item_json = tool(.{ .description = "Look up exact Zig stdlib declaration-name matches with source-scan provenance, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdItemJson"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_lang_ref_search = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback; text includes source/completeness metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigLangRefSearch"), .plan = .{ .pure_analysis = docs_plan } });
+    pub const zig_lang_ref_search_json = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback with source, completeness, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigLangRefSearchJson"), .plan = .{ .pure_analysis = docs_plan } });
     pub const zig_import_graph = tool(.{
         .description = "Build a heuristic import graph from workspace Zig files.",
         .input_schema = schema(&.{.{ "limit", "integer", false }}),
@@ -501,6 +456,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportGraph"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_import_graph_json = tool(.{
         .description = "Build a JSON-native heuristic import graph from workspace Zig files.",
@@ -509,7 +465,9 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportGraphJson"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
+    pub const zig_ast_imports = tool(.{ .description = "Return parser-backed @import calls for a Zig file using std.zig.Ast tokens.", .input_schema = schema(&.{.{ "file", "string", true }}), .read_only = true, .group = .static_analysis, .handler = handler(.static_analysis, "zigAstImports"), .plan = .{ .pure_analysis = "Parser-backed source analysis; parses one Zig file with std.zig.Ast without executing compiler semantic analysis." }, .static_analysis_tier = .parser_backed });
     pub const zig_decl_summary = tool(.{
         .description = "Heuristically summarize declarations in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
@@ -517,6 +475,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeclSummary"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_decl_summary_json = tool(.{
         .description = "Return a JSON-native heuristic declaration summary for a Zig file.",
@@ -525,7 +484,9 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeclSummaryJson"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
+    pub const zig_ast_decl_summary = tool(.{ .description = "Return a parser-backed declaration summary for a Zig file using std.zig.Ast.", .input_schema = schema(&.{.{ "file", "string", true }}), .read_only = true, .group = .static_analysis, .handler = handler(.static_analysis, "zigAstDeclSummary"), .plan = .{ .pure_analysis = "Parser-backed source analysis; parses one Zig file with std.zig.Ast without executing compiler semantic analysis." }, .static_analysis_tier = .parser_backed });
     pub const zig_allocations = tool(.{
         .description = "Find likely allocation-related call sites in a Zig file.",
         .input_schema = schema(&.{.{ "file", "string", true }}),
@@ -533,6 +494,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigAllocations"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_error_sets = tool(.{
         .description = "Find likely error-related sites in a Zig file.",
@@ -541,6 +503,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigErrorSets"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_public_api = tool(.{
         .description = "Find likely public API declarations in a Zig file.",
@@ -549,6 +512,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigPublicApi"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_dead_decl_candidates = tool(.{
         .description = "List private declaration candidates that need reference checks before deletion.",
@@ -557,6 +521,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDeadDeclCandidates"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_build_graph = tool(.{
         .description = "Parse build.zig/build.zig.zon heuristically into modules, dependencies, build steps, and artifacts.",
@@ -565,6 +530,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildGraph"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_build_targets = tool(.{
         .description = "Return likely build steps, artifacts, modules, and suggested zig build commands.",
@@ -573,6 +539,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildTargets"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_build_options = tool(.{
         .description = "Heuristically discover available `zig build -D...` options from build.zig and standard Zig build knobs.",
@@ -581,6 +548,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigBuildOptions"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_file_owner = tool(.{
         .description = "Map a workspace Zig file to likely build module/artifact/test commands.",
@@ -589,6 +557,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigFileOwner"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_import_resolve = tool(.{
         .description = "Heuristically resolve a Zig @import string against workspace modules, packages, stdlib, or a source file.",
@@ -597,6 +566,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigImportResolve"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_test_discover = tool(.{
         .description = "Heuristically discover Zig test declarations and runnable test commands.",
@@ -605,7 +575,9 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestDiscover"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
+    pub const zig_ast_tests = tool(.{ .description = "Return parser-backed Zig test declarations for a Zig file using std.zig.Ast.", .input_schema = schema(&.{.{ "file", "string", true }}), .read_only = true, .group = .static_analysis, .handler = handler(.static_analysis, "zigAstTests"), .plan = .{ .pure_analysis = "Parser-backed source analysis; parses one Zig file with std.zig.Ast without executing compiler semantic analysis." }, .static_analysis_tier = .parser_backed });
     pub const zig_changed_files_plan = tool(.{
         .description = "Inspect git changes and recommend the smallest useful Zig validation commands.",
         .input_schema = schema(&.{.{ "timeout_ms", "integer", false }}),
@@ -614,6 +586,7 @@ pub const definitions = struct {
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigChangedFilesPlan"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_dependency_inspect = tool(.{
         .description = "Inspect build.zig.zon dependencies, hashes, local package/cache state, and dependency wiring risks.",
@@ -622,6 +595,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigDependencyInspect"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_target_matrix_plan = tool(.{
         .description = "Plan cross-target Zig build/test matrix commands without running them.",
@@ -630,6 +604,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTargetMatrixPlan"),
         .plan = .{ .pure_analysis = "Command matrix planner; returns candidate build/test commands without running them." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_test_failure_triage = tool(.{
         .description = "Parse Zig test output or run tests and return failing tests, panic clues, and rerun commands.",
@@ -639,6 +614,7 @@ pub const definitions = struct {
         .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
         .handler = handler(.static_analysis, "zigTestFailureTriage"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .compiler_backed,
     });
     pub const zig_workspace_symbol_cache = tool(.{
         .description = "Build or inspect a cached heuristic workspace symbol/import index for repeated MCP calls.",
@@ -647,6 +623,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigWorkspaceSymbolCache"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_package_cache_doctor = tool(.{
         .description = "Diagnose Zig package/cache directories, git-tracked generated artifacts, and package hash risks.",
@@ -656,6 +633,7 @@ pub const definitions = struct {
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigPackageCacheDoctor"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_test_map = tool(.{
         .description = "Build a deterministic map of Zig test declarations, files, likely symbols, and test commands.",
@@ -664,6 +642,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestMap"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_test_select = tool(.{
         .description = "Recommend focused Zig test commands for changed files or symbols.",
@@ -672,6 +651,7 @@ pub const definitions = struct {
         .group = .static_analysis,
         .handler = handler(.static_analysis, "zigTestSelect"),
         .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_public_api_diff = tool(.{
         .description = "Compare heuristic public Zig declaration snapshots and report likely breaking changes.",
@@ -684,6 +664,7 @@ pub const definitions = struct {
         .risk = .{ .executes_backend = true },
         .handler = handler(.static_analysis, "zigPublicApiDiff"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .advisory_orientation,
     });
     pub const zig_ci_annotations = tool(.{
         .description = "Convert diagnostics/check output into CI annotation records.",
@@ -720,27 +701,30 @@ pub const definitions = struct {
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLint"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .zwanzig_backed,
     });
     pub const zig_lint_sarif = tool(.{
-        .description = "Run zwanzig with SARIF output.",
+        .description = "Run optional zwanzig-backed static analysis with SARIF output.",
         .input_schema = schema(&.{ .{ "path", "string", false }, .{ "rules_do", "string", false }, .{ "rules_skip", "string", false }, .{ "config", "string", false }, .{ "args", "string", false } }),
         .read_only = true,
         .group = .zwanzig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLintSarif"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .zwanzig_backed,
     });
     pub const zig_lint_rules = tool(.{
-        .description = "List zwanzig rules when the backend is installed.",
+        .description = "List optional zwanzig-backed lint/static-analysis rules when the backend is installed.",
         .input_schema = schema(&.{}),
         .read_only = true,
         .group = .zwanzig,
         .risk = .{ .executes_backend = true },
         .handler = handler(.zwanzig, "zigLintRules"),
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+        .static_analysis_tier = .zwanzig_backed,
     });
     pub const zig_analysis_graphs = tool(.{
-        .description = "Run a typed zwanzig graph dump mode, writing DOT files under an explicit workspace output directory.",
+        .description = "Run an optional zwanzig-backed graph dump mode, writing DOT files under an explicit workspace output directory.",
         .input_schema = schemaWithHints(&.{ .{ "mode", "string", true }, .{ "path", "string", true }, .{ "output", "string", true }, .{ "args", "string", false } }, &.{
             fieldHint("mode", .{ .description = "zwanzig graph dump mode.", .enum_values = backend_contracts.zwanzig_graph_mode_names[0..] }),
             fieldHint("output", .{ .description = "Workspace-relative graph output directory.", .path_kind = "output_path" }),
@@ -750,17 +734,21 @@ pub const definitions = struct {
         .risk = .{ .writes_artifacts = true, .executes_backend = true },
         .handler = handler(.zwanzig, "zigAnalysisGraphs"),
         .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
+        .static_analysis_tier = .zwanzig_backed,
     });
     pub const zig_profile_plan = tool(.{
-        .description = "Return platform-specific profiling capture suggestions for the workspace.",
-        .input_schema = schema(&.{.{ "binary", "string", false }}),
+        .description = "Return structured external-capture plans and zflame rendering next steps without running profilers.",
+        .input_schema = schemaWithHints(&.{ .{ "binary", "string", false }, .{ "platform", "string", false }, .{ "output_prefix", "string", false } }, &.{
+            fieldHint("platform", .{ .description = "Requested platform override; omitted means use zigar's detected host platform." }),
+            fieldHint("output_prefix", .{ .description = "Workspace-relative prefix used in suggested capture/render artifact paths.", .path_kind = "output_path" }),
+        }),
         .read_only = true,
         .group = .profiling,
         .handler = handler(.profiling, "zigProfilePlan"),
-        .plan = .{ .pure_analysis = "Profiling command planner; returns platform-specific capture suggestions without running profilers." },
+        .plan = .{ .pure_analysis = "Profiling workflow planner; returns structured external capture suggestions and rendering next steps without running profilers." },
     });
     pub const zig_profile_run = tool(.{
-        .description = "Run a user-specified profiler command in the workspace.",
+        .description = "Run an explicit user-provided profiler command in the workspace after splitting argv without a shell.",
         .input_schema = schema(&.{ .{ "command", "string", true }, .{ "timeout_ms", "integer", false } }),
         .read_only = true,
         .group = .profiling,
@@ -769,7 +757,7 @@ pub const definitions = struct {
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_flamegraph = tool(.{
-        .description = "Convert captured profiler output to SVG through zflame with an explicit input format.",
+        .description = "Render captured profiler output to SVG through zflame with explicit format and auditable artifact metadata.",
         .input_schema = schemaWithHints(&.{ .{ "format", "string", true }, .{ "input", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{
             fieldHint("format", .{ .description = "Explicit profiler input format passed to zflame.", .enum_values = backend_contracts.zflame_format_names[0..] }),
             fieldHint("colors", .{ .description = "zflame color palette passed as --colors=<palette>." }),
@@ -783,8 +771,9 @@ pub const definitions = struct {
         .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
     });
     pub const zig_flamegraph_diff = tool(.{
-        .description = "Create a differential folded stack file through diff-folded, then render it through zflame.",
-        .input_schema = schemaWithHints(&.{ .{ "before", "string", true }, .{ "after", "string", true }, .{ "output", "string", true }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{
+        .description = "Create an auditable differential folded stack through diff-folded, then render it through zflame recursive.",
+        .input_schema = schemaWithHints(&.{ .{ "before", "string", true }, .{ "after", "string", true }, .{ "output", "string", true }, .{ "intermediate", "string", false }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{
+            fieldHint("intermediate", .{ .description = "Optional workspace-relative folded diff output path; defaults to .zigar-cache/profile/diff-<n>.folded.", .path_kind = "output_path" }),
             fieldHint("colors", .{ .description = "zflame color palette passed as --colors=<palette>." }),
             fieldHint("width", .{ .description = "SVG width passed as --width=<pixels>.", .minimum = 1 }),
             fieldHint("min_width", .{ .description = "Minimum frame width passed as --min-width=<pixels>.", .minimum = 1 }),

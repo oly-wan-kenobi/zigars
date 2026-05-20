@@ -139,6 +139,26 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
         try out.writer.writeAll("\n");
     }
 
+    try out.writer.writeAll("\n## Static Analysis Capability Tiers\n\n");
+    const static_contracts = obj.get("registry_static_analysis_contracts").?.object;
+    var static_keys: std.ArrayList([]const u8) = .empty;
+    defer static_keys.deinit(allocator);
+    for (tool_metadata.entries) |entry| {
+        if (entry.static_analysis_tier != null) try static_keys.append(allocator, entry.name);
+    }
+    std.mem.sort([]const u8, static_keys.items, {}, stringLessThan);
+    for (static_keys.items) |tool_name| {
+        const contract = static_contracts.get(tool_name).?.object;
+        try out.writer.print("- `{s}`: tier `{s}`, confidence `{s}`, class `{s}`, kind `{s}`; cross-check `{s}`\n", .{
+            tool_name,
+            contract.get("capability_tier").?.string,
+            contract.get("confidence").?.string,
+            contract.get("confidence_class").?.string,
+            contract.get("analysis_kind").?.string,
+            contract.get("recommended_cross_check").?.string,
+        });
+    }
+
     try out.writer.print("\n{s}\n", .{obj.get("tools_list_schema_note").?.string});
     return try out.toOwnedSlice();
 }

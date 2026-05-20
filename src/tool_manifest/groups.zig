@@ -9,8 +9,8 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .formatting_and_edits, .keywords = &.{ "fmt", "formatter", "formatting", "zig fmt", "patch preview", "unified diff", "rename", "code action", "apply=true" } },
     .{ .group = .zls, .keywords = &.{ "zls", "lsp", "diagnostics", "hover", "definition", "references", "completion", "symbols", "unsaved document" } },
     .{ .group = .docs, .keywords = &.{ "docs", "stdlib", "builtin", "langref", "language reference" } },
-    .{ .group = .static_analysis, .keywords = &.{ "heuristic", "confidence", "imports", "declarations", "allocation", "error set", "public api", "api diff", "breaking change", "build graph", "build options", "test discovery", "test map", "test select", "changed files", "dependency inspector", "target matrix", "test failure triage", "symbol cache", "package cache doctor" } },
+    .{ .group = .static_analysis, .keywords = &.{ "heuristic", "parser backed", "capability tier", "confidence", "imports", "declarations", "allocation", "error set", "public api", "api diff", "breaking change", "build graph", "build options", "test discovery", "test map", "test select", "changed files", "dependency inspector", "target matrix", "test failure triage", "symbol cache", "package cache doctor" } },
     .{ .group = .ci_artifacts, .keywords = &.{ "ci", "annotations", "junit", "matrix", "multiple zig versions", "test report" } },
     .{ .group = .zwanzig, .keywords = &.{ "zwanzig", "lint", "linter", "static analysis", "sarif", "rules", "dot graph" } },
-    .{ .group = .profiling, .keywords = &.{ "profile", "profiling", "perf", "dtrace", "sample", "xctrace", "vtune", "zflame", "flamegraph", "diff flamegraph" } },
+    .{ .group = .profiling, .keywords = &.{ "profile", "profiling", "profile plan", "external capture", "perf", "dtrace", "sample", "xctrace", "vtune", "zflame", "flamegraph", "diff flamegraph" } },
 };

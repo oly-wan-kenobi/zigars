@@ -99,9 +99,11 @@ preview workflows from default mutations.
 
 Heuristic scanners are useful for fast orientation, but they are not semantic
 Zig analysis. Keep them isolated in `src/analysis.zig` or a dedicated analysis
-module, include fixture tests, and prefer ZLS or Zig compiler-backed tools for
-actions that would modify source. JSON heuristic results should include
-`analysis_kind`, `confidence`, `confidence_class`, `limitations`, `verify_with`,
-and skipped-file counts when unreadable files are omitted. The release hygiene
-check fails when a static-analysis tool is missing a contract or stops being
-source-read-only.
+module, include fixture tests, and prefer parser-backed, ZLS, Zig
+compiler-backed, or optional zwanzig-backed tools for actions that would modify
+source. Static-analysis results should include `analysis_kind`,
+`capability_tier`, `confidence`, `confidence_class`, `source_coverage`,
+`limitations`, `verify_with`, `recommended_cross_check`, and skipped-file counts
+when unreadable files are omitted. The release hygiene check fails when a
+static-analysis product tool is missing a tiered contract or when a
+source-analysis tool stops being source-read-only.

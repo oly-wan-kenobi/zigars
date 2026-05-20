@@ -50,12 +50,20 @@ unsupported. `zig_command_plan` is intentionally narrower: it returns exact
 `argv`/`cwd`/`timeout_ms` only for command-backed tools and returns a structured
 unsupported response for other known tools instead of `InvalidArguments`.
 
-Static-analysis tools use a shared confidence contract. Structured heuristic
-results include `analysis_kind`, `confidence`, `confidence_class`,
-`limitations`, and `verify_with`; text results state the same confidence in
-plain language. Treat `orientation_only` results as navigation aids, `advisory`
-results as review input, and verify release decisions with Zig compiler, ZLS, CI,
-or optional backend tools.
+Static-analysis tools use a shared confidence and capability-tier contract.
+Structured results include `analysis_kind`, `capability_tier`, `confidence`,
+`confidence_class`, `source_coverage`, `limitations`, `verify_with`, and a
+`recommended_cross_check`. Text results carry the same metadata beside their
+human-readable body. Treat `advisory_orientation` tools as navigation aids:
+`zig_dead_decl_candidates` still needs reference checks before deletion,
+`zig_public_api_diff` has a public declaration line comparison basis with known
+blind spots, and `zig_test_select` returns recommendations unless a stronger
+dependency model validates them. Use `parser_backed` tools such as
+`zig_ast_decl_summary`, `zig_ast_imports`, and `zig_ast_tests` when syntactic
+precision matters, then verify release decisions with Zig compiler, ZLS, CI, or
+optional zwanzig-backed tools. `zwanzig_backed` tools are optional
+zwanzig-backed static-analysis/lint integrations; zigar reports their tier and
+does not require zwanzig to be installed.
 
 `zigar_doctor` accepts optional `probe_backends` and `timeout_ms` arguments. Use
 backend probes when a client reports `PermissionDenied`, missing formatter/ZLS
@@ -70,6 +78,16 @@ language-reference sections, reports whether it used `installed_langref_html` or
 `bundled_langref_index`, marks bundled fallback data as `partial_curated`, and
 does not scan Zig autodoc implementation files.
 
+Structured docs outputs use the same contract across builtin, stdlib source, std
+item, and language-reference workflows: `source`, `query`, `limit`,
+`result_count`, `no_result_reason`, and `ranking`. The `source` object includes
+`id`, `label`, `provenance`, `completeness`, explicit `version`/
+`version_status`, and `path`/`source_path` when a local file or directory is
+known. Text docs tools are human-readable projections of the same contract, and
+the `_json` companions (`zig_builtin_doc_json`, `zig_std_search_json`,
+`zig_std_item_json`, `zig_lang_ref_search_json`) are the preferred interface for
+agents that need stable result metadata.
+
 High-signal discovery keywords include:
 
 - `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`,
@@ -82,7 +100,7 @@ High-signal discovery keywords include:
 - `build options`, `target matrix`, `test failure triage`, `symbol cache`
 - `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`
 - `zwanzig`, `lint`, `sarif`
-- `zflame`, `profile`, `flamegraph`
+- `zflame`, `profile`, `profile plan`, `external capture`, `flamegraph`
 
 Source-mutating tools are preview-first and require `apply=true` to write:
 
@@ -93,6 +111,10 @@ Source-mutating tools are preview-first and require `apply=true` to write:
 - `zigar_project_profile`
 
 Generated output tools such as `zig_flamegraph` and `zig_analysis_graphs` must
-write to explicit workspace-local output paths. `zig_flamegraph_diff` also writes
-its intermediate folded stacks under `.zigar-cache/profile/diff-<n>.folded` to
-avoid clobbering another in-process diff run.
+write to explicit workspace-local output paths. `zig_profile_plan` is read-only
+and returns structured guidance for external profilers; zigar does not define
+capture semantics. `zig_flamegraph` requires an explicit zflame format and
+returns argv/backend/probe/compatibility metadata with the SVG path.
+`zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to
+`.zigar-cache/profile/diff-<n>.folded` unless an explicit workspace-local
+`intermediate` path is supplied.

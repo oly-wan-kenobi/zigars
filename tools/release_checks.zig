@@ -9,11 +9,26 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     const generated = [_][]const u8{ "zig-out", ".zig-cache", "zig-pkg", ".zigar-cache", "coverage", "dist" };
     var ok = true;
     for (generated) |path| {
-        if (isGitTracked(allocator, io, path)) {
+        const tracked = isGitTracked(io, path) catch |err| blk: {
+            try stderrPrint(io, "generated artifact check could not query git tracking for {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            break :blk false;
+        };
+        if (tracked) {
             try stderrPrint(io, "generated artifact path is tracked: {s}\n", .{path});
             ok = false;
         }
-        if (pathExists(io, path) and !isGitIgnored(allocator, io, path)) {
+        const exists = pathExists(io, path) catch |err| blk: {
+            try stderrPrint(io, "generated artifact check could not inspect {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            break :blk false;
+        };
+        const ignored = isGitIgnored(io, path) catch |err| blk: {
+            try stderrPrint(io, "generated artifact check could not query git ignore status for {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            break :blk false;
+        };
+        if (exists and !ignored) {
             try stderrPrint(io, "generated artifact path exists but is not ignored: {s}\n", .{path});
             ok = false;
         }
@@ -25,8 +40,10 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     ok = (try checkStaticAnalysisContracts(io)) and ok;
+    ok = (try checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
+    ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
 
@@ -134,41 +151,42 @@ fn writeFakeDot(io: Io, output_dir: []const u8, mode: []const u8) !void {
     try stdoutWrite(io, "wrote fake graph\n");
 }
 
-fn fakeBackendUsageError(io: Io, message: []const u8) error{InvalidArguments} {
-    Io.File.stderr().writeStreamingAll(io, message) catch {};
+fn fakeBackendUsageError(io: Io, message: []const u8) !void {
+    try Io.File.stderr().writeStreamingAll(io, message);
     return error.InvalidArguments;
 }
 
-fn isGitTracked(allocator: Allocator, io: Io, path: []const u8) bool {
-    _ = allocator;
-    var child = std.process.spawn(io, .{
+fn isGitTracked(io: Io, path: []const u8) !bool {
+    var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "ls-files", "--error-unmatch", path },
         .stdout = .ignore,
         .stderr = .ignore,
-    }) catch return false;
-    const term = child.wait(io) catch return false;
+    });
+    const term = try child.wait(io);
     return switch (term) {
         .exited => |code| code == 0,
         else => false,
     };
 }
 
-fn isGitIgnored(allocator: Allocator, io: Io, path: []const u8) bool {
-    _ = allocator;
-    var child = std.process.spawn(io, .{
+fn isGitIgnored(io: Io, path: []const u8) !bool {
+    var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "check-ignore", "-q", "--", path },
         .stdout = .ignore,
         .stderr = .ignore,
-    }) catch return false;
-    const term = child.wait(io) catch return false;
+    });
+    const term = try child.wait(io);
     return switch (term) {
         .exited => |code| code == 0,
         else => false,
     };
 }
 
-fn pathExists(io: Io, path: []const u8) bool {
-    var dir = Io.Dir.cwd().openDir(io, path, .{}) catch return false;
+fn pathExists(io: Io, path: []const u8) !bool {
+    var dir = Io.Dir.cwd().openDir(io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => return err,
+    };
     dir.close(io);
     return true;
 }
@@ -180,6 +198,12 @@ const LineBudget = struct {
 };
 
 const ForbiddenToken = struct {
+    path: []const u8,
+    token: []const u8,
+    reason: []const u8,
+};
+
+const HygieneToken = struct {
     path: []const u8,
     token: []const u8,
     reason: []const u8,
@@ -391,6 +415,102 @@ const forbidden_tokens = [_]ForbiddenToken{
     },
 };
 
+const code_hygiene_tokens = [_]HygieneToken{
+    .{
+        .path = "src/zls/session.zig",
+        .token = "const std = @import(\"std\");",
+        .reason = "known stale import from task 018",
+    },
+    .{
+        .path = "src/tools/static_core.zig",
+        .token = "const docs = zigar.docs;",
+        .reason = "known stale alias from task 018",
+    },
+    .{
+        .path = "src/tools/static_tests.zig",
+        .token = "const countTopLevelEntries = static_core.countTopLevelEntries;",
+        .reason = "known stale alias from task 018",
+    },
+    .{
+        .path = "src/tools/agent_values.zig",
+        .token = "const testMapValue = static_analysis.testMapValue;",
+        .reason = "known stale alias from task 018",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "const LspClient = common.LspClient;",
+        .reason = "known stale alias from task 018",
+    },
+};
+
+const ignored_error_hygiene_tokens = [_]HygieneToken{
+    .{
+        .path = "src/lsp/client.zig",
+        .token = "catch {};",
+        .reason = "LSP client errors must be propagated or recorded with logger/last_error",
+    },
+    .{
+        .path = "src/lsp/client.zig",
+        .token = "catch return;",
+        .reason = "LSP client best-effort shutdown/read paths must record why they are ignored",
+    },
+    .{
+        .path = "src/lsp/transport.zig",
+        .token = "catch continue",
+        .reason = "LSP transport parse/read errors must be explicit protocol failures",
+    },
+    .{
+        .path = "src/lsp/transport.zig",
+        .token = "catch return",
+        .reason = "LSP transport test helpers must only swallow EOF-like read errors explicitly",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "catch {};",
+        .reason = "ZLS edit cleanup/close errors must be logged or surfaced",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "catch null",
+        .reason = "ZLS diagnostics fallbacks must log the backend/cache failure before falling back",
+    },
+    .{
+        .path = "src/tools/edit_zls.zig",
+        .token = "catch continue",
+        .reason = "ZLS diagnostics workspace must count or report malformed cached notifications",
+    },
+    .{
+        .path = "src/tools/edit_zls_edits.zig",
+        .token = "catch {};",
+        .reason = "ZLS edit close failures after apply must be logged",
+    },
+    .{
+        .path = "tools/stdio_fixtures.zig",
+        .token = "deleteTree(io, rel) catch {};",
+        .reason = "fixture cleanup failures must be reported without masking test status",
+    },
+    .{
+        .path = "tools/http_smoke.zig",
+        .token = "sleep(.{ .duration = .{ .raw = Io.Duration.fromMilliseconds(100), .clock = .awake } }, io) catch {};",
+        .reason = "HTTP smoke retry sleep failures must be visible",
+    },
+    .{
+        .path = "tools/release_checks.zig",
+        .token = "writeStreamingAll(io, message) catch " ++ "{};",
+        .reason = "release-check fake backend diagnostics must not be silently dropped",
+    },
+    .{
+        .path = "tools/release_checks.zig",
+        .token = "catch return " ++ "false",
+        .reason = "release-check git/filesystem probes must report unexpected failures",
+    },
+    .{
+        .path = "tools/cli_io.zig",
+        .token = "catch {};",
+        .reason = "CLI usage diagnostics must either be printed or return the print failure",
+    },
+};
+
 const tool_error_contract_paths = [_][]const u8{
     "src/tool_registry.zig",
     "src/tools/common.zig",
@@ -547,6 +667,30 @@ fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+fn checkCodeHygiene(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    ok = (try checkHygieneTokensAbsent(allocator, io, "stale-code", &code_hygiene_tokens)) and ok;
+    ok = (try checkHygieneTokensAbsent(allocator, io, "ignored-error", &ignored_error_hygiene_tokens)) and ok;
+    return ok;
+}
+
+fn checkHygieneTokensAbsent(allocator: Allocator, io: Io, check_name: []const u8, rules: []const HygieneToken) !bool {
+    var ok = true;
+    for (rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 8 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "{s} hygiene check could not read {s}: {s}\n", .{ check_name, rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+            try stderrPrint(io, "{s} hygiene violation in {s}: `{s}` ({s})\n", .{ check_name, rule.path, rule.token, rule.reason });
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (tool_error_contract_paths) |path| {
@@ -615,18 +759,72 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
 fn checkStaticAnalysisContracts(io: Io) !bool {
     var ok = true;
     for (zigar.tool_metadata.entries) |entry| {
-        if (entry.group != .static_analysis) continue;
+        if (entry.group != .static_analysis and entry.group != .zwanzig) continue;
+        const tier = entry.static_analysis_tier orelse {
+            try stderrPrint(io, "static-analysis capability tier missing for tool: {s}\n", .{entry.name});
+            ok = false;
+            continue;
+        };
         const contract = zigar.analysis_contract.forTool(entry.name) orelse {
             try stderrPrint(io, "static-analysis contract missing for tool: {s}\n", .{entry.name});
             ok = false;
             continue;
         };
-        if (contract.analysis_kind.len == 0 or contract.limitations.len == 0 or contract.verify_with.len == 0) {
+        if (tier != contract.tier) {
+            try stderrPrint(io, "static-analysis manifest tier disagrees with contract for tool: {s}\n", .{entry.name});
+            ok = false;
+        }
+        if (contract.analysis_kind.len == 0 or contract.source_coverage.len == 0 or contract.limitations.len == 0 or contract.verify_with.len == 0) {
             try stderrPrint(io, "static-analysis contract incomplete for tool: {s}\n", .{entry.name});
             ok = false;
         }
-        if (!entry.meta.read_only or entry.risk.writes_source) {
+        if (entry.group == .zwanzig and tier != .zwanzig_backed) {
+            try stderrPrint(io, "zwanzig tool must use zwanzig_backed capability tier: {s}\n", .{entry.name});
+            ok = false;
+        }
+        if (entry.group == .static_analysis and (!entry.meta.read_only or entry.risk.writes_source)) {
             try stderrPrint(io, "static-analysis tool must stay source-read-only: {s}\n", .{entry.name});
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkStaticAnalysisDocs(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
+        "capability_tier",
+        "advisory_orientation",
+        "parser_backed",
+        "zwanzig_backed",
+        "optional zwanzig-backed",
+        "zig_dead_decl_candidates",
+        "reference checks before deletion",
+        "zig_public_api_diff",
+        "comparison basis",
+        "zig_test_select",
+        "recommendations",
+    })) and ok;
+    ok = (try checkDocNeedles(allocator, io, "docs/tool-index.generated.md", &.{
+        "## Static Analysis Capability Tiers",
+        "zig_ast_decl_summary",
+        "parser_backed",
+        "zig_lint",
+        "zwanzig_backed",
+    })) and ok;
+    return ok;
+}
+
+fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
+    const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
+        try stderrPrint(io, "static-analysis docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
+        return false;
+    };
+    defer allocator.free(bytes);
+    var ok = true;
+    for (needles) |needle| {
+        if (std.mem.indexOf(u8, bytes, needle) == null) {
+            try stderrPrint(io, "static-analysis docs check missing `{s}` in {s}\n", .{ needle, path });
             ok = false;
         }
     }
@@ -650,6 +848,9 @@ fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
         "--title=<title>",
         "--colors=<palette>",
         "diff-folded --output=",
+        "zig_profile_plan",
+        "capture semantics",
+        "artifact metadata",
     };
     for (required) |needle| {
         if (std.mem.indexOf(u8, bytes, needle) == null) {
