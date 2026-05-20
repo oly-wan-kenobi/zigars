@@ -175,6 +175,21 @@ pub fn agentToolAliasesValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+pub fn workflowContractValue(allocator: std.mem.Allocator, evidence: []const u8, inference: []const u8, confidence: []const u8, limitations: []const u8, verification: []const u8, stop_condition: []const u8, tools: []const []const u8) !std.json.Value {
+    var next_tools = std.json.Array.init(allocator);
+    for (tools) |tool| try next_tools.append(try ownedString(allocator, tool));
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "evidence", .{ .string = evidence });
+    try obj.put(allocator, "inference", .{ .string = inference });
+    try obj.put(allocator, "confidence", .{ .string = confidence });
+    try obj.put(allocator, "limitations", .{ .string = limitations });
+    try obj.put(allocator, "verification", .{ .string = verification });
+    try obj.put(allocator, "stop_condition", .{ .string = stop_condition });
+    try obj.put(allocator, "recommended_next_tools", .{ .array = next_tools });
+    return .{ .object = obj };
+}
+
 pub fn nextActionPlanValue(allocator: std.mem.Allocator, goal: []const u8, changed_files: ?[]const u8, last_error: ?[]const u8) !std.json.Value {
     const lower = try static_analysis.asciiLowerAllocLocal(allocator, goal);
     defer allocator.free(lower);
@@ -208,6 +223,8 @@ pub fn nextActionPlanValue(allocator: std.mem.Allocator, goal: []const u8, chang
     if (changed_files) |files| try obj.put(allocator, "changed_files", try ownedString(allocator, files)) else try obj.put(allocator, "changed_files", .null);
     if (last_error) |err| try obj.put(allocator, "last_error", try ownedString(allocator, err)) else try obj.put(allocator, "last_error", .null);
     try obj.put(allocator, "recommended_steps", .{ .array = steps });
+    try obj.put(allocator, "classification_reasons", .{ .string = "keyword match over user goal, optional changed_files, and optional last_error" });
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "user_supplied_goal plus optional git/status text and last_error", "deterministic routing hint, not semantic proof of correctness", "medium", "keyword classification can miss project-specific intent; run the recommended verification gate", "zigar_validate_patch", "stop when zigar_validate_patch passes or the next tool returns a focused source edit blocker", &.{ "zigar_context_pack", "zigar_validate_patch" }));
     try obj.put(allocator, "stop_when", .{ .string = "stop when zigar_validate_patch passes or the next tool returns a focused source edit blocker" });
     return .{ .object = obj };
 }
@@ -308,6 +325,7 @@ pub fn failureFusionValue(allocator: std.mem.Allocator, stderr: []const u8, stdo
     try obj.put(allocator, "primary_failure", try primaryFailureValue(allocator, compiler, tests));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "rerun_command", .{ .string = try commandString(allocator, argv) });
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "compiler stderr/stdout and command exit status", "primary failure is selected from parsed compiler/test output", "medium", "compiler and test parsing is best-effort; raw command output remains the audit source", "rerun_command then zigar_validate_patch", "stop when the primary diagnostic is resolved or validation passes", &.{ "zigar_impact", "zig_test_select", "zigar_validate_patch" }));
     return .{ .object = obj };
 }
 
@@ -390,6 +408,8 @@ pub fn impactValue(allocator: std.mem.Allocator, a: *App, files_text: ?[]const u
     try obj.put(allocator, "likely_tests", .{ .array = likely_tests });
     try obj.put(allocator, "public_api", .{ .array = public_api });
     try obj.put(allocator, "recommended_commands", .{ .array = commands });
+    try obj.put(allocator, "limitations", .{ .string = "heuristic text/import scan; not semantic dependency proof" });
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace Zig file scan, import text, symbol text, and public declaration lines", "likely affected files/tests and commands", "medium", "heuristic text matches can over- or under-select; verify with compiler-backed commands", "zigar_validate_patch", "stop after focused commands or zigar_validate_patch pass", &.{ "zig_test_select", "zigar_validate_patch" }));
     return .{ .object = obj };
 }
 

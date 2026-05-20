@@ -777,10 +777,12 @@ const diff_fail_script =
     \\
 ;
 
+var profiling_test_counter = std.atomic.Value(u64).init(0);
+
 const ProfilingTestEnv = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
-    tmp: std.testing.TmpDir,
+    tmp_root: []const u8,
     root: []const u8,
     zflame_path: []const u8,
     diff_folded_path: []const u8,
@@ -788,15 +790,20 @@ const ProfilingTestEnv = struct {
 
     fn init(allocator: std.mem.Allocator, zflame_script: []const u8, diff_script: []const u8) !ProfilingTestEnv {
         const io = std.testing.io;
-        var tmp = std.testing.tmpDir(.{});
-        errdefer tmp.cleanup();
-        try tmp.dir.createDirPath(io, "root/bin");
-        try tmp.dir.writeFile(io, .{ .sub_path = "root/stacks.folded", .data = "main;work 7\n" });
-        try tmp.dir.writeFile(io, .{ .sub_path = "root/before.folded", .data = "main;old 3\n" });
-        try tmp.dir.writeFile(io, .{ .sub_path = "root/after.folded", .data = "main;new 5\n" });
+        const tmp_id = profiling_test_counter.fetchAdd(1, .monotonic);
+        const tmp_root = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/profiling-test-{x}-{d}", .{ std.Thread.getCurrentId(), tmp_id });
+        errdefer allocator.free(tmp_root);
+        errdefer cleanupProfilingTemp(io, tmp_root);
+        const root_rel = try std.fs.path.join(allocator, &.{ tmp_root, "root" });
+        defer allocator.free(root_rel);
+        const bin_rel = try std.fs.path.join(allocator, &.{ root_rel, "bin" });
+        defer allocator.free(bin_rel);
+        try std.Io.Dir.cwd().createDirPath(io, bin_rel);
+        try writeFixtureFile(io, allocator, root_rel, "stacks.folded", "main;work 7\n");
+        try writeFixtureFile(io, allocator, root_rel, "before.folded", "main;old 3\n");
+        try writeFixtureFile(io, allocator, root_rel, "after.folded", "main;new 5\n");
 
-        const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
-        defer allocator.free(rel_base);
+        const rel_base = tmp_root;
         const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
         defer allocator.free(base_z);
         const root = try std.fs.path.join(allocator, &.{ base_z[0..], "root" });
@@ -825,7 +832,7 @@ const ProfilingTestEnv = struct {
         return .{
             .allocator = allocator,
             .io = io,
-            .tmp = tmp,
+            .tmp_root = tmp_root,
             .root = root,
             .zflame_path = zflame_path,
             .diff_folded_path = diff_folded_path,
@@ -839,13 +846,26 @@ const ProfilingTestEnv = struct {
         self.allocator.free(self.root);
         self.allocator.free(self.zflame_path);
         self.allocator.free(self.diff_folded_path);
-        self.tmp.cleanup();
+        cleanupProfilingTemp(self.io, self.tmp_root);
+        self.allocator.free(self.tmp_root);
     }
 
     fn readWorkspaceFile(self: *ProfilingTestEnv, path: []const u8) ![]u8 {
         return self.app.workspace.readFileAlloc(self.io, path, 1024 * 1024);
     }
 };
+
+fn cleanupProfilingTemp(io: std.Io, path: []const u8) void {
+    std.Io.Dir.cwd().deleteTree(io, path) catch |err| {
+        std.debug.print("profiling test cleanup failed for {s}: {s}\n", .{ path, @errorName(err) });
+    };
+}
+
+fn writeFixtureFile(io: std.Io, allocator: std.mem.Allocator, root: []const u8, name: []const u8, data: []const u8) !void {
+    const path = try std.fs.path.join(allocator, &.{ root, name });
+    defer allocator.free(path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = data });
+}
 
 fn writeExecutableFile(io: std.Io, path: []const u8, bytes: []const u8) !void {
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes, .flags = .{ .permissions = .executable_file } });
