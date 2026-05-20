@@ -13,6 +13,20 @@ and zigar path hints. `zigar_schema` and the `zigar://tools/schema` resource
 remain compact catalog views for grouping, risk, planning, and discovery
 keywords.
 
+## Public Contract Compatibility
+
+Treat `tools/list`, `zigar_schema`, `zigar_tool_index`, and
+`zigar://tools/schema` as client-visible API. Tool names, argument fields,
+required sets, enum values, defaults, risk flags, discovery keywords, backend
+setup entries, and capability tiers are compatibility-sensitive. Additive fields
+are usually safe; removals, renames, risk changes, or stronger/weaker precision
+claims need changelog notes and smoke fixture updates before a public tag.
+
+`src/tool_manifest/` is the authority for structured contract data, while
+`src/tool_catalog.json` adds static safety notes and common intents. Do not
+teach clients to scrape prose when the manifest or schema exposes a structured
+field.
+
 [tool-index.generated.md](tool-index.generated.md) is generated from
 the typed manifest and static catalog notes. CI runs `zig build docs-check` so
 the committed tool index cannot drift from registered groups, keywords, or

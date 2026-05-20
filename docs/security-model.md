@@ -15,6 +15,7 @@ The primary boundary is the configured workspace:
 - Tool arguments are validated against typed metadata before handlers run.
 - Free-form `args` are split into argv vectors and are not passed through a
   shell.
+- Command timeouts are total wall-clock deadlines, not per-read idle timers.
 
 Command-backed tools run with the user's privileges. Running `zig build`,
 `zig test`, profilers, or project build scripts can execute local code.
@@ -34,6 +35,16 @@ and transport primitives, but the server adapter is first-party code under
 `src/mcp_server.zig`. There is no patched upstream MCP server in the build. That
 keeps the local security boundary auditable: zigar owns request routing,
 workspace/tool validation before handler execution, and post-serialization
-cleanup of owned tool results.
+cleanup of owned tool, resource, and prompt results.
+
+## Threat Matrix
+
+| Boundary | Guarantee | Remaining responsibility |
+| --- | --- | --- |
+| Workspace paths | Canonical path checks reject symlink escapes and writes outside `--workspace`. | Choose the intended workspace and inspect generated artifacts before trusting them. |
+| Source writes | Mutating tools are preview-first and require `apply=true`. | Agents and users decide whether a preview is correct before applying it. |
+| Command execution | Commands use argv vectors without shell expansion and bounded output/timeouts. | `zig build`, profilers, and user-provided commands still execute local project code. |
+| MCP transport | stdio is local-process only; HTTP binds only loopback hosts. | Do not place the unauthenticated HTTP endpoint behind a remote proxy. |
+| Optional backends | Backend absence and unsupported capabilities are structured results. | Pin and validate backend versions when release or CI decisions depend on them. |
 
 See [security-audit.md](security-audit.md) for the release-review checklist.

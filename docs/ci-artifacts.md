@@ -4,6 +4,12 @@ zigar's CI artifact tools are command-backed helpers with explicit contracts.
 They preserve raw command output and disclose their parsing basis instead of
 claiming precision the Zig CLI does not expose.
 
+Release fixtures cover parser contracts, XML escaping, matrix-entry status
+fields, raw output retention, and failure summaries. CI deployments should still
+compare zigar output against the target runner's native upload behavior because
+annotation rendering, test-report retention, and SARIF/JUnit ingestion rules are
+owned by the CI platform.
+
 ## Annotations
 
 `zig_ci_annotations` runs `zig ast-check <file>` and returns
@@ -43,6 +49,10 @@ Generic CI example:
 # Call zig_junit with {"args":"--summary all"} and write junit_xml to the
 # CI system's test-report upload path.
 ```
+
+When CI requires per-test reporting, keep that outside `zig_junit` until Zig
+exposes a stable per-test event stream. zigar's contract is command-level JUnit
+with preserved stdout/stderr.
 
 ## Matrix Checks
 

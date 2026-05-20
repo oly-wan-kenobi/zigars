@@ -9,6 +9,7 @@ const tool_registry = zigar.tool_registry;
 const tool_handlers = @import("tool_handlers.zig");
 
 const resources = @import("tools/resources.zig");
+const json_result = zigar.json_result;
 const resource_errors = zigar.resource_errors;
 
 const App = runtime_mod.App;
@@ -20,54 +21,54 @@ pub fn registerTools(server: *mcp_server.Server, runtime: *App) !void {
 }
 
 pub fn registerResources(server: *mcp_server.Server, runtime: *App) !void {
-    try server.addResource(.{
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://workspace",
         .name = "Zigar Workspace",
         .description = "Current zigar workspace and backend configuration.",
         .mimeType = "text/plain",
         .handler = resourceHandler(resources.workspaceResource),
         .user_data = runtime,
-    });
-    try server.addResource(.{
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://zls/status",
         .name = "ZLS Status",
         .description = "Current ZLS session state and capability summary.",
         .mimeType = "application/json",
         .handler = resourceHandler(resources.zlsStatusResource),
         .user_data = runtime,
-    });
-    try server.addResource(.{
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://tools/capabilities",
         .name = "Zigar Tool Capabilities",
         .description = "Deterministic capability summary for zigar tool groups.",
         .mimeType = "application/json",
         .handler = resourceHandler(resources.capabilitiesResource),
         .user_data = runtime,
-    });
-    try server.addResource(.{
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://tools/schema",
         .name = "Zigar Tool Schema",
         .description = "Compact zigar tool catalog, safety defaults, and discovery hints.",
         .mimeType = "application/json",
         .handler = resourceHandler(resources.schemaResource),
         .user_data = runtime,
-    });
-    try server.addResource(.{
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://workspace/import-graph",
         .name = "Workspace Import Graph",
         .description = "Heuristic Zig import graph for the active workspace.",
         .mimeType = "text/plain",
         .handler = resourceHandler(resources.importGraphResource),
         .user_data = runtime,
-    });
-    try server.addResource(.{
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
         .uri = "zigar://metrics",
         .name = "Zigar Metrics",
         .description = "Process-local zigar counters and backend state.",
         .mimeType = "application/json",
         .handler = resourceHandler(resources.metricsResource),
         .user_data = runtime,
-    });
+    }, json_result.deinitResourceContent);
     try server.addResourceTemplate(.{
         .uriTemplate = "zigar://file/{path}/symbols",
         .name = "File Symbols",
@@ -89,13 +90,13 @@ pub fn registerResources(server: *mcp_server.Server, runtime: *App) !void {
 }
 
 pub fn registerPrompts(server: *mcp_server.Server, runtime: *App) !void {
-    try server.addPrompt(.{
+    try server.addPromptWithDeinit(.{
         .name = "zigar_profile_workflow",
         .description = "Plan a deterministic Zig profiling workflow using zigar tools.",
         .title = "Zig Profiling Workflow",
         .handler = promptHandler(resources.profilePrompt),
         .user_data = runtime,
-    });
+    }, json_result.deinitPromptMessages);
 }
 
 fn resourceHandler(comptime handler: *const fn (*App, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {

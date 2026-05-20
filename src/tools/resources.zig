@@ -113,7 +113,9 @@ pub fn metricsResource(a: *App, allocator: std.mem.Allocator, uri: []const u8) m
 
 pub fn profilePrompt(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
-    messages[0] = mcp.prompts.userMessage("Use zigar_workspace_info, zig_profile_plan, zig_profile_run, zig_flamegraph, and zig_flamegraph_diff to build a deterministic Zig profiling workflow. Do not edit source files unless an explicit tool argument requires apply=true.");
+    errdefer allocator.free(messages);
+    const text = allocator.dupe(u8, "Use zigar_workspace_info, zig_profile_plan, zig_profile_run, zig_flamegraph, and zig_flamegraph_diff to build a deterministic Zig profiling workflow. Do not edit source files unless an explicit tool argument requires apply=true.") catch return error.OutOfMemory;
+    messages[0] = mcp.prompts.userMessage(text);
     return messages;
 }
 

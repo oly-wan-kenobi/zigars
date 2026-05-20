@@ -33,7 +33,7 @@ feature below A-.
 | Profiling/zflame | B | A- | Explicit `zig_profile_run` argv contract, external-capture docs, zflame/diff-folded backend metadata, SVG/intermediate artifact smoke tests, and release-check docs guards. |
 | Agent workflows | B | A- | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, heuristic limitations, focused tests, and stdio coverage for agent routing/validation output. |
 | CI artifact tools | B- | A- | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. |
-| HTTP/MCP substrate | B | A- | First-party MCP adapter without upstream patches, explicit tool-result ownership/deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, and release checks preventing patched MCP reintroduction. |
+| HTTP/MCP substrate | B | A- | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, task-frontmatter release blockers, trust-doc guards, and release checks preventing patched MCP reintroduction. |
 
 No below-A- feature area remains without a blocking follow-up. Remaining limits
 are documented as product boundaries rather than hidden defects.
@@ -50,6 +50,9 @@ are documented as product boundaries rather than hidden defects.
   output because Zig does not expose a stable event stream for every invocation.
 - HTTP transport is local-only. zigar does not provide authenticated remote MCP
   serving.
+- External repository policy is not inferred from local files. GitHub branch
+  protection, release permissions, and real optional-backend CI runs must be
+  checked outside the repository when release notes claim them.
 
 ## Release Gate
 
@@ -62,4 +65,5 @@ zig build dist release-asset-smoke
 
 `release-check` validates this maturity document, generated docs/JSON, unit and
 smoke tests, coverage floors, artifact hygiene, line-budget headroom, command
-contracts, backend-contract docs, and the no-patch MCP architecture guard.
+contracts, backend-contract docs, public-release blocker task frontmatter, trust
+checklist coverage, and the no-patch MCP architecture guard.

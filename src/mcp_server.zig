@@ -2,9 +2,9 @@
 //!
 //! zigar imports protocol data structures, JSON-RPC helpers, content types, and
 //! transports from the pinned upstream MCP dependency. This module owns the
-//! server-side routing boundary and the lifetime of zigar-owned tool results.
-//! Tool results stay alive until after the JSON-RPC response is serialized, then
-//! the registered deinitializer releases the owned content and structured JSON.
+//! server-side routing boundary and the lifetime of zigar-owned results.
+//! Tool/resource/prompt results stay alive until after the JSON-RPC response is
+//! serialized, then registered deinitializers release owned allocations.
 
 const std = @import("std");
 const http = std.http;
@@ -18,6 +18,8 @@ const prompts_mod = mcp.prompts;
 const resources_mod = mcp.resources;
 
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
+pub const ResourceContentDeinit = *const fn (allocator: std.mem.Allocator, content: mcp.resources.ResourceContent) void;
+pub const PromptMessagesDeinit = *const fn (allocator: std.mem.Allocator, messages: []const mcp.prompts.PromptMessage) void;
 
 pub const Tool = struct {
     name: []const u8,
@@ -119,8 +121,10 @@ pub const Server = struct {
     state: ServerState = .uninitialized,
     tools: std.StringHashMap(Tool),
     resources: std.StringHashMap(resources_mod.Resource),
+    resource_content_deinits: std.StringHashMap(ResourceContentDeinit),
     resource_templates: std.StringHashMap(resources_mod.ResourceTemplate),
     prompts: std.StringHashMap(prompts_mod.Prompt),
+    prompt_message_deinits: std.StringHashMap(PromptMessagesDeinit),
     capabilities: types.ServerCapabilities = .{},
     client_info: ?types.Implementation = null,
     client_capabilities: ?types.ClientCapabilities = null,
@@ -145,8 +149,10 @@ pub const Server = struct {
             .config = config,
             .tools = .init(allocator),
             .resources = .init(allocator),
+            .resource_content_deinits = .init(allocator),
             .resource_templates = .init(allocator),
             .prompts = .init(allocator),
+            .prompt_message_deinits = .init(allocator),
             .pending_requests = .init(allocator),
         };
     }
@@ -160,8 +166,10 @@ pub const Server = struct {
         }
         self.tools.deinit();
         self.resources.deinit();
+        self.resource_content_deinits.deinit();
         self.resource_templates.deinit();
         self.prompts.deinit();
+        self.prompt_message_deinits.deinit();
         self.pending_requests.deinit();
     }
 
@@ -177,6 +185,13 @@ pub const Server = struct {
         self.capabilities.resources = .{ .listChanged = true, .subscribe = false };
     }
 
+    /// Add a resource whose returned content follows a zigar-owned cleanup contract.
+    pub fn addResourceWithDeinit(self: *Self, resource: resources_mod.Resource, deinit_content: ResourceContentDeinit) !void {
+        errdefer _ = self.resources.remove(resource.uri);
+        try self.addResource(resource);
+        try self.resource_content_deinits.put(resource.uri, deinit_content);
+    }
+
     /// Add a resource template to the server
     pub fn addResourceTemplate(self: *Self, template: resources_mod.ResourceTemplate) !void {
         try self.resource_templates.put(template.name, template);
@@ -189,6 +204,13 @@ pub const Server = struct {
     pub fn addPrompt(self: *Self, prompt: prompts_mod.Prompt) !void {
         try self.prompts.put(prompt.name, prompt);
         self.capabilities.prompts = .{ .listChanged = true };
+    }
+
+    /// Add a prompt whose returned messages follow a zigar-owned cleanup contract.
+    pub fn addPromptWithDeinit(self: *Self, prompt: prompts_mod.Prompt, deinit_messages: PromptMessagesDeinit) !void {
+        errdefer _ = self.prompts.remove(prompt.name);
+        try self.addPrompt(prompt);
+        try self.prompt_message_deinits.put(prompt.name, deinit_messages);
     }
 
     /// Enable logging capability
@@ -852,9 +874,14 @@ pub const Server = struct {
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
                 return;
             };
+            defer if (self.resource_content_deinits.get(uri)) |deinit_content| deinit_content(allocator, content);
 
             var contents_array: std.json.Array = .init(allocator);
+            var contents_array_in_result = false;
+            defer if (!contents_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
             var content_obj: std.json.ObjectMap = .empty;
+            var content_obj_in_array = false;
+            errdefer if (!content_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
             try content_obj.put(allocator, "uri", .{ .string = uri });
             if (content.text) |text| {
                 try content_obj.put(allocator, "text", .{ .string = text });
@@ -866,9 +893,12 @@ pub const Server = struct {
                 try content_obj.put(allocator, "mimeType", .{ .string = mime });
             }
             try contents_array.append(.{ .object = content_obj });
+            content_obj_in_array = true;
 
             var result: std.json.ObjectMap = .empty;
+            defer deinitBorrowedJsonContainers(allocator, .{ .object = result });
             try result.put(allocator, "contents", .{ .array = contents_array });
+            contents_array_in_result = true;
 
             const response = jsonrpc.createResponse(request.id, .{ .object = result });
             try self.sendResponse(io, allocator, .{ .response = response });
@@ -988,12 +1018,19 @@ pub const Server = struct {
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
                 return;
             };
+            defer if (self.prompt_message_deinits.get(prompt_name)) |deinit_messages| deinit_messages(allocator, messages);
 
             var messages_array: std.json.Array = .init(allocator);
+            var messages_array_in_result = false;
+            defer if (!messages_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = messages_array });
             for (messages) |msg| {
                 var msg_obj: std.json.ObjectMap = .empty;
+                var msg_obj_in_array = false;
+                errdefer if (!msg_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = msg_obj });
                 try msg_obj.put(allocator, "role", .{ .string = msg.role.toString() });
                 var content_obj: std.json.ObjectMap = .empty;
+                var content_obj_in_msg = false;
+                errdefer if (!content_obj_in_msg) deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
                 switch (msg.content) {
                     .text => |text| {
                         try content_obj.put(allocator, "type", .{ .string = "text" });
@@ -1017,17 +1054,24 @@ pub const Server = struct {
                     .resource => |res| {
                         try content_obj.put(allocator, "type", .{ .string = "resource" });
                         var res_inner: std.json.ObjectMap = .empty;
+                        var res_inner_in_content = false;
+                        errdefer if (!res_inner_in_content) deinitBorrowedJsonContainers(allocator, .{ .object = res_inner });
                         try res_inner.put(allocator, "uri", .{ .string = res.resource.uri });
                         if (res.resource.text) |text| try res_inner.put(allocator, "text", .{ .string = text });
                         try content_obj.put(allocator, "resource", .{ .object = res_inner });
+                        res_inner_in_content = true;
                     },
                 }
                 try msg_obj.put(allocator, "content", .{ .object = content_obj });
+                content_obj_in_msg = true;
                 try messages_array.append(.{ .object = msg_obj });
+                msg_obj_in_array = true;
             }
 
             var result: std.json.ObjectMap = .empty;
+            defer deinitBorrowedJsonContainers(allocator, .{ .object = result });
             try result.put(allocator, "messages", .{ .array = messages_array });
+            messages_array_in_result = true;
             if (prompt.description) |desc| {
                 try result.put(allocator, "description", .{ .string = desc });
             }

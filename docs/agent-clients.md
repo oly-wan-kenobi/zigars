@@ -164,6 +164,20 @@ If an agent can only run shell commands and cannot speak MCP, zigar currently
 does not expose individual MCP tools as CLI subcommands. Use direct Zig commands
 or a small MCP bridge for that client rather than parsing zigar server stdout.
 
+## Client Validation
+
+Before recommending a client profile publicly, capture a short smoke transcript
+for that client: startup, `tools/list`, `zigar_schema`, `zigar_workspace_info`,
+one read-only Zig command, one docs/static-analysis call, and one preview-first
+source-write tool without `apply=true`. The transcript should show the command
+path, workspace path, and whether the client preserved structured MCP result
+fields.
+
+Client launch environments differ. A profile is mature only when path handling,
+workspace selection, stdio framing, refresh after tool changes, and structured
+result display are verified in that client instead of inferred from another
+client's behavior.
+
 ## Operational Checks
 
 - Restart the client after changing MCP config so it refreshes `tools/list`.

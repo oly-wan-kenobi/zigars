@@ -10,10 +10,13 @@ zig build dist release-asset-smoke
 The gate includes formatting, generated docs/JSON checks, unit tests,
 ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
 coverage floors, structured tool-error contract scans, line-budget headroom, and
-artifact hygiene. It also checks that the build imports the pinned upstream
-`mcp` package directly instead of routing through a patched MCP server wrapper.
-It validates [maturity.md](maturity.md) so the public-release A- feature
-reassessment and known product boundaries remain documented.
+artifact hygiene. It also checks public-release blocker task frontmatter,
+[trust.md](trust.md), and [maturity.md](maturity.md) so release readiness cannot
+drift away from the task ledger or the documented product boundaries. It checks
+that the build imports the pinned upstream `mcp` package directly instead of
+routing through a patched MCP server wrapper, and that the first-party adapter
+still exposes explicit `tools/call`, `resources/read`, and `prompts/get`
+post-serialization cleanup hooks.
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow
@@ -47,8 +50,11 @@ and runs `zigar --version` from it.
 4. Run `zig build dist release-asset-smoke`.
 5. Confirm [maturity.md](maturity.md) still says every major feature area is at
    least A- without hiding known limitations.
-6. Confirm the tag and GitHub release do not already exist.
-7. Tag the release:
+6. Confirm [trust.md](trust.md) still matches the release notes, especially any
+   absent external validation for branch protection, optional backends, or
+   client-specific behavior.
+7. Confirm the tag and GitHub release do not already exist.
+8. Tag the release:
 
 ```sh
 version="$(zig build version)"
@@ -104,6 +110,9 @@ Release assets are named:
 - Keep the typed manifest under `src/tool_manifest/` as the single authority for
   tool names, schemas, grouping, discovery keywords, risk flags, planning
   metadata, and handler references when adding, renaming, or removing tools.
+- Keep `blocks_public_release: true` tasks closed or deferred before tagging.
+  `zig build artifact-hygiene` fails when a release-blocking task frontmatter
+  status is still open.
 - Regenerate `docs/tool-index.generated.md` with `zig build tool-index` after
   manifest or static catalog note changes.
 - Keep `tests/fixtures/http-smoke.expect.json` synchronized with public MCP

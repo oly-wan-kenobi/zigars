@@ -9,7 +9,8 @@ auditable:
 - `src/mcp_server.zig` is zigar's first-party MCP server adapter. zigar imports
   protocol types, JSON-RPC helpers, content/resource/prompt types, and transport
   primitives from the pinned upstream `mcp.zig` dependency, but zigar owns
-  server-side request routing and the `tools/call` result-lifetime boundary.
+  server-side request routing and the result-lifetime boundary for `tools/call`,
+  `resources/read`, and `prompts/get`.
 - `src/server.zig` wires MCP tools, resources, and prompts. Tool registration is
   driven by the manifest; server code should not grow per-tool switches.
 - `src/tools/*.zig` groups MCP tool handlers by workflow area: discovery,
@@ -107,16 +108,18 @@ patched MCP dependency in the build graph. The first-party adapter in
 `initialize`, `ping`, tools, resources, prompts, logging level, empty task-list
 responses, stdio transport, and loopback HTTP transport.
 
-`tools/call` is the lifetime-sensitive path. zigar handlers return owned
-`mcp.tools.ToolResult` values whose `content` slices and `structuredContent`
-JSON are valid through response serialization. Each registered tool carries a
-`ToolResultDeinit` callback, currently `json_result.deinitToolResult`, and the
-adapter invokes that callback only after the JSON-RPC response has been
-serialized and sent. This preserves deterministic cleanup without carrying a
-patched upstream server.
+`tools/call`, `resources/read`, and `prompts/get` are the lifetime-sensitive
+paths. zigar handlers may return owned `mcp.tools.ToolResult`,
+`mcp.resources.ResourceContent`, or prompt message values whose slices and JSON
+payloads must remain valid through response serialization. Registered tools,
+resources, and prompts carry `ToolResultDeinit`, `ResourceContentDeinit`, or
+`PromptMessagesDeinit` callbacks, and the adapter invokes those callbacks only
+after the JSON-RPC response has been serialized and sent. This preserves
+deterministic cleanup without carrying a patched upstream server.
 
-The release gate scans `build.zig` and `build.zig.zon` for patched MCP wrapper
-tokens so future dependency updates keep using upstream `mcp` APIs directly.
+The release gate scans `build.zig`, `build.zig.zon`, and the adapter contract so
+future dependency updates keep using upstream `mcp` APIs directly while
+retaining explicit zigar-owned cleanup hooks.
 
 ## Heuristic Analysis Rules
 

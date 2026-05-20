@@ -69,9 +69,20 @@ fn runWithOutputLimit(
     var stdout_truncated = false;
     var stderr_truncated = false;
     var term: std.process.Child.Term = .{ .unknown = 0 };
-    const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(timeout_ms) } };
+    const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
+    const timeout_ns = @as(i96, timeout_ms) * std.time.ns_per_ms;
+    const deadline_ns = started_ns + timeout_ns;
 
-    while (multi_reader.fill(64, timeout)) |_| {
+    while (true) {
+        const now_ns = std.Io.Clock.now(.real, io).nanoseconds;
+        if (now_ns >= deadline_ns) return error.Timeout;
+        const remaining_ns = deadline_ns - now_ns;
+        const remaining_ms: i64 = @intCast(@divTrunc(remaining_ns + std.time.ns_per_ms - 1, std.time.ns_per_ms));
+        const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(@max(1, remaining_ms)) } };
+        multi_reader.fill(64, timeout) catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => |e| return e,
+        };
         if (stdout_reader.buffered().len > stdout_limit) stdout_truncated = true;
         if (stderr_reader.buffered().len > stderr_limit) stderr_truncated = true;
         if (stdout_truncated or stderr_truncated) {
@@ -80,9 +91,6 @@ fn runWithOutputLimit(
             child_active = false;
             break;
         }
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => |e| return e,
     }
 
     if (!stdout_truncated and !stderr_truncated) {
@@ -286,4 +294,23 @@ test "run truncates oversized stdout instead of failing" {
     try std.testing.expect(!result.stderr_truncated);
     try std.testing.expectEqualStrings("abcd", result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "run timeout is a total wall-clock deadline" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const io = std.testing.io;
+    const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
+    try std.testing.expectError(error.Timeout, runWithOutputLimit(
+        std.testing.allocator,
+        io,
+        ".",
+        &.{ "/bin/sh", "-c", "printf x; sleep 1; printf y" },
+        100,
+        1024,
+        1024,
+    ));
+    const elapsed_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
+
+    try std.testing.expect(elapsed_ns < std.time.ns_per_s);
 }

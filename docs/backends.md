@@ -16,6 +16,19 @@ configured binary is missing, not a generic MCP failure.
   CI image when reproducibility matters.
 - Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
 
+## Version Pinning And Optional CI
+
+Default CI uses fake backend fixtures so zigar can verify command shapes,
+structured errors, SARIF/XML/SVG contracts, and artifact metadata without
+requiring every optional executable on every runner. Projects that depend on
+real ZLS, zwanzig, zflame, diff-folded, or platform-profiler behavior should add
+their own backend matrix and pin exact backend versions in the dev shell or CI
+image.
+
+Release notes should distinguish fake-backend fixture coverage from real-backend
+validation. Claim real backend coverage only when the exact binary and version
+were probed or exercised.
+
 ## Packaged Setup Catalog
 
 zigar ships a structured backend setup catalog in the server binary. Call

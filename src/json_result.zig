@@ -15,6 +15,25 @@ pub fn deinitToolResult(allocator: std.mem.Allocator, result: mcp.tools.ToolResu
     if (result.content.len > 0) allocator.free(result.content);
 }
 
+/// Ownership contract for zigar resource results:
+/// - `uri` and `mimeType` borrow the registered resource/request data.
+/// - `text`, `blob`, and `_meta`, when present, are owned by the callback
+///   allocator and must stay alive through response serialization.
+pub fn deinitResourceContent(allocator: std.mem.Allocator, content: mcp.resources.ResourceContent) void {
+    if (content.text) |text| allocator.free(text);
+    if (content.blob) |blob| allocator.free(blob);
+    if (content._meta) |meta| deinitOwnedValue(allocator, meta);
+}
+
+/// Ownership contract for zigar prompt results:
+/// - The message slice is owned by the callback allocator.
+/// - Each content block payload is owned according to `deinitOwnedContentBlock`.
+/// Call this only for prompts that explicitly opt into the zigar-owned contract.
+pub fn deinitPromptMessages(allocator: std.mem.Allocator, messages: []const mcp.prompts.PromptMessage) void {
+    for (messages) |message| deinitOwnedContentBlock(allocator, message.content);
+    if (messages.len > 0) allocator.free(messages);
+}
+
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structuredWithErrorFlag(allocator, value, false);
 }
@@ -85,11 +104,41 @@ pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) voi
     deinitClonedValue(allocator, value);
 }
 
-fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
+pub fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
     switch (content_item) {
-        .text => |text| allocator.free(text.text),
-        else => {},
+        .text => |text| {
+            allocator.free(text.text);
+            if (text._meta) |meta| deinitOwnedValue(allocator, meta);
+        },
+        .image => |image| {
+            allocator.free(image.data);
+            allocator.free(image.mimeType);
+            if (image._meta) |meta| deinitOwnedValue(allocator, meta);
+        },
+        .audio => |audio| {
+            allocator.free(audio.data);
+            allocator.free(audio.mimeType);
+            if (audio._meta) |meta| deinitOwnedValue(allocator, meta);
+        },
+        .resource => |resource| {
+            deinitProtocolResourceContent(allocator, resource.resource);
+            if (resource._meta) |meta| deinitOwnedValue(allocator, meta);
+        },
+        .resource_link => |link| {
+            allocator.free(link.name);
+            if (link.title) |title| allocator.free(title);
+            allocator.free(link.uri);
+            if (link.description) |description| allocator.free(description);
+            if (link.mimeType) |mime| allocator.free(mime);
+            if (link._meta) |meta| deinitOwnedValue(allocator, meta);
+        },
     }
+}
+
+fn deinitProtocolResourceContent(allocator: std.mem.Allocator, content: mcp.types.ResourceContent) void {
+    if (content.text) |text| allocator.free(text);
+    if (content.blob) |blob| allocator.free(blob);
+    if (content._meta) |meta| deinitOwnedValue(allocator, meta);
 }
 
 fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {

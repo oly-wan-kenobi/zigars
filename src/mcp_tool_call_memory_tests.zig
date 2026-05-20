@@ -121,6 +121,71 @@ test "mcp tools/call releases repeated structured tool errors" {
     }
 }
 
+test "mcp resources/read releases repeated owned resource content" {
+    const allocator = std.testing.allocator;
+    var server = mcp_server.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
+    defer server.deinit();
+    server.state = .ready;
+
+    try server.addResourceWithDeinit(.{
+        .uri = "zigar://owned-resource",
+        .name = "owned resource",
+        .handler = ownedResourceHandler,
+    }, json_result.deinitResourceContent);
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        ,
+        \\{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        ,
+        \\{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        ,
+        \\{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        ,
+    };
+    var transport = CaptureTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    try std.testing.expectEqual(messages.len, transport.responses.items.len);
+    for (transport.responses.items) |response| {
+        try expectResourceReadResponse(response, "owned resource text");
+    }
+}
+
+test "mcp prompts/get releases repeated owned prompt messages" {
+    const allocator = std.testing.allocator;
+    var server = mcp_server.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
+    defer server.deinit();
+    server.state = .ready;
+
+    try server.addPromptWithDeinit(.{
+        .name = "owned_prompt",
+        .handler = ownedPromptHandler,
+    }, json_result.deinitPromptMessages);
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"owned_prompt","arguments":{}}}
+        ,
+        \\{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"owned_prompt","arguments":{}}}
+        ,
+        \\{"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"owned_prompt","arguments":{}}}
+        ,
+        \\{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"owned_prompt","arguments":{}}}
+        ,
+    };
+    var transport = CaptureTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    try std.testing.expectEqual(messages.len, transport.responses.items.len);
+    for (transport.responses.items) |response| {
+        try expectPromptGetResponse(response, "owned prompt text");
+    }
+}
+
 fn successHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = makeOwnedNestedValue(allocator, "structured_success") catch return error.OutOfMemory;
     return json_result.structuredOwned(allocator, value);
@@ -130,6 +195,23 @@ fn structuredErrorHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocato
     const value = makeOwnedNestedValue(allocator, "structured_error") catch return error.OutOfMemory;
     defer json_result.deinitOwnedValue(allocator, value);
     return json_result.structuredError(allocator, value);
+}
+
+fn ownedResourceHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    const text = allocator.dupe(u8, "owned resource text") catch return error.OutOfMemory;
+    return .{
+        .uri = uri,
+        .mimeType = "text/plain",
+        .text = text,
+    };
+}
+
+fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
+    const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
+    errdefer allocator.free(messages);
+    const text = allocator.dupe(u8, "owned prompt text") catch return error.OutOfMemory;
+    messages[0] = mcp.prompts.userMessage(text);
+    return messages;
 }
 
 fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8) !void {
@@ -150,6 +232,30 @@ fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: [
     const details = structured.get("details").?.array;
     try std.testing.expectEqualStrings("alpha", details.items[0].string);
     try expectJsonNumber(details.items[1], 99.5);
+}
+
+fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !void {
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value.object;
+    const result = root.get("result").?.object;
+    const contents = result.get("contents").?.array;
+    try std.testing.expectEqual(@as(usize, 1), contents.items.len);
+    try std.testing.expectEqualStrings(expected_text, contents.items[0].object.get("text").?.string);
+}
+
+fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !void {
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value.object;
+    const result = root.get("result").?.object;
+    const messages = result.get("messages").?.array;
+    try std.testing.expectEqual(@as(usize, 1), messages.items.len);
+    const content = messages.items[0].object.get("content").?.object;
+    try std.testing.expectEqualStrings("text", content.get("type").?.string);
+    try std.testing.expectEqualStrings(expected_text, content.get("text").?.string);
 }
 
 fn expectJsonNumber(value: std.json.Value, expected: f64) !void {

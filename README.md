@@ -13,8 +13,9 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 
 `zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
 transports. Major feature areas are documented at A- or better in
-[docs/maturity.md](docs/maturity.md). The current package version is `0.2.0`; see
-[CHANGELOG.md](CHANGELOG.md).
+[docs/maturity.md](docs/maturity.md), and the release-facing trust checklist is
+kept in [docs/trust.md](docs/trust.md). The current package version is `0.2.0`;
+see [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
 
@@ -83,7 +84,8 @@ zig-out/bin/zigar
 `zig build release-check` is the adoption gate: it runs formatting, generated
 docs/JSON checks, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke
 fixtures, kcov line coverage floors, artifact hygiene, structured error-contract
-scans, and line-budget headroom checks.
+scans, task frontmatter checks for public-release blockers, trust/maturity docs
+checks, and line-budget headroom checks.
 
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics
@@ -250,8 +252,9 @@ backend setup metadata.
 The server imports the pinned upstream `mcp.zig` package directly for protocol
 types, JSON-RPC helpers, content/resource/prompt types, and transport
 primitives. zigar's first-party MCP adapter owns request routing and releases
-owned tool results after `tools/call` responses are serialized, so no patched
-upstream MCP server is part of the build.
+owned `tools/call`, `resources/read`, and `prompts/get` results after JSON-RPC
+responses are serialized, so no patched upstream MCP server is part of the
+build.
 
 The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.md)
 is built from `src/tool_catalog.json` plus the typed registry metadata and
@@ -301,6 +304,8 @@ More detail:
   coverage, and release assets.
 - [Feature maturity](docs/maturity.md): public-readiness rubric,
   reassessment, evidence, and known product boundaries.
+- [Public trust checklist](docs/trust.md): release guarantees, local gates,
+  and external validation that cannot be inferred from the repository alone.
 - [Security policy](SECURITY.md), [security model](docs/security-model.md), and
   [security readiness audit](docs/security-audit.md): private vulnerability
   reporting, workspace boundaries, and remaining security posture.
