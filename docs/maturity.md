@@ -64,6 +64,7 @@ zig build dist release-asset-smoke
 ```
 
 `release-check` validates this maturity document, generated docs/JSON, unit and
-smoke tests, coverage floors, artifact hygiene, line-budget headroom, command
-contracts, backend-contract docs, public-release blocker task frontmatter, trust
-checklist coverage, and the no-patch MCP architecture guard.
+smoke tests, coverage floors, fake-backend conformance report contracts,
+artifact hygiene, line-budget headroom, command contracts, backend-contract docs,
+public-release blocker task frontmatter, trust checklist coverage, and the
+no-patch MCP architecture guard.

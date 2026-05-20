@@ -124,6 +124,12 @@ pub fn build(b: *std.Build) void {
     const release_coverage_cmd = addCoverageCommand(b, tools_exe);
     release_coverage_cmd.step.dependOn(&release_stdio_fixtures_cmd.step);
 
+    const backend_conformance_contract_cmd = b.addSystemCommand(&.{ "bash", ".github/scripts/backend-conformance-contract-smoke.sh", "--binary" });
+    backend_conformance_contract_cmd.addFileArg(release_exe.getEmittedBin());
+    backend_conformance_contract_cmd.step.dependOn(&release_coverage_cmd.step);
+    const backend_conformance_contract_step = b.step("backend-conformance-contract", "Smoke-test backend conformance evidence report contract");
+    backend_conformance_contract_step.dependOn(&backend_conformance_contract_cmd.step);
+
     const fmt_check_cmd = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build.zig.zon", "src", "tools" });
     const fmt_check_step = b.step("fmt-check", "Check Zig formatting");
     fmt_check_step.dependOn(&fmt_check_cmd.step);
@@ -143,6 +149,7 @@ pub fn build(b: *std.Build) void {
     release_check_step.dependOn(test_step);
     release_check_step.dependOn(release_safe_step);
     release_check_step.dependOn(&release_coverage_cmd.step);
+    release_check_step.dependOn(backend_conformance_contract_step);
     release_check_step.dependOn(hygiene_step);
 
     const dist_cmd = b.addRunArtifact(tools_exe);

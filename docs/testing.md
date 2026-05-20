@@ -13,8 +13,9 @@ zig build release-check
 
 `release-check` is intentionally broader than test execution. It also checks
 generated docs/JSON drift, ReleaseSafe compilation, HTTP/stdio transport smoke
-fixtures, kcov line coverage floors, artifact hygiene, structured tool-error
-contracts, and line-budget headroom for large implementation files.
+fixtures, kcov line coverage floors, fake-backend conformance report contracts,
+artifact hygiene, structured tool-error contracts, and line-budget headroom for
+large implementation files.
 
 For targeted checks:
 
@@ -22,6 +23,7 @@ For targeted checks:
 zig build test
 zig build smoke
 zig build stdio-fixtures
+zig build backend-conformance-contract
 zig build coverage
 zig build dist release-asset-smoke
 ```
@@ -72,6 +74,13 @@ verifies zflame/diff-folded SVG artifacts. Use `ZIGAR_ZLS_PATH`,
 the binaries are not on `PATH`. The check writes `report.json`, `summary.md`,
 `stdout.jsonl`, and `stderr.log` under `.zigar-cache/backend-conformance/` by
 default, and the workflow uploads those files as `zigar-backend-conformance`.
+
+`zig build backend-conformance-contract` is the local fake-backend companion
+check. It validates that the conformance script still writes the documented
+report files and that the release binary can exercise representative ZLS,
+zwanzig, zflame, and diff-folded tool paths. `zig build release-check` depends
+on this contract smoke; real backend certification still requires the manual
+script or workflow above.
 
 ## Coverage
 
