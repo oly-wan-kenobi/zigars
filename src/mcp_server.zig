@@ -223,19 +223,6 @@ pub const Server = struct {
         self.capabilities.completions = .{};
     }
 
-    /// Enable task-augmented tools/call support
-    pub fn enableTasks(self: *Self) void {
-        self.capabilities.tasks = .{
-            .list = .{},
-            .cancel = .{},
-            .requests = .{
-                .tools = .{
-                    .call = .{},
-                },
-            },
-        };
-    }
-
     /// Options for running the server
     pub const HttpRunConfig = struct {
         port: u16 = 8080,
@@ -509,14 +496,6 @@ pub const Server = struct {
             try self.handleSetLogLevel(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "completion/complete")) {
             try self.handleCompletion(io, allocator, request);
-        } else if (std.mem.eql(u8, request.method, "tasks/get")) {
-            try self.handleTasksGet(io, allocator, request);
-        } else if (std.mem.eql(u8, request.method, "tasks/result")) {
-            try self.handleTasksResult(io, allocator, request);
-        } else if (std.mem.eql(u8, request.method, "tasks/list")) {
-            try self.handleTasksList(io, allocator, request);
-        } else if (std.mem.eql(u8, request.method, "tasks/cancel")) {
-            try self.handleTasksCancel(io, allocator, request);
         } else {
             const error_response = jsonrpc.createMethodNotFound(request.id, request.method);
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
@@ -588,17 +567,6 @@ pub const Server = struct {
         }
         if (self.capabilities.completions != null) {
             try caps.put(response_allocator, "completions", .{ .object = .empty });
-        }
-        if (self.capabilities.tasks != null) {
-            var tasks_cap: std.json.ObjectMap = .empty;
-            try tasks_cap.put(response_allocator, "list", .{ .object = .empty });
-            try tasks_cap.put(response_allocator, "cancel", .{ .object = .empty });
-            var requests_cap: std.json.ObjectMap = .empty;
-            var tools_req: std.json.ObjectMap = .empty;
-            try tools_req.put(response_allocator, "call", .{ .object = .empty });
-            try requests_cap.put(response_allocator, "tools", .{ .object = tools_req });
-            try tasks_cap.put(response_allocator, "requests", .{ .object = requests_cap });
-            try caps.put(response_allocator, "tasks", .{ .object = tasks_cap });
         }
         try result.put(response_allocator, "capabilities", .{ .object = caps });
 
@@ -1139,37 +1107,6 @@ pub const Server = struct {
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
-    }
-
-    fn handleTasksGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
-        const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/get");
-        try self.sendResponse(io, allocator, .{ .error_response = error_response });
-    }
-
-    fn handleTasksResult(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
-        const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/result");
-        try self.sendResponse(io, allocator, .{ .error_response = error_response });
-    }
-
-    fn handleTasksList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var response_arena = std.heap.ArenaAllocator.init(allocator);
-        defer response_arena.deinit();
-        const response_allocator = response_arena.allocator();
-
-        var result: std.json.ObjectMap = .empty;
-        const tasks_array: std.json.Array = .init(response_allocator);
-        try result.put(response_allocator, "tasks", .{ .array = tasks_array });
-
-        const response = jsonrpc.createResponse(request.id, .{ .object = result });
-        try self.sendResponse(io, allocator, .{ .response = response });
-    }
-
-    fn handleTasksCancel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
-        const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/cancel");
-        try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
     fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {

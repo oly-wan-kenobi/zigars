@@ -42,6 +42,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     ok = (try checkStaticAnalysisContracts(io)) and ok;
+    ok = (try checkWorkflowPermissions(allocator, io)) and ok;
     ok = (try release_docs.checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try release_docs.checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try release_docs.checkCommandRunningToolDocs(allocator, io)) and ok;
@@ -51,7 +52,9 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try release_docs.checkTrustDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
+    ok = (try checkMcpAdvertisedCapabilityContract(allocator, io)) and ok;
     ok = (try task_status.checkPublicReleaseBlockers(allocator, io)) and ok;
+    ok = (try task_status.checkReadyTaskScope(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -236,7 +239,7 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/mcp_server.zig",
-        .max_lines = 1350,
+        .max_lines = 1300,
         .reason = "first-party MCP adapter owns routing and tool/resource/prompt result lifetime but must not grow into a general MCP framework",
     },
     .{
@@ -271,13 +274,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/edit_zls.zig",
-        .max_lines = 760,
-        .reason = "edit and ZLS handlers must delegate diagnostics and edit application helpers",
+        .max_lines = 620,
+        .reason = "edit and ZLS mutation/navigation handlers must keep diagnostics in the dedicated module",
     },
     .{
         .path = "src/tools/edit_zls_diagnostics.zig",
-        .max_lines = 100,
-        .reason = "ZLS diagnostics shaping should remain a focused helper",
+        .max_lines = 300,
+        .reason = "ZLS diagnostics handlers and cache shaping should stay independently reviewable",
     },
     .{
         .path = "src/tools/edit_zls_edits.zig",
@@ -321,8 +324,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/profiling.zig",
-        .max_lines = 1120,
-        .reason = "profiling workflow code is backend-heavy and must keep enough review headroom for renderer contract fixes",
+        .max_lines = 820,
+        .reason = "profiling workflow handlers should stay separate from backend-heavy unit fixtures",
+    },
+    .{
+        .path = "src/tools/profiling_tests.zig",
+        .max_lines = 430,
+        .reason = "profiling backend contract fixtures should stay reviewable and move shared helpers if they grow further",
     },
     .{
         .path = "src/docs.zig",
@@ -341,8 +349,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/zls_common.zig",
-        .max_lines = 650,
-        .reason = "shared ZLS/LSP helpers should stay below a reviewable module size",
+        .max_lines = 600,
+        .reason = "shared ZLS/LSP helpers should keep capability contract tests in focused test modules",
+    },
+    .{
+        .path = "src/tools/zls_common_tests.zig",
+        .max_lines = 380,
+        .reason = "ZLS common helper tests should remain focused on capability, command, and LSP shaping contracts",
     },
     .{
         .path = "src/lsp/client.zig",
@@ -524,12 +537,12 @@ const ignored_error_hygiene_tokens = [_]HygieneToken{
         .reason = "ZLS edit cleanup/close errors must be logged or surfaced",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .path = "src/tools/edit_zls_diagnostics.zig",
         .token = "catch null",
         .reason = "ZLS diagnostics fallbacks must log the backend/cache failure before falling back",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .path = "src/tools/edit_zls_diagnostics.zig",
         .token = "catch continue",
         .reason = "ZLS diagnostics workspace must count or report malformed cached notifications",
     },
@@ -574,6 +587,7 @@ const tool_error_contract_paths = [_][]const u8{
     "src/tools/discovery.zig",
     "src/tools/docs.zig",
     "src/tools/edit_zls.zig",
+    "src/tools/edit_zls_diagnostics.zig",
     "src/tools/profiling.zig",
     "src/tools/static_core.zig",
     "src/tools/static_tests.zig",
@@ -665,6 +679,37 @@ const cli_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+const WorkflowPermissionRule = struct {
+    path: []const u8,
+    required: []const []const u8,
+};
+
+const workflow_permission_rules = [_]WorkflowPermissionRule{
+    .{
+        .path = ".github/workflows/ci.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
+        .path = ".github/workflows/backend-conformance.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
+        .path = ".github/workflows/release.yml",
+        .required = &.{
+            "permissions:",
+            "contents: write",
+            "id-token: write",
+            "attestations: write",
+        },
+    },
+};
+
 const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",
@@ -674,6 +719,25 @@ const pure_zig_roots = [_][]const u8{
     "tests",
     "tools",
 };
+
+fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    for (workflow_permission_rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 1024 * 1024) catch |err| {
+            try stderrPrint(io, "workflow-permissions check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        for (rule.required) |needle| {
+            if (std.mem.indexOf(u8, bytes, needle) == null) {
+                try stderrPrint(io, "workflow-permissions check missing `{s}` in {s}\n", .{ needle, rule.path });
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
 
 fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
     var ok = true;
@@ -908,6 +972,45 @@ fn checkMcpNoPatchContract(allocator: Allocator, io: Io) !bool {
     for (required) |needle| {
         if (std.mem.indexOf(u8, adapter, needle) == null) {
             try stderrPrint(io, "MCP no-patch check missing `{s}` in src/mcp_server.zig\n", .{needle});
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkMcpAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
+    const rules = [_]struct {
+        path: []const u8,
+        token: []const u8,
+        reason: []const u8,
+    }{
+        .{
+            .path = "src/main.zig",
+            .token = "enableTasks(",
+            .reason = "public server startup must not advertise MCP task support until zigar implements the task lifecycle",
+        },
+        .{
+            .path = "src/mcp_server.zig",
+            .token = "capabilities.tasks",
+            .reason = "MCP task capabilities must not be emitted without implemented task methods",
+        },
+        .{
+            .path = "src/mcp_server.zig",
+            .token = "handleTasks",
+            .reason = "stub task handlers must not remain in the public protocol surface",
+        },
+    };
+
+    var ok = true;
+    for (rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 2 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "MCP capability-contract check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+            try stderrPrint(io, "MCP capability-contract violation in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
             ok = false;
         }
     }

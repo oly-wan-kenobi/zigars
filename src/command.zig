@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const output_limit: usize = 1024 * 1024;
 pub const output_limit_mode = "truncate_on_limit";
@@ -49,8 +50,12 @@ fn runWithOutputLimit(
     stdout_limit: usize,
     stderr_limit: usize,
 ) !RunResult {
+    var spawn_arena = std.heap.ArenaAllocator.init(allocator);
+    defer spawn_arena.deinit();
+    const spawn_argv = try argvForSpawn(spawn_arena.allocator(), io, cwd, argv);
+
     var child = try std.process.spawn(io, .{
-        .argv = argv,
+        .argv = spawn_argv,
         .cwd = .{ .path = cwd },
         .stdin = .ignore,
         .stdout = .pipe,
@@ -113,6 +118,45 @@ fn runWithOutputLimit(
         .stdout_limit = stdout_limit,
         .stderr_limit = stderr_limit,
     };
+}
+
+fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv: []const []const u8) ![]const []const u8 {
+    if (argv.len == 0 or builtin.os.tag == .windows) return argv;
+
+    const script_path = executablePathForRead(allocator, cwd, argv[0]) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return argv,
+    };
+    const bytes = std.Io.Dir.cwd().readFileAlloc(io, script_path, allocator, .limited(4096)) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return argv,
+    };
+    defer allocator.free(bytes);
+
+    const shebang = parseShebang(bytes) orelse return argv;
+    const interpreter = splitArgs(allocator, shebang) catch return argv;
+    if (interpreter.len == 0) return argv;
+
+    var out: std.ArrayList([]const u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, interpreter);
+    try out.append(allocator, script_path);
+    try out.appendSlice(allocator, argv[1..]);
+    return out.toOwnedSlice(allocator);
+}
+
+fn executablePathForRead(allocator: std.mem.Allocator, cwd: []const u8, executable: []const u8) ![]const u8 {
+    if (std.fs.path.isAbsolute(executable)) return allocator.dupe(u8, executable);
+    if (std.mem.indexOfScalar(u8, executable, std.fs.path.sep) == null) return error.SkipShebangDetection;
+    return std.fs.path.join(allocator, &.{ cwd, executable });
+}
+
+fn parseShebang(bytes: []const u8) ?[]const u8 {
+    if (bytes.len < 3 or bytes[0] != '#' or bytes[1] != '!') return null;
+    const end = std.mem.indexOfScalar(u8, bytes, '\n') orelse bytes.len;
+    const line = std.mem.trim(u8, bytes[2..end], " \t\r");
+    if (line.len == 0) return null;
+    return line;
 }
 
 fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.Allocator, index: usize, limit: usize) !OwnedOutput {
@@ -263,6 +307,31 @@ test "split args preserves quoted values" {
     try std.testing.expectEqualStrings("hello zig", args[2]);
     try std.testing.expectEqualStrings("two words", args[3]);
     try std.testing.expectEqualStrings("escaped space", args[4]);
+}
+
+test "command runner executes shebang scripts through their interpreter" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const root = ".zig-cache/tmp/command-shebang-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    const script = ".zig-cache/tmp/command-shebang-test/echo-fixture";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = script,
+        .data =
+        \\#!/bin/sh
+        \\printf 'script:%s\n' "$1"
+        \\
+        ,
+        .flags = .{ .permissions = .executable_file },
+    });
+
+    const result = try run(allocator, std.testing.io, ".", &.{ script, "ok" }, 1000);
+    defer result.deinit(allocator);
+    try std.testing.expect(result.succeeded());
+    try std.testing.expectEqualStrings("script:ok\n", result.stdout);
 }
 
 test "split args rejects unfinished quotes" {

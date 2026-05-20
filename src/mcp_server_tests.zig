@@ -176,11 +176,9 @@ test "Server enable capabilities" {
 
     server.enableLogging();
     server.enableCompletions();
-    server.enableTasks();
 
     try std.testing.expect(server.capabilities.logging != null);
     try std.testing.expect(server.capabilities.completions != null);
-    try std.testing.expect(server.capabilities.tasks != null);
 }
 
 test "Server routes JSON-RPC methods and serializes registered surfaces" {
@@ -199,7 +197,6 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     defer server.deinit();
     server.enableLogging();
     server.enableCompletions();
-    server.enableTasks();
 
     var props = std.json.ObjectMap.empty;
     try props.put(allocator, "flag", .{ .object = .empty });
@@ -269,10 +266,6 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"prompts/get\",\"params\":{\"name\":\"missing\"}}",
         "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"debug\"}}",
         "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"completion/complete\",\"params\":{}}",
-        "{\"jsonrpc\":\"2.0\",\"id\":18,\"method\":\"tasks/list\"}",
-        "{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"tasks/get\"}",
-        "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tasks/result\"}",
-        "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"tasks/cancel\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"unknown/method\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":23,\"result\":{}}",
         "{\"jsonrpc\":\"2.0\",\"id\":24,\"error\":{\"code\":-32603,\"message\":\"client error\"}}",
@@ -295,7 +288,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try server.notifyPromptsChanged(std.testing.io, allocator);
 
     const sent = try joinedSent(allocator, &transport);
-    try std.testing.expect(transport.sent.items.len >= 27);
+    try std.testing.expect(transport.sent.items.len >= 23);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Server not initialized") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"serverInfo\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"tools\"") != null);
@@ -307,7 +300,6 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resourceTemplates\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"completion\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "\"tasks\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Method not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/tools/list_changed") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/resources/updated") != null);
@@ -328,7 +320,6 @@ test "protocol response builders release response allocations" {
     defer server.deinit();
     server.enableLogging();
     server.enableCompletions();
-    server.enableTasks();
 
     try server.addTool(.{
         .name = "ok_tool",
@@ -379,7 +370,6 @@ test "protocol response builders release response allocations" {
         "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"prompts/list\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"debug\"}}",
         "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"completion/complete\",\"params\":{}}",
-        "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tasks/list\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/list\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"prompts/list\"}",
     };

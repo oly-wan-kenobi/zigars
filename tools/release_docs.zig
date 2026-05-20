@@ -134,6 +134,7 @@ pub fn checkTrustDocs(allocator: Allocator, io: Io) !bool {
         "advisory_orientation",
         "release-check",
         "release-asset-smoke",
+        "least-privilege GitHub Actions permissions",
     });
 }
 
