@@ -31,16 +31,31 @@ pub const FakeZls = struct {
             const msg = body orelse return;
             defer self.allocator.free(msg);
 
-            if (std.mem.indexOf(u8, msg, "\"id\":1") != null) {
+            const parsed = std.json.parseFromSlice(std.json.Value, self.allocator, msg, .{}) catch return;
+            defer parsed.deinit();
+            const obj = switch (parsed.value) {
+                .object => |o| o,
+                else => return,
+            };
+            const id = if (obj.get("id")) |value| switch (value) {
+                .integer => |i| i,
+                else => null,
+            } else null;
+            const method = if (obj.get("method")) |value| switch (value) {
+                .string => |s| s,
+                else => "",
+            } else "";
+
+            if (id != null and id.? == 1 and std.mem.eql(u8, method, "initialize")) {
                 self.writeResponse(1, "{\"capabilities\":{\"hoverProvider\":true}}") catch return;
                 self.writeRaw(
                     \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/fake.zig","diagnostics":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"severity":2,"source":"fake-zls","message":"fake warning"}]}}
                 ) catch return;
-            } else if (std.mem.indexOf(u8, msg, "\"id\":2") != null) {
+            } else if (id != null and id.? == 2) {
                 self.writeResponse(2, "{\"contents\":{\"kind\":\"markdown\",\"value\":\"fake hover\"}}") catch return;
-            } else if (std.mem.indexOf(u8, msg, "\"id\":3") != null) {
+            } else if (id != null and id.? == 3) {
                 self.writeResponse(3, "null") catch return;
-            } else if (std.mem.indexOf(u8, msg, "\"method\":\"exit\"") != null) {
+            } else if (std.mem.eql(u8, method, "exit")) {
                 return;
             }
         }
