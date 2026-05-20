@@ -92,6 +92,9 @@ pub const diff_folded_verify = [_][]const u8{
     "zig_flamegraph_diff",
 };
 
+pub const zflame_compatibility_baseline = "zflame CLI with explicit format subcommand, --title=, --subtitle=, --colors=, --width=, --min-width=, --hash, and SVG on stdout";
+pub const diff_folded_compatibility_baseline = "diff-folded CLI with --output=<path> before.folded after.folded and non-empty folded-stack output";
+
 pub const ZflameFormat = enum {
     perf,
     dtrace,
@@ -244,7 +247,7 @@ pub const capabilities = [_]CapabilityContract{
     .{
         .tool = "zig_flamegraph_diff",
         .backend = .diff_folded,
-        .argv_shape = "diff-folded --output=<workspace-folded-diff> <before.folded> <after.folded>; then zflame recursive <workspace-folded-diff>",
+        .argv_shape = "diff-folded --output=<workspace-folded-diff> <before.folded> <after.folded>; then zflame recursive <workspace-folded-diff> with the zflame options from zig_flamegraph_diff",
         .input_behavior = .reads_workspace_input,
         .output_behavior = .writes_workspace_folded_diff,
     },

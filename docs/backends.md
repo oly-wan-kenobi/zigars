@@ -163,13 +163,19 @@ zflame powers `zig_flamegraph`. diff-folded powers the first stage of
 `zig_flamegraph_diff`. zigar treats capture and rendering separately:
 
 1. Build the target with symbols, usually `zig build -Doptimize=ReleaseFast`.
-2. Capture with a platform profiler such as `perf`, `xctrace`, DTrace, VTune, or
-   a sampling tool that can produce folded stacks or another zflame-supported
-   input format.
-3. Render the captured data with `zig_flamegraph`.
-4. For before/after comparisons, pass two folded stack files to
+2. Call `zig_profile_plan` for structured capture guidance. It lists external
+   plans for Linux `perf`, macOS `sample`, macOS `xctrace`, DTrace, VTune, and
+   already-folded recursive inputs. The plan names the external command,
+   expected capture path, matching zflame format, prerequisites, limitations,
+   and the next zigar rendering call.
+3. Capture with the selected external profiler. zigar does not execute or define
+   profiler capture semantics; permissions, sampling mode, symbols, and capture
+   fidelity belong to that profiler.
+4. Render the captured data with `zig_flamegraph`.
+5. For before/after comparisons, pass two folded stack files to
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
-   `.zigar-cache/profile/` and then renders the SVG through zflame.
+   `.zigar-cache/profile/` by default, or an explicit workspace-local
+   `intermediate` path, and then renders the SVG through zflame.
 
 The zflame command shape zigar expects is explicit and does not use format
 guessing:
@@ -190,11 +196,14 @@ file explicitly:
 diff-folded --output=delta.folded before.folded after.folded
 ```
 
-`zig_flamegraph_diff` returns both the final SVG path and the intermediate
-folded diff path under `.zigar-cache/profile/`. All zigar-generated SVG and DOT
-outputs must use explicit workspace-local output paths. This keeps profiler
-artifacts inspectable and prevents accidental writes outside the active
-workspace.
+`zig_flamegraph` and `zig_flamegraph_diff` return auditable artifact metadata:
+input/output paths, explicit input format, backend executable path, argv shape
+and argv, cached probe status when available, unknown version when no stable
+version probe is available, compatibility status, and warnings. Diff results
+also include intermediate folded metadata for the diff-folded stage. All
+zigar-generated SVG, DOT, and folded-diff outputs must use workspace-local
+paths. This keeps profiler artifacts inspectable and prevents accidental writes
+outside the active workspace.
 
 ## Failure Triage
 
