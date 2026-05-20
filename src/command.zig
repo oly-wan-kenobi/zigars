@@ -1,7 +1,12 @@
 const std = @import("std");
 
 pub const output_limit: usize = 1024 * 1024;
-pub const output_limit_mode = "fail_on_limit";
+pub const output_limit_mode = "truncate_on_limit";
+
+const OwnedOutput = struct {
+    bytes: []u8,
+    truncated: bool,
+};
 
 pub const RunResult = struct {
     term: std.process.Child.Term,
@@ -32,20 +37,84 @@ pub fn run(
     argv: []const []const u8,
     timeout_ms: i64,
 ) !RunResult {
-    const result = try std.process.run(allocator, io, .{
+    return runWithOutputLimit(allocator, io, cwd, argv, timeout_ms, output_limit, output_limit);
+}
+
+fn runWithOutputLimit(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: []const u8,
+    argv: []const []const u8,
+    timeout_ms: i64,
+    stdout_limit: usize,
+    stderr_limit: usize,
+) !RunResult {
+    var child = try std.process.spawn(io, .{
         .argv = argv,
         .cwd = .{ .path = cwd },
-        .stdout_limit = .limited(output_limit),
-        .stderr_limit = .limited(output_limit),
-        .timeout = .{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(timeout_ms) } },
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
     });
+    var child_active = true;
+    defer if (child_active) child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    const stdout_reader = multi_reader.reader(0);
+    const stderr_reader = multi_reader.reader(1);
+    var stdout_truncated = false;
+    var stderr_truncated = false;
+    var term: std.process.Child.Term = .{ .unknown = 0 };
+    const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(timeout_ms) } };
+
+    while (multi_reader.fill(64, timeout)) |_| {
+        if (stdout_reader.buffered().len > stdout_limit) stdout_truncated = true;
+        if (stderr_reader.buffered().len > stderr_limit) stderr_truncated = true;
+        if (stdout_truncated or stderr_truncated) {
+            multi_reader.batch.cancel(io);
+            child.kill(io);
+            child_active = false;
+            break;
+        }
+    } else |err| switch (err) {
+        error.EndOfStream => {},
+        else => |e| return e,
+    }
+
+    if (!stdout_truncated and !stderr_truncated) {
+        try multi_reader.checkAnyError();
+        term = try child.wait(io);
+        child_active = false;
+    }
+
+    const stdout = try takeOwnedLimited(&multi_reader, allocator, 0, stdout_limit);
+    errdefer allocator.free(stdout.bytes);
+    const stderr = try takeOwnedLimited(&multi_reader, allocator, 1, stderr_limit);
+    errdefer allocator.free(stderr.bytes);
+
     return .{
-        .term = result.term,
-        .stdout = result.stdout,
-        .stderr = result.stderr,
-        .stdout_limit = output_limit,
-        .stderr_limit = output_limit,
+        .term = term,
+        .stdout = stdout.bytes,
+        .stderr = stderr.bytes,
+        .stdout_truncated = stdout_truncated or stdout.truncated,
+        .stderr_truncated = stderr_truncated or stderr.truncated,
+        .stdout_limit = stdout_limit,
+        .stderr_limit = stderr_limit,
     };
+}
+
+fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.Allocator, index: usize, limit: usize) !OwnedOutput {
+    const bytes = try multi_reader.toOwnedSlice(index);
+    errdefer allocator.free(bytes);
+    if (bytes.len <= limit) return .{ .bytes = bytes, .truncated = false };
+
+    const trimmed = try allocator.dupe(u8, bytes[0..limit]);
+    allocator.free(bytes);
+    return .{ .bytes = trimmed, .truncated = true };
 }
 
 pub fn errorKind(err: anyerror) []const u8 {
@@ -141,16 +210,18 @@ pub fn formatRunResult(allocator: std.mem.Allocator, title: []const u8, result: 
         \\{s}
         \\status: {s}
         \\
-        \\stdout:
+        \\stdout{s}:
         \\{s}
         \\
-        \\stderr:
+        \\stderr{s}:
         \\{s}
         \\
     , .{
         title,
         termText(result.term),
+        if (result.stdout_truncated) " (truncated)" else "",
         result.stdout,
+        if (result.stderr_truncated) " (truncated)" else "",
         result.stderr,
     });
 }
@@ -194,4 +265,25 @@ test "classifies command errors" {
     try std.testing.expectEqualStrings("output_limit", errorKind(error.StreamTooLong));
     try std.testing.expect(isOutputLimitError(error.StreamTooLong));
     try std.testing.expect(isTimeoutError(error.Timeout));
+}
+
+test "run truncates oversized stdout instead of failing" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const result = try runWithOutputLimit(
+        std.testing.allocator,
+        std.testing.io,
+        ".",
+        &.{ "/bin/sh", "-c", "printf abcdef" },
+        1000,
+        4,
+        1024,
+    );
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expect(!result.succeeded());
+    try std.testing.expect(result.stdout_truncated);
+    try std.testing.expect(!result.stderr_truncated);
+    try std.testing.expectEqualStrings("abcd", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
 }

@@ -65,10 +65,12 @@ replay summary.
 ## Command Output Is Too Large
 
 Command-backed tools classify timeout, output-limit, executable, and permission
-failures in structured results. zigar uses a `fail_on_limit` policy: if stdout
-or stderr exceeds the configured capture limit, it fails the command instead of
-returning partial output. If output limits are reached, run the underlying
-command directly or narrow the check with file-focused tools such as `zig_check`.
+failures in structured results. zigar uses a `truncate_on_limit` policy: if
+stdout or stderr exceeds the configured capture limit, it returns the captured
+prefix and marks the affected stream with `stdout_truncated` or
+`stderr_truncated`. If output limits are reached, run the underlying command
+directly for complete logs or narrow the check with file-focused tools such as
+`zig_check`.
 
 ## HTTP Host Is Rejected
 

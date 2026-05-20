@@ -45,6 +45,10 @@ pub fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv:
     try obj.put(allocator, "stdout_limit", .{ .integer = @intCast(result.stdout_limit) });
     try obj.put(allocator, "stderr_limit", .{ .integer = @intCast(result.stderr_limit) });
     try obj.put(allocator, "output_limit_mode", .{ .string = command.output_limit_mode });
+    try obj.put(allocator, "output_limit_exceeded", .{ .bool = result.stdout_truncated or result.stderr_truncated });
+    if (result.stdout_truncated or result.stderr_truncated) {
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar returned the captured prefix and marked the truncated stream so the result remains inspectable." });
+    }
     const insights = try compilerInsightsValue(allocator, result.stdout, result.stderr, argv);
     try obj.put(allocator, "diagnostics", insights);
     try obj.put(allocator, "failure_summary", try failureSummaryValue(allocator, insights, result.succeeded(), argv));
@@ -69,7 +73,7 @@ pub fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: 
     try obj.put(allocator, "stdout_truncated", .{ .bool = false });
     try obj.put(allocator, "stderr_truncated", .{ .bool = false });
     if (command.isOutputLimitError(err)) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar fails the command instead of returning partial output; narrow the command or run it directly when full output is needed." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit before zigar could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
     }
     try obj.put(allocator, "failure_summary", try commandErrorSummaryValue(allocator, err, argv));
     return .{ .object = obj };
