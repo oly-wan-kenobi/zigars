@@ -124,6 +124,7 @@ test {
     _ = @import("tools/edit_zls_tests.zig");
     _ = @import("tools/profiling_backends.zig");
     _ = @import("tools/profiling.zig");
+    _ = @import("tools/profiling_tests.zig");
     _ = @import("tools/zwanzig.zig");
     _ = @import("tools/zls_common_tests.zig");
     _ = @import("tools/zls_document.zig");

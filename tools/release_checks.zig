@@ -238,7 +238,7 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/mcp_server.zig",
-        .max_lines = 1350,
+        .max_lines = 1300,
         .reason = "first-party MCP adapter owns routing and tool/resource/prompt result lifetime but must not grow into a general MCP framework",
     },
     .{
@@ -323,8 +323,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/profiling.zig",
-        .max_lines = 1120,
-        .reason = "profiling workflow code is backend-heavy and must keep enough review headroom for renderer contract fixes",
+        .max_lines = 820,
+        .reason = "profiling workflow handlers should stay separate from backend-heavy unit fixtures",
+    },
+    .{
+        .path = "src/tools/profiling_tests.zig",
+        .max_lines = 430,
+        .reason = "profiling backend contract fixtures should stay reviewable and move shared helpers if they grow further",
     },
     .{
         .path = "src/docs.zig",
