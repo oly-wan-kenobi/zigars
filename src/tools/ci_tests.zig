@@ -31,6 +31,9 @@ test "ci annotations expose parser basis confidence and details" {
     const first = annotations.items[0].object;
     try std.testing.expectEqualStrings("src/main.zig", first.get("path").?.string);
     try std.testing.expectEqual(@as(i64, 2), first.get("start_line").?.integer);
+    try std.testing.expectEqual(@as(i64, 9), first.get("start_column").?.integer);
+    try std.testing.expectEqual(@as(i64, 10), first.get("end_column").?.integer);
+    try std.testing.expect(first.get("located").?.bool);
     try std.testing.expectEqualStrings("failure", first.get("annotation_level").?.string);
     try std.testing.expectEqualStrings("located Zig compiler diagnostic", first.get("parsing_basis").?.string);
     try std.testing.expectEqual(@as(usize, 2), first.get("details").?.array.items.len);
@@ -38,6 +41,38 @@ test "ci annotations expose parser basis confidence and details" {
     const note = annotations.items[1].object;
     try std.testing.expectEqualStrings("notice", note.get("annotation_level").?.string);
     try std.testing.expectEqualStrings("declared here", note.get("message").?.string);
+}
+
+test "ci annotations keep unlocated diagnostics with fallback path and explicit confidence" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var annotations = std.json.Array.init(allocator);
+    const summary = try ci.tryParseAnnotations(allocator, &annotations, "src/main.zig",
+        \\error: unable to load source file
+        \\src/main.zig:3:5: warning: unused local constant
+        \\note: rerun with --verbose for more detail
+        \\
+    );
+    try std.testing.expectEqual(@as(i64, 3), summary.annotation_count);
+    try std.testing.expectEqual(@as(i64, 1), summary.located_diagnostics);
+    try std.testing.expectEqual(@as(i64, 2), summary.unlocated_diagnostics);
+    try std.testing.expectEqualStrings("medium", summary.confidence());
+
+    const unlocated = annotations.items[0].object;
+    try std.testing.expectEqualStrings("src/main.zig", unlocated.get("path").?.string);
+    try std.testing.expectEqual(@as(i64, 1), unlocated.get("start_line").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), unlocated.get("start_column").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), unlocated.get("end_column").?.integer);
+    try std.testing.expect(!unlocated.get("located").?.bool);
+    try std.testing.expectEqualStrings("low", unlocated.get("parser_confidence").?.string);
+    try std.testing.expectEqualStrings("unlocated Zig compiler diagnostic", unlocated.get("parsing_basis").?.string);
+
+    const located = annotations.items[1].object;
+    try std.testing.expect(located.get("located").?.bool);
+    try std.testing.expectEqualStrings("warning", located.get("annotation_level").?.string);
+    try std.testing.expectEqualStrings("high", located.get("parser_confidence").?.string);
 }
 
 test "junit command artifact escapes xml and declares command-level semantics" {
@@ -50,6 +85,8 @@ test "junit command artifact escapes xml and declares command-level semantics" {
     const xml = try ci.junitXmlForCommand(allocator, argv, result);
     try std.testing.expect(std.mem.indexOf(u8, xml, "zigar.artifact_kind") != null);
     try std.testing.expect(std.mem.indexOf(u8, xml, "command_level_junit") != null);
+    try std.testing.expect(std.mem.indexOf(u8, xml, "zigar.junit_kind") != null);
+    try std.testing.expect(std.mem.indexOf(u8, xml, "zigar.raw_output_available") != null);
     try std.testing.expect(std.mem.indexOf(u8, xml, "zig test src/bad.zig") != null);
     try std.testing.expect(std.mem.indexOf(u8, xml, "found &lt;bad&gt; &amp; &quot;quoted&quot;&#xFFFD;") != null);
     try std.testing.expect(std.mem.indexOf(u8, xml, "<system-out>stdout &lt;kept&gt;&amp;\n</system-out>") != null);

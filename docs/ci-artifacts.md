@@ -20,8 +20,10 @@ owned by the CI platform.
 Annotations are parsed from common Zig compiler diagnostic lines shaped as
 `path:line:column: severity: message`. Following source and caret lines are
 attached as `details`. Unlocated `error:`, `warning:`, and `note:` lines are
-kept with low confidence and the requested file as the fallback path. The raw
-stderr in `raw` remains the audit source for CI renderers.
+kept with low confidence, `located: false`, and the requested file as the
+fallback path. Located annotations include an explicit start/end column range so
+CI renderers can translate them without guessing. The raw stderr in `raw`
+remains the audit source for CI renderers.
 
 Example GitHub Actions usage:
 
@@ -36,8 +38,9 @@ zigar --transport stdio
 `zig_junit` returns `artifact_kind: "command_level_junit"` and
 `junit_kind: "command_level"`. It runs either `zig build test` or
 `zig test <file>` and emits one JUnit testcase for the command. The XML includes
-properties for `zigar.artifact_kind`, `zigar.command`,
-`zigar.parsing_basis`, and `zigar.limitations`.
+properties for `zigar.artifact_kind`, `zigar.junit_kind`,
+`zigar.raw_output_available`, `zigar.command`, `zigar.parsing_basis`, and
+`zigar.limitations`.
 
 This is intentionally not per-test JUnit. Zig output does not provide a stable
 per-test event stream for every invocation, so zigar reports command success or

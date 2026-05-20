@@ -113,13 +113,17 @@ pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.
 
 fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parsed: common.CompilerLine) !std.json.Value {
     const located = parsed.path != null and parsed.line != null and parsed.column != null;
+    const start_column = parsed.column orelse 1;
+    const end_column = if (start_column == std.math.maxInt(i64)) start_column else start_column + 1;
     const details = std.json.Array.init(allocator);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = parsed.path orelse default_file });
     try obj.put(allocator, "start_line", .{ .integer = parsed.line orelse 1 });
-    try obj.put(allocator, "start_column", .{ .integer = parsed.column orelse 1 });
+    try obj.put(allocator, "start_column", .{ .integer = start_column });
     try obj.put(allocator, "end_line", .{ .integer = parsed.line orelse 1 });
+    try obj.put(allocator, "end_column", .{ .integer = end_column });
+    try obj.put(allocator, "located", .{ .bool = located });
     try obj.put(allocator, "annotation_level", .{ .string = annotationLevel(parsed.severity) });
     try obj.put(allocator, "severity", .{ .string = parsed.severity });
     try obj.put(allocator, "diagnostic_class", .{ .string = classifyDiagnosticMessage(parsed.message) });
@@ -263,6 +267,8 @@ pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8
         \\<testsuite name="zigar.zig_junit" tests="1" failures="{d}" errors="0" skipped="0">
         \\  <properties>
         \\    <property name="zigar.artifact_kind" value="{s}"/>
+        \\    <property name="zigar.junit_kind" value="command_level"/>
+        \\    <property name="zigar.raw_output_available" value="true"/>
         \\    <property name="zigar.command" value="{s}"/>
         \\    <property name="zigar.parsing_basis" value="{s}"/>
         \\    <property name="zigar.limitations" value="{s}"/>
