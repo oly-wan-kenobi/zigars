@@ -68,8 +68,8 @@ zig build dist release-asset-smoke
 `release-check` covers formatting, generated docs, generated JSON/catalog
 fixtures, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke tests,
 kcov coverage floors, fake-backend conformance report contracts, structured
-error-contract scans, task frontmatter, least-privilege GitHub Actions
-permissions, security/maturity docs, artifact hygiene, and line-budget headroom.
+error-contract scans, task frontmatter, least-privilege GitHub Actions permissions,
+security/maturity docs, artifact hygiene, and line-budget headroom.
 
 `release-asset-smoke` builds ReleaseSafe archives for all published targets,
 checks `zigar-checksums.txt`, verifies archive shape, extracts the native
