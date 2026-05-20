@@ -103,16 +103,11 @@ pub const DocumentState = struct {
             if (self.open_docs.get(file_uri)) |_| {
                 return try ret_allocator.dupe(u8, file_uri);
             }
+            if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
         }
 
         // Slow path: read file content outside the lock (no mutex held during I/O)
-        const io = self.io orelse return error.FileReadError;
-        const content = std.Io.Dir.cwd().readFileAlloc(io, abs_path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch |err| {
-            return switch (err) {
-                error.FileNotFound => error.FileNotFound,
-                else => error.FileReadError,
-            };
-        };
+        const content = try self.readDiskDocument(abs_path);
         defer self.allocator.free(content);
 
         // Re-acquire lock, double-check, then reserve the open document.
@@ -124,6 +119,7 @@ pub const DocumentState = struct {
             if (self.open_docs.get(file_uri)) |_| {
                 return try ret_allocator.dupe(u8, file_uri);
             }
+            if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
 
             const stored_uri = try self.allocator.dupe(u8, file_uri);
             errdefer self.allocator.free(stored_uri);
@@ -374,9 +370,8 @@ pub const DocumentState = struct {
             var disk_content: ?[]u8 = null;
             defer if (disk_content) |content| self.allocator.free(content);
             const content = doc.content orelse blk: {
-                const io = self.io orelse continue;
-                disk_content = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)) catch {
-                    self.logger.warn("docs", "failed to re-read {s} for reopen", .{path});
+                disk_content = self.readDiskDocument(path) catch |err| {
+                    self.logger.warn("docs", "failed to re-read {s} for reopen: {}", .{ path, err });
                     reopen_summary.failed += 1;
                     continue;
                 };
@@ -404,6 +399,17 @@ pub const DocumentState = struct {
         self.last_reopen = reopen_summary;
         self.mutex.unlock();
         return reopen_summary;
+    }
+
+    fn readDiskDocument(self: *DocumentState, path: []const u8) ![]u8 {
+        const io = self.io orelse return error.FileReadError;
+        return std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(self.max_document_bytes)) catch |err| {
+            return switch (err) {
+                error.FileNotFound => error.FileNotFound,
+                error.StreamTooLong => error.DocumentTooLarge,
+                else => error.FileReadError,
+            };
+        };
     }
 
     fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
@@ -513,6 +519,62 @@ test "DocumentState enforces open document budget" {
     defer client.deinit();
 
     try std.testing.expectError(error.OpenDocumentLimitExceeded, ds.syncText(&client, "/tmp/new.zig", "const x = 1;\n", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
+test "DocumentState ensureOpen enforces open document budget" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
+
+    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer alloc.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
+    defer alloc.free(base_z);
+    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
+    defer alloc.free(root);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    ds.max_open_documents = 0;
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.OpenDocumentLimitExceeded, ds.ensureOpen(&client, "main.zig", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
+test "DocumentState ensureOpen enforces disk document byte budget" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const too_big = true;\n" });
+
+    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer alloc.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
+    defer alloc.free(base_z);
+    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
+    defer alloc.free(root);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    ds.max_document_bytes = 4;
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.DocumentTooLarge, ds.ensureOpen(&client, "main.zig", alloc));
     try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
