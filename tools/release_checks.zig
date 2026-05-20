@@ -273,13 +273,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/edit_zls.zig",
-        .max_lines = 760,
-        .reason = "edit and ZLS handlers must delegate diagnostics and edit application helpers",
+        .max_lines = 620,
+        .reason = "edit and ZLS mutation/navigation handlers must keep diagnostics in the dedicated module",
     },
     .{
         .path = "src/tools/edit_zls_diagnostics.zig",
-        .max_lines = 100,
-        .reason = "ZLS diagnostics shaping should remain a focused helper",
+        .max_lines = 300,
+        .reason = "ZLS diagnostics handlers and cache shaping should stay independently reviewable",
     },
     .{
         .path = "src/tools/edit_zls_edits.zig",
@@ -536,12 +536,12 @@ const ignored_error_hygiene_tokens = [_]HygieneToken{
         .reason = "ZLS edit cleanup/close errors must be logged or surfaced",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .path = "src/tools/edit_zls_diagnostics.zig",
         .token = "catch null",
         .reason = "ZLS diagnostics fallbacks must log the backend/cache failure before falling back",
     },
     .{
-        .path = "src/tools/edit_zls.zig",
+        .path = "src/tools/edit_zls_diagnostics.zig",
         .token = "catch continue",
         .reason = "ZLS diagnostics workspace must count or report malformed cached notifications",
     },
@@ -586,6 +586,7 @@ const tool_error_contract_paths = [_][]const u8{
     "src/tools/discovery.zig",
     "src/tools/docs.zig",
     "src/tools/edit_zls.zig",
+    "src/tools/edit_zls_diagnostics.zig",
     "src/tools/profiling.zig",
     "src/tools/static_core.zig",
     "src/tools/static_tests.zig",

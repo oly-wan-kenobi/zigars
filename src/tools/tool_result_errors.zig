@@ -79,6 +79,28 @@ pub fn commandResultErrorResult(allocator: std.mem.Allocator, spec: CommandResul
     });
 }
 
+pub fn lspToolError(allocator: std.mem.Allocator, tool: []const u8, operation: []const u8, phase: []const u8, code: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return tool_errors.fromError(allocator, .{
+        .tool = tool,
+        .operation = operation,
+        .phase = phase,
+        .code = code,
+        .category = "lsp",
+        .resolution = resolution,
+    }, err);
+}
+
+pub fn lspShapeError(allocator: std.mem.Allocator, tool: []const u8, operation: []const u8, phase: []const u8, code: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return tool_errors.result(allocator, .{
+        .tool = tool,
+        .operation = operation,
+        .phase = phase,
+        .code = code,
+        .category = "lsp",
+        .resolution = resolution,
+    });
+}
+
 fn commandText(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;

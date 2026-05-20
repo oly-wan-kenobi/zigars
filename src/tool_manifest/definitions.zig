@@ -356,7 +356,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .zls,
         .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
-        .handler = handler(.edit_zls, "zigDiagnostics"),
+        .handler = handler(.edit_zls_diagnostics, "zigDiagnostics"),
         .plan = .{ .zls_request = .{ .method = "textDocument/publishDiagnostics with ast-check fallback", .requires_document_sync = true } },
     });
     pub const zig_diagnostics_all = tool(.{
@@ -365,7 +365,7 @@ pub const definitions = struct {
         .read_only = true,
         .group = .zls,
         .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
-        .handler = handler(.edit_zls, "zigDiagnosticsAll"),
+        .handler = handler(.edit_zls_diagnostics, "zigDiagnosticsAll"),
         .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic plus ast-check fallback", .requires_document_sync = true } },
     });
     pub const zig_diagnostics_workspace = tool(.{
@@ -373,7 +373,7 @@ pub const definitions = struct {
         .input_schema = schema(&.{}),
         .read_only = true,
         .group = .zls,
-        .handler = handler(.edit_zls, "zigDiagnosticsWorkspace"),
+        .handler = handler(.edit_zls_diagnostics, "zigDiagnosticsWorkspace"),
         .plan = .{ .pure_analysis = "Reads cached workspace diagnostics collected from the active ZLS session." },
     });
     pub const zig_hover = tool(.{

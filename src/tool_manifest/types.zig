@@ -32,6 +32,7 @@ pub const HandlerModule = enum {
     agent,
     core,
     edit_zls,
+    edit_zls_diagnostics,
     docs,
     static_analysis,
     ci,
