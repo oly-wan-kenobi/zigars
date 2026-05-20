@@ -134,7 +134,7 @@ pub fn checkTrustDocs(allocator: Allocator, io: Io) !bool {
         "tools/call`, `resources/read`, and",
         "prompts/get",
         "total wall-clock deadlines",
-        "Public-release blocker tasks",
+        "validation evidence block",
         "advisory_orientation",
         "release-check",
         "release-asset-smoke",

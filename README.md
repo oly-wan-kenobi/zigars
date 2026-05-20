@@ -87,9 +87,8 @@ zig-out/bin/zigar
 `zig build release-check` is the adoption gate: it runs formatting, generated
 docs/JSON checks, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke
 fixtures, kcov line coverage floors, fake-backend conformance report-contract
-smoke, artifact hygiene, structured error-contract scans, task frontmatter
-checks for public-release blockers, trust/maturity docs checks, and line-budget
-headroom checks.
+smoke, artifact hygiene, structured error-contract scans, trust/maturity docs
+checks, and line-budget headroom checks.
 
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics

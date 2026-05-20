@@ -916,9 +916,7 @@ pub const Server = struct {
 
     fn handleSubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         if (!self.resourceSubscriptionsSupported()) {
-            const error_response = jsonrpc.createInvalidParams(request.id, "Resource subscriptions are not supported by this server");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
+            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
         }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
@@ -928,9 +926,7 @@ pub const Server = struct {
 
     fn handleUnsubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         if (!self.resourceSubscriptionsSupported()) {
-            const error_response = jsonrpc.createInvalidParams(request.id, "Resource subscriptions are not supported by this server");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
+            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
         }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
@@ -1076,35 +1072,25 @@ pub const Server = struct {
     }
 
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        const level_value = request.params orelse {
-            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
-        };
-        if (level_value != .object) {
-            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
-        }
-        const level_json = level_value.object.get("level") orelse {
-            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
-        };
+        const shape_error = "logging/setLevel requires params.level to be a string";
+        const level_value = request.params orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
+        if (level_value != .object) return self.sendInvalidParams(io, allocator, request.id, shape_error);
+        const level_json = level_value.object.get("level") orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
         if (level_json != .string) {
-            const error_response = jsonrpc.createInvalidParams(request.id, "logging/setLevel requires params.level to be a string");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
+            return self.sendInvalidParams(io, allocator, request.id, shape_error);
         }
         self.log_level = parseLogLevel(level_json.string) orelse {
-            const error_response = jsonrpc.createInvalidParams(request.id, "Unsupported logging level");
-            try self.sendResponse(io, allocator, .{ .error_response = error_response });
-            return;
+            return self.sendInvalidParams(io, allocator, request.id, "Unsupported logging level");
         };
 
         const result: std.json.ObjectMap = .empty;
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn sendInvalidParams(self: *Self, io: std.Io, allocator: std.mem.Allocator, id: types.RequestId, message: []const u8) !void {
+        const error_response = jsonrpc.createInvalidParams(id, message);
+        try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
     fn parseLogLevel(level: []const u8) ?protocol.LogLevel {

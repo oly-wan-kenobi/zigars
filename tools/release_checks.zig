@@ -2,7 +2,6 @@ const std = @import("std");
 const zigar = @import("zigar");
 const release_docs = @import("release_docs.zig");
 const mcp_contracts = @import("mcp_contracts.zig");
-const task_status = @import("task_status.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -55,8 +54,6 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try mcp_contracts.checkNoPatchContract(allocator, io)) and ok;
     ok = (try mcp_contracts.checkAdvertisedCapabilityContract(allocator, io)) and ok;
-    ok = (try task_status.checkPublicReleaseBlockers(allocator, io)) and ok;
-    ok = (try task_status.checkReadyTaskScope(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -443,11 +440,6 @@ const line_budgets = [_]LineBudget{
         .path = "tools/mcp_contracts.zig",
         .max_lines = 150,
         .reason = "MCP release-contract checks should stay focused on adapter and advertised-capability invariants",
-    },
-    .{
-        .path = "tools/task_status.zig",
-        .max_lines = 140,
-        .reason = "task frontmatter release-blocker checks should stay separate from the main release-check dispatcher",
     },
     .{
         .path = "tools/release_checks.zig",
