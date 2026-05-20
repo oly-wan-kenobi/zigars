@@ -364,6 +364,11 @@ pub const LspClient = struct {
         const response = try self.sendRawRequestWithTimeout(self.allocator, id, msg, timeout_ms, "ShutdownTimeout");
         self.allocator.free(response);
         self.sendRawNotification(self.allocator, "exit") catch |err| {
+            if (isBenignExitNotificationError(err)) {
+                self.logger.debug("lsp", "exit notification skipped after shutdown response: {}", .{err});
+                self.running.store(false, .release);
+                return;
+            }
             self.rememberLastError(@errorName(err));
             self.logger.warn("lsp", "failed to send exit notification: {}", .{err});
         };
@@ -403,6 +408,13 @@ pub const LspClient = struct {
         };
     }
 };
+
+fn isBenignExitNotificationError(err: anyerror) bool {
+    return switch (err) {
+        error.BrokenPipe, error.EndOfStream, error.NotConnected => true,
+        else => false,
+    };
+}
 
 // ── Tests ──
 
@@ -449,4 +461,11 @@ test "duplicate LSP response replaces pending response buffer" {
     defer alloc.destroy(removed);
     defer if (removed.response) |response| alloc.free(response);
     try std.testing.expect(std.mem.indexOf(u8, removed.response.?, "second") != null);
+}
+
+test "closed exit notification is benign after shutdown response" {
+    try std.testing.expect(isBenignExitNotificationError(error.BrokenPipe));
+    try std.testing.expect(isBenignExitNotificationError(error.EndOfStream));
+    try std.testing.expect(isBenignExitNotificationError(error.NotConnected));
+    try std.testing.expect(!isBenignExitNotificationError(error.RequestTimeout));
 }
