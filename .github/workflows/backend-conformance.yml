@@ -24,6 +24,9 @@ on:
         required: false
         default: "diff-folded"
 
+permissions:
+  contents: read
+
 jobs:
   backend-conformance:
     name: Real optional backends

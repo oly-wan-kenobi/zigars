@@ -42,6 +42,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     ok = (try checkStaticAnalysisContracts(io)) and ok;
+    ok = (try checkWorkflowPermissions(allocator, io)) and ok;
     ok = (try release_docs.checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try release_docs.checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try release_docs.checkCommandRunningToolDocs(allocator, io)) and ok;
@@ -678,6 +679,37 @@ const cli_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+const WorkflowPermissionRule = struct {
+    path: []const u8,
+    required: []const []const u8,
+};
+
+const workflow_permission_rules = [_]WorkflowPermissionRule{
+    .{
+        .path = ".github/workflows/ci.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
+        .path = ".github/workflows/backend-conformance.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
+        .path = ".github/workflows/release.yml",
+        .required = &.{
+            "permissions:",
+            "contents: write",
+            "id-token: write",
+            "attestations: write",
+        },
+    },
+};
+
 const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",
@@ -687,6 +719,25 @@ const pure_zig_roots = [_][]const u8{
     "tests",
     "tools",
 };
+
+fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    for (workflow_permission_rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 1024 * 1024) catch |err| {
+            try stderrPrint(io, "workflow-permissions check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        for (rule.required) |needle| {
+            if (std.mem.indexOf(u8, bytes, needle) == null) {
+                try stderrPrint(io, "workflow-permissions check missing `{s}` in {s}\n", .{ needle, rule.path });
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
 
 fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
     var ok = true;

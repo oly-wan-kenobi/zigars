@@ -68,8 +68,8 @@ zig build dist release-asset-smoke
 `release-check` covers formatting, generated docs, generated JSON/catalog
 fixtures, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke tests,
 kcov coverage floors, fake-backend conformance report contracts, structured
-error-contract scans, task frontmatter, security/maturity docs, artifact hygiene,
-and line-budget headroom.
+error-contract scans, task frontmatter, least-privilege GitHub Actions
+permissions, security/maturity docs, artifact hygiene, and line-budget headroom.
 
 `release-asset-smoke` builds ReleaseSafe archives for all published targets,
 checks `zigar-checksums.txt`, verifies archive shape, extracts the native
@@ -80,7 +80,8 @@ archive, and runs `zigar --version`.
 Some quality signals cannot be forced by the local repository alone:
 
 - GitHub branch protection and release permissions must be configured on the
-  hosted repository.
+  hosted repository. Repository workflows declare least-privilege token
+  permissions, but hosted branch/release policy still lives outside git.
 - Real ZLS, zwanzig, zflame, diff-folded, and platform-profiler validation is
   optional because those backends are not bundled. Use the manual
   `Backend Conformance` workflow or `.github/scripts/backend-conformance.sh`
