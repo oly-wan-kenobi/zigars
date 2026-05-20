@@ -245,9 +245,11 @@ fn stdSearchValueImpl(
     for (collected.items[0..result_count], 0..) |match, index| {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
+        const source_path = try std.fs.path.join(allocator, &.{ std_dir, match.path });
         try obj.put(allocator, "rank", .{ .integer = @intCast(index + 1) });
         try obj.put(allocator, "root", .{ .string = "std" });
         try obj.put(allocator, "path", .{ .string = match.path });
+        try obj.put(allocator, "source_path", .{ .string = source_path });
         try obj.put(allocator, "line", .{ .integer = @intCast(match.line) });
         try obj.put(allocator, "snippet", .{ .string = match.snippet });
         try matches.append(.{ .object = obj });
@@ -347,11 +349,13 @@ fn stdItemValueImpl(
     for (collected.items[0..result_count], 0..) |match, index| {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
+        const source_path = try std.fs.path.join(allocator, &.{ std_dir, match.path });
         try obj.put(allocator, "rank", .{ .integer = @intCast(index + 1) });
         try obj.put(allocator, "name", .{ .string = name });
         try obj.put(allocator, "decl_name", .{ .string = item_name });
         try obj.put(allocator, "match_kind", .{ .string = match.kind });
         try obj.put(allocator, "path", .{ .string = match.path });
+        try obj.put(allocator, "source_path", .{ .string = source_path });
         try obj.put(allocator, "line", .{ .integer = @intCast(match.line) });
         try obj.put(allocator, "snippet", .{ .string = match.snippet });
         try obj.put(allocator, "preferred_path", .{ .bool = match.preferred_path });
@@ -672,6 +676,7 @@ test "std search JSON applies deterministic sorted limit and source contract" {
     try std.testing.expectEqual(@as(i64, 1), obj.get("result_count").?.integer);
     try std.testing.expectEqual(@as(i64, 2), obj.get("total_match_count").?.integer);
     try std.testing.expectEqualStrings("a_first.zig", obj.get("matches").?.array.items[0].object.get("path").?.string);
+    try std.testing.expect(std.mem.endsWith(u8, obj.get("matches").?.array.items[0].object.get("source_path").?.string, "std/a_first.zig"));
     try std.testing.expect(obj.get("no_result_reason").? == .null);
 }
 
@@ -699,6 +704,7 @@ test "std item JSON uses exact declaration lookup and no-match contract" {
     try std.testing.expectEqualStrings("source_scan", hit_obj.get("source").?.object.get("completeness").?.string);
     try std.testing.expectEqualStrings("fs/path.zig", hit_obj.get("qualified_path_hint").?.string);
     try std.testing.expectEqualStrings("fs/path.zig", first.get("path").?.string);
+    try std.testing.expect(std.mem.endsWith(u8, first.get("source_path").?.string, "std/fs/path.zig"));
     try std.testing.expect(first.get("preferred_path").?.bool);
     try std.testing.expectEqualStrings("fn", first.get("match_kind").?.string);
 

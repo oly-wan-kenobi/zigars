@@ -104,10 +104,12 @@ item, and language-reference workflows: `source`, `query`, `limit`,
 `result_count`, `no_result_reason`, and `ranking`. The `source` object includes
 `id`, `label`, `provenance`, `completeness`, explicit `version`/
 `version_status`, and `path`/`source_path` when a local file or directory is
-known. Text docs tools are human-readable projections of the same contract, and
-the `_json` companions (`zig_builtin_doc_json`, `zig_std_search_json`,
-`zig_std_item_json`, `zig_lang_ref_search_json`) are the preferred interface for
-agents that need stable result metadata.
+known. Stdlib and installed language-reference hits also include result-level
+`source_path` for the exact local file behind the match. Text docs tools are
+human-readable projections of the same contract, and the `_json` companions
+(`zig_builtin_doc_json`, `zig_std_search_json`, `zig_std_item_json`,
+`zig_lang_ref_search_json`) are the preferred interface for agents that need
+stable result metadata.
 
 High-signal discovery keywords include:
 
