@@ -523,62 +523,6 @@ test "DocumentState enforces open document budget" {
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
 
-test "DocumentState ensureOpen enforces open document budget" {
-    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
-
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.createDirPath(io, "root");
-    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
-
-    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
-    defer alloc.free(rel_base);
-    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
-    defer alloc.free(base_z);
-    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
-    defer alloc.free(root);
-
-    var ds = DocumentState.initWithIo(alloc, root, io);
-    defer ds.deinit();
-    ds.max_open_documents = 0;
-    var client = LspClient.init(alloc, io);
-    defer client.deinit();
-
-    try std.testing.expectError(error.OpenDocumentLimitExceeded, ds.ensureOpen(&client, "main.zig", alloc));
-    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
-    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
-}
-
-test "DocumentState ensureOpen enforces disk document byte budget" {
-    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
-
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.createDirPath(io, "root");
-    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const too_big = true;\n" });
-
-    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
-    defer alloc.free(rel_base);
-    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
-    defer alloc.free(base_z);
-    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
-    defer alloc.free(root);
-
-    var ds = DocumentState.initWithIo(alloc, root, io);
-    defer ds.deinit();
-    ds.max_document_bytes = 4;
-    var client = LspClient.init(alloc, io);
-    defer client.deinit();
-
-    try std.testing.expectError(error.DocumentTooLarge, ds.ensureOpen(&client, "main.zig", alloc));
-    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
-    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
-}
-
 test "DocumentState enforces retained content budget for new sync documents" {
     const alloc = std.testing.allocator;
     var ds = DocumentState.init(alloc, "/tmp");

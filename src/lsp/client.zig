@@ -410,10 +410,7 @@ pub const LspClient = struct {
 };
 
 fn isBenignExitNotificationError(err: anyerror) bool {
-    return switch (err) {
-        error.BrokenPipe, error.EndOfStream, error.NotConnected => true,
-        else => false,
-    };
+    return err == error.BrokenPipe or err == error.EndOfStream or err == error.NotConnected;
 }
 
 // ── Tests ──
