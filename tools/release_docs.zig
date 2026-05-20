@@ -29,47 +29,6 @@ pub fn checkStaticAnalysisDocs(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
-pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
-    const path = "docs/backends.md";
-    const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
-        try stderrPrint(io, "backend-contract check could not read {s}: {s}\n", .{ path, @errorName(err) });
-        return false;
-    };
-    defer allocator.free(bytes);
-    var ok = true;
-    const required = [_][]const u8{
-        "--dump-cfg",
-        "--dump-exploded-graph",
-        "--dump-annotated-cfg",
-        "--dump-path-trace",
-        "zflame recursive",
-        "--title=<title>",
-        "--colors=<palette>",
-        "diff-folded --output=",
-        "zig_profile_plan",
-        "capture semantics",
-        "artifact metadata",
-    };
-    for (required) |needle| {
-        if (std.mem.indexOf(u8, bytes, needle) == null) {
-            try stderrPrint(io, "backend-contract check missing `{s}` in {s}\n", .{ needle, path });
-            ok = false;
-        }
-    }
-    const stale = [_][]const u8{
-        "zflame guess",
-        "--palette",
-        "diff-folded before.folded after.folded >",
-    };
-    for (stale) |needle| {
-        if (std.mem.indexOf(u8, bytes, needle) != null) {
-            try stderrPrint(io, "backend-contract check found stale `{s}` in {s}\n", .{ needle, path });
-            ok = false;
-        }
-    }
-    return ok;
-}
-
 pub fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
     const path = "README.md";
     const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
@@ -109,8 +68,27 @@ pub fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
     });
 }
 
+pub fn checkDocsLookupDocs(allocator: Allocator, io: Io) !bool {
+    return checkDocNeedles(allocator, io, "docs/tools.md", &.{
+        "Docs tools are intentionally split by source",
+        "provenance/completeness",
+        "active Zig version",
+        "triple-slash doc comments",
+        "index_metadata",
+        "source roots",
+        "curated fallback status",
+    });
+}
+
 pub fn checkReleaseEvidenceDocs(allocator: Allocator, io: Io) !bool {
-    return checkDocNeedles(allocator, io, "docs/release.md", &.{ "validation evidence block", "real-backend validation status", "do not claim real backend coverage" });
+    return checkDocNeedles(allocator, io, "docs/release.md", &.{
+        "validation evidence block",
+        "real-backend validation status",
+        "do not claim real backend coverage",
+        "Release Readiness",
+        "backend compatibility matrix",
+        "ZLS Conformance",
+    });
 }
 
 pub fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {

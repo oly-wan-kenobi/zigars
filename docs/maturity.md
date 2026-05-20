@@ -42,7 +42,9 @@ are documented as product boundaries rather than hidden defects.
 
 - Optional backends remain optional. ZLS, zwanzig, zflame, and diff-folded tools
   return structured unavailable errors or degraded advisory output instead of
-  requiring those binaries in default CI.
+  requiring those binaries in default CI. Public release notes should claim real
+  optional-backend coverage only from the manual `Release Readiness` evidence
+  package or a specific conformance artifact.
 - Static-analysis and agent-routing features disclose heuristic scope. Use
   parser-backed tools, compiler-backed commands, ZLS, or project CI before
   making release decisions from advisory output.

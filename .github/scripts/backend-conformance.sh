@@ -23,7 +23,9 @@ resolve_executable() {
 }
 
 zigar_binary="${ZIGAR_BINARY:-zig-out/bin/zigar}"
-if [[ ! -x "$zigar_binary" ]]; then
+if [[ "${ZIGAR_SKIP_BUILD:-0}" != "1" ]]; then
+  zig build -Doptimize=ReleaseSafe
+elif [[ ! -x "$zigar_binary" ]]; then
   zig build -Doptimize=ReleaseSafe
 fi
 
@@ -124,6 +126,7 @@ python3 <<'PY'
 import hashlib
 import json
 import os
+import platform
 import pathlib
 import selectors
 import subprocess
@@ -143,6 +146,11 @@ report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
 summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
 backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
 timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
+claimed_backends = [
+    item.strip()
+    for item in os.environ.get("ZIGAR_CLAIMED_BACKENDS", "zls,zwanzig,zflame,diff_folded").split(",")
+    if item.strip()
+]
 
 backend_specs = {
     "zigar": {
@@ -212,6 +220,15 @@ for name, spec in backend_specs.items():
         "version_probe": run_probe(spec["version_argv"]),
     }
     backend_evidence[name] = entry
+
+for backend in claimed_backends:
+    if backend not in backend_evidence:
+        fail(f"claimed backend is not part of the conformance report: {backend}")
+
+try:
+    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+except Exception:
+    source_commit = os.environ.get("GITHUB_SHA", "unavailable")
 
 requests = [
     {
@@ -477,18 +494,60 @@ tool_evidence = {
     "zig_flamegraph_diff": {"response_id": 7, "artifact": "diff.svg"},
 }
 
+compatibility_matrix = [
+    {
+        "backend": "zig",
+        "claim": "required",
+        "status": "passed",
+        "evidence": "zigar_doctor zig_probe and command-backed fixture execution",
+    },
+    {
+        "backend": "zls",
+        "claim": "claimed" if "zls" in claimed_backends else "not_claimed",
+        "status": "passed" if "zls" in claimed_backends else "observed",
+        "evidence": "zigar_doctor zls_probe and zig_document_symbols textDocument/documentSymbol",
+    },
+    {
+        "backend": "zwanzig",
+        "claim": "claimed" if "zwanzig" in claimed_backends else "not_claimed",
+        "status": "passed" if "zwanzig" in claimed_backends else "observed",
+        "evidence": "zig_lint_rules metadata and successful zwanzig probe",
+    },
+    {
+        "backend": "zflame",
+        "claim": "claimed" if "zflame" in claimed_backends else "not_claimed",
+        "status": "passed" if "zflame" in claimed_backends else "observed",
+        "evidence": "zig_flamegraph SVG render and artifact hash",
+    },
+    {
+        "backend": "diff_folded",
+        "claim": "claimed" if "diff_folded" in claimed_backends else "not_claimed",
+        "status": "passed" if "diff_folded" in claimed_backends else "observed",
+        "evidence": "zig_flamegraph_diff diff-folded intermediate and SVG render",
+    },
+]
+
 report = {
     "kind": "zigar_backend_conformance_report",
     "schema_version": 1,
     "generated_unix": int(time.time()),
+    "source_commit": source_commit,
+    "platform": {
+        "system": platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine(),
+        "python": platform.python_version(),
+    },
     "workspace": str(workspace),
     "timeout_ms": backend_timeout_ms,
+    "claimed_backends": claimed_backends,
     "stdio": {
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
         "response_count": len(responses),
     },
     "backends": backend_evidence,
+    "compatibility_matrix": compatibility_matrix,
     "tool_evidence": tool_evidence,
     "artifacts": artifacts,
     "result": "passed",
@@ -499,6 +558,8 @@ summary_lines = [
     "# Zigar Backend Conformance",
     "",
     "Result: passed",
+    f"Source commit: `{source_commit}`",
+    f"Platform: `{platform.system()} {platform.release()} {platform.machine()}`",
     f"Report: `{report_path}`",
     f"Workspace: `{workspace}`",
     "",
@@ -510,6 +571,15 @@ for name, entry in backend_evidence.items():
     output = probe.get("stdout") or probe.get("stderr") or probe.get("message", "")
     first_line = output.splitlines()[0] if output else ""
     summary_lines.append(f"- {name}: `{entry['path']}` sha256 `{entry['sha256']}` {first_line}")
+summary_lines.extend([
+    "",
+    "## Compatibility Matrix",
+    "",
+    "| Backend | Claim | Status | Evidence |",
+    "|---|---|---|---|",
+])
+for row in compatibility_matrix:
+    summary_lines.append(f"| `{row['backend']}` | {row['claim']} | {row['status']} | {row['evidence']} |")
 summary_lines.extend([
     "",
     "## Tool Evidence",

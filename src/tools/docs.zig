@@ -36,28 +36,40 @@ fn docsError(
     }, err);
 }
 
-pub fn zigBuiltinList(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const output = docs.builtinList(allocator) catch return error.OutOfMemory;
+pub fn zigBuiltinList(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const version = builtinToolchainVersionOrNull(a, allocator);
+    defer if (version) |bytes| allocator.free(bytes);
+    const output = docs.builtinList(allocator, version) catch return error.OutOfMemory;
     defer allocator.free(output);
     return structuredText(allocator, "zig_builtin_list", output);
 }
 
-pub fn zigBuiltinListJson(_: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const value = docs.builtinListValue(allocator) catch return error.OutOfMemory;
+pub fn zigBuiltinListJson(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const version = builtinToolchainVersionOrNull(a, allocator);
+    defer if (version) |bytes| allocator.free(bytes);
+    const value = docs.builtinListValue(allocator, version) catch return error.OutOfMemory;
     return structuredOwned(allocator, value);
 }
 
-pub fn zigBuiltinDoc(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+pub fn zigBuiltinDoc(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_builtin_doc", "query", "string");
-    const output = docs.builtinDoc(allocator, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch return error.OutOfMemory;
+    const version = builtinToolchainVersionOrNull(a, allocator);
+    defer if (version) |bytes| allocator.free(bytes);
+    const output = docs.builtinDoc(allocator, query, @intCast(@max(1, argInt(args, "limit", 20))), version) catch return error.OutOfMemory;
     defer allocator.free(output);
     return structuredText(allocator, "zig_builtin_doc", output);
 }
 
-pub fn zigBuiltinDocJson(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+pub fn zigBuiltinDocJson(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_builtin_doc_json", "query", "string");
-    const value = docs.builtinDocValue(allocator, query, @intCast(@max(1, argInt(args, "limit", 20)))) catch return error.OutOfMemory;
+    const version = builtinToolchainVersionOrNull(a, allocator);
+    defer if (version) |bytes| allocator.free(bytes);
+    const value = docs.builtinDocValue(allocator, query, @intCast(@max(1, argInt(args, "limit", 20))), version) catch return error.OutOfMemory;
     return structuredOwned(allocator, value);
+}
+
+fn builtinToolchainVersionOrNull(a: *App, allocator: std.mem.Allocator) ?[]u8 {
+    return zigEnvValue(a, allocator, "version") catch null;
 }
 
 pub fn zigStdSearch(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {

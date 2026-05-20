@@ -29,6 +29,13 @@ Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
 were probed or exercised.
 
+The preferred public-release path is the manual `Release Readiness` workflow.
+It runs the normal release gate, release-asset smoke, real backend conformance,
+and real ZLS conformance, then uploads a single evidence package. Its generated
+backend compatibility matrix is the authority for optional-backend claims in
+release notes. If a backend is not present in that matrix as passed, say
+`not run` or `not claimed` instead of implying support from fake fixtures.
+
 For release-candidate validation against actual optional backends, run the
 manual `Backend Conformance` GitHub Actions workflow or execute the same script
 locally:
@@ -48,6 +55,11 @@ default: `report.json`, `summary.md`, `stdout.jsonl`, and `stderr.log`. The
 manual workflow uploads the same files as the `zigar-backend-conformance`
 artifact. Set `ZIGAR_CONFORMANCE_REPORT_DIR` to choose a different output
 directory.
+
+Run the manual `ZLS Conformance` workflow when only the ZLS-backed tool surface
+needs a fresh release artifact. It starts zigar with a real ZLS binary and
+exercises document open, document symbols, hover, diagnostics, formatting,
+rename preview, and workspace symbols against a disposable Zig workspace.
 
 ## Packaged Setup Catalog
 

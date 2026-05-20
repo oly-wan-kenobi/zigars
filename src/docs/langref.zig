@@ -113,6 +113,7 @@ fn searchBundledValue(allocator: std.mem.Allocator, query: []const u8, limit: us
         .no_result_reason = if (count == 0) "no_langref_match" else null,
         .ranking = bundled_ranking,
     });
+    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, "bundled_curated_langref_index", null, sections.len));
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -202,6 +203,7 @@ fn searchHtmlValue(allocator: std.mem.Allocator, path: []const u8, html: []const
         .no_result_reason = if (count == 0) "no_langref_match" else null,
         .ranking = installed_ranking,
     });
+    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, "installed_html_heading_scan", path, countHeadings(html)));
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -289,6 +291,32 @@ const HtmlHeading = struct {
     anchor: []const u8,
     title_html: []const u8,
 };
+
+fn indexMetadataValue(allocator: std.mem.Allocator, strategy: []const u8, source_path: ?[]const u8, indexed_sections: usize) !std.json.Value {
+    var roots = std.json.Array.init(allocator);
+    errdefer roots.deinit();
+    if (source_path) |path| try roots.append(.{ .string = path });
+
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "index_strategy", .{ .string = strategy });
+    try obj.put(allocator, "generated_unix", .null);
+    try obj.put(allocator, "generated_at", .{ .string = "per_call_in_memory_index" });
+    try obj.put(allocator, "indexed_section_count", .{ .integer = @intCast(indexed_sections) });
+    try obj.put(allocator, "source_roots", .{ .array = roots });
+    try obj.put(allocator, "section_summary", .{ .string = "heading and nearby text search with source/completeness metadata" });
+    return .{ .object = obj };
+}
+
+fn countHeadings(html: []const u8) usize {
+    var count: usize = 0;
+    var pos: usize = 0;
+    while (nextHeading(html, pos)) |heading| {
+        count += 1;
+        pos = heading.end;
+    }
+    return count;
+}
 
 fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
     var pos = start_pos;
@@ -402,6 +430,7 @@ test "bundled langref JSON labels partial curated fallback and no-match reason" 
     try std.testing.expectEqualStrings("partial_curated", hit_obj.get("source").?.object.get("completeness").?.string);
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("limit").?.integer);
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("result_count").?.integer);
+    try std.testing.expectEqualStrings("bundled_curated_langref_index", hit_obj.get("index_metadata").?.object.get("index_strategy").?.string);
     try std.testing.expectEqualStrings("Defer", hit_obj.get("matches").?.array.items[0].object.get("title").?.string);
     try std.testing.expect(hit_obj.get("no_result_reason").? == .null);
 
@@ -535,6 +564,8 @@ test "uses installed language reference html when present" {
     const obj = value.object;
     try std.testing.expectEqualStrings("installed_langref_html", obj.get("source").?.object.get("id").?.string);
     try std.testing.expectEqualStrings("installed_complete", obj.get("source").?.object.get("completeness").?.string);
+    try std.testing.expectEqualStrings("installed_html_heading_scan", obj.get("index_metadata").?.object.get("index_strategy").?.string);
+    try std.testing.expectEqual(@as(i64, 2), obj.get("index_metadata").?.object.get("indexed_section_count").?.integer);
     try std.testing.expect(std.mem.indexOf(u8, obj.get("source").?.object.get("path").?.string, "langref.html") != null);
     try std.testing.expectEqualStrings("defer", obj.get("matches").?.array.items[0].object.get("anchor").?.string);
 }

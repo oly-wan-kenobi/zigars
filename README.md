@@ -37,8 +37,8 @@ in [docs/backends.md](docs/backends.md). The same backend setup contract is
 available at runtime through `zigar_backend_catalog` and in `zigar_schema` under
 `backend_setup`.
 Release candidates that claim real optional-backend coverage should also run the
-manual `Backend Conformance` workflow or
-`.github/scripts/backend-conformance.sh` with the exact backend versions.
+manual `Release Readiness` workflow with the exact backend versions and cite its
+generated backend compatibility matrix.
 
 ## Install
 
@@ -198,6 +198,14 @@ Source writes require apply=true.
 ```
 
 ## Tool Groups
+
+Public feature claims use evidence labels instead of broad precision claims:
+command-backed tools run explicit `zig` argv, LSP-backed tools require a live
+ZLS response for that call, parser-backed tools use `std.zig.Ast`, source-scan
+tools search local files with provenance metadata, heuristic/advisory tools are
+orientation aids, external-backend-backed tools report the backend executable
+and probe metadata, and curated fallback means bundled partial data. Real
+optional-backend support is claimed only from a release evidence artifact.
 
 - Discovery/meta: `zigar_capabilities`, `zigar_tool_index`,
   `zigar_schema`, `zigar_backend_catalog`, `zigar_doctor`,
