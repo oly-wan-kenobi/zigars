@@ -116,7 +116,15 @@ summary, limits, eviction count, and oversized-drop count.
 
 When ZLS is unavailable, command-backed tools such as `zig_build`, `zig_test`,
 `zig_check`, `zig_format`, docs search, and static-analysis summaries still work.
-ZLS-backed tools return structured backend/session errors with a resolution.
+ZLS-backed tools return structured backend/session errors with the configured
+path, current session status, restart attempts, last failure when available, and
+a resolution. Tools with static or command-backed fallbacks, including
+`zig_document_symbols`, diagnostics summaries, and workspace symbols, return
+degraded advisory output when the ZLS session is unavailable.
+
+`zls_unsupported_capability` is reserved for an initialized ZLS session whose
+advertised capabilities omit the requested LSP method. Treat it as a ZLS
+version/configuration mismatch rather than a missing executable.
 
 ## zwanzig
 

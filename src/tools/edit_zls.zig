@@ -32,6 +32,8 @@ const backendErrorResult = common.backendErrorResult;
 const commandResultErrorResult = common.commandResultErrorResult;
 const structuredText = common.structuredText;
 const requireZlsCapability = common.requireZlsCapability;
+const unsupportedCapability = common.unsupportedCapability;
+const zlsCapabilityState = common.zlsCapabilityState;
 const zlsUnavailable = common.zlsUnavailable;
 const zlsFileUriFromArgs = common.zlsFileUriFromArgs;
 const zlsDocumentFromArgs = common.zlsDocumentFromArgs;
@@ -197,7 +199,11 @@ pub fn zlsPositionRequest(a: *App, allocator: std.mem.Allocator, args: ?std.json
 }
 
 pub fn zigDocumentSymbols(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    if (requireZlsCapability(a, allocator, "textDocument/documentSymbol")) |result| return result;
+    switch (zlsCapabilityState(a, allocator, "textDocument/documentSymbol")) {
+        .no_capability_required, .supported => {},
+        .unavailable => return zigDeclSummary(a, allocator, args),
+        .unsupported => |capability| return unsupportedCapability(allocator, "textDocument/documentSymbol", capability),
+    }
     const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/documentSymbol", argString(args, "file"), err);
     defer allocator.free(file_uri);
     const client = a.lsp_client orelse return zigDeclSummary(a, allocator, args);
@@ -679,13 +685,21 @@ pub fn workspaceEditToolResultForDocument(a: *App, allocator: std.mem.Allocator,
 pub fn zigWorkspaceSymbols(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_workspace_symbols", "query", "string");
     if (a.lsp_client) |client| {
-        if (requireZlsCapability(a, allocator, "workspace/symbol")) |result| return result;
+        switch (zlsCapabilityState(a, allocator, "workspace/symbol")) {
+            .no_capability_required, .supported => {},
+            .unavailable => return zigWorkspaceSymbolsFallback(a, allocator, query, args),
+            .unsupported => |capability| return unsupportedCapability(allocator, "workspace/symbol", capability),
+        }
         const Params = struct { query: []const u8 };
         a.zls_requests += 1;
         const response = client.sendRequest(allocator, "workspace/symbol", Params{ .query = query }) catch |err| return backendErrorResult(allocator, "zls", "workspace/symbol", err, "ZLS workspace symbol search failed; zigar will use heuristic analysis when no ZLS client is available");
         defer allocator.free(response);
         return lspStructuredTool(allocator, "workspace/symbol", response);
     }
+    return zigWorkspaceSymbolsFallback(a, allocator, query, args);
+}
+
+fn zigWorkspaceSymbolsFallback(a: *App, allocator: std.mem.Allocator, query: []const u8, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const graph = analysis.importGraph(allocator, a.io, a.workspace.root, @intCast(@max(1, argInt(args, "limit", 200)))) catch |err| return toolErrorFromError(allocator, .{
         .tool = "zig_workspace_symbols",
         .operation = "heuristic_symbol_search",

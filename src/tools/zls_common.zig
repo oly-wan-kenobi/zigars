@@ -34,7 +34,7 @@ pub const zlsDocumentStateSummaryValue = zls_status.zlsDocumentStateSummaryValue
 
 pub fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capability: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    defer obj.deinit(allocator);
     obj.put(allocator, "ok", .{ .bool = false }) catch return error.OutOfMemory;
     obj.put(allocator, "kind", .{ .string = "zls_unsupported_capability" }) catch return error.OutOfMemory;
     obj.put(allocator, "backend", .{ .string = "zls" }) catch return error.OutOfMemory;
@@ -60,33 +60,105 @@ pub fn zlsCapabilityName(method: []const u8) ?[]const u8 {
     return null;
 }
 
-pub fn zlsSupportsCapability(a: *App, allocator: std.mem.Allocator, method: []const u8) bool {
-    const capability = zlsCapabilityName(method) orelse return true;
-    const response = a.zls_initialize_response orelse return false;
-    const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch return false;
+pub const ZlsCapabilityState = union(enum) {
+    no_capability_required,
+    unavailable: []const u8,
+    supported,
+    unsupported: []const u8,
+};
+
+pub fn zlsCapabilityState(a: *App, allocator: std.mem.Allocator, method: []const u8) ZlsCapabilityState {
+    const capability = zlsCapabilityName(method) orelse return .no_capability_required;
+    if (a.lsp_client == null) return .{ .unavailable = capability };
+    const response = a.zls_initialize_response orelse return .{ .unavailable = capability };
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch return .{ .unavailable = capability };
     defer parsed.deinit();
-    const result = responseResult(parsed.value) orelse return false;
+    const result = responseResult(parsed.value) orelse return .{ .unavailable = capability };
     const result_obj = switch (result) {
         .object => |o| o,
-        else => return false,
+        else => return .{ .unavailable = capability },
     };
     const caps = switch (result_obj.get("capabilities") orelse .null) {
         .object => |o| o,
-        else => return false,
+        else => return .{ .unavailable = capability },
     };
-    const value = caps.get(capability) orelse return false;
+    const value = caps.get(capability) orelse return .{ .unsupported = capability };
     return switch (value) {
-        .bool => |b| b,
-        .object => true,
-        .array => true,
-        else => false,
+        .bool => |b| if (b) .supported else .{ .unsupported = capability },
+        .object, .array => .supported,
+        else => .{ .unsupported = capability },
+    };
+}
+
+pub fn zlsSupportsCapability(a: *App, allocator: std.mem.Allocator, method: []const u8) bool {
+    return switch (zlsCapabilityState(a, allocator, method)) {
+        .no_capability_required, .supported => true,
+        .unavailable, .unsupported => false,
     };
 }
 
 pub fn requireZlsCapability(a: *App, allocator: std.mem.Allocator, method: []const u8) ?mcp.tools.ToolResult {
-    const capability = zlsCapabilityName(method) orelse return null;
-    if (zlsSupportsCapability(a, allocator, method)) return null;
-    return unsupportedCapability(allocator, method, capability) catch null;
+    return switch (zlsCapabilityState(a, allocator, method)) {
+        .no_capability_required, .supported => null,
+        .unavailable => zlsUnavailable(a, allocator) catch null,
+        .unsupported => |capability| unsupportedCapability(allocator, method, capability) catch null,
+    };
+}
+
+test "ZLS capability state distinguishes unavailable from unsupported" {
+    var app = testCapabilityApp();
+    app.zls_status = "startup failed";
+    app.zls_last_failure = "FileNotFound";
+    app.zls_restart_attempts = 2;
+
+    const result = requireZlsCapability(&app, std.testing.allocator, "textDocument/hover").?;
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("backend_error", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("unavailable", obj.get("error_kind").?.string);
+    try std.testing.expectEqualStrings("/missing/zls", obj.get("configured_path").?.string);
+    try std.testing.expectEqual(@as(i64, 2), obj.get("restart_attempts").?.integer);
+    try std.testing.expectEqualStrings("FileNotFound", obj.get("last_failure").?.string);
+}
+
+test "ZLS capability state reports initialized unsupported capability" {
+    var fake_client: zigar.lsp_client.LspClient = undefined;
+    var app = testCapabilityApp();
+    app.lsp_client = &fake_client;
+    app.zls_initialize_response =
+        \\{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"hoverProvider":true}}}
+    ;
+
+    const result = requireZlsCapability(&app, std.testing.allocator, "textDocument/documentSymbol").?;
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zls_unsupported_capability", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("textDocument/documentSymbol", obj.get("method").?.string);
+    try std.testing.expectEqualStrings("documentSymbolProvider", obj.get("capability").?.string);
+}
+
+test "ZLS capability state accepts advertised capabilities" {
+    var fake_client: zigar.lsp_client.LspClient = undefined;
+    var app = testCapabilityApp();
+    app.lsp_client = &fake_client;
+    app.zls_initialize_response =
+        \\{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"documentSymbolProvider":true}}}
+    ;
+
+    try std.testing.expect(requireZlsCapability(&app, std.testing.allocator, "textDocument/documentSymbol") == null);
+    try std.testing.expect(zlsSupportsCapability(&app, std.testing.allocator, "textDocument/documentSymbol"));
+}
+
+fn testCapabilityApp() App {
+    return .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .config = .{
+            .workspace = "/tmp/zigar-test",
+            .zls_path = "/missing/zls",
+        },
+        .workspace = undefined,
+    };
 }
 pub const ExplainCommand = struct {
     argv: std.ArrayList([]const u8),

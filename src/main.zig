@@ -120,6 +120,7 @@ test "executable usage names the command" {
 
 test {
     _ = @import("tools/edit_zls_edits_tests.zig");
+    _ = @import("tools/edit_zls_tests.zig");
     _ = @import("tools/profiling_backends.zig");
     _ = @import("tools/profiling.zig");
     _ = @import("tools/zwanzig.zig");

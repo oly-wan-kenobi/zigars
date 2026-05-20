@@ -332,6 +332,14 @@ Confirm `--zls-path` points to a working `zls` binary compatible with your Zig
 version. Command-backed tools such as `zig_check`, `zig_build`, and `zig_test`
 continue to work without ZLS.
 
+ZLS-only tools report a structured `backend_error` with the configured path,
+current session status, restart attempts, last failure when available, and a
+resolution. Tools with static or command-backed fallbacks, including
+`zig_document_symbols`, diagnostics summaries, and workspace symbols, continue
+with degraded advisory output when the ZLS session is unavailable. An
+`zls_unsupported_capability` result means ZLS did initialize, but its
+advertised capabilities omitted the requested LSP method.
+
 For install paths, wrapper-script configuration, and zwanzig/zflame/diff-folded
 checks, see [docs/backends.md](docs/backends.md).
 

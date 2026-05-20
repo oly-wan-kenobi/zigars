@@ -420,12 +420,22 @@ pub fn lineAtLocal(text_value: []const u8, index: usize) []const u8 {
 }
 
 pub fn zlsUnavailable(a: *App, allocator: std.mem.Allocator) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return backendUnavailableResult(
-        allocator,
-        "zls",
-        "lsp_session",
-        a.config.zls_path,
-        a.zls_status,
-        "confirm --zls-path points to a ZLS build compatible with the configured Zig version, then restart the MCP client",
-    );
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "backend_error" });
+    try obj.put(allocator, "ok", .{ .bool = false });
+    try obj.put(allocator, "backend", .{ .string = "zls" });
+    try obj.put(allocator, "operation", .{ .string = "lsp_session" });
+    try obj.put(allocator, "error", .{ .string = "Unavailable" });
+    try obj.put(allocator, "error_kind", .{ .string = "unavailable" });
+    try obj.put(allocator, "configured_path", .{ .string = a.config.zls_path });
+    try obj.put(allocator, "status", .{ .string = a.zls_status });
+    try obj.put(allocator, "restart_attempts", .{ .integer = @intCast(a.zls_restart_attempts) });
+    if (a.zls_last_failure) |failure| {
+        try obj.put(allocator, "last_failure", .{ .string = failure });
+    } else {
+        try obj.put(allocator, "last_failure", .null);
+    }
+    try obj.put(allocator, "resolution", .{ .string = "confirm --zls-path points to a ZLS build compatible with the configured Zig version, then restart the MCP client" });
+    return structured(allocator, .{ .object = obj });
 }
