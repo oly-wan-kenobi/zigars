@@ -34,8 +34,13 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/mcp_server.zig",
-        .max_lines = 1300,
-        .reason = "first-party MCP adapter owns routing and tool/resource/prompt result lifetime but must not grow into a general MCP framework",
+        .max_lines = 1250,
+        .reason = "first-party MCP adapter owns routing and result lifetime; transport-specific helpers should stay separate",
+    },
+    .{
+        .path = "src/mcp_server/http_transport.zig",
+        .max_lines = 120,
+        .reason = "HTTP request transport adapter should stay a compact MCP transport shim",
     },
     .{
         .path = "src/backend_catalog.zig",
@@ -69,8 +74,13 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/edit_zls.zig",
-        .max_lines = 620,
+        .max_lines = 520,
         .reason = "edit and ZLS mutation/navigation handlers must keep diagnostics in the dedicated module",
+    },
+    .{
+        .path = "src/tools/edit_zls_documents.zig",
+        .max_lines = 150,
+        .reason = "ZLS document open/close/status handlers should stay separate from edit/navigation handlers",
     },
     .{
         .path = "src/tools/edit_zls_diagnostics.zig",
@@ -119,8 +129,13 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/profiling.zig",
-        .max_lines = 820,
-        .reason = "profiling workflow handlers should stay separate from backend-heavy unit fixtures",
+        .max_lines = 600,
+        .reason = "profiling workflow handlers should stay separate from plan and backend-heavy fixture modules",
+    },
+    .{
+        .path = "src/tools/profiling_plan.zig",
+        .max_lines = 250,
+        .reason = "profiling capture planning should stay separate from backend execution handlers",
     },
     .{
         .path = "src/tools/profiling_tests.zig",
@@ -159,8 +174,13 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/zls_common.zig",
-        .max_lines = 600,
-        .reason = "shared ZLS/LSP helpers should keep capability contract tests in focused test modules",
+        .max_lines = 430,
+        .reason = "shared ZLS/LSP helpers should delegate diagnostic shaping and keep capability contracts focused",
+    },
+    .{
+        .path = "src/tools/zls_diagnostics_values.zig",
+        .max_lines = 240,
+        .reason = "ZLS diagnostic insight shaping should stay independently reviewable",
     },
     .{
         .path = "src/tools/zls_common_tests.zig",
