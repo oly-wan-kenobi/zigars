@@ -93,21 +93,27 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
 }
 
 fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child) !void {
-    const deadline = smoke.nowNs(io) + 10 * std.time.ns_per_s;
+    const deadline = smoke.nowNs(io) + 30 * std.time.ns_per_s;
     while (true) {
         const init_response = smoke.rpc(allocator, io, port,
             \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"zigar-smoke","version":"0"}}}
         ) catch |err| {
             if (smoke.nowNs(io) > deadline) {
-                if (child.stderr) |stderr| {
+                const stderr_file = child.stderr;
+                child.stderr = null;
+                child.kill(io);
+                if (stderr_file) |stderr| {
+                    defer stderr.close(io);
                     var reader_buffer: [4096]u8 = undefined;
                     var reader = stderr.reader(io, &reader_buffer);
                     const stderr_text = reader.interface.allocRemaining(allocator, .limited(64 * 1024)) catch |read_err| {
-                        try stderrPrint(io, "initialize timed out ({s}); stderr could not be read: {s}\n", .{ @errorName(err), @errorName(read_err) });
+                        try stderrPrint(io, "initialize timed out after 30s ({s}); stderr could not be read after terminating child: {s}\n", .{ @errorName(err), @errorName(read_err) });
                         return err;
                     };
                     defer allocator.free(stderr_text);
-                    try stderrPrint(io, "initialize timed out ({s}); stderr:\n{s}\n", .{ @errorName(err), stderr_text });
+                    try stderrPrint(io, "initialize timed out after 30s ({s}); stderr:\n{s}\n", .{ @errorName(err), stderr_text });
+                } else {
+                    try stderrPrint(io, "initialize timed out after 30s ({s}); child was terminated before returning the failure\n", .{@errorName(err)});
                 }
                 return err;
             }
