@@ -199,8 +199,58 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tool_manifest/definitions.zig",
-        .max_lines = 850,
-        .reason = "the generated-style tool definition list should remain reviewable and avoid helper logic",
+        .max_lines = 140,
+        .reason = "tool definition facade should preserve public order and delegate group bodies",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/discovery.zig",
+        .max_lines = 140,
+        .reason = "discovery and planning tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/agent.zig",
+        .max_lines = 120,
+        .reason = "agent workflow tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/core.zig",
+        .max_lines = 130,
+        .reason = "core Zig command tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/formatting.zig",
+        .max_lines = 100,
+        .reason = "formatting and edit tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/zls.zig",
+        .max_lines = 170,
+        .reason = "ZLS tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/docs.zig",
+        .max_lines = 80,
+        .reason = "docs tool definitions should remain compact and explicitly scoped",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/static_analysis.zig",
+        .max_lines = 260,
+        .reason = "static analysis tool definitions should remain independently reviewable",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/ci.zig",
+        .max_lines = 80,
+        .reason = "CI artifact tool definitions should remain compact",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/zwanzig.zig",
+        .max_lines = 90,
+        .reason = "optional zwanzig backend definitions should remain compact",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/profiling.zig",
+        .max_lines = 100,
+        .reason = "profiling backend definitions should remain compact",
     },
     .{
         .path = "src/tool_manifest/groups.zig",
@@ -269,7 +319,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_rules.zig",
-        .max_lines = 620,
+        .max_lines = 700,
         .reason = "release policy tables should stay auditable and split by domain if they grow further",
     },
 };

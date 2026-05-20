@@ -1,0 +1,20 @@
+const types = @import("../types.zig");
+
+const schema = types.schema;
+const schemaWithHints = types.schemaWithHints;
+const tool = types.tool;
+const handler = types.handler;
+const fieldHint = types.fieldHint;
+
+const docs_plan = "Offline docs lookup; no network, ZLS, or optional backend.";
+
+pub const zig_builtin_list = tool(.{ .description = "List bundled curated Zig builtin docs; source is partial curated zigar data.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinList"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_builtin_list_json = tool(.{ .description = "Return bundled curated Zig builtin docs with source, completeness, count, and ranking metadata.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinListJson"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_builtin_doc = tool(.{ .description = "Search bundled curated Zig builtin docs; text output includes partial-curated source metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinDoc"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_builtin_doc_json = tool(.{ .description = "Search bundled curated Zig builtin docs with source, completeness, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigBuiltinDocJson"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_std_search = tool(.{ .description = "Search local Zig stdlib .zig source files; this is source scanning, not rendered stdlib documentation.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdSearch"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_std_search_json = tool(.{ .description = "Search local Zig stdlib .zig source files with source-scan provenance, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdSearchJson"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_std_item = tool(.{ .description = "Look up exact Zig stdlib declaration-name matches in local .zig source; not rendered stdlib documentation.", .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdItem"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_std_item_json = tool(.{ .description = "Look up exact Zig stdlib declaration-name matches with source-scan provenance, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigStdItemJson"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_lang_ref_search = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback; text includes source/completeness metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigLangRefSearch"), .plan = .{ .pure_analysis = docs_plan } });
+pub const zig_lang_ref_search_json = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback with source, completeness, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .handler = handler(.docs, "zigLangRefSearchJson"), .plan = .{ .pure_analysis = docs_plan } });
