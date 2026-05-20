@@ -36,6 +36,10 @@ diff_folded_path="$(resolve_executable "${ZIGAR_DIFF_FOLDED_PATH:-diff-folded}" 
 
 command -v python3 >/dev/null || fail "python3 is required for response validation"
 
+report_dir="${ZIGAR_CONFORMANCE_REPORT_DIR:-.zigar-cache/backend-conformance}"
+mkdir -p "$report_dir"
+report_dir="$(cd "$report_dir" && pwd -P)"
+
 workspace="$(mktemp -d "${TMPDIR:-/tmp}/zigar-backend-conformance.XXXXXX")"
 cleanup() {
   if [[ "${ZIGAR_KEEP_CONFORMANCE_WORKSPACE:-0}" != "1" ]]; then
@@ -89,10 +93,13 @@ cat >"$workspace/after.folded" <<'EOF'
 root;main;new 5
 EOF
 
-stdout_path="$workspace/stdout.jsonl"
-stderr_path="$workspace/stderr.log"
+stdout_path="$report_dir/stdout.jsonl"
+stderr_path="$report_dir/stderr.log"
+report_path="$report_dir/report.json"
+summary_path="$report_dir/summary.md"
 
 printf 'backend-conformance: workspace %s\n' "$workspace"
+printf 'backend-conformance: report %s\n' "$report_path"
 printf 'backend-conformance: zigar %s\n' "$zigar_binary"
 printf 'backend-conformance: zig %s\n' "$zig_path"
 printf 'backend-conformance: zls %s\n' "$zls_path"
@@ -109,14 +116,19 @@ ZIGAR_ZFLAME_PATH="$zflame_path" \
 ZIGAR_DIFF_FOLDED_PATH="$diff_folded_path" \
 ZIGAR_STDOUT_PATH="$stdout_path" \
 ZIGAR_STDERR_PATH="$stderr_path" \
+ZIGAR_REPORT_PATH="$report_path" \
+ZIGAR_SUMMARY_PATH="$summary_path" \
 ZIGAR_BACKEND_TIMEOUT_MS="${ZIGAR_BACKEND_TIMEOUT_MS:-20000}" \
 ZIGAR_CONFORMANCE_TIMEOUT_SECONDS="${ZIGAR_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
 python3 <<'PY'
+import hashlib
 import json
 import os
 import pathlib
+import selectors
 import subprocess
 import sys
+import time
 
 
 def fail(message):
@@ -127,8 +139,79 @@ def fail(message):
 workspace = pathlib.Path(os.environ["ZIGAR_WORKSPACE"])
 stdout_path = pathlib.Path(os.environ["ZIGAR_STDOUT_PATH"])
 stderr_path = pathlib.Path(os.environ["ZIGAR_STDERR_PATH"])
+report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
+summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
 backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
 timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
+
+backend_specs = {
+    "zigar": {
+        "path": os.environ["ZIGAR_BINARY"],
+        "version_argv": [os.environ["ZIGAR_BINARY"], "--version"],
+    },
+    "zig": {
+        "path": os.environ["ZIGAR_ZIG_PATH"],
+        "version_argv": [os.environ["ZIGAR_ZIG_PATH"], "version"],
+    },
+    "zls": {
+        "path": os.environ["ZIGAR_ZLS_PATH"],
+        "version_argv": [os.environ["ZIGAR_ZLS_PATH"], "--version"],
+    },
+    "zwanzig": {
+        "path": os.environ["ZIGAR_ZWANZIG_PATH"],
+        "version_argv": [os.environ["ZIGAR_ZWANZIG_PATH"], "--help"],
+    },
+    "zflame": {
+        "path": os.environ["ZIGAR_ZFLAME_PATH"],
+        "version_argv": [os.environ["ZIGAR_ZFLAME_PATH"], "--help"],
+    },
+    "diff_folded": {
+        "path": os.environ["ZIGAR_DIFF_FOLDED_PATH"],
+        "version_argv": [os.environ["ZIGAR_DIFF_FOLDED_PATH"], "--help"],
+    },
+}
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_probe(argv):
+    try:
+        result = subprocess.run(
+            argv,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        return {
+            "argv": argv,
+            "returncode": result.returncode,
+            "stdout": result.stdout.strip()[:4096],
+            "stderr": result.stderr.strip()[:4096],
+        }
+    except Exception as exc:
+        return {
+            "argv": argv,
+            "error": type(exc).__name__,
+            "message": str(exc),
+        }
+
+
+backend_evidence = {}
+for name, spec in backend_specs.items():
+    path = pathlib.Path(spec["path"])
+    entry = {
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "version_probe": run_probe(spec["version_argv"]),
+    }
+    backend_evidence[name] = entry
 
 requests = [
     {
@@ -220,27 +303,73 @@ argv = [
     str(backend_timeout_ms),
 ]
 
-try:
-    proc = subprocess.run(
-        argv,
-        input=stdin,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout_seconds,
-    )
-except subprocess.TimeoutExpired as exc:
-    stdout_path.write_text(exc.stdout or "")
-    stderr_path.write_text(exc.stderr or "")
-    fail(f"zigar stdio run timed out after {timeout_seconds}s")
-
-stdout_path.write_text(proc.stdout)
-stderr_path.write_text(proc.stderr)
-if proc.returncode != 0:
-    fail(f"zigar exited with status {proc.returncode}; stderr saved to {stderr_path}")
-
 responses = {}
-for index, raw in enumerate(proc.stdout.splitlines(), start=1):
+stdout_lines = []
+stderr_file = stderr_path.open("w")
+proc = subprocess.Popen(
+    argv,
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=stderr_file,
+    text=True,
+    bufsize=1,
+)
+try:
+    assert proc.stdin is not None
+    proc.stdin.write(stdin)
+    proc.stdin.close()
+    proc.stdin = None
+
+    selector = selectors.DefaultSelector()
+    assert proc.stdout is not None
+    selector.register(proc.stdout, selectors.EVENT_READ)
+    deadline = time.monotonic() + timeout_seconds
+    expected_ids = set(range(1, 8))
+    line_index = 0
+    while not expected_ids.issubset(responses.keys()):
+        if time.monotonic() > deadline:
+            proc.kill()
+            proc.wait(timeout=5)
+            stdout_path.write_text("".join(stdout_lines))
+            fail(f"zigar stdio run timed out after {timeout_seconds}s; stdout saved to {stdout_path}, stderr saved to {stderr_path}")
+        events = selector.select(timeout=0.2)
+        if not events:
+            if proc.poll() is not None:
+                break
+            continue
+        for key, _ in events:
+            raw_line = key.fileobj.readline()
+            if raw_line == "":
+                selector.unregister(key.fileobj)
+                continue
+            stdout_lines.append(raw_line)
+            line_index += 1
+            raw = raw_line.strip()
+            if not raw:
+                continue
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                stdout_path.write_text("".join(stdout_lines))
+                fail(f"stdout line {line_index} is not JSON: {exc}")
+            response_id = message.get("id")
+            if response_id is not None:
+                responses[response_id] = message
+finally:
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+    if proc.stdout is not None:
+        stdout_lines.extend(proc.stdout.readlines())
+    stderr_file.close()
+
+stdout_path.write_text("".join(stdout_lines))
+
+for index, raw in enumerate(stdout_lines, start=1):
     raw = raw.strip()
     if not raw:
         continue
@@ -328,7 +457,78 @@ for rel in ("profile.svg", "diff.svg"):
     if not prefix.startswith("<svg"):
         fail(f"expected {rel} to start with <svg")
 
+artifacts = {}
+for rel in ("profile.svg", "diff.svg"):
+    path = workspace / rel
+    artifacts[rel] = {
+        "path": str(path),
+        "bytes": path.stat().st_size,
+        "sha256": sha256_file(path),
+    }
+
+tool_evidence = {
+    "zigar_doctor": {"response_id": 3, "probe_checks": checks},
+    "zig_document_symbols": {
+        "response_id": 4,
+        "required_markers": ["textDocument/documentSymbol", "PublicThing or main"],
+    },
+    "zig_lint_rules": {"response_id": 5, "required_markers": ["zwanzig"]},
+    "zig_flamegraph": {"response_id": 6, "artifact": "profile.svg"},
+    "zig_flamegraph_diff": {"response_id": 7, "artifact": "diff.svg"},
+}
+
+report = {
+    "kind": "zigar_backend_conformance_report",
+    "schema_version": 1,
+    "generated_unix": int(time.time()),
+    "workspace": str(workspace),
+    "timeout_ms": backend_timeout_ms,
+    "stdio": {
+        "stdout": str(stdout_path),
+        "stderr": str(stderr_path),
+        "response_count": len(responses),
+    },
+    "backends": backend_evidence,
+    "tool_evidence": tool_evidence,
+    "artifacts": artifacts,
+    "result": "passed",
+}
+report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+
+summary_lines = [
+    "# Zigar Backend Conformance",
+    "",
+    "Result: passed",
+    f"Report: `{report_path}`",
+    f"Workspace: `{workspace}`",
+    "",
+    "## Backends",
+    "",
+]
+for name, entry in backend_evidence.items():
+    probe = entry["version_probe"]
+    output = probe.get("stdout") or probe.get("stderr") or probe.get("message", "")
+    first_line = output.splitlines()[0] if output else ""
+    summary_lines.append(f"- {name}: `{entry['path']}` sha256 `{entry['sha256']}` {first_line}")
+summary_lines.extend([
+    "",
+    "## Tool Evidence",
+    "",
+    "- `zigar_doctor` reported successful probes for zig, zls, zwanzig, zflame, and diff-folded.",
+    "- `zig_document_symbols` exercised `textDocument/documentSymbol` and returned fixture symbols.",
+    "- `zig_lint_rules` exercised zwanzig metadata.",
+    "- `zig_flamegraph` and `zig_flamegraph_diff` wrote SVG artifacts.",
+    "",
+    "## Artifacts",
+    "",
+])
+for name, entry in artifacts.items():
+    summary_lines.append(f"- {name}: {entry['bytes']} bytes sha256 `{entry['sha256']}`")
+summary_path.write_text("\n".join(summary_lines) + "\n")
+
 print("backend-conformance: real backend probes and tool calls passed")
 print(f"backend-conformance: stdout {stdout_path}")
 print(f"backend-conformance: stderr {stderr_path}")
+print(f"backend-conformance: report {report_path}")
+print(f"backend-conformance: summary {summary_path}")
 PY

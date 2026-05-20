@@ -43,6 +43,11 @@ backend probes, exercises `zig_document_symbols`, `zig_lint_rules`,
 `zig_flamegraph`, and `zig_flamegraph_diff`, and verifies the generated SVG
 artifacts. Configure non-default paths with `ZIGAR_ZLS_PATH`,
 `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH`.
+It writes release-citable evidence to `.zigar-cache/backend-conformance/` by
+default: `report.json`, `summary.md`, `stdout.jsonl`, and `stderr.log`. The
+manual workflow uploads the same files as the `zigar-backend-conformance`
+artifact. Set `ZIGAR_CONFORMANCE_REPORT_DIR` to choose a different output
+directory.
 
 ## Packaged Setup Catalog
 

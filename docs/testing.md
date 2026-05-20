@@ -69,7 +69,9 @@ workflow. It starts zigar over stdio with real backend paths, probes them throug
 `zigar_doctor`, runs one representative tool for each backend family, and
 verifies zflame/diff-folded SVG artifacts. Use `ZIGAR_ZLS_PATH`,
 `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` when
-the binaries are not on `PATH`.
+the binaries are not on `PATH`. The check writes `report.json`, `summary.md`,
+`stdout.jsonl`, and `stderr.log` under `.zigar-cache/backend-conformance/` by
+default, and the workflow uploads those files as `zigar-backend-conformance`.
 
 ## Coverage
 
