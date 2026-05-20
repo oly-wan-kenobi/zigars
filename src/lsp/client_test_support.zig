@@ -40,6 +40,7 @@ pub const FakeZls = struct {
                 self.writeResponse(2, "{\"contents\":{\"kind\":\"markdown\",\"value\":\"fake hover\"}}") catch return;
             } else if (std.mem.indexOf(u8, msg, "\"id\":3") != null) {
                 self.writeResponse(3, "null") catch return;
+            } else if (std.mem.indexOf(u8, msg, "\"method\":\"exit\"") != null) {
                 return;
             }
         }

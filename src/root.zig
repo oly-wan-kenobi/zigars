@@ -57,6 +57,7 @@ test {
     _ = lsp_transport;
     _ = lsp_types;
     _ = document_state;
+    _ = @import("state/documents_tests.zig");
     _ = uri;
     _ = workspace;
     _ = zls_process;
