@@ -999,6 +999,11 @@ fn checkMcpAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
             .token = "handleTasks",
             .reason = "stub task handlers must not remain in the public protocol surface",
         },
+        .{
+            .path = "docs/architecture.md",
+            .token = "empty task-list",
+            .reason = "architecture docs must not advertise MCP task support until zigar implements the task lifecycle",
+        },
     };
 
     var ok = true;

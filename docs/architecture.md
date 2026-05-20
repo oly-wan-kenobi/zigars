@@ -105,8 +105,8 @@ preview workflows from default mutations.
 The build imports the pinned upstream `mcp` package directly. There is no local
 patched MCP dependency in the build graph. The first-party adapter in
 `src/mcp_server.zig` keeps zigar's supported MCP surface explicit:
-`initialize`, `ping`, tools, resources, prompts, logging level, empty task-list
-responses, stdio transport, and loopback HTTP transport.
+`initialize`, `ping`, tools, resources, prompts, logging level, completion
+requests, stdio transport, and loopback HTTP transport.
 
 `tools/call`, `resources/read`, and `prompts/get` are the lifetime-sensitive
 paths. zigar handlers may return owned `mcp.tools.ToolResult`,
