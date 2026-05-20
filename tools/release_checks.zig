@@ -44,6 +44,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try checkCommandRunningToolDocs(allocator, io)) and ok;
     ok = (try checkAgentWorkflowDocs(allocator, io)) and ok;
+    ok = (try checkCiArtifactDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
@@ -249,6 +250,11 @@ const line_budgets = [_]LineBudget{
         .reason = "shared tool helpers must stay a small facade over focused helper modules",
     },
     .{
+        .path = "src/tools/ci.zig",
+        .max_lines = 430,
+        .reason = "CI artifact handlers should keep parsing, XML, and matrix shaping reviewable",
+    },
+    .{
         .path = "src/tools/agent.zig",
         .max_lines = 340,
         .reason = "agent workflow handlers should remain focused and delegate value-building helpers",
@@ -395,7 +401,7 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/stdio_fixtures.zig",
-        .max_lines = 430,
+        .max_lines = 450,
         .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
     },
     .{
@@ -930,6 +936,17 @@ fn checkAgentWorkflowDocs(allocator: Allocator, io: Io) !bool {
         "skipped_phases",
         "heuristic text/import scan",
         "zigar_context_pack -> zigar_next_action",
+    });
+}
+
+fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
+    return checkDocNeedles(allocator, io, "docs/ci-artifacts.md", &.{
+        "parser_confidence",
+        "parsing_basis",
+        "command_level_junit",
+        "raw_output_available",
+        "failure_summary",
+        "GitHub Actions",
     });
 }
 

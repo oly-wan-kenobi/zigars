@@ -676,7 +676,7 @@ pub const definitions = struct {
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_junit = tool(.{
-        .description = "Run Zig tests and return a minimal JUnit XML artifact.",
+        .description = "Run Zig tests and return a command-level JUnit XML artifact with raw output metadata.",
         .input_schema = schema(&.{ .{ "file", "string", false }, .{ "filter", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
         .read_only = true,
         .group = .ci_artifacts,
@@ -685,7 +685,7 @@ pub const definitions = struct {
         .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     });
     pub const zig_matrix_check = tool(.{
-        .description = "Run build/test checks across configured Zig binaries.",
+        .description = "Run build/test checks across configured Zig binaries with direct per-entry status fields.",
         .input_schema = schema(&.{ .{ "zig_paths", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
         .read_only = true,
         .group = .ci_artifacts,

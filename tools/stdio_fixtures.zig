@@ -103,6 +103,7 @@ fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     const src_dir = try std.fmt.bufPrint(&src_path_buf, "{s}/src", .{workspace});
     try Io.Dir.cwd().createDirPath(io, src_dir);
     try writeJoinedFile(io, workspace, "src/main.zig", "pub fn main() void {const x=1;_ = x;}\n");
+    try writeJoinedFile(io, workspace, "src/bad.zig", "pub fn bad() void { const x = ; _ = x; }\n");
     try writeJoinedFile(io, workspace, "src/tests.zig", "const std = @import(\"std\");\npub const Fixture = struct { pub fn run() void {} };\ntest \"fixture works\" { _ = std.testing; }\n");
     try writeJoinedFile(io, workspace, "stacks.folded", "main;work 7\n");
     try writeJoinedFile(io, workspace, "before.folded", "main;old 3\n");
@@ -245,6 +246,11 @@ const StdioClient = struct {
         defer self.allocator.free(ast_decls);
         try self.expectPathString(ast_decls, "capability_tier", "parser_backed");
         if (std.mem.indexOf(u8, ast_decls, "Fixture") == null) return error.AssertionFailed;
+
+        const annotations = try self.callTool("zig_ci_annotations", "{\"file\":\"src/bad.zig\"}");
+        defer self.allocator.free(annotations);
+        try self.expectPathString(annotations, "artifact_kind", "ci_annotations");
+        try self.expectPathString(annotations, "parser_confidence", "high");
 
         const validate = try self.callTool("zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(validate);

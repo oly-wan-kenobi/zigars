@@ -229,6 +229,8 @@ Source writes require apply=true.
   guidance; fast heuristic tools are `advisory_orientation`, AST variants are
   `parser_backed`)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
+  (annotations expose parser confidence and raw output; JUnit is explicitly
+  command-level; matrix entries expose direct status fields)
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
   `zig_analysis_graphs` (`zwanzig_backed`, optional)
 - Profiling/zflame: `zig_profile_plan` returns structured external-capture
