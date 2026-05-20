@@ -170,3 +170,59 @@ test "static analysis tools remain read-only and source-safe" {
         try std.testing.expect(!entry.risk.writes_source);
     }
 }
+
+test "static analysis contracts do not overstate evidence maturity" {
+    for (contracts) |contract| switch (contract.tier) {
+        .advisory_orientation => {
+            try std.testing.expect(contract.confidence != .high);
+            try std.testing.expect(contract.classification != .release_gating_candidate);
+        },
+        .parser_backed => {
+            try std.testing.expectEqual(Confidence.high, contract.confidence);
+            try std.testing.expectEqual(Classification.advisory, contract.classification);
+            try std.testing.expect(contains(contract.analysis_kind, "parser_backed"));
+            try std.testing.expect(contains(contract.source_coverage, "std.zig.Ast"));
+            try std.testing.expect(contains(contract.source_coverage, "parse_error_count"));
+            try std.testing.expect(anyContains(contract.limitations, "Parse errors"));
+            try std.testing.expect(contract.verify_with.len > 0);
+            try std.testing.expect(contains(contract.verify_with[0], "zig ast-check"));
+        },
+        .compiler_backed => {
+            try std.testing.expect(contains(contract.source_coverage, "Compiler") or contains(contract.source_coverage, "compiler"));
+            try std.testing.expect(anyContains(contract.limitations, "compiler") or anyContains(contract.limitations, "test output"));
+        },
+        .zls_backed => {
+            try std.testing.expect(contains(contract.source_coverage, "ZLS") or anyContains(contract.verify_with, "ZLS"));
+        },
+        .zwanzig_backed => {
+            try std.testing.expect(contains(contract.source_coverage, "zwanzig"));
+            try std.testing.expect(anyContains(contract.limitations, "optional configured zwanzig"));
+            try std.testing.expect(contract.verify_with.len > 0);
+            try std.testing.expect(contains(contract.verify_with[0], "configured zwanzig"));
+        },
+    };
+}
+
+test "release-gating static analysis claims require executable-backed evidence" {
+    for (contracts) |contract| {
+        if (contract.classification != .release_gating_candidate) continue;
+        switch (contract.tier) {
+            .compiler_backed, .zwanzig_backed => {},
+            else => return error.ReleaseGatingClaimWithoutExecutableEvidence,
+        }
+        try std.testing.expectEqual(Confidence.high, contract.confidence);
+        try std.testing.expect(contract.verify_with.len > 0);
+        try std.testing.expect(contains(contract.source_coverage, "output") or contains(contract.source_coverage, "Compiler") or contains(contract.source_coverage, "zwanzig"));
+    }
+}
+
+fn contains(haystack: []const u8, needle: []const u8) bool {
+    return std.mem.indexOf(u8, haystack, needle) != null;
+}
+
+fn anyContains(values: []const []const u8, needle: []const u8) bool {
+    for (values) |value| {
+        if (contains(value, needle)) return true;
+    }
+    return false;
+}
