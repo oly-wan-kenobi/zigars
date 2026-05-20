@@ -85,7 +85,9 @@ Some quality signals cannot be forced by the local repository alone:
 - Real ZLS, zwanzig, zflame, diff-folded, and platform-profiler validation is
   optional because those backends are not bundled. Use the manual
   `Backend Conformance` workflow or `.github/scripts/backend-conformance.sh`
-  when release notes need to claim exact real-backend validation.
+  when release notes need to claim exact real-backend validation. Every public
+  release note should still state real-backend validation status explicitly,
+  using `not run` when no real-backend evidence artifact exists.
 - Agent-client behavior varies by client. zigar documents Codex, Claude, Gemini,
   Hermes, and generic stdio setup, but clients still own launch environment and
   workspace selection.

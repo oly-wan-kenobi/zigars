@@ -27,6 +27,13 @@ transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
 output metadata, CI annotation contracts, structured profiling plans, and
 diff-folded flamegraph flow with fake backend executables.
 
+Release notes must include a short validation evidence block. At minimum, record
+the source commit, `zig build release-check`, `zig build dist
+release-asset-smoke`, fake-backend fixtures, and real-backend validation status.
+For real optional backends, either cite the uploaded `Backend Conformance`
+artifact or say `not run`; do not claim real backend coverage from fake-backend
+fixtures.
+
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
 binary results, per-suite floors, measured kcov coverage, configured coverage
@@ -53,8 +60,11 @@ and runs `zigar --version` from it.
 6. Confirm [trust.md](trust.md) still matches the release notes, especially any
    absent external validation for branch protection, optional backends, or
    client-specific behavior.
-7. Confirm the tag and GitHub release do not already exist.
-8. Tag the release:
+7. Add a validation evidence block to the release notes, including real-backend
+   validation status. If the manual backend conformance script or workflow did
+   not run, say `not run` instead of implying coverage.
+8. Confirm the tag and GitHub release do not already exist.
+9. Tag the release:
 
 ```sh
 version="$(zig build version)"
