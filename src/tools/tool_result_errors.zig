@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const command = zigar.command;
+const command_output = zigar.command_output;
 const tool_errors = zigar.tool_errors;
 
 pub const CommandRunError = struct {
@@ -55,6 +56,10 @@ pub fn commandRunErrorResult(allocator: std.mem.Allocator, spec: CommandRunError
 pub fn commandResultErrorResult(allocator: std.mem.Allocator, spec: CommandResultError) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_text = commandText(allocator, spec.argv) catch return error.OutOfMemory;
     defer allocator.free(command_text);
+    const stdout = command_output.safeTextAlloc(allocator, spec.result.stdout) catch return error.OutOfMemory;
+    defer allocator.free(stdout.text);
+    const stderr = command_output.safeTextAlloc(allocator, spec.result.stderr) catch return error.OutOfMemory;
+    defer allocator.free(stderr.text);
     const details = [_]tool_errors.Detail{
         .{ .key = "backend", .value = .{ .string = spec.backend } },
         .{ .key = "command", .value = .{ .string = command_text } },
@@ -62,8 +67,14 @@ pub fn commandResultErrorResult(allocator: std.mem.Allocator, spec: CommandResul
         .{ .key = "timeout_ms", .value = .{ .integer = spec.timeout_ms } },
         .{ .key = "term", .value = .{ .string = termName(spec.result.term) } },
         .{ .key = "exit_code", .value = if (termExitCode(spec.result.term)) |code| .{ .integer = code } else .null },
-        .{ .key = "stdout", .value = .{ .string = spec.result.stdout } },
-        .{ .key = "stderr", .value = .{ .string = spec.result.stderr } },
+        .{ .key = "stdout", .value = .{ .string = stdout.text } },
+        .{ .key = "stderr", .value = .{ .string = stderr.text } },
+        .{ .key = "stdout_invalid_utf8", .value = .{ .bool = stdout.invalid_utf8 } },
+        .{ .key = "stderr_invalid_utf8", .value = .{ .bool = stderr.invalid_utf8 } },
+        .{ .key = "stdout_encoding", .value = .{ .string = stdout.encoding } },
+        .{ .key = "stderr_encoding", .value = .{ .string = stderr.encoding } },
+        .{ .key = "stdout_byte_count", .value = .{ .integer = @intCast(stdout.byte_count) } },
+        .{ .key = "stderr_byte_count", .value = .{ .integer = @intCast(stderr.byte_count) } },
         .{ .key = "stdout_truncated", .value = .{ .bool = spec.result.stdout_truncated } },
         .{ .key = "stderr_truncated", .value = .{ .bool = spec.result.stderr_truncated } },
         .{ .key = "output_limit_mode", .value = .{ .string = command.output_limit_mode } },
@@ -132,4 +143,34 @@ test "commandText joins argv without shell interpretation" {
     const text = try commandText(std.testing.allocator, &.{ "zig", "build", "test" });
     defer std.testing.allocator.free(text);
     try std.testing.expectEqualStrings("zig build test", text);
+}
+
+test "commandResultErrorResult sanitizes invalid UTF-8 streams" {
+    const allocator = std.testing.allocator;
+    const result = command.RunResult{
+        .term = .{ .exited = 2 },
+        .stdout = try allocator.dupe(u8, "out\xff"),
+        .stderr = try allocator.dupe(u8, "err"),
+    };
+    defer result.deinit(allocator);
+
+    const tool_result = try commandResultErrorResult(allocator, .{
+        .tool = "zig_flamegraph",
+        .operation = "render",
+        .phase = "run_backend",
+        .code = "backend_failed",
+        .backend = "zflame",
+        .argv = &.{ "zflame", "input.folded" },
+        .cwd = ".",
+        .timeout_ms = 1000,
+        .result = result,
+        .resolution = "Inspect backend output and retry.",
+    });
+    defer zigar.json_result.deinitToolResult(allocator, tool_result);
+
+    const obj = tool_result.structuredContent.?.object;
+    try std.testing.expect(obj.get("stdout_invalid_utf8").?.bool);
+    try std.testing.expect(!obj.get("stderr_invalid_utf8").?.bool);
+    try std.testing.expectEqualStrings("utf-8-lossy", obj.get("stdout_encoding").?.string);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(obj.get("stdout").?.string));
 }
