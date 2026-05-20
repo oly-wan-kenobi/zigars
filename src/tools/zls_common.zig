@@ -216,8 +216,12 @@ pub fn buildExplainCommand(allocator: std.mem.Allocator, args: ?std.json.Value, 
         error.OutOfMemory => error.OutOfMemory,
         else => error.InvalidExtraArgs,
     };
-    defer freeArgList(allocator, extra);
+    var extra_transferred = false;
+    defer if (!extra_transferred) freeArgList(allocator, extra);
     list.appendSlice(allocator, extra) catch return error.OutOfMemory;
+    owned_paths.appendSlice(allocator, extra) catch return error.OutOfMemory;
+    allocator.free(extra);
+    extra_transferred = true;
     return .{ .argv = list, .owned_paths = owned_paths, .mode = mode };
 }
 

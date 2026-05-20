@@ -199,12 +199,18 @@ pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8,
 }
 
 pub fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, backendErrorValue(allocator, backend_name, operation, err, resolution) catch return error.OutOfMemory);
+    var value = backendErrorValue(allocator, backend_name, operation, err, resolution) catch return error.OutOfMemory;
+    defer switch (value) {
+        .object => |*obj| obj.deinit(allocator),
+        else => {},
+    };
+    return structured(allocator, value);
 }
 
 pub fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, configured_path: []const u8, status: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
+    defer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "backend", .{ .string = backend_name });
@@ -227,6 +233,7 @@ pub fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) mcp.
 pub fn structuredText(allocator: std.mem.Allocator, kind: []const u8, body: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
+    defer obj.deinit(allocator);
     obj.put(allocator, "kind", .{ .string = kind }) catch return error.OutOfMemory;
     obj.put(allocator, "text", .{ .string = body }) catch return error.OutOfMemory;
     return structured(allocator, .{ .object = obj });
@@ -310,11 +317,9 @@ pub fn workspacePathExists(allocator: std.mem.Allocator, a: *App, path: []const 
     const resolved = a.workspace.resolve(path) catch return false;
     defer allocator.free(resolved);
     var dir = std.Io.Dir.openDirAbsolute(a.io, resolved, .{}) catch {
-        if (std.Io.Dir.cwd().readFileAlloc(a.io, resolved, allocator, .limited(1)) catch null) |bytes| {
-            allocator.free(bytes);
-            return true;
-        }
-        return false;
+        var file = std.Io.Dir.cwd().openFile(a.io, resolved, .{}) catch return false;
+        file.close(a.io);
+        return true;
     };
     dir.close(a.io);
     return true;

@@ -12,6 +12,8 @@ ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
 coverage floors, structured tool-error contract scans, line-budget headroom, and
 artifact hygiene. It also checks that the build imports the pinned upstream
 `mcp` package directly instead of routing through a patched MCP server wrapper.
+It validates [maturity.md](maturity.md) so the public-release A- feature
+reassessment and known product boundaries remain documented.
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow
@@ -19,8 +21,8 @@ can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
 `tools/list`, `zigar_schema`, and `zigar_doctor` using
 `tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
-output metadata, structured profiling plans, and diff-folded flamegraph flow
-with fake backend executables.
+output metadata, CI annotation contracts, structured profiling plans, and
+diff-folded flamegraph flow with fake backend executables.
 
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
@@ -43,8 +45,10 @@ and runs `zigar --version` from it.
 2. Confirm `zig build version` matches the intended release version.
 3. Run `zig build release-check`.
 4. Run `zig build dist release-asset-smoke`.
-5. Confirm the tag and GitHub release do not already exist.
-6. Tag the release:
+5. Confirm [maturity.md](maturity.md) still says every major feature area is at
+   least A- without hiding known limitations.
+6. Confirm the tag and GitHub release do not already exist.
+7. Tag the release:
 
 ```sh
 version="$(zig build version)"

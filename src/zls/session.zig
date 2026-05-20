@@ -1,3 +1,4 @@
+const testing = @import("std").testing;
 const runtime_mod = @import("../runtime.zig");
 const uri_util = @import("../types/uri.zig");
 const DocumentState = @import("../state/documents.zig").DocumentState;
@@ -81,4 +82,34 @@ pub fn ensureReady(runtime: *App) !void {
         if (client.isRunning()) return;
     }
     try restart(runtime);
+}
+
+test "clear drops runtime ZLS pointers" {
+    var fake_proc: ZlsProcess = undefined;
+    var fake_client: LspClient = undefined;
+    var fake_docs: DocumentState = undefined;
+    var app = testSessionApp();
+    app.zls_process = &fake_proc;
+    app.lsp_client = &fake_client;
+    app.doc_state = &fake_docs;
+
+    clear(&app);
+    try testing.expect(app.zls_process == null);
+    try testing.expect(app.lsp_client == null);
+    try testing.expect(app.doc_state == null);
+}
+
+test "restart and ensureReady report missing slots" {
+    var app = testSessionApp();
+    try testing.expectError(error.NotConnected, restart(&app));
+    try testing.expectError(error.NotConnected, ensureReady(&app));
+}
+
+fn testSessionApp() App {
+    return .{
+        .allocator = testing.allocator,
+        .io = testing.io,
+        .config = .{ .workspace = "/tmp/zigar-zls-session-test" },
+        .workspace = undefined,
+    };
 }

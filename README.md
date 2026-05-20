@@ -11,8 +11,9 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 
 ## Status
 
-`zigar` is ready for early public use with Zig 0.16.0 over stdio and HTTP MCP
-transports. The current package version is `0.2.0`; see
+`zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
+transports. Major feature areas are documented at A- or better in
+[docs/maturity.md](docs/maturity.md). The current package version is `0.2.0`; see
 [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
@@ -298,6 +299,8 @@ More detail:
   setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
+- [Feature maturity](docs/maturity.md): public-readiness rubric,
+  reassessment, evidence, and known product boundaries.
 - [Security policy](SECURITY.md), [security model](docs/security-model.md), and
   [security readiness audit](docs/security-audit.md): private vulnerability
   reporting, workspace boundaries, and remaining security posture.

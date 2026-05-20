@@ -45,6 +45,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkCommandRunningToolDocs(allocator, io)) and ok;
     ok = (try checkAgentWorkflowDocs(allocator, io)) and ok;
     ok = (try checkCiArtifactDocs(allocator, io)) and ok;
+    ok = (try checkMaturityDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
@@ -947,6 +948,22 @@ fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
         "raw_output_available",
         "failure_summary",
         "GitHub Actions",
+    });
+}
+
+fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {
+    return checkDocNeedles(allocator, io, "docs/maturity.md", &.{
+        "Minimum public-release rating: A-",
+        "No below-A- feature area remains",
+        "ZLS/LSP tools",
+        "Docs lookup",
+        "Static analysis",
+        "zwanzig optional backend",
+        "Profiling/zflame",
+        "Agent workflows",
+        "CI artifact tools",
+        "HTTP/MCP substrate",
+        "command-level JUnit",
     });
 }
 
