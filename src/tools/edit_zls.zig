@@ -147,11 +147,9 @@ pub fn zigPatchPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 pub fn zigHover(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zlsPositionRequest(a, allocator, args, "textDocument/hover");
 }
-
 pub fn zigDefinition(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zlsPositionRequest(a, allocator, args, "textDocument/definition");
 }
-
 pub fn zigReferences(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (requireZlsCapability(a, allocator, "textDocument/references")) |result| return result;
     const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, "textDocument/references", argString(args, "file"), err);
@@ -175,11 +173,9 @@ pub fn zigReferences(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 pub fn zigCompletion(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zlsPositionRequest(a, allocator, args, "textDocument/completion");
 }
-
 pub fn zigSignatureHelp(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zlsPositionRequest(a, allocator, args, "textDocument/signatureHelp");
 }
-
 pub fn zlsPositionRequest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (requireZlsCapability(a, allocator, method)) |result| return result;
     const file_uri = zlsFileUriFromArgs(a, allocator, args) catch |err| return zlsSetupErrorResult(a, allocator, method, argString(args, "file"), err);
@@ -684,19 +680,17 @@ pub fn workspaceEditToolResultForDocument(a: *App, allocator: std.mem.Allocator,
 
 pub fn zigWorkspaceSymbols(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return missingArgumentResult(allocator, "zig_workspace_symbols", "query", "string");
-    if (a.lsp_client) |client| {
-        switch (zlsCapabilityState(a, allocator, "workspace/symbol")) {
-            .no_capability_required, .supported => {},
-            .unavailable => return zigWorkspaceSymbolsFallback(a, allocator, query, args),
-            .unsupported => |capability| return unsupportedCapability(allocator, "workspace/symbol", capability),
-        }
-        const Params = struct { query: []const u8 };
-        a.zls_requests += 1;
-        const response = client.sendRequest(allocator, "workspace/symbol", Params{ .query = query }) catch |err| return backendErrorResult(allocator, "zls", "workspace/symbol", err, "ZLS workspace symbol search failed; zigar will use heuristic analysis when no ZLS client is available");
-        defer allocator.free(response);
-        return lspStructuredTool(allocator, "workspace/symbol", response);
+    const client = a.lsp_client orelse return zigWorkspaceSymbolsFallback(a, allocator, query, args);
+    switch (zlsCapabilityState(a, allocator, "workspace/symbol")) {
+        .no_capability_required, .supported => {},
+        .unavailable => return zigWorkspaceSymbolsFallback(a, allocator, query, args),
+        .unsupported => |capability| return unsupportedCapability(allocator, "workspace/symbol", capability),
     }
-    return zigWorkspaceSymbolsFallback(a, allocator, query, args);
+    const Params = struct { query: []const u8 };
+    a.zls_requests += 1;
+    const response = client.sendRequest(allocator, "workspace/symbol", Params{ .query = query }) catch |err| return backendErrorResult(allocator, "zls", "workspace/symbol", err, "ZLS workspace symbol search failed; zigar will use heuristic analysis when no ZLS client is available");
+    defer allocator.free(response);
+    return lspStructuredTool(allocator, "workspace/symbol", response);
 }
 
 fn zigWorkspaceSymbolsFallback(a: *App, allocator: std.mem.Allocator, query: []const u8, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
