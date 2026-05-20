@@ -53,6 +53,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
     ok = (try checkMcpAdvertisedCapabilityContract(allocator, io)) and ok;
     ok = (try task_status.checkPublicReleaseBlockers(allocator, io)) and ok;
+    ok = (try task_status.checkReadyTaskScope(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }

@@ -34,7 +34,8 @@ enforce them, and the product boundaries that should stay visible.
    changes should be called out in the changelog before a tag.
 9. Public-release blocker tasks must be closed before `release-check` passes.
    This prevents maturity docs from claiming readiness while blocking task
-   frontmatter still says otherwise.
+   frontmatter still says otherwise. Ready future tasks must explicitly declare
+   that they are outside the current public-release scope.
 
 ## Feature Maturity
 
