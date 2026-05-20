@@ -87,6 +87,9 @@ Some quality signals cannot be forced by the local repository alone:
   when release notes need to claim exact real-backend validation. Every public
   release note should still state real-backend validation status explicitly,
   using `not run` when no real-backend evidence artifact exists.
+- Public optional-backend claims should come from the manual `Release Readiness`
+  artifact, including the generated backend compatibility matrix and the
+  `ZLS Conformance` report for real ZLS behavior.
 - Agent-client behavior varies by client. zigar documents Codex, Claude, Gemini,
   Hermes, and generic stdio setup, but clients still own launch environment and
   workspace selection.

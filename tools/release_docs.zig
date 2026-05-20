@@ -110,7 +110,14 @@ pub fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
 }
 
 pub fn checkReleaseEvidenceDocs(allocator: Allocator, io: Io) !bool {
-    return checkDocNeedles(allocator, io, "docs/release.md", &.{ "validation evidence block", "real-backend validation status", "do not claim real backend coverage" });
+    return checkDocNeedles(allocator, io, "docs/release.md", &.{
+        "validation evidence block",
+        "real-backend validation status",
+        "do not claim real backend coverage",
+        "Release Readiness",
+        "backend compatibility matrix",
+        "ZLS Conformance",
+    });
 }
 
 pub fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {

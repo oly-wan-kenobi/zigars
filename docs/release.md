@@ -7,6 +7,13 @@ zig build release-check
 zig build dist release-asset-smoke
 ```
 
+For a public release candidate, also run the manual `Release Readiness`
+workflow. That workflow creates one evidence package containing the local
+release gate, release-asset smoke result, real optional-backend conformance
+report, real ZLS conformance report, and generated backend compatibility
+matrix. Treat this workflow as release-required when the release notes claim
+support for optional backends.
+
 The gate includes formatting, generated docs/JSON checks, unit tests,
 ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
 coverage floors, structured tool-error contract scans, line-budget headroom, and
@@ -33,6 +40,14 @@ For real optional backends, either cite the uploaded `Backend Conformance`
 artifact or say `not run`; do not claim real backend coverage from fake-backend
 fixtures.
 
+When the `Release Readiness` workflow runs, use its generated
+`release-readiness.md`, `backend-conformance/summary.md`, and
+`zls-conformance/summary.md` files as the release-note source of truth. The
+backend compatibility matrix is generated from executable paths, SHA-256 hashes,
+version/probe output, platform metadata, tested capabilities, and pass/fail
+status. Do not hand-write broader compatibility claims than the generated matrix
+supports.
+
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
 binary results, per-suite floors, measured kcov coverage, configured coverage
@@ -54,16 +69,19 @@ and runs `zigar --version` from it.
 2. Confirm `zig build version` matches the intended release version.
 3. Run `zig build release-check`.
 4. Run `zig build dist release-asset-smoke`.
-5. Confirm [maturity.md](maturity.md) still says every major feature area is at
+5. Run the manual `Release Readiness` workflow with the real backend paths that
+   the release intends to claim. If only ZLS is being refreshed, run the manual
+   `ZLS Conformance` workflow and cite that artifact.
+6. Confirm [maturity.md](maturity.md) still says every major feature area is at
    least A- without hiding known limitations.
-6. Confirm [trust.md](trust.md) still matches the release notes, especially any
+7. Confirm [trust.md](trust.md) still matches the release notes, especially any
    absent external validation for branch protection, optional backends, or
    client-specific behavior.
-7. Add a validation evidence block to the release notes, including real-backend
+8. Add a validation evidence block to the release notes, including real-backend
    validation status. If the manual backend conformance script or workflow did
    not run, say `not run` instead of implying coverage.
-8. Confirm the tag and GitHub release do not already exist.
-9. Tag the release:
+9. Confirm the tag and GitHub release do not already exist.
+10. Tag the release:
 
 ```sh
 version="$(zig build version)"

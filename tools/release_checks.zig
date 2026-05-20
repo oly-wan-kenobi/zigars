@@ -699,6 +699,20 @@ const workflow_permission_rules = [_]WorkflowPermissionRule{
         },
     },
     .{
+        .path = ".github/workflows/zls-conformance.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
+        .path = ".github/workflows/release-readiness.yml",
+        .required = &.{
+            "permissions:",
+            "contents: read",
+        },
+    },
+    .{
         .path = ".github/workflows/release.yml",
         .required = &.{
             "permissions:",

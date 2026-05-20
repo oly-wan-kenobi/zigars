@@ -1,0 +1,73 @@
+name: Release Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_command:
+        description: "Optional shell command that installs or activates real optional backend binaries."
+        required: false
+        default: ""
+      zls_path:
+        description: "Path or command name for zls."
+        required: false
+        default: "zls"
+      zwanzig_path:
+        description: "Path or command name for zwanzig."
+        required: false
+        default: "zwanzig"
+      zflame_path:
+        description: "Path or command name for zflame."
+        required: false
+        default: "zflame"
+      diff_folded_path:
+        description: "Path or command name for diff-folded."
+        required: false
+        default: "diff-folded"
+      claimed_backends:
+        description: "Comma-separated optional backends this release intends to claim."
+        required: false
+        default: "zls,zwanzig,zflame,diff_folded"
+
+permissions:
+  contents: read
+
+jobs:
+  release-readiness:
+    name: Release evidence package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Install kcov
+        run: bash .github/scripts/install-kcov.sh
+
+      - name: Optional backend setup
+        if: ${{ inputs.setup_command != '' }}
+        run: ${{ inputs.setup_command }}
+
+      - name: Run release readiness
+        env:
+          ZIGAR_RELEASE_READINESS_DIR: release-readiness
+          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
+          ZIGAR_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
+          ZIGAR_ZFLAME_PATH: ${{ inputs.zflame_path }}
+          ZIGAR_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
+          ZIGAR_CLAIMED_BACKENDS: ${{ inputs.claimed_backends }}
+        run: bash .github/scripts/release-readiness.sh
+
+      - name: Upload release readiness evidence
+        if: always()
+        # actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zigar-release-readiness
+          path: release-readiness

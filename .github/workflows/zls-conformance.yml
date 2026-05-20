@@ -1,0 +1,50 @@
+name: ZLS Conformance
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_command:
+        description: "Optional shell command that installs or activates a real ZLS binary."
+        required: false
+        default: ""
+      zls_path:
+        description: "Path or command name for zls."
+        required: false
+        default: "zls"
+
+permissions:
+  contents: read
+
+jobs:
+  zls-conformance:
+    name: Real ZLS release gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Optional ZLS setup
+        if: ${{ inputs.setup_command != '' }}
+        run: ${{ inputs.setup_command }}
+
+      - name: Run real ZLS conformance
+        env:
+          ZIGAR_ZLS_CONFORMANCE_REPORT_DIR: zls-conformance
+          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
+        run: bash .github/scripts/real-zls-conformance.sh
+
+      - name: Upload ZLS conformance evidence
+        if: always()
+        # actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zigar-zls-conformance
+          path: zls-conformance
