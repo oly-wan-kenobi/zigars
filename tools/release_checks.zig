@@ -2,6 +2,8 @@ const std = @import("std");
 const zigar = @import("zigar");
 const release_docs = @import("release_docs.zig");
 const mcp_contracts = @import("mcp_contracts.zig");
+const public_claims = @import("public_claims.zig");
+const backend_docs = @import("backend_docs.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -44,8 +46,9 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkStaticAnalysisContracts(io)) and ok;
     ok = (try checkWorkflowPermissions(allocator, io)) and ok;
     ok = (try release_docs.checkStaticAnalysisDocs(allocator, io)) and ok;
-    ok = (try release_docs.checkOptionalBackendContracts(allocator, io)) and ok;
+    ok = (try backend_docs.checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try release_docs.checkCommandRunningToolDocs(allocator, io)) and ok;
+    ok = (try public_claims.checkPublicClaimDocs(allocator, io)) and ok;
     ok = (try release_docs.checkAgentWorkflowDocs(allocator, io)) and ok;
     ok = (try release_docs.checkCiArtifactDocs(allocator, io)) and ok;
     ok = (try release_docs.checkReleaseEvidenceDocs(allocator, io)) and ok;
@@ -435,6 +438,16 @@ const line_budgets = [_]LineBudget{
         .path = "tools/release_docs.zig",
         .max_lines = 190,
         .reason = "release documentation checks should stay separate from the release-check dispatcher",
+    },
+    .{
+        .path = "tools/backend_docs.zig",
+        .max_lines = 120,
+        .reason = "optional backend documentation checks should stay focused on backend evidence contracts",
+    },
+    .{
+        .path = "tools/public_claims.zig",
+        .max_lines = 180,
+        .reason = "public claim wording checks should stay focused and separate from docs-specific release checks",
     },
     .{
         .path = "tools/mcp_contracts.zig",

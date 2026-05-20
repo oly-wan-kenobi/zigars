@@ -13,6 +13,25 @@ and zigar path hints. `zigar_schema` and the `zigar://tools/schema` resource
 remain compact catalog views for grouping, risk, planning, and discovery
 keywords.
 
+## Evidence Labels
+
+Public feature claims use this vocabulary:
+
+- Command-backed: zigar invokes an explicit `zig` argv and returns captured
+  command metadata.
+- LSP-backed: ZLS provided the result for that call; unsupported capabilities
+  and missing sessions are structured results.
+- Parser-backed: zigar parsed Zig source with `std.zig.Ast`; this is syntactic,
+  not compiler semantic analysis.
+- Source-scan-backed: zigar scanned local files and reports source paths,
+  ranking, skipped files, and provenance.
+- Heuristic/advisory: useful for orientation or prioritization, not proof.
+- External-backend-backed: zwanzig, zflame, diff-folded, or platform profilers
+  own the backend semantics; zigar reports argv, probes, and artifact metadata.
+- Curated fallback: bundled partial data used when installed docs are missing.
+- Real conformance artifact: optional-backend compatibility claimed from a
+  release evidence package, not from fake-backend fixtures.
+
 ## Public Contract Compatibility
 
 Treat `tools/list`, `zigar_schema`, `zigar_tool_index`, and
