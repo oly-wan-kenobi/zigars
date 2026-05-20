@@ -1,6 +1,7 @@
 const std = @import("std");
 const zigar = @import("zigar");
 const release_docs = @import("release_docs.zig");
+const mcp_contracts = @import("mcp_contracts.zig");
 const task_status = @import("task_status.zig");
 
 const Io = std.Io;
@@ -52,8 +53,8 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try release_docs.checkMaturityDocs(allocator, io)) and ok;
     ok = (try release_docs.checkTrustDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
-    ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
-    ok = (try checkMcpAdvertisedCapabilityContract(allocator, io)) and ok;
+    ok = (try mcp_contracts.checkNoPatchContract(allocator, io)) and ok;
+    ok = (try mcp_contracts.checkAdvertisedCapabilityContract(allocator, io)) and ok;
     ok = (try task_status.checkPublicReleaseBlockers(allocator, io)) and ok;
     ok = (try task_status.checkReadyTaskScope(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
@@ -437,6 +438,11 @@ const line_budgets = [_]LineBudget{
         .path = "tools/release_docs.zig",
         .max_lines = 190,
         .reason = "release documentation checks should stay separate from the release-check dispatcher",
+    },
+    .{
+        .path = "tools/mcp_contracts.zig",
+        .max_lines = 150,
+        .reason = "MCP release-contract checks should stay focused on adapter and advertised-capability invariants",
     },
     .{
         .path = "tools/task_status.zig",
@@ -926,97 +932,6 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     for (required) |needle| {
         if (std.mem.indexOf(u8, bytes, needle) == null) {
             try stderrPrint(io, "security-policy check missing `{s}` in {s}\n", .{ needle, path });
-            ok = false;
-        }
-    }
-    return ok;
-}
-
-fn checkMcpNoPatchContract(allocator: Allocator, io: Io) !bool {
-    var ok = true;
-    const build_files = [_][]const u8{ "build.zig", "build.zig.zon" };
-    const forbidden = [_][]const u8{
-        "third_party/mcp_zigar_patch",
-        "mcp_upstream",
-        "addMcpModule",
-    };
-    for (build_files) |path| {
-        const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
-            try stderrPrint(io, "MCP no-patch check could not read {s}: {s}\n", .{ path, @errorName(err) });
-            ok = false;
-            continue;
-        };
-        defer allocator.free(bytes);
-        for (forbidden) |needle| {
-            if (std.mem.indexOf(u8, bytes, needle) != null) {
-                try stderrPrint(io, "MCP no-patch check found `{s}` in {s}; build must use the pinned upstream mcp module directly\n", .{ needle, path });
-                ok = false;
-            }
-        }
-    }
-
-    const adapter = readFileAlloc(allocator, io, "src/mcp_server.zig", 2 * 1024 * 1024) catch |err| {
-        try stderrPrint(io, "MCP no-patch check could not read src/mcp_server.zig: {s}\n", .{@errorName(err)});
-        return false;
-    };
-    defer allocator.free(adapter);
-    const required = [_][]const u8{
-        "First-party MCP server adapter",
-        "pinned upstream MCP dependency",
-        "ToolResultDeinit",
-        "ResourceContentDeinit",
-        "PromptMessagesDeinit",
-        "deinit_result",
-        "addResourceWithDeinit",
-        "addPromptWithDeinit",
-    };
-    for (required) |needle| {
-        if (std.mem.indexOf(u8, adapter, needle) == null) {
-            try stderrPrint(io, "MCP no-patch check missing `{s}` in src/mcp_server.zig\n", .{needle});
-            ok = false;
-        }
-    }
-    return ok;
-}
-
-fn checkMcpAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
-    const rules = [_]struct {
-        path: []const u8,
-        token: []const u8,
-        reason: []const u8,
-    }{
-        .{
-            .path = "src/main.zig",
-            .token = "enableTasks(",
-            .reason = "public server startup must not advertise MCP task support until zigar implements the task lifecycle",
-        },
-        .{
-            .path = "src/mcp_server.zig",
-            .token = "capabilities.tasks",
-            .reason = "MCP task capabilities must not be emitted without implemented task methods",
-        },
-        .{
-            .path = "src/mcp_server.zig",
-            .token = "handleTasks",
-            .reason = "stub task handlers must not remain in the public protocol surface",
-        },
-        .{
-            .path = "docs/architecture.md",
-            .token = "empty task-list",
-            .reason = "architecture docs must not advertise MCP task support until zigar implements the task lifecycle",
-        },
-    };
-
-    var ok = true;
-    for (rules) |rule| {
-        const bytes = readFileAlloc(allocator, io, rule.path, 2 * 1024 * 1024) catch |err| {
-            try stderrPrint(io, "MCP capability-contract check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
-            ok = false;
-            continue;
-        };
-        defer allocator.free(bytes);
-        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
-            try stderrPrint(io, "MCP capability-contract violation in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
             ok = false;
         }
     }
