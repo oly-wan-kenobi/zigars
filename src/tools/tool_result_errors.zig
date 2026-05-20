@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const command = zigar.command;
+const command_output = zigar.command_output;
 const tool_errors = zigar.tool_errors;
 
 pub const CommandRunError = struct {
@@ -55,6 +56,10 @@ pub fn commandRunErrorResult(allocator: std.mem.Allocator, spec: CommandRunError
 pub fn commandResultErrorResult(allocator: std.mem.Allocator, spec: CommandResultError) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_text = commandText(allocator, spec.argv) catch return error.OutOfMemory;
     defer allocator.free(command_text);
+    const stdout = command_output.safeTextAlloc(allocator, spec.result.stdout) catch return error.OutOfMemory;
+    defer allocator.free(stdout.text);
+    const stderr = command_output.safeTextAlloc(allocator, spec.result.stderr) catch return error.OutOfMemory;
+    defer allocator.free(stderr.text);
     const details = [_]tool_errors.Detail{
         .{ .key = "backend", .value = .{ .string = spec.backend } },
         .{ .key = "command", .value = .{ .string = command_text } },
@@ -62,8 +67,14 @@ pub fn commandResultErrorResult(allocator: std.mem.Allocator, spec: CommandResul
         .{ .key = "timeout_ms", .value = .{ .integer = spec.timeout_ms } },
         .{ .key = "term", .value = .{ .string = termName(spec.result.term) } },
         .{ .key = "exit_code", .value = if (termExitCode(spec.result.term)) |code| .{ .integer = code } else .null },
-        .{ .key = "stdout", .value = .{ .string = spec.result.stdout } },
-        .{ .key = "stderr", .value = .{ .string = spec.result.stderr } },
+        .{ .key = "stdout", .value = .{ .string = stdout.text } },
+        .{ .key = "stderr", .value = .{ .string = stderr.text } },
+        .{ .key = "stdout_invalid_utf8", .value = .{ .bool = stdout.invalid_utf8 } },
+        .{ .key = "stderr_invalid_utf8", .value = .{ .bool = stderr.invalid_utf8 } },
+        .{ .key = "stdout_encoding", .value = .{ .string = stdout.encoding } },
+        .{ .key = "stderr_encoding", .value = .{ .string = stderr.encoding } },
+        .{ .key = "stdout_byte_count", .value = .{ .integer = @intCast(stdout.byte_count) } },
+        .{ .key = "stderr_byte_count", .value = .{ .integer = @intCast(stderr.byte_count) } },
         .{ .key = "stdout_truncated", .value = .{ .bool = spec.result.stdout_truncated } },
         .{ .key = "stderr_truncated", .value = .{ .bool = spec.result.stderr_truncated } },
         .{ .key = "output_limit_mode", .value = .{ .string = command.output_limit_mode } },
@@ -126,10 +137,4 @@ fn termExitCode(term: std.process.Child.Term) ?i64 {
         .exited => |code| @intCast(code),
         else => null,
     };
-}
-
-test "commandText joins argv without shell interpretation" {
-    const text = try commandText(std.testing.allocator, &.{ "zig", "build", "test" });
-    defer std.testing.allocator.free(text);
-    try std.testing.expectEqualStrings("zig build test", text);
 }

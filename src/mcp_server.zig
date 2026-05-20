@@ -119,11 +119,11 @@ pub const Server = struct {
     allocator: std.mem.Allocator,
     config: ServerConfig,
     state: ServerState = .uninitialized,
-    tools: std.StringHashMap(Tool),
-    resources: std.StringHashMap(resources_mod.Resource),
+    tools: std.StringArrayHashMapUnmanaged(Tool),
+    resources: std.StringArrayHashMapUnmanaged(resources_mod.Resource),
     resource_content_deinits: std.StringHashMap(ResourceContentDeinit),
-    resource_templates: std.StringHashMap(resources_mod.ResourceTemplate),
-    prompts: std.StringHashMap(prompts_mod.Prompt),
+    resource_templates: std.StringArrayHashMapUnmanaged(resources_mod.ResourceTemplate),
+    prompts: std.StringArrayHashMapUnmanaged(prompts_mod.Prompt),
     prompt_message_deinits: std.StringHashMap(PromptMessagesDeinit),
     capabilities: types.ServerCapabilities = .{},
     client_info: ?types.Implementation = null,
@@ -147,11 +147,11 @@ pub const Server = struct {
         return .{
             .allocator = allocator,
             .config = config,
-            .tools = .init(allocator),
-            .resources = .init(allocator),
+            .tools = .empty,
+            .resources = .empty,
             .resource_content_deinits = .init(allocator),
-            .resource_templates = .init(allocator),
-            .prompts = .init(allocator),
+            .resource_templates = .empty,
+            .prompts = .empty,
             .prompt_message_deinits = .init(allocator),
             .pending_requests = .init(allocator),
         };
@@ -164,37 +164,37 @@ pub const Server = struct {
             self.allocator.destroy(stdio);
             self.stdio_transport = null;
         }
-        self.tools.deinit();
-        self.resources.deinit();
+        self.tools.deinit(self.allocator);
+        self.resources.deinit(self.allocator);
         self.resource_content_deinits.deinit();
-        self.resource_templates.deinit();
-        self.prompts.deinit();
+        self.resource_templates.deinit(self.allocator);
+        self.prompts.deinit(self.allocator);
         self.prompt_message_deinits.deinit();
         self.pending_requests.deinit();
     }
 
     /// Add a tool to the server
     pub fn addTool(self: *Self, tool: Tool) !void {
-        try self.tools.put(tool.name, tool);
+        try self.tools.put(self.allocator, tool.name, tool);
         self.capabilities.tools = .{ .listChanged = true };
     }
 
     /// Add a resource to the server
     pub fn addResource(self: *Self, resource: resources_mod.Resource) !void {
-        try self.resources.put(resource.uri, resource);
+        try self.resources.put(self.allocator, resource.uri, resource);
         self.capabilities.resources = .{ .listChanged = true, .subscribe = false };
     }
 
     /// Add a resource whose returned content follows a zigar-owned cleanup contract.
     pub fn addResourceWithDeinit(self: *Self, resource: resources_mod.Resource, deinit_content: ResourceContentDeinit) !void {
-        errdefer _ = self.resources.remove(resource.uri);
         try self.addResource(resource);
+        errdefer _ = self.resources.orderedRemove(resource.uri);
         try self.resource_content_deinits.put(resource.uri, deinit_content);
     }
 
     /// Add a resource template to the server
     pub fn addResourceTemplate(self: *Self, template: resources_mod.ResourceTemplate) !void {
-        try self.resource_templates.put(template.name, template);
+        try self.resource_templates.put(self.allocator, template.name, template);
         if (self.capabilities.resources == null) {
             self.capabilities.resources = .{};
         }
@@ -202,14 +202,14 @@ pub const Server = struct {
 
     /// Add a prompt to the server
     pub fn addPrompt(self: *Self, prompt: prompts_mod.Prompt) !void {
-        try self.prompts.put(prompt.name, prompt);
+        try self.prompts.put(self.allocator, prompt.name, prompt);
         self.capabilities.prompts = .{ .listChanged = true };
     }
 
     /// Add a prompt whose returned messages follow a zigar-owned cleanup contract.
     pub fn addPromptWithDeinit(self: *Self, prompt: prompts_mod.Prompt, deinit_messages: PromptMessagesDeinit) !void {
-        errdefer _ = self.prompts.remove(prompt.name);
         try self.addPrompt(prompt);
+        errdefer _ = self.prompts.orderedRemove(prompt.name);
         try self.prompt_message_deinits.put(prompt.name, deinit_messages);
     }
 
@@ -609,17 +609,18 @@ pub const Server = struct {
 
         var iter = self.tools.iterator();
         while (iter.next()) |entry| {
+            const tool = entry.value_ptr.*;
             var tool_obj: std.json.ObjectMap = .empty;
-            try tool_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
-            if (entry.value_ptr.description) |desc| {
+            try tool_obj.put(response_allocator, "name", .{ .string = tool.name });
+            if (tool.description) |desc| {
                 try tool_obj.put(response_allocator, "description", .{ .string = desc });
             }
-            if (entry.value_ptr.title) |t| {
+            if (tool.title) |t| {
                 try tool_obj.put(response_allocator, "title", .{ .string = t });
             }
 
             var input_schema: std.json.ObjectMap = .empty;
-            if (entry.value_ptr.inputSchema) |schema| {
+            if (tool.inputSchema) |schema| {
                 try input_schema.put(response_allocator, "type", .{ .string = schema.type });
 
                 if (schema.@"$schema") |s| try input_schema.put(response_allocator, "$schema", .{ .string = s });
@@ -636,7 +637,7 @@ pub const Server = struct {
             }
             try tool_obj.put(response_allocator, "inputSchema", .{ .object = input_schema });
 
-            if (entry.value_ptr.annotations) |ann| {
+            if (tool.annotations) |ann| {
                 var ann_obj: std.json.ObjectMap = .empty;
                 if (ann.title) |t| try ann_obj.put(response_allocator, "title", .{ .string = t });
                 try ann_obj.put(response_allocator, "readOnlyHint", .{ .bool = ann.readOnlyHint });
@@ -646,7 +647,7 @@ pub const Server = struct {
                 try tool_obj.put(response_allocator, "annotations", .{ .object = ann_obj });
             }
 
-            if (entry.value_ptr.execution) |exec| {
+            if (tool.execution) |exec| {
                 var exec_obj: std.json.ObjectMap = .empty;
                 if (exec.taskSupport) |ts| {
                     try exec_obj.put(response_allocator, "taskSupport", .{ .string = ts });
@@ -802,19 +803,20 @@ pub const Server = struct {
 
         var iter = self.resources.iterator();
         while (iter.next()) |entry| {
+            const resource = entry.value_ptr.*;
             var resource_obj: std.json.ObjectMap = .empty;
-            try resource_obj.put(response_allocator, "uri", .{ .string = entry.value_ptr.uri });
-            try resource_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
-            if (entry.value_ptr.title) |t| {
+            try resource_obj.put(response_allocator, "uri", .{ .string = resource.uri });
+            try resource_obj.put(response_allocator, "name", .{ .string = resource.name });
+            if (resource.title) |t| {
                 try resource_obj.put(response_allocator, "title", .{ .string = t });
             }
-            if (entry.value_ptr.description) |desc| {
+            if (resource.description) |desc| {
                 try resource_obj.put(response_allocator, "description", .{ .string = desc });
             }
-            if (entry.value_ptr.mimeType) |mime| {
+            if (resource.mimeType) |mime| {
                 try resource_obj.put(response_allocator, "mimeType", .{ .string = mime });
             }
-            if (entry.value_ptr.size) |s| {
+            if (resource.size) |s| {
                 try resource_obj.put(response_allocator, "size", .{ .integer = @intCast(s) });
             }
             try resources_array.append(.{ .object = resource_obj });
@@ -889,16 +891,17 @@ pub const Server = struct {
 
         var iter = self.resource_templates.iterator();
         while (iter.next()) |entry| {
+            const template = entry.value_ptr.*;
             var template_obj: std.json.ObjectMap = .empty;
-            try template_obj.put(response_allocator, "uriTemplate", .{ .string = entry.value_ptr.uriTemplate });
-            try template_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
-            if (entry.value_ptr.title) |t| {
+            try template_obj.put(response_allocator, "uriTemplate", .{ .string = template.uriTemplate });
+            try template_obj.put(response_allocator, "name", .{ .string = template.name });
+            if (template.title) |t| {
                 try template_obj.put(response_allocator, "title", .{ .string = t });
             }
-            if (entry.value_ptr.description) |desc| {
+            if (template.description) |desc| {
                 try template_obj.put(response_allocator, "description", .{ .string = desc });
             }
-            if (entry.value_ptr.mimeType) |mime| {
+            if (template.mimeType) |mime| {
                 try template_obj.put(response_allocator, "mimeType", .{ .string = mime });
             }
             try templates_array.append(.{ .object = template_obj });
@@ -912,7 +915,9 @@ pub const Server = struct {
     }
 
     fn handleSubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
+        if (!self.resourceSubscriptionsSupported()) {
+            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
+        }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
@@ -920,11 +925,17 @@ pub const Server = struct {
     }
 
     fn handleUnsubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        _ = request.params;
+        if (!self.resourceSubscriptionsSupported()) {
+            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
+        }
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn resourceSubscriptionsSupported(self: *Self) bool {
+        return if (self.capabilities.resources) |resources_cap| resources_cap.subscribe else false;
     }
 
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
@@ -936,16 +947,17 @@ pub const Server = struct {
 
         var iter = self.prompts.iterator();
         while (iter.next()) |entry| {
+            const prompt = entry.value_ptr.*;
             var prompt_obj: std.json.ObjectMap = .empty;
-            try prompt_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
-            if (entry.value_ptr.description) |desc| {
+            try prompt_obj.put(response_allocator, "name", .{ .string = prompt.name });
+            if (prompt.description) |desc| {
                 try prompt_obj.put(response_allocator, "description", .{ .string = desc });
             }
-            if (entry.value_ptr.title) |t| {
+            if (prompt.title) |t| {
                 try prompt_obj.put(response_allocator, "title", .{ .string = t });
             }
 
-            if (entry.value_ptr.arguments) |args| {
+            if (prompt.arguments) |args| {
                 var args_array: std.json.Array = .init(response_allocator);
                 for (args) |arg| {
                     var arg_obj: std.json.ObjectMap = .empty;
@@ -1060,36 +1072,37 @@ pub const Server = struct {
     }
 
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        if (request.params) |params| {
-            if (params == .object) {
-                if (params.object.get("level")) |level_val| {
-                    if (level_val == .string) {
-                        const level_str = level_val.string;
-                        if (std.mem.eql(u8, level_str, "debug")) {
-                            self.log_level = .debug;
-                        } else if (std.mem.eql(u8, level_str, "info")) {
-                            self.log_level = .info;
-                        } else if (std.mem.eql(u8, level_str, "notice")) {
-                            self.log_level = .notice;
-                        } else if (std.mem.eql(u8, level_str, "warning")) {
-                            self.log_level = .warning;
-                        } else if (std.mem.eql(u8, level_str, "error")) {
-                            self.log_level = .@"error";
-                        } else if (std.mem.eql(u8, level_str, "critical")) {
-                            self.log_level = .critical;
-                        } else if (std.mem.eql(u8, level_str, "alert")) {
-                            self.log_level = .alert;
-                        } else if (std.mem.eql(u8, level_str, "emergency")) {
-                            self.log_level = .emergency;
-                        }
-                    }
-                }
-            }
+        const shape_error = "logging/setLevel requires params.level to be a string";
+        const level_value = request.params orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
+        if (level_value != .object) return self.sendInvalidParams(io, allocator, request.id, shape_error);
+        const level_json = level_value.object.get("level") orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
+        if (level_json != .string) {
+            return self.sendInvalidParams(io, allocator, request.id, shape_error);
         }
+        self.log_level = parseLogLevel(level_json.string) orelse {
+            return self.sendInvalidParams(io, allocator, request.id, "Unsupported logging level");
+        };
 
         const result: std.json.ObjectMap = .empty;
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn sendInvalidParams(self: *Self, io: std.Io, allocator: std.mem.Allocator, id: types.RequestId, message: []const u8) !void {
+        const error_response = jsonrpc.createInvalidParams(id, message);
+        try self.sendResponse(io, allocator, .{ .error_response = error_response });
+    }
+
+    fn parseLogLevel(level: []const u8) ?protocol.LogLevel {
+        if (std.mem.eql(u8, level, "debug")) return .debug;
+        if (std.mem.eql(u8, level, "info")) return .info;
+        if (std.mem.eql(u8, level, "notice")) return .notice;
+        if (std.mem.eql(u8, level, "warning")) return .warning;
+        if (std.mem.eql(u8, level, "error")) return .@"error";
+        if (std.mem.eql(u8, level, "critical")) return .critical;
+        if (std.mem.eql(u8, level, "alert")) return .alert;
+        if (std.mem.eql(u8, level, "emergency")) return .emergency;
+        return null;
     }
 
     fn handleCompletion(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {

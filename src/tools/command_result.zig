@@ -2,6 +2,7 @@ const std = @import("std");
 const zigar = @import("zigar");
 
 const command = zigar.command;
+const command_output = zigar.command_output;
 
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
@@ -38,8 +39,10 @@ pub fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv:
     try obj.put(allocator, "argv", try argvValue(allocator, argv));
     try obj.put(allocator, "timeout_ms", .{ .integer = timeout_ms });
     try obj.put(allocator, "term", try commandTermValue(allocator, result.term));
-    try obj.put(allocator, "stdout", .{ .string = result.stdout });
-    try obj.put(allocator, "stderr", .{ .string = result.stderr });
+    const stdout = try command_output.safeTextAlloc(allocator, result.stdout);
+    const stderr = try command_output.safeTextAlloc(allocator, result.stderr);
+    try command_output.putStreamFields(allocator, &obj, "stdout", stdout);
+    try command_output.putStreamFields(allocator, &obj, "stderr", stderr);
     try obj.put(allocator, "stdout_truncated", .{ .bool = result.stdout_truncated });
     try obj.put(allocator, "stderr_truncated", .{ .bool = result.stderr_truncated });
     try obj.put(allocator, "stdout_limit", .{ .integer = @intCast(result.stdout_limit) });
@@ -49,7 +52,7 @@ pub fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv:
     if (result.stdout_truncated or result.stderr_truncated) {
         try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar returned the captured prefix and marked the truncated stream so the result remains inspectable." });
     }
-    const insights = try compilerInsightsValue(allocator, result.stdout, result.stderr, argv);
+    const insights = try compilerInsightsValue(allocator, stdout.text, stderr.text, argv);
     try obj.put(allocator, "diagnostics", insights);
     try obj.put(allocator, "failure_summary", try failureSummaryValue(allocator, insights, result.succeeded(), argv));
     return .{ .object = obj };
