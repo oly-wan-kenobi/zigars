@@ -73,9 +73,8 @@ pub const Workspace = struct {
 
     pub fn relative(self: Workspace, abs_path: []const u8) []const u8 {
         if (std.mem.eql(u8, abs_path, self.root)) return ".";
-        if (std.mem.startsWith(u8, abs_path, self.root) and abs_path.len > self.root.len) {
-            const sep_len: usize = if (abs_path[self.root.len] == std.fs.path.sep) 1 else 0;
-            return abs_path[self.root.len + sep_len ..];
+        if (std.mem.startsWith(u8, abs_path, self.root) and abs_path.len > self.root.len and abs_path[self.root.len] == std.fs.path.sep) {
+            return abs_path[self.root.len + 1 ..];
         }
         return abs_path;
     }
@@ -208,6 +207,21 @@ test "workspace init canonicalizes relative root" {
     var ws = try Workspace.init(std.testing.allocator, std.testing.io, ".", null);
     defer ws.deinit();
     try std.testing.expect(std.fs.path.isAbsolute(ws.root));
+}
+
+test "workspace relative only trims root at path boundary" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const ws = Workspace{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .root = "/tmp/project",
+        .cache_root = "/tmp/project/.zigar-cache",
+    };
+
+    try std.testing.expectEqualStrings(".", ws.relative("/tmp/project"));
+    try std.testing.expectEqualStrings("src/main.zig", ws.relative("/tmp/project/src/main.zig"));
+    try std.testing.expectEqualStrings("/tmp/projectile/src/main.zig", ws.relative("/tmp/projectile/src/main.zig"));
 }
 
 test "workspace allows symlinked input inside root" {
