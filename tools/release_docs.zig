@@ -68,6 +68,18 @@ pub fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
     });
 }
 
+pub fn checkDocsLookupDocs(allocator: Allocator, io: Io) !bool {
+    return checkDocNeedles(allocator, io, "docs/tools.md", &.{
+        "Docs tools are intentionally split by source",
+        "provenance/completeness",
+        "active Zig version",
+        "triple-slash doc comments",
+        "index_metadata",
+        "source roots",
+        "curated fallback status",
+    });
+}
+
 pub fn checkReleaseEvidenceDocs(allocator: Allocator, io: Io) !bool {
     return checkDocNeedles(allocator, io, "docs/release.md", &.{
         "validation evidence block",

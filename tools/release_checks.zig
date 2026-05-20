@@ -51,6 +51,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try public_claims.checkPublicClaimDocs(allocator, io)) and ok;
     ok = (try release_docs.checkAgentWorkflowDocs(allocator, io)) and ok;
     ok = (try release_docs.checkCiArtifactDocs(allocator, io)) and ok;
+    ok = (try release_docs.checkDocsLookupDocs(allocator, io)) and ok;
     ok = (try release_docs.checkReleaseEvidenceDocs(allocator, io)) and ok;
     ok = (try release_docs.checkMaturityDocs(allocator, io)) and ok;
     ok = (try release_docs.checkTrustDocs(allocator, io)) and ok;

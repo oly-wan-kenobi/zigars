@@ -111,21 +111,26 @@ tools, or unclear executable-path failures. Probe results are cached for the
 server process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
 
 Docs tools are intentionally split by source, and each source reports
-provenance/completeness. `zig_builtin_*` uses curated zigar data and is marked
+provenance/completeness. `zig_builtin_*` uses curated zigar data, records the
+active Zig version when `zig env` is available, and is marked
 `partial_curated`. `zig_std_search` scans local Zig standard-library `.zig`
-source files and is marked `source_scan`. `zig_lang_ref_search` searches
-language-reference sections, reports whether it used `installed_langref_html` or
-`bundled_langref_index`, marks bundled fallback data as `partial_curated`, and
-does not scan Zig autodoc implementation files.
+source files and is marked `source_scan`. `zig_std_item` extracts adjacent
+triple-slash doc comments for declaration matches. `zig_lang_ref_search`
+searches language-reference sections, reports whether it used
+`installed_langref_html` or `bundled_langref_index`, marks bundled fallback data
+as `partial_curated`, and does not scan Zig autodoc implementation files.
 
 Structured docs outputs use the same contract across builtin, stdlib source, std
 item, and language-reference workflows: `source`, `query`, `limit`,
-`result_count`, `no_result_reason`, and `ranking`. The `source` object includes
-`id`, `label`, `provenance`, `completeness`, explicit `version`/
-`version_status`, and `path`/`source_path` when a local file or directory is
-known. Stdlib and installed language-reference hits also include result-level
-`source_path` for the exact local file behind the match. Text docs tools are
-human-readable projections of the same contract, and the `_json` companions
+`result_count`, `no_result_reason`, `ranking`, and `index_metadata`. The
+`source` object includes `id`, `label`, `provenance`, `completeness`, explicit
+`version`/`version_status`, and `path`/`source_path` when a local file or
+directory is known. `index_metadata` records the in-memory index strategy,
+source roots, per-call creation status, scanned/skipped counts where applicable, and
+curated fallback status. Stdlib and installed language-reference hits also
+include result-level `source_path` for the exact local file behind the match.
+Text docs tools are human-readable projections of the same contract, and the
+`_json` companions
 (`zig_builtin_doc_json`, `zig_std_search_json`, `zig_std_item_json`,
 `zig_lang_ref_search_json`) are the preferred interface for agents that need
 stable result metadata.

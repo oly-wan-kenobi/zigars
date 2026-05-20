@@ -45,7 +45,7 @@ const builtin_doc_ranking = "case-insensitive builtin-name substring match in cu
 const std_search_ranking = "case-insensitive source hit sorted by relative path then line; limit is applied after sorting";
 const std_item_ranking = "exact declaration-name match, preferring the path implied by a qualified std name, then relative path and line; limit is applied after sorting";
 
-pub fn builtinList(allocator: std.mem.Allocator) ![]u8 {
+pub fn builtinList(allocator: std.mem.Allocator, toolchain_version: ?[]const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     const source = docs_source.curatedBuiltins();
@@ -55,6 +55,7 @@ pub fn builtinList(allocator: std.mem.Allocator) ![]u8 {
     };
     try docs_source.appendTextHeader(allocator, &out, source);
     try docs_source.appendTextContract(allocator, &out, contract);
+    try appendBuiltinIndexMetadataText(allocator, &out, toolchain_version);
     try out.print(allocator, "Known Zig builtins ({d} curated entries):\n\n", .{builtins.len});
     for (builtins) |item| {
         try out.print(allocator, "- `{s}`: {s}\n", .{ item.signature, item.summary });
@@ -62,13 +63,13 @@ pub fn builtinList(allocator: std.mem.Allocator) ![]u8 {
     return out.toOwnedSlice(allocator);
 }
 
-pub fn builtinListValue(allocator: std.mem.Allocator) !std.json.Value {
+pub fn builtinListValue(allocator: std.mem.Allocator, toolchain_version: ?[]const u8) !std.json.Value {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    return json_result.cloneValue(allocator, try builtinListValueImpl(arena.allocator()));
+    return json_result.cloneValue(allocator, try builtinListValueImpl(arena.allocator(), toolchain_version));
 }
 
-fn builtinListValueImpl(allocator: std.mem.Allocator) !std.json.Value {
+fn builtinListValueImpl(allocator: std.mem.Allocator, toolchain_version: ?[]const u8) !std.json.Value {
     var items = std.json.Array.init(allocator);
     errdefer items.deinit();
     for (builtins) |item| try items.append(try builtinItemValue(allocator, item, null));
@@ -79,12 +80,13 @@ fn builtinListValueImpl(allocator: std.mem.Allocator) !std.json.Value {
         .result_count = builtins.len,
         .ranking = builtin_list_ranking,
     });
+    try obj.put(allocator, "index_metadata", try builtinIndexMetadataValue(allocator, toolchain_version));
     try obj.put(allocator, "count", .{ .integer = @intCast(builtins.len) });
     try obj.put(allocator, "builtins", .{ .array = items });
     return .{ .object = obj };
 }
 
-pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize) ![]u8 {
+pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize, toolchain_version: ?[]const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -103,6 +105,7 @@ pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize)
     };
     try docs_source.appendTextHeader(allocator, &out, docs_source.curatedBuiltins());
     try docs_source.appendTextContract(allocator, &out, contract);
+    try appendBuiltinIndexMetadataText(allocator, &out, toolchain_version);
 
     var emitted: usize = 0;
     for (builtins) |item| {
@@ -121,13 +124,13 @@ pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize)
     return out.toOwnedSlice(allocator);
 }
 
-pub fn builtinDocValue(allocator: std.mem.Allocator, query: []const u8, limit: usize) !std.json.Value {
+pub fn builtinDocValue(allocator: std.mem.Allocator, query: []const u8, limit: usize, toolchain_version: ?[]const u8) !std.json.Value {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    return json_result.cloneValue(allocator, try builtinDocValueImpl(arena.allocator(), query, limit));
+    return json_result.cloneValue(allocator, try builtinDocValueImpl(arena.allocator(), query, limit, toolchain_version));
 }
 
-fn builtinDocValueImpl(allocator: std.mem.Allocator, query: []const u8, limit: usize) !std.json.Value {
+fn builtinDocValueImpl(allocator: std.mem.Allocator, query: []const u8, limit: usize, toolchain_version: ?[]const u8) !std.json.Value {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -153,6 +156,7 @@ fn builtinDocValueImpl(allocator: std.mem.Allocator, query: []const u8, limit: u
         .no_result_reason = if (emitted == 0) "no_builtin_match" else null,
         .ranking = builtin_doc_ranking,
     });
+    try obj.put(allocator, "index_metadata", try builtinIndexMetadataValue(allocator, toolchain_version));
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -208,6 +212,7 @@ fn stdSearchValueImpl(
 
     var collected: std.ArrayList(StdSourceMatch) = .empty;
     defer collected.deinit(allocator);
+    var files_scanned: usize = 0;
     var skipped_files: usize = 0;
     var walk_errors: usize = 0;
     while (true) {
@@ -226,6 +231,7 @@ fn stdSearchValueImpl(
             continue;
         };
         defer allocator.free(contents);
+        files_scanned += 1;
 
         const lower_contents = try asciiLowerAlloc(allocator, contents);
         defer allocator.free(lower_contents);
@@ -264,7 +270,9 @@ fn stdSearchValueImpl(
         .no_result_reason = if (collected.items.len == 0) "no_std_source_match" else null,
         .ranking = std_search_ranking,
     });
+    try obj.put(allocator, "index_metadata", try stdIndexMetadataValue(allocator, std_dir, files_scanned, skipped_files, walk_errors));
     try obj.put(allocator, "total_match_count", .{ .integer = @intCast(collected.items.len) });
+    try obj.put(allocator, "files_scanned", .{ .integer = @intCast(files_scanned) });
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
     try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
     try obj.put(allocator, "matches", .{ .array = matches });
@@ -309,6 +317,7 @@ fn stdItemValueImpl(
 
     var collected: std.ArrayList(StdItemMatch) = .empty;
     defer collected.deinit(allocator);
+    var files_scanned: usize = 0;
     var skipped_files: usize = 0;
     var walk_errors: usize = 0;
     while (has_item_name) {
@@ -327,18 +336,39 @@ fn stdItemValueImpl(
             continue;
         };
         defer allocator.free(contents);
+        files_scanned += 1;
 
         var line_no: usize = 1;
+        var pending_doc_comments: std.ArrayList(u8) = .empty;
+        var pending_doc_comment_count: usize = 0;
+        defer pending_doc_comments.deinit(allocator);
         var lines = std.mem.splitScalar(u8, contents, '\n');
         while (lines.next()) |line| : (line_no += 1) {
-            const kind = declarationKind(line, item_name) orelse continue;
+            const trimmed = std.mem.trim(u8, line, " \t\r\n");
+            if (docCommentText(trimmed)) |comment| {
+                if (pending_doc_comments.items.len > 0) try pending_doc_comments.append(allocator, '\n');
+                try pending_doc_comments.appendSlice(allocator, comment);
+                pending_doc_comment_count += 1;
+                continue;
+            }
+            const kind = declarationKind(line, item_name) orelse {
+                if (trimmed.len != 0) {
+                    pending_doc_comments.clearRetainingCapacity();
+                    pending_doc_comment_count = 0;
+                }
+                continue;
+            };
             try collected.append(allocator, .{
                 .path = try allocator.dupe(u8, entry.path),
                 .line = line_no,
                 .snippet = try allocator.dupe(u8, std.mem.trim(u8, line, " \t\r\n")),
                 .kind = kind,
                 .preferred_path = if (path_hint) |hint| pathMatchesHint(entry.path, hint) else false,
+                .doc_comments = try allocator.dupe(u8, pending_doc_comments.items),
+                .doc_comment_count = pending_doc_comment_count,
             });
+            pending_doc_comments.clearRetainingCapacity();
+            pending_doc_comment_count = 0;
         }
     }
     std.mem.sort(StdItemMatch, collected.items, {}, stdItemMatchLessThan);
@@ -358,6 +388,8 @@ fn stdItemValueImpl(
         try obj.put(allocator, "source_path", .{ .string = source_path });
         try obj.put(allocator, "line", .{ .integer = @intCast(match.line) });
         try obj.put(allocator, "snippet", .{ .string = match.snippet });
+        try obj.put(allocator, "doc_comments", .{ .string = match.doc_comments });
+        try obj.put(allocator, "doc_comment_count", .{ .integer = @intCast(match.doc_comment_count) });
         try obj.put(allocator, "preferred_path", .{ .bool = match.preferred_path });
         try matches.append(.{ .object = obj });
     }
@@ -371,6 +403,7 @@ fn stdItemValueImpl(
         .no_result_reason = if (collected.items.len == 0) "no_std_item_declaration_match" else null,
         .ranking = std_item_ranking,
     });
+    try obj.put(allocator, "index_metadata", try stdIndexMetadataValue(allocator, std_dir, files_scanned, skipped_files, walk_errors));
     try obj.put(allocator, "name", .{ .string = name });
     try obj.put(allocator, "decl_name", .{ .string = item_name });
     if (path_hint) |hint| {
@@ -379,6 +412,7 @@ fn stdItemValueImpl(
         try obj.put(allocator, "qualified_path_hint", .null);
     }
     try obj.put(allocator, "total_match_count", .{ .integer = @intCast(collected.items.len) });
+    try obj.put(allocator, "files_scanned", .{ .integer = @intCast(files_scanned) });
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
     try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
     try obj.put(allocator, "matches", .{ .array = matches });
@@ -393,6 +427,32 @@ fn builtinItemValue(allocator: std.mem.Allocator, item: BuiltinDoc, rank: ?usize
     try obj.put(allocator, "signature", .{ .string = item.signature });
     try obj.put(allocator, "summary", .{ .string = item.summary });
     return .{ .object = obj };
+}
+
+fn builtinIndexMetadataValue(allocator: std.mem.Allocator, toolchain_version: ?[]const u8) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "index_strategy", .{ .string = "curated_builtin_index" });
+    try obj.put(allocator, "completeness_mode", .{ .string = "partial_curated" });
+    try obj.put(allocator, "curated_count", .{ .integer = @intCast(builtins.len) });
+    if (toolchain_version) |version| {
+        try obj.put(allocator, "toolchain_version", .{ .string = version });
+        try obj.put(allocator, "drift_check_status", .{ .string = "toolchain_version_recorded_builtin_set_not_extracted" });
+    } else {
+        try obj.put(allocator, "toolchain_version", .null);
+        try obj.put(allocator, "drift_check_status", .{ .string = "toolchain_version_unavailable" });
+    }
+    try obj.put(allocator, "drift_check_note", .{ .string = "Zig exposes the active version through zig env; zigar records it beside bundled curated builtin coverage because the full builtin set is not exposed as a stable machine-readable command." });
+    return .{ .object = obj };
+}
+
+fn appendBuiltinIndexMetadataText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), toolchain_version: ?[]const u8) !void {
+    try out.print(allocator, "Index strategy: curated_builtin_index\nCurated entries: {d}\n", .{builtins.len});
+    if (toolchain_version) |version| {
+        try out.print(allocator, "Toolchain version: {s}\nDrift check: toolchain_version_recorded_builtin_set_not_extracted\n\n", .{version});
+    } else {
+        try out.appendSlice(allocator, "Toolchain version: unavailable\nDrift check: toolchain_version_unavailable\n\n");
+    }
 }
 
 fn countBuiltinMatches(allocator: std.mem.Allocator, lower_query: []const u8, limit: usize) !usize {
@@ -424,6 +484,8 @@ const StdItemMatch = struct {
     snippet: []const u8,
     kind: []const u8,
     preferred_path: bool,
+    doc_comments: []const u8,
+    doc_comment_count: usize,
 };
 
 fn stdItemMatchLessThan(_: void, lhs: StdItemMatch, rhs: StdItemMatch) bool {
@@ -431,6 +493,38 @@ fn stdItemMatchLessThan(_: void, lhs: StdItemMatch, rhs: StdItemMatch) bool {
     const path_order = std.mem.order(u8, lhs.path, rhs.path);
     if (path_order != .eq) return path_order == .lt;
     return lhs.line < rhs.line;
+}
+
+fn stdIndexMetadataValue(
+    allocator: std.mem.Allocator,
+    std_dir: []const u8,
+    files_scanned: usize,
+    skipped_files: usize,
+    walk_errors: usize,
+) !std.json.Value {
+    var roots = std.json.Array.init(allocator);
+    errdefer roots.deinit();
+    try roots.append(.{ .string = std_dir });
+
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "index_strategy", .{ .string = "in_memory_stdlib_source_scan" });
+    try obj.put(allocator, "completeness_mode", .{ .string = "source_scan" });
+    try obj.put(allocator, "generated_unix", .null);
+    try obj.put(allocator, "generated_at", .{ .string = "per_call_in_memory_index" });
+    try obj.put(allocator, "source_roots", .{ .array = roots });
+    try obj.put(allocator, "max_file_bytes", .{ .integer = 512 * 1024 });
+    try obj.put(allocator, "files_scanned", .{ .integer = @intCast(files_scanned) });
+    try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
+    try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
+    try obj.put(allocator, "doc_comment_extraction", .{ .string = "adjacent_triple_slash_comments_for_std_item_matches" });
+    return .{ .object = obj };
+}
+
+fn docCommentText(trimmed_line: []const u8) ?[]const u8 {
+    if (!std.mem.startsWith(u8, trimmed_line, "///")) return null;
+    if (std.mem.startsWith(u8, trimmed_line, "////")) return null;
+    return std.mem.trim(u8, trimmed_line[3..], " \t\r\n");
 }
 
 fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
@@ -476,6 +570,10 @@ fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
             match.get("match_kind").?.string,
             match.get("snippet").?.string,
         });
+        const doc_comments = match.get("doc_comments").?.string;
+        if (doc_comments.len > 0) {
+            try out.print(allocator, "Doc comments:\n{s}\n\n", .{doc_comments});
+        }
     }
     if (matches.len == 0) {
         try out.print(allocator, "No stdlib declaration matched `{s}`. Try `zig_std_search` for broader source scanning.\n", .{obj.get("name").?.string});
@@ -594,7 +692,7 @@ fn lineAt(text: []const u8, index: usize) []const u8 {
 }
 
 test "builtin docs find import" {
-    const text = try builtinDoc(std.testing.allocator, "import", 20);
+    const text = try builtinDoc(std.testing.allocator, "import", 20, "0.16.0");
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "@import") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Docs source: curated_zigar_builtins") != null);
@@ -608,16 +706,17 @@ test "builtin doc JSON exposes docs contract and no-match reason" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const hit = try builtinDocValue(allocator, "import", 1);
+    const hit = try builtinDocValue(allocator, "import", 1, "0.16.0");
     const hit_obj = hit.object;
     try std.testing.expectEqualStrings("curated_zigar_builtins", hit_obj.get("source").?.object.get("id").?.string);
     try std.testing.expectEqualStrings("partial_curated", hit_obj.get("source").?.object.get("completeness").?.string);
+    try std.testing.expectEqualStrings("0.16.0", hit_obj.get("index_metadata").?.object.get("toolchain_version").?.string);
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("limit").?.integer);
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("result_count").?.integer);
     try std.testing.expect(hit_obj.get("no_result_reason").? == .null);
     try std.testing.expectEqualStrings("@import", hit_obj.get("matches").?.array.items[0].object.get("name").?.string);
 
-    const miss = try builtinDocValue(allocator, "definitely_not_a_builtin", 5);
+    const miss = try builtinDocValue(allocator, "definitely_not_a_builtin", 5, null);
     const miss_obj = miss.object;
     try std.testing.expectEqual(@as(i64, 0), miss_obj.get("result_count").?.integer);
     try std.testing.expectEqualStrings("no_builtin_match", miss_obj.get("no_result_reason").?.string);
@@ -689,7 +788,15 @@ test "std item JSON uses exact declaration lookup and no-match contract" {
     defer tmp.cleanup();
 
     try tmp.dir.createDirPath(io, "std/fs");
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/fs/path.zig", .data = "pub fn join() void {}\n" });
+    try tmp.dir.writeFile(io, .{
+        .sub_path = "std/fs/path.zig",
+        .data =
+        \\/// Join path segments.
+        \\/// Returns an owned path buffer.
+        \\pub fn join() void {}
+        \\
+        ,
+    });
     try tmp.dir.writeFile(io, .{ .sub_path = "std/other.zig", .data = "pub fn join() void {}\n" });
 
     const std_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "std");
@@ -707,6 +814,9 @@ test "std item JSON uses exact declaration lookup and no-match contract" {
     try std.testing.expect(std.mem.endsWith(u8, first.get("source_path").?.string, "std/fs/path.zig"));
     try std.testing.expect(first.get("preferred_path").?.bool);
     try std.testing.expectEqualStrings("fn", first.get("match_kind").?.string);
+    try std.testing.expectEqual(@as(i64, 2), first.get("doc_comment_count").?.integer);
+    try std.testing.expect(std.mem.indexOf(u8, first.get("doc_comments").?.string, "Join path segments.") != null);
+    try std.testing.expectEqualStrings("in_memory_stdlib_source_scan", hit_obj.get("index_metadata").?.object.get("index_strategy").?.string);
 
     const miss = try stdItemValue(arena.allocator(), io, std_dir, "std.fs.path.missing", 3);
     const miss_obj = miss.object;
@@ -729,13 +839,13 @@ test "docs JSON values are fully owned and compatible with structuredOwned" {
     defer allocator.free(std_dir);
 
     {
-        const value = try builtinListValue(allocator);
+        const value = try builtinListValue(allocator, null);
         const result = try json_result.structuredOwned(allocator, value);
         defer json_result.deinitToolResult(allocator, result);
         try std.testing.expectEqualStrings("curated_zigar_builtins", result.structuredContent.?.object.get("source").?.object.get("id").?.string);
     }
     {
-        const value = try builtinDocValue(allocator, "import", 1);
+        const value = try builtinDocValue(allocator, "import", 1, null);
         const result = try json_result.structuredOwned(allocator, value);
         defer json_result.deinitToolResult(allocator, result);
         try std.testing.expectEqual(@as(i64, 1), result.structuredContent.?.object.get("result_count").?.integer);
