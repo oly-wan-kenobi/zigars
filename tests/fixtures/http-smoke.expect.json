@@ -1,5 +1,5 @@
 {
-  "required_tools": ["zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff"],
+  "required_tools": ["zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json"],
   "tools_list_schema_paths": {
     "zig_format": {
       "inputSchema.type": "object",
@@ -25,6 +25,16 @@
     "zigar_agent_guide": {
       "inputSchema.properties.client.enum.2": "gemini",
       "inputSchema.properties.client.enum.3": "hermes"
+    },
+    "zig_builtin_doc_json": {
+      "inputSchema.properties.query.type": "string",
+      "inputSchema.properties.limit.minimum": 1,
+      "inputSchema.required.0": "query"
+    },
+    "zig_lang_ref_search_json": {
+      "inputSchema.properties.query.type": "string",
+      "inputSchema.properties.limit.type": "integer",
+      "inputSchema.properties.limit.minimum": 1
     }
   },
   "schema_paths": {
@@ -39,6 +49,9 @@
     "backend_setup.backends.1.path_flag": "--zls-path",
     "registry_tool_arguments.zig_toolchain_resolve.optional.probe_managers": "boolean",
     "registry_tool_arguments.zig_compile_error_index.optional.text": "string",
+    "registry_tool_arguments.zig_builtin_doc_json.required.query": "string",
+    "registry_tool_arguments.zig_std_item_json.required.name": "string",
+    "registry_tool_arguments.zig_lang_ref_search_json.required.query": "string",
     "registry_tool_arguments.zigar_validate_patch.risk.executes_project_code": true,
     "registry_tool_arguments.zigar_validate_patch.risk.writes_artifacts": true,
     "registry_tool_arguments.zig_test_failure_triage.risk.executes_project_code": true,

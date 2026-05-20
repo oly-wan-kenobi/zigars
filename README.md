@@ -214,20 +214,28 @@ Source writes require apply=true.
   `zig_std_search`, `zig_std_search_json`, `zig_std_item`,
   `zig_lang_ref_search` for language-reference sections
 - Static analysis: `zig_import_graph`, `zig_import_graph_json`,
+  `zig_ast_imports`,
   `zig_decl_summary`, `zig_decl_summary_json`, `zig_allocations`,
+  `zig_ast_decl_summary`,
   `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`,
   `zig_build_graph`, `zig_build_targets`, `zig_build_options`,
   `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`,
+  `zig_ast_tests`,
   `zig_test_map`, `zig_test_select`, `zig_public_api_diff`,
   `zig_changed_files_plan`, `zig_dependency_inspect`,
   `zig_target_matrix_plan`, `zig_test_failure_triage`,
   `zig_workspace_symbol_cache`, `zig_package_cache_doctor`
-  (heuristic results carry confidence, limitations, and verification guidance)
+  (results carry capability tiers, confidence, limitations, and verification
+  guidance; fast heuristic tools are `advisory_orientation`, AST variants are
+  `parser_backed`)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
-  `zig_analysis_graphs`
-- Profiling/zflame: `zig_profile_plan`, `zig_profile_run`, `zig_flamegraph`,
-  `zig_flamegraph_diff`
+  `zig_analysis_graphs` (`zwanzig_backed`, optional)
+- Profiling/zflame: `zig_profile_plan` returns structured external-capture
+  plans for `perf`, macOS `sample`/`xctrace`, DTrace, VTune, and already-folded
+  stacks; `zig_flamegraph` and `zig_flamegraph_diff` render through zflame and
+  diff-folded with artifact metadata. zigar does not own profiler capture
+  semantics.
 
 Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`
@@ -257,8 +265,9 @@ The short version is: start with `zigar_context_pack`, ask
   execution, and user-command execution.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
-- zwanzig graph output and zflame SVG output must use explicit workspace-local
-  output paths.
+- zwanzig graph output, zflame SVG output, and diff folded intermediates must
+  use explicit workspace-local output paths. `zig_flamegraph` requires an
+  explicit zflame format; there is no `guess` default.
 
 More detail:
 

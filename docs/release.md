@@ -17,7 +17,8 @@ can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
 `tools/list`, `zigar_schema`, and `zigar_doctor` using
 `tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
-output, and diff-folded flamegraph flow with fake backend executables.
+output metadata, structured profiling plans, and diff-folded flamegraph flow
+with fake backend executables.
 
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test

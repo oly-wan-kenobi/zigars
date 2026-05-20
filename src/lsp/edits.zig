@@ -6,6 +6,11 @@ const TextEdit = struct {
     new_text: []const u8,
 };
 
+const DecodedUtf8 = struct {
+    scalar: u32,
+    len: usize,
+};
+
 pub fn textEditCount(value: std.json.Value) usize {
     return switch (value) {
         .array => |a| a.items.len,
@@ -144,24 +149,197 @@ fn positionOffset(source: []const u8, position: std.json.Value) !usize {
         else => return error.InvalidTextEdit,
     };
 
+    return lspPositionToByteOffset(source, line, character);
+}
+
+/// Convert an LSP position to a byte offset.
+///
+/// Lines are delimited by '\n'. For CRLF files, the '\r' remains part of the
+/// preceding line and counts as one UTF-16 code unit, matching prior behavior.
+pub fn lspPositionToByteOffset(source: []const u8, line: usize, utf16_character: usize) !usize {
     var current_line: usize = 0;
-    var line_start: usize = 0;
+    var line_utf16_units: usize = 0;
+    var found_offset: ?usize = null;
     var i: usize = 0;
-    while (i < source.len and current_line < line) : (i += 1) {
+    while (i < source.len) {
+        if (current_line == line and line_utf16_units == utf16_character and found_offset == null) {
+            found_offset = i;
+        }
         if (source[i] == '\n') {
             current_line += 1;
-            line_start = i + 1;
+            line_utf16_units = 0;
+            i += 1;
+            continue;
         }
-    }
-    if (current_line != line) return error.InvalidTextEdit;
 
-    var offset = line_start;
-    var chars_seen: usize = 0;
-    while (offset < source.len and source[offset] != '\n' and chars_seen < character) : (offset += 1) {
-        chars_seen += 1;
+        const decoded = try decodeUtf8At(source, i);
+        if (current_line == line) {
+            const units = utf16CodeUnitCount(decoded.scalar);
+            if (line_utf16_units < utf16_character and utf16_character < line_utf16_units + units) {
+                return error.InvalidTextEdit;
+            }
+            line_utf16_units += units;
+        }
+        i += decoded.len;
     }
-    if (chars_seen != character) return error.InvalidTextEdit;
-    return offset;
+    if (current_line == line and line_utf16_units == utf16_character and found_offset == null) {
+        found_offset = source.len;
+    }
+    return found_offset orelse error.InvalidTextEdit;
+}
+
+fn utf16CodeUnitCount(scalar: u32) usize {
+    return if (scalar > 0xffff) 2 else 1;
+}
+
+fn decodeUtf8At(source: []const u8, offset: usize) !DecodedUtf8 {
+    const first = source[offset];
+    if (first < 0x80) return .{ .scalar = first, .len = 1 };
+
+    if (first < 0xc2) return error.InvalidTextEdit;
+    if (first < 0xe0) {
+        if (source.len - offset < 2) return error.InvalidTextEdit;
+        const second = source[offset + 1];
+        if (!isContinuation(second)) return error.InvalidTextEdit;
+        return .{
+            .scalar = (@as(u32, first & 0x1f) << 6) | @as(u32, second & 0x3f),
+            .len = 2,
+        };
+    }
+
+    if (first < 0xf0) {
+        if (source.len - offset < 3) return error.InvalidTextEdit;
+        const second = source[offset + 1];
+        const third = source[offset + 2];
+        if (!isContinuation(second) or !isContinuation(third)) return error.InvalidTextEdit;
+        if (first == 0xe0 and second < 0xa0) return error.InvalidTextEdit;
+        if (first == 0xed and second >= 0xa0) return error.InvalidTextEdit;
+        return .{
+            .scalar = (@as(u32, first & 0x0f) << 12) | (@as(u32, second & 0x3f) << 6) | @as(u32, third & 0x3f),
+            .len = 3,
+        };
+    }
+
+    if (first < 0xf5) {
+        if (source.len - offset < 4) return error.InvalidTextEdit;
+        const second = source[offset + 1];
+        const third = source[offset + 2];
+        const fourth = source[offset + 3];
+        if (!isContinuation(second) or !isContinuation(third) or !isContinuation(fourth)) return error.InvalidTextEdit;
+        if (first == 0xf0 and second < 0x90) return error.InvalidTextEdit;
+        if (first == 0xf4 and second >= 0x90) return error.InvalidTextEdit;
+        return .{
+            .scalar = (@as(u32, first & 0x07) << 18) | (@as(u32, second & 0x3f) << 12) | (@as(u32, third & 0x3f) << 6) | @as(u32, fourth & 0x3f),
+            .len = 4,
+        };
+    }
+
+    return error.InvalidTextEdit;
+}
+
+fn isContinuation(byte: u8) bool {
+    return (byte & 0xc0) == 0x80;
+}
+
+fn expectApplyTextEdits(source: []const u8, edits_json: []const u8, expected: []const u8) !void {
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, edits_json, .{});
+    defer parsed.deinit();
+    const updated = try applyTextEdits(std.testing.allocator, source, parsed.value);
+    defer std.testing.allocator.free(updated);
+    try std.testing.expectEqualStrings(expected, updated);
+}
+
+fn expectApplyTextEditsError(source: []const u8, edits_json: []const u8) !void {
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, edits_json, .{});
+    defer parsed.deinit();
+    try std.testing.expectError(error.InvalidTextEdit, applyTextEdits(std.testing.allocator, source, parsed.value));
+}
+
+test "lspPositionToByteOffset maps UTF-16 code units" {
+    const e = "\xc3\xa9";
+    const grin = "\xf0\x9f\x98\x80";
+    try std.testing.expectEqual(@as(usize, 2), try lspPositionToByteOffset(e ++ "a", 0, 1));
+
+    const mixed = "a" ++ e ++ grin ++ "b\nx";
+    try std.testing.expectEqual(@as(usize, 0), try lspPositionToByteOffset(mixed, 0, 0));
+    try std.testing.expectEqual(@as(usize, 1), try lspPositionToByteOffset(mixed, 0, 1));
+    try std.testing.expectEqual(@as(usize, 3), try lspPositionToByteOffset(mixed, 0, 2));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset(mixed, 0, 3));
+    try std.testing.expectEqual(@as(usize, 7), try lspPositionToByteOffset(mixed, 0, 4));
+    try std.testing.expectEqual(@as(usize, 8), try lspPositionToByteOffset(mixed, 0, 5));
+    try std.testing.expectEqual(@as(usize, 9), try lspPositionToByteOffset(mixed, 1, 0));
+}
+
+test "lspPositionToByteOffset rejects invalid source and positions" {
+    const grin = "\xf0\x9f\x98\x80";
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("abc", 1, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xc3\xa9", 0, 2));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset(grin, 0, 1));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("ok\xff", 0, 0));
+}
+
+test "applyTextEdits keeps ASCII behavior" {
+    try expectApplyTextEdits("abcdef\n",
+        \\[{"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":4}},"newText":"XY"}]
+    , "abXYef\n");
+}
+
+test "applyTextEdits uses UTF-16 offsets for BMP text" {
+    const e = "\xc3\xa9";
+    try expectApplyTextEdits(e ++ "abc\n",
+        \\[{"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":2}},"newText":"A"}]
+    , e ++ "Abc\n");
+}
+
+test "applyTextEdits uses UTF-16 offsets for astral text" {
+    const grin = "\xf0\x9f\x98\x80";
+    try expectApplyTextEdits(grin ++ "abc\n",
+        \\[{"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":3}},"newText":"A"}]
+    , grin ++ "Abc\n");
+}
+
+test "applyTextEdits supports end-of-line and multi-line UTF-16 edits" {
+    const e = "\xc3\xa9";
+    const grin = "\xf0\x9f\x98\x80";
+    try expectApplyTextEdits(e ++ grin ++ "\n",
+        \\[{"range":{"start":{"line":0,"character":3},"end":{"line":0,"character":3}},"newText":"!"}]
+    , e ++ grin ++ "!\n");
+
+    try expectApplyTextEdits(e ++ "\nabc\n" ++ grin ++ "def\n",
+        \\[{"range":{"start":{"line":1,"character":1},"end":{"line":2,"character":2}},"newText":"X"}]
+    , e ++ "\naXdef\n");
+}
+
+test "applyTextEdits accepts non-ASCII replacement text" {
+    try expectApplyTextEdits("abc\n",
+        \\[{"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":2}},"newText":"caf\u00e9"}]
+    , "acaf\xc3\xa9c\n");
+}
+
+test "applyTextEdits rejects UTF-16 invalid positions" {
+    const grin = "\xf0\x9f\x98\x80";
+    try expectApplyTextEditsError(grin ++ "abc\n",
+        \\[{"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":1}},"newText":"x"}]
+    );
+    try expectApplyTextEditsError("abc\n",
+        \\[{"range":{"start":{"line":-1,"character":0},"end":{"line":0,"character":0}},"newText":"x"}]
+    );
+    try expectApplyTextEditsError("abc\n",
+        \\[{"range":{"start":{"line":0,"character":-1},"end":{"line":0,"character":0}},"newText":"x"}]
+    );
+    try expectApplyTextEditsError("ok\xff",
+        \\[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"x"}]
+    );
+}
+
+test "applyTextEdits rejects overlapping UTF-16 edits" {
+    const e = "\xc3\xa9";
+    try expectApplyTextEditsError(e ++ "abcd\n",
+        \\[
+        \\  {"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":3}},"newText":"x"},
+        \\  {"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":4}},"newText":"y"}
+        \\]
+    );
 }
 
 test "applyTextEdits rejects overlapping edits" {

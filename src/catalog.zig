@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const analysis_contract = @import("analysis_contract.zig");
 const backend_catalog = @import("backend_catalog.zig");
 const json_result = @import("json_result.zig");
 const tool_metadata = @import("tool_metadata.zig");
@@ -17,6 +18,7 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     try obj.put(catalog_allocator, "groups", try groupsValue(catalog_allocator));
     try obj.put(catalog_allocator, "registry_tool_arguments", try toolArgumentsValue(catalog_allocator));
     try obj.put(catalog_allocator, "registry_tool_planning", try toolPlanningValue(catalog_allocator));
+    try obj.put(catalog_allocator, "registry_static_analysis_contracts", try staticAnalysisContractsValue(catalog_allocator));
     try obj.put(catalog_allocator, "backend_setup", try backend_catalog.value(catalog_allocator, .{}, false));
     try obj.put(catalog_allocator, "registered_tool_count", .{ .integer = @intCast(tool_metadata.specs.len) });
     try obj.put(catalog_allocator, "registry_tool_schema_source", .{ .string = "generated from src/tool_manifest.zig" });
@@ -45,6 +47,25 @@ pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
     errdefer obj.deinit(allocator);
     for (tool_metadata.entries) |entry| {
         try obj.put(allocator, entry.name, try planningValue(allocator, entry));
+    }
+    return .{ .object = obj };
+}
+
+pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    for (analysis_contract.contracts) |contract| {
+        var item = std.json.ObjectMap.empty;
+        errdefer item.deinit(allocator);
+        try item.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
+        try item.put(allocator, "capability_tier", .{ .string = analysis_contract.capabilityTierName(contract.tier) });
+        try item.put(allocator, "confidence", .{ .string = analysis_contract.confidenceName(contract.confidence) });
+        try item.put(allocator, "confidence_class", .{ .string = analysis_contract.classificationName(contract.classification) });
+        try item.put(allocator, "source_coverage", .{ .string = contract.source_coverage });
+        try item.put(allocator, "limitations", try stringArrayValue(allocator, contract.limitations));
+        try item.put(allocator, "verify_with", try stringArrayValue(allocator, contract.verify_with));
+        if (contract.verify_with.len > 0) try item.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
+        try obj.put(allocator, contract.tool, .{ .object = item });
     }
     return .{ .object = obj };
 }
@@ -220,6 +241,13 @@ test "registry arguments include risk metadata" {
     const build = planning.get("zig_build").?.object;
     try std.testing.expectEqualStrings("exact_command", build.get("kind").?.string);
     try std.testing.expect(build.get("exact_command").?.bool);
+
+    const static_contracts = catalog.value.object.get("registry_static_analysis_contracts").?.object;
+    const ast_decls = static_contracts.get("zig_ast_decl_summary").?.object;
+    try std.testing.expectEqualStrings("parser_backed", ast_decls.get("capability_tier").?.string);
+    try std.testing.expectEqualStrings("high", ast_decls.get("confidence").?.string);
+    const lint = static_contracts.get("zig_lint").?.object;
+    try std.testing.expectEqualStrings("zwanzig_backed", lint.get("capability_tier").?.string);
 }
 
 test "manifest-generated catalog group membership covers registry exactly once" {

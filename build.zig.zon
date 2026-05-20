@@ -15,6 +15,7 @@
         "src",
         "src/tool_catalog.json",
         "tools",
+        "third_party",
         "tests",
         "examples",
         "docs",

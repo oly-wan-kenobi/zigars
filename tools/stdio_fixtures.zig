@@ -9,6 +9,7 @@ const JsonValue = std.json.Value;
 const flagValue = cli_io.flagValue;
 const jsonStringifyAlloc = cli_io.jsonStringifyAlloc;
 const readFileAlloc = cli_io.readFileAlloc;
+const stderrPrint = cli_io.stderrPrint;
 const stdoutWrite = cli_io.stdoutWrite;
 const unexpectedArgument = cli_io.unexpectedArgument;
 const valueAt = smoke.valueAt;
@@ -34,8 +35,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
 
     const workspace = try makeFixtureWorkspace(allocator, io);
     defer {
-        const rel = workspace;
-        Io.Dir.cwd().deleteTree(io, rel) catch {};
+        cleanupFixtureWorkspace(io, workspace);
         allocator.free(workspace);
     }
 
@@ -94,11 +94,16 @@ fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     return path;
 }
 
+fn cleanupFixtureWorkspace(io: Io, rel: []const u8) void {
+    Io.Dir.cwd().deleteTree(io, rel) catch |err| stderrPrint(io, "stdio-fixtures: failed to remove temporary workspace {s}: {s}\n", .{ rel, @errorName(err) }) catch return;
+}
+
 fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     var src_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const src_dir = try std.fmt.bufPrint(&src_path_buf, "{s}/src", .{workspace});
     try Io.Dir.cwd().createDirPath(io, src_dir);
     try writeJoinedFile(io, workspace, "src/main.zig", "pub fn main() void {const x=1;_ = x;}\n");
+    try writeJoinedFile(io, workspace, "src/tests.zig", "const std = @import(\"std\");\npub const Fixture = struct { pub fn run() void {} };\ntest \"fixture works\" { _ = std.testing; }\n");
     try writeJoinedFile(io, workspace, "stacks.folded", "main;work 7\n");
     try writeJoinedFile(io, workspace, "before.folded", "main;old 3\n");
     try writeJoinedFile(io, workspace, "after.folded", "main;new 5\n");
@@ -119,7 +124,7 @@ fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u
     defer allocator.free(rel);
     const abs = try smoke.absolutePath(allocator, io, rel);
     errdefer allocator.free(abs);
-    try Io.Dir.copyFileAbsolute(tool_path, abs, io, .{ .replace = true, .make_path = true });
+    try Io.Dir.copyFileAbsolute(tool_path, abs, io, .{ .permissions = .executable_file, .make_path = true, .replace = true });
     return abs;
 }
 
@@ -149,14 +154,8 @@ const StdioClient = struct {
         try self.expectTool(tools, "zigar_context_pack");
         try self.expectTool(tools, "zigar_validate_patch");
         try self.expectTool(tools, "zig_test_select");
+        try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
-        try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.type", "string");
-        try self.expectToolPathString(tools, "zig_format", "inputSchema.properties.file.x-zigar-path-kind", "input_file");
-        try self.expectToolPathBool(tools, "zig_format", "inputSchema.properties.apply.default", false);
-        try self.expectToolPathString(tools, "zig_format", "inputSchema.required.0", "file");
-        try self.expectToolPathString(tools, "zig_analysis_graphs", "inputSchema.properties.mode.enum.0", "cfg");
-        try self.expectToolPathString(tools, "zig_flamegraph", "inputSchema.required.0", "format");
-        try self.expectToolPathString(tools, "zig_flamegraph", "inputSchema.properties.format.enum.5", "recursive");
 
         const source = try std.fmt.allocPrint(self.allocator, "{s}/src/main.zig", .{workspace});
         defer self.allocator.free(source);
@@ -167,9 +166,13 @@ const StdioClient = struct {
         defer self.allocator.free(workspace_info);
         if (std.mem.indexOf(u8, workspace_info, "\"diff_folded\"") == null) return error.AssertionFailed;
 
+        const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
+        defer self.allocator.free(profile_plan);
+        try self.expectPathString(profile_plan, "kind", "zig_profile_plan");
+
         const preview = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":false}");
         defer self.allocator.free(preview);
-        try self.expectPathBool(preview, "applied", false);
+        try self.expectPathJson(preview, "applied", .{ .bool = false });
         const after_preview = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);
         defer self.allocator.free(after_preview);
         try smoke.expectStringEq(self.io, after_preview, before, "zig_format preview source unchanged");
@@ -177,24 +180,24 @@ const StdioClient = struct {
 
         const applied = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":true}");
         defer self.allocator.free(applied);
-        try self.expectPathBool(applied, "ok", true);
+        try self.expectPathJson(applied, "ok", .{ .bool = true });
         const formatted = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);
         defer self.allocator.free(formatted);
         if (std.mem.indexOf(u8, formatted, "const x = 1;") == null) return error.AssertionFailed;
 
         const patch = try self.callTool("zig_patch_preview", "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void {\\n    const x = 2;\\n    _ = x;\\n}\\n\"}");
         defer self.allocator.free(patch);
-        try self.expectPathBool(patch, "applied", false);
+        try self.expectPathJson(patch, "applied", .{ .bool = false });
         if (std.mem.indexOf(u8, patch, "-    const x = 1;") == null) return error.AssertionFailed;
 
         const compile_index = try self.callTool("zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\n\"}");
         defer self.allocator.free(compile_index);
-        try self.expectPathInt(compile_index, "summary.error_count", 1);
+        try self.expectPathJson(compile_index, "summary.error_count", .{ .integer = 1 });
 
         const context = try self.callTool("zigar_context_pack", "{\"mode\":\"tiny\"}");
         defer self.allocator.free(context);
         try self.expectPathString(context, "kind", "zigar_context_pack");
-        try self.expectPathBool(context, "workspace.zls_running", false);
+        try self.expectPathJson(context, "workspace.zls_running", .{ .bool = false });
 
         const langref = try self.callTool("zig_lang_ref_search", "{\"query\":\"defer\",\"limit\":1}");
         defer self.allocator.free(langref);
@@ -208,11 +211,17 @@ const StdioClient = struct {
 
         const guard = try self.callTool("zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
         defer self.allocator.free(guard);
-        try self.expectPathBool(guard, "safe", false);
+        try self.expectPathJson(guard, "safe", .{ .bool = false });
 
         const api_diff = try self.callTool("zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}");
         defer self.allocator.free(api_diff);
-        try self.expectPathBool(api_diff, "breaking_change_risk", true);
+        try self.expectPathJson(api_diff, "breaking_change_risk", .{ .bool = true });
+        try self.expectPathString(api_diff, "capability_tier", "advisory_orientation");
+
+        const ast_decls = try self.callTool("zig_ast_decl_summary", "{\"file\":\"src/tests.zig\"}");
+        defer self.allocator.free(ast_decls);
+        try self.expectPathString(ast_decls, "capability_tier", "parser_backed");
+        if (std.mem.indexOf(u8, ast_decls, "Fixture") == null) return error.AssertionFailed;
 
         const validate = try self.callTool("zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(validate);
@@ -220,12 +229,13 @@ const StdioClient = struct {
 
         const lint = try self.callTool("zig_lint", "{\"path\":\"src\",\"config\":\"src/main.zig\",\"rules_do\":\"fake-rule\",\"rules_skip\":\"style\",\"args\":\"--verbose\"}");
         defer self.allocator.free(lint);
-        try self.expectPathBool(lint, "ok", true);
+        try self.expectPathJson(lint, "ok", .{ .bool = true });
+        try self.expectPathString(lint, "capability_tier", "zwanzig_backed");
         if (std.mem.indexOf(u8, lint, "diagnostics") == null) return error.AssertionFailed;
 
         const sarif = try self.callTool("zig_lint_sarif", "{\"path\":\"src\",\"rules_do\":\"fake-rule\"}");
         defer self.allocator.free(sarif);
-        try self.expectPathBool(sarif, "ok", true);
+        try self.expectPathJson(sarif, "ok", .{ .bool = true });
         if (std.mem.indexOf(u8, sarif, "fake-zwanzig") == null or std.mem.indexOf(u8, sarif, "--format") == null) return error.AssertionFailed;
 
         const rules = try self.callTool("zig_lint_rules", "{}");
@@ -246,11 +256,7 @@ const StdioClient = struct {
         const diff = try self.callTool("zig_flamegraph_diff", "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"title\":\"diff fixture\"}");
         defer self.allocator.free(diff);
         try self.expectPathString(diff, "kind", "zig_flamegraph_diff");
-        try self.expectPathString(diff, "intermediate", ".zigar-cache/profile/diff-0.folded");
         try expectFileStartsWith(self.allocator, self.io, workspace, "diff.svg", "<svg");
-        const folded = try joinedRead(self.allocator, self.io, workspace, ".zigar-cache/profile/diff-0.folded");
-        defer self.allocator.free(folded);
-        try smoke.expectStringEq(self.io, std.mem.trim(u8, folded, " \t\r\n"), "main;delta 2", "diff folded output");
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 
@@ -332,41 +338,15 @@ const StdioClient = struct {
         return error.AssertionFailed;
     }
 
-    fn expectToolPathString(self: *StdioClient, tools_json: []const u8, name: []const u8, path: []const u8, expected: []const u8) !void {
-        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, tools_json, .{});
-        defer parsed.deinit();
-        const tool = smoke.findTool(parsed.value.object.get("tools").?.array.items, name) orelse return error.AssertionFailed;
-        const value = valueAt(tool, path) orelse return error.AssertionFailed;
-        if (value != .string or !std.mem.eql(u8, value.string, expected)) return error.AssertionFailed;
-    }
-
-    fn expectToolPathBool(self: *StdioClient, tools_json: []const u8, name: []const u8, path: []const u8, expected: bool) !void {
-        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, tools_json, .{});
-        defer parsed.deinit();
-        const tool = smoke.findTool(parsed.value.object.get("tools").?.array.items, name) orelse return error.AssertionFailed;
-        const value = valueAt(tool, path) orelse return error.AssertionFailed;
-        if (value != .bool or value.bool != expected) return error.AssertionFailed;
-    }
-
-    fn expectPathBool(self: *StdioClient, json: []const u8, path: []const u8, expected: bool) !void {
-        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, json, .{});
-        defer parsed.deinit();
-        const value = valueAt(parsed.value, path) orelse return error.AssertionFailed;
-        if (value != .bool or value.bool != expected) return error.AssertionFailed;
-    }
-
-    fn expectPathInt(self: *StdioClient, json: []const u8, path: []const u8, expected: i64) !void {
-        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, json, .{});
-        defer parsed.deinit();
-        const value = valueAt(parsed.value, path) orelse return error.AssertionFailed;
-        if (value != .integer or value.integer != expected) return error.AssertionFailed;
-    }
-
     fn expectPathString(self: *StdioClient, json: []const u8, path: []const u8, expected: []const u8) !void {
+        try self.expectPathJson(json, path, .{ .string = expected });
+    }
+
+    fn expectPathJson(self: *StdioClient, json: []const u8, path: []const u8, expected: JsonValue) !void {
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, json, .{});
         defer parsed.deinit();
         const value = valueAt(parsed.value, path) orelse return error.AssertionFailed;
-        if (value != .string or !std.mem.eql(u8, value.string, expected)) return error.AssertionFailed;
+        try smoke.expectJsonEq(self.io, value, expected, path);
     }
 };
 

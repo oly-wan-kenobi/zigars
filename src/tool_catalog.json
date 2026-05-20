@@ -27,8 +27,9 @@
     {"intent": "detect public API changes", "prefer": "zig_public_api_diff", "keywords": ["public api diff", "breaking change", "api"]},
     {"intent": "inspect build dependencies", "prefer": "zig_dependency_inspect", "keywords": ["build.zig.zon", "dependency", "hash", "zig-pkg"]},
     {"intent": "find symbol information", "prefer": "zig_hover, zig_definition, zig_references, zig_document_symbols", "keywords": ["zls", "lsp", "symbol", "definition", "references"]},
-    {"intent": "search Zig docs", "prefer": "zig_builtin_doc, zig_std_search, zig_lang_ref_search", "keywords": ["docs", "stdlib", "builtin", "langref", "language reference"]},
+    {"intent": "search Zig docs", "prefer": "zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json", "keywords": ["docs", "stdlib", "builtin", "langref", "language reference", "source provenance"]},
     {"intent": "lint Zig code", "prefer": "zig_lint", "keywords": ["zwanzig", "lint", "linter", "sarif"]},
+    {"intent": "plan profiling capture", "prefer": "zig_profile_plan", "keywords": ["profile plan", "external capture", "perf", "xctrace", "sample", "dtrace", "vtune"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
     {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zwanzig", "zflame", "diff-folded"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}

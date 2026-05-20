@@ -9,6 +9,7 @@ pub const ToolGroup = types.ToolGroup;
 pub const HandlerModule = types.HandlerModule;
 pub const HandlerRef = types.HandlerRef;
 pub const ToolRisk = types.ToolRisk;
+pub const StaticAnalysisTier = types.StaticAnalysisTier;
 pub const FileCommandPlan = types.FileCommandPlan;
 pub const CommandPlan = types.CommandPlan;
 pub const ZlsPlan = types.ZlsPlan;
@@ -32,6 +33,7 @@ pub const ToolEntry = struct {
     risk: ToolRisk,
     handler: HandlerRef,
     plan: PlanPolicy,
+    static_analysis_tier: ?StaticAnalysisTier,
 };
 
 pub const definitions = definitions_mod.definitions;
@@ -63,6 +65,7 @@ fn buildEntries() [definition_decls.len]ToolEntry {
             .risk = definition.risk,
             .handler = definition.handler,
             .plan = definition.plan,
+            .static_analysis_tier = definition.static_analysis_tier,
         };
     }
     return result;
@@ -113,6 +116,10 @@ pub fn riskFor(id: ToolId) ToolRisk {
 
 pub fn planFor(id: ToolId) PlanPolicy {
     return entryFor(id).plan;
+}
+
+pub fn staticAnalysisTierFor(id: ToolId) ?StaticAnalysisTier {
+    return entryFor(id).static_analysis_tier;
 }
 
 pub fn commandPlanFor(id: ToolId) ?CommandPlan {
@@ -215,6 +222,18 @@ test "tool planning policies expose exact command plans only for exact commands"
             else => try std.testing.expect(commandPlanFor(entry.id) == null),
         }
     }
+}
+
+test "static analysis product tools expose capability tiers" {
+    for (entries) |entry| {
+        if (entry.group == .static_analysis or entry.group == .zwanzig) {
+            try std.testing.expect(entry.static_analysis_tier != null);
+        } else {
+            try std.testing.expect(entry.static_analysis_tier == null);
+        }
+    }
+    try std.testing.expectEqual(StaticAnalysisTier.parser_backed, staticAnalysisTierFor(.zig_ast_decl_summary).?);
+    try std.testing.expectEqual(StaticAnalysisTier.zwanzig_backed, staticAnalysisTierFor(.zig_lint).?);
 }
 
 test "risk metadata distinguishes read-only annotations from code execution" {

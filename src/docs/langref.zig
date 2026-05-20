@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const docs_source = @import("source.zig");
+const json_result = @import("../json_result.zig");
 
 pub const Section = struct {
     title: []const u8,
@@ -30,15 +31,32 @@ pub const sections = [_]Section{
     .{ .title = "While", .anchor = "while", .summary = "while repeats a body while a condition holds.", .body = "while supports continue expressions, optional captures, error-union captures, and else clauses for natural completion." },
 };
 
+const bundled_ranking = "bundled curated sections with title or anchor matches before summary/body matches; limit is applied after ranking";
+const installed_ranking = "installed HTML heading order for matching language-reference sections; limit is applied after document-order ranking";
+
 pub fn search(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8, query: []const u8, limit: usize) ![]u8 {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const result = try searchValue(arena.allocator(), io, lib_dir, query, limit);
+    return searchTextFromValue(allocator, result);
+}
+
+pub fn searchValue(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8, query: []const u8, limit: usize) !std.json.Value {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    return json_result.cloneValue(allocator, try searchValueImpl(arena.allocator(), io, lib_dir, query, limit));
+}
+
+fn searchValueImpl(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8, query: []const u8, limit: usize) !std.json.Value {
     const normalized_limit = @max(limit, 1);
     if (try findHtml(allocator, io, lib_dir)) |path| {
-        defer allocator.free(path);
-        const contents = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
+        const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024)) catch {
+            return searchBundledValue(allocator, query, normalized_limit);
+        };
         defer allocator.free(contents);
-        return searchHtml(allocator, path, contents, query, normalized_limit);
+        return searchHtmlValue(allocator, path, contents, query, normalized_limit);
     }
-    return searchBundled(allocator, query, normalized_limit);
+    return searchBundledValue(allocator, query, normalized_limit);
 }
 
 fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !?[]u8 {
@@ -65,6 +83,7 @@ fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !?[]u
 }
 
 fn looksLikeLangRef(rel_path: []const u8, bytes: []const u8) bool {
+    if (std.mem.eql(u8, rel_path, "docs/index.html")) return false;
     if (std.mem.indexOf(u8, bytes, "Language Reference") != null or
         std.mem.indexOf(u8, bytes, "Zig Language Reference") != null)
     {
@@ -74,40 +93,48 @@ fn looksLikeLangRef(rel_path: []const u8, bytes: []const u8) bool {
     return std.mem.indexOf(u8, bytes, "Zig") != null or std.mem.indexOf(u8, bytes, "zig") != null;
 }
 
-fn searchBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+fn searchBundledValue(allocator: std.mem.Allocator, query: []const u8, limit: usize) !std.json.Value {
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
-    const source = docs_source.bundledLangref();
-    try out.print(allocator, "Language reference search source: {s}\n", .{source.id});
-    try docs_source.appendTextHeader(allocator, &out, source);
-    try out.print(allocator, "Query: `{s}`\n\n", .{query});
-    var count = try appendBundledMatches(allocator, &out, lower_query, limit, .title);
+    var matches = std.json.Array.init(allocator);
+    errdefer matches.deinit();
+    var count = try appendBundledMatches(allocator, &matches, lower_query, limit, .title);
     if (count < limit) {
-        count += try appendBundledMatches(allocator, &out, lower_query, limit - count, .body);
+        count += try appendBundledMatches(allocator, &matches, lower_query, limit - count, .body);
     }
 
-    if (count == 0) {
-        try out.print(allocator, "No language reference matches for `{s}` in the bundled index.\n", .{query});
-    }
-    return out.toOwnedSlice(allocator);
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try docs_source.putContractFields(allocator, &obj, docs_source.bundledLangref(), .{
+        .query = query,
+        .limit = limit,
+        .result_count = count,
+        .no_result_reason = if (count == 0) "no_langref_match" else null,
+        .ranking = bundled_ranking,
+    });
+    try obj.put(allocator, "matches", .{ .array = matches });
+    return .{ .object = obj };
 }
 
 const MatchPass = enum { title, body };
 
-fn appendBundledMatches(allocator: std.mem.Allocator, out: *std.ArrayList(u8), lower_query: []const u8, limit: usize, pass: MatchPass) !usize {
+fn appendBundledMatches(allocator: std.mem.Allocator, matches: *std.json.Array, lower_query: []const u8, limit: usize, pass: MatchPass) !usize {
     var count: usize = 0;
     for (sections) |section| {
         if (count >= limit) break;
         if (!sectionMatches(section, lower_query, pass)) continue;
         count += 1;
-        try out.print(
-            allocator,
-            "### {s} (#{s})\n\nSource: bundled Zig language reference index\n\n{s}\n\n{s}\n\n",
-            .{ section.title, section.anchor, section.summary, section.body },
-        );
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "rank", .{ .integer = @intCast(matches.items.len + 1) });
+        try obj.put(allocator, "title", .{ .string = section.title });
+        try obj.put(allocator, "anchor", .{ .string = section.anchor });
+        try obj.put(allocator, "summary", .{ .string = section.summary });
+        try obj.put(allocator, "body", .{ .string = section.body });
+        try obj.put(allocator, "match_pass", .{ .string = @tagName(pass) });
+        try obj.put(allocator, "source_path", .null);
+        try matches.append(.{ .object = obj });
     }
     return count;
 }
@@ -132,16 +159,12 @@ fn containsLowered(haystack: []const u8, lower_query: []const u8) bool {
     return false;
 }
 
-fn searchHtml(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+fn searchHtmlValue(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize) !std.json.Value {
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
-    const source = docs_source.installedLangref(path, null);
-    try out.print(allocator, "Language reference search source: {s}\n", .{source.id});
-    try docs_source.appendTextHeader(allocator, &out, source);
-    try out.print(allocator, "Query: `{s}`\n\n", .{query});
+    var matches = std.json.Array.init(allocator);
+    errdefer matches.deinit();
     var count: usize = 0;
     var pos: usize = 0;
     while (count < limit) {
@@ -158,19 +181,106 @@ fn searchHtml(allocator: std.mem.Allocator, path: []const u8, html: []const u8, 
 
         count += 1;
         const title = try stripHtmlAlloc(allocator, heading.title_html);
-        defer allocator.free(title);
         const snippet = snippetForQuery(text, lower_text, lower_query);
-        try out.print(
-            allocator,
-            "### {s} (#{s})\n\nSource: {s}\n\n{s}\n\n",
-            .{ std.mem.trim(u8, title, " \t\r\n"), heading.anchor, path, std.mem.trim(u8, snippet, " \t\r\n") },
-        );
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "rank", .{ .integer = @intCast(count) });
+        try obj.put(allocator, "title", .{ .string = std.mem.trim(u8, title, " \t\r\n") });
+        try obj.put(allocator, "anchor", .{ .string = try allocator.dupe(u8, heading.anchor) });
+        try obj.put(allocator, "snippet", .{ .string = try allocator.dupe(u8, std.mem.trim(u8, snippet, " \t\r\n")) });
+        try obj.put(allocator, "match_pass", .{ .string = "html_section" });
+        try obj.put(allocator, "source_path", .{ .string = path });
+        try matches.append(.{ .object = obj });
     }
 
-    if (count == 0) {
-        try out.print(allocator, "No language reference matches for `{s}` in {s}.\n", .{ query, path });
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try docs_source.putContractFields(allocator, &obj, docs_source.installedLangref(path, null), .{
+        .query = query,
+        .limit = limit,
+        .result_count = count,
+        .no_result_reason = if (count == 0) "no_langref_match" else null,
+        .ranking = installed_ranking,
+    });
+    try obj.put(allocator, "matches", .{ .array = matches });
+    return .{ .object = obj };
+}
+
+fn searchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    const obj = value.object;
+    const source_obj = obj.get("source").?.object;
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.print(allocator, "Language reference search source: {s}\n", .{source_obj.get("id").?.string});
+    try appendSourceObjectText(allocator, &out, source_obj);
+    try appendContractObjectText(allocator, &out, obj);
+
+    const matches = obj.get("matches").?.array.items;
+    for (matches) |match_value| {
+        const match = match_value.object;
+        try out.print(allocator, "### {s} (#{s})\n\n", .{ match.get("title").?.string, match.get("anchor").?.string });
+        const source_path = match.get("source_path").?;
+        if (source_path == .string) {
+            try out.print(allocator, "Source: {s}\n\n", .{source_path.string});
+            try out.print(allocator, "{s}\n\n", .{match.get("snippet").?.string});
+        } else {
+            try out.appendSlice(allocator, "Source: bundled Zig language reference index\n\n");
+            try out.print(allocator, "{s}\n\n{s}\n\n", .{ match.get("summary").?.string, match.get("body").?.string });
+        }
+    }
+
+    if (matches.len == 0) {
+        const source_path = source_obj.get("path").?;
+        if (source_path == .string) {
+            try out.print(allocator, "No language reference matches for `{s}` in {s}.\n", .{ obj.get("query").?.string, source_path.string });
+        } else {
+            try out.print(allocator, "No language reference matches for `{s}` in the bundled index.\n", .{obj.get("query").?.string});
+        }
     }
     return out.toOwnedSlice(allocator);
+}
+
+fn appendSourceObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source_obj: std.json.ObjectMap) !void {
+    try out.print(allocator,
+        \\Docs source: {s}
+        \\Source label: {s}
+        \\Provenance: {s}
+        \\Completeness: {s}
+        \\Version: {s}
+        \\
+    , .{
+        source_obj.get("id").?.string,
+        source_obj.get("label").?.string,
+        source_obj.get("provenance").?.string,
+        source_obj.get("completeness").?.string,
+        source_obj.get("version").?.string,
+    });
+    const path = source_obj.get("path").?;
+    if (path == .string) try out.print(allocator, "Path: {s}\n", .{path.string});
+    try out.append(allocator, '\n');
+}
+
+fn appendContractObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), obj: std.json.ObjectMap) !void {
+    const query = obj.get("query").?;
+    if (query == .string) {
+        try out.print(allocator, "Query: `{s}`\n", .{query.string});
+    } else {
+        try out.appendSlice(allocator, "Query: none\n");
+    }
+    const limit = obj.get("limit").?;
+    if (limit == .integer) {
+        try out.print(allocator, "Limit: {d}\n", .{limit.integer});
+    } else {
+        try out.appendSlice(allocator, "Limit: none\n");
+    }
+    try out.print(allocator, "Result count: {d}\n", .{obj.get("result_count").?.integer});
+    const no_result = obj.get("no_result_reason").?;
+    if (no_result == .string) {
+        try out.print(allocator, "No result reason: {s}\n", .{no_result.string});
+    } else {
+        try out.appendSlice(allocator, "No result reason: none\n");
+    }
+    try out.print(allocator, "Ranking: {s}\n\n", .{obj.get("ranking").?.string});
 }
 
 const HtmlHeading = struct {
@@ -276,8 +386,41 @@ test "uses bundled index when installed langref is absent" {
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: partial_curated") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Result count: 1") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "### Defer (#defer)") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "errdefer") != null);
+}
+
+test "bundled langref JSON labels partial curated fallback and no-match reason" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const hit = try searchValue(allocator, std.testing.io, "/definitely/missing/zig/lib", "defer", 1);
+    const hit_obj = hit.object;
+    try std.testing.expectEqualStrings("bundled_langref_index", hit_obj.get("source").?.object.get("id").?.string);
+    try std.testing.expectEqualStrings("partial_curated", hit_obj.get("source").?.object.get("completeness").?.string);
+    try std.testing.expectEqual(@as(i64, 1), hit_obj.get("limit").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), hit_obj.get("result_count").?.integer);
+    try std.testing.expectEqualStrings("Defer", hit_obj.get("matches").?.array.items[0].object.get("title").?.string);
+    try std.testing.expect(hit_obj.get("no_result_reason").? == .null);
+
+    const miss = try searchValue(allocator, std.testing.io, "/definitely/missing/zig/lib", "not-a-langref-token", 2);
+    const miss_obj = miss.object;
+    try std.testing.expectEqual(@as(i64, 0), miss_obj.get("result_count").?.integer);
+    try std.testing.expectEqualStrings("no_langref_match", miss_obj.get("no_result_reason").?.string);
+}
+
+test "langref JSON value is fully owned and compatible with structuredOwned" {
+    const allocator = std.testing.allocator;
+    const value = try searchValue(allocator, std.testing.io, "/definitely/missing/zig/lib", "defer", 1);
+    const result = try json_result.structuredOwned(allocator, value);
+    defer json_result.deinitToolResult(allocator, result);
+
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("bundled_langref_index", obj.get("source").?.object.get("id").?.string);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("result_count").?.integer);
+    try std.testing.expectEqualStrings("Defer", obj.get("matches").?.array.items[0].object.get("title").?.string);
 }
 
 test "does not scan docs implementation zig files" {
@@ -319,7 +462,7 @@ test "does not treat installed autodoc index as language reference" {
         \\<!doctype html>
         \\<html><head><title>Zig Documentation</title></head><body>
         \\<h1 id="hdrName">defer</h1>
-        \\<p>Autodoc search result shell, not the language reference.</p>
+        \\<p>Autodoc search result shell, not the Zig Language Reference.</p>
         \\</body></html>
         ,
     });
@@ -331,6 +474,27 @@ test "does not treat installed autodoc index as language reference" {
 
     try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "installed_langref_html") == null);
+}
+
+test "unreadable langref candidate falls back to bundled partial data" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "lib/doc/langref.html");
+
+    const lib_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "lib");
+    defer allocator.free(lib_dir);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const value = try searchValue(arena.allocator(), io, lib_dir, "defer", 1);
+    const obj = value.object;
+
+    try std.testing.expectEqualStrings("bundled_langref_index", obj.get("source").?.object.get("id").?.string);
+    try std.testing.expectEqualStrings("partial_curated", obj.get("source").?.object.get("completeness").?.string);
 }
 
 test "uses installed language reference html when present" {
@@ -364,6 +528,15 @@ test "uses installed language reference html when present" {
     try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: installed_complete") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "### defer (#defer)") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "bundled_langref_index") == null);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const value = try searchValue(arena.allocator(), io, lib_dir, "scope exit sentinel", 5);
+    const obj = value.object;
+    try std.testing.expectEqualStrings("installed_langref_html", obj.get("source").?.object.get("id").?.string);
+    try std.testing.expectEqualStrings("installed_complete", obj.get("source").?.object.get("completeness").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, obj.get("source").?.object.get("path").?.string, "langref.html") != null);
+    try std.testing.expectEqualStrings("defer", obj.get("matches").?.array.items[0].object.get("anchor").?.string);
 }
 
 test "respects limit for installed html" {

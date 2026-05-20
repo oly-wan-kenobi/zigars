@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const runtime_mod = @import("../runtime.zig");
 const uri_util = @import("../types/uri.zig");
 const DocumentState = @import("../state/documents.zig").DocumentState;

@@ -19,6 +19,14 @@ pub const ToolGroup = enum {
     profiling,
 };
 
+pub const StaticAnalysisTier = enum {
+    advisory_orientation,
+    parser_backed,
+    compiler_backed,
+    zls_backed,
+    zwanzig_backed,
+};
+
 pub const HandlerModule = enum {
     discovery,
     agent,
@@ -84,6 +92,7 @@ pub const ToolDefinition = struct {
     risk: ToolRisk = .{},
     handler: HandlerRef,
     plan: PlanPolicy,
+    static_analysis_tier: ?StaticAnalysisTier = null,
 };
 
 pub const GroupSpec = struct {

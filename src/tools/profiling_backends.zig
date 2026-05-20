@@ -100,6 +100,21 @@ test "zflame argv uses explicit formats and upstream option syntax" {
     for (expected, argv.argv.items) |expected_arg, actual_arg| try std.testing.expectEqualStrings(expected_arg, actual_arg);
 }
 
+test "zflame argv covers every advertised input format without guessing" {
+    inline for (std.meta.tags(backend_contracts.ZflameFormat)) |format| {
+        var argv = try buildZflameArgv(std.testing.allocator, .{
+            .executable = "zflame",
+            .format = format,
+            .input = "/workspace/input.profile",
+        });
+        defer argv.deinit(std.testing.allocator);
+        try std.testing.expectEqualStrings("zflame", argv.argv.items[0]);
+        try std.testing.expectEqualStrings(format.name(), argv.argv.items[1]);
+        try std.testing.expectEqualStrings("/workspace/input.profile", argv.argv.items[2]);
+    }
+    try std.testing.expect(backend_contracts.parseZflameFormat("guess") == null);
+}
+
 test "diff-folded argv writes explicit output file" {
     var argv = try buildDiffFoldedArgv(std.testing.allocator, .{
         .executable = "diff-folded",

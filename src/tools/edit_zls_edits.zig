@@ -176,7 +176,9 @@ pub fn workspaceEditFileValueForDocument(a: *App, allocator: std.mem.Allocator, 
     if (apply) {
         try a.workspace.writeFile(a.io, rel, updated);
         if (a.lsp_client) |client| {
-            if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch {};
+            if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch |err| {
+                a.logger.warn("zls", "failed to close edited document {s}: {}", .{ uri, err });
+            };
         }
     }
 
@@ -203,6 +205,8 @@ pub fn applyEditsForUri(a: *App, allocator: std.mem.Allocator, uri: []const u8, 
     defer allocator.free(updated);
     try a.workspace.writeFile(a.io, rel, updated);
     if (a.lsp_client) |client| {
-        if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch {};
+        if (a.doc_state) |doc_state| doc_state.closeDoc(client, uri) catch |err| {
+            a.logger.warn("zls", "failed to close edited document {s}: {}", .{ uri, err });
+        };
     }
 }

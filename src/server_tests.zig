@@ -148,9 +148,8 @@ test "registry catalog arguments can be derived from tool registry" {
 test "zigar_schema exposes registry-derived risk metadata" {
     const allocator = std.testing.allocator;
     const result = try zigarSchema(allocator, null);
-    defer allocator.free(result.content);
     const body = result.content[0].text.text;
-    defer allocator.free(body);
+    defer json_result.deinitToolResult(allocator, result);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
     defer parsed.deinit();
@@ -466,11 +465,64 @@ test "public api diff detects breaking removal and additions" {
     );
     const obj = value.object;
     try std.testing.expectEqualStrings("heuristic_public_decl_diff", obj.get("analysis_kind").?.string);
+    try std.testing.expectEqualStrings("advisory_orientation", obj.get("capability_tier").?.string);
     try std.testing.expectEqualStrings("advisory", obj.get("confidence_class").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, obj.get("source_coverage").?.string, "public declaration line") != null);
     try std.testing.expect(obj.get("limitations").?.array.items.len > 0);
     try std.testing.expect(obj.get("breaking_change_risk").?.bool);
     try std.testing.expectEqual(@as(usize, 1), obj.get("removed").?.array.items.len);
     try std.testing.expectEqual(@as(usize, 1), obj.get("added").?.array.items.len);
+}
+
+test "parser-backed static analysis result releases temporary JSON tree" {
+    const allocator = std.testing.allocator;
+    const result = try static_analysis.sourceJsonResult(
+        allocator,
+        "zig_ast_decl_summary",
+        "parse_ast_declarations",
+        "fixture.zig",
+        "pub const Fixture = struct { pub fn run() void {} };",
+        analysis.astDeclSummaryJson,
+    );
+    defer json_result.deinitToolResult(allocator, result);
+
+    const structured = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("parser_backed", structured.get("capability_tier").?.string);
+    try std.testing.expectEqualStrings("zig_ast_decl_summary", structured.get("kind").?.string);
+}
+
+test "static core handler releases temporary JSON tree" {
+    const allocator = std.testing.allocator;
+    var app = try testAppForCommandPlanning(allocator);
+    defer app.workspace.deinit();
+    var args = std.json.ObjectMap.empty;
+    defer args.deinit(allocator);
+    try args.put(allocator, "targets", .{ .string = "native x86_64-linux-gnu" });
+    try args.put(allocator, "steps", .{ .string = "test" });
+
+    const result = try static_analysis.zigTargetMatrixPlan(&app, allocator, .{ .object = args });
+    defer json_result.deinitToolResult(allocator, result);
+
+    const structured = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_target_matrix_plan", structured.get("kind").?.string);
+    try std.testing.expectEqualStrings("advisory_orientation", structured.get("capability_tier").?.string);
+}
+
+test "static tests handler releases temporary JSON tree" {
+    const allocator = std.testing.allocator;
+    var app = try testAppForCommandPlanning(allocator);
+    defer app.workspace.deinit();
+    var args = std.json.ObjectMap.empty;
+    defer args.deinit(allocator);
+    try args.put(allocator, "before", .{ .string = "pub fn oldName() void {}\n" });
+    try args.put(allocator, "after", .{ .string = "pub fn newName() void {}\n" });
+
+    const result = try static_analysis.zigPublicApiDiff(&app, allocator, .{ .object = args });
+    defer json_result.deinitToolResult(allocator, result);
+
+    const structured = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_public_api_diff", structured.get("kind").?.string);
+    try std.testing.expect(structured.get("breaking_change_risk").?.bool);
 }
 
 test "failure summary suggests agent diagnostic tools" {
