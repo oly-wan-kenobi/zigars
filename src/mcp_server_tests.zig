@@ -313,3 +313,88 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/resources/updated") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/prompts/list_changed") != null);
 }
+
+test "protocol response builders release response allocations" {
+    const allocator = std.testing.allocator;
+
+    var server: Server = .init(allocator, .{
+        .name = "leak-check-server",
+        .version = "1.0.0",
+        .title = "Leak Check",
+        .description = "Fixture server",
+        .websiteUrl = "https://example.test",
+        .instructions = "Use fixture tools.",
+    });
+    defer server.deinit();
+    server.enableLogging();
+    server.enableCompletions();
+    server.enableTasks();
+
+    try server.addTool(.{
+        .name = "ok_tool",
+        .description = "A routed tool",
+        .title = "OK Tool",
+        .inputSchema = .{
+            .@"$schema" = "https://json-schema.org/draft/2020-12/schema",
+            .description = "Tool input",
+            .required = &.{"flag"},
+        },
+        .execution = .{ .taskSupport = "optional" },
+        .annotations = .{ .title = "Annotation", .readOnlyHint = true, .destructiveHint = false, .idempotentHint = true, .openWorldHint = false },
+        .handler = okToolHandler,
+    });
+    try server.addResource(.{
+        .uri = "file:///resource",
+        .name = "Resource",
+        .title = "Resource Title",
+        .description = "Resource description",
+        .mimeType = "text/plain",
+        .size = 12,
+        .handler = testResourceHandler,
+    });
+    try server.addResourceTemplate(.{
+        .uriTemplate = "file:///{name}",
+        .name = "Template",
+        .title = "Template Title",
+        .description = "Template description",
+        .mimeType = "text/plain",
+    });
+    try server.addPrompt(.{
+        .name = "prompt",
+        .title = "Prompt Title",
+        .description = "Prompt description",
+        .arguments = &.{.{ .name = "topic", .title = "Topic", .description = "Prompt topic", .required = true }},
+        .handler = testPromptHandler,
+    });
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"resources/templates/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"resources/subscribe\",\"params\":{\"uri\":\"file:///resource\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"resources/unsubscribe\",\"params\":{\"uri\":\"file:///resource\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"prompts/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"debug\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"completion/complete\",\"params\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tasks/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/list\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"prompts/list\"}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+    try server.sendLogMessage(std.testing.io, allocator, .info, "info log");
+    try server.sendProgress(std.testing.io, allocator, .{ .string = "tok" }, 0.5, 1.0, "half");
+    try server.notifyResourceUpdated(std.testing.io, allocator, "file:///resource");
+
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"tools\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"resourceTemplates\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/resources/updated") != null);
+}

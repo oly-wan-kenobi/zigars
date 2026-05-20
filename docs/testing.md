@@ -55,6 +55,22 @@ fake backends are intentionally strict about supported argv shapes so stale flag
 or option syntax fail before release. The fixture enforces the configured
 minimum `tools/call` count before it reports success.
 
+## Real Backend Conformance
+
+Default CI does not require real optional backend binaries. Before claiming real
+ZLS, zwanzig, zflame, or diff-folded support in release notes, run:
+
+```sh
+bash .github/scripts/backend-conformance.sh
+```
+
+The same check is available as the manual `Backend Conformance` GitHub Actions
+workflow. It starts zigar over stdio with real backend paths, probes them through
+`zigar_doctor`, runs one representative tool for each backend family, and
+verifies zflame/diff-folded SVG artifacts. Use `ZIGAR_ZLS_PATH`,
+`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` when
+the binaries are not on `PATH`.
+
 ## Coverage
 
 `zig build coverage` installs the Zig test binaries, requires `kcov` on `PATH`,

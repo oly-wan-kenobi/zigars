@@ -80,7 +80,9 @@ Some quality signals cannot be forced by the local repository alone:
 - GitHub branch protection and release permissions must be configured on the
   hosted repository.
 - Real ZLS, zwanzig, zflame, diff-folded, and platform-profiler validation is
-  optional because those backends are not bundled.
+  optional because those backends are not bundled. Use the manual
+  `Backend Conformance` workflow or `.github/scripts/backend-conformance.sh`
+  when release notes need to claim exact real-backend validation.
 - Agent-client behavior varies by client. zigar documents Codex, Claude, Gemini,
   Hermes, and generic stdio setup, but clients still own launch environment and
   workspace selection.

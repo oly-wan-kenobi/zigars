@@ -49,6 +49,7 @@ const diagnosticsStructuredValue = edit_diagnostics.diagnosticsStructuredValue;
 const waitForDiagnostics = edit_diagnostics.waitForDiagnostics;
 const textEditToolValueForDocument = edit_edits.textEditToolValueForDocument;
 const workspaceEditValueForDocument = edit_edits.workspaceEditValueForDocument;
+const source_read_limit = common.source_read_limit;
 
 pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_format", "file", "string");
@@ -67,7 +68,7 @@ pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) m
     const rel = a.workspace.relative(resolved);
     const preview_path = std.fs.path.join(allocator, &.{ ".zigar-cache", "format-preview", rel }) catch return error.OutOfMemory;
     defer allocator.free(preview_path);
-    const input = a.workspace.readFileAlloc(a.io, file, 4 * 1024 * 1024) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "read_source", "read_failed", "filesystem", file, err, "Confirm the file exists inside the zigar workspace and retry.");
+    const input = a.workspace.readFileAlloc(a.io, file, source_read_limit) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "read_source", "read_failed", "filesystem", file, err, "Confirm the file exists inside the zigar workspace and retry.");
     defer allocator.free(input);
     a.workspace.writeFile(a.io, preview_path, input) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "write_preview", "preview_write_failed", "filesystem", preview_path, err, "Confirm zigar can write to .zigar-cache in the configured workspace and retry.");
     const preview_abs = a.workspace.resolve(preview_path) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "resolve_preview", "preview_resolve_failed", "workspace_path", preview_path, err, "Confirm the preview path resolves inside the zigar workspace and retry.");
@@ -93,7 +94,7 @@ pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) m
             .resolution = "Inspect stdout/stderr, fix the preview source so zig fmt can parse it, then retry.",
         });
     }
-    const formatted = a.workspace.readFileAlloc(a.io, preview_path, 4 * 1024 * 1024) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "read_formatted_preview", "formatted_preview_read_failed", "filesystem", preview_path, err, "Retry after confirming zig fmt wrote the preview file.");
+    const formatted = a.workspace.readFileAlloc(a.io, preview_path, source_read_limit) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "read_formatted_preview", "formatted_preview_read_failed", "filesystem", preview_path, err, "Retry after confirming zig fmt wrote the preview file.");
     defer allocator.free(formatted);
     const diff = lsp_edits.unifiedDiff(allocator, file, input, formatted) catch |err| return fileToolError(allocator, "zig_format", "format_preview", "build_diff", "diff_failed", "diff", file, err, "Retry with a text Zig source file that can be diffed.");
     defer allocator.free(diff);
@@ -123,7 +124,7 @@ pub fn zigPatchPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_patch_preview", file, err);
     defer allocator.free(resolved);
     const rel = a.workspace.relative(resolved);
-    const source = a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024) catch |err| return fileToolError(allocator, "zig_patch_preview", "patch_preview", "read_source", "read_failed", "filesystem", rel, err, "Confirm the file exists inside the zigar workspace and retry.");
+    const source = a.workspace.readFileAlloc(a.io, rel, source_read_limit) catch |err| return fileToolError(allocator, "zig_patch_preview", "patch_preview", "read_source", "read_failed", "filesystem", rel, err, "Confirm the file exists inside the zigar workspace and retry.");
     defer allocator.free(source);
     const diff = lsp_edits.unifiedDiff(allocator, rel, source, content) catch |err| return fileToolError(allocator, "zig_patch_preview", "patch_preview", "build_diff", "diff_failed", "diff", rel, err, "Retry with text content that can be diffed against the source file.");
     defer allocator.free(diff);

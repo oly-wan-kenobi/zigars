@@ -13,6 +13,7 @@ const structuredText = common.structuredText;
 const toolErrorFromError = common.toolErrorFromError;
 const missingArgumentResult = common.missingArgumentResult;
 const zigEnvValue = common.zigEnvValue;
+const source_read_limit = common.source_read_limit;
 
 fn docsError(
     allocator: std.mem.Allocator,
@@ -113,6 +114,6 @@ pub fn zigLangRefSearchJson(a: *App, allocator: std.mem.Allocator, args: ?std.js
 pub fn readSourceArg(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !struct { name: []const u8, bytes: []u8 } {
     _ = allocator;
     const file = argString(args, "file") orelse return error.MissingFile;
-    const bytes = try a.workspace.readFileAlloc(a.io, file, 4 * 1024 * 1024);
+    const bytes = try a.workspace.readFileAlloc(a.io, file, source_read_limit);
     return .{ .name = file, .bytes = bytes };
 }

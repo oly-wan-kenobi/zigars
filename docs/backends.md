@@ -29,6 +29,21 @@ Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
 were probed or exercised.
 
+For release-candidate validation against actual optional backends, run the
+manual `Backend Conformance` GitHub Actions workflow or execute the same script
+locally:
+
+```sh
+bash .github/scripts/backend-conformance.sh
+```
+
+The script builds `zig-out/bin/zigar` when needed, starts zigar over stdio with
+real ZLS, zwanzig, zflame, and diff-folded paths, runs `zigar_doctor` with
+backend probes, exercises `zig_document_symbols`, `zig_lint_rules`,
+`zig_flamegraph`, and `zig_flamegraph_diff`, and verifies the generated SVG
+artifacts. Configure non-default paths with `ZIGAR_ZLS_PATH`,
+`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH`.
+
 ## Packaged Setup Catalog
 
 zigar ships a structured backend setup catalog in the server binary. Call

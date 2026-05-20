@@ -523,9 +523,11 @@ pub const Server = struct {
         }
     }
 
-    /// Handle initialize request
     fn handleInitialize(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         self.state = .initializing;
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
 
         if (request.params) |params| {
             if (params == .object) {
@@ -561,69 +563,67 @@ pub const Server = struct {
         }
 
         var result: std.json.ObjectMap = .empty;
-        defer result.deinit(allocator);
 
-        try result.put(allocator, "protocolVersion", .{ .string = negotiated_version });
+        try result.put(response_allocator, "protocolVersion", .{ .string = negotiated_version });
 
         var caps: std.json.ObjectMap = .empty;
         if (self.capabilities.tools) |t| {
             var tools_cap: std.json.ObjectMap = .empty;
-            try tools_cap.put(allocator, "listChanged", .{ .bool = t.listChanged });
-            try caps.put(allocator, "tools", .{ .object = tools_cap });
+            try tools_cap.put(response_allocator, "listChanged", .{ .bool = t.listChanged });
+            try caps.put(response_allocator, "tools", .{ .object = tools_cap });
         }
         if (self.capabilities.resources) |r| {
             var res_cap: std.json.ObjectMap = .empty;
-            try res_cap.put(allocator, "listChanged", .{ .bool = r.listChanged });
-            try res_cap.put(allocator, "subscribe", .{ .bool = r.subscribe });
-            try caps.put(allocator, "resources", .{ .object = res_cap });
+            try res_cap.put(response_allocator, "listChanged", .{ .bool = r.listChanged });
+            try res_cap.put(response_allocator, "subscribe", .{ .bool = r.subscribe });
+            try caps.put(response_allocator, "resources", .{ .object = res_cap });
         }
         if (self.capabilities.prompts) |p| {
             var prompts_cap: std.json.ObjectMap = .empty;
-            try prompts_cap.put(allocator, "listChanged", .{ .bool = p.listChanged });
-            try caps.put(allocator, "prompts", .{ .object = prompts_cap });
+            try prompts_cap.put(response_allocator, "listChanged", .{ .bool = p.listChanged });
+            try caps.put(response_allocator, "prompts", .{ .object = prompts_cap });
         }
         if (self.capabilities.logging != null) {
-            try caps.put(allocator, "logging", .{ .object = .empty });
+            try caps.put(response_allocator, "logging", .{ .object = .empty });
         }
         if (self.capabilities.completions != null) {
-            try caps.put(allocator, "completions", .{ .object = .empty });
+            try caps.put(response_allocator, "completions", .{ .object = .empty });
         }
         if (self.capabilities.tasks != null) {
             var tasks_cap: std.json.ObjectMap = .empty;
-            try tasks_cap.put(allocator, "list", .{ .object = .empty });
-            try tasks_cap.put(allocator, "cancel", .{ .object = .empty });
+            try tasks_cap.put(response_allocator, "list", .{ .object = .empty });
+            try tasks_cap.put(response_allocator, "cancel", .{ .object = .empty });
             var requests_cap: std.json.ObjectMap = .empty;
             var tools_req: std.json.ObjectMap = .empty;
-            try tools_req.put(allocator, "call", .{ .object = .empty });
-            try requests_cap.put(allocator, "tools", .{ .object = tools_req });
-            try tasks_cap.put(allocator, "requests", .{ .object = requests_cap });
-            try caps.put(allocator, "tasks", .{ .object = tasks_cap });
+            try tools_req.put(response_allocator, "call", .{ .object = .empty });
+            try requests_cap.put(response_allocator, "tools", .{ .object = tools_req });
+            try tasks_cap.put(response_allocator, "requests", .{ .object = requests_cap });
+            try caps.put(response_allocator, "tasks", .{ .object = tasks_cap });
         }
-        try result.put(allocator, "capabilities", .{ .object = caps });
+        try result.put(response_allocator, "capabilities", .{ .object = caps });
 
         var server_info: std.json.ObjectMap = .empty;
-        try server_info.put(allocator, "name", .{ .string = self.config.name });
-        try server_info.put(allocator, "version", .{ .string = self.config.version });
+        try server_info.put(response_allocator, "name", .{ .string = self.config.name });
+        try server_info.put(response_allocator, "version", .{ .string = self.config.version });
         if (self.config.title) |t| {
-            try server_info.put(allocator, "title", .{ .string = t });
+            try server_info.put(response_allocator, "title", .{ .string = t });
         }
         if (self.config.description) |d| {
-            try server_info.put(allocator, "description", .{ .string = d });
+            try server_info.put(response_allocator, "description", .{ .string = d });
         }
         if (self.config.websiteUrl) |u| {
-            try server_info.put(allocator, "websiteUrl", .{ .string = u });
+            try server_info.put(response_allocator, "websiteUrl", .{ .string = u });
         }
-        try result.put(allocator, "serverInfo", .{ .object = server_info });
+        try result.put(response_allocator, "serverInfo", .{ .object = server_info });
 
         if (self.config.instructions) |inst| {
-            try result.put(allocator, "instructions", .{ .string = inst });
+            try result.put(response_allocator, "instructions", .{ .string = inst });
         }
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle ping request
     fn handlePing(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
@@ -632,68 +632,70 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle tools/list request
     fn handleToolsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var tools_array: std.json.Array = .init(allocator);
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
+        var tools_array: std.json.Array = .init(response_allocator);
 
         var iter = self.tools.iterator();
         while (iter.next()) |entry| {
             var tool_obj: std.json.ObjectMap = .empty;
-            try tool_obj.put(allocator, "name", .{ .string = entry.value_ptr.name });
+            try tool_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
             if (entry.value_ptr.description) |desc| {
-                try tool_obj.put(allocator, "description", .{ .string = desc });
+                try tool_obj.put(response_allocator, "description", .{ .string = desc });
             }
             if (entry.value_ptr.title) |t| {
-                try tool_obj.put(allocator, "title", .{ .string = t });
+                try tool_obj.put(response_allocator, "title", .{ .string = t });
             }
 
             var input_schema: std.json.ObjectMap = .empty;
             if (entry.value_ptr.inputSchema) |schema| {
-                try input_schema.put(allocator, "type", .{ .string = schema.type });
+                try input_schema.put(response_allocator, "type", .{ .string = schema.type });
 
-                if (schema.@"$schema") |s| try input_schema.put(allocator, "$schema", .{ .string = s });
-                if (schema.description) |d| try input_schema.put(allocator, "description", .{ .string = d });
-                if (schema.properties) |p| try input_schema.put(allocator, "properties", p);
+                if (schema.@"$schema") |s| try input_schema.put(response_allocator, "$schema", .{ .string = s });
+                if (schema.description) |d| try input_schema.put(response_allocator, "description", .{ .string = d });
+                if (schema.properties) |p| try input_schema.put(response_allocator, "properties", p);
 
                 if (schema.required) |req| {
-                    var arr: std.json.Array = .init(allocator);
+                    var arr: std.json.Array = .init(response_allocator);
                     for (req) |name| try arr.append(.{ .string = name });
-                    try input_schema.put(allocator, "required", .{ .array = arr });
+                    try input_schema.put(response_allocator, "required", .{ .array = arr });
                 }
             } else {
-                try input_schema.put(allocator, "type", .{ .string = "object" });
+                try input_schema.put(response_allocator, "type", .{ .string = "object" });
             }
-            try tool_obj.put(allocator, "inputSchema", .{ .object = input_schema });
+            try tool_obj.put(response_allocator, "inputSchema", .{ .object = input_schema });
 
             if (entry.value_ptr.annotations) |ann| {
                 var ann_obj: std.json.ObjectMap = .empty;
-                if (ann.title) |t| try ann_obj.put(allocator, "title", .{ .string = t });
-                try ann_obj.put(allocator, "readOnlyHint", .{ .bool = ann.readOnlyHint });
-                try ann_obj.put(allocator, "destructiveHint", .{ .bool = ann.destructiveHint });
-                try ann_obj.put(allocator, "idempotentHint", .{ .bool = ann.idempotentHint });
-                try ann_obj.put(allocator, "openWorldHint", .{ .bool = ann.openWorldHint });
-                try tool_obj.put(allocator, "annotations", .{ .object = ann_obj });
+                if (ann.title) |t| try ann_obj.put(response_allocator, "title", .{ .string = t });
+                try ann_obj.put(response_allocator, "readOnlyHint", .{ .bool = ann.readOnlyHint });
+                try ann_obj.put(response_allocator, "destructiveHint", .{ .bool = ann.destructiveHint });
+                try ann_obj.put(response_allocator, "idempotentHint", .{ .bool = ann.idempotentHint });
+                try ann_obj.put(response_allocator, "openWorldHint", .{ .bool = ann.openWorldHint });
+                try tool_obj.put(response_allocator, "annotations", .{ .object = ann_obj });
             }
 
             if (entry.value_ptr.execution) |exec| {
                 var exec_obj: std.json.ObjectMap = .empty;
                 if (exec.taskSupport) |ts| {
-                    try exec_obj.put(allocator, "taskSupport", .{ .string = ts });
+                    try exec_obj.put(response_allocator, "taskSupport", .{ .string = ts });
                 }
-                try tool_obj.put(allocator, "execution", .{ .object = exec_obj });
+                try tool_obj.put(response_allocator, "execution", .{ .object = exec_obj });
             }
 
             try tools_array.append(.{ .object = tool_obj });
         }
 
         var result: std.json.ObjectMap = .empty;
-        try result.put(allocator, "tools", .{ .array = tools_array });
+        try result.put(response_allocator, "tools", .{ .array = tools_array });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle tools/call request
     fn handleToolsCall(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var tool_name: []const u8 = "";
         var arguments: ?std.json.Value = null;
@@ -823,38 +825,40 @@ pub const Server = struct {
         }
     }
 
-    /// Handle resources/list request
     fn handleResourcesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var resources_array: std.json.Array = .init(allocator);
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
+        var resources_array: std.json.Array = .init(response_allocator);
 
         var iter = self.resources.iterator();
         while (iter.next()) |entry| {
             var resource_obj: std.json.ObjectMap = .empty;
-            try resource_obj.put(allocator, "uri", .{ .string = entry.value_ptr.uri });
-            try resource_obj.put(allocator, "name", .{ .string = entry.value_ptr.name });
+            try resource_obj.put(response_allocator, "uri", .{ .string = entry.value_ptr.uri });
+            try resource_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
             if (entry.value_ptr.title) |t| {
-                try resource_obj.put(allocator, "title", .{ .string = t });
+                try resource_obj.put(response_allocator, "title", .{ .string = t });
             }
             if (entry.value_ptr.description) |desc| {
-                try resource_obj.put(allocator, "description", .{ .string = desc });
+                try resource_obj.put(response_allocator, "description", .{ .string = desc });
             }
             if (entry.value_ptr.mimeType) |mime| {
-                try resource_obj.put(allocator, "mimeType", .{ .string = mime });
+                try resource_obj.put(response_allocator, "mimeType", .{ .string = mime });
             }
             if (entry.value_ptr.size) |s| {
-                try resource_obj.put(allocator, "size", .{ .integer = @intCast(s) });
+                try resource_obj.put(response_allocator, "size", .{ .integer = @intCast(s) });
             }
             try resources_array.append(.{ .object = resource_obj });
         }
 
         var result: std.json.ObjectMap = .empty;
-        try result.put(allocator, "resources", .{ .array = resources_array });
+        try result.put(response_allocator, "resources", .{ .array = resources_array });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle resources/read request
     fn handleResourcesRead(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var uri: []const u8 = "";
 
@@ -908,35 +912,37 @@ pub const Server = struct {
         }
     }
 
-    /// Handle resources/templates/list request
     fn handleResourceTemplatesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var templates_array: std.json.Array = .init(allocator);
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
+        var templates_array: std.json.Array = .init(response_allocator);
 
         var iter = self.resource_templates.iterator();
         while (iter.next()) |entry| {
             var template_obj: std.json.ObjectMap = .empty;
-            try template_obj.put(allocator, "uriTemplate", .{ .string = entry.value_ptr.uriTemplate });
-            try template_obj.put(allocator, "name", .{ .string = entry.value_ptr.name });
+            try template_obj.put(response_allocator, "uriTemplate", .{ .string = entry.value_ptr.uriTemplate });
+            try template_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
             if (entry.value_ptr.title) |t| {
-                try template_obj.put(allocator, "title", .{ .string = t });
+                try template_obj.put(response_allocator, "title", .{ .string = t });
             }
             if (entry.value_ptr.description) |desc| {
-                try template_obj.put(allocator, "description", .{ .string = desc });
+                try template_obj.put(response_allocator, "description", .{ .string = desc });
             }
             if (entry.value_ptr.mimeType) |mime| {
-                try template_obj.put(allocator, "mimeType", .{ .string = mime });
+                try template_obj.put(response_allocator, "mimeType", .{ .string = mime });
             }
             try templates_array.append(.{ .object = template_obj });
         }
 
         var result: std.json.ObjectMap = .empty;
-        try result.put(allocator, "resourceTemplates", .{ .array = templates_array });
+        try result.put(response_allocator, "resourceTemplates", .{ .array = templates_array });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle resources/subscribe request
     fn handleSubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         _ = request.params;
         var result: std.json.ObjectMap = .empty;
@@ -945,7 +951,6 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle resources/unsubscribe request
     fn handleUnsubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         _ = request.params;
         var result: std.json.ObjectMap = .empty;
@@ -954,49 +959,51 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle prompts/list request
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var prompts_array: std.json.Array = .init(allocator);
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
+        var prompts_array: std.json.Array = .init(response_allocator);
 
         var iter = self.prompts.iterator();
         while (iter.next()) |entry| {
             var prompt_obj: std.json.ObjectMap = .empty;
-            try prompt_obj.put(allocator, "name", .{ .string = entry.value_ptr.name });
+            try prompt_obj.put(response_allocator, "name", .{ .string = entry.value_ptr.name });
             if (entry.value_ptr.description) |desc| {
-                try prompt_obj.put(allocator, "description", .{ .string = desc });
+                try prompt_obj.put(response_allocator, "description", .{ .string = desc });
             }
             if (entry.value_ptr.title) |t| {
-                try prompt_obj.put(allocator, "title", .{ .string = t });
+                try prompt_obj.put(response_allocator, "title", .{ .string = t });
             }
 
             if (entry.value_ptr.arguments) |args| {
-                var args_array: std.json.Array = .init(allocator);
+                var args_array: std.json.Array = .init(response_allocator);
                 for (args) |arg| {
                     var arg_obj: std.json.ObjectMap = .empty;
-                    try arg_obj.put(allocator, "name", .{ .string = arg.name });
+                    try arg_obj.put(response_allocator, "name", .{ .string = arg.name });
                     if (arg.title) |t| {
-                        try arg_obj.put(allocator, "title", .{ .string = t });
+                        try arg_obj.put(response_allocator, "title", .{ .string = t });
                     }
                     if (arg.description) |d| {
-                        try arg_obj.put(allocator, "description", .{ .string = d });
+                        try arg_obj.put(response_allocator, "description", .{ .string = d });
                     }
-                    try arg_obj.put(allocator, "required", .{ .bool = arg.required });
+                    try arg_obj.put(response_allocator, "required", .{ .bool = arg.required });
                     try args_array.append(.{ .object = arg_obj });
                 }
-                try prompt_obj.put(allocator, "arguments", .{ .array = args_array });
+                try prompt_obj.put(response_allocator, "arguments", .{ .array = args_array });
             }
 
             try prompts_array.append(.{ .object = prompt_obj });
         }
 
         var result: std.json.ObjectMap = .empty;
-        try result.put(allocator, "prompts", .{ .array = prompts_array });
+        try result.put(response_allocator, "prompts", .{ .array = prompts_array });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle prompts/get request
     fn handlePromptsGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var prompt_name: []const u8 = "";
         var arguments: ?std.json.Value = null;
@@ -1084,7 +1091,6 @@ pub const Server = struct {
         }
     }
 
-    /// Handle logging/setLevel request
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         if (request.params) |params| {
             if (params == .object) {
@@ -1118,52 +1124,54 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle completion/complete request
     fn handleCompletion(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
         var completion: std.json.ObjectMap = .empty;
-        const values_array: std.json.Array = .init(allocator);
-        try completion.put(allocator, "values", .{ .array = values_array });
-        try completion.put(allocator, "hasMore", .{ .bool = false });
+        const values_array: std.json.Array = .init(response_allocator);
+        try completion.put(response_allocator, "values", .{ .array = values_array });
+        try completion.put(response_allocator, "hasMore", .{ .bool = false });
 
         var result: std.json.ObjectMap = .empty;
-        try result.put(allocator, "completion", .{ .object = completion });
+        try result.put(response_allocator, "completion", .{ .object = completion });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle tasks/get request
     fn handleTasksGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         _ = request.params;
         const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/get");
         try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
-    /// Handle tasks/result request
     fn handleTasksResult(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         _ = request.params;
         const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/result");
         try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
-    /// Handle tasks/list request
     fn handleTasksList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
         var result: std.json.ObjectMap = .empty;
-        const tasks_array: std.json.Array = .init(allocator);
-        try result.put(allocator, "tasks", .{ .array = tasks_array });
+        const tasks_array: std.json.Array = .init(response_allocator);
+        try result.put(response_allocator, "tasks", .{ .array = tasks_array });
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    /// Handle tasks/cancel request
     fn handleTasksCancel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         _ = request.params;
         const error_response = jsonrpc.createMethodNotFound(request.id, "tasks/cancel");
         try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
-    /// Handle incoming notifications
     fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {
         if (std.mem.eql(u8, notification.method, "notifications/initialized")) {
             self.state = .ready;
@@ -1181,7 +1189,6 @@ pub const Server = struct {
         }
     }
 
-    /// Handle incoming response to a request we sent
     fn handleResponse(self: *Self, response: jsonrpc.Response) void {
         const id = switch (response.id) {
             .integer => |i| i,
@@ -1190,7 +1197,6 @@ pub const Server = struct {
         _ = self.pending_requests.remove(id);
     }
 
-    /// Handle incoming error response
     fn handleErrorResponse(self: *Self, io: std.Io, err: jsonrpc.ErrorResponse) void {
         if (err.id) |id| {
             const int_id = switch (id) {
@@ -1202,60 +1208,64 @@ pub const Server = struct {
         self.logError(io, err.@"error".message);
     }
 
-    /// Send a notification to the client
     pub fn sendNotification(self: *Self, io: std.Io, allocator: std.mem.Allocator, method: []const u8, params: ?std.json.Value) !void {
         const notification = jsonrpc.createNotification(method, params);
         try self.sendResponse(io, allocator, .{ .notification = notification });
     }
 
-    /// Send a log message notification
     pub fn sendLogMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, level: protocol.LogLevel, message: []const u8) !void {
         if (@intFromEnum(level) < @intFromEnum(self.log_level)) return;
 
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
         var params: std.json.ObjectMap = .empty;
-        try params.put(allocator, "level", .{ .string = level.toString() });
-        try params.put(allocator, "data", .{ .string = message });
+        try params.put(response_allocator, "level", .{ .string = level.toString() });
+        try params.put(response_allocator, "data", .{ .string = message });
 
         try self.sendNotification(io, allocator, "notifications/message", .{ .object = params });
     }
 
-    /// Send a progress notification
     pub fn sendProgress(self: *Self, io: std.Io, allocator: std.mem.Allocator, token: std.json.Value, prog: f64, total: ?f64, message: ?[]const u8) !void {
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
         var params: std.json.ObjectMap = .empty;
-        try params.put(allocator, "progressToken", token);
-        try params.put(allocator, "progress", .{ .float = prog });
+        try params.put(response_allocator, "progressToken", token);
+        try params.put(response_allocator, "progress", .{ .float = prog });
         if (total) |t| {
-            try params.put(allocator, "total", .{ .float = t });
+            try params.put(response_allocator, "total", .{ .float = t });
         }
         if (message) |m| {
-            try params.put(allocator, "message", .{ .string = m });
+            try params.put(response_allocator, "message", .{ .string = m });
         }
         try self.sendNotification(io, allocator, "notifications/progress", .{ .object = params });
     }
 
-    /// Notify clients that tools have changed
     pub fn notifyToolsChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/tools/list_changed", null);
     }
 
-    /// Notify clients that resources have changed
     pub fn notifyResourcesChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/resources/list_changed", null);
     }
 
-    /// Notify clients that a resource has been updated
     pub fn notifyResourceUpdated(self: *Self, io: std.Io, allocator: std.mem.Allocator, uri: []const u8) !void {
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
         var params: std.json.ObjectMap = .empty;
-        try params.put(allocator, "uri", .{ .string = uri });
+        try params.put(response_allocator, "uri", .{ .string = uri });
         try self.sendNotification(io, allocator, "notifications/resources/updated", .{ .object = params });
     }
 
-    /// Notify clients that prompts have changed
     pub fn notifyPromptsChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/prompts/list_changed", null);
     }
 
-    /// Send a response message
     fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
         if (self.transport) |t| {
             const json = jsonrpc.serializeMessage(allocator, message) catch {

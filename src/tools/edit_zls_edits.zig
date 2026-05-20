@@ -10,6 +10,7 @@ const lsp_edits = zigar.lsp_edits;
 const uri_util = zigar.uri;
 const putOwnedKey = common.putOwnedKey;
 const responseResult = common.responseResult;
+const source_read_limit = common.source_read_limit;
 
 pub fn textEditToolValue(a: *App, allocator: std.mem.Allocator, file_uri: []const u8, response: []const u8, apply: bool) !std.json.Value {
     const path = try uri_util.uriToPath(allocator, file_uri);
@@ -19,7 +20,7 @@ pub fn textEditToolValue(a: *App, allocator: std.mem.Allocator, file_uri: []cons
     const rel_view = a.workspace.relative(safe_path);
     const rel = try allocator.dupe(u8, rel_view);
     defer allocator.free(rel);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+    const source = try a.workspace.readFileAlloc(a.io, rel, source_read_limit);
     defer allocator.free(source);
     return textEditToolValueForSource(a, allocator, rel, source, "disk", response, apply);
 }
@@ -61,7 +62,7 @@ pub fn previewTextEditResponse(a: *App, allocator: std.mem.Allocator, file_uri: 
     const safe_path = try a.workspace.resolve(path);
     defer allocator.free(safe_path);
     const rel = a.workspace.relative(safe_path);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+    const source = try a.workspace.readFileAlloc(a.io, rel, source_read_limit);
     defer allocator.free(source);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
@@ -160,10 +161,10 @@ pub fn workspaceEditFileValueForDocument(a: *App, allocator: std.mem.Allocator, 
     defer if (owned_source) |source| allocator.free(source);
     const source: []const u8 = if (primary_doc) |doc| blk: {
         if (std.mem.eql(u8, uri, doc.uri)) break :blk doc.source;
-        owned_source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+        owned_source = try a.workspace.readFileAlloc(a.io, rel, source_read_limit);
         break :blk owned_source.?;
     } else blk: {
-        owned_source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+        owned_source = try a.workspace.readFileAlloc(a.io, rel, source_read_limit);
         break :blk owned_source.?;
     };
     const source_kind = if (primary_doc) |doc|
@@ -199,7 +200,7 @@ pub fn applyEditsForUri(a: *App, allocator: std.mem.Allocator, uri: []const u8, 
     const safe_path = try a.workspace.resolve(path);
     defer allocator.free(safe_path);
     const rel = a.workspace.relative(safe_path);
-    const source = try a.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024);
+    const source = try a.workspace.readFileAlloc(a.io, rel, source_read_limit);
     defer allocator.free(source);
     const updated = try lsp_edits.applyTextEdits(allocator, source, edits);
     defer allocator.free(updated);

@@ -13,6 +13,7 @@ const command_result = @import("command_result.zig");
 pub const App = runtime_mod.App;
 pub const BackendProbeCache = runtime_mod.BackendProbeCache;
 pub const LspClient = zigar.lsp_client.LspClient;
+pub const source_read_limit = zigar.document_state.DocumentState.default_max_document_bytes;
 
 pub fn scratchApp(a: *App, allocator: std.mem.Allocator) App {
     var copy = a.*;

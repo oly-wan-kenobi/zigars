@@ -1,0 +1,53 @@
+name: Backend Conformance
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_command:
+        description: "Optional shell command that installs or activates real backend binaries."
+        required: false
+        default: ""
+      zls_path:
+        description: "Path or command name for zls."
+        required: false
+        default: "zls"
+      zwanzig_path:
+        description: "Path or command name for zwanzig."
+        required: false
+        default: "zwanzig"
+      zflame_path:
+        description: "Path or command name for zflame."
+        required: false
+        default: "zflame"
+      diff_folded_path:
+        description: "Path or command name for diff-folded."
+        required: false
+        default: "diff-folded"
+
+jobs:
+  backend-conformance:
+    name: Real optional backends
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Optional backend setup
+        if: ${{ inputs.setup_command != '' }}
+        run: ${{ inputs.setup_command }}
+
+      - name: Run backend conformance
+        env:
+          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
+          ZIGAR_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
+          ZIGAR_ZFLAME_PATH: ${{ inputs.zflame_path }}
+          ZIGAR_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
+        run: bash .github/scripts/backend-conformance.sh

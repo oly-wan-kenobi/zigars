@@ -6,6 +6,7 @@ pub const App = shared_core.App;
 pub const scratchApp = shared_core.scratchApp;
 pub const BackendProbeCache = shared_core.BackendProbeCache;
 pub const LspClient = shared_core.LspClient;
+pub const source_read_limit = shared_core.source_read_limit;
 pub const structured = shared_core.structured;
 pub const structuredOwned = shared_core.structuredOwned;
 pub const putOwnedKey = shared_core.putOwnedKey;

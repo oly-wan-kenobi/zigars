@@ -32,6 +32,7 @@ const analysisCacheStatusValue = common.analysisCacheStatusValue;
 const appendUniqueCommand = common.appendUniqueCommand;
 const freeArgList = common.freeArgList;
 const compilerErrorIndexValue = core.compilerErrorIndexValue;
+const source_read_limit = common.source_read_limit;
 
 const asciiLowerAllocLocal = static_core.asciiLowerAllocLocal;
 const quotedString = static_core.quotedString;
@@ -378,7 +379,7 @@ pub fn zigPublicApiDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     };
     const after_text = argString(args, "after") orelse blk: {
         const rel = file orelse break :blk "";
-        after_owned = scratch_app.workspace.readFileAlloc(a.io, rel, 4 * 1024 * 1024) catch break :blk "";
+        after_owned = scratch_app.workspace.readFileAlloc(a.io, rel, source_read_limit) catch break :blk "";
         break :blk after_owned.?;
     };
     return structured(allocator, publicApiDiffValue(scratch, file, before_text, after_text) catch return error.OutOfMemory);

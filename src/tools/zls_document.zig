@@ -6,6 +6,7 @@ const core = @import("shared_core.zig");
 
 const App = core.App;
 const argString = core.argString;
+const source_read_limit = core.source_read_limit;
 const toolErrorResult = core.toolErrorResult;
 const zls_session = zigar.zls_session;
 
@@ -52,7 +53,7 @@ pub fn fromArgs(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !D
     const rel_path = try allocator.dupe(u8, rel_view);
     errdefer allocator.free(rel_path);
 
-    const disk_content = try a.workspace.readFileAlloc(a.io, rel_path, 4 * 1024 * 1024);
+    const disk_content = try a.workspace.readFileAlloc(a.io, rel_path, source_read_limit);
     defer allocator.free(disk_content);
 
     if (argString(args, "content")) |content| {

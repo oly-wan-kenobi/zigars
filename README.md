@@ -36,6 +36,9 @@ Optional backend setup, verification commands, and failure triage are documented
 in [docs/backends.md](docs/backends.md). The same backend setup contract is
 available at runtime through `zigar_backend_catalog` and in `zigar_schema` under
 `backend_setup`.
+Release candidates that claim real optional-backend coverage should also run the
+manual `Backend Conformance` workflow or
+`.github/scripts/backend-conformance.sh` with the exact backend versions.
 
 ## Install
 
