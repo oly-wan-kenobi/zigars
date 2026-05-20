@@ -233,9 +233,11 @@ Source writes require apply=true.
   `zig_analysis_graphs` (`zwanzig_backed`, optional)
 - Profiling/zflame: `zig_profile_plan` returns structured external-capture
   plans for `perf`, macOS `sample`/`xctrace`, DTrace, VTune, and already-folded
-  stacks; `zig_flamegraph` and `zig_flamegraph_diff` render through zflame and
-  diff-folded with artifact metadata. zigar does not own profiler capture
-  semantics.
+  stacks; `zig_profile_run` runs an explicit user-provided argv command
+  without a shell, with the workspace as cwd; `zig_flamegraph` and `zig_flamegraph_diff`
+  render through zflame and diff-folded with artifact metadata.
+  `zig_profile_run` can execute project code and create normal build/profile
+  artifacts. zigar does not own profiler capture semantics.
 
 Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`
@@ -269,6 +271,8 @@ The short version is: start with `zigar_context_pack`, ask
 - `zigar_schema` includes finer-grained tool risk metadata for source writes,
   artifact writes, LSP state mutation, backend execution, project-code
   execution, and user-command execution.
+- MCP `readOnlyHint` is a client UI hint; zigar risk fields are the source of
+  truth for command execution and artifact-write behavior.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
 - zwanzig graph output, zflame SVG output, and diff folded intermediates must

@@ -179,8 +179,12 @@ zflame powers `zig_flamegraph`. diff-folded powers the first stage of
 3. Capture with the selected external profiler. zigar does not execute or define
    profiler capture semantics; permissions, sampling mode, symbols, and capture
    fidelity belong to that profiler.
-4. Render the captured data with `zig_flamegraph`.
-5. For before/after comparisons, pass two folded stack files to
+4. Optionally use `zig_profile_run` for an explicit command you provide. zigar
+   splits the command into argv without a shell and runs it with the workspace as
+   cwd; that command can execute project code and create normal build/profile
+   artifacts.
+5. Render the captured data with `zig_flamegraph`.
+6. For before/after comparisons, pass two folded stack files to
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
    `.zigar-cache/profile/` by default, or an explicit workspace-local
    `intermediate` path, and then renders the SVG through zflame.

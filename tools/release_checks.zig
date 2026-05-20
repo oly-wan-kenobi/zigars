@@ -42,6 +42,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkStaticAnalysisContracts(io)) and ok;
     ok = (try checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try checkOptionalBackendContracts(allocator, io)) and ok;
+    ok = (try checkCommandRunningToolDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
@@ -897,6 +898,24 @@ fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
     for (stale) |needle| {
         if (std.mem.indexOf(u8, bytes, needle) != null) {
             try stderrPrint(io, "backend-contract check found stale `{s}` in {s}\n", .{ needle, path });
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
+    const path = "README.md";
+    const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
+        try stderrPrint(io, "command-running tool docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
+        return false;
+    };
+    defer allocator.free(bytes);
+    var ok = std.mem.indexOf(u8, bytes, "without a shell") != null and
+        std.mem.indexOf(u8, bytes, "MCP `readOnlyHint`") != null;
+    for (zigar.tool_metadata.entries) |entry| {
+        if (entry.risk.executes_user_command and std.mem.indexOf(u8, bytes, entry.name) == null) {
+            try stderrPrint(io, "command-running tool docs check missing `{s}` in {s}\n", .{ entry.name, path });
             ok = false;
         }
     }
