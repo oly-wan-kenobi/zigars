@@ -470,9 +470,9 @@ for rel in ("profile.svg", "diff.svg"):
     path = workspace / rel
     if not path.exists():
         fail(f"expected artifact was not written: {rel}")
-    prefix = path.read_text(errors="replace")[:32].lstrip()
-    if not prefix.startswith("<svg"):
-        fail(f"expected {rel} to start with <svg")
+    text = path.read_text(errors="replace").lstrip()
+    if not (text.startswith("<svg") or (text.startswith("<?xml") and "<svg" in text[:1024])):
+        fail(f"expected {rel} to be an SVG artifact")
 
 artifacts = {}
 for rel in ("profile.svg", "diff.svg"):
