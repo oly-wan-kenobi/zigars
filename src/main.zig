@@ -84,7 +84,6 @@ pub fn main(init: std.process.Init) !void {
     defer server.deinit();
 
     server.enableLogging();
-    server.enableTasks();
     try server_mod.registerTools(&server, &runtime);
     try server_mod.registerResources(&server, &runtime);
     try server_mod.registerPrompts(&server, &runtime);

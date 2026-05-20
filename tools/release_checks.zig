@@ -51,6 +51,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try release_docs.checkTrustDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
+    ok = (try checkMcpAdvertisedCapabilityContract(allocator, io)) and ok;
     ok = (try task_status.checkPublicReleaseBlockers(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
@@ -908,6 +909,45 @@ fn checkMcpNoPatchContract(allocator: Allocator, io: Io) !bool {
     for (required) |needle| {
         if (std.mem.indexOf(u8, adapter, needle) == null) {
             try stderrPrint(io, "MCP no-patch check missing `{s}` in src/mcp_server.zig\n", .{needle});
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkMcpAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
+    const rules = [_]struct {
+        path: []const u8,
+        token: []const u8,
+        reason: []const u8,
+    }{
+        .{
+            .path = "src/main.zig",
+            .token = "enableTasks(",
+            .reason = "public server startup must not advertise MCP task support until zigar implements the task lifecycle",
+        },
+        .{
+            .path = "src/mcp_server.zig",
+            .token = "capabilities.tasks",
+            .reason = "MCP task capabilities must not be emitted without implemented task methods",
+        },
+        .{
+            .path = "src/mcp_server.zig",
+            .token = "handleTasks",
+            .reason = "stub task handlers must not remain in the public protocol surface",
+        },
+    };
+
+    var ok = true;
+    for (rules) |rule| {
+        const bytes = readFileAlloc(allocator, io, rule.path, 2 * 1024 * 1024) catch |err| {
+            try stderrPrint(io, "MCP capability-contract check could not read {s}: {s}\n", .{ rule.path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        if (std.mem.indexOf(u8, bytes, rule.token) != null) {
+            try stderrPrint(io, "MCP capability-contract violation in {s}: `{s}` ({s})\n", .{ rule.path, rule.token, rule.reason });
             ok = false;
         }
     }
