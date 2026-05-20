@@ -65,6 +65,13 @@ optional zwanzig-backed tools. `zwanzig_backed` tools are optional
 zwanzig-backed static-analysis/lint integrations; zigar reports their tier and
 does not require zwanzig to be installed.
 
+CI artifact tools use an explicit artifact contract. `zig_ci_annotations`
+reports `parser_confidence`, `parsing_basis`, limitations, parse summaries, and
+raw `zig ast-check` output. `zig_junit` is command-level JUnit, not inferred
+per-test JUnit, and embeds that contract in XML properties. `zig_matrix_check`
+returns direct per-entry `ok`, `zig`, `command`, and `failure_summary` fields.
+See [ci-artifacts.md](ci-artifacts.md) for integration examples.
+
 `zigar_doctor` accepts optional `probe_backends` and `timeout_ms` arguments. Use
 backend probes when a client reports `PermissionDenied`, missing formatter/ZLS
 tools, or unclear executable-path failures. Probe results are cached for the

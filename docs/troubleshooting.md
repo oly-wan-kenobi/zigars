@@ -24,6 +24,14 @@ configured zwanzig, zflame, and diff-folded backend paths for support logs.
 Command-backed tools such as `zig_check`, `zig_build`, and `zig_test` continue
 to work without ZLS.
 
+ZLS-only tools report a structured `backend_error` with `configured_path`,
+`status`, `restart_attempts`, `last_failure` when available, and `resolution`.
+Fallback-capable tools such as `zig_document_symbols`, diagnostics summaries,
+and workspace symbols return degraded advisory output instead of failing when
+the ZLS session is unavailable. `zls_unsupported_capability` means ZLS
+initialized but did not advertise the requested LSP capability; upgrade or
+reconfigure ZLS for that method.
+
 For project-level version mismatches, call `zig_toolchain_resolve`. It inspects
 `.zigversion`, `.tool-versions`, `mise.toml`, `build.zig.zon`, active Zig/ZLS
 versions, and common managers such as mise, asdf, zvm, and zigup.

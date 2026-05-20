@@ -72,6 +72,7 @@ pub const analysisCacheStatusValue = zls_common.analysisCacheStatusValue;
 pub const zlsStatusValue = zls_common.zlsStatusValue;
 pub const unsupportedCapability = zls_common.unsupportedCapability;
 pub const zlsCapabilityName = zls_common.zlsCapabilityName;
+pub const zlsCapabilityState = zls_common.zlsCapabilityState;
 pub const zlsSupportsCapability = zls_common.zlsSupportsCapability;
 pub const requireZlsCapability = zls_common.requireZlsCapability;
 pub const ExplainCommand = zls_common.ExplainCommand;

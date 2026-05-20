@@ -6,6 +6,10 @@ auditable:
 
 - `src/main.zig` owns CLI parsing, runtime setup, transport startup, and the
   package version surfaced from `build.zig.zon` through `src/version.zig`.
+- `src/mcp_server.zig` is zigar's first-party MCP server adapter. zigar imports
+  protocol types, JSON-RPC helpers, content/resource/prompt types, and transport
+  primitives from the pinned upstream `mcp.zig` dependency, but zigar owns
+  server-side request routing and the `tools/call` result-lifetime boundary.
 - `src/server.zig` wires MCP tools, resources, and prompts. Tool registration is
   driven by the manifest; server code should not grow per-tool switches.
 - `src/tools/*.zig` groups MCP tool handlers by workflow area: discovery,
@@ -94,6 +98,25 @@ raw `InvalidArguments`, `ExecutionFailed`, `ResourceNotFound`, and unchecked
 Use `riskFor` for finer-grained trust decisions. Apply-gated tools advertise
 `writes_require_apply` and `preview_by_default` so clients can distinguish
 preview workflows from default mutations.
+
+## MCP Adapter Boundary
+
+The build imports the pinned upstream `mcp` package directly. There is no local
+patched MCP dependency in the build graph. The first-party adapter in
+`src/mcp_server.zig` keeps zigar's supported MCP surface explicit:
+`initialize`, `ping`, tools, resources, prompts, logging level, empty task-list
+responses, stdio transport, and loopback HTTP transport.
+
+`tools/call` is the lifetime-sensitive path. zigar handlers return owned
+`mcp.tools.ToolResult` values whose `content` slices and `structuredContent`
+JSON are valid through response serialization. Each registered tool carries a
+`ToolResultDeinit` callback, currently `json_result.deinitToolResult`, and the
+adapter invokes that callback only after the JSON-RPC response has been
+serialized and sent. This preserves deterministic cleanup without carrying a
+patched upstream server.
+
+The release gate scans `build.zig` and `build.zig.zon` for patched MCP wrapper
+tokens so future dependency updates keep using upstream `mcp` APIs directly.
 
 ## Heuristic Analysis Rules
 

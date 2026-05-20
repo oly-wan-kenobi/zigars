@@ -35,6 +35,21 @@ pub fn zigarContextPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     const mode = argString(args, "mode") orelse "standard";
     const token_budget = @max(500, @min(argInt(args, "token_budget", 4000), 50_000));
     const limit: usize = if (std.mem.eql(u8, mode, "tiny")) 40 else if (std.mem.eql(u8, mode, "deep")) 500 else 150;
+    const tiny = std.mem.eql(u8, mode, "tiny");
+    var included = std.json.Array.init(allocator);
+    var omitted = std.json.Array.init(allocator);
+    try included.append(try ownedString(allocator, "workspace"));
+    try included.append(try ownedString(allocator, "project_type"));
+    try included.append(try ownedString(allocator, "build"));
+    try included.append(try ownedString(allocator, "source_map"));
+    try included.append(try ownedString(allocator, "quality"));
+    if (tiny) {
+        try omitted.append(try ownedString(allocator, "tests: omitted in tiny mode"));
+        try omitted.append(try ownedString(allocator, "deps: omitted in tiny mode"));
+    } else {
+        try included.append(try ownedString(allocator, "tests"));
+        try included.append(try ownedString(allocator, "deps"));
+    }
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -44,7 +59,7 @@ pub fn zigarContextPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     try obj.put(allocator, "workspace", try values.contextWorkspaceValue(allocator, a));
     try obj.put(allocator, "project_type", try values.projectTypeValue(allocator, a));
     try obj.put(allocator, "build", buildWorkspaceValue(allocator, a) catch .null);
-    if (!std.mem.eql(u8, mode, "tiny")) {
+    if (!tiny) {
         try obj.put(allocator, "tests", testMapValue(allocator, a, @min(limit, 200)) catch .null);
         try obj.put(allocator, "deps", values.dependencyContextValue(allocator, a) catch .null);
     }
@@ -52,6 +67,9 @@ pub fn zigarContextPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     try obj.put(allocator, "quality", try values.qualityCommandsValue(allocator, a));
     try obj.put(allocator, "agent_rules", try values.agentRulesValue(allocator, "generic", "any"));
     try obj.put(allocator, "recommended_start", try values.nextActionPlanValue(allocator, "orient", null, null));
+    try obj.put(allocator, "included_sections", .{ .array = included });
+    try obj.put(allocator, "omitted_sections", .{ .array = omitted });
+    try obj.put(allocator, "workflow_contract", try values.workflowContractValue(allocator, "workspace files, build metadata, optional dependency/test summaries, and ZLS status", "orientation pack for routing; not a semantic project proof", if (tiny) "low" else "medium", "mode and token_budget intentionally omit sections; inspect omitted_sections before assuming absence", "zigar_validate_patch", "stop after the selected low-level tool or final validation gate passes", &.{ "zigar_next_action", "zigar_validate_patch" }));
     try obj.put(allocator, "limits", try values.contextLimitsValue(allocator));
     return structured(allocator, .{ .object = obj });
 }
@@ -84,6 +102,7 @@ pub fn zigarValidatePatch(a: *App, allocator: std.mem.Allocator, args: ?std.json
     defer freeStringList(allocator, paths.items);
 
     var phases = std.json.Array.init(allocator);
+    var skipped_phases = std.json.Array.init(allocator);
     var files = std.json.Array.init(allocator);
     var ok = true;
     var ran_full_build = false;
@@ -121,6 +140,7 @@ pub fn zigarValidatePatch(a: *App, allocator: std.mem.Allocator, args: ?std.json
             if (!build_ok) ok = false;
         }
     }
+    if (!ran_full_build) try skipped_phases.append(try skippedPhaseValue(allocator, "build_test", "mode/path selection or stop_on_failure skipped full build test"));
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -129,9 +149,18 @@ pub fn zigarValidatePatch(a: *App, allocator: std.mem.Allocator, args: ?std.json
     try obj.put(allocator, "mode", .{ .string = mode });
     try obj.put(allocator, "changed_files", .{ .array = files });
     try obj.put(allocator, "phases", .{ .array = phases });
+    try obj.put(allocator, "skipped_phases", .{ .array = skipped_phases });
     try obj.put(allocator, "ran_full_build_test", .{ .bool = ran_full_build });
+    try obj.put(allocator, "workflow_contract", try values.workflowContractValue(allocator, "git/status changed files or user-supplied changed_files plus command exit status", "patch readiness from selected validation phases", if (ran_full_build) "high" else "medium", "quick mode and stop_on_failure can skip later phases; inspect skipped_phases", "rerun failed phase or run zigar_validate_patch mode=full", "stop when all selected phases pass", &.{ "zigar_failure_fusion", "zigar_validate_patch" }));
     try obj.put(allocator, "next_action", try values.validationNextActionValue(allocator, ok, phases));
     return structured(allocator, .{ .object = obj });
+}
+
+fn skippedPhaseValue(allocator: std.mem.Allocator, name: []const u8, reason: []const u8) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "name", .{ .string = name });
+    try obj.put(allocator, "reason", .{ .string = reason });
+    return .{ .object = obj };
 }
 
 pub fn zigarFailureFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {

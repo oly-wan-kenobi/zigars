@@ -11,14 +11,15 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 
 ## Status
 
-`zigar` is ready for early public use with Zig 0.16.0 over stdio and HTTP MCP
-transports. The current package version is `0.2.0`; see
+`zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
+transports. Major feature areas are documented at A- or better in
+[docs/maturity.md](docs/maturity.md). The current package version is `0.2.0`; see
 [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
 
-- `mcp.zig` is consumed as a pinned URL dependency. `zig-pkg/` is a local
-  cache/artifact directory and is ignored.
+- `mcp.zig` is consumed as a pinned URL dependency without local patches.
+  `zig-pkg/` is a local cache/artifact directory and is ignored.
 - ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
   that need a missing backend return an explicit error.
 
@@ -229,18 +230,28 @@ Source writes require apply=true.
   guidance; fast heuristic tools are `advisory_orientation`, AST variants are
   `parser_backed`)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
+  (annotations expose parser confidence and raw output; JUnit is explicitly
+  command-level; matrix entries expose direct status fields)
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
   `zig_analysis_graphs` (`zwanzig_backed`, optional)
 - Profiling/zflame: `zig_profile_plan` returns structured external-capture
   plans for `perf`, macOS `sample`/`xctrace`, DTrace, VTune, and already-folded
-  stacks; `zig_flamegraph` and `zig_flamegraph_diff` render through zflame and
-  diff-folded with artifact metadata. zigar does not own profiler capture
-  semantics.
+  stacks; `zig_profile_run` runs an explicit user-provided argv command
+  without a shell, with the workspace as cwd; `zig_flamegraph` and `zig_flamegraph_diff`
+  render through zflame and diff-folded with artifact metadata.
+  `zig_profile_run` can execute project code and create normal build/profile
+  artifacts. zigar does not own profiler capture semantics.
 
 Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`
 complements that with compact grouping, risk, planning, discovery keywords, and
 backend setup metadata.
+
+The server imports the pinned upstream `mcp.zig` package directly for protocol
+types, JSON-RPC helpers, content/resource/prompt types, and transport
+primitives. zigar's first-party MCP adapter owns request routing and releases
+owned tool results after `tools/call` responses are serialized, so no patched
+upstream MCP server is part of the build.
 
 The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.md)
 is built from `src/tool_catalog.json` plus the typed registry metadata and
@@ -263,6 +274,8 @@ The short version is: start with `zigar_context_pack`, ask
 - `zigar_schema` includes finer-grained tool risk metadata for source writes,
   artifact writes, LSP state mutation, backend execution, project-code
   execution, and user-command execution.
+- MCP `readOnlyHint` is a client UI hint; zigar risk fields are the source of
+  truth for command execution and artifact-write behavior.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
 - zwanzig graph output, zflame SVG output, and diff folded intermediates must
@@ -286,6 +299,8 @@ More detail:
   setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
+- [Feature maturity](docs/maturity.md): public-readiness rubric,
+  reassessment, evidence, and known product boundaries.
 - [Security policy](SECURITY.md), [security model](docs/security-model.md), and
   [security readiness audit](docs/security-audit.md): private vulnerability
   reporting, workspace boundaries, and remaining security posture.
@@ -325,6 +340,14 @@ zig_format_check
 Confirm `--zls-path` points to a working `zls` binary compatible with your Zig
 version. Command-backed tools such as `zig_check`, `zig_build`, and `zig_test`
 continue to work without ZLS.
+
+ZLS-only tools report a structured `backend_error` with the configured path,
+current session status, restart attempts, last failure when available, and a
+resolution. Tools with static or command-backed fallbacks, including
+`zig_document_symbols`, diagnostics summaries, and workspace symbols, continue
+with degraded advisory output when the ZLS session is unavailable. An
+`zls_unsupported_capability` result means ZLS did initialize, but its
+advertised capabilities omitted the requested LSP method.
 
 For install paths, wrapper-script configuration, and zwanzig/zflame/diff-folded
 checks, see [docs/backends.md](docs/backends.md).

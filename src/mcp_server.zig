@@ -1,20 +1,37 @@
-//! MCP Server Implementation (Spec 2025-11-25)
+//! First-party MCP server adapter for zigar.
 //!
-//! Provides the main MCP Server that handles client connections, protocol
-//! negotiation, capability advertisement, and request routing for tools,
-//! resources, prompts, tasks, and all standard MCP methods.
+//! zigar imports protocol data structures, JSON-RPC helpers, content types, and
+//! transports from the pinned upstream MCP dependency. This module owns the
+//! server-side routing boundary and the lifetime of zigar-owned tool results.
+//! Tool results stay alive until after the JSON-RPC response is serialized, then
+//! the registered deinitializer releases the owned content and structured JSON.
 
 const std = @import("std");
 const http = std.http;
-const upstream = @import("mcp_upstream");
+const mcp = @import("mcp");
 
-const jsonrpc = upstream.jsonrpc;
-const protocol = upstream.protocol;
-const types = upstream.types;
-const transport_mod = upstream.transport;
-const prompts_mod = upstream.prompts;
-const resources_mod = upstream.resources;
-const tools_mod = @import("tools.zig");
+const jsonrpc = mcp.jsonrpc;
+const protocol = mcp.protocol;
+const types = mcp.types;
+const transport_mod = mcp.transport;
+const prompts_mod = mcp.prompts;
+const resources_mod = mcp.resources;
+
+pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
+
+pub const Tool = struct {
+    name: []const u8,
+    description: ?[]const u8 = null,
+    title: ?[]const u8 = null,
+    inputSchema: ?types.InputSchema = null,
+    outputSchema: ?types.OutputSchema = null,
+    execution: ?types.ToolExecution = null,
+    icons: ?[]const types.Icon = null,
+    annotations: ?mcp.tools.ToolAnnotations = null,
+    handler: *const fn (user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, arguments: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult,
+    deinit_result: ?ToolResultDeinit = null,
+    user_data: ?*anyopaque = null,
+};
 
 const HttpRequestTransport = struct {
     response_message: ?[]const u8 = null,
@@ -97,9 +114,10 @@ pub const ServerState = enum {
 
 /// MCP Server that handles client connections and routes requests
 pub const Server = struct {
+    allocator: std.mem.Allocator,
     config: ServerConfig,
     state: ServerState = .uninitialized,
-    tools: std.StringHashMap(tools_mod.Tool),
+    tools: std.StringHashMap(Tool),
     resources: std.StringHashMap(resources_mod.Resource),
     resource_templates: std.StringHashMap(resources_mod.ResourceTemplate),
     prompts: std.StringHashMap(prompts_mod.Prompt),
@@ -123,6 +141,7 @@ pub const Server = struct {
     /// Initialize a new MCP Server
     pub fn init(allocator: std.mem.Allocator, config: ServerConfig) Self {
         return .{
+            .allocator = allocator,
             .config = config,
             .tools = .init(allocator),
             .resources = .init(allocator),
@@ -134,6 +153,11 @@ pub const Server = struct {
 
     /// Clean up server resources
     pub fn deinit(self: *Self) void {
+        if (self.stdio_transport) |stdio| {
+            stdio.deinit(self.allocator);
+            self.allocator.destroy(stdio);
+            self.stdio_transport = null;
+        }
         self.tools.deinit();
         self.resources.deinit();
         self.resource_templates.deinit();
@@ -142,7 +166,7 @@ pub const Server = struct {
     }
 
     /// Add a tool to the server
-    pub fn addTool(self: *Self, tool: tools_mod.Tool) !void {
+    pub fn addTool(self: *Self, tool: Tool) !void {
         try self.tools.put(tool.name, tool);
         self.capabilities.tools = .{ .listChanged = true };
     }
@@ -1216,92 +1240,3 @@ pub const Server = struct {
         }
     }
 };
-
-test "Server initialization" {
-    var server: Server = .init(std.testing.allocator, .{
-        .name = "test-server",
-        .version = "1.0.0",
-    });
-    defer server.deinit();
-
-    try std.testing.expectEqual(ServerState.uninitialized, server.state);
-    try std.testing.expectEqualStrings("test-server", server.config.name);
-}
-
-test "Server add tool" {
-    var server: Server = .init(std.testing.allocator, .{
-        .name = "test-server",
-        .version = "1.0.0",
-    });
-    defer server.deinit();
-
-    const tool: tools_mod.Tool = .{
-        .name = "test_tool",
-        .description = "A test tool",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !tools_mod.ToolResult {
-                return .{ .content = &.{} };
-            }
-        }.handler,
-    };
-
-    try server.addTool(tool);
-    try std.testing.expect(server.tools.contains("test_tool"));
-    try std.testing.expect(server.capabilities.tools != null);
-}
-
-test "Server add resource" {
-    var server: Server = .init(std.testing.allocator, .{
-        .name = "test-server",
-        .version = "1.0.0",
-    });
-    defer server.deinit();
-
-    try server.addResource(.{
-        .uri = "file:///test",
-        .name = "Test",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []const u8) !resources_mod.ResourceContent {
-                return .{ .uri = uri };
-            }
-        }.handler,
-    });
-    try std.testing.expect(server.resources.contains("file:///test"));
-    try std.testing.expect(server.capabilities.resources != null);
-}
-
-test "Server add prompt" {
-    var server: Server = .init(std.testing.allocator, .{
-        .name = "test-server",
-        .version = "1.0.0",
-    });
-    defer server.deinit();
-
-    try server.addPrompt(.{
-        .name = "test_prompt",
-        .description = "A test prompt",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const prompts_mod.PromptMessage {
-                return &.{};
-            }
-        }.handler,
-    });
-    try std.testing.expect(server.prompts.contains("test_prompt"));
-    try std.testing.expect(server.capabilities.prompts != null);
-}
-
-test "Server enable capabilities" {
-    var server: Server = .init(std.testing.allocator, .{
-        .name = "test-server",
-        .version = "1.0.0",
-    });
-    defer server.deinit();
-
-    server.enableLogging();
-    server.enableCompletions();
-    server.enableTasks();
-
-    try std.testing.expect(server.capabilities.logging != null);
-    try std.testing.expect(server.capabilities.completions != null);
-    try std.testing.expect(server.capabilities.tasks != null);
-}

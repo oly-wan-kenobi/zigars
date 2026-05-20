@@ -103,6 +103,7 @@ fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     const src_dir = try std.fmt.bufPrint(&src_path_buf, "{s}/src", .{workspace});
     try Io.Dir.cwd().createDirPath(io, src_dir);
     try writeJoinedFile(io, workspace, "src/main.zig", "pub fn main() void {const x=1;_ = x;}\n");
+    try writeJoinedFile(io, workspace, "src/bad.zig", "pub fn bad() void { const x = ; _ = x; }\n");
     try writeJoinedFile(io, workspace, "src/tests.zig", "const std = @import(\"std\");\npub const Fixture = struct { pub fn run() void {} };\ntest \"fixture works\" { _ = std.testing; }\n");
     try writeJoinedFile(io, workspace, "stacks.folded", "main;work 7\n");
     try writeJoinedFile(io, workspace, "before.folded", "main;old 3\n");
@@ -117,14 +118,19 @@ fn writeJoinedFile(io: Io, workspace: []const u8, rel: []const u8, data: []const
     const path = try std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ workspace, rel });
     try writeFile(io, path, data);
 }
-
 fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u8, tool_path: []const u8, name: []const u8) ![]u8 {
     const suffix = if (builtin.os.tag == .windows) ".exe" else "";
     const rel = try std.fmt.allocPrint(allocator, "{s}/bin/{s}{s}", .{ workspace, name, suffix });
     defer allocator.free(rel);
     const abs = try smoke.absolutePath(allocator, io, rel);
     errdefer allocator.free(abs);
-    try Io.Dir.copyFileAbsolute(tool_path, abs, io, .{ .permissions = .executable_file, .make_path = true, .replace = true });
+    if (builtin.os.tag == .windows) {
+        try Io.Dir.copyFileAbsolute(tool_path, abs, io, .{ .permissions = .executable_file, .make_path = true, .replace = true });
+    } else {
+        const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nexec \"{s}\" {s} \"$@\"\n", .{ tool_path, name });
+        defer allocator.free(script);
+        try Io.Dir.cwd().writeFile(io, .{ .sub_path = abs, .data = script, .flags = .{ .permissions = .executable_file } });
+    }
     return abs;
 }
 
@@ -156,6 +162,23 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
+
+        const resources = try self.request("resources/list", null);
+        defer self.allocator.free(resources);
+        if (std.mem.indexOf(u8, resources, "zigar://workspace") == null) return error.AssertionFailed;
+        if (std.mem.indexOf(u8, resources, "zigar://tools/schema") == null) return error.AssertionFailed;
+
+        const resource_read = try self.request("resources/read", "{\"uri\":\"zigar://workspace\"}");
+        defer self.allocator.free(resource_read);
+        if (std.mem.indexOf(u8, resource_read, workspace) == null) return error.AssertionFailed;
+
+        const prompts = try self.request("prompts/list", null);
+        defer self.allocator.free(prompts);
+        if (std.mem.indexOf(u8, prompts, "zigar_profile_workflow") == null) return error.AssertionFailed;
+
+        const prompt = try self.request("prompts/get", "{\"name\":\"zigar_profile_workflow\",\"arguments\":{}}");
+        defer self.allocator.free(prompt);
+        if (std.mem.indexOf(u8, prompt, "zig_profile_plan") == null) return error.AssertionFailed;
 
         const source = try std.fmt.allocPrint(self.allocator, "{s}/src/main.zig", .{workspace});
         defer self.allocator.free(source);
@@ -208,6 +231,7 @@ const StdioClient = struct {
         const next_action = try self.callTool("zigar_next_action", "{\"goal\":\"fix compile error\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(next_action);
         try self.expectPathString(next_action, "recommended_steps.0.tool", "zig_compile_error_index");
+        try self.expectPathString(next_action, "workflow_contract.confidence", "medium");
 
         const guard = try self.callTool("zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
         defer self.allocator.free(guard);
@@ -223,9 +247,15 @@ const StdioClient = struct {
         try self.expectPathString(ast_decls, "capability_tier", "parser_backed");
         if (std.mem.indexOf(u8, ast_decls, "Fixture") == null) return error.AssertionFailed;
 
+        const annotations = try self.callTool("zig_ci_annotations", "{\"file\":\"src/bad.zig\"}");
+        defer self.allocator.free(annotations);
+        try self.expectPathString(annotations, "artifact_kind", "ci_annotations");
+        try self.expectPathString(annotations, "parser_confidence", "high");
+
         const validate = try self.callTool("zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(validate);
         try self.expectPathString(validate, "kind", "zigar_validate_patch");
+        try self.expectPathString(validate, "workflow_contract.verification", "rerun failed phase or run zigar_validate_patch mode=full");
 
         const lint = try self.callTool("zig_lint", "{\"path\":\"src\",\"config\":\"src/main.zig\",\"rules_do\":\"fake-rule\",\"rules_skip\":\"style\",\"args\":\"--verbose\"}");
         defer self.allocator.free(lint);

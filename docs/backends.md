@@ -116,7 +116,15 @@ summary, limits, eviction count, and oversized-drop count.
 
 When ZLS is unavailable, command-backed tools such as `zig_build`, `zig_test`,
 `zig_check`, `zig_format`, docs search, and static-analysis summaries still work.
-ZLS-backed tools return structured backend/session errors with a resolution.
+ZLS-backed tools return structured backend/session errors with the configured
+path, current session status, restart attempts, last failure when available, and
+a resolution. Tools with static or command-backed fallbacks, including
+`zig_document_symbols`, diagnostics summaries, and workspace symbols, return
+degraded advisory output when the ZLS session is unavailable.
+
+`zls_unsupported_capability` is reserved for an initialized ZLS session whose
+advertised capabilities omit the requested LSP method. Treat it as a ZLS
+version/configuration mismatch rather than a missing executable.
 
 ## zwanzig
 
@@ -171,8 +179,12 @@ zflame powers `zig_flamegraph`. diff-folded powers the first stage of
 3. Capture with the selected external profiler. zigar does not execute or define
    profiler capture semantics; permissions, sampling mode, symbols, and capture
    fidelity belong to that profiler.
-4. Render the captured data with `zig_flamegraph`.
-5. For before/after comparisons, pass two folded stack files to
+4. Optionally use `zig_profile_run` for an explicit command you provide. zigar
+   splits the command into argv without a shell and runs it with the workspace as
+   cwd; that command can execute project code and create normal build/profile
+   artifacts.
+5. Render the captured data with `zig_flamegraph`.
+6. For before/after comparisons, pass two folded stack files to
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
    `.zigar-cache/profile/` by default, or an explicit workspace-local
    `intermediate` path, and then renders the SVG through zflame.

@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const mcp_mod = addMcpModule(b, target, optimize, mcp_dep.module("mcp"));
+    const mcp_mod = mcp_dep.module("mcp");
 
     const zigar_mod = addZigarModule(b, "zigar", target, optimize, mcp_mod, build_options);
     const exe_mod = addZigarExecutableModule(b, target, optimize, zigar_mod, mcp_mod);
@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = release_optimize,
     });
-    const release_mcp_mod = addMcpModule(b, target, release_optimize, release_mcp_dep.module("mcp"));
+    const release_mcp_mod = release_mcp_dep.module("mcp");
     const release_zigar_mod = addZigarModule(b, "zigar-release-check", target, release_optimize, release_mcp_mod, build_options);
     const release_exe_mod = addZigarExecutableModule(b, target, release_optimize, release_zigar_mod, release_mcp_mod);
     const release_exe = b.addExecutable(.{
@@ -153,7 +153,7 @@ pub fn build(b: *std.Build) void {
             .target = dist_target,
             .optimize = release_optimize,
         });
-        const dist_mcp_mod = addMcpModule(b, dist_target, release_optimize, dist_mcp_dep.module("mcp"));
+        const dist_mcp_mod = dist_mcp_dep.module("mcp");
         const dist_zigar_mod = addZigarModule(b, b.fmt("zigar-dist-{s}", .{release_target.package_name}), dist_target, release_optimize, dist_mcp_mod, build_options);
         const dist_exe_mod = addZigarExecutableModule(b, dist_target, release_optimize, dist_zigar_mod, dist_mcp_mod);
         const dist_exe = b.addExecutable(.{
@@ -172,21 +172,6 @@ pub fn build(b: *std.Build) void {
     release_asset_smoke_cmd.step.dependOn(dist_step);
     const release_asset_smoke_step = b.step("release-asset-smoke", "Verify release archives, checksums, and native archive runtime");
     release_asset_smoke_step.dependOn(&release_asset_smoke_cmd.step);
-}
-
-fn addMcpModule(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    upstream_mcp_mod: *std.Build.Module,
-) *std.Build.Module {
-    const mcp_mod = b.createModule(.{
-        .root_source_file = b.path("third_party/mcp_zigar_patch/mcp.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    mcp_mod.addImport("mcp_upstream", upstream_mcp_mod);
-    return mcp_mod;
 }
 
 fn addZigarModule(

@@ -25,6 +25,15 @@ workspaces.
 
 HTTP transport is local-only by default. `--transport http` must bind a loopback
 host such as `127.0.0.1`, `localhost`, or `::1`; non-loopback hosts are rejected
-rather than exposed as an unauthenticated remote endpoint.
+rather than exposed as an unauthenticated remote endpoint. HTTP remains
+unauthenticated by design because its supported use is local integration; stdio
+is the default transport for agent clients.
+
+zigar uses the pinned upstream MCP package for protocol types, JSON-RPC helpers,
+and transport primitives, but the server adapter is first-party code under
+`src/mcp_server.zig`. There is no patched upstream MCP server in the build. That
+keeps the local security boundary auditable: zigar owns request routing,
+workspace/tool validation before handler execution, and post-serialization
+cleanup of owned tool results.
 
 See [security-audit.md](security-audit.md) for the release-review checklist.

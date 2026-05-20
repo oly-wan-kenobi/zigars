@@ -1,9 +1,9 @@
 const std = @import("std");
-const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const config_mod = zigar.config;
 const logging = zigar.logging;
+const mcp_server = zigar.mcp_server;
 const runtime_mod = zigar.runtime;
 const workspace_mod = zigar.workspace;
 const zls_session = zigar.zls_session;
@@ -74,7 +74,7 @@ pub fn main(init: std.process.Init) !void {
         runtime.logger.info("main", "zls session: {s}", .{runtime.zls_status});
     }
 
-    var server = mcp.Server.init(allocator, .{
+    var server = mcp_server.Server.init(allocator, .{
         .name = "zigar",
         .version = version,
         .title = "Zigar",
@@ -119,9 +119,13 @@ test "executable usage names the command" {
 }
 
 test {
+    _ = @import("tools/agent_tests.zig");
+    _ = @import("tools/ci_tests.zig");
     _ = @import("tools/edit_zls_edits_tests.zig");
+    _ = @import("tools/edit_zls_tests.zig");
     _ = @import("tools/profiling_backends.zig");
     _ = @import("tools/profiling.zig");
     _ = @import("tools/zwanzig.zig");
+    _ = @import("tools/zls_common_tests.zig");
     _ = @import("tools/zls_document.zig");
 }
