@@ -88,7 +88,7 @@ pub const LspTransport = struct {
                 if (line.len == 0) continue;
                 const prefix = "Content-Length: ";
                 if (std.mem.startsWith(u8, line, prefix)) {
-                    content_length = std.fmt.parseInt(usize, line[prefix.len..], 10) catch continue;
+                    content_length = try std.fmt.parseInt(usize, line[prefix.len..], 10);
                 }
             }
 
@@ -151,7 +151,10 @@ fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
 fn readPipeAll(file: std.Io.File, io: std.Io, buf: []u8) ![]const u8 {
     var total: usize = 0;
     while (total < buf.len) {
-        const n = file.readStreaming(io, &.{buf[total..]}) catch return buf[0..total];
+        const n = file.readStreaming(io, &.{buf[total..]}) catch |err| switch (err) {
+            error.EndOfStream, error.ConnectionResetByPeer => return buf[0..total],
+            else => |e| return e,
+        };
         if (n == 0) break;
         total += n;
     }

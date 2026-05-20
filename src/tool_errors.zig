@@ -181,11 +181,7 @@ test "tool error value includes stable contract fields" {
 test "tool error result is marked as an MCP error with structured content" {
     const allocator = std.testing.allocator;
     const tool_result = try missingArgument(allocator, "zig_format", "file", "string");
-    defer {
-        if (tool_result.structuredContent) |structured_content| json_result.deinitOwnedValue(allocator, structured_content);
-        allocator.free(tool_result.content[0].text.text);
-        allocator.free(tool_result.content);
-    }
+    defer json_result.deinitToolResult(allocator, tool_result);
 
     try std.testing.expect(tool_result.is_error);
     const obj = tool_result.structuredContent.?.object;

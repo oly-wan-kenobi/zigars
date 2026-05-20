@@ -10,15 +10,33 @@ const lspDiagnosticsInsightsValue = common.lspDiagnosticsInsightsValue;
 pub fn waitForDiagnostics(a: *App, client: *LspClient, file_uri: []const u8, wait_ms: i64) void {
     var elapsed: i64 = 0;
     while (elapsed <= wait_ms) : (elapsed += 50) {
-        if (client.getDiagnostics(a.allocator, file_uri) catch null) |diagnostics| {
+        if (cachedDiagnosticsOrNull(a, a.allocator, client, file_uri, "wait_for_diagnostics")) |diagnostics| {
             a.allocator.free(diagnostics);
             return;
         }
         if (elapsed == wait_ms) return;
         const step_ms = @min(@as(i64, 50), wait_ms - elapsed);
         if (step_ms <= 0) return;
-        std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(step_ms), .clock = .awake } }, a.io) catch return;
+        std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(step_ms), .clock = .awake } }, a.io) catch |err| {
+            a.logger.debug("zls", "diagnostics wait sleep failed: {}", .{err});
+            return;
+        };
     }
+}
+
+pub fn diagnosticPullOrNull(a: *App, allocator: std.mem.Allocator, client: *LspClient, file_uri: []const u8, tool: []const u8) ?[]const u8 {
+    const Params = struct { textDocument: struct { uri: []const u8 } };
+    return client.sendRequest(allocator, "textDocument/diagnostic", Params{ .textDocument = .{ .uri = file_uri } }) catch |err| {
+        a.logger.debug("zls", "{s}: textDocument/diagnostic unavailable for {s}: {}", .{ tool, file_uri, err });
+        return null;
+    };
+}
+
+pub fn cachedDiagnosticsOrNull(a: *App, allocator: std.mem.Allocator, client: *LspClient, file_uri: []const u8, tool: []const u8) ?[]const u8 {
+    return client.getDiagnostics(allocator, file_uri) catch |err| {
+        a.logger.debug("zls", "{s}: diagnostics cache unavailable for {s}: {}", .{ tool, file_uri, err });
+        return null;
+    };
 }
 
 pub fn diagnosticWaitMs(args: ?std.json.Value) i64 {

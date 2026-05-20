@@ -11,20 +11,20 @@ pub fn failUsage(
     usage_hint: []const u8,
     comptime fmt: []const u8,
     args: anytype,
-) error{InvalidArguments} {
-    stderrPrint(io, "zigar-tools {s}: ", .{command}) catch {};
-    stderrPrint(io, fmt ++ "\n", args) catch {};
+) anyerror {
+    stderrPrint(io, "zigar-tools {s}: ", .{command}) catch |err| return err;
+    stderrPrint(io, fmt ++ "\n", args) catch |err| return err;
     if (usage_hint.len > 0) {
-        stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch {};
+        stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch |err| return err;
     }
     return error.InvalidArguments;
 }
 
-pub fn missingFlagValue(io: Io, command: []const u8, flag: []const u8, usage_hint: []const u8) error{InvalidArguments} {
+pub fn missingFlagValue(io: Io, command: []const u8, flag: []const u8, usage_hint: []const u8) anyerror {
     return failUsage(io, command, usage_hint, "missing value for {s}", .{flag});
 }
 
-pub fn unexpectedArgument(io: Io, command: []const u8, arg: []const u8, usage_hint: []const u8) error{InvalidArguments} {
+pub fn unexpectedArgument(io: Io, command: []const u8, arg: []const u8, usage_hint: []const u8) anyerror {
     return failUsage(io, command, usage_hint, "unexpected argument `{s}`", .{arg});
 }
 
@@ -35,7 +35,7 @@ pub fn flagValue(
     command: []const u8,
     flag: []const u8,
     usage_hint: []const u8,
-) error{InvalidArguments}![]const u8 {
+) anyerror![]const u8 {
     index.* += 1;
     if (index.* >= args.len) return missingFlagValue(io, command, flag, usage_hint);
     return args[index.*];
@@ -48,9 +48,9 @@ pub fn reportInvalidArguments(
     err: anyerror,
 ) anyerror {
     if (err == error.InvalidArguments) {
-        stderrPrint(io, "zigar-tools {s}: invalid arguments\n", .{command}) catch {};
+        stderrPrint(io, "zigar-tools {s}: invalid arguments\n", .{command}) catch |print_err| return print_err;
         if (usage_hint.len > 0) {
-            stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch {};
+            stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch |print_err| return print_err;
         }
     }
     return err;

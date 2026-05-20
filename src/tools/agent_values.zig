@@ -24,7 +24,6 @@ const jsonArrayLen = common.jsonArrayLen;
 const ownedString = common.ownedString;
 const stringListContains = common.stringListContains;
 const testFailureTriageValue = static_analysis.testFailureTriageValue;
-const testMapValue = static_analysis.testMapValue;
 const workspacePathExists = static_analysis.workspacePathExists;
 
 pub fn contextWorkspaceValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {

@@ -39,6 +39,7 @@ test {
     _ = doctor;
     _ = json_result;
     _ = logging;
+    _ = @import("mcp_tool_call_memory_tests.zig");
     _ = resource_errors;
     _ = runtime;
     _ = tooling;

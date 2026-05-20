@@ -1,6 +1,20 @@
 const std = @import("std");
 const mcp = @import("mcp");
 
+/// Ownership contract for zigar tool results:
+/// - `structured`, `structuredError`, `structuredOwned`, and `jsonTextOnly`
+///   return content slices owned by the callback allocator.
+/// - Text content payloads in those slices are owned by the same allocator.
+/// - `structuredContent`, when present, is a deep clone owned by the same
+///   allocator, including object keys, arrays, strings, and number strings.
+/// Call this after the MCP response has been serialized and no response value
+/// still borrows from the result.
+pub fn deinitToolResult(allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void {
+    if (result.structuredContent) |structured_content| deinitOwnedValue(allocator, structured_content);
+    for (result.content) |content_item| deinitOwnedContentBlock(allocator, content_item);
+    if (result.content.len > 0) allocator.free(result.content);
+}
+
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structuredWithErrorFlag(allocator, value, false);
 }
@@ -69,6 +83,13 @@ pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json
 
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     deinitClonedValue(allocator, value);
+}
+
+fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
+    switch (content_item) {
+        .text => |text| allocator.free(text.text),
+        else => {},
+    }
 }
 
 fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
@@ -201,17 +222,75 @@ test "cloneValue owns nested strings" {
     try std.testing.expectEqualStrings("fmt", cloned_obj.get("keywords").?.array.items[0].string);
 }
 
+test "deinitToolResult releases nested structured result allocations" {
+    const allocator = std.testing.allocator;
+    var obj = std.json.ObjectMap.empty;
+    try putOwnedString(allocator, &obj, "name", "zigar");
+    try putOwnedNumberString(allocator, &obj, "ratio", "1.25");
+
+    var nested = std.json.ObjectMap.empty;
+    var nested_owned = true;
+    errdefer if (nested_owned) deinitOwnedValue(allocator, .{ .object = nested });
+    try putOwnedString(allocator, &nested, "status", "ok");
+
+    var array = std.json.Array.init(allocator);
+    var array_owned = true;
+    errdefer if (array_owned) deinitOwnedValue(allocator, .{ .array = array });
+    try appendOwnedString(allocator, &array, "first");
+    try appendOwnedNumberString(allocator, &array, "42.5");
+    try putOwnedValue(allocator, &nested, "items", .{ .array = array });
+    array_owned = false;
+
+    try putOwnedValue(allocator, &obj, "nested", .{ .object = nested });
+    nested_owned = false;
+
+    const result = try structuredOwned(allocator, .{ .object = obj });
+    defer deinitToolResult(allocator, result);
+
+    const structured_content = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zigar", structured_content.get("name").?.string);
+    try std.testing.expectEqualStrings("1.25", structured_content.get("ratio").?.number_string);
+    try std.testing.expectEqualStrings("first", structured_content.get("nested").?.object.get("items").?.array.items[0].string);
+    try std.testing.expectEqualStrings("42.5", structured_content.get("nested").?.object.get("items").?.array.items[1].number_string);
+}
+
 test "structuredOwned releases input value after cloning result" {
     const allocator = std.testing.allocator;
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, try allocator.dupe(u8, "name"), .{ .string = try allocator.dupe(u8, "zigar") });
 
     const result = try structuredOwned(allocator, .{ .object = obj });
-    defer {
-        if (result.structuredContent) |structured_content| deinitOwnedValue(allocator, structured_content);
-        allocator.free(result.content[0].text.text);
-        allocator.free(result.content);
-    }
+    defer deinitToolResult(allocator, result);
 
     try std.testing.expectEqualStrings("zigar", result.structuredContent.?.object.get("name").?.string);
+}
+
+fn putOwnedValue(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
+    const owned_key = try allocator.dupe(u8, key);
+    errdefer allocator.free(owned_key);
+    try obj.put(allocator, owned_key, value);
+}
+
+fn putOwnedString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
+    const owned_value = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned_value);
+    try putOwnedValue(allocator, obj, key, .{ .string = owned_value });
+}
+
+fn putOwnedNumberString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
+    const owned_value = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned_value);
+    try putOwnedValue(allocator, obj, key, .{ .number_string = owned_value });
+}
+
+fn appendOwnedString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
+    const owned_value = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned_value);
+    try array.append(.{ .string = owned_value });
+}
+
+fn appendOwnedNumberString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
+    const owned_value = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned_value);
+    try array.append(.{ .number_string = owned_value });
 }

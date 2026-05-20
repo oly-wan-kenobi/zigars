@@ -102,13 +102,19 @@ fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *st
                 if (child.stderr) |stderr| {
                     var reader_buffer: [4096]u8 = undefined;
                     var reader = stderr.reader(io, &reader_buffer);
-                    const stderr_text = reader.interface.allocRemaining(allocator, .limited(64 * 1024)) catch "";
-                    defer if (stderr_text.len > 0) allocator.free(stderr_text);
+                    const stderr_text = reader.interface.allocRemaining(allocator, .limited(64 * 1024)) catch |read_err| {
+                        try stderrPrint(io, "initialize timed out ({s}); stderr could not be read: {s}\n", .{ @errorName(err), @errorName(read_err) });
+                        return err;
+                    };
+                    defer allocator.free(stderr_text);
                     try stderrPrint(io, "initialize timed out ({s}); stderr:\n{s}\n", .{ @errorName(err), stderr_text });
                 }
                 return err;
             }
-            Io.Timeout.sleep(.{ .duration = .{ .raw = Io.Duration.fromMilliseconds(100), .clock = .awake } }, io) catch {};
+            Io.Timeout.sleep(.{ .duration = .{ .raw = Io.Duration.fromMilliseconds(100), .clock = .awake } }, io) catch |sleep_err| {
+                try stderrPrint(io, "initialize retry sleep failed: {s}\n", .{@errorName(sleep_err)});
+                return sleep_err;
+            };
             continue;
         };
         defer allocator.free(init_response);

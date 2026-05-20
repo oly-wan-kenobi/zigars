@@ -62,3 +62,59 @@ test "workspaceEditFileValueForDocument previews primary file against ZLS source
     try std.testing.expect(std.mem.indexOf(u8, diff, "+const saved = true;") != null);
     try std.testing.expect(std.mem.indexOf(u8, diff, "disk") == null);
 }
+
+test "workspaceEditFileValueForDocument applies UTF-16 edit offsets" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
+
+    const rel_base = try std.fs.path.join(alloc, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer alloc.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, alloc);
+    defer alloc.free(base_z);
+    const root = try std.fs.path.join(alloc, &.{ base_z[0..], "root" });
+    defer alloc.free(root);
+    var workspace = try zigar.workspace.Workspace.init(alloc, io, root, null);
+    defer workspace.deinit();
+    var app = App{
+        .allocator = alloc,
+        .io = io,
+        .config = undefined,
+        .workspace = workspace,
+    };
+
+    const abs = try std.fs.path.join(alloc, &.{ root, "main.zig" });
+    defer alloc.free(abs);
+    const e = "\xc3\xa9";
+    const grin = "\xf0\x9f\x98\x80";
+    var doc = ZlsDocument{
+        .uri = try uri_util.pathToUri(alloc, abs),
+        .rel_path = try alloc.dupe(u8, "main.zig"),
+        .source = try alloc.dupe(u8, "const " ++ e ++ grin ++ "foo = 1;\n"),
+        .source_kind = .provided_content,
+        .content_matches_disk = false,
+    };
+    defer doc.deinit(alloc);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc,
+        \\[{"range":{"start":{"line":0,"character":9},"end":{"line":0,"character":12}},"newText":"bar"}]
+    , .{});
+    defer parsed.deinit();
+    const value = try edit_edits.workspaceEditFileValueForDocument(&app, alloc, doc.uri, parsed.value, false, doc);
+    defer json_result.deinitOwnedValue(alloc, value);
+
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.TestUnexpectedResult,
+    };
+    try std.testing.expectEqualStrings("provided_content", obj.get("source_kind").?.string);
+    const diff = obj.get("diff").?.string;
+    try std.testing.expect(std.mem.indexOf(u8, diff, "-const " ++ e ++ grin ++ "foo = 1;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "+const " ++ e ++ grin ++ "bar = 1;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "disk") == null);
+}

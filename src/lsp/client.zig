@@ -170,7 +170,7 @@ pub const LspClient = struct {
         try self.writeMessage(stdin, msg);
 
         pending.event.waitTimeout(self.io, .{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(@max(1, timeout_ms)), .clock = .awake } }) catch {
-            self.setLastError(timeout_label) catch {};
+            self.rememberLastError(timeout_label);
             self.removePending(id);
             return error.RequestTimeout;
         };
@@ -194,14 +194,14 @@ pub const LspClient = struct {
             const msg = reader.readMessage(self.allocator) catch |err| {
                 if (!self.running.load(.acquire) or self.closing.load(.acquire)) return;
                 self.logger.warn("lsp", "reader error: {}", .{err});
-                self.setLastError(@errorName(err)) catch {};
+                self.rememberLastError(@errorName(err));
                 self.running.store(false, .release);
                 self.signalAllPending();
                 return;
             };
             if (msg == null) {
                 if (self.closing.load(.acquire)) return;
-                self.setLastError("EndOfStream") catch {};
+                self.rememberLastError("EndOfStream");
                 self.running.store(false, .release);
                 self.signalAllPending();
                 return;
@@ -268,7 +268,10 @@ pub const LspClient = struct {
         const stderr = self.zls_stderr orelse return;
         var buf: [4096]u8 = undefined;
         while (true) {
-            const n = stderr.readStreaming(self.io, &.{&buf}) catch return;
+            const n = stderr.readStreaming(self.io, &.{&buf}) catch |err| {
+                self.logger.debug("lsp", "ZLS stderr reader stopped: {}", .{err});
+                return;
+            };
             if (n == 0) return;
             self.logger.debug("lsp", "ZLS stderr: {s}", .{buf[0..n]});
         }
@@ -304,7 +307,7 @@ pub const LspClient = struct {
                 p.response = null;
             }
             p.response = self.allocator.dupe(u8, data) catch blk: {
-                self.setLastError("OutOfMemory") catch {};
+                self.rememberLastError("OutOfMemory");
                 break :blk null;
             };
             p.event.set(self.io);
@@ -320,7 +323,7 @@ pub const LspClient = struct {
     pub fn disconnect(self: *LspClient) void {
         self.closing.store(true, .release);
         self.shutdownWithTimeout(self.shutdown_timeout_ms) catch |err| {
-            self.setLastError(if (err == error.RequestTimeout) "ShutdownTimeout" else @errorName(err)) catch {};
+            self.rememberLastError(if (err == error.RequestTimeout) "ShutdownTimeout" else @errorName(err));
         };
         self.running.store(false, .release);
         self.signalAllPending();
@@ -358,9 +361,12 @@ pub const LspClient = struct {
         const id = self.next_id.fetchAdd(1, .monotonic);
         const msg = try json_rpc.writeRequest(self.allocator, .{ .integer = id }, "shutdown", .{});
         defer self.allocator.free(msg);
-        const response = self.sendRawRequestWithTimeout(self.allocator, id, msg, timeout_ms, "ShutdownTimeout") catch return;
+        const response = try self.sendRawRequestWithTimeout(self.allocator, id, msg, timeout_ms, "ShutdownTimeout");
         self.allocator.free(response);
-        self.sendRawNotification(self.allocator, "exit") catch {};
+        self.sendRawNotification(self.allocator, "exit") catch |err| {
+            self.rememberLastError(@errorName(err));
+            self.logger.warn("lsp", "failed to send exit notification: {}", .{err});
+        };
         self.running.store(false, .release);
     }
 
@@ -389,6 +395,12 @@ pub const LspClient = struct {
         defer self.last_error_mutex.unlock();
         if (self.last_error) |old| self.allocator.free(old);
         self.last_error = try self.allocator.dupe(u8, value);
+    }
+
+    fn rememberLastError(self: *LspClient, value: []const u8) void {
+        self.setLastError(value) catch |err| {
+            self.logger.warn("lsp", "failed to record last error `{s}`: {}", .{ value, err });
+        };
     }
 };
 
