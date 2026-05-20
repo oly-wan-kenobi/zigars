@@ -17,8 +17,8 @@ transports. The current package version is `0.2.0`; see
 
 Known limitations:
 
-- `mcp.zig` is consumed as a pinned URL dependency. `zig-pkg/` is a local
-  cache/artifact directory and is ignored.
+- `mcp.zig` is consumed as a pinned URL dependency without local patches.
+  `zig-pkg/` is a local cache/artifact directory and is ignored.
 - ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
   that need a missing backend return an explicit error.
 
@@ -241,6 +241,12 @@ Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`
 complements that with compact grouping, risk, planning, discovery keywords, and
 backend setup metadata.
+
+The server imports the pinned upstream `mcp.zig` package directly for protocol
+types, JSON-RPC helpers, content/resource/prompt types, and transport
+primitives. zigar's first-party MCP adapter owns request routing and releases
+owned tool results after `tools/call` responses are serialized, so no patched
+upstream MCP server is part of the build.
 
 The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.md)
 is built from `src/tool_catalog.json` plus the typed registry metadata and

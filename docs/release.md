@@ -10,7 +10,9 @@ zig build dist release-asset-smoke
 The gate includes formatting, generated docs/JSON checks, unit tests,
 ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
 coverage floors, structured tool-error contract scans, line-budget headroom, and
-artifact hygiene. The default GitHub Actions PR/main workflow then runs
+artifact hygiene. It also checks that the build imports the pinned upstream
+`mcp` package directly instead of routing through a patched MCP server wrapper.
+The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow
 can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
@@ -86,7 +88,9 @@ Release assets are named:
 ## Package Hygiene
 
 - `build.zig.zon` pins `mcp.zig` by archive URL and package hash; update both
-  intentionally when bumping the dependency.
+  intentionally when bumping the dependency. Do not add local patches under
+  `third_party` or route `mcp` through a wrapper module; if zigar needs
+  server-side behavior, keep it in the first-party adapter under `src/`.
 - Release targets are defined once in `tools/release_targets.zig`; update that
   table when adding or removing a published archive target.
 - `zig-pkg/`, `.zig-cache/`, `.zigar-cache/`, and `zig-out/` are local artifacts

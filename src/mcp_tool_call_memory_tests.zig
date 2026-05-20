@@ -2,6 +2,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const json_result = @import("json_result.zig");
+const mcp_server = @import("mcp_server.zig");
 
 const CaptureTransport = struct {
     messages: []const []const u8,
@@ -56,7 +57,7 @@ const CaptureTransport = struct {
 
 test "mcp tools/call releases repeated successful structured results" {
     const allocator = std.testing.allocator;
-    var server = mcp.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
+    var server = mcp_server.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
     defer server.deinit();
     server.state = .ready;
 
@@ -89,7 +90,7 @@ test "mcp tools/call releases repeated successful structured results" {
 
 test "mcp tools/call releases repeated structured tool errors" {
     const allocator = std.testing.allocator;
-    var server = mcp.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
+    var server = mcp_server.Server.init(allocator, .{ .name = "memory-test", .version = "1.0.0" });
     defer server.deinit();
     server.state = .ready;
 

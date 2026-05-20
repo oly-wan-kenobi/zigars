@@ -1,9 +1,9 @@
 const std = @import("std");
-const mcp = @import("mcp");
 const zigar = @import("zigar");
 
 const config_mod = zigar.config;
 const logging = zigar.logging;
+const mcp_server = zigar.mcp_server;
 const runtime_mod = zigar.runtime;
 const workspace_mod = zigar.workspace;
 const zls_session = zigar.zls_session;
@@ -74,7 +74,7 @@ pub fn main(init: std.process.Init) !void {
         runtime.logger.info("main", "zls session: {s}", .{runtime.zls_status});
     }
 
-    var server = mcp.Server.init(allocator, .{
+    var server = mcp_server.Server.init(allocator, .{
         .name = "zigar",
         .version = version,
         .title = "Zigar",

@@ -2,6 +2,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 const zigar = @import("zigar");
 
+const mcp_server = zigar.mcp_server;
 const runtime_mod = zigar.runtime;
 const tool_metadata = zigar.tool_metadata;
 const tool_registry = zigar.tool_registry;
@@ -12,13 +13,13 @@ const resource_errors = zigar.resource_errors;
 
 const App = runtime_mod.App;
 
-pub fn registerTools(server: *mcp.Server, runtime: *App) !void {
+pub fn registerTools(server: *mcp_server.Server, runtime: *App) !void {
     inline for (tool_metadata.specs) |spec| {
         try tool_registry.addTool(server, runtime.allocator, runtime, spec, tool_handlers.handlerFor(spec.id));
     }
 }
 
-pub fn registerResources(server: *mcp.Server, runtime: *App) !void {
+pub fn registerResources(server: *mcp_server.Server, runtime: *App) !void {
     try server.addResource(.{
         .uri = "zigar://workspace",
         .name = "Zigar Workspace",
@@ -87,7 +88,7 @@ pub fn registerResources(server: *mcp.Server, runtime: *App) !void {
     });
 }
 
-pub fn registerPrompts(server: *mcp.Server, runtime: *App) !void {
+pub fn registerPrompts(server: *mcp_server.Server, runtime: *App) !void {
     try server.addPrompt(.{
         .name = "zigar_profile_workflow",
         .description = "Plan a deterministic Zig profiling workflow using zigar tools.",

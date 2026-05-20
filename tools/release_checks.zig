@@ -43,6 +43,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try checkOptionalBackendContracts(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
+    ok = (try checkMcpNoPatchContract(allocator, io)) and ok;
     ok = (try checkCodeHygiene(allocator, io)) and ok;
     if (!ok) return error.ArtifactHygieneFailed;
 }
@@ -226,6 +227,11 @@ const line_budgets = [_]LineBudget{
         .reason = "MCP server wiring must stay a dispatcher; tool behavior belongs in src/tools modules",
     },
     .{
+        .path = "src/mcp_server.zig",
+        .max_lines = 1300,
+        .reason = "first-party MCP adapter owns routing and result lifetime but must not grow into a general MCP framework",
+    },
+    .{
         .path = "src/backend_catalog.zig",
         .max_lines = 120,
         .reason = "backend setup catalog rendering should remain separate from packaged backend definitions",
@@ -299,6 +305,26 @@ const line_budgets = [_]LineBudget{
         .path = "src/tools/static_tests.zig",
         .max_lines = 700,
         .reason = "test/cache/public-API analysis helpers should stay below a reviewable module size",
+    },
+    .{
+        .path = "src/tools/profiling.zig",
+        .max_lines = 1120,
+        .reason = "profiling workflow code is backend-heavy and must keep enough review headroom for renderer contract fixes",
+    },
+    .{
+        .path = "src/docs.zig",
+        .max_lines = 840,
+        .reason = "documentation lookup indexes should remain reviewable and split if another source family is added",
+    },
+    .{
+        .path = "src/analysis.zig",
+        .max_lines = 700,
+        .reason = "heuristic source scanners should stay bounded; semantic analysis belongs in stronger backends",
+    },
+    .{
+        .path = "src/state/documents.zig",
+        .max_lines = 860,
+        .reason = "document state is concurrency-sensitive and must keep line-count pressure visible",
     },
     .{
         .path = "src/tools/zls_common.zig",
@@ -379,6 +405,11 @@ const line_budgets = [_]LineBudget{
         .path = "tools/release_targets.zig",
         .max_lines = 120,
         .reason = "release target metadata should remain a compact shared table",
+    },
+    .{
+        .path = "tools/release_checks.zig",
+        .max_lines = 1100,
+        .reason = "release checks are critical trust infrastructure and should split before becoming hard to audit",
     },
 };
 
@@ -889,6 +920,49 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     for (required) |needle| {
         if (std.mem.indexOf(u8, bytes, needle) == null) {
             try stderrPrint(io, "security-policy check missing `{s}` in {s}\n", .{ needle, path });
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+fn checkMcpNoPatchContract(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    const build_files = [_][]const u8{ "build.zig", "build.zig.zon" };
+    const forbidden = [_][]const u8{
+        "third_party/mcp_zigar_patch",
+        "mcp_upstream",
+        "addMcpModule",
+    };
+    for (build_files) |path| {
+        const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
+            try stderrPrint(io, "MCP no-patch check could not read {s}: {s}\n", .{ path, @errorName(err) });
+            ok = false;
+            continue;
+        };
+        defer allocator.free(bytes);
+        for (forbidden) |needle| {
+            if (std.mem.indexOf(u8, bytes, needle) != null) {
+                try stderrPrint(io, "MCP no-patch check found `{s}` in {s}; build must use the pinned upstream mcp module directly\n", .{ needle, path });
+                ok = false;
+            }
+        }
+    }
+
+    const adapter = readFileAlloc(allocator, io, "src/mcp_server.zig", 2 * 1024 * 1024) catch |err| {
+        try stderrPrint(io, "MCP no-patch check could not read src/mcp_server.zig: {s}\n", .{@errorName(err)});
+        return false;
+    };
+    defer allocator.free(adapter);
+    const required = [_][]const u8{
+        "First-party MCP server adapter",
+        "pinned upstream MCP dependency",
+        "ToolResultDeinit",
+        "deinit_result",
+    };
+    for (required) |needle| {
+        if (std.mem.indexOf(u8, adapter, needle) == null) {
+            try stderrPrint(io, "MCP no-patch check missing `{s}` in src/mcp_server.zig\n", .{needle});
             ok = false;
         }
     }

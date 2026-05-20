@@ -157,6 +157,23 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
 
+        const resources = try self.request("resources/list", null);
+        defer self.allocator.free(resources);
+        if (std.mem.indexOf(u8, resources, "zigar://workspace") == null) return error.AssertionFailed;
+        if (std.mem.indexOf(u8, resources, "zigar://tools/schema") == null) return error.AssertionFailed;
+
+        const resource_read = try self.request("resources/read", "{\"uri\":\"zigar://workspace\"}");
+        defer self.allocator.free(resource_read);
+        if (std.mem.indexOf(u8, resource_read, workspace) == null) return error.AssertionFailed;
+
+        const prompts = try self.request("prompts/list", null);
+        defer self.allocator.free(prompts);
+        if (std.mem.indexOf(u8, prompts, "zigar_profile_workflow") == null) return error.AssertionFailed;
+
+        const prompt = try self.request("prompts/get", "{\"name\":\"zigar_profile_workflow\",\"arguments\":{}}");
+        defer self.allocator.free(prompt);
+        if (std.mem.indexOf(u8, prompt, "zig_profile_plan") == null) return error.AssertionFailed;
+
         const source = try std.fmt.allocPrint(self.allocator, "{s}/src/main.zig", .{workspace});
         defer self.allocator.free(source);
         const before = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);

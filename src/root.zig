@@ -9,6 +9,7 @@ pub const docs = @import("docs.zig");
 pub const doctor = @import("doctor.zig");
 pub const json_result = @import("json_result.zig");
 pub const logging = @import("logging.zig");
+pub const mcp_server = @import("mcp_server.zig");
 pub const resource_errors = @import("resource_errors.zig");
 pub const runtime = @import("runtime.zig");
 pub const tooling = @import("tooling.zig");
@@ -39,6 +40,8 @@ test {
     _ = doctor;
     _ = json_result;
     _ = logging;
+    _ = mcp_server;
+    _ = @import("mcp_server_tests.zig");
     _ = @import("mcp_tool_call_memory_tests.zig");
     _ = resource_errors;
     _ = runtime;

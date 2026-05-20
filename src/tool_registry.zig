@@ -2,6 +2,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const json_result = @import("json_result.zig");
+const mcp_server = @import("mcp_server.zig");
 const runtime_mod = @import("runtime.zig");
 const tool_errors = @import("tool_errors.zig");
 const tool_metadata = @import("tool_metadata.zig");
@@ -14,7 +15,7 @@ const App = runtime_mod.App;
 pub const ToolHandler = tool_metadata.ToolHandler;
 
 pub fn addTool(
-    server: *mcp.Server,
+    server: *mcp_server.Server,
     allocator: std.mem.Allocator,
     runtime: *App,
     comptime spec: tool_metadata.ToolMeta,
