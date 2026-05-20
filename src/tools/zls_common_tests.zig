@@ -6,6 +6,8 @@ const zls_common = @import("zls_common.zig");
 
 const App = core.App;
 const json_result = zigar.json_result;
+const requireZlsCapability = zls_common.requireZlsCapability;
+const zlsSupportsCapability = zls_common.zlsSupportsCapability;
 
 test "ZLS capability helpers map required LSP capabilities" {
     try std.testing.expectEqualStrings("hoverProvider", zls_common.zlsCapabilityName("textDocument/hover").?);
@@ -273,4 +275,59 @@ fn expectCapabilitySupported(state: zls_common.ZlsCapabilityState) !void {
         .supported => {},
         else => return error.UnexpectedCapabilityState,
     }
+}
+test "ZLS capability state distinguishes unavailable from unsupported" {
+    var app = testCapabilityApp();
+    app.zls_status = "startup failed";
+    app.zls_last_failure = "FileNotFound";
+    app.zls_restart_attempts = 2;
+
+    const result = requireZlsCapability(&app, std.testing.allocator, "textDocument/hover").?;
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("backend_error", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("unavailable", obj.get("error_kind").?.string);
+    try std.testing.expectEqualStrings("/missing/zls", obj.get("configured_path").?.string);
+    try std.testing.expectEqual(@as(i64, 2), obj.get("restart_attempts").?.integer);
+    try std.testing.expectEqualStrings("FileNotFound", obj.get("last_failure").?.string);
+}
+
+test "ZLS capability state reports initialized unsupported capability" {
+    var fake_client: zigar.lsp_client.LspClient = undefined;
+    var app = testCapabilityApp();
+    app.lsp_client = &fake_client;
+    app.zls_initialize_response =
+        \\{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"hoverProvider":true}}}
+    ;
+
+    const result = requireZlsCapability(&app, std.testing.allocator, "textDocument/documentSymbol").?;
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zls_unsupported_capability", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("textDocument/documentSymbol", obj.get("method").?.string);
+    try std.testing.expectEqualStrings("documentSymbolProvider", obj.get("capability").?.string);
+}
+
+test "ZLS capability state accepts advertised capabilities" {
+    var fake_client: zigar.lsp_client.LspClient = undefined;
+    var app = testCapabilityApp();
+    app.lsp_client = &fake_client;
+    app.zls_initialize_response =
+        \\{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"documentSymbolProvider":true}}}
+    ;
+
+    try std.testing.expect(requireZlsCapability(&app, std.testing.allocator, "textDocument/documentSymbol") == null);
+    try std.testing.expect(zlsSupportsCapability(&app, std.testing.allocator, "textDocument/documentSymbol"));
+}
+
+fn testCapabilityApp() App {
+    return .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .config = .{
+            .workspace = "/tmp/zigar-test",
+            .zls_path = "/missing/zls",
+        },
+        .workspace = undefined,
+    };
 }

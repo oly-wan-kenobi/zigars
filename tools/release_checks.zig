@@ -348,8 +348,13 @@ const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/zls_common.zig",
-        .max_lines = 650,
-        .reason = "shared ZLS/LSP helpers should stay below a reviewable module size",
+        .max_lines = 600,
+        .reason = "shared ZLS/LSP helpers should keep capability contract tests in focused test modules",
+    },
+    .{
+        .path = "src/tools/zls_common_tests.zig",
+        .max_lines = 380,
+        .reason = "ZLS common helper tests should remain focused on capability, command, and LSP shaping contracts",
     },
     .{
         .path = "src/lsp/client.zig",
