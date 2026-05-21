@@ -17,6 +17,11 @@ pub const ToolGroup = enum {
     ci_artifacts,
     zwanzig,
     profiling,
+    artifact_registry,
+    observability,
+    trust_safety,
+    result_contracts,
+    release_drift,
 };
 
 pub const StaticAnalysisTier = enum {
@@ -30,14 +35,19 @@ pub const StaticAnalysisTier = enum {
 pub const HandlerModule = enum {
     discovery,
     agent,
+    artifacts,
     core,
     edit_zls,
     edit_zls_diagnostics,
     docs,
     static_analysis,
     ci,
+    observability,
     zwanzig,
     profiling,
+    trust,
+    result_shape,
+    release_drift,
 };
 
 pub const HandlerRef = struct {

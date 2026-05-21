@@ -79,6 +79,8 @@ fn defaultHintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "content")) return .{ .description = "Complete source text to preview, analyze, or sync in memory." };
     if (std.mem.eql(u8, name, "apply")) return .{ .description = "Must be true before a tool writes source or workspace artifacts.", .default_bool = false };
     if (std.mem.eql(u8, name, "timeout_ms")) return .{ .description = "Per-call timeout in milliseconds; values must be positive and may be clamped by zigar.", .minimum = 1 };
+    if (std.mem.eql(u8, name, "max_bytes")) return .{ .description = "Maximum bytes to read from a bounded artifact or document.", .default_int = 65536, .minimum = 1 };
+    if (std.mem.eql(u8, name, "token_budget")) return .{ .description = "Approximate output token budget for result-shape planning.", .minimum = 1 };
     if (std.mem.eql(u8, name, "wait_ms")) return .{ .description = "How long to wait for asynchronous ZLS diagnostics.", .default_int = 500, .minimum = 0 };
     if (std.mem.eql(u8, name, "limit")) return .{ .description = "Maximum number of records to return.", .minimum = 1 };
     if (std.mem.eql(u8, name, "line") or std.mem.eql(u8, name, "start_line") or std.mem.eql(u8, name, "end_line")) return .{ .description = "Zero-based line number.", .minimum = 0 };
@@ -90,6 +92,9 @@ fn defaultHintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile." };
     if (std.mem.eql(u8, name, "format")) return .{ .description = "Tool-specific format selector." };
     if (std.mem.eql(u8, name, "probe_backends") or std.mem.eql(u8, name, "probe_managers")) return .{ .description = "Run extra backend probes instead of using cheap static checks.", .default_bool = false };
+    if (std.mem.eql(u8, name, "include_hashes")) return .{ .description = "Include bounded artifact hashes where practical.", .default_bool = true };
+    if (std.mem.eql(u8, name, "include_clean_tree")) return .{ .description = "Run a bounded git clean-tree check as part of the report.", .default_bool = false };
+    if (std.mem.eql(u8, name, "include_none")) return .{ .description = "Include tools whose risk level is none.", .default_bool = false };
     if (std.mem.eql(u8, name, "include_configured_paths")) return .{ .description = "Include the server's currently configured backend paths in setup catalog output.", .default_bool = true };
     if (std.mem.eql(u8, name, "refresh")) return .{ .description = "Rebuild the cached workspace index.", .default_bool = false };
     if (std.mem.eql(u8, name, "stop_on_failure")) return .{ .description = "Stop validation after the first failed phase.", .default_bool = false };

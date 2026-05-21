@@ -31,6 +31,11 @@
     {"intent": "lint Zig code", "prefer": "zig_lint", "keywords": ["zwanzig", "lint", "linter", "sarif"]},
     {"intent": "plan profiling capture", "prefer": "zig_profile_plan", "keywords": ["profile plan", "external capture", "perf", "xctrace", "sample", "dtrace", "vtune"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
+    {"intent": "inspect generated evidence artifacts", "prefer": "zigar_artifact_index, zigar_artifact_read", "keywords": ["artifact", "registry", "provenance", "sha256", "evidence"]},
+    {"intent": "inspect zigar runtime health", "prefer": "zigar_metrics_v2, zigar_tool_latency", "keywords": ["metrics", "observability", "latency", "backend health", "zls timeline"]},
+    {"intent": "explain zigar safety posture", "prefer": "zigar_trust_report, zigar_risk_audit", "keywords": ["trust", "safety", "risk", "command provenance", "clean tree"]},
+    {"intent": "choose compact or deep output", "prefer": "zigar_result_shape, zigar_output_budget_plan", "keywords": ["result shape", "compact", "deep", "omitted sections", "token budget"]},
+    {"intent": "check docs and release drift", "prefer": "zigar_docs_drift_check, zigar_tool_index_check", "keywords": ["docs drift", "release claims", "tool index", "release-check"]},
     {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zwanzig", "zflame", "diff-folded"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
