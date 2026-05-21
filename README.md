@@ -270,6 +270,24 @@ optional-backend support is claimed only from a release evidence artifact.
   render through zflame and diff-folded with artifact metadata.
   `zig_profile_run` can execute project code and create normal build/profile
   artifacts. zigar does not own profiler capture semantics.
+- Artifact registry: `zigar_artifact_index`, `zigar_artifact_read`, and
+  `zigar_artifact_prune` expose workspace-local generated artifacts, bounded
+  hashes, provenance records, and apply-gated registry cleanup. Pruning removes
+  stale registry entries only; it does not delete generated files.
+- Observability: `zigar_metrics_v2`, `zigar_backend_health_history`,
+  `zigar_zls_timeline`, and `zigar_tool_latency` report in-process counters,
+  backend probe history, ZLS status transitions, artifact counts, command
+  durations observed by shared helpers, and per-tool dispatch latency.
+- Trust and safety: `zigar_trust_report`, `zigar_command_provenance`,
+  `zigar_risk_audit`, and `zigar_clean_tree_gate` summarize path policy,
+  backend identities, dependency hashes, manifest risk flags, and clean-tree
+  evidence without broadening zigar's sandbox boundary.
+- Result contracts and release drift: `zigar_result_shape` and
+  `zigar_output_budget_plan` describe compact, standard, and deep output modes
+  with explicit omissions; `zigar_docs_drift_check`,
+  `zigar_release_claim_check`, and `zigar_tool_index_check` provide fast
+  public-doc and generated-index drift checks before running the full release
+  gate.
 
 Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`

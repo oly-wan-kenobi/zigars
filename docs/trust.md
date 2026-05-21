@@ -36,6 +36,30 @@ enforce them, and the product boundaries that should stay visible.
    public tag. This prevents maturity docs from claiming readiness without the
    exact source commit, local gate results, and real-backend validation status.
 
+## Trust Tools
+
+`zigar_trust_report` is the machine-readable trust summary for the current
+server process. It reports the configured workspace/cache roots, path policy,
+backend identities, dependency hash references from `build.zig.zon`, manifest
+risk audit, and optional clean-tree evidence. By default it does not run git;
+pass `include_clean_tree=true` to include the same clean-tree gate used by
+`zigar_clean_tree_gate`.
+
+`zigar_command_provenance` reports how registered tools are planned: exact Zig
+argv, dynamic command, ZLS request, apply-gated mutation, workspace artifact,
+pure analysis, or explicitly unsupported. `zigar_risk_audit` summarizes source
+writes, artifact writes, apply gates, backend execution, project-code
+execution, and arbitrary user-command execution from the typed manifest.
+`zigar_clean_tree_gate` runs `git status --porcelain` with a bounded timeout and
+classifies changed paths, including generated or vendored paths.
+
+The clean-tree gate is evidence, not a repository policy engine. It reports what
+git returned for the configured workspace and asks the caller to review, commit,
+stash, or account for changed paths. It does not reset files, delete generated
+outputs, install backends, or prove hosted branch protection. Use the full
+`release-check`, release-asset smoke, and clean `Release Readiness` artifact for
+public release claims.
+
 ## Feature Maturity
 
 10. ZLS-backed tools are bounded and degraded-mode aware. Missing or unsupported

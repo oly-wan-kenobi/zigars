@@ -83,6 +83,69 @@ unsupported. `zig_command_plan` is intentionally narrower: it returns exact
 `argv`/`cwd`/`timeout_ms` only for command-backed tools and returns a structured
 unsupported response for other known tools instead of `InvalidArguments`.
 
+## Artifact registry and provenance
+
+Artifact registry and provenance tools make generated evidence inspectable
+without weakening workspace path policy. `zigar_artifact_index` reads the
+workspace-local `.zigar-cache/artifacts/registry.jsonl` registry when present,
+scans bounded generated roots such as `.zigar-cache`, `zig-out`, `coverage`, and
+`dist`, and reports artifact paths, counts, bounded SHA-256 identities,
+provenance records, evidence source, confidence, limitations, and next actions.
+`zigar_artifact_read` reads one workspace artifact with a caller-specified byte
+limit and hash. `zigar_artifact_prune` is preview-first: with `apply=false` it
+reports the registry preimage identity and stale-entry summary, and with
+`apply=true` it rewrites registry metadata only. It never deletes artifact
+files.
+
+Artifact registry results use the shared `result_shape` fields for `mode` and
+`omitted_sections`. Compact mode can omit large collections or hash detail, but
+the omissions name the skipped section, the reason, and the recovery path.
+Before release decisions, treat artifact entries as evidence pointers and verify
+the producing command, source tree, and release gate that generated them.
+
+## Result Shapes
+
+`zigar_result_shape` describes the public compact, standard, and deep response
+contracts. New shared-contract tools can accept `mode=compact|standard|deep` and
+return stable machine fields first: `kind`, `ok`, `mode`, `result_shape`,
+`omitted_sections`, evidence source, confidence, limitations, and resolution
+where applicable. `zigar_output_budget_plan` returns planning budgets for a
+tool and mode. Token budgets are planning estimates for clients; they are not
+tokenizer-exact guarantees.
+
+Compact output is for routing and automation, standard output is the normal
+agent path, and deep output is for human review or verification. A compact
+result must not imply that omitted validation ran. If a section is truncated or
+not returned, clients should inspect `omitted_sections` and rerun with a deeper
+mode or higher bounded limit.
+
+## Observability
+
+`zigar_metrics_v2` reports in-memory runtime counters for the current server
+process: command calls, ZLS requests, legacy tool errors, observed tool
+dispatch calls/errors, analysis-cache state, artifact registry counts, bounded
+artifact scan counts, backend health history, ZLS timeline, tool latency, and
+observed command durations. `zigar_backend_health_history`,
+`zigar_zls_timeline`, and `zigar_tool_latency` expose those sections
+individually.
+
+Observability data resets when the zigar process restarts. Backend history
+records probes observed through zigar helper paths; it does not watch external
+backend state independently. Command durations are observed for commands routed
+through shared zigar helpers, and tool latency is MCP validation plus handler
+dispatch time, not client/network serialization time. Use `zigar_doctor
+probe_backends=true`, project CI, and release gates for stronger evidence.
+
+## Release Drift Tools
+
+`zigar_docs_drift_check`, `zigar_release_claim_check`, and
+`zigar_tool_index_check` are fast, read-only guards for public docs and
+generated index drift. They return structured checks with `ok`, evidence source,
+limitations, and resolution. They do not replace `zig build docs-check`,
+`zig build json-check`, or `zig build release-check`; they are agent-facing
+preflight checks that make missing generated-index entries and over-broad claim
+tokens visible before the full gate runs.
+
 Static-analysis tools use a shared confidence and capability-tier contract.
 Structured results include `analysis_kind`, `capability_tier`, `confidence`,
 `confidence_class`, `source_coverage`, `limitations`, `verify_with`,

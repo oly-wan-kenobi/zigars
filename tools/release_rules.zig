@@ -63,9 +63,59 @@ pub const line_budgets = [_]LineBudget{
         .reason = "backend setup metadata should remain compact and auditable",
     },
     .{
+        .path = "src/artifacts.zig",
+        .max_lines = 600,
+        .reason = "artifact registry provenance helpers must stay auditable and separate from tool handlers",
+    },
+    .{
+        .path = "src/observability.zig",
+        .max_lines = 470,
+        .reason = "observability state and value builders should stay bounded and testable",
+    },
+    .{
+        .path = "src/result_shape.zig",
+        .max_lines = 310,
+        .reason = "result-shape contract policy should stay compact and reusable",
+    },
+    .{
+        .path = "src/trust.zig",
+        .max_lines = 520,
+        .reason = "trust report helpers must stay auditable and evidence-focused",
+    },
+    .{
         .path = "src/tools/common.zig",
         .max_lines = 160,
         .reason = "shared tool helpers must stay a small facade over focused helper modules",
+    },
+    .{
+        .path = "src/tools/artifacts.zig",
+        .max_lines = 360,
+        .reason = "artifact registry handlers should delegate provenance helpers and remain reviewable",
+    },
+    .{
+        .path = "src/tools/observability.zig",
+        .max_lines = 190,
+        .reason = "observability handlers should stay thin over reusable metrics builders",
+    },
+    .{
+        .path = "src/tools/release_drift.zig",
+        .max_lines = 320,
+        .reason = "docs and release drift handlers should stay focused on public contract checks",
+    },
+    .{
+        .path = "src/tools/result_shape.zig",
+        .max_lines = 100,
+        .reason = "result-shape handlers should stay thin over shared policy",
+    },
+    .{
+        .path = "src/tools/result_shape_tests.zig",
+        .max_lines = 120,
+        .reason = "result-shape handler fixtures should stay compact",
+    },
+    .{
+        .path = "src/tools/trust.zig",
+        .max_lines = 80,
+        .reason = "trust handlers should stay thin over reusable report builders",
     },
     .{
         .path = "src/tools/ci.zig",
@@ -114,7 +164,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/shared_core.zig",
-        .max_lines = 500,
+        .max_lines = 520,
         .reason = "shared command/compiler/path helpers must stay a facade over focused helper modules",
     },
     .{
@@ -288,6 +338,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "docs tool definitions should remain compact and explicitly scoped",
     },
     .{
+        .path = "src/tool_manifest/definitions/foundation.zig",
+        .max_lines = 180,
+        .reason = "foundation contract tool definitions should remain compact and additive",
+    },
+    .{
         .path = "src/tool_manifest/definitions/static_analysis.zig",
         .max_lines = 260,
         .reason = "static analysis tool definitions should remain independently reviewable",
@@ -354,7 +409,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_docs.zig",
-        .max_lines = 190,
+        .max_lines = 240,
         .reason = "release documentation checks should stay separate from the release-check dispatcher",
     },
     .{
@@ -522,17 +577,22 @@ pub const tool_error_contract_paths = [_][]const u8{
     "src/tool_registry.zig",
     "src/tools/common.zig",
     "src/tools/agent.zig",
+    "src/tools/artifacts.zig",
     "src/tools/ci.zig",
     "src/tools/core.zig",
     "src/tools/discovery.zig",
     "src/tools/docs.zig",
     "src/tools/edit_zls.zig",
     "src/tools/edit_zls_diagnostics.zig",
+    "src/tools/observability.zig",
     "src/tools/profiling.zig",
+    "src/tools/release_drift.zig",
+    "src/tools/result_shape.zig",
     "src/tools/static_core.zig",
     "src/tools/static_tests.zig",
     "src/tools/shared_core.zig",
     "src/tools/tool_result_errors.zig",
+    "src/tools/trust.zig",
     "src/tools/zls_common.zig",
     "src/tools/zwanzig.zig",
 };

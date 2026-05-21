@@ -139,6 +139,37 @@ pub fn checkTrustDocs(allocator: Allocator, io: Io) !bool {
     });
 }
 
+pub fn checkFoundationContractDocs(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
+        "Artifact registry and provenance",
+        "zigar_artifact_index",
+        "result_shape",
+        "omitted_sections",
+        "zigar_metrics_v2",
+        "zigar_docs_drift_check",
+    })) and ok;
+    ok = (try checkDocNeedles(allocator, io, "docs/trust.md", &.{
+        "zigar_trust_report",
+        "zigar_command_provenance",
+        "zigar_clean_tree_gate",
+        "clean-tree gate",
+    })) and ok;
+    ok = (try checkDocNeedles(allocator, io, "docs/release.md", &.{
+        "zigar_docs_drift_check",
+        "zigar_release_claim_check",
+        "zigar_tool_index_check",
+    })) and ok;
+    ok = (try checkDocNeedles(allocator, io, "docs/tool-index.generated.md", &.{
+        "zigar_artifact_index",
+        "zigar_metrics_v2",
+        "zigar_trust_report",
+        "zigar_result_shape",
+        "zigar_docs_drift_check",
+    })) and ok;
+    return ok;
+}
+
 fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
     const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "docs check could not read {s}: {s}\n", .{ path, @errorName(err) });

@@ -27,6 +27,12 @@ documented product boundaries. It checks that the build imports the pinned
 upstream `mcp` package directly instead of routing through a patched MCP server
 wrapper, and that the first-party adapter still exposes explicit `tools/call`,
 `resources/read`, and `prompts/get` post-serialization cleanup hooks.
+The release drift tools provide the same contract as MCP-facing preflight
+checks: `zigar_docs_drift_check` verifies public documentation markers and
+generated-index coverage, `zigar_release_claim_check` scans public docs for
+conservative overclaim tokens, and `zigar_tool_index_check` compares registered
+tools to `docs/tool-index.generated.md`. These tools are read-only convenience
+checks; the release authority remains the build targets above.
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow

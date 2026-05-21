@@ -68,6 +68,36 @@ Tools: `zig_profile_plan`, `zig_profile_run`, `zig_flamegraph`, `zig_flamegraph_
 
 Keywords: `profile`, `profiling`, `profile plan`, `external capture`, `perf`, `dtrace`, `sample`, `xctrace`, `vtune`, `zflame`, `flamegraph`, `diff flamegraph`
 
+### artifact_registry
+
+Tools: `zigar_artifact_index`, `zigar_artifact_read`, `zigar_artifact_prune`
+
+Keywords: `artifact`, `registry`, `provenance`, `sha256`, `evidence`, `generated files`, `profile`, `coverage`, `release artifact`
+
+### observability
+
+Tools: `zigar_metrics_v2`, `zigar_backend_health_history`, `zigar_zls_timeline`, `zigar_tool_latency`
+
+Keywords: `metrics`, `observability`, `latency`, `backend health`, `zls timeline`, `tool errors`, `runtime counters`
+
+### trust_safety
+
+Tools: `zigar_trust_report`, `zigar_command_provenance`, `zigar_risk_audit`, `zigar_clean_tree_gate`
+
+Keywords: `trust`, `safety`, `risk`, `clean tree`, `command provenance`, `apply gate`, `path policy`, `backend identity`
+
+### result_contracts
+
+Tools: `zigar_result_shape`, `zigar_output_budget_plan`
+
+Keywords: `result shape`, `compact`, `standard`, `deep`, `output budget`, `omitted sections`, `token budget`
+
+### release_drift
+
+Tools: `zigar_docs_drift_check`, `zigar_release_claim_check`, `zigar_tool_index_check`
+
+Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `public claims`, `release-check`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -90,6 +120,11 @@ Keywords: `profile`, `profiling`, `profile plan`, `external capture`, `perf`, `d
 - lint Zig code: prefer `zig_lint`
 - plan profiling capture: prefer `zig_profile_plan`
 - make a flamegraph: prefer `zig_flamegraph`
+- inspect generated evidence artifacts: prefer `zigar_artifact_index, zigar_artifact_read`
+- inspect zigar runtime health: prefer `zigar_metrics_v2, zigar_tool_latency`
+- explain zigar safety posture: prefer `zigar_trust_report, zigar_risk_audit`
+- choose compact or deep output: prefer `zigar_result_shape, zigar_output_budget_plan`
+- check docs and release drift: prefer `zigar_docs_drift_check, zigar_tool_index_check`
 - install optional backends: prefer `zigar_backend_catalog`
 - diagnose zigar setup: prefer `zigar_doctor`
 
@@ -164,14 +199,26 @@ Keywords: `profile`, `profiling`, `profile plan`, `external capture`, `perf`, `d
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
+- `zigar_artifact_index`: optional `path: string`, `limit: integer`, `include_hashes: boolean`, `mode: string`
+- `zigar_artifact_prune`: optional `apply: boolean`, `mode: string`
+- `zigar_artifact_read`: required `path: string`; optional `max_bytes: integer`, `mode: string`
 - `zigar_backend_catalog`: optional `include_configured_paths: boolean`
+- `zigar_clean_tree_gate`: optional `timeout_ms: integer`
+- `zigar_command_provenance`: optional `tool: string`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
+- `zigar_docs_drift_check`: optional `mode: string`
 - `zigar_doctor`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zigar_next_action`: required `goal: string`; optional `changed_files: string`, `last_error: string`
+- `zigar_output_budget_plan`: optional `mode: string`, `token_budget: integer`, `tool: string`
 - `zigar_patch_guard`: optional `files: string`, `patch: string`
 - `zigar_project_profile`: optional `apply: boolean`, `content: string`
+- `zigar_release_claim_check`: optional `mode: string`
+- `zigar_result_shape`: optional `mode: string`
+- `zigar_risk_audit`: optional `include_none: boolean`
+- `zigar_tool_index_check`: optional `mode: string`
+- `zigar_trust_report`: optional `include_clean_tree: boolean`, `timeout_ms: integer`
 - `zigar_validate_patch`: optional `mode: string`, `changed_files: string`, `stop_on_failure: boolean`, `timeout_ms: integer`
 
 ## Planning Support
@@ -256,21 +303,37 @@ Keywords: `profile`, `profiling`, `profile plan`, `external capture`, `perf`, `d
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
+- `zigar_artifact_index`: `pure_analysis` read-only analysis
+- `zigar_artifact_prune`: `apply_gated_mutation` preview/apply mutation
+- `zigar_artifact_read`: `pure_analysis` read-only analysis
 - `zigar_backend_catalog`: `pure_analysis` read-only analysis
+- `zigar_backend_health_history`: `pure_analysis` read-only analysis
 - `zigar_capabilities`: `pure_analysis` read-only analysis
+- `zigar_clean_tree_gate`: `dynamic_command` runtime-dependent backend plan
+- `zigar_command_provenance`: `pure_analysis` read-only analysis
 - `zigar_context_pack`: `pure_analysis` read-only analysis
+- `zigar_docs_drift_check`: `pure_analysis` read-only analysis
 - `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
 - `zigar_http_status`: `pure_analysis` read-only analysis
 - `zigar_impact`: `pure_analysis` read-only analysis
 - `zigar_metrics`: `pure_analysis` read-only analysis
+- `zigar_metrics_v2`: `pure_analysis` read-only analysis
 - `zigar_next_action`: `pure_analysis` read-only analysis
+- `zigar_output_budget_plan`: `pure_analysis` read-only analysis
 - `zigar_patch_guard`: `pure_analysis` read-only analysis
 - `zigar_project_profile`: `apply_gated_mutation` preview/apply mutation
+- `zigar_release_claim_check`: `pure_analysis` read-only analysis
+- `zigar_result_shape`: `pure_analysis` read-only analysis
+- `zigar_risk_audit`: `pure_analysis` read-only analysis
 - `zigar_schema`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
+- `zigar_tool_index_check`: `pure_analysis` read-only analysis
+- `zigar_tool_latency`: `pure_analysis` read-only analysis
+- `zigar_trust_report`: `dynamic_command` runtime-dependent backend plan
 - `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
 - `zigar_workspace_info`: `pure_analysis` read-only analysis
+- `zigar_zls_timeline`: `pure_analysis` read-only analysis
 
 ## Static Analysis Capability Tiers
 
