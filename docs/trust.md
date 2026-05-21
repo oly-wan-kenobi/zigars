@@ -68,11 +68,11 @@ public release claims.
     source-scan based, and language-reference search reports whether it used
     installed or bundled data.
 12. Static-analysis tools are tiered. `advisory_orientation` tools are for
-    navigation; parser-backed, compiler-backed, ZLS-backed, and zwanzig-backed
-    tools should be preferred for release decisions.
-13. Optional backends are explicit. ZLS, zwanzig, zflame, diff-folded, and
-    platform profilers are local dependencies with documented setup, probe, and
-    compatibility expectations.
+    navigation; parser-backed, compiler-backed, ZLS-backed, ZLint-backed, and
+    zwanzig-backed tools should be preferred for release decisions.
+13. Optional backends are explicit. ZLS, ZLint, zwanzig, zflame, diff-folded,
+    and platform profilers are local dependencies with documented setup, probe,
+    and compatibility expectations.
 14. CI artifact tools disclose parser confidence and scope. `zig_junit` is
     command-level JUnit unless Zig exposes a stable per-test event stream.
 15. Agent workflow tools are deterministic advisory helpers. They expose
@@ -105,7 +105,7 @@ Some quality signals cannot be forced by the local repository alone:
 - GitHub branch protection and release permissions must be configured on the
   hosted repository. Repository workflows declare least-privilege token
   permissions, but hosted branch/release policy still lives outside git.
-- Real ZLS, zwanzig, zflame, diff-folded, and platform-profiler validation is
+- Real ZLS, ZLint, zwanzig, zflame, diff-folded, and platform-profiler validation is
   optional because those backends are not bundled. Use the manual
   `Backend Conformance` workflow or `.github/scripts/backend-conformance.sh`
   when release notes need to claim exact real-backend validation. Every public

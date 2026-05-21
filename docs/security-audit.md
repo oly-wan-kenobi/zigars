@@ -38,7 +38,7 @@ This checklist is for release reviews and MCP-client integration changes.
 ## Known Trust Boundaries
 
 - `zig build`, `zig test`, and build scripts can execute project code.
-- ZLS, zwanzig, zflame, diff-folded, and platform profilers are local executables.
+- ZLS, ZLint, zwanzig, zflame, diff-folded, and platform profilers are local executables.
 - The workspace realpath boundary rejects symlink escapes through existing path
   ancestors, but it does not protect against concurrent filesystem races by
   untrusted local processes.

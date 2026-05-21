@@ -6,6 +6,7 @@ pub const Input = struct {
     transport: []const u8,
     zig_path: []const u8,
     zls_path: []const u8,
+    zlint_path: []const u8,
     zwanzig_path: []const u8,
     zflame_path: []const u8,
     diff_folded_path: []const u8,
@@ -18,6 +19,7 @@ pub const Input = struct {
     http_available: bool,
     zig_probe: ?Probe = null,
     zls_probe: ?Probe = null,
+    zlint_probe: ?Probe = null,
     zwanzig_probe: ?Probe = null,
     zflame_probe: ?Probe = null,
     diff_folded_probe: ?Probe = null,
@@ -71,11 +73,13 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
         else
             input.zls_last_failure orelse "ZLS-backed tools require a working zls binary",
     ));
+    try checks.append(try checkValue(allocator, "zlint_backend_path", true, "configured", input.zlint_path));
     try checks.append(try checkValue(allocator, "zwanzig_backend_path", true, "configured", input.zwanzig_path));
     try checks.append(try checkValue(allocator, "zflame_backend_path", true, "configured", input.zflame_path));
     try checks.append(try checkValue(allocator, "diff_folded_backend_path", true, "configured", input.diff_folded_path));
     if (input.zig_probe) |probe| try checks.append(try probeValue(allocator, "zig_probe", probe));
     if (input.zls_probe) |probe| try checks.append(try probeValue(allocator, "zls_probe", probe));
+    if (input.zlint_probe) |probe| try checks.append(try probeValue(allocator, "zlint_probe", probe));
     if (input.zwanzig_probe) |probe| try checks.append(try probeValue(allocator, "zwanzig_probe", probe));
     if (input.zflame_probe) |probe| try checks.append(try probeValue(allocator, "zflame_probe", probe));
     if (input.diff_folded_probe) |probe| try checks.append(try probeValue(allocator, "diff_folded_probe", probe));
@@ -87,6 +91,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     try obj.put(allocator, "transport", .{ .string = input.transport });
     try obj.put(allocator, "zig_path", .{ .string = input.zig_path });
     try obj.put(allocator, "zls_path", .{ .string = input.zls_path });
+    try obj.put(allocator, "zlint_path", .{ .string = input.zlint_path });
     try obj.put(allocator, "zwanzig_path", .{ .string = input.zwanzig_path });
     try obj.put(allocator, "zflame_path", .{ .string = input.zflame_path });
     try obj.put(allocator, "diff_folded_path", .{ .string = input.diff_folded_path });
@@ -118,6 +123,7 @@ test "doctor report includes checks" {
         .transport = "stdio",
         .zig_path = "zig",
         .zls_path = "zls",
+        .zlint_path = "zlint",
         .zwanzig_path = "zwanzig",
         .zflame_path = "zflame",
         .diff_folded_path = "diff-folded",

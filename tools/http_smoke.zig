@@ -42,7 +42,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     var port_buf: [16]u8 = undefined;
     const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
     var child = try std.process.spawn(io, .{
-        .argv = &.{ options.binary, "--workspace", options.workspace, "--transport", "http", "--host", "127.0.0.1", "--port", port_text, "--zls-path", "/definitely/missing/zls" },
+        .argv = &.{ options.binary, "--workspace", options.workspace, "--transport", "http", "--host", "127.0.0.1", "--port", port_text, "--zls-path", "/definitely/missing/zls", "--zlint-path", "/definitely/missing/zlint" },
         .stdout = .ignore,
         .stderr = .pipe,
     });
@@ -76,6 +76,27 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try assertToolPaths(allocator, io, port, 11, "zig_changed_files_plan", "{}", expected.value, "changed_files_plan_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 12, "zig_test_failure_triage", "{\"text\":\"1/1 test.foo...FAIL (TestExpectedEqual)\\nexpected 1, found 2\\n\"}", expected.value, "test_failure_triage_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 13, "zig_workspace_symbol_cache", "{\"query\":\"main\",\"limit\":20}", expected.value, "workspace_symbol_cache_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 80, "zig_semantic_index_build", "{\"limit\":20}", expected.value, "semantic_index_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 81, "zig_semantic_index_status", "{}", expected.value, "semantic_index_status_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 82, "zig_semantic_index_refresh", "{\"limit\":20}", expected.value, "semantic_index_refresh_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 83, "zig_semantic_query", "{\"query\":\"main\",\"limit\":5}", expected.value, "semantic_query_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 84, "zig_semantic_refs", "{\"symbol\":\"main\",\"limit\":5}", expected.value, "semantic_refs_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 85, "zig_semantic_decl", "{\"symbol\":\"main\",\"limit\":5}", expected.value, "semantic_decl_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 86, "zig_semantic_callers", "{\"symbol\":\"main\",\"limit\":5}", expected.value, "semantic_callers_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 87, "zig_static_fusion", "{\"query\":\"main\",\"limit\":5}", expected.value, "static_fusion_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 88, "zig_code_index_export", "{\"apply\":false,\"limit\":20}", expected.value, "code_index_export_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 89, "zig_scip_export", "{\"apply\":false,\"limit\":20}", expected.value, "scip_export_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 90, "zig_zlint", "{\"path\":\"src\"}", expected.value, "zlint_unavailable_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 91, "zig_zlint_sarif", "{\"path\":\"src\"}", expected.value, "zlint_sarif_unavailable_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 92, "zig_zlint_rules", "{}", expected.value, "zlint_rules_unavailable_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 93, "zig_zlint_fix", "{\"path\":\"src\",\"apply\":false}", expected.value, "zlint_fix_preview_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 94, "zig_lint_compare", "{\"zlint_findings\":\"[]\",\"zwanzig_findings\":\"[]\"}", expected.value, "lint_compare_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 95, "zig_lint_profile", "{}", expected.value, "lint_profile_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 96, "zig_lint_gate", "{\"findings\":\"[]\"}", expected.value, "lint_gate_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 97, "zig_lint_fix_plan", "{\"findings\":\"[]\"}", expected.value, "lint_fix_plan_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 98, "zig_lint_baseline", "{\"findings\":\"[]\",\"apply\":false}", expected.value, "lint_baseline_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 99, "zig_lint_suppressions", "{\"findings\":\"[]\"}", expected.value, "lint_suppressions_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 100, "zig_lint_trend", "{\"before\":\"[]\",\"after\":\"[]\"}", expected.value, "lint_trend_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 14, "zig_package_cache_doctor", "{\"timeout_ms\":1000}", expected.value, "package_cache_doctor_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 15, "zigar_context_pack", "{\"mode\":\"tiny\"}", expected.value, "context_pack_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 16, "zigar_next_action", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected.value, "next_action_paths", &scenarios);

@@ -26,6 +26,7 @@ const workflow_permission_rules = release_rules.workflow_permission_rules;
 const pure_zig_roots = release_rules.pure_zig_roots;
 
 pub const fakeZwanzig = fake_backends.fakeZwanzig;
+pub const fakeZlint = fake_backends.fakeZlint;
 pub const fakeZflame = fake_backends.fakeZflame;
 pub const fakeDiffFolded = fake_backends.fakeDiffFolded;
 
@@ -308,8 +309,8 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
             try stderrPrint(io, "parser-backed static-analysis contract must expose parse status and partial-result fields: {s}\n", .{entry.name});
             ok = false;
         }
-        if (contract.classification == .release_gating_candidate and tier != .compiler_backed and tier != .zwanzig_backed) {
-            try stderrPrint(io, "release-gating static-analysis tool must be compiler-backed or zwanzig-backed: {s}\n", .{entry.name});
+        if (contract.classification == .release_gating_candidate and tier != .compiler_backed and tier != .zlint_backed and tier != .zwanzig_backed) {
+            try stderrPrint(io, "release-gating static-analysis tool must be compiler-backed, ZLint-backed, or zwanzig-backed: {s}\n", .{entry.name});
             ok = false;
         }
         if (entry.group == .zwanzig and tier != .zwanzig_backed) {
@@ -317,8 +318,10 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
             ok = false;
         }
         if (entry.group == .static_analysis and (!entry.meta.read_only or entry.risk.writes_source)) {
-            try stderrPrint(io, "static-analysis tool must stay source-read-only: {s}\n", .{entry.name});
-            ok = false;
+            if (!(entry.risk.writes_source and entry.risk.writes_require_apply and entry.risk.preview_by_default and !entry.meta.read_only)) {
+                try stderrPrint(io, "static-analysis source writes must be explicit apply-gated previews: {s}\n", .{entry.name});
+                ok = false;
+            }
         }
     }
     return ok;

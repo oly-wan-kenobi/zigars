@@ -9,6 +9,7 @@ pub const command_output = @import("command_output.zig");
 pub const config = @import("config.zig");
 pub const docs = @import("docs.zig");
 pub const doctor = @import("doctor.zig");
+pub const evidence = @import("evidence.zig");
 pub const json_result = @import("json_result.zig");
 pub const logging = @import("logging.zig");
 pub const mcp_server = @import("mcp_server.zig");
@@ -46,6 +47,7 @@ test {
     _ = config;
     _ = docs;
     _ = doctor;
+    _ = evidence;
     _ = json_result;
     _ = logging;
     _ = mcp_server;

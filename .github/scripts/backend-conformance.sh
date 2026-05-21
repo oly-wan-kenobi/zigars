@@ -32,6 +32,7 @@ fi
 zigar_binary="$(resolve_executable "$zigar_binary" zigar)"
 zig_path="$(resolve_executable "${ZIGAR_ZIG_PATH:-zig}" zig)"
 zls_path="${ZIGAR_ZLS_PATH:-zls}"
+zlint_path="${ZIGAR_ZLINT_PATH:-zlint}"
 zwanzig_path="${ZIGAR_ZWANZIG_PATH:-zwanzig}"
 zflame_path="${ZIGAR_ZFLAME_PATH:-zflame}"
 diff_folded_path="${ZIGAR_DIFF_FOLDED_PATH:-diff-folded}"
@@ -105,6 +106,7 @@ printf 'backend-conformance: report %s\n' "$report_path"
 printf 'backend-conformance: zigar %s\n' "$zigar_binary"
 printf 'backend-conformance: zig %s\n' "$zig_path"
 printf 'backend-conformance: zls %s\n' "$zls_path"
+printf 'backend-conformance: zlint %s\n' "$zlint_path"
 printf 'backend-conformance: zwanzig %s\n' "$zwanzig_path"
 printf 'backend-conformance: zflame %s\n' "$zflame_path"
 printf 'backend-conformance: diff-folded %s\n' "$diff_folded_path"
@@ -114,6 +116,7 @@ ZIGAR_BINARY="$zigar_binary" \
 ZIGAR_WORKSPACE="$workspace" \
 ZIGAR_ZIG_PATH="$zig_path" \
 ZIGAR_ZLS_PATH="$zls_path" \
+ZIGAR_ZLINT_PATH="$zlint_path" \
 ZIGAR_ZWANZIG_PATH="$zwanzig_path" \
 ZIGAR_ZFLAME_PATH="$zflame_path" \
 ZIGAR_DIFF_FOLDED_PATH="$diff_folded_path" \
@@ -150,7 +153,7 @@ report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
 summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
 backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
 timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
-valid_claimed_backends = {"zls", "zwanzig", "zflame", "diff_folded"}
+valid_claimed_backends = {"zls", "zlint", "zwanzig", "zflame", "diff_folded"}
 claimed_backends = [
     item.strip().replace("-", "_")
     for item in os.environ.get("ZIGAR_CLAIMED_BACKENDS", "").split(",")
@@ -173,6 +176,11 @@ backend_specs = {
         "path": os.environ["ZIGAR_ZLS_PATH"],
         "required": False,
         "version_args": ["--version"],
+    },
+    "zlint": {
+        "path": os.environ["ZIGAR_ZLINT_PATH"],
+        "required": False,
+        "version_args": ["--help"],
     },
     "zwanzig": {
         "path": os.environ["ZIGAR_ZWANZIG_PATH"],
@@ -441,6 +449,51 @@ def validate_zwanzig_json(payload, text, scenario):
     scenario["required_markers"] = ["--format", "json", "zwanzig"]
 
 
+def validate_zlint_json(payload, text, scenario):
+    if payload.get("kind") != "zig_zlint":
+        raise AssertionError(f"zig_zlint returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zlint":
+        raise AssertionError("zig_zlint did not report zlint backend metadata")
+    if payload.get("ok") is not True:
+        raise AssertionError("zig_zlint reported ok=false")
+    if "findings" not in payload or "summary" not in payload:
+        raise AssertionError("zig_zlint did not return normalized findings and summary")
+    scenario["required_markers"] = ["--format", "json", "zlint"]
+
+
+def validate_zlint_sarif(payload, text, scenario):
+    if payload.get("kind") != "zig_zlint_sarif":
+        raise AssertionError(f"zig_zlint_sarif returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zlint":
+        raise AssertionError("zig_zlint_sarif did not report zlint backend metadata")
+    if payload.get("sarif", {}).get("version") != "2.1.0":
+        raise AssertionError("zig_zlint_sarif did not return SARIF 2.1.0")
+    scenario["required_markers"] = ["SARIF", "zlint"]
+
+
+def validate_zlint_rules(payload, text, scenario):
+    if payload.get("kind") != "zig_zlint_rules":
+        raise AssertionError(f"zig_zlint_rules returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zlint":
+        raise AssertionError("zig_zlint_rules did not report zlint backend metadata")
+    if "rules" not in payload:
+        raise AssertionError("zig_zlint_rules did not return normalized rules")
+    scenario["required_markers"] = ["rule metadata or capability fallback", "zlint"]
+
+
+def validate_zlint_fix_preview(payload, text, scenario):
+    if payload.get("kind") != "zig_zlint_fix":
+        raise AssertionError(f"zig_zlint_fix returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zlint":
+        raise AssertionError("zig_zlint_fix did not report zlint backend metadata")
+    if payload.get("apply") is not False or payload.get("requires_apply") is not True:
+        raise AssertionError("zig_zlint_fix preview did not enforce apply gate")
+    argv = payload.get("argv") or []
+    if "--fix" not in argv:
+        raise AssertionError("zig_zlint_fix preview did not include --fix argv")
+    scenario["required_markers"] = ["--fix", "apply gate", "zlint"]
+
+
 def validate_zwanzig_sarif(payload, text, scenario):
     command_payload_ok(payload, "zig_lint_sarif")
     if payload.get("backend") != "zwanzig":
@@ -555,6 +608,34 @@ add_tool_scenario(
     validate_zwanzig_graph,
 )
 add_tool_scenario(
+    "zlint_diagnostics_json",
+    ["zlint"],
+    "zig_zlint",
+    {"path": "src/main.zig"},
+    validate_zlint_json,
+)
+add_tool_scenario(
+    "zlint_sarif",
+    ["zlint"],
+    "zig_zlint_sarif",
+    {"path": "src/main.zig"},
+    validate_zlint_sarif,
+)
+add_tool_scenario(
+    "zlint_rules",
+    ["zlint"],
+    "zig_zlint_rules",
+    {},
+    validate_zlint_rules,
+)
+add_tool_scenario(
+    "zlint_fix_preview",
+    ["zlint"],
+    "zig_zlint_fix",
+    {"path": "src/main.zig", "apply": False},
+    validate_zlint_fix_preview,
+)
+add_tool_scenario(
     "zflame_recursive_folded_svg",
     ["zflame"],
     "zig_flamegraph",
@@ -594,6 +675,8 @@ argv = [
     os.environ["ZIGAR_ZIG_PATH"],
     "--zls-path",
     backend_arg("zls"),
+    "--zlint-path",
+    backend_arg("zlint"),
     "--zwanzig-path",
     backend_arg("zwanzig"),
     "--zflame-path",
@@ -694,6 +777,10 @@ tool_names = {tool.get("name") for tool in tools_result.get("tools", [])}
 for tool in (
     "zigar_doctor",
     "zig_document_symbols",
+    "zig_zlint",
+    "zig_zlint_sarif",
+    "zig_zlint_rules",
+    "zig_zlint_fix",
     "zig_lint",
     "zig_lint_sarif",
     "zig_lint_rules",
@@ -758,6 +845,7 @@ checks = {check.get("name"): check for check in doctor.get("checks", []) if isin
 for backend, probe in (
     ("zig", "zig_probe"),
     ("zls", "zls_probe"),
+    ("zlint", "zlint_probe"),
     ("zwanzig", "zwanzig_probe"),
     ("zflame", "zflame_probe"),
     ("diff_folded", "diff_folded_probe"),
@@ -851,7 +939,7 @@ def backend_matrix_row(backend):
 
 compatibility_matrix = [
     backend_matrix_row(backend)
-    for backend in ("zigar", "zig", "zls", "zwanzig", "zflame", "diff_folded")
+    for backend in ("zigar", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded")
 ]
 
 coverage_errors = []

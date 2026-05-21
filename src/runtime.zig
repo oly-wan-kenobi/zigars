@@ -13,6 +13,7 @@ const ZlsProcess = @import("zls/process.zig").ZlsProcess;
 pub const BackendProbeCache = struct {
     zig: ?doctor.Probe = null,
     zls: ?doctor.Probe = null,
+    zlint: ?doctor.Probe = null,
     zwanzig: ?doctor.Probe = null,
     zflame: ?doctor.Probe = null,
     diff_folded: ?doctor.Probe = null,
@@ -25,6 +26,18 @@ pub const AnalysisCache = struct {
     refreshes: usize = 0,
 
     pub fn deinit(self: *AnalysisCache, allocator: std.mem.Allocator) void {
+        if (self.index_json) |bytes| allocator.free(bytes);
+        self.* = .{};
+    }
+};
+
+pub const SemanticIndexCache = struct {
+    signature: u64 = 0,
+    index_json: ?[]u8 = null,
+    hits: usize = 0,
+    refreshes: usize = 0,
+
+    pub fn deinit(self: *SemanticIndexCache, allocator: std.mem.Allocator) void {
         if (self.index_json) |bytes| allocator.free(bytes);
         self.* = .{};
     }
@@ -51,12 +64,14 @@ pub const App = struct {
     tool_errors: usize = 0,
     backend_probe_cache: BackendProbeCache = .{},
     analysis_cache: AnalysisCache = .{},
+    semantic_index_cache: SemanticIndexCache = .{},
     observability: observability.State = .{},
     runtime_ux: runtime_ux.State = .{},
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     pub fn deinit(self: *App) void {
         self.analysis_cache.deinit(self.allocator);
+        self.semantic_index_cache.deinit(self.allocator);
         if (self.zls_initialize_response) |bytes| {
             self.allocator.free(bytes);
             self.zls_initialize_response = null;

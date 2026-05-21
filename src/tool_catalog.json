@@ -28,7 +28,8 @@
     {"intent": "inspect build dependencies", "prefer": "zig_dependency_inspect", "keywords": ["build.zig.zon", "dependency", "hash", "zig-pkg"]},
     {"intent": "find symbol information", "prefer": "zig_hover, zig_definition, zig_references, zig_document_symbols", "keywords": ["zls", "lsp", "symbol", "definition", "references"]},
     {"intent": "search Zig docs", "prefer": "zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json", "keywords": ["docs", "stdlib", "builtin", "langref", "language reference", "source provenance"]},
-    {"intent": "lint Zig code", "prefer": "zig_lint", "keywords": ["zwanzig", "lint", "linter", "sarif"]},
+    {"intent": "query parser-backed Zig symbols", "prefer": "zig_semantic_query, zig_semantic_decl, zig_semantic_refs, zig_semantic_callers", "keywords": ["semantic index", "semantic query", "declaration", "references", "callers", "zlint ast"]},
+    {"intent": "lint Zig code", "prefer": "zig_zlint, zig_zlint_fix, zig_lint, zig_lint_compare", "keywords": ["zlint", "zwanzig", "lint", "linter", "lint compare", "lint gate", "sarif", "fix lint"]},
     {"intent": "plan profiling capture", "prefer": "zig_profile_plan", "keywords": ["profile plan", "external capture", "perf", "xctrace", "sample", "dtrace", "vtune"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
     {"intent": "inspect generated evidence artifacts", "prefer": "zigar_artifact_index, zigar_artifact_read", "keywords": ["artifact", "registry", "provenance", "sha256", "evidence"]},
@@ -36,7 +37,7 @@
     {"intent": "explain zigar safety posture", "prefer": "zigar_trust_report, zigar_risk_audit", "keywords": ["trust", "safety", "risk", "command provenance", "clean tree"]},
     {"intent": "choose compact or deep output", "prefer": "zigar_result_shape, zigar_output_budget_plan", "keywords": ["result shape", "compact", "deep", "omitted sections", "token budget"]},
     {"intent": "check docs and release drift", "prefer": "zigar_docs_drift_check, zigar_tool_index_check", "keywords": ["docs drift", "release claims", "tool index", "release-check"]},
-    {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zwanzig", "zflame", "diff-folded"]},
+    {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zlint", "zwanzig", "zflame", "diff-folded"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
   "tool_argument_scope": "Compact high-signal argument and planning hints are generated from the typed manifest under src/tool_manifest/ at build and runtime.",

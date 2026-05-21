@@ -20,7 +20,8 @@ rejected when `linked-dir` is a symlink outside the workspace.
 
 Run `zigar_doctor` and `zig_version`. Confirm `zls_path` points to a ZLS build
 compatible with the configured Zig version. `zigar_doctor` also reports the
-configured zwanzig, zflame, and diff-folded backend paths for support logs.
+configured ZLint, zwanzig, zflame, and diff-folded backend paths for support
+logs.
 Command-backed tools such as `zig_check`, `zig_build`, and `zig_test` continue
 to work without ZLS.
 

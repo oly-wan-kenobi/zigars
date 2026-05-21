@@ -45,6 +45,33 @@ pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
     }
 }
 
+pub fn fakeZlint(io: Io, args: []const []const u8) !void {
+    if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
+        try stdoutWrite(io, "fake ZLint help\n--format json\n--rules --format json\n--print-ast <file>\n--fix\n--fix-dangerously\n");
+        return;
+    }
+    if (args.len == 2 and std.mem.eql(u8, args[0], "--print-ast")) {
+        try stdoutWrite(io, "Printing AST for ");
+        try stdoutWrite(io, args[1]);
+        try stdoutWrite(io, "\n{\"symbols\":[{\"name\":\"main\",\"references\":[{\"flags\":[\"call\"]}]}]}\n");
+        return;
+    }
+    if (args.len >= 3 and std.mem.eql(u8, args[0], "--rules") and std.mem.eql(u8, args[1], "--format") and std.mem.eql(u8, args[2], "json")) {
+        try stdoutWrite(io, "{\"rules\":[{\"id\":\"fake.zlint.rule\",\"severity\":\"warning\",\"category\":\"style\",\"description\":\"fake ZLint rule\"}]}\n");
+        return;
+    }
+    if (args.len < 3 or !std.mem.eql(u8, args[0], "--format") or !std.mem.eql(u8, args[1], "json")) {
+        return fakeBackendUsageError(io, "fake ZLint requires --format json <path>\n");
+    }
+    for (args[2..]) |arg| {
+        if (std.mem.eql(u8, arg, "--fix") or std.mem.eql(u8, arg, "--fix-dangerously")) {
+            try stdoutWrite(io, "{\"findings\":[]}\n");
+            return;
+        }
+    }
+    try stdoutWrite(io, "{\"findings\":[{\"rule\":\"fake.zlint.rule\",\"severity\":\"warning\",\"path\":\"src/main.zig\",\"line\":1,\"column\":15,\"message\":\"fake ZLint finding\"}]}\n");
+}
+
 pub fn fakeZflame(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake zflame help\nusage: zflame <format> [--title=<text>] [--colors=<palette>] <input>\n");

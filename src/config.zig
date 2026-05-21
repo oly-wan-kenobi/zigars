@@ -9,6 +9,7 @@ pub const Config = struct {
     workspace: []const u8,
     zig_path: []const u8 = "zig",
     zls_path: []const u8 = "zls",
+    zlint_path: []const u8 = "zlint",
     zwanzig_path: []const u8 = "zwanzig",
     zflame_path: []const u8 = "zflame",
     diff_folded_path: []const u8 = "diff-folded",
@@ -23,6 +24,7 @@ pub const Config = struct {
         allocator.free(self.workspace);
         allocator.free(self.zig_path);
         allocator.free(self.zls_path);
+        allocator.free(self.zlint_path);
         allocator.free(self.zwanzig_path);
         allocator.free(self.zflame_path);
         allocator.free(self.diff_folded_path);
@@ -62,6 +64,8 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
             try replaceOwned(allocator, &result.zig_path, raw_args, &i);
         } else if (std.mem.eql(u8, arg, "--zls-path")) {
             try replaceOwned(allocator, &result.zls_path, raw_args, &i);
+        } else if (std.mem.eql(u8, arg, "--zlint-path")) {
+            try replaceOwned(allocator, &result.zlint_path, raw_args, &i);
         } else if (std.mem.eql(u8, arg, "--zwanzig-path")) {
             try replaceOwned(allocator, &result.zwanzig_path, raw_args, &i);
         } else if (std.mem.eql(u8, arg, "--zflame-path")) {
@@ -121,6 +125,8 @@ fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
     errdefer allocator.free(zig_path);
     const zls_path = try allocator.dupe(u8, "zls");
     errdefer allocator.free(zls_path);
+    const zlint_path = try allocator.dupe(u8, "zlint");
+    errdefer allocator.free(zlint_path);
     const zwanzig_path = try allocator.dupe(u8, "zwanzig");
     errdefer allocator.free(zwanzig_path);
     const zflame_path = try allocator.dupe(u8, "zflame");
@@ -134,6 +140,7 @@ fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
         .workspace = workspace,
         .zig_path = zig_path,
         .zls_path = zls_path,
+        .zlint_path = zlint_path,
         .zwanzig_path = zwanzig_path,
         .zflame_path = zflame_path,
         .diff_folded_path = diff_folded_path,
@@ -159,7 +166,7 @@ pub fn usage() []const u8 {
     \\
     \\Usage:
     \\  zigar [--workspace <path>] [--zig-path <path>] [--zls-path <path>]
-    \\        [--zwanzig-path <path>] [--zflame-path <path>]
+    \\        [--zlint-path <path>] [--zwanzig-path <path>] [--zflame-path <path>]
     \\        [--diff-folded-path <path>]
     \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]

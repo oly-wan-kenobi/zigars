@@ -40,8 +40,9 @@ can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
 `tools/list`, `zigar_schema`, and `zigar_doctor` using
 `tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
 transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
-output metadata, CI annotation contracts, structured profiling plans, and
-diff-folded flamegraph flow with fake backend executables.
+output metadata, ZLint diagnostics/SARIF/rules/fix preview normalization, CI
+annotation contracts, structured profiling plans, and diff-folded flamegraph flow with
+fake backend executables.
 
 Release notes must include a short validation evidence block. At minimum, record
 the source commit, clean-tree status, `zig build release-check`, `zig build dist

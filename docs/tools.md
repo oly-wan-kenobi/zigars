@@ -26,7 +26,7 @@ Public feature claims use this vocabulary:
 - Source-scan-backed: zigar scanned local files and reports source paths,
   ranking, skipped files, and provenance.
 - Heuristic/advisory: useful for orientation or prioritization, not proof.
-- External-backend-backed: zwanzig, zflame, diff-folded, or platform profilers
+- External-backend-backed: ZLint, zwanzig, zflame, diff-folded, or platform profilers
   own the backend semantics; zigar reports argv, probes, and artifact metadata.
 - Curated fallback: bundled partial data used when installed docs are missing.
 - Real conformance artifact: optional-backend compatibility claimed from a
@@ -237,13 +237,32 @@ carry the same metadata beside their human-readable body. Treat
 still needs reference checks before deletion, `zig_public_api_diff` has a public
 declaration line comparison basis with known blind spots, and `zig_test_select`
 returns recommendations unless a stronger dependency model validates them. Use
-`parser_backed` tools such as `zig_ast_decl_summary`, `zig_ast_imports`, and
-`zig_ast_tests` when syntactic precision matters. Parser-backed results expose
-`parse_status`, `partial_result`, `result_complete`, and `parse_error_count` so
-malformed source cannot look complete. Verify release decisions with Zig
-compiler, ZLS, CI, or optional zwanzig-backed tools. `zwanzig_backed` tools are
-optional zwanzig-backed static-analysis/lint integrations; zigar reports their
-tier and does not require zwanzig to be installed.
+`parser_backed` tools such as `zig_ast_decl_summary`, `zig_ast_imports`,
+`zig_ast_tests`, `zig_semantic_index_build`, `zig_semantic_query`, and
+`zig_semantic_decl` when syntactic precision matters. Parser-backed results
+expose `parse_status`, `partial_result`, `result_complete`, and
+`parse_error_count` so malformed source cannot look complete. The semantic
+index cache records declarations, imports, tests, source locations, cache hits,
+refreshes, and evidence sources; `zig_code_index_export` and `zig_scip_export`
+preview workspace-local JSON artifacts and write only with `apply=true`.
+`zig_semantic_refs` and `zig_semantic_callers` use ZLint `--print-ast` symbol
+references when the configured backend supports it, then fall back to bounded
+source scans with explicit limits.
+
+ZLint-backed tools are optional and separate from zwanzig. `zig_zlint` runs a
+configured ZLint-compatible executable and normalizes diagnostics into findings
+with rule, severity, location, fingerprint, and summary fields.
+`zig_zlint_sarif` converts those normalized findings to SARIF 2.1.0, and
+`zig_zlint_rules` normalizes rule metadata when the installed binary exposes a
+rule-catalog flag; otherwise it reports a capability fallback. `zig_zlint_fix`
+previews the exact ZLint `--fix` argv and runs it only with `apply=true`.
+`zig_lint_compare`, `zig_lint_gate`, `zig_lint_profile`, `zig_lint_fix_plan`,
+`zig_lint_baseline`, `zig_lint_suppressions`, and `zig_lint_trend` consume
+normalized findings for consensus, policy, fix planning, baselines,
+suppressions, and before/after reporting. Verify release decisions with Zig
+compiler, ZLS, CI, or optional ZLint/zwanzig-backed tools. `zlint_backed` and
+`zwanzig_backed` tools report their tier and do not require those binaries to
+be installed for default zigar operation.
 
 CI artifact tools use an explicit artifact contract. `zig_ci_annotations`
 reports `parser_confidence`, `parsing_basis`, limitations, parse summaries, and
@@ -300,8 +319,11 @@ High-signal discovery keywords include:
 - `doctor`, `health`, `workspace`, `PermissionDenied`
 - `compile error index`, `changed files`, `dependency inspector`
 - `build options`, `target matrix`, `test failure triage`, `symbol cache`
+- `semantic index`, `semantic query`, `references`, `callers`, `code index`,
+  `scip`
 - `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`
-- `zwanzig`, `lint`, `sarif`
+- `zlint`, `zwanzig`, `lint`, `lint compare`, `lint gate`, `lint baseline`,
+  `suppressions`, `trend`, `sarif`
 - `zflame`, `profile`, `profile plan`, `external capture`, `flamegraph`
 
 Source-mutating tools are preview-first and require `apply=true` to write:
@@ -310,13 +332,16 @@ Source-mutating tools are preview-first and require `apply=true` to write:
 - `zig_patch_preview`
 - `zig_rename`
 - `zig_code_action_apply`
+- `zig_zlint_fix`
 - `zigar_project_profile`
 
-Generated output tools such as `zig_flamegraph` and `zig_analysis_graphs` must
-write to explicit workspace-local output paths. `zig_profile_plan` is read-only
-and returns structured guidance for external profilers; zigar does not define
-capture semantics. `zig_flamegraph` requires an explicit zflame format and
-returns argv/backend/probe/compatibility metadata with the SVG path.
+Generated output tools such as `zig_code_index_export`, `zig_scip_export`,
+`zig_lint_baseline`, `zig_flamegraph`, and `zig_analysis_graphs` must write to
+explicit workspace-local output paths and preserve preview-first apply gates
+where advertised. `zig_profile_plan` is read-only and returns structured
+guidance for external profilers; zigar does not define capture semantics.
+`zig_flamegraph` requires an explicit zflame format and returns
+argv/backend/probe/compatibility metadata with the SVG path.
 `zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to
 `.zigar-cache/profile/diff-<n>.folded` unless an explicit workspace-local
 `intermediate` path is supplied.

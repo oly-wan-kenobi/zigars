@@ -3,6 +3,7 @@ const std = @import("std");
 pub const BackendId = enum {
     zig,
     zls,
+    zlint,
     zwanzig,
     zflame,
     diff_folded,
@@ -11,6 +12,7 @@ pub const BackendId = enum {
         return switch (self) {
             .zig => "zig",
             .zls => "zls",
+            .zlint => "zlint",
             .zwanzig => "zwanzig",
             .zflame => "zflame",
             .diff_folded => "diff-folded",
@@ -25,6 +27,7 @@ pub const BackendId = enum {
         return switch (self) {
             .zig => "--zig-path",
             .zls => "--zls-path",
+            .zlint => "--zlint-path",
             .zwanzig => "--zwanzig-path",
             .zflame => "--zflame-path",
             .diff_folded => "--diff-folded-path",
@@ -47,6 +50,7 @@ pub const BackendFailureKind = enum {
 pub const ArtifactBehavior = enum {
     none,
     reads_workspace_input,
+    writes_workspace_source,
     writes_workspace_directory,
     writes_workspace_svg,
     writes_workspace_folded_diff,
@@ -74,6 +78,7 @@ pub const supported_failure_kinds = [_]BackendFailureKind{
 
 pub const zig_probe_argv = [_][]const u8{ "zig", "version" };
 pub const zls_probe_argv = [_][]const u8{ "zls", "--version" };
+pub const zlint_probe_argv = [_][]const u8{ "zlint", "--help" };
 pub const zwanzig_probe_argv = [_][]const u8{ "zwanzig", "--help" };
 pub const zflame_probe_argv = [_][]const u8{ "zflame", "--help" };
 pub const diff_folded_probe_argv = [_][]const u8{ "diff-folded", "--help" };
@@ -82,6 +87,14 @@ pub const zwanzig_verify = [_][]const u8{
     "zwanzig --help",
     "zwanzig --format json src",
     "zwanzig --dump-cfg .zigar-cache/zwanzig-graphs src/main.zig",
+};
+pub const zlint_verify = [_][]const u8{
+    "zlint --help",
+    "zlint --format json src",
+    "zlint --print-ast src/main.zig",
+    "zig_zlint",
+    "zig_zlint_sarif",
+    "zig_zlint_fix apply=false",
 };
 pub const zflame_verify = [_][]const u8{
     "zflame --help",
@@ -165,6 +178,15 @@ pub const ZwanzigLintFormat = enum {
     }
 };
 
+pub const ZlintFormat = enum {
+    json,
+    sarif,
+
+    pub fn name(self: ZlintFormat) []const u8 {
+        return @tagName(self);
+    }
+};
+
 pub const ZwanzigGraphMode = enum {
     cfg,
     exploded_graph,
@@ -209,6 +231,34 @@ pub fn supportedZwanzigGraphModesText() []const u8 {
 }
 
 pub const capabilities = [_]CapabilityContract{
+    .{
+        .tool = "zig_zlint",
+        .backend = .zlint,
+        .argv_shape = "zlint --format json [--config <path>] [--rules <rules>] <workspace-path> [args...]",
+        .input_behavior = .reads_workspace_input,
+        .output_behavior = .none,
+    },
+    .{
+        .tool = "zig_zlint_sarif",
+        .backend = .zlint,
+        .argv_shape = "zlint --format json [--config <path>] [--rules <rules>] <workspace-path> [args...]; zigar converts normalized findings to SARIF",
+        .input_behavior = .reads_workspace_input,
+        .output_behavior = .none,
+    },
+    .{
+        .tool = "zig_zlint_rules",
+        .backend = .zlint,
+        .argv_shape = "zlint --help; when supported, zlint --rules --format json",
+        .input_behavior = .none,
+        .output_behavior = .none,
+    },
+    .{
+        .tool = "zig_zlint_fix",
+        .backend = .zlint,
+        .argv_shape = "zlint --format json (--fix|--fix-dangerously) [--config <path>] [--rules <rules>] <workspace-path> [args...]",
+        .input_behavior = .reads_workspace_input,
+        .output_behavior = .writes_workspace_source,
+    },
     .{
         .tool = "zig_lint",
         .backend = .zwanzig,
@@ -264,6 +314,7 @@ pub fn probeArgv(id: BackendId) []const []const u8 {
     return switch (id) {
         .zig => zig_probe_argv[0..],
         .zls => zls_probe_argv[0..],
+        .zlint => zlint_probe_argv[0..],
         .zwanzig => zwanzig_probe_argv[0..],
         .zflame => zflame_probe_argv[0..],
         .diff_folded => diff_folded_probe_argv[0..],
@@ -274,6 +325,7 @@ pub fn configuredPath(id: BackendId, config: anytype) []const u8 {
     return switch (id) {
         .zig => config.zig_path,
         .zls => config.zls_path,
+        .zlint => config.zlint_path,
         .zwanzig => config.zwanzig_path,
         .zflame => config.zflame_path,
         .diff_folded => config.diff_folded_path,

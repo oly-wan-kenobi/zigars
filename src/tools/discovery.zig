@@ -46,6 +46,7 @@ pub fn zigarBackendCatalog(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     const value = backend_catalog.value(allocator, .{
         .zig_path = a.config.zig_path,
         .zls_path = a.config.zls_path,
+        .zlint_path = a.config.zlint_path,
         .zwanzig_path = a.config.zwanzig_path,
         .zflame_path = a.config.zflame_path,
         .diff_folded_path = a.config.diff_folded_path,
@@ -69,6 +70,7 @@ pub fn zigarDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
         },
         .zig_path = a.config.zig_path,
         .zls_path = a.config.zls_path,
+        .zlint_path = a.config.zlint_path,
         .zwanzig_path = a.config.zwanzig_path,
         .zflame_path = a.config.zflame_path,
         .diff_folded_path = a.config.diff_folded_path,
@@ -81,6 +83,7 @@ pub fn zigarDoctor(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
         .http_available = true,
         .zig_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zig.name(), &.{ a.config.zig_path, "version" }, probe_timeout_ms) else null,
         .zls_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zls.name(), &.{ a.config.zls_path, "--version" }, probe_timeout_ms) else null,
+        .zlint_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zlint.name(), &.{ a.config.zlint_path, "--help" }, probe_timeout_ms) else null,
         .zwanzig_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zwanzig.name(), &.{ a.config.zwanzig_path, "--help" }, probe_timeout_ms) else null,
         .zflame_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.zflame.name(), &.{ a.config.zflame_path, "--help" }, probe_timeout_ms) else null,
         .diff_folded_probe = if (probe_backends) probeBackend(a, allocator, backend_contracts.BackendId.diff_folded.name(), &.{ a.config.diff_folded_path, "--help" }, probe_timeout_ms) else null,

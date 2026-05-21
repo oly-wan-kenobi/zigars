@@ -480,6 +480,7 @@ fn cachedProbeFor(a: *App, id: backend_contracts.BackendId) ?doctor.Probe {
     return switch (id) {
         .zig => a.backend_probe_cache.zig,
         .zls => a.backend_probe_cache.zls,
+        .zlint => a.backend_probe_cache.zlint,
         .zwanzig => a.backend_probe_cache.zwanzig,
         .zflame => a.backend_probe_cache.zflame,
         .diff_folded => a.backend_probe_cache.diff_folded,

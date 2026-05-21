@@ -46,6 +46,8 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
     defer allocator.free(tool_path);
     const fake_zwanzig = try installFakeBackend(allocator, io, workspace, tool_path, "fake-zwanzig");
     defer allocator.free(fake_zwanzig);
+    const fake_zlint = try installFakeBackend(allocator, io, workspace, tool_path, "fake-zlint");
+    defer allocator.free(fake_zlint);
     const fake_zflame = try installFakeBackend(allocator, io, workspace, tool_path, "fake-zflame");
     defer allocator.free(fake_zflame);
     const fake_diff = try installFakeBackend(allocator, io, workspace, tool_path, "fake-diff-folded");
@@ -62,6 +64,8 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
             options.zig_path,
             "--zls-path",
             "/definitely/missing/zls",
+            "--zlint-path",
+            fake_zlint,
             "--zwanzig-path",
             fake_zwanzig,
             "--zflame-path",
@@ -172,6 +176,8 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
+        try self.expectTool(tools, "zig_zlint");
+        try self.expectTool(tools, "zig_zlint_fix");
 
         const resources = try self.request("resources/list", null);
         defer self.allocator.free(resources);
@@ -283,6 +289,34 @@ const StdioClient = struct {
         const rules = try self.callTool("zig_lint_rules", "{}");
         defer self.allocator.free(rules);
         if (std.mem.indexOf(u8, rules, "--dump-cfg") == null) return error.AssertionFailed;
+
+        const zlint = try self.callTool("zig_zlint", "{\"path\":\"src\",\"rules\":\"fake-rule\"}");
+        defer self.allocator.free(zlint);
+        try self.expectPathString(zlint, "capability_tier", "zlint_backed");
+        try self.expectPathString(zlint, "findings.0.rule", "fake.zlint.rule");
+
+        const zlint_sarif = try self.callTool("zig_zlint_sarif", "{\"path\":\"src\"}");
+        defer self.allocator.free(zlint_sarif);
+        try self.expectPathString(zlint_sarif, "sarif.version", "2.1.0");
+
+        const zlint_rules = try self.callTool("zig_zlint_rules", "{}");
+        defer self.allocator.free(zlint_rules);
+        try self.expectPathString(zlint_rules, "rules.0.id", "fake.zlint.rule");
+
+        const zlint_fix_preview = try self.callTool("zig_zlint_fix", "{\"path\":\"src\",\"apply\":false}");
+        defer self.allocator.free(zlint_fix_preview);
+        try self.expectPathJson(zlint_fix_preview, "requires_apply", .{ .bool = true });
+        try self.expectPathString(zlint_fix_preview, "argv.3", "--fix");
+
+        const zlint_fix_apply = try self.callTool("zig_zlint_fix", "{\"path\":\"src\",\"apply\":true}");
+        defer self.allocator.free(zlint_fix_apply);
+        try self.expectPathJson(zlint_fix_apply, "applied", .{ .bool = true });
+        try self.expectPathJson(zlint_fix_apply, "summary.error_count", .{ .integer = 0 });
+
+        const semantic_refs = try self.callTool("zig_semantic_refs", "{\"symbol\":\"main\",\"limit\":5}");
+        defer self.allocator.free(semantic_refs);
+        try self.expectPathString(semantic_refs, "references.0.source", "zlint");
+        try self.expectPathJson(semantic_refs, "zlint_ast_files", .{ .integer = 1 });
 
         const graph = try self.callTool("zig_analysis_graphs", "{\"mode\":\"cfg\",\"path\":\"src/main.zig\",\"output\":\"graphs/cfg\"}");
         defer self.allocator.free(graph);

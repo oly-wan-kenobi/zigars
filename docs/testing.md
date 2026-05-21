@@ -51,16 +51,17 @@ gate cannot silently shrink.
 `zig build stdio-fixtures` starts zigar over stdio and uses a temporary
 workspace with Zig-backed fake optional backends. It checks newline-delimited
 JSON-RPC, formatter preview/apply behavior, zwanzig JSON/SARIF/rule/graph
-flows, CI annotation contracts, structured profiling plans, zflame SVG output
-metadata, and diff-folded flamegraph generation with intermediate metadata. The
-fake backends are intentionally strict about supported argv shapes so stale flags
-or option syntax fail before release. The fixture enforces the configured
-minimum `tools/call` count before it reports success.
+flows, ZLint diagnostics/SARIF/rules/fix preview normalization, CI annotation contracts,
+structured profiling plans, zflame SVG output metadata, and diff-folded
+flamegraph generation with intermediate metadata. The fake backends are
+intentionally strict about supported argv shapes so stale flags or option syntax
+fail before release. The fixture enforces the configured minimum `tools/call`
+count before it reports success.
 
 ## Real Backend Conformance
 
 Default CI does not require real optional backend binaries. Before claiming real
-ZLS, zwanzig, zflame, or diff-folded support in release notes, run:
+ZLS, ZLint, zwanzig, zflame, or diff-folded support in release notes, run:
 
 ```sh
 bash .github/scripts/backend-conformance.sh
@@ -70,17 +71,18 @@ The same check is available as the manual `Backend Conformance` GitHub Actions
 workflow. It starts zigar over stdio with real backend paths, probes them through
 `zigar_doctor`, runs one representative tool for each backend family, and
 verifies zflame/diff-folded SVG artifacts. Use `ZIGAR_ZLS_PATH`,
-`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` when
-the binaries are not on `PATH`. The check writes `report.json`, `summary.md`,
-`stdout.jsonl`, and `stderr.log` under `.zigar-cache/backend-conformance/` by
-default, and the workflow uploads those files as `zigar-backend-conformance`.
+`ZIGAR_ZLINT_PATH`, `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and
+`ZIGAR_DIFF_FOLDED_PATH` when the binaries are not on `PATH`. The check writes
+`report.json`, `summary.md`, `stdout.jsonl`, and `stderr.log` under
+`.zigar-cache/backend-conformance/` by default, and the workflow uploads those
+files as `zigar-backend-conformance`.
 
 `zig build backend-conformance-contract` is the local fake-backend companion
 check. It validates that the conformance script still writes the documented
 report files and that the release binary can exercise representative ZLS,
-zwanzig, zflame, and diff-folded tool paths. `zig build release-check` depends
-on this contract smoke; real backend certification still requires the manual
-script or workflow above.
+ZLint, zwanzig, zflame, and diff-folded tool paths. `zig build release-check`
+depends on this contract smoke; real backend certification still requires the
+manual script or workflow above.
 
 ## Coverage
 

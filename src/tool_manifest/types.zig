@@ -1,9 +1,7 @@
 const std = @import("std");
 const mcp = @import("mcp");
-
 const runtime_mod = @import("../runtime.zig");
 pub const tooling = @import("../tooling.zig");
-
 pub const ToolHandler = *const fn (*runtime_mod.App, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult;
 
 pub const ToolGroup = enum {
@@ -31,6 +29,7 @@ pub const StaticAnalysisTier = enum {
     parser_backed,
     compiler_backed,
     zls_backed,
+    zlint_backed,
     zwanzig_backed,
 };
 
@@ -122,6 +121,7 @@ pub fn schema(comptime fields: []const tooling.SchemaField) tooling.SchemaSpec {
 pub fn schemaWithHints(comptime fields: []const tooling.SchemaField, comptime field_hints: []const tooling.SchemaFieldHint) tooling.SchemaSpec {
     return tooling.schemaWithHints(fields, field_hints);
 }
+
 pub fn fieldHint(comptime field_name: []const u8, comptime hint: tooling.FieldHint) tooling.SchemaFieldHint {
     return .{ .field_name = field_name, .hint = hint };
 }

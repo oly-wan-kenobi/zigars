@@ -1,5 +1,7 @@
 const static_core = @import("static_core.zig");
 const static_tests = @import("static_tests.zig");
+const static_semantic = @import("static_semantic.zig");
+const lint_intelligence = @import("lint_intelligence.zig");
 
 test {
     _ = @import("static_ast_fixture_tests.zig");
@@ -83,3 +85,27 @@ pub const findDeclByKey = static_tests.findDeclByKey;
 pub const cachePathStatusValue = static_core.cachePathStatusValue;
 pub const countTopLevelEntries = static_core.countTopLevelEntries;
 pub const gitTracksPath = static_tests.gitTracksPath;
+pub const zigSemanticIndexBuild = static_semantic.zigSemanticIndexBuild;
+pub const zigSemanticIndexStatus = static_semantic.zigSemanticIndexStatus;
+pub const zigSemanticIndexRefresh = static_semantic.zigSemanticIndexRefresh;
+pub const zigSemanticQuery = static_semantic.zigSemanticQuery;
+pub const zigSemanticRefs = static_semantic.zigSemanticRefs;
+pub const zigSemanticDecl = static_semantic.zigSemanticDecl;
+pub const zigSemanticCallers = static_semantic.zigSemanticCallers;
+pub const zigStaticFusion = static_semantic.zigStaticFusion;
+pub const zigCodeIndexExport = static_semantic.zigCodeIndexExport;
+pub const zigScipExport = static_semantic.zigScipExport;
+pub const semanticIndexValue = static_semantic.semanticIndexValue;
+pub const zigZlint = lint_intelligence.zigZlint;
+pub const zigZlintSarif = lint_intelligence.zigZlintSarif;
+pub const zigZlintRules = lint_intelligence.zigZlintRules;
+pub const zigZlintFix = lint_intelligence.zigZlintFix;
+pub const zigLintCompare = lint_intelligence.zigLintCompare;
+pub const zigLintProfile = lint_intelligence.zigLintProfile;
+pub const zigLintGate = lint_intelligence.zigLintGate;
+pub const zigLintFixPlan = lint_intelligence.zigLintFixPlan;
+pub const zigLintBaseline = lint_intelligence.zigLintBaseline;
+pub const zigLintSuppressions = lint_intelligence.zigLintSuppressions;
+pub const zigLintTrend = lint_intelligence.zigLintTrend;
+pub const normalizeFindingsText = lint_intelligence.normalizeFindingsText;
+pub const lintCompareValue = lint_intelligence.lintCompareValue;

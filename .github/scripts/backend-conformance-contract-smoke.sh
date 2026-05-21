@@ -130,6 +130,31 @@ case "$2" in
 esac
 SH
 
+cat >"$tmpdir/zlint" <<'SH'
+#!/bin/sh
+if [ "$1" = "--help" ]; then echo "fake zlint help --format json --rules --print-ast --fix"; exit 0; fi
+if [ "$1" = "--print-ast" ]; then
+  echo '{"symbols":[{"name":"main","references":[{"flags":["call"]}]}]}'
+  exit 0
+fi
+if [ "$1" = "--rules" ] && [ "$2" = "--format" ] && [ "$3" = "json" ]; then
+  echo '{"rules":[{"id":"fake.zlint.rule","severity":"warning","description":"fake rule"}]}'
+  exit 0
+fi
+if [ "$1" = "--format" ] && [ "$2" = "json" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "--fix" ] || [ "$arg" = "--fix-dangerously" ]; then
+      echo '{"findings":[]}'
+      exit 0
+    fi
+  done
+  echo '{"findings":[{"rule":"fake.zlint.rule","severity":"warning","path":"src/main.zig","line":1,"column":15,"message":"fake ZLint finding"}]}'
+  exit 0
+fi
+echo "fake zlint expected --format json or --rules --format json" >&2
+exit 2
+SH
+
 cat >"$tmpdir/zflame" <<'SH'
 #!/bin/sh
 if [ "$1" = "--help" ]; then echo "fake zflame help"; exit 0; fi
@@ -149,16 +174,17 @@ esac
 printf 'root;diff 1\n' > "$out"
 SH
 
-chmod +x "$tmpdir/zls" "$tmpdir/zwanzig" "$tmpdir/zflame" "$tmpdir/diff-folded"
+chmod +x "$tmpdir/zls" "$tmpdir/zlint" "$tmpdir/zwanzig" "$tmpdir/zflame" "$tmpdir/diff-folded"
 
 report_dir="$tmpdir/report"
 ZIGAR_BINARY="$binary" \
 ZIGAR_ZLS_PATH="$tmpdir/zls" \
+ZIGAR_ZLINT_PATH="$tmpdir/zlint" \
 ZIGAR_ZWANZIG_PATH="$tmpdir/zwanzig" \
 ZIGAR_ZFLAME_PATH="$tmpdir/zflame" \
 ZIGAR_DIFF_FOLDED_PATH="$tmpdir/diff-folded" \
 ZIGAR_CONFORMANCE_REPORT_DIR="$report_dir" \
-ZIGAR_CLAIMED_BACKENDS="zls,zwanzig,zflame,diff_folded" \
+ZIGAR_CLAIMED_BACKENDS="zls,zlint,zwanzig,zflame,diff_folded" \
 ZIGAR_CONFORMANCE_TIMEOUT_SECONDS=20 \
 bash .github/scripts/backend-conformance.sh >/dev/null
 
@@ -178,17 +204,21 @@ if report.get("result") != "passed":
     sys.exit("conformance report did not pass")
 if not report.get("source_commit") or report.get("source", {}).get("commit") != report.get("source_commit"):
     sys.exit("missing source commit metadata")
-for backend in ("zigar", "zig", "zls", "zwanzig", "zflame", "diff_folded"):
+for backend in ("zigar", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded"):
     entry = report["backends"][backend]
     if len(entry.get("sha256", "")) != 64:
         sys.exit(f"missing sha256 for {backend}")
 matrix = {row["backend"]: row for row in report["compatibility_matrix"]}
-for backend in ("zls", "zwanzig", "zflame", "diff_folded"):
+for backend in ("zls", "zlint", "zwanzig", "zflame", "diff_folded"):
     if matrix[backend]["claim"] != "claimed" or matrix[backend]["status"] != "passed":
         sys.exit(f"claimed backend did not pass matrix coverage: {backend}")
 scenarios = {scenario["name"]: scenario for scenario in report["scenarios"]}
 required_scenarios = (
     "zls_document_symbols",
+    "zlint_diagnostics_json",
+    "zlint_sarif",
+    "zlint_rules",
+    "zlint_fix_preview",
     "zwanzig_lint_json",
     "zwanzig_lint_sarif",
     "zwanzig_lint_rules",

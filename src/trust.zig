@@ -184,6 +184,7 @@ fn backendIdentitiesValue(allocator: std.mem.Allocator, app: *runtime.App) !std.
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try backendIdentityValue(allocator, app.config.zig_path, app.backend_probe_cache.zig));
     try obj.put(allocator, "zls", try backendIdentityValue(allocator, app.config.zls_path, app.backend_probe_cache.zls));
+    try obj.put(allocator, "zlint", try backendIdentityValue(allocator, app.config.zlint_path, app.backend_probe_cache.zlint));
     try obj.put(allocator, "zwanzig", try backendIdentityValue(allocator, app.config.zwanzig_path, app.backend_probe_cache.zwanzig));
     try obj.put(allocator, "zflame", try backendIdentityValue(allocator, app.config.zflame_path, app.backend_probe_cache.zflame));
     try obj.put(allocator, "diff_folded", try backendIdentityValue(allocator, app.config.diff_folded_path, app.backend_probe_cache.diff_folded));

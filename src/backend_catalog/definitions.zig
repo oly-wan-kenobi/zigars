@@ -41,6 +41,18 @@ pub const backends = [_]Backend{
         .verify = &.{ "zls --version", "zigar_doctor {\"probe_backends\":true}" },
     },
     .{
+        .name = backend_contracts.BackendId.zlint.name(),
+        .optional = true,
+        .path_flag = backend_contracts.BackendId.zlint.pathFlag(),
+        .default_path = backend_contracts.BackendId.zlint.defaultPath(),
+        .purpose = "optional ZLint diagnostics, AST reference evidence, apply-gated fixes, rule catalog, and SARIF conversion backend",
+        .compatibility = "ZLint CLI that accepts --format json for diagnostics; --print-ast and --fix enable richer references and source fixes, while --rules is treated as optional when absent",
+        .install_strategy = "Pin a zlint executable in the project toolchain, dev shell, or CI image and pass --zlint-path; zigar does not install it automatically.",
+        .tools = &.{ "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix" },
+        .probe_argv = backend_contracts.zlint_probe_argv[0..],
+        .verify = backend_contracts.zlint_verify[0..],
+    },
+    .{
         .name = backend_contracts.BackendId.zwanzig.name(),
         .optional = true,
         .path_flag = backend_contracts.BackendId.zwanzig.pathFlag(),

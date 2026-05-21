@@ -80,8 +80,8 @@ optional backends should not block core Zig command tools.
 
 Call `zigar_backend_catalog` when a project needs to install or pin optional
 backends. It returns the path flags, configured paths, probe commands,
-compatibility rules, and related zigar tools for Zig, ZLS, zwanzig, zflame, and
-diff-folded.
+compatibility rules, and related zigar tools for Zig, ZLS, ZLint, zwanzig,
+zflame, and diff-folded.
 
 Example config files are available in `examples/codex-global.toml` and
 `examples/codex-pinned-workspace.toml`.

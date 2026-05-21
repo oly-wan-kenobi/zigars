@@ -309,7 +309,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tool_manifest/all_definitions.zig",
-        .max_lines = 190,
+        .max_lines = 210,
         .reason = "combined tool definition aliases should stay a compact ordered table over group bodies",
     },
     .{
@@ -404,7 +404,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/stdio_fixtures.zig",
-        .max_lines = 450,
+        .max_lines = 490,
         .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
     },
     .{
@@ -444,7 +444,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/fake_backends.zig",
-        .max_lines = 150,
+        .max_lines = 165,
         .reason = "fake backend fixtures should stay small and focused on conformance smoke behavior",
     },
     .{

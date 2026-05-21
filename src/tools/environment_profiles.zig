@@ -60,7 +60,7 @@ fn elicitationResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     }
 
     if (std.mem.eql(u8, default_topic, "backend") or std.mem.eql(u8, topic, "backend") or std.mem.eql(u8, default_topic, "setup")) {
-        try questions.append(try questionValue(allocator, "optional_backends", "Which optional backends should be claimed as supported for this project: zls, zwanzig, zflame, diff-folded, or none?", "zigar_backend_verify and zigar_backend_conformance"));
+        try questions.append(try questionValue(allocator, "optional_backends", "Which optional backends should be claimed as supported for this project: zls, zlint, zwanzig, zflame, diff-folded, or none?", "zigar_backend_verify and zigar_backend_conformance"));
         try questions.append(try questionValue(allocator, "backend_paths", "Are backend paths expected to come from PATH, a dev shell, CI image, or checked-in setup artifacts?", "zigar_backend_install_plan"));
     }
     if (std.mem.eql(u8, default_topic, "profile") or std.mem.eql(u8, topic, "toolchain") or std.mem.eql(u8, default_topic, "setup")) {
@@ -581,7 +581,8 @@ fn ciPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
 fn lintPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "formatter", .{ .string = "zig_format_check" });
-    try obj.put(allocator, "optional_backend", .{ .string = "zwanzig" });
+    try obj.put(allocator, "optional_backend", .{ .string = "zlint or zwanzig" });
+    try obj.put(allocator, "lint_tools", try stringArrayValue(allocator, &.{ "zig_zlint", "zig_zlint_fix", "zig_lint", "zig_lint_compare", "zig_lint_gate" }));
     try obj.put(allocator, "required", .{ .bool = false });
     return .{ .object = obj };
 }
@@ -598,6 +599,7 @@ fn profileBackendsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try profileBackendValue(allocator, "zig", false, a.config.zig_path));
     try obj.put(allocator, "zls", try profileBackendValue(allocator, "zls", true, a.config.zls_path));
+    try obj.put(allocator, "zlint", try profileBackendValue(allocator, "zlint", true, a.config.zlint_path));
     try obj.put(allocator, "zwanzig", try profileBackendValue(allocator, "zwanzig", true, a.config.zwanzig_path));
     try obj.put(allocator, "zflame", try profileBackendValue(allocator, "zflame", true, a.config.zflame_path));
     try obj.put(allocator, "diff_folded", try profileBackendValue(allocator, "diff-folded", true, a.config.diff_folded_path));
@@ -789,6 +791,7 @@ fn explicitPinValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value
     try obj.put(allocator, "workspace", .{ .string = a.workspace.root });
     try obj.put(allocator, "zig", try pinEntryValue(allocator, "zig", a.config.zig_path, argString(args, "zig_version")));
     try obj.put(allocator, "zls", try pinEntryValue(allocator, "zls", a.config.zls_path, argString(args, "zls_version")));
+    try obj.put(allocator, "zlint", try pinEntryValue(allocator, "zlint", a.config.zlint_path, argString(args, "zlint_version")));
     try obj.put(allocator, "zwanzig", try pinEntryValue(allocator, "zwanzig", a.config.zwanzig_path, argString(args, "zwanzig_version")));
     try obj.put(allocator, "zflame", try pinEntryValue(allocator, "zflame", a.config.zflame_path, argString(args, "zflame_version")));
     try obj.put(allocator, "diff_folded", try pinEntryValue(allocator, "diff-folded", a.config.diff_folded_path, argString(args, "diff_folded_version")));
@@ -840,6 +843,10 @@ fn conformanceScenariosValue(allocator: std.mem.Allocator, selected: []const u8)
     var scenarios = std.json.Array.init(allocator);
     const rows = [_]struct { backend: []const u8, scenario: []const u8, evidence: []const u8 }{
         .{ .backend = "zls", .scenario = "zls_document_symbols", .evidence = "MCP document symbol response and backend version/hash" },
+        .{ .backend = "zlint", .scenario = "zlint_diagnostics_json", .evidence = "normalized ZLint diagnostics" },
+        .{ .backend = "zlint", .scenario = "zlint_sarif_export", .evidence = "SARIF converted from normalized ZLint diagnostics" },
+        .{ .backend = "zlint", .scenario = "zlint_rule_catalog", .evidence = "ZLint rule metadata" },
+        .{ .backend = "zlint", .scenario = "zlint_fix_preview", .evidence = "apply-gated ZLint fix plan" },
         .{ .backend = "zwanzig", .scenario = "zwanzig_lint_json", .evidence = "JSON lint output" },
         .{ .backend = "zwanzig", .scenario = "zwanzig_lint_sarif", .evidence = "SARIF lint output" },
         .{ .backend = "zwanzig", .scenario = "zwanzig_analysis_graphs_cfg", .evidence = "DOT graph artifact" },
@@ -1201,6 +1208,7 @@ fn trimmedOutputValue(allocator: std.mem.Allocator, result: command.RunResult) !
 fn configuredBackendPath(a: *App, name: []const u8) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return a.config.zig_path;
     if (std.mem.eql(u8, name, "zls")) return a.config.zls_path;
+    if (std.mem.eql(u8, name, "zlint")) return a.config.zlint_path;
     if (std.mem.eql(u8, name, "zwanzig")) return a.config.zwanzig_path;
     if (std.mem.eql(u8, name, "zflame")) return a.config.zflame_path;
     return a.config.diff_folded_path;

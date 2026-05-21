@@ -6,6 +6,7 @@ pub const Backend = definitions.Backend;
 pub const Paths = struct {
     zig_path: []const u8 = "zig",
     zls_path: []const u8 = "zls",
+    zlint_path: []const u8 = "zlint",
     zwanzig_path: []const u8 = "zwanzig",
     zflame_path: []const u8 = "zflame",
     diff_folded_path: []const u8 = "diff-folded",
@@ -46,6 +47,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
 fn pathFor(name: []const u8, paths: Paths) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
+    if (std.mem.eql(u8, name, "zlint")) return paths.zlint_path;
     if (std.mem.eql(u8, name, "zwanzig")) return paths.zwanzig_path;
     if (std.mem.eql(u8, name, "zflame")) return paths.zflame_path;
     if (std.mem.eql(u8, name, "diff-folded")) return paths.diff_folded_path;
@@ -69,7 +71,7 @@ fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, 
 }
 
 test "backend catalog keeps every backend executable configurable and probeable" {
-    try std.testing.expectEqual(@as(usize, 5), backends.len);
+    try std.testing.expectEqual(@as(usize, 6), backends.len);
     for (backends) |backend| {
         try std.testing.expect(std.mem.startsWith(u8, backend.path_flag, "--"));
         try std.testing.expect(backend.default_path.len > 0);

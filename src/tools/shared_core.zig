@@ -266,6 +266,7 @@ pub fn probeBackend(a: *App, allocator: std.mem.Allocator, name: []const u8, arg
 pub fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
     if (std.mem.eql(u8, name, "zig")) return &a.backend_probe_cache.zig;
     if (std.mem.eql(u8, name, "zls")) return &a.backend_probe_cache.zls;
+    if (std.mem.eql(u8, name, "zlint")) return &a.backend_probe_cache.zlint;
     if (std.mem.eql(u8, name, "zwanzig")) return &a.backend_probe_cache.zwanzig;
     if (std.mem.eql(u8, name, "zflame")) return &a.backend_probe_cache.zflame;
     if (std.mem.eql(u8, name, "diff-folded")) return &a.backend_probe_cache.diff_folded;
@@ -297,6 +298,7 @@ pub fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeC
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try cachedProbeValue(allocator, cache.zig));
     try obj.put(allocator, "zls", try cachedProbeValue(allocator, cache.zls));
+    try obj.put(allocator, "zlint", try cachedProbeValue(allocator, cache.zlint));
     try obj.put(allocator, "zwanzig", try cachedProbeValue(allocator, cache.zwanzig));
     try obj.put(allocator, "zflame", try cachedProbeValue(allocator, cache.zflame));
     try obj.put(allocator, "diff_folded", try cachedProbeValue(allocator, cache.diff_folded));

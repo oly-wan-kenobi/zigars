@@ -3,7 +3,7 @@
 `zigar` is a deterministic MCP server for Zig development. It gives MCP-capable
 agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
 compiler commands, formatting, ZLS code intelligence, local docs lookup, static
-analysis summaries, zwanzig linting, and zflame profiling helpers.
+analysis summaries, ZLint/zwanzig linting, and zflame profiling helpers.
 
 `zigar` is intentionally not an AI code generator. It exposes tools that inspect,
 run, format, and analyze Zig projects. Any source write requires an explicit
@@ -22,15 +22,15 @@ Known limitations:
 
 - `mcp.zig` is consumed as a pinned URL dependency without local patches.
   `zig-pkg/` is a local cache/artifact directory and is ignored.
-- ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
+- ZLS, ZLint, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
   that need a missing backend return an explicit error, and public real-backend
   claims come from generated conformance evidence.
 - Docs lookup is scoped lookup over installed source, installed langref HTML, or
   curated fallback data. It is not a complete rendered documentation browser.
 - Static-analysis and agent-workflow tools expose confidence, limitations, and
   verification fields. Heuristic/advisory outputs are routing aids; release
-  decisions still need parser-backed, command-backed, ZLS, zwanzig, or CI
-  evidence.
+  decisions still need parser-backed, command-backed, ZLS, optional linter
+  backend, or CI evidence.
 - `zig_junit` reports command-level JUnit because Zig does not expose a stable
   per-test event stream for every invocation.
 - Profiling tools render and describe captured data, including artifact hashes;
@@ -41,6 +41,9 @@ Known limitations:
 - Zig `0.16.0`
 - An MCP client that supports stdio servers
 - Optional: `zls` `0.16.0` for language-server-backed tools
+- Optional: `zlint` for ZLint-backed diagnostics, AST reference evidence,
+  apply-gated fixes, rules when exposed by the installed binary, and SARIF
+  conversion
 - Optional: `zwanzig` for linting/static-analysis backend tools
 - Optional: `zflame` and `diff-folded` for flamegraphs and flamegraph diffs
 
@@ -144,6 +147,7 @@ Options:
 --workspace <path>
 --zig-path <path>
 --zls-path <path>
+--zlint-path <path>
 --zwanzig-path <path>
 --zflame-path <path>
 --diff-folded-path <path>
@@ -254,13 +258,21 @@ optional-backend support is claimed only from a release evidence artifact.
   `zig_test_map`, `zig_test_select`, `zig_public_api_diff`,
   `zig_changed_files_plan`, `zig_dependency_inspect`,
   `zig_target_matrix_plan`, `zig_test_failure_triage`,
-  `zig_workspace_symbol_cache`, `zig_package_cache_doctor`
+  `zig_workspace_symbol_cache`, `zig_package_cache_doctor`,
+  `zig_semantic_index_build`, `zig_semantic_index_status`,
+  `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`,
+  `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`,
+  `zig_code_index_export`, `zig_scip_export`
   (results carry capability tiers, confidence, limitations, and verification
   guidance; fast heuristic tools are `advisory_orientation`, AST variants are
-  `parser_backed`)
+  `parser_backed`; semantic index exports are preview-first workspace artifacts)
 - CI/test artifacts: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
   (annotations expose parser confidence and raw output; JUnit is explicitly
   command-level; matrix entries expose direct status fields)
+- ZLint: `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`
+  (`zlint_backed`, optional), plus normalized lint intelligence tools
+  `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`,
+  `zig_lint_baseline`, `zig_lint_suppressions`, and `zig_lint_trend`
 - zwanzig: `zig_lint`, `zig_lint_sarif`, `zig_lint_rules`,
   `zig_analysis_graphs` (`zwanzig_backed`, optional)
 - Profiling/zflame: `zig_profile_plan` returns structured external-capture
@@ -343,8 +355,8 @@ More detail:
   and keyword metadata for every registered tool.
 - [Architecture notes](docs/architecture.md): module boundaries, manifest rules,
   and handler contracts.
-- [Optional backends](docs/backends.md): ZLS, zwanzig, zflame, and diff-folded
-  setup.
+- [Optional backends](docs/backends.md): ZLS, ZLint, zwanzig, zflame, and
+  diff-folded setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
 - [Feature maturity](docs/maturity.md): public-readiness rubric,
@@ -399,14 +411,15 @@ with degraded advisory output when the ZLS session is unavailable. An
 `zls_unsupported_capability` result means ZLS did initialize, but its
 advertised capabilities omitted the requested LSP method.
 
-For install paths, wrapper-script configuration, and zwanzig/zflame/diff-folded
-checks, see [docs/backends.md](docs/backends.md).
+For install paths, wrapper-script configuration, and ZLint, zwanzig, zflame,
+and diff-folded checks, see [docs/backends.md](docs/backends.md).
 
 Run `zigar_doctor` for a compact health report that includes workspace,
 dependency, transport, timeout, ZLS status, and optional backend paths. Pass
-`probe_backends=true` to execute short backend probes for Zig, ZLS, zwanzig,
-zflame, and diff-folded. Probe results are cached in the server process and are
-also visible through `zigar_workspace_info` and `zigar_metrics`.
+`probe_backends=true` to execute short backend probes for Zig, ZLS, ZLint,
+zwanzig, zflame, and diff-folded. Probe results are cached in the server
+process and are also visible through `zigar_workspace_info` and
+`zigar_metrics`.
 
 ## Development
 

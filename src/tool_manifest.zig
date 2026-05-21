@@ -233,6 +233,7 @@ test "static analysis product tools expose capability tiers" {
         }
     }
     try std.testing.expectEqual(StaticAnalysisTier.parser_backed, staticAnalysisTierFor(.zig_ast_decl_summary).?);
+    try std.testing.expectEqual(StaticAnalysisTier.zlint_backed, staticAnalysisTierFor(.zig_zlint).?);
     try std.testing.expectEqual(StaticAnalysisTier.zwanzig_backed, staticAnalysisTierFor(.zig_lint).?);
 }
 

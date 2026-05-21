@@ -1,9 +1,9 @@
 # Optional Backends
 
 zigar starts and serves core Zig tools with only a `zig` executable. ZLS,
-zwanzig, zflame, and diff-folded are optional local executables. Tools that need
-one of them return structured `backend_error` or `tool_error` payloads when the
-configured binary is missing, not a generic MCP failure.
+ZLint, zwanzig, zflame, and diff-folded are optional local executables. Tools
+that need one of them return structured `backend_error` or `tool_error`
+payloads when the configured binary is missing, not a generic MCP failure.
 
 ## Compatibility Rules
 
@@ -11,9 +11,9 @@ configured binary is missing, not a generic MCP failure.
   build and CI gates currently use Zig `0.16.0`.
 - Keep ZLS on the same Zig release line as `zig`. A mismatched ZLS can start but
   fail later on syntax, builtin, or standard-library changes.
-- Treat zwanzig, zflame, diff-folded, and platform profilers as workspace-local
-  tooling dependencies. Pin them in the project's package manager, dev shell, or
-  CI image when reproducibility matters.
+- Treat ZLint, zwanzig, zflame, diff-folded, and platform profilers as
+  workspace-local tooling dependencies. Pin them in the project's package
+  manager, dev shell, or CI image when reproducibility matters.
 - Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
 
 ## Version Pinning And Optional CI
@@ -21,9 +21,9 @@ configured binary is missing, not a generic MCP failure.
 Default CI uses fake backend fixtures so zigar can verify command shapes,
 structured errors, SARIF/XML/SVG contracts, and artifact metadata without
 requiring every optional executable on every runner. Projects that depend on
-real ZLS, zwanzig, zflame, diff-folded, or platform-profiler behavior should add
-their own backend matrix and pin exact backend versions in the dev shell or CI
-image.
+real ZLS, ZLint, zwanzig, zflame, diff-folded, or platform-profiler behavior
+should add their own backend matrix and pin exact backend versions in the dev
+shell or CI image.
 
 Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
@@ -33,7 +33,7 @@ There are two supported ways to provide optional backend paths:
 
 - User-provided paths: install backends through your project package manager,
   dev shell, CI image, or local source checkout, then pass absolute paths with
-  `--zls-path`, `--zwanzig-path`, `--zflame-path`, and
+  `--zls-path`, `--zlint-path`, `--zwanzig-path`, `--zflame-path`, and
   `--diff-folded-path`.
 - Repo-pinned release validation: maintainers can run the pinned setup script
   in this repository to provision the optional release-validation backends under
@@ -61,10 +61,11 @@ bash .github/scripts/setup-real-backends.sh
 The script writes `env.sh`, `checksums.sha256`, and a copy of
 `real_backend_pins.json` under `.zigar-cache/real-backends/`. `env.sh` exports
 `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` for the
-manual release-readiness flow. Zig and ZLS remain explicit toolchain inputs:
-set `ZIGAR_ZIG_PATH` and `ZIGAR_ZLS_PATH` to the binaries being validated.
-Normal CI must remain optional-backend-free unless a workflow intentionally
-opts into this setup.
+manual release-readiness flow. Zig, ZLS, and ZLint remain explicit toolchain
+inputs: set `ZIGAR_ZIG_PATH`, `ZIGAR_ZLS_PATH`, and `ZIGAR_ZLINT_PATH` to the
+binaries being validated when the release intends to claim them. Normal CI must
+remain optional-backend-free unless a workflow intentionally opts into this
+setup.
 
 The preferred public-release path is the manual `Release Readiness` workflow.
 It runs the normal release gate, release-asset smoke, real backend conformance,
@@ -82,16 +83,17 @@ bash .github/scripts/backend-conformance.sh
 ```
 
 The script builds `zig-out/bin/zigar` when needed, starts zigar over stdio with
-real ZLS, zwanzig, zflame, and diff-folded paths, runs `zigar_doctor` with
-backend probes, exercises `zig_document_symbols`, `zig_lint_rules`,
-`zig_flamegraph`, and `zig_flamegraph_diff`, and verifies the generated SVG
-artifacts. Configure non-default paths with `ZIGAR_ZLS_PATH`,
-`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH`.
-It writes release-citable evidence to `.zigar-cache/backend-conformance/` by
-default: `report.json`, `summary.md`, `stdout.jsonl`, and `stderr.log`. The
-manual workflow uploads the same files as the `zigar-backend-conformance`
-artifact. Set `ZIGAR_CONFORMANCE_REPORT_DIR` to choose a different output
-directory.
+real ZLS, ZLint, zwanzig, zflame, and diff-folded paths, runs `zigar_doctor`
+with backend probes, exercises `zig_document_symbols`, `zig_zlint_rules`,
+`zig_zlint_fix` preview, `zig_lint_rules`, `zig_flamegraph`, and
+`zig_flamegraph_diff`, and verifies the generated SVG artifacts. Configure
+non-default paths with `ZIGAR_ZLS_PATH`,
+`ZIGAR_ZLINT_PATH`, `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and
+`ZIGAR_DIFF_FOLDED_PATH`. It writes release-citable evidence to
+`.zigar-cache/backend-conformance/` by default: `report.json`, `summary.md`,
+`stdout.jsonl`, and `stderr.log`. The manual workflow uploads the same files as
+the `zigar-backend-conformance` artifact. Set `ZIGAR_CONFORMANCE_REPORT_DIR` to
+choose a different output directory.
 
 Run the manual `ZLS Conformance` workflow when only the ZLS-backed tool surface
 needs a fresh release artifact. It starts zigar with a real ZLS binary and
@@ -131,6 +133,7 @@ zigar \
   --workspace /path/to/project \
   --zig-path "$(command -v zig)" \
   --zls-path "$(command -v zls)" \
+  --zlint-path "$(command -v zlint)" \
   --zwanzig-path "$(command -v zwanzig)" \
   --zflame-path "$(command -v zflame)" \
   --diff-folded-path "$(command -v diff-folded)"
@@ -164,6 +167,7 @@ Direct shell checks are also useful:
 ```sh
 zig version
 zls --version
+zlint --help
 zwanzig --help
 printf 'main 1\n' > /tmp/zigar.folded
 zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
@@ -228,6 +232,51 @@ degraded advisory output when the ZLS session is unavailable.
 `zls_unsupported_capability` is reserved for an initialized ZLS session whose
 advertised capabilities omit the requested LSP method. Treat it as a ZLS
 version/configuration mismatch rather than a missing executable.
+
+## ZLint
+
+ZLint-compatible executables power `zig_zlint`, `zig_zlint_sarif`,
+`zig_zlint_rules`, `zig_zlint_fix`, and the ZLint-confirmed evidence path used
+by `zig_semantic_refs` and `zig_semantic_callers`. Configure the executable with
+`--zlint-path`. The diagnostics tools run this command shape:
+
+```text
+zlint --format json [--config <path>] [--rules <rules>] <path> [extra args]
+```
+
+`zig_zlint` accepts backend JSON shaped as a `findings`, `diagnostics`, or
+`results` array and normalizes each entry into rule, severity, message,
+workspace path, line, column, comparison key, and fingerprint fields.
+`zig_zlint_sarif` converts the normalized findings to SARIF 2.1.0.
+`zig_semantic_refs` and `zig_semantic_callers` use this command shape for
+backend-confirmed symbol references when available:
+
+```text
+zlint --print-ast <file>
+```
+
+`zig_zlint_fix` previews the exact argv and only applies source changes when
+`apply=true`:
+
+```text
+zlint --format json (--fix|--fix-dangerously) [--config <path>] [--rules <rules>] <path> [extra args]
+```
+
+`zig_zlint_rules` uses rule metadata from this command when the configured
+binary exposes it:
+
+```text
+zlint --rules --format json
+```
+
+If the configured binary does not expose a rule-catalog flag, `zig_zlint_rules`
+returns an empty rule list with capability metadata rather than failing the MCP
+call. If diagnostics or fix output use an incompatible JSON dialect, zigar
+returns a structured backend-output error with stdout/stderr previews instead
+of treating the tool call as a generic MCP failure. Use `zig_lint_compare` to
+compare normalized ZLint findings with normalized zwanzig findings, and use
+`zig_lint_gate`, `zig_lint_baseline`, `zig_lint_suppressions`, and
+`zig_lint_trend` for policy and adoption workflows over normalized findings.
 
 ## zwanzig
 

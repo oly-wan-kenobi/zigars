@@ -30,7 +30,7 @@ Keywords: `zig`, `build`, `test`, `check`, `ast-check`, `compiler diagnostics`, 
 
 Tools: `zig_format`, `zig_format_check`, `zig_patch_preview`, `zig_rename`, `zig_code_actions`, `zig_code_action_apply`
 
-Keywords: `fmt`, `formatter`, `formatting`, `zig fmt`, `patch preview`, `unified diff`, `rename`, `code action`, `apply=true`
+Keywords: `fmt`, `formatter`, `formatting`, `zig fmt`, `patch preview`, `unified diff`, `rename`, `code action`, `apply=true`, `zlint fix`
 
 ### zls
 
@@ -46,9 +46,9 @@ Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`
 
 ### static_analysis
 
-Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`
+Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`
 
-Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `imports`, `declarations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test map`, `test select`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`
+Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `declarations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test map`, `test select`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
 
 ### ci_artifacts
 
@@ -129,7 +129,8 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - inspect build dependencies: prefer `zig_dependency_inspect`
 - find symbol information: prefer `zig_hover, zig_definition, zig_references, zig_document_symbols`
 - search Zig docs: prefer `zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json`
-- lint Zig code: prefer `zig_lint`
+- query parser-backed Zig symbols: prefer `zig_semantic_query, zig_semantic_decl, zig_semantic_refs, zig_semantic_callers`
+- lint Zig code: prefer `zig_zlint, zig_zlint_fix, zig_lint, zig_lint_compare`
 - plan profiling capture: prefer `zig_profile_plan`
 - make a flamegraph: prefer `zig_flamegraph`
 - inspect generated evidence artifacts: prefer `zigar_artifact_index, zigar_artifact_read`
@@ -155,6 +156,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_ci_annotations`: required `file: string`; optional `timeout_ms: integer`
 - `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`, `apply: boolean`
 - `zig_code_actions`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`; optional `content: string`
+- `zig_code_index_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
 - `zig_compile_error_index`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_completion`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
@@ -184,7 +186,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_lang_ref_search`: required `query: string`; optional `limit: integer`
 - `zig_lang_ref_search_json`: required `query: string`; optional `limit: integer`
 - `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
+- `zig_lint_baseline`: required `findings: string`; optional `baseline: string`, `output: string`, `apply: boolean`
+- `zig_lint_compare`: optional `zlint_findings: string`, `zwanzig_findings: string`
+- `zig_lint_fix_plan`: required `findings: string`
+- `zig_lint_gate`: required `findings: string`; optional `profile: string`, `max_warnings: integer`, `allow_warnings: boolean`
+- `zig_lint_profile`: optional `profile: string`
 - `zig_lint_sarif`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
+- `zig_lint_suppressions`: required `findings: string`; optional `suppressions: string`
+- `zig_lint_trend`: required `before: string`, `after: string`
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
 - `zig_package_cache_doctor`: optional `timeout_ms: integer`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
@@ -194,7 +203,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_public_api_diff`: optional `file: string`, `before: string`, `after: string`, `baseline_ref: string`
 - `zig_references`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`, `include_declaration: boolean`
 - `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`, `apply: boolean`
+- `zig_scip_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
+- `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`
+- `zig_semantic_decl`: required `symbol: string`; optional `limit: integer`, `refresh: boolean`
+- `zig_semantic_index_build`: optional `refresh: boolean`, `limit: integer`
+- `zig_semantic_index_refresh`: optional `limit: integer`
+- `zig_semantic_query`: required `query: string`; optional `kind: string`, `limit: integer`, `refresh: boolean`
+- `zig_semantic_refs`: required `symbol: string`; optional `limit: integer`
 - `zig_signature_help`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_static_fusion`: required `query: string`; optional `zlint_findings: string`, `zwanzig_findings: string`, `limit: integer`
 - `zig_std_item`: required `name: string`; optional `limit: integer`
 - `zig_std_item_json`: required `name: string`; optional `limit: integer`
 - `zig_std_search`: required `query: string`; optional `limit: integer`
@@ -206,12 +223,16 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_test_map`: optional `limit: integer`
 - `zig_test_select`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zig_tool_plan`: required `tool: string`; optional `file: string`, `path: string`, `input: string`, `output: string`, `command: string`, `args: string`, `timeout_ms: integer`
-- `zig_toolchain_pin`: optional `apply: boolean`, `output: string`, `zig_version: string`, `zls_version: string`, `zwanzig_version: string`, `zflame_version: string`, `diff_folded_version: string`
+- `zig_toolchain_pin`: optional `apply: boolean`, `output: string`, `zig_version: string`, `zls_version: string`, `zlint_version: string`, `zwanzig_version: string`, `zflame_version: string`, `diff_folded_version: string`
 - `zig_toolchain_pin_check`: optional `input: string`, `probe_backends: boolean`, `timeout_ms: integer`
 - `zig_toolchain_resolve`: optional `probe_managers: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
+- `zig_zlint`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
+- `zig_zlint_fix`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `dangerous: boolean`, `apply: boolean`, `timeout_ms: integer`
+- `zig_zlint_rules`: optional `timeout_ms: integer`
+- `zig_zlint_sarif`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
 - `zig_zls_match_check`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
 - `zigar_agent_guide_v2`: optional `client: string`, `task: string`
@@ -290,6 +311,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
 - `zig_code_action_apply`: `apply_gated_mutation` preview/apply mutation
 - `zig_code_actions`: `zls_request` `textDocument/codeAction`
+- `zig_code_index_export`: `workspace_artifact` explicit workspace artifact
 - `zig_command_plan`: `pure_analysis` read-only analysis
 - `zig_compile_error_index`: `dynamic_command` runtime-dependent backend plan
 - `zig_completion`: `zls_request` `textDocument/completion`
@@ -322,8 +344,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_lang_ref_search`: `pure_analysis` read-only analysis
 - `zig_lang_ref_search_json`: `pure_analysis` read-only analysis
 - `zig_lint`: `dynamic_command` runtime-dependent backend plan
+- `zig_lint_baseline`: `workspace_artifact` explicit workspace artifact
+- `zig_lint_compare`: `pure_analysis` read-only analysis
+- `zig_lint_fix_plan`: `pure_analysis` read-only analysis
+- `zig_lint_gate`: `pure_analysis` read-only analysis
+- `zig_lint_profile`: `pure_analysis` read-only analysis
 - `zig_lint_rules`: `dynamic_command` runtime-dependent backend plan
 - `zig_lint_sarif`: `dynamic_command` runtime-dependent backend plan
+- `zig_lint_suppressions`: `pure_analysis` read-only analysis
+- `zig_lint_trend`: `pure_analysis` read-only analysis
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
 - `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
@@ -333,7 +362,16 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_public_api_diff`: `dynamic_command` runtime-dependent backend plan
 - `zig_references`: `zls_request` `textDocument/references`
 - `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_scip_export`: `workspace_artifact` explicit workspace artifact
+- `zig_semantic_callers`: `pure_analysis` read-only analysis
+- `zig_semantic_decl`: `pure_analysis` read-only analysis
+- `zig_semantic_index_build`: `pure_analysis` read-only analysis
+- `zig_semantic_index_refresh`: `pure_analysis` read-only analysis
+- `zig_semantic_index_status`: `pure_analysis` read-only analysis
+- `zig_semantic_query`: `pure_analysis` read-only analysis
+- `zig_semantic_refs`: `pure_analysis` read-only analysis
 - `zig_signature_help`: `zls_request` `textDocument/signatureHelp`
+- `zig_static_fusion`: `pure_analysis` read-only analysis
 - `zig_std_item`: `pure_analysis` read-only analysis
 - `zig_std_item_json`: `pure_analysis` read-only analysis
 - `zig_std_search`: `pure_analysis` read-only analysis
@@ -353,6 +391,10 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
+- `zig_zlint`: `dynamic_command` runtime-dependent backend plan
+- `zig_zlint_fix`: `apply_gated_mutation` preview/apply mutation
+- `zig_zlint_rules`: `dynamic_command` runtime-dependent backend plan
+- `zig_zlint_sarif`: `dynamic_command` runtime-dependent backend plan
 - `zig_zls_match_check`: `dynamic_command` runtime-dependent backend plan
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
 - `zigar_agent_guide_v2`: `pure_analysis` read-only analysis
@@ -433,6 +475,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_build_options`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_option_scan`; cross-check `zig build --help`
 - `zig_build_targets`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_file_scan`; cross-check `zig build --help`
 - `zig_changed_files_plan`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `git_status_command_planner`; cross-check `zig build test`
+- `zig_code_index_export`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_code_index_export`; cross-check `zig ast-check`
 - `zig_dead_decl_candidates`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_private_decl_scan`; cross-check `ZLS references`
 - `zig_decl_summary`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_declaration_scan`; cross-check `zig_ast_decl_summary`
 - `zig_decl_summary_json`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_declaration_scan`; cross-check `zig_ast_decl_summary`
@@ -443,16 +486,36 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_import_graph_json`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_import_scan`; cross-check `zig_ast_imports`
 - `zig_import_resolve`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_import_resolution`; cross-check `zig build test`
 - `zig_lint`: tier `zwanzig_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zwanzig_lint_json`; cross-check `configured zwanzig --help`
+- `zig_lint_baseline`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_baseline_comparison`; cross-check `zig_lint_gate`
+- `zig_lint_compare`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `dual_linter_consensus_comparison`; cross-check `zig_zlint`
+- `zig_lint_fix_plan`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `lint_fix_planning`; cross-check `code review`
+- `zig_lint_gate`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_findings_policy_gate`; cross-check `configured linters`
+- `zig_lint_profile`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `lint_gate_profile_policy`; cross-check `zig_lint_gate`
 - `zig_lint_rules`: tier `zwanzig_backed`, confidence `medium`, class `advisory`, kind `optional_zwanzig_rule_catalog`; cross-check `configured zwanzig --help`
 - `zig_lint_sarif`: tier `zwanzig_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zwanzig_lint_sarif`; cross-check `configured zwanzig --help`
+- `zig_lint_suppressions`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_suppression_filter`; cross-check `code review`
+- `zig_lint_trend`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_trend_comparison`; cross-check `configured linters`
 - `zig_package_cache_doctor`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `package_cache_hygiene_scan`; cross-check `git status`
 - `zig_public_api`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_public_decl_scan`; cross-check `zig_ast_decl_summary`
 - `zig_public_api_diff`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_public_decl_diff`; cross-check `zig_ast_decl_summary`
+- `zig_scip_export`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_scip_like_export`; cross-check `zig ast-check`
+- `zig_semantic_callers`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `zlint_confirmed_call_site_scan`; cross-check `ZLS references`
+- `zig_semantic_decl`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_declaration_lookup`; cross-check `zig ast-check`
+- `zig_semantic_index_build`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_workspace_index`; cross-check `zig ast-check`
+- `zig_semantic_index_refresh`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_workspace_index`; cross-check `zig ast-check`
+- `zig_semantic_index_status`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `semantic_index_cache_status`; cross-check `zig_semantic_index_refresh`
+- `zig_semantic_query`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_index_query`; cross-check `zig ast-check`
+- `zig_semantic_refs`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `zlint_confirmed_reference_scan`; cross-check `ZLS references`
+- `zig_static_fusion`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `multi_source_static_confidence_fusion`; cross-check `zig build test`
 - `zig_target_matrix_plan`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_target_matrix_plan`; cross-check `zig_matrix_check`
 - `zig_test_discover`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_test_scan`; cross-check `zig_ast_tests`
 - `zig_test_failure_triage`: tier `compiler_backed`, confidence `medium`, class `advisory`, kind `compiler_output_triage`; cross-check `rerun failing command`
 - `zig_test_map`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_test_declaration_scan`; cross-check `zig_ast_tests`
 - `zig_test_select`: tier `advisory_orientation`, confidence `low`, class `advisory`, kind `heuristic_test_impact_selection`; cross-check `zig build test`
 - `zig_workspace_symbol_cache`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `cached_heuristic_symbol_import_scan`; cross-check `ZLS workspace symbols`
+- `zig_zlint`: tier `zlint_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zlint_diagnostics`; cross-check `configured ZLint --help`
+- `zig_zlint_fix`: tier `zlint_backed`, confidence `medium`, class `advisory`, kind `optional_zlint_apply_gated_fix`; cross-check `configured ZLint --help`
+- `zig_zlint_rules`: tier `zlint_backed`, confidence `medium`, class `advisory`, kind `optional_zlint_rule_catalog`; cross-check `configured ZLint --help`
+- `zig_zlint_sarif`: tier `zlint_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zlint_sarif_export`; cross-check `configured ZLint --help`
 
 tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords.

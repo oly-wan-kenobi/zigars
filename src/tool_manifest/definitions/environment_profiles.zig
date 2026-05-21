@@ -153,7 +153,7 @@ pub const zig_zls_match_check = tool(.{
 
 pub const zig_toolchain_pin = tool(.{
     .description = "Preview or apply a deterministic .zigar/toolchain.json pin file for Zig, ZLS, and optional backend versions.",
-    .input_schema = schema(&.{ .{ "apply", "boolean", false }, .{ "output", "string", false }, .{ "zig_version", "string", false }, .{ "zls_version", "string", false }, .{ "zwanzig_version", "string", false }, .{ "zflame_version", "string", false }, .{ "diff_folded_version", "string", false } }),
+    .input_schema = schema(&.{ .{ "apply", "boolean", false }, .{ "output", "string", false }, .{ "zig_version", "string", false }, .{ "zls_version", "string", false }, .{ "zlint_version", "string", false }, .{ "zwanzig_version", "string", false }, .{ "zflame_version", "string", false }, .{ "diff_folded_version", "string", false } }),
     .read_only = false,
     .group = .environment_profiles,
     .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
