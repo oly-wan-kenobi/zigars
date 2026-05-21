@@ -253,6 +253,34 @@ diff using manifest descriptions, keywords, risk, and confidence metadata.
 `zigar_tool_sequence_plan` returns an ordered tool sequence with execution-risk
 markers and stop conditions. Both are read-only routing aids.
 
+## Transactional Editing And Refactors
+
+Patch-session tools provide preview-first multi-file editing with explicit
+preimage evidence. `zigar_patch_session_create` records current file identities
+and generated/vendor policy for the requested paths. `zigar_patch_session_preview`
+returns per-file diffs plus `expected_preimages`; `zigar_patch_session_apply`
+writes only with `apply=true`, matching expected preimages, and editable source
+paths. Applied sessions write rollback preimages under
+`.zigar-cache/patch-sessions/` and append a bounded JSONL history record.
+`zigar_patch_session_revert` restores only files whose current hash still matches
+the recorded session output, and `zigar_patch_session_validate` delegates to the
+validation workflow with session or edit-derived changed files.
+
+Generated and vendor policy tools make non-source paths explicit.
+`zig_generated_file_trace` classifies one path, `zigar_edit_policy_check`
+checks files or patch text before broad edits, and `zigar_generated_route`
+returns likely source inputs and regeneration commands. These tools are routing
+aids; they do not expand workspace path access or edit generated output.
+
+Refactor helpers are intentionally conservative and diff-first.
+`zig_organize_imports` sorts and deduplicates top-level `@import` declarations,
+`zig_update_imports` performs exact `@import("...")` path replacements,
+`zig_move_decl` moves a heuristic top-level declaration between files, and
+`zig_extract_decl` extracts an explicit line range to another file. Each writes
+only with `apply=true` and returns limitations plus validation guidance.
+`zig_code_action_batch` reports ZLS unavailability or unsupported transaction
+state rather than guessing when safe batch code actions are not available.
+
 ## Release Drift Tools
 
 `zigar_docs_drift_check`, `zigar_release_claim_check`, and
@@ -363,6 +391,9 @@ High-signal discovery keywords include:
 - `build options`, `target matrix`, `test failure triage`, `symbol cache`
 - `semantic index`, `semantic query`, `references`, `callers`, `code index`,
   `scip`, `semantic impact`, `semantic test select`
+- `patch session`, `transactional edit`, `rollback`, `preimage`,
+  `generated route`, `vendor`, `refactor`, `move declaration`,
+  `extract declaration`, `update imports`, `organize imports`
 - `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`
 - `zlint`, `zwanzig`, `lint`, `lint compare`, `lint gate`, `lint baseline`,
   `suppressions`, `trend`, `sarif`
@@ -372,6 +403,13 @@ Source-mutating tools are preview-first and require `apply=true` to write:
 
 - `zig_format`
 - `zig_patch_preview`
+- `zigar_patch_session_apply`
+- `zigar_patch_session_revert`
+- `zig_move_decl`
+- `zig_extract_decl`
+- `zig_update_imports`
+- `zig_organize_imports`
+- `zig_code_action_batch`
 - `zig_rename`
 - `zig_code_action_apply`
 - `zig_zlint_fix`

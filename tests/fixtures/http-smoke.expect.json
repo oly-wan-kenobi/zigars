@@ -4,7 +4,8 @@
     "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack",
     "zigar_job_start", "zigar_job_status", "zigar_job_result", "zigar_job_cancel", "zigar_cancel_status", "zigar_run_stream", "zigar_run_events", "zigar_resource_query", "zigar_resource_subscribe", "zigar_resource_unsubscribe", "zigar_roots_sync", "zigar_workspace_map", "zigar_workspace_select", "zigar_agent_guide_v2", "zigar_client_guide", "zigar_prompt_pack",
     "zig_semantic_index_build", "zig_semantic_index_status", "zig_semantic_index_refresh", "zig_semantic_query", "zig_semantic_refs", "zig_semantic_decl", "zig_semantic_callers", "zig_static_fusion", "zig_code_index_export", "zig_scip_export", "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix", "zig_lint_compare", "zig_lint_profile", "zig_lint_gate", "zig_lint_fix_plan", "zig_lint_baseline", "zig_lint_suppressions", "zig_lint_trend",
-    "zig_impact_semantic", "zig_test_select_semantic", "zigar_validation_plan", "zigar_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigar_validation_history", "zig_test_flake_history", "zig_failure_history", "zigar_session_snapshot", "zigar_handoff_pack", "zigar_decision_record", "zigar_project_notes", "zigar_project_memory", "zigar_capability_match", "zigar_tool_sequence_plan"
+    "zig_impact_semantic", "zig_test_select_semantic", "zigar_validation_plan", "zigar_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigar_validation_history", "zig_test_flake_history", "zig_failure_history", "zigar_session_snapshot", "zigar_handoff_pack", "zigar_decision_record", "zigar_project_notes", "zigar_project_memory", "zigar_capability_match", "zigar_tool_sequence_plan",
+    "zigar_patch_session_create", "zigar_patch_session_preview", "zigar_patch_session_apply", "zigar_patch_session_validate", "zigar_patch_session_revert", "zig_generated_file_trace", "zigar_edit_policy_check", "zigar_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch"
   ],
   "tools_list_schema_paths": {
     "zig_format": {
@@ -119,6 +120,34 @@
       "inputSchema.properties.apply.default": false,
       "inputSchema.required.0": "title",
       "inputSchema.required.1": "decision"
+    },
+    "zigar_patch_session_preview": {
+      "inputSchema.properties.edits.type": "string",
+      "inputSchema.required.0": "edits"
+    },
+    "zigar_patch_session_apply": {
+      "inputSchema.properties.apply.type": "boolean",
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.properties.expected_preimages.type": "string"
+    },
+    "zigar_patch_session_revert": {
+      "inputSchema.properties.session_id.type": "string",
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.required.0": "session_id"
+    },
+    "zig_generated_file_trace": {
+      "inputSchema.properties.path.type": "string",
+      "inputSchema.required.0": "path"
+    },
+    "zig_move_decl": {
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.required.0": "source_file",
+      "inputSchema.required.2": "name"
+    },
+    "zig_code_action_batch": {
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.required.0": "file",
+      "inputSchema.required.5": "action_indices"
     }
   },
   "schema_paths": {
@@ -174,6 +203,12 @@
     "registry_tool_arguments.zig_build_events.risk.executes_project_code": true,
     "registry_tool_arguments.zigar_decision_record.required.title": "string",
     "registry_tool_arguments.zigar_decision_record.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigar_patch_session_apply.optional.apply": "boolean",
+    "registry_tool_arguments.zigar_patch_session_apply.risk.writes_source": true,
+    "registry_tool_arguments.zigar_patch_session_apply.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigar_patch_session_validate.risk.executes_project_code": true,
+    "registry_tool_arguments.zig_move_decl.risk.preview_by_default": true,
+    "registry_tool_arguments.zig_code_action_batch.risk.mutates_lsp_state": true,
     "common_intents.0.prefer": "zig_format"
   },
   "doctor_paths": {
@@ -397,6 +432,78 @@
   },
   "tool_sequence_plan_paths": {
     "kind": "zigar_tool_sequence_plan"
+  },
+  "patch_session_create_paths": {
+    "kind": "zigar_patch_session_create",
+    "safe_to_edit": false,
+    "files.1.policy.classification": "cache",
+    "next_action.tool": "zigar_generated_route"
+  },
+  "patch_session_preview_paths": {
+    "kind": "zigar_patch_session_preview",
+    "requires_apply": true,
+    "safe_to_apply": true,
+    "files.0.file": "tests/fixtures/static-analysis/legacy-usingnamespace.zig",
+    "files.0.changed": true
+  },
+  "patch_session_apply_blocked_paths": {
+    "kind": "zigar_patch_session_apply",
+    "applied": false,
+    "safe_to_apply": false,
+    "files.0.policy.classification": "cache"
+  },
+  "patch_session_validate_paths": {
+    "kind": "zigar_patch_session_validate",
+    "validation.kind": "zigar_validation_run"
+  },
+  "patch_session_revert_paths": {
+    "kind": "zigar_patch_session_revert",
+    "session_id": "fixture",
+    "applied": false,
+    "requires_apply": true,
+    "safe_to_revert": true
+  },
+  "generated_file_trace_paths": {
+    "kind": "zig_generated_file_trace",
+    "policy.classification": "generated",
+    "policy.direct_edit_allowed": false
+  },
+  "edit_policy_check_paths": {
+    "kind": "zigar_edit_policy_check",
+    "allow_direct_edit": false,
+    "blocked_paths.0": "zig-out/generated.zig"
+  },
+  "generated_route_paths": {
+    "kind": "zigar_generated_route",
+    "policy.classification": "generated",
+    "regeneration_commands.0": "zig build tool-index"
+  },
+  "organize_imports_paths": {
+    "kind": "zig_organize_imports",
+    "safe_to_apply": true,
+    "files.0.changed": true
+  },
+  "update_imports_paths": {
+    "kind": "zig_update_imports",
+    "safe_to_apply": true,
+    "files.0.changed": true
+  },
+  "move_decl_paths": {
+    "kind": "zig_move_decl",
+    "safe_to_apply": true,
+    "files.0.changed": true,
+    "files.1.changed": true
+  },
+  "extract_decl_paths": {
+    "kind": "zig_extract_decl",
+    "safe_to_apply": true,
+    "files.0.changed": true,
+    "files.1.changed": true
+  },
+  "code_action_batch_paths": {
+    "kind": "backend_error",
+    "backend": "zls",
+    "error_kind": "unavailable"
   },
   "package_cache_doctor_paths": {
     "kind": "zig_package_cache_doctor"

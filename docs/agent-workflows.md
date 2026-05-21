@@ -111,6 +111,23 @@ Use `zigar_patch_guard` before broad edits or generated patches. It rejects path
 outside the workspace and flags generated/vendor paths such as `.zig-cache`,
 `.zigar-cache`, `zig-out`, and `zig-pkg`.
 
+Use `zigar_patch_session_create` and `zigar_patch_session_preview` for multi-file
+edits that need stable preimage hashes before applying. Apply with
+`zigar_patch_session_apply` only after passing the preview's
+`expected_preimages`; stale files or generated/vendor paths block the write.
+`zigar_patch_session_revert` can roll back an applied session while the current
+file hashes still match the recorded session output.
+
+Use `zig_generated_file_trace`, `zigar_edit_policy_check`, and
+`zigar_generated_route` when a requested edit touches generated, cache, artifact,
+or vendored files. Route those changes to source inputs or regeneration commands
+instead of editing derived output directly.
+
+Use `zig_move_decl`, `zig_extract_decl`, `zig_update_imports`, and
+`zig_organize_imports` for preview-first refactor edits, then validate with
+`zigar_patch_session_validate` or the normal validation workflow before claiming
+the refactor is complete.
+
 Use `zig_public_api_diff` when library-facing files change. It compares public
 declarations from supplied text or from `git show <baseline>:<file>` against the
 current file and marks removed or signature-changed declarations as breaking
@@ -142,6 +159,9 @@ evidence reproducible.
   zigar_validate_patch`.
 - Changed Zig file validation: `zigar_patch_guard -> zig_impact_semantic ->
   zig_test_select_semantic -> zigar_validation_plan -> zigar_validation_run`.
+- Transactional refactor: `zigar_patch_session_create ->
+  zigar_patch_session_preview -> zigar_patch_session_apply ->
+  zigar_patch_session_validate`.
 - Retained test evidence: `zigar_prompt_pack -> zig_test_select ->
   zigar_job_start -> zigar_job_result -> tasks/result`.
 - Handoff after an interrupted run: `zigar_session_snapshot ->

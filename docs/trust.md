@@ -13,7 +13,9 @@ enforce them, and the product boundaries that should stay visible.
    output is bounded, truncation is reported in structured fields, and command
    timeouts are total wall-clock deadlines.
 3. Source writes are preview-first. Mutating tools require `apply=true`, expose
-   risk metadata, and report source-write behavior through the manifest.
+   risk metadata, and report source-write behavior through the manifest. Patch
+   sessions add preimage matching and rollback records for applied multi-file
+   edits.
 
 ## Workspace And Security Boundaries
 
@@ -52,6 +54,10 @@ writes, artifact writes, apply gates, backend execution, project-code
 execution, and arbitrary user-command execution from the typed manifest.
 `zigar_clean_tree_gate` runs `git status --porcelain` with a bounded timeout and
 classifies changed paths, including generated or vendored paths.
+`zig_generated_file_trace`, `zigar_edit_policy_check`, and
+`zigar_generated_route` expose the same generated/vendor policy for individual
+edit decisions and route derived paths back to likely source inputs or
+regeneration commands.
 
 The clean-tree gate is evidence, not a repository policy engine. It reports what
 git returned for the configured workspace and asks the caller to review, commit,
@@ -78,6 +84,9 @@ public release claims.
 15. Agent workflow tools are deterministic advisory helpers. They expose
     included sections, omitted sections, skipped phases, and heuristic limits so
     clients can decide when stronger validation is required.
+16. Transactional editing tools are bounded by preimage hashes, apply gates, and
+    generated/vendor policy. Refactor helpers return diffs and limitations rather
+    than claiming semantic completeness.
 
 ## Release Gates
 

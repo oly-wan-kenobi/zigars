@@ -3,7 +3,8 @@
 `zigar` is a deterministic MCP server for Zig development. It gives MCP-capable
 agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
 compiler commands, formatting, ZLS code intelligence, local docs lookup, static
-analysis summaries, ZLint/zwanzig linting, and zflame profiling helpers.
+analysis summaries, transactional edit/refactor previews, ZLint/zwanzig linting,
+and zflame profiling helpers.
 
 `zigar` is intentionally not an AI code generator. It exposes tools that inspect,
 run, format, and analyze Zig projects. Any source write requires an explicit
@@ -232,11 +233,17 @@ optional-backend support is claimed only from a release evidence artifact.
   `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
 - Agent workflows: `zigar_context_pack`, `zigar_next_action`,
   `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`,
-  `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`
+  `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`,
+  `zigar_validation_plan`, `zigar_validation_run`,
+  `zigar_patch_session_create`, `zigar_patch_session_validate`
 - Core Zig: `zig_version`, `zig_env`, `zig_targets`, `zig_build`, `zig_test`,
   `zig_check`, `zig_compile_error_index`, `zig_explain_errors`,
   `zig_translate_c`
-- Formatting: `zig_format`, `zig_format_check`, `zig_patch_preview`
+- Formatting and transactional edits: `zig_format`, `zig_format_check`,
+  `zig_patch_preview`, `zigar_patch_session_preview`,
+  `zigar_patch_session_apply`, `zigar_patch_session_revert`, `zig_move_decl`,
+  `zig_extract_decl`, `zig_update_imports`, `zig_organize_imports`,
+  `zig_code_action_batch`
 - ZLS intelligence: `zig_diagnostics`, `zig_diagnostics_all`,
   `zig_diagnostics_workspace`, `zig_hover`, `zig_definition`,
   `zig_references`, `zig_completion`, `zig_signature_help`,
@@ -291,9 +298,11 @@ optional-backend support is claimed only from a release evidence artifact.
   backend probe history, ZLS status transitions, artifact counts, command
   durations observed by shared helpers, and per-tool dispatch latency.
 - Trust and safety: `zigar_trust_report`, `zigar_command_provenance`,
-  `zigar_risk_audit`, and `zigar_clean_tree_gate` summarize path policy,
-  backend identities, dependency hashes, manifest risk flags, and clean-tree
-  evidence without broadening zigar's sandbox boundary.
+  `zigar_risk_audit`, `zigar_clean_tree_gate`, `zig_generated_file_trace`,
+  `zigar_edit_policy_check`, and `zigar_generated_route` summarize path policy,
+  generated/vendor edit routing, backend identities, dependency hashes, manifest
+  risk flags, and clean-tree evidence without broadening zigar's sandbox
+  boundary.
 - Result contracts and release drift: `zigar_result_shape` and
   `zigar_output_budget_plan` describe compact, standard, and deep output modes
   with explicit omissions; `zigar_docs_drift_check`,
@@ -329,7 +338,12 @@ The short version is: start with `zigar_context_pack`, ask
   parent are realpathed. Symlinks are supported only when the real target stays
   inside the workspace; symlink escapes are rejected.
 - Source writes require `apply=true`.
-- Formatting, patch preview, and rename tools return previews/diffs by default.
+- Formatting, patch-session, refactor, and rename tools return previews/diffs by
+  default.
+- Patch sessions record file preimage hashes and refuse apply when current files
+  no longer match the previewed preimages.
+- Generated, cache, artifact, and vendored paths are classified separately so
+  agents can route changes to source inputs or regeneration commands.
 - Build, test, and profiling commands run with the workspace as cwd.
 - `zigar_schema` includes finer-grained tool risk metadata for source writes,
   artifact writes, LSP state mutation, backend execution, project-code

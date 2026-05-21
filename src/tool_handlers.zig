@@ -14,6 +14,7 @@ const release_drift = @import("tools/release_drift.zig");
 const result_shape = @import("tools/result_shape.zig");
 const runtime_ux = @import("tools/runtime_ux.zig");
 const static_analysis = @import("tools/static_analysis.zig");
+const transactional_editing = @import("tools/transactional_editing.zig");
 const trust = @import("tools/trust.zig");
 const validation_workflows = @import("tools/validation_workflows.zig");
 const zwanzig = @import("tools/zwanzig.zig");
@@ -45,6 +46,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .environment_profiles => @field(environment_profiles, ref.name),
         .runtime_ux => @field(runtime_ux, ref.name),
         .validation_workflows => @field(validation_workflows, ref.name),
+        .transactional_editing => @field(transactional_editing, ref.name),
     };
 }
 

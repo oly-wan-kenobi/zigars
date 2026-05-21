@@ -10,6 +10,7 @@ test {
     _ = @import("profiling.zig");
     _ = @import("profiling_tests.zig");
     _ = @import("tool_result_errors_tests.zig");
+    _ = @import("transactional_editing_tests.zig");
     _ = @import("validation_workflows_tests.zig");
     _ = @import("zwanzig.zig");
     _ = @import("zls_common_tests.zig");

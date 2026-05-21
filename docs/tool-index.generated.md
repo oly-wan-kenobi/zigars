@@ -16,9 +16,9 @@ Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace
 
 ### agent_workflows
 
-Tools: `zigar_context_pack`, `zigar_next_action`, `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`, `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`, `zigar_validation_plan`, `zigar_validation_run`, `zigar_validation_history`, `zig_build_events`, `zig_test_events`, `zig_test_timing`, `zig_test_flake_history`, `zig_failure_history`, `zigar_session_snapshot`, `zigar_handoff_pack`, `zigar_decision_record`, `zigar_project_notes`, `zigar_project_memory`, `zigar_capability_match`, `zigar_tool_sequence_plan`
+Tools: `zigar_context_pack`, `zigar_next_action`, `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`, `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`, `zigar_validation_plan`, `zigar_validation_run`, `zigar_validation_history`, `zig_build_events`, `zig_test_events`, `zig_test_timing`, `zig_test_flake_history`, `zig_failure_history`, `zigar_session_snapshot`, `zigar_handoff_pack`, `zigar_decision_record`, `zigar_project_notes`, `zigar_project_memory`, `zigar_capability_match`, `zigar_tool_sequence_plan`, `zigar_patch_session_create`, `zigar_patch_session_validate`
 
-Keywords: `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`, `hermes`, `context pack`, `next action`, `validate patch`, `validation plan`, `validation run`, `build events`, `test events`, `validation history`, `flake history`, `failure history`, `handoff`, `project memory`, `capability match`, `tool sequence`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
+Keywords: `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`, `hermes`, `context pack`, `next action`, `validate patch`, `patch session`, `transactional editing`, `validation plan`, `validation run`, `build events`, `test events`, `validation history`, `flake history`, `failure history`, `handoff`, `project memory`, `capability match`, `tool sequence`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
 
 ### core_zig
 
@@ -28,9 +28,9 @@ Keywords: `zig`, `build`, `test`, `check`, `ast-check`, `compiler diagnostics`, 
 
 ### formatting_and_edits
 
-Tools: `zig_format`, `zig_format_check`, `zig_patch_preview`, `zig_rename`, `zig_code_actions`, `zig_code_action_apply`
+Tools: `zig_format`, `zig_format_check`, `zig_patch_preview`, `zig_rename`, `zig_code_actions`, `zig_code_action_apply`, `zigar_patch_session_preview`, `zigar_patch_session_apply`, `zigar_patch_session_revert`, `zig_move_decl`, `zig_extract_decl`, `zig_update_imports`, `zig_organize_imports`, `zig_code_action_batch`
 
-Keywords: `fmt`, `formatter`, `formatting`, `zig fmt`, `patch preview`, `unified diff`, `rename`, `code action`, `apply=true`, `zlint fix`
+Keywords: `fmt`, `formatter`, `formatting`, `zig fmt`, `patch preview`, `patch session`, `transactional edit`, `rollback`, `unified diff`, `rename`, `refactor`, `move declaration`, `extract declaration`, `imports`, `code action`, `apply=true`, `zlint fix`
 
 ### zls
 
@@ -82,9 +82,9 @@ Keywords: `metrics`, `observability`, `latency`, `backend health`, `zls timeline
 
 ### trust_safety
 
-Tools: `zigar_trust_report`, `zigar_command_provenance`, `zigar_risk_audit`, `zigar_clean_tree_gate`
+Tools: `zigar_trust_report`, `zigar_command_provenance`, `zigar_risk_audit`, `zigar_clean_tree_gate`, `zig_generated_file_trace`, `zigar_edit_policy_check`, `zigar_generated_route`
 
-Keywords: `trust`, `safety`, `risk`, `clean tree`, `command provenance`, `apply gate`, `path policy`, `backend identity`
+Keywords: `trust`, `safety`, `risk`, `clean tree`, `command provenance`, `apply gate`, `path policy`, `generated files`, `vendor`, `regeneration route`, `backend identity`
 
 ### result_contracts
 
@@ -117,6 +117,9 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - choose the next Zig workflow step: prefer `zigar_next_action`
 - validate an agent patch: prefer `zigar_validate_patch`
 - plan and run validation safely: prefer `zigar_validation_plan, zigar_validation_run`
+- preview and apply a transactional edit: prefer `zigar_patch_session_create, zigar_patch_session_preview, zigar_patch_session_apply, zigar_patch_session_revert`
+- route generated or vendor edits: prefer `zigar_edit_policy_check, zig_generated_file_trace, zigar_generated_route`
+- preview a Zig refactor: prefer `zig_move_decl, zig_extract_decl, zig_update_imports, zig_organize_imports`
 - fuse compiler and test failures: prefer `zigar_failure_fusion`
 - parse build and test output events: prefer `zig_build_events, zig_test_events, zig_test_timing`
 - analyze impact of touched files: prefer `zigar_impact`
@@ -163,6 +166,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_check`: required `file: string`; optional `timeout_ms: integer`
 - `zig_ci_annotations`: required `file: string`; optional `timeout_ms: integer`
 - `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`, `apply: boolean`
+- `zig_code_action_batch`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_indices: string`; optional `content: string`, `apply: boolean`
 - `zig_code_actions`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`; optional `content: string`
 - `zig_code_index_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
@@ -181,12 +185,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_document_symbols`: required `file: string`; optional `content: string`
 - `zig_error_sets`: required `file: string`
 - `zig_explain_errors`: optional `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
+- `zig_extract_decl`: required `file: string`, `target_file: string`, `start_line: integer`, `end_line: integer`; optional `apply: boolean`
 - `zig_failure_history`: optional `history: string`, `path: string`, `limit: integer`
 - `zig_file_owner`: required `file: string`
 - `zig_flamegraph`: required `format: string`, `input: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `intermediate: string`, `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
+- `zig_generated_file_trace`: required `path: string`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_impact_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
 - `zig_import_graph`: optional `limit: integer`
@@ -205,6 +211,8 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_lint_suppressions`: required `findings: string`; optional `suppressions: string`
 - `zig_lint_trend`: required `before: string`, `after: string`
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
+- `zig_move_decl`: required `source_file: string`, `target_file: string`, `name: string`; optional `apply: boolean`
+- `zig_organize_imports`: required `file: string`; optional `apply: boolean`
 - `zig_package_cache_doctor`: optional `timeout_ms: integer`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
 - `zig_profile_plan`: optional `binary: string`, `platform: string`, `output_prefix: string`
@@ -241,6 +249,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_toolchain_pin_check`: optional `input: string`, `probe_backends: boolean`, `timeout_ms: integer`
 - `zig_toolchain_resolve`: optional `probe_managers: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
+- `zig_update_imports`: required `old_import: string`, `new_import: string`; optional `file: string`, `files: string`, `apply: boolean`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
 - `zig_zlint`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
@@ -269,9 +278,11 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
 - `zigar_docs_drift_check`: optional `mode: string`
 - `zigar_doctor`: optional `probe_backends: boolean`, `timeout_ms: integer`
+- `zigar_edit_policy_check`: optional `files: string`, `patch: string`
 - `zigar_env_export`: optional `output: string`, `apply: boolean`, `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
+- `zigar_generated_route`: required `path: string`; optional `goal: string`
 - `zigar_handoff_pack`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zigar_job_cancel`: required `job_id: string`; optional `reason: string`
@@ -281,6 +292,11 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_next_action`: required `goal: string`; optional `changed_files: string`, `last_error: string`
 - `zigar_output_budget_plan`: optional `mode: string`, `token_budget: integer`, `tool: string`
 - `zigar_patch_guard`: optional `files: string`, `patch: string`
+- `zigar_patch_session_apply`: required `edits: string`; optional `goal: string`, `session_id: string`, `expected_preimages: string`, `apply: boolean`
+- `zigar_patch_session_create`: optional `goal: string`, `files: string`, `patch: string`, `edits: string`
+- `zigar_patch_session_preview`: required `edits: string`; optional `goal: string`, `session_id: string`
+- `zigar_patch_session_revert`: required `session_id: string`; optional `history: string`, `history_path: string`, `apply: boolean`
+- `zigar_patch_session_validate`: optional `session_id: string`, `changed_files: string`, `diff: string`, `edits: string`, `goal: string`, `mode: string`, `include_semantic: boolean`, `stop_on_failure: boolean`, `apply: boolean`, `output: string`, `timeout_ms: integer`
 - `zigar_profile_bootstrap`: optional `mode: string`
 - `zigar_profile_diff`: optional `content: string`, `path: string`
 - `zigar_profile_elicit`: optional `content: string`, `mode: string`
@@ -335,6 +351,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_check`: `exact_command` exact argv
 - `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
 - `zig_code_action_apply`: `apply_gated_mutation` preview/apply mutation
+- `zig_code_action_batch`: `apply_gated_mutation` preview/apply mutation
 - `zig_code_actions`: `zls_request` `textDocument/codeAction`
 - `zig_code_index_export`: `workspace_artifact` explicit workspace artifact
 - `zig_command_plan`: `pure_analysis` read-only analysis
@@ -356,12 +373,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_env`: `exact_command` exact argv
 - `zig_error_sets`: `pure_analysis` read-only analysis
 - `zig_explain_errors`: `dynamic_command` runtime-dependent backend plan
+- `zig_extract_decl`: `apply_gated_mutation` preview/apply mutation
 - `zig_failure_history`: `pure_analysis` read-only analysis
 - `zig_file_owner`: `pure_analysis` read-only analysis
 - `zig_flamegraph`: `workspace_artifact` explicit workspace artifact
 - `zig_flamegraph_diff`: `workspace_artifact` explicit workspace artifact
 - `zig_format`: `apply_gated_mutation` preview/apply mutation
 - `zig_format_check`: `exact_command` exact argv
+- `zig_generated_file_trace`: `pure_analysis` read-only analysis
 - `zig_hover`: `zls_request` `textDocument/hover`
 - `zig_impact_semantic`: `pure_analysis` read-only analysis
 - `zig_import_graph`: `pure_analysis` read-only analysis
@@ -381,6 +400,8 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_lint_suppressions`: `pure_analysis` read-only analysis
 - `zig_lint_trend`: `pure_analysis` read-only analysis
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
+- `zig_move_decl`: `apply_gated_mutation` preview/apply mutation
+- `zig_organize_imports`: `apply_gated_mutation` preview/apply mutation
 - `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
 - `zig_profile_plan`: `pure_analysis` read-only analysis
@@ -419,6 +440,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_toolchain_pin_check`: `dynamic_command` runtime-dependent backend plan
 - `zig_toolchain_resolve`: `dynamic_command` runtime-dependent backend plan
 - `zig_translate_c`: `exact_command` exact argv
+- `zig_update_imports`: `apply_gated_mutation` preview/apply mutation
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
@@ -450,9 +472,11 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_dev_env_generate`: `apply_gated_mutation` preview/apply mutation
 - `zigar_docs_drift_check`: `pure_analysis` read-only analysis
 - `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
+- `zigar_edit_policy_check`: `pure_analysis` read-only analysis
 - `zigar_env_export`: `apply_gated_mutation` preview/apply mutation
 - `zigar_env_pack`: `dynamic_command` runtime-dependent backend plan
 - `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
+- `zigar_generated_route`: `pure_analysis` read-only analysis
 - `zigar_handoff_pack`: `pure_analysis` read-only analysis
 - `zigar_http_status`: `pure_analysis` read-only analysis
 - `zigar_impact`: `pure_analysis` read-only analysis
@@ -465,6 +489,11 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_next_action`: `pure_analysis` read-only analysis
 - `zigar_output_budget_plan`: `pure_analysis` read-only analysis
 - `zigar_patch_guard`: `pure_analysis` read-only analysis
+- `zigar_patch_session_apply`: `apply_gated_mutation` preview/apply mutation
+- `zigar_patch_session_create`: `pure_analysis` read-only analysis
+- `zigar_patch_session_preview`: `pure_analysis` read-only analysis
+- `zigar_patch_session_revert`: `apply_gated_mutation` preview/apply mutation
+- `zigar_patch_session_validate`: `dynamic_command` runtime-dependent backend plan
 - `zigar_profile_bootstrap`: `pure_analysis` read-only analysis
 - `zigar_profile_diff`: `pure_analysis` read-only analysis
 - `zigar_profile_elicit`: `pure_analysis` read-only analysis

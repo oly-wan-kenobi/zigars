@@ -51,14 +51,15 @@ gate cannot silently shrink.
 `zig build stdio-fixtures` starts zigar over stdio and uses a temporary
 workspace with Zig-backed fake optional backends. It checks newline-delimited
 JSON-RPC, formatter preview/apply behavior, semantic impact/test-selection
-contracts, validation plans/runs/history, build/test event parsing, handoff and
-project-memory tools, capability routing, zwanzig JSON/SARIF/rule/graph flows,
-ZLint diagnostics/SARIF/rules/fix preview normalization, CI annotation
-contracts, structured profiling plans, zflame SVG output metadata, and
-diff-folded flamegraph generation with intermediate metadata. The fake backends
-are intentionally strict about supported argv shapes so stale flags or option
-syntax fail before release. The fixture enforces the configured minimum
-`tools/call` count before it reports success.
+contracts, validation plans/runs/history, transactional patch apply/revert,
+generated/vendor policy routing, preview-first refactor helpers, build/test
+event parsing, handoff and project-memory tools, capability routing, zwanzig
+JSON/SARIF/rule/graph flows, ZLint diagnostics/SARIF/rules/fix preview
+normalization, CI annotation contracts, structured profiling plans, zflame SVG
+output metadata, and diff-folded flamegraph generation with intermediate
+metadata. The fake backends are intentionally strict about supported argv shapes
+so stale flags or option syntax fail before release. The fixture enforces the
+configured minimum `tools/call` count before it reports success.
 
 ## Real Backend Conformance
 

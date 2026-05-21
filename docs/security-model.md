@@ -11,6 +11,11 @@ The primary boundary is the configured workspace:
   inside the workspace; symlink escapes are rejected even when the final output
   directory does not exist yet.
 - Source writes require `apply=true`.
+- Patch-session writes additionally require matching preimage hashes from the
+  preview. Rollback is limited to recorded session files whose current hash still
+  matches the applied output.
+- Generated, cache, artifact, and vendored paths are classified separately and
+  should be changed through source inputs or regeneration commands.
 - stdout is reserved for MCP JSON-RPC; logs go to stderr.
 - Tool arguments are validated against typed metadata before handlers run.
 - Free-form `args` are split into argv vectors and are not passed through a
@@ -43,7 +48,8 @@ cleanup of owned tool, resource, and prompt results.
 | Boundary | Guarantee | Remaining responsibility |
 | --- | --- | --- |
 | Workspace paths | Canonical path checks reject symlink escapes and writes outside `--workspace`. | Choose the intended workspace and inspect generated artifacts before trusting them. |
-| Source writes | Mutating tools are preview-first and require `apply=true`. | Agents and users decide whether a preview is correct before applying it. |
+| Source writes | Mutating tools are preview-first and require `apply=true`; patch sessions also check preimage hashes. | Agents and users decide whether a preview is correct before applying it, and rerun previews after unrelated edits. |
+| Generated/vendor paths | Policy tools classify generated, cache, artifact, and vendored paths and route them to source or regeneration steps. | Maintainers still own generator behavior, dependency policy, and review of regenerated diffs. |
 | Command execution | Commands use argv vectors without shell expansion and bounded output/timeouts. | `zig build`, profilers, and user-provided commands still execute local project code. |
 | MCP transport | stdio is local-process only; HTTP binds only loopback hosts. | Do not place the unauthenticated HTTP endpoint behind a remote proxy. |
 | Optional backends | Backend absence and unsupported capabilities are structured results. | Pin and validate backend versions when release or CI decisions depend on them. |

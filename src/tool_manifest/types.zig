@@ -3,7 +3,6 @@ const mcp = @import("mcp");
 const runtime_mod = @import("../runtime.zig");
 pub const tooling = @import("../tooling.zig");
 pub const ToolHandler = *const fn (*runtime_mod.App, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult;
-
 pub const ToolGroup = enum {
     discovery,
     agent_workflows,
@@ -52,6 +51,7 @@ pub const HandlerModule = enum {
     environment_profiles,
     runtime_ux,
     validation_workflows,
+    transactional_editing,
 };
 pub const HandlerRef = struct {
     module: HandlerModule,
