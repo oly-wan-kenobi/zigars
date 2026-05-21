@@ -1,9 +1,11 @@
 # Optional Backends
 
 zigar starts and serves core Zig tools with only a `zig` executable. ZLS,
-ZLint, zwanzig, zflame, and diff-folded are optional local executables. Tools
-that need one of them return structured `backend_error` or `tool_error`
-payloads when the configured binary is missing, not a generic MCP failure.
+ZLint, zwanzig, zflame, and diff-folded are optional local executables with
+server configuration paths. Samply and Tracy capture tools are optional
+profiler executables configured per tool call. Tools that need one of them
+return structured `backend_error` or `tool_error` payloads when the binary is
+missing or the platform is unsupported, not a generic MCP failure.
 
 ## Compatibility Rules
 
@@ -11,19 +13,22 @@ payloads when the configured binary is missing, not a generic MCP failure.
   build and CI gates currently use Zig `0.16.0`.
 - Keep ZLS on the same Zig release line as `zig`. A mismatched ZLS can start but
   fail later on syntax, builtin, or standard-library changes.
-- Treat ZLint, zwanzig, zflame, diff-folded, and platform profilers as
-  workspace-local tooling dependencies. Pin them in the project's package
-  manager, dev shell, or CI image when reproducibility matters.
+- Treat ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, and platform
+  profilers as workspace-local tooling dependencies. Pin them in the project's
+  package manager, dev shell, or CI image when reproducibility matters.
 - Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
+  For Samply and Tracy capture calls, pass `samply_path` or
+  `tracy_capture_path` in the tool arguments when the executable is not on
+  `PATH`.
 
 ## Version Pinning And Optional CI
 
 Default CI uses fake backend fixtures so zigar can verify command shapes,
 structured errors, SARIF/XML/SVG contracts, and artifact metadata without
 requiring every optional executable on every runner. Projects that depend on
-real ZLS, ZLint, zwanzig, zflame, diff-folded, or platform-profiler behavior
-should add their own backend matrix and pin exact backend versions in the dev
-shell or CI image.
+real ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, or
+platform-profiler behavior should add their own backend matrix and pin exact
+backend versions in the dev shell or CI image.
 
 Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
@@ -66,6 +71,11 @@ inputs: set `ZIGAR_ZIG_PATH`, `ZIGAR_ZLS_PATH`, and `ZIGAR_ZLINT_PATH` to the
 binaries being validated when the release intends to claim them. Normal CI must
 remain optional-backend-free unless a workflow intentionally opts into this
 setup.
+
+Samply and Tracy are not provisioned by the repo-pinned backend setup. For those
+tools, keep the profiler binary in your project environment and pass
+`samply_path` or `tracy_capture_path` per call when the default command name is
+not appropriate.
 
 The preferred public-release path is the manual `Release Readiness` workflow.
 It runs the normal release gate, release-asset smoke, real backend conformance,
@@ -172,6 +182,8 @@ zwanzig --help
 printf 'main 1\n' > /tmp/zigar.folded
 zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
 diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
+samply --help
+tracy-capture --help
 ```
 
 If a direct shell check fails, fix the backend before debugging zigar. If the
@@ -377,6 +389,39 @@ intermediate folded SHA-256 for the diff-folded stage. All
 zigar-generated SVG, DOT, and folded-diff outputs must use workspace-local
 paths. This keeps profiler artifacts inspectable and prevents accidental writes
 outside the active workspace.
+
+## Samply And Tracy
+
+Samply and Tracy capture workflows are explicit and preview-first. zigar does
+not install either profiler, does not mutate developer setup, and does not open
+viewer applications.
+
+`zig_samply_record` builds this command shape and runs it only with
+`apply=true`:
+
+```text
+samply record -o <workspace-output> -- <command argv>
+```
+
+Use `samply_path` when the executable is not named `samply`. Missing binaries,
+failed probes, unsupported platforms, and profiler command failures are
+structured results with the attempted argv and resolution. `zig_samply_summary`
+parses supplied profile JSON without running Samply. `zig_samply_import` writes
+a normalized profile artifact only when applied, and `zig_samply_artifact`
+registers an existing workspace artifact with provenance only when applied.
+
+`zig_tracy_probe` reports `not_probed` unless `probe_backend=true`; when probed,
+it runs a bounded `tracy-capture --help`. `zig_tracy_capture` builds this
+command shape and runs it only with `apply=true`:
+
+```text
+tracy-capture -o <workspace-output> -a <address> -p <port> -s <seconds>
+```
+
+Use `tracy_capture_path` when the executable is not named `tracy-capture`.
+`zig_tracy_plan` and `zig_tracy_hints` are source-scan/advisory tools; they do
+not modify source or prove instrumentation coverage. `zig_tracy_artifacts`
+registers existing trace files as workspace artifacts only when applied.
 
 ## Failure Triage
 

@@ -25,10 +25,10 @@ The primary boundary is the configured workspace:
 Command-backed tools run with the user's privileges. Running `zig build`,
 `zig test`, profilers, or project build scripts can execute local code.
 
-Optional backends such as ZLS, ZLint, zwanzig, zflame, and platform profilers
-are local processes. Configure their paths explicitly when using zigar in
-sensitive workspaces. ZLint automatic fixes are delegated to the configured
-binary and still require zigar's `apply=true` source-write gate.
+Optional backends such as ZLS, ZLint, zwanzig, zflame, Samply, Tracy, and
+platform profilers are local processes. Configure their paths explicitly when
+using zigar in sensitive workspaces. ZLint automatic fixes are delegated to the
+configured binary and still require zigar's `apply=true` source-write gate.
 
 HTTP transport is local-only by default. `--transport http` must bind a loopback
 host such as `127.0.0.1`, `localhost`, or `::1`; non-loopback hosts are rejected

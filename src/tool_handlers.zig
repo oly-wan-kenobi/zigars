@@ -10,6 +10,7 @@ const edit_zls = @import("tools/edit_zls.zig");
 const edit_zls_diagnostics = @import("tools/edit_zls_diagnostics.zig");
 const observability = @import("tools/observability.zig");
 const profiling = @import("tools/profiling.zig");
+const performance = @import("tools/performance.zig");
 const release_drift = @import("tools/release_drift.zig");
 const result_shape = @import("tools/result_shape.zig");
 const runtime_ux = @import("tools/runtime_ux.zig");
@@ -49,6 +50,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .validation_workflows => @field(validation_workflows, ref.name),
         .transactional_editing => @field(transactional_editing, ref.name),
         .phase6 => @field(phase6, ref.name),
+        .performance => @field(performance, ref.name),
     };
 }
 

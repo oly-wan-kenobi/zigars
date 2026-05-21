@@ -46,7 +46,10 @@ fixtures, and the pure-Zig release helper.
 `tools/list`, `zigar_schema`, `zigar_doctor`, and representative tool calls
 against `tests/fixtures/http-smoke.expect.json`. The helper also enforces a
 minimum scenario floor from `tools/coverage_config.zig` so this integration
-gate cannot silently shrink.
+gate cannot silently shrink. HTTP smoke also exercises the coverage, benchmark,
+Samply, Tracy, and performance evidence tool surface in parser or preview modes
+so every public performance workflow has a transport-level fixture without
+requiring external profiler binaries.
 
 `zig build stdio-fixtures` starts zigar over stdio and uses a temporary
 workspace with Zig-backed fake optional backends. It checks newline-delimited
@@ -87,6 +90,11 @@ ZLint, zwanzig, zflame, and diff-folded tool paths. `zig build release-check`
 depends on this contract smoke; real backend certification still requires the
 manual script or workflow above.
 
+Samply and Tracy capture tools are not part of the repo-pinned real-backend
+conformance script. Projects that depend on those profilers should pin and probe
+the exact binaries in their own CI or release workflow, then package the profiler
+evidence with `zig_perf_evidence_pack`.
+
 ## Coverage
 
 `zig build coverage` installs the Zig test binaries, requires `kcov` on `PATH`,
@@ -106,6 +114,12 @@ configured floors. The coverage job uploads the complete `coverage/` directory
 as the `zigar-coverage` artifact. A build/test/ReleaseSafe plus HTTP/stdio
 transport smoke matrix runs on macOS and Windows to catch path, process,
 transport, and executable suffix issues.
+
+The MCP coverage workflow is separate from the `zig build coverage` release
+gate. `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`,
+`zig_coverage_baseline`, and `zig_coverage_budget_check` consume supplied LCOV
+or zigar JSON evidence; `zig_coverage_run` runs a caller-provided coverage
+command only with `apply=true` and records artifact provenance.
 
 ## Release Assets
 

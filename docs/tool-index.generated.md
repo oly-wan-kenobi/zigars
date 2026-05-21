@@ -128,6 +128,12 @@ Tools: `zig_dependency_update_plan`, `zig_dependency_fetch_check`, `zig_dependen
 
 Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclonedx`, `security scan`, `osv`, `zat`, `license`, `dependency submission`, `provenance`
 
+### performance_workflows
+
+Tools: `zig_coverage_run`, `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, `zig_coverage_budget_check`, `zig_bench_discover`, `zig_bench_run`, `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`, `zig_perf_budget_check`, `zig_profile_regression`, `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`, `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`, `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`, `zig_tracy_hints`, `zig_perf_evidence_pack`
+
+Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `bench baseline`, `performance budget`, `profile regression`, `samply`, `tracy`, `profile artifact`, `performance evidence`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -166,6 +172,9 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - lint Zig code: prefer `zig_zlint, zig_zlint_fix, zig_lint, zig_lint_compare`
 - plan profiling capture: prefer `zig_profile_plan`
 - make a flamegraph: prefer `zig_flamegraph`
+- normalize coverage evidence: prefer `zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check`
+- run and compare benchmarks: prefer `zig_bench_discover, zig_bench_run, zig_bench_compare, zig_perf_budget_check`
+- record profiler evidence: prefer `zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack`
 - inspect generated evidence artifacts: prefer `zigar_artifact_index, zigar_artifact_read`
 - inspect zigar runtime health: prefer `zigar_metrics_v2, zigar_tool_latency`
 - explain zigar safety posture: prefer `zigar_trust_report, zigar_risk_audit`
@@ -186,6 +195,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_ast_imports`: required `file: string`
 - `zig_ast_tests`: required `file: string`
 - `zig_autodoc_ingest`: optional `path: string`, `content: string`, `limit: integer`
+- `zig_bench_baseline`: optional `command: string`, `results: string`, `current: string`, `baseline: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `threshold_pct: integer`, `limit: integer`
+- `zig_bench_compare`: optional `results: string`, `current: string`, `baseline: string`, `threshold_pct: integer`, `limit: integer`
+- `zig_bench_discover`: optional `limit: integer`
+- `zig_bench_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`
+- `zig_benchmark_history`: optional `path: string`, `limit: integer`
 - `zig_build`: optional `args: string`, `timeout_ms: integer`
 - `zig_build_events`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_builtin_doc`: required `query: string`; optional `limit: integer`
@@ -203,6 +217,12 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
 - `zig_compile_error_index`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_completion`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_coverage_baseline`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `limit: integer`
+- `zig_coverage_budget_check`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
+- `zig_coverage_diff`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
+- `zig_coverage_map`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `limit: integer`
+- `zig_coverage_merge`: optional `current: string`, `baseline: string`, `left: string`, `right: string`, `output: string`, `apply: boolean`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
+- `zig_coverage_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `target: string`, `coverage_backend: string`, `coverage_artifacts: string`
 - `zig_dead_decl_candidates`: required `file: string`
 - `zig_decl_summary`: required `file: string`
 - `zig_decl_summary_json`: required `file: string`
@@ -259,7 +279,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_osv_scan`: optional `path: string`, `content: string`
 - `zig_package_cache_doctor`: optional `timeout_ms: integer`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
+- `zig_perf_budget_check`: optional `comparison: string`, `results: string`, `max_regression_pct: integer`
+- `zig_perf_evidence_pack`: optional `coverage: string`, `benchmarks: string`, `samply: string`, `tracy: string`, `flamegraph: string`, `validation: string`, `output: string`, `apply: boolean`
+- `zig_profile_open`: required `path: string`; optional `viewer: string`
 - `zig_profile_plan`: optional `binary: string`, `platform: string`, `output_prefix: string`
+- `zig_profile_regression`: optional `comparison: string`, `backend: string`, `command: string`, `threshold_pct: integer`
 - `zig_profile_run`: required `command: string`; optional `timeout_ms: integer`
 - `zig_project_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`
 - `zig_public_api`: required `file: string`
@@ -270,6 +294,10 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_release_notes_draft`: optional `changes: string`, `api_diff: string`, `validation: string`, `ci: string`, `dependencies: string`, `security: string`, `version: string`
 - `zig_release_plan`: optional `goal: string`, `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `changelog: string`, `changed_files: string`
 - `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`, `apply: boolean`
+- `zig_samply_artifact`: required `path: string`; optional `apply: boolean`
+- `zig_samply_import`: optional `command: string`, `path: string`, `content: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`, `tracy_capture_path: string`, `probe_backend: boolean`, `address: string`, `port: integer`, `seconds: integer`, `limit: integer`
+- `zig_samply_record`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`
+- `zig_samply_summary`: optional `path: string`, `content: string`, `profile: string`, `limit: integer`
 - `zig_sbom`: optional `manifest: string`, `output: string`, `apply: boolean`
 - `zig_scip_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`
@@ -301,6 +329,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_toolchain_pin`: optional `apply: boolean`, `output: string`, `zig_version: string`, `zls_version: string`, `zlint_version: string`, `zwanzig_version: string`, `zflame_version: string`, `diff_folded_version: string`
 - `zig_toolchain_pin_check`: optional `input: string`, `probe_backends: boolean`, `timeout_ms: integer`
 - `zig_toolchain_resolve`: optional `probe_managers: boolean`, `timeout_ms: integer`
+- `zig_tracy_artifacts`: required `path: string`; optional `apply: boolean`
+- `zig_tracy_capture`: optional `command: string`, `path: string`, `content: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`, `tracy_capture_path: string`, `probe_backend: boolean`, `address: string`, `port: integer`, `seconds: integer`, `limit: integer`
+- `zig_tracy_hints`: optional `profile: string`, `bench: string`, `limit: integer`
+- `zig_tracy_plan`: optional `limit: integer`
+- `zig_tracy_probe`: optional `tracy_capture_path: string`, `probe_backend: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_update_imports`: required `old_import: string`, `new_import: string`; optional `file: string`, `files: string`, `apply: boolean`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
@@ -397,6 +430,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_ast_imports`: `pure_analysis` read-only analysis
 - `zig_ast_tests`: `pure_analysis` read-only analysis
 - `zig_autodoc_ingest`: `pure_analysis` read-only analysis
+- `zig_bench_baseline`: `apply_gated_mutation` preview/apply mutation
+- `zig_bench_compare`: `pure_analysis` read-only analysis
+- `zig_bench_discover`: `pure_analysis` read-only analysis
+- `zig_bench_run`: `apply_gated_mutation` preview/apply mutation
+- `zig_benchmark_history`: `pure_analysis` read-only analysis
 - `zig_build`: `exact_command` exact argv
 - `zig_build_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_build_graph`: `pure_analysis` read-only analysis
@@ -419,6 +457,12 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_command_plan`: `pure_analysis` read-only analysis
 - `zig_compile_error_index`: `dynamic_command` runtime-dependent backend plan
 - `zig_completion`: `zls_request` `textDocument/completion`
+- `zig_coverage_baseline`: `apply_gated_mutation` preview/apply mutation
+- `zig_coverage_budget_check`: `pure_analysis` read-only analysis
+- `zig_coverage_diff`: `pure_analysis` read-only analysis
+- `zig_coverage_map`: `pure_analysis` read-only analysis
+- `zig_coverage_merge`: `apply_gated_mutation` preview/apply mutation
+- `zig_coverage_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_dead_decl_candidates`: `pure_analysis` read-only analysis
 - `zig_decl_summary`: `pure_analysis` read-only analysis
 - `zig_decl_summary_json`: `pure_analysis` read-only analysis
@@ -479,7 +523,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_osv_scan`: `pure_analysis` read-only analysis
 - `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
+- `zig_perf_budget_check`: `pure_analysis` read-only analysis
+- `zig_perf_evidence_pack`: `apply_gated_mutation` preview/apply mutation
+- `zig_profile_open`: `pure_analysis` read-only analysis
 - `zig_profile_plan`: `pure_analysis` read-only analysis
+- `zig_profile_regression`: `pure_analysis` read-only analysis
 - `zig_profile_run`: `dynamic_command` runtime-dependent backend plan
 - `zig_project_docs_query`: `pure_analysis` read-only analysis
 - `zig_public_api`: `pure_analysis` read-only analysis
@@ -490,6 +538,10 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_release_notes_draft`: `pure_analysis` read-only analysis
 - `zig_release_plan`: `pure_analysis` read-only analysis
 - `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_samply_artifact`: `apply_gated_mutation` preview/apply mutation
+- `zig_samply_import`: `apply_gated_mutation` preview/apply mutation
+- `zig_samply_record`: `apply_gated_mutation` preview/apply mutation
+- `zig_samply_summary`: `pure_analysis` read-only analysis
 - `zig_sbom`: `workspace_artifact` explicit workspace artifact
 - `zig_scip_export`: `workspace_artifact` explicit workspace artifact
 - `zig_semantic_callers`: `pure_analysis` read-only analysis
@@ -523,6 +575,11 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 - `zig_toolchain_pin`: `apply_gated_mutation` preview/apply mutation
 - `zig_toolchain_pin_check`: `dynamic_command` runtime-dependent backend plan
 - `zig_toolchain_resolve`: `dynamic_command` runtime-dependent backend plan
+- `zig_tracy_artifacts`: `apply_gated_mutation` preview/apply mutation
+- `zig_tracy_capture`: `apply_gated_mutation` preview/apply mutation
+- `zig_tracy_hints`: `pure_analysis` read-only analysis
+- `zig_tracy_plan`: `pure_analysis` read-only analysis
+- `zig_tracy_probe`: `dynamic_command` runtime-dependent backend plan
 - `zig_translate_c`: `exact_command` exact argv
 - `zig_update_imports`: `apply_gated_mutation` preview/apply mutation
 - `zig_version`: `dynamic_command` runtime-dependent backend plan

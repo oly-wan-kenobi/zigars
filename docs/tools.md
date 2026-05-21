@@ -26,8 +26,9 @@ Public feature claims use this vocabulary:
 - Source-scan-backed: zigar scanned local files and reports source paths,
   ranking, skipped files, and provenance.
 - Heuristic/advisory: useful for orientation or prioritization, not proof.
-- External-backend-backed: ZLint, zwanzig, zflame, diff-folded, or platform profilers
-  own the backend semantics; zigar reports argv, probes, and artifact metadata.
+- External-backend-backed: ZLint, zwanzig, zflame, diff-folded, Samply, Tracy,
+  or platform profilers own the backend semantics; zigar reports argv, probes,
+  and artifact metadata.
 - Curated fallback: bundled partial data used when installed docs are missing.
 - Real conformance artifact: optional-backend compatibility claimed from a
   release evidence package, not from fake-backend fixtures.
@@ -179,6 +180,46 @@ backend state independently. Command durations are observed for commands routed
 through shared zigar helpers, and tool latency is MCP validation plus handler
 dispatch time, not client/network serialization time. Use `zigar_doctor
 probe_backends=true`, project CI, and release gates for stronger evidence.
+
+## Coverage, Benchmarks, And Performance Evidence
+
+Performance workflow tools share a stable evidence envelope: `evidence_basis`,
+`backend_status`, `command_argv`, `toolchain`, `target`, `artifact_identity`,
+`baseline_identity`, `confidence`, `limitations`, and `skipped_validation`
+appear where they apply. Preview results must not imply skipped execution or
+validation ran.
+
+Coverage tools parse LCOV and zigar JSON evidence. `zig_coverage_map` normalizes
+file totals and line-rate records, `zig_coverage_merge` combines two maps,
+`zig_coverage_diff` compares current and baseline evidence, and
+`zig_coverage_budget_check` evaluates configured line-rate and changed-file
+budgets. `zig_coverage_baseline` previews or writes a baseline artifact only
+with `apply=true`. `zig_coverage_run` runs a caller-supplied coverage command
+only with `apply=true`; preview returns argv, output path, preimage identity,
+and skipped validation instead of executing project code.
+
+Benchmark tools discover likely benchmark entrypoints, normalize JSON or simple
+text timing output, preserve baselines, compare current results to baselines,
+and check regression budgets. `zig_bench_run` is preview-first and executes the
+caller-supplied benchmark command only with `apply=true`; `zig_bench_baseline`
+and `zig_perf_evidence_pack` write workspace artifacts only when applied.
+`zig_profile_regression` plans follow-up profiling from comparison evidence; it
+does not start a profiler.
+
+Samply tools use per-call `samply_path` and never install profiler tools.
+`zig_samply_record` previews or runs `samply record` with explicit unavailable
+and unsupported-platform states. `zig_samply_summary` summarizes supplied
+Samply/Firefox profile JSON, `zig_samply_import` previews or writes a normalized
+profile artifact, and `zig_samply_artifact` registers an existing workspace
+profile artifact only with `apply=true`.
+
+Tracy tools follow the same explicit backend model. `zig_tracy_plan` scans
+source for instrumentation signals, `zig_tracy_probe` reports `not_probed`
+unless `probe_backend=true`, and `zig_tracy_capture` previews or runs
+`tracy-capture` only with `apply=true`. `zig_tracy_artifacts` registers existing
+trace artifacts, and `zig_tracy_hints` produces advisory instrumentation hints
+without modifying source. `zig_profile_open` returns a viewer launch plan only;
+it never opens GUI applications.
 
 ## Runtime Jobs, Resources, And Client Guides
 
@@ -460,6 +501,9 @@ High-signal discovery keywords include:
 - `zlint`, `zwanzig`, `lint`, `lint compare`, `lint gate`, `lint baseline`,
   `suppressions`, `trend`, `sarif`
 - `zflame`, `profile`, `profile plan`, `external capture`, `flamegraph`
+- `coverage`, `coverage baseline`, `coverage budget`, `benchmark`,
+  `benchmark baseline`, `performance budget`, `profile regression`, `samply`,
+  `tracy`, `profile artifact`, `performance evidence`
 
 Source-mutating tools are preview-first and require `apply=true` to write:
 
@@ -481,9 +525,15 @@ Generated output tools such as `zig_code_index_export`, `zig_scip_export`,
 `zig_lint_baseline`, `zig_api_baseline_init`, `zig_sbom`,
 `zigar_validation_run`, `zigar_decision_record`, `zig_flamegraph`, and
 `zig_analysis_graphs` must write to explicit workspace-local output paths and
-preserve preview-first apply gates where advertised. `zig_profile_plan` is
-read-only and returns structured guidance for external profilers; zigar does not
-define capture semantics.
+preserve preview-first apply gates where advertised. Coverage and performance
+artifacts from `zig_coverage_run`, `zig_coverage_merge`,
+`zig_coverage_baseline`, `zig_bench_run`, `zig_bench_baseline`,
+`zig_samply_record`, `zig_samply_import`, `zig_samply_artifact`,
+`zig_tracy_capture`, `zig_tracy_artifacts`, and `zig_perf_evidence_pack` follow
+the same preview/apply provenance rule. `zig_profile_plan` is read-only and
+returns structured guidance for external profilers; Samply and Tracy capture
+tools define explicit argv plans but profiler capture semantics remain with the
+external backend.
 `zig_flamegraph` requires an explicit zflame format and returns
 argv/backend/probe/compatibility metadata with the SVG path.
 `zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to

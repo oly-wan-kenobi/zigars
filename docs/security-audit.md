@@ -26,7 +26,8 @@ This checklist is for release reviews and MCP-client integration changes.
 - Command results include timeout and output-limit metadata.
 - Backend failures use structured `backend_error` payloads.
 - ZLS failures preserve status, restart count, timeout, and last-failure data.
-- HTTP smoke tests cover `initialize`, `tools/list`, `zigar_schema`, and `zigar_doctor`.
+- HTTP smoke tests cover `initialize`, `tools/list`, `zigar_schema`,
+  `zigar_doctor`, and preview/parser coverage for performance workflow tools.
 - HTTP transport rejects non-loopback bind hosts unless a future authenticated
   remote mode is deliberately introduced.
 - Stdio fixture tests cover transport framing, formatter write gating, optional
@@ -38,7 +39,8 @@ This checklist is for release reviews and MCP-client integration changes.
 ## Known Trust Boundaries
 
 - `zig build`, `zig test`, and build scripts can execute project code.
-- ZLS, ZLint, zwanzig, zflame, diff-folded, and platform profilers are local executables.
+- ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, and platform
+  profilers are local executables.
 - The workspace realpath boundary rejects symlink escapes through existing path
   ancestors, but it does not protect against concurrent filesystem races by
   untrusted local processes.

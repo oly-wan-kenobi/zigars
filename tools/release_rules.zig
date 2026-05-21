@@ -213,6 +213,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "profiling backend contract fixtures should stay reviewable and move shared helpers if they grow further",
     },
     .{
+        .path = "src/tools/performance.zig",
+        .max_lines = 1545,
+        .reason = "coverage, benchmark, and profiler workflow handlers should be split before the shared evidence contracts become hard to audit",
+    },
+    .{
         .path = "src/docs.zig",
         .max_lines = 120,
         .reason = "documentation lookup facade should stay thin over focused source-family modules",
@@ -373,6 +378,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "profiling backend definitions should remain compact",
     },
     .{
+        .path = "src/tool_manifest/definitions/performance.zig",
+        .max_lines = 180,
+        .reason = "performance workflow definitions should remain compact and additive",
+    },
+    .{
         .path = "src/tool_manifest/groups.zig",
         .max_lines = 80,
         .reason = "tool group keyword metadata should remain a compact manifest adjunct",
@@ -401,6 +411,11 @@ pub const line_budgets = [_]LineBudget{
         .path = "tools/http_smoke.zig",
         .max_lines = 260,
         .reason = "HTTP smoke tests should stay focused on transport-level release assertions",
+    },
+    .{
+        .path = "tools/http_performance_smoke.zig",
+        .max_lines = 120,
+        .reason = "performance HTTP smoke coverage should stay a focused fixture module",
     },
     .{
         .path = "tools/stdio_fixtures.zig",
@@ -449,7 +464,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_rules.zig",
-        .max_lines = 800,
+        .max_lines = 850,
         .reason = "release policy tables should stay auditable and split by domain if they grow further",
     },
 };
@@ -596,6 +611,7 @@ pub const tool_error_contract_paths = [_][]const u8{
     "src/tools/edit_zls_diagnostics.zig",
     "src/tools/observability.zig",
     "src/tools/profiling.zig",
+    "src/tools/performance.zig",
     "src/tools/release_drift.zig",
     "src/tools/result_shape.zig",
     "src/tools/static_core.zig",

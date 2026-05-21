@@ -40,6 +40,7 @@ feature below A.
 | ZLint optional backend | A | B+ | Optional diagnostics/SARIF/rules/fix command contracts, normalized finding fields, rule-catalog capability fallback, apply-gated fix preview, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and conformance-script scenario hooks when a real ZLint path is claimed. Public claims must name the actual backend evidence. |
 | zwanzig optional backend | A | B+ | Repo-pinned provisioning, JSON/SARIF/rules/CFG graph real scenarios, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and generated scenario evidence in the compatibility matrix. Public claims must name the actual backend evidence. |
 | Profiling/zflame | A | B+ | Explicit `zig_profile_run` argv contract, external-capture docs, zflame recursive SVG validation, XML-prologue SVG acceptance, rendered and intermediate artifact hashes, diff-folded metadata checks, and release-check docs guards. Capture correctness remains the profiler's responsibility. |
+| Coverage/performance workflows | A | B+ | LCOV and zigar JSON coverage parsing, coverage merge/diff/budget contracts, benchmark discovery and result normalization, baseline and evidence-pack artifacts with provenance, preview/apply gates for command-backed runs, HTTP smoke coverage for every public performance tool, and explicit Samply/Tracy unavailable or unsupported-platform states. Coverage merge and benchmark parsing remain evidence-normalization helpers rather than proof of workload representativeness. |
 | Agent workflows | A- | B+ | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, risk-aware validation plans/runs, build/test event parsing, validation history summaries, handoff packs, project memory, capability matching, focused tests, and HTTP/stdio coverage for agent routing/validation output. Workflow output helps route validation; it does not prove code correctness. |
 | CI artifact tools | A- | B+ | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. `zig_junit` remains command-level JUnit. |
 | HTTP/MCP substrate | A | A- | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
@@ -49,11 +50,15 @@ marketed as scoped capabilities rather than full semantic or backend proof.
 
 ## Remaining Limits
 
-- Optional backends remain optional. ZLS, ZLint, zwanzig, zflame, and diff-folded tools
-  return structured unavailable errors or degraded advisory output instead of
-  requiring those binaries in default CI. Public release notes should claim real
-  optional-backend coverage only from a clean-tree manual `Release Readiness`
-  evidence package or a specific conformance artifact.
+- Optional backends remain optional. ZLS, ZLint, zwanzig, zflame, diff-folded,
+  Samply, and Tracy tools return structured unavailable errors, unsupported
+  platform states, or degraded advisory output instead of requiring those
+  binaries in default CI. Public release notes should claim real optional-backend
+  coverage only from a clean-tree manual `Release Readiness` evidence package or
+  a specific conformance artifact.
+- Coverage and benchmark workflows normalize supplied evidence. They do not make
+  a benchmark stable, prove workload representativeness, or make profiler
+  captures correct without external validation.
 - Static-analysis and agent-routing features disclose heuristic scope. Use
   parser-backed tools, compiler-backed commands, ZLS, or project CI before
   making release decisions from advisory output.

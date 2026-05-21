@@ -24,6 +24,7 @@ pub const ToolGroup = enum {
     release_intelligence,
     api_lifecycle,
     dependency_security,
+    performance_workflows,
 };
 pub const StaticAnalysisTier = enum {
     advisory_orientation,
@@ -54,6 +55,7 @@ pub const HandlerModule = enum {
     validation_workflows,
     transactional_editing,
     phase6,
+    performance,
 };
 pub const HandlerRef = struct {
     module: HandlerModule,
@@ -73,14 +75,12 @@ pub const FileCommandPlan = struct {
     file_args: []const []const u8,
     fallback_args: []const []const u8,
 };
-
 pub const CommandPlan = union(enum) {
     argv: []const []const u8,
     optional_file: FileCommandPlan,
     required_file: []const []const u8,
     required_path: []const []const u8,
 };
-
 pub const ZlsPlan = struct {
     method: []const u8,
     requires_document_sync: bool = false,

@@ -23,4 +23,5 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .release_intelligence, .keywords = &.{ "release", "semver", "release notes", "evidence pack", "release readiness", "changelog", "ci evidence", "docs evidence" } },
     .{ .group = .api_lifecycle, .keywords = &.{ "api lifecycle", "api baseline", "api check", "api docs diff", "breaking change", "public api review" } },
     .{ .group = .dependency_security, .keywords = &.{ "dependency update", "dependency fetch", "lock audit", "sbom", "cyclonedx", "security scan", "osv", "zat", "license", "dependency submission", "provenance" } },
+    .{ .group = .performance_workflows, .keywords = &.{ "coverage", "coverage baseline", "coverage budget", "benchmark", "bench baseline", "performance budget", "profile regression", "samply", "tracy", "profile artifact", "performance evidence" } },
 };

@@ -45,11 +45,13 @@ The default GitHub Actions PR/main workflow then runs
 checksums, and native archive runtime behavior are verified before a tag workflow
 can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
 `tools/list`, `zigar_schema`, and `zigar_doctor` using
-`tests/fixtures/http-smoke.expect.json`. The stdio fixture covers newline JSON
-transport, formatting preview/apply, zwanzig SARIF passthrough, zflame SVG
-output metadata, ZLint diagnostics/SARIF/rules/fix preview normalization, CI
-annotation contracts, structured profiling plans, and diff-folded flamegraph flow with
-fake backend executables.
+`tests/fixtures/http-smoke.expect.json`, including parser/preview coverage for
+coverage maps, benchmark comparison, Samply profile import/summary, Tracy
+planning/probe/capture preview, and performance evidence bundles. The stdio
+fixture covers newline JSON transport, formatting preview/apply, zwanzig SARIF
+passthrough, zflame SVG output metadata, ZLint diagnostics/SARIF/rules/fix
+preview normalization, CI annotation contracts, structured profiling plans, and
+diff-folded flamegraph flow with fake backend executables.
 
 Release notes must include a short validation evidence block. At minimum, record
 the source commit, clean-tree status, `zig build release-check`, `zig build dist

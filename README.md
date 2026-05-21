@@ -4,7 +4,8 @@
 agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
 compiler commands, formatting, ZLS code intelligence, local docs lookup, static
 analysis summaries, transactional edit/refactor previews, ZLint/zwanzig linting,
-and zflame profiling helpers.
+zflame profiling helpers, and coverage/benchmark performance evidence
+workflows.
 
 `zigar` is intentionally not an AI code generator. It exposes tools that inspect,
 run, format, and analyze Zig projects. Any source write requires an explicit
@@ -34,8 +35,10 @@ Known limitations:
   backend, or CI evidence.
 - `zig_junit` reports command-level JUnit because Zig does not expose a stable
   per-test event stream for every invocation.
-- Profiling tools render and describe captured data, including artifact hashes;
-  profiler capture correctness belongs to the external profiler backend.
+- Coverage, benchmark, and profiling tools normalize supplied evidence and
+  record artifact hashes; command-backed capture or benchmark runs execute only
+  with `apply=true`, and capture correctness belongs to the external profiler
+  backend.
 
 ## Requirements
 
@@ -47,11 +50,14 @@ Known limitations:
   conversion
 - Optional: `zwanzig` for linting/static-analysis backend tools
 - Optional: `zflame` and `diff-folded` for flamegraphs and flamegraph diffs
+- Optional: `samply` and `tracy-capture` for apply-gated profiler captures,
+  passed per tool call with `samply_path` or `tracy_capture_path`
 
 Optional backend setup, verification commands, and failure triage are documented
-in [docs/backends.md](docs/backends.md). The same backend setup contract is
-available at runtime through `zigar_backend_catalog` and in `zigar_schema` under
-`backend_setup`.
+in [docs/backends.md](docs/backends.md). Cataloged backend setup for Zig, ZLS,
+ZLint, zwanzig, zflame, and diff-folded is available at runtime through
+`zigar_backend_catalog` and in `zigar_schema` under `backend_setup`; Samply and
+Tracy paths are supplied per profiler tool call.
 Release candidates that claim real optional-backend coverage should also run the
 manual `Release Readiness` workflow with the exact backend versions, clean-tree
 source metadata, and generated backend compatibility matrix. Maintainers can use
@@ -289,6 +295,21 @@ optional-backend support is claimed only from a release evidence artifact.
   render through zflame and diff-folded with artifact metadata.
   `zig_profile_run` can execute project code and create normal build/profile
   artifacts. zigar does not own profiler capture semantics.
+- Coverage/performance workflows: `zig_coverage_run`, `zig_coverage_map`,
+  `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, and
+  `zig_coverage_budget_check` normalize LCOV or zigar JSON evidence and check
+  line-rate budgets; `zig_bench_discover`, `zig_bench_run`,
+  `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`,
+  `zig_perf_budget_check`, and `zig_profile_regression` discover benchmark
+  commands, normalize timing evidence, compare baselines, and plan focused
+  profiling; `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`,
+  `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`,
+  `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`,
+  `zig_tracy_hints`, and `zig_perf_evidence_pack` expose apply-gated profile
+  capture, import, artifact registration, and evidence bundles. `zig_coverage_run`,
+  `zig_bench_run`, `zig_samply_record`, and `zig_tracy_capture` can execute
+  project code or external profiler commands, always without a shell and with
+  preview-first artifact writes.
 - Artifact registry: `zigar_artifact_index`, `zigar_artifact_read`, and
   `zigar_artifact_prune` expose workspace-local generated artifacts, bounded
   hashes, provenance records, and apply-gated registry cleanup. Pruning removes
@@ -344,7 +365,8 @@ The short version is: start with `zigar_context_pack`, ask
   no longer match the previewed preimages.
 - Generated, cache, artifact, and vendored paths are classified separately so
   agents can route changes to source inputs or regeneration commands.
-- Build, test, and profiling commands run with the workspace as cwd.
+- Build, test, coverage, benchmark, and profiling commands run with the
+  workspace as cwd.
 - `zigar_schema` includes finer-grained tool risk metadata for source writes,
   artifact writes, LSP state mutation, backend execution, project-code
   execution, and user-command execution.
@@ -352,8 +374,9 @@ The short version is: start with `zigar_context_pack`, ask
   truth for command execution and artifact-write behavior.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
-- zwanzig graph output, zflame SVG output, and diff folded intermediates must
-  use explicit workspace-local output paths. `zig_flamegraph` requires an
+- zwanzig graph output, zflame SVG output, diff folded intermediates, coverage
+  baselines, benchmark baselines, profile captures, and performance evidence
+  packs must use workspace-local output paths. `zig_flamegraph` requires an
   explicit zflame format; there is no `guess` default.
 
 More detail:
@@ -369,8 +392,8 @@ More detail:
   and keyword metadata for every registered tool.
 - [Architecture notes](docs/architecture.md): module boundaries, manifest rules,
   and handler contracts.
-- [Optional backends](docs/backends.md): ZLS, ZLint, zwanzig, zflame, and
-  diff-folded setup.
+- [Optional backends](docs/backends.md): ZLS, ZLint, zwanzig, zflame,
+  diff-folded, Samply, and Tracy setup.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
 - [Feature maturity](docs/maturity.md): public-readiness rubric,

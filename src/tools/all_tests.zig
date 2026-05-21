@@ -7,6 +7,7 @@ test {
     _ = @import("environment_profiles_tests.zig");
     _ = @import("foundation_tests.zig");
     _ = @import("phase6.zig");
+    _ = @import("performance.zig");
     _ = @import("profiling_backends.zig");
     _ = @import("profiling.zig");
     _ = @import("profiling_tests.zig");

@@ -15,6 +15,7 @@ const resource_errors = zigar.resource_errors;
 const App = runtime_mod.App;
 
 pub fn registerTools(server: *mcp_server.Server, runtime: *App) !void {
+    @setEvalBranchQuota(3000);
     inline for (tool_metadata.specs) |spec| {
         try tool_registry.addTool(server, runtime.allocator, runtime, spec, tool_handlers.handlerFor(spec.id));
     }

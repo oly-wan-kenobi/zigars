@@ -171,3 +171,7 @@ evidence reproducible.
 - Profiling workflow routing: `zigar_next_action -> zig_profile_plan ->
   zig_profile_run` when an explicit command is needed, then `zig_flamegraph` or
   `zig_flamegraph_diff` for rendering captured data.
+- Performance evidence routing: `zig_bench_discover -> zig_bench_run ->
+  zig_bench_compare -> zig_perf_budget_check -> zig_profile_regression`, then
+  `zig_samply_record` or `zig_tracy_capture` only when an apply-gated profiler
+  capture is appropriate.
