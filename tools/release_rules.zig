@@ -218,6 +218,16 @@ pub const line_budgets = [_]LineBudget{
         .reason = "coverage, benchmark, and profiler workflow handlers should be split before the shared evidence contracts become hard to audit",
     },
     .{
+        .path = "src/tools/diagnostics.zig",
+        .max_lines = 1450,
+        .reason = "runtime diagnostic handlers should stay bounded and split before backend lanes become hard to audit",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/diagnostics.zig",
+        .max_lines = 170,
+        .reason = "runtime diagnostic tool definitions should remain compact and additive",
+    },
+    .{
         .path = "src/docs.zig",
         .max_lines = 120,
         .reason = "documentation lookup facade should stay thin over focused source-family modules",
@@ -304,7 +314,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tool_manifest/types.zig",
-        .max_lines = 150,
+        .max_lines = 160,
         .reason = "manifest type definitions should remain a compact schema vocabulary",
     },
     .{
@@ -409,7 +419,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/http_smoke.zig",
-        .max_lines = 260,
+        .max_lines = 270,
         .reason = "HTTP smoke tests should stay focused on transport-level release assertions",
     },
     .{
@@ -419,7 +429,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/stdio_fixtures.zig",
-        .max_lines = 490,
+        .max_lines = 510,
         .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
     },
     .{
@@ -607,6 +617,7 @@ pub const tool_error_contract_paths = [_][]const u8{
     "src/tools/core.zig",
     "src/tools/discovery.zig",
     "src/tools/docs.zig",
+    "src/tools/diagnostics.zig",
     "src/tools/edit_zls.zig",
     "src/tools/edit_zls_diagnostics.zig",
     "src/tools/observability.zig",

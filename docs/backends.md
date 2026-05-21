@@ -2,10 +2,11 @@
 
 zigar starts and serves core Zig tools with only a `zig` executable. ZLS,
 ZLint, zwanzig, zflame, and diff-folded are optional local executables with
-server configuration paths. Samply and Tracy capture tools are optional
-profiler executables configured per tool call. Tools that need one of them
-return structured `backend_error` or `tool_error` payloads when the binary is
-missing or the platform is unsupported, not a generic MCP failure.
+server configuration paths. Samply, Tracy, LLDB, heaptrack, Valgrind, AFL++,
+LLVM binary tools, QEMU, and flash tools are optional executables configured per
+tool call. Tools that need one of them return structured `backend_error` or
+`tool_error` payloads when the binary is missing or the platform is unsupported,
+not a generic MCP failure.
 
 ## Compatibility Rules
 
@@ -13,22 +14,26 @@ missing or the platform is unsupported, not a generic MCP failure.
   build and CI gates currently use Zig `0.16.0`.
 - Keep ZLS on the same Zig release line as `zig`. A mismatched ZLS can start but
   fail later on syntax, builtin, or standard-library changes.
-- Treat ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, and platform
-  profilers as workspace-local tooling dependencies. Pin them in the project's
-  package manager, dev shell, or CI image when reproducibility matters.
+- Treat ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, LLDB, heaptrack,
+  Valgrind, AFL++, LLVM binary tools, QEMU, flash tools, and platform profilers
+  as workspace-local tooling dependencies. Pin them in the project's package
+  manager, dev shell, or CI image when reproducibility matters.
 - Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
   For Samply and Tracy capture calls, pass `samply_path` or
   `tracy_capture_path` in the tool arguments when the executable is not on
-  `PATH`.
+  `PATH`. Runtime diagnostic calls use per-call paths such as `lldb_path`,
+  `heaptrack_path`, `valgrind_path`, `afl_path`, `objdump_path`,
+  `dwarfdump_path`, `symbolizer_path`, `qemu_path`, and `flash_tool`.
 
 ## Version Pinning And Optional CI
 
 Default CI uses fake backend fixtures so zigar can verify command shapes,
 structured errors, SARIF/XML/SVG contracts, and artifact metadata without
 requiring every optional executable on every runner. Projects that depend on
-real ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, or
-platform-profiler behavior should add their own backend matrix and pin exact
-backend versions in the dev shell or CI image.
+real ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, debugger,
+memory-analysis, fuzzing, binary-tool, emulator, flash, or platform-profiler
+behavior should add their own backend matrix and pin exact backend versions in
+the dev shell or CI image.
 
 Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
@@ -72,10 +77,10 @@ binaries being validated when the release intends to claim them. Normal CI must
 remain optional-backend-free unless a workflow intentionally opts into this
 setup.
 
-Samply and Tracy are not provisioned by the repo-pinned backend setup. For those
-tools, keep the profiler binary in your project environment and pass
-`samply_path` or `tracy_capture_path` per call when the default command name is
-not appropriate.
+Samply, Tracy, LLDB, heaptrack, Valgrind, AFL++, LLVM binary tools, QEMU, and
+flash tools are not provisioned by the repo-pinned backend setup. Keep those
+binaries in your project environment and pass the per-call path argument when
+the default command name is not appropriate.
 
 The preferred public-release path is the manual `Release Readiness` workflow.
 It runs the normal release gate, release-asset smoke, real backend conformance,
@@ -184,6 +189,15 @@ zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
 diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
 samply --help
 tracy-capture --help
+lldb --version
+heaptrack --help
+valgrind --version
+afl-fuzz -h
+llvm-objdump --version
+llvm-dwarfdump --version
+llvm-symbolizer --version
+qemu-aarch64 --version
+probe-rs --help
 ```
 
 If a direct shell check fails, fix the backend before debugging zigar. If the

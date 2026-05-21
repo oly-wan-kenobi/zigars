@@ -2,6 +2,7 @@ test {
     _ = @import("agent_tests.zig");
     _ = @import("ci_tests.zig");
     _ = @import("command_result_mcp_tests.zig");
+    _ = @import("diagnostics.zig");
     _ = @import("edit_zls_edits_tests.zig");
     _ = @import("edit_zls_tests.zig");
     _ = @import("environment_profiles_tests.zig");

@@ -27,8 +27,9 @@ Public feature claims use this vocabulary:
   ranking, skipped files, and provenance.
 - Heuristic/advisory: useful for orientation or prioritization, not proof.
 - External-backend-backed: ZLint, zwanzig, zflame, diff-folded, Samply, Tracy,
-  or platform profilers own the backend semantics; zigar reports argv, probes,
-  and artifact metadata.
+  LLDB, heaptrack, Valgrind, AFL++, LLVM binary tools, QEMU, flash tools, or
+  platform profilers own the backend semantics; zigar reports argv, probes, and
+  artifact metadata.
 - Curated fallback: bundled partial data used when installed docs are missing.
 - Real conformance artifact: optional-backend compatibility claimed from a
   release evidence package, not from fake-backend fixtures.
@@ -220,6 +221,49 @@ unless `probe_backend=true`, and `zig_tracy_capture` previews or runs
 trace artifacts, and `zig_tracy_hints` produces advisory instrumentation hints
 without modifying source. `zig_profile_open` returns a viewer launch plan only;
 it never opens GUI applications.
+
+## Runtime Diagnostics, Fuzzing, Binary, And Targets
+
+Runtime diagnostic tools use the same evidence envelope as performance tools:
+`evidence_basis`, `backend_status`, `command_argv`, `platform`, `toolchain`,
+`target`, `artifact_identity`, `preimage_identity`, `crash_identity`,
+`confidence`, `limitations`, and `skipped_validation` appear where they apply.
+Preview results expose exact argv and skipped validation without running
+debuggers, fuzzers, emulators, or project commands.
+
+Debugging tools plan and capture LLDB-oriented evidence. `zig_debug_plan`
+returns a debugger workflow and optional LLDB probe. `zig_lldb_backtrace` and
+`zig_core_inspect` preview LLDB argv and run only with `apply=true`, with
+explicit unavailable or unsupported-platform results. `zig_debug_frame_summary`
+parses supplied debugger, sanitizer, or symbolized frames without invoking a
+backend.
+
+Crash fusion tools are read-only parsers for supplied evidence.
+`zig_sanitizer_fusion`, `zig_panic_trace_analyze`, and `zig_crash_repro_plan`
+classify sanitizer, panic, and crash text, extract frames, return stable crash
+identity fields, and list follow-up verification steps.
+
+Memory and fuzzing tools never install optional backends. `zig_heaptrack_run`,
+`zig_valgrind_memcheck`, `zig_callgrind_report`, `zig_afl_run`, and
+`zig_libfuzzer_run` are preview-first and execute only with `apply=true`.
+Applied runs write normalized workspace evidence with preimage and artifact
+identity metadata. `zig_heaptrack_summary`, `zig_fuzz_plan`,
+`zig_fuzz_crash_minimize`, and `zig_fuzz_corpus_summary` parse or plan from
+supplied/workspace evidence without running external tools.
+
+Binary and target tools separate static artifact reads from optional backend
+execution. `zig_binary_size` and `zig_binary_size_diff` read workspace artifacts
+and report size, format, and hash identity. `zig_objdump_summary`,
+`zig_dwarfdump_check`, and `zig_symbolize` preview LLVM backend argv and run only
+when applied. `zig_qemu_test` previews or runs QEMU smoke commands with
+apply-gated execution, while `zig_cross_smoke` and `zig_target_runtime_plan`
+produce cross-target runtime guidance without starting emulators.
+
+Embedded tools remain advisory unless explicitly probing a flash backend.
+`zig_embedded_detect` scans workspace files for embedded, MicroZig, linker, and
+flash workflow signals. `zig_microzig_plan` and `zig_board_profile` return board
+and target guidance. `zig_flash_plan` may probe a selected flash tool with
+`--help`, but it never flashes hardware or mutates devices.
 
 ## Runtime Jobs, Resources, And Client Guides
 
@@ -504,6 +548,10 @@ High-signal discovery keywords include:
 - `coverage`, `coverage baseline`, `coverage budget`, `benchmark`,
   `benchmark baseline`, `performance budget`, `profile regression`, `samply`,
   `tracy`, `profile artifact`, `performance evidence`
+- `debug`, `lldb`, `core dump`, `sanitizer`, `panic`, `crash repro`,
+  `heaptrack`, `valgrind`, `callgrind`, `fuzz`, `afl`, `libfuzzer`, `corpus`
+- `binary size`, `objdump`, `dwarf`, `symbolize`, `qemu`, `cross target`,
+  `embedded`, `microzig`, `board`, `firmware`, `flash`
 
 Source-mutating tools are preview-first and require `apply=true` to write:
 
@@ -530,10 +578,13 @@ artifacts from `zig_coverage_run`, `zig_coverage_merge`,
 `zig_coverage_baseline`, `zig_bench_run`, `zig_bench_baseline`,
 `zig_samply_record`, `zig_samply_import`, `zig_samply_artifact`,
 `zig_tracy_capture`, `zig_tracy_artifacts`, and `zig_perf_evidence_pack` follow
-the same preview/apply provenance rule. `zig_profile_plan` is read-only and
-returns structured guidance for external profilers; Samply and Tracy capture
-tools define explicit argv plans but profiler capture semantics remain with the
-external backend.
+the same preview/apply provenance rule. Runtime diagnostic artifacts from
+`zig_heaptrack_run`, `zig_valgrind_memcheck`, `zig_callgrind_report`,
+`zig_afl_run`, `zig_libfuzzer_run`, and `zig_qemu_test` also follow this rule.
+`zig_profile_plan`, `zig_debug_plan`, `zig_fuzz_plan`, `zig_cross_smoke`,
+`zig_target_runtime_plan`, `zig_microzig_plan`, `zig_board_profile`, and
+`zig_flash_plan` are planning tools; external capture, debugger, fuzzer,
+emulator, and flash semantics remain with the selected backend.
 `zig_flamegraph` requires an explicit zflame format and returns
 argv/backend/probe/compatibility metadata with the SVG path.
 `zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to

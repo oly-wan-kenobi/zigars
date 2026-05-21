@@ -71,6 +71,27 @@ Use `zigar_validation_history`, `zig_test_flake_history`, and
 last run, last good run, recurring failure fingerprints, and history limits.
 They are summaries of supplied or zigar-written history, not a CI database.
 
+## Runtime Diagnostics
+
+Use `zig_debug_plan` when a crash or core dump needs debugger orientation before
+running anything. It returns exact LLDB-oriented argv plans and optional backend
+probe status. `zig_lldb_backtrace` and `zig_core_inspect` execute only with
+`apply=true`; preview mode reports skipped backend execution.
+
+For supplied crash logs, start with `zig_sanitizer_fusion`,
+`zig_panic_trace_analyze`, or `zig_crash_repro_plan`. These tools parse
+sanitizer and panic evidence, extract frames, assign stable crash identities, and
+recommend follow-up verification without invoking external tools.
+
+Use memory, fuzzing, binary, cross-target, and embedded tools when runtime
+evidence depends on optional backends. `zig_heaptrack_run`,
+`zig_valgrind_memcheck`, `zig_callgrind_report`, `zig_afl_run`,
+`zig_libfuzzer_run`, and `zig_qemu_test` are preview-first and write registered
+evidence artifacts only when applied. `zig_binary_size`, `zig_binary_size_diff`,
+`zig_cross_smoke`, `zig_target_runtime_plan`, `zig_embedded_detect`,
+`zig_microzig_plan`, `zig_board_profile`, and `zig_flash_plan` are planning or
+static-inspection tools; `zig_flash_plan` never flashes hardware.
+
 ## Impact And Tests
 
 Use `zigar_impact` for touched files or symbols. It reports direct importers,
@@ -175,3 +196,9 @@ evidence reproducible.
   zig_bench_compare -> zig_perf_budget_check -> zig_profile_regression`, then
   `zig_samply_record` or `zig_tracy_capture` only when an apply-gated profiler
   capture is appropriate.
+- Runtime crash routing: `zig_crash_repro_plan -> zig_sanitizer_fusion ->
+  zig_debug_plan -> zig_lldb_backtrace`, using `apply=true` only when the
+  debugger capture should run.
+- Cross-target and embedded routing: `zig_target_runtime_plan ->
+  zig_cross_smoke -> zig_qemu_test`, or `zig_embedded_detect ->
+  zig_board_profile -> zig_flash_plan` for firmware workflows.

@@ -99,6 +99,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try @import("http_transactional_editing_smoke.zig").run(allocator, io, port, expected.value, &scenarios);
     try @import("http_phase6_smoke.zig").run(allocator, io, port, expected.value, &scenarios);
     try @import("http_performance_smoke.zig").run(allocator, io, port, expected.value, &scenarios);
+    try @import("http_diagnostics_smoke.zig").run(allocator, io, port, expected.value, &scenarios);
     try assertToolPaths(allocator, io, port, 14, "zig_package_cache_doctor", "{\"timeout_ms\":1000}", expected.value, "package_cache_doctor_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 15, "zigar_context_pack", "{\"mode\":\"tiny\"}", expected.value, "context_pack_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 16, "zigar_next_action", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected.value, "next_action_paths", &scenarios);

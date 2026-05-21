@@ -3,6 +3,7 @@ const cli_io = @import("cli_io.zig");
 const coverage = @import("coverage.zig");
 const dist = @import("dist.zig");
 const http_smoke = @import("http_smoke.zig");
+const http_diagnostics_smoke = @import("http_diagnostics_smoke.zig");
 const json_query = @import("json_query.zig");
 const json_util = @import("json_util.zig");
 const release_checks = @import("release_checks.zig");
@@ -23,6 +24,7 @@ test {
     _ = cli_io;
     _ = dist;
     _ = http_smoke;
+    _ = http_diagnostics_smoke;
     _ = json_query;
     _ = json_util;
     _ = release_checks;

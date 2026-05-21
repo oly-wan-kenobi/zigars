@@ -178,6 +178,10 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_lang_ref_search");
         try self.expectTool(tools, "zig_zlint");
         try self.expectTool(tools, "zig_zlint_fix");
+        try self.expectTool(tools, "zig_debug_plan");
+        try self.expectTool(tools, "zig_fuzz_plan");
+        try self.expectTool(tools, "zig_binary_size");
+        try self.expectTool(tools, "zig_flash_plan");
 
         const resources = try self.request("resources/list", null);
         defer self.allocator.free(resources);
@@ -210,6 +214,16 @@ const StdioClient = struct {
         const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
         defer self.allocator.free(profile_plan);
         try self.expectPathString(profile_plan, "kind", "zig_profile_plan");
+
+        const panic_trace = try self.callTool("zig_panic_trace_analyze", "{\"content\":\"thread 1 panic: reached unreachable code\\n#0 0x1 in main src/main.zig:1\\n\"}");
+        defer self.allocator.free(panic_trace);
+        try self.expectPathString(panic_trace, "kind", "zig_panic_trace_analyze");
+        try self.expectPathString(panic_trace, "failure_kind", "panic");
+
+        const binary_size = try self.callTool("zig_binary_size", "{\"path\":\"src/main.zig\"}");
+        defer self.allocator.free(binary_size);
+        try self.expectPathString(binary_size, "kind", "zig_binary_size");
+        try self.expectPathString(binary_size, "format", "unknown");
 
         const preview = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":false}");
         defer self.allocator.free(preview);

@@ -25,6 +25,7 @@ pub const ToolGroup = enum {
     api_lifecycle,
     dependency_security,
     performance_workflows,
+    runtime_diagnostics,
 };
 pub const StaticAnalysisTier = enum {
     advisory_orientation,
@@ -56,6 +57,7 @@ pub const HandlerModule = enum {
     transactional_editing,
     phase6,
     performance,
+    diagnostics,
 };
 pub const HandlerRef = struct {
     module: HandlerModule,

@@ -134,6 +134,12 @@ Tools: `zig_coverage_run`, `zig_coverage_map`, `zig_coverage_merge`, `zig_covera
 
 Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `bench baseline`, `performance budget`, `profile regression`, `samply`, `tracy`, `profile artifact`, `performance evidence`
 
+### runtime_diagnostics
+
+Tools: `zig_debug_plan`, `zig_lldb_backtrace`, `zig_core_inspect`, `zig_debug_frame_summary`, `zig_sanitizer_fusion`, `zig_panic_trace_analyze`, `zig_crash_repro_plan`, `zig_heaptrack_run`, `zig_heaptrack_summary`, `zig_valgrind_memcheck`, `zig_callgrind_report`, `zig_fuzz_plan`, `zig_afl_run`, `zig_libfuzzer_run`, `zig_fuzz_crash_minimize`, `zig_fuzz_corpus_summary`, `zig_binary_size`, `zig_binary_size_diff`, `zig_objdump_summary`, `zig_dwarfdump_check`, `zig_symbolize`, `zig_qemu_test`, `zig_cross_smoke`, `zig_target_runtime_plan`, `zig_embedded_detect`, `zig_microzig_plan`, `zig_board_profile`, `zig_flash_plan`
+
+Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro`, `heaptrack`, `valgrind`, `callgrind`, `fuzz`, `afl`, `libfuzzer`, `binary size`, `objdump`, `dwarf`, `symbolize`, `qemu`, `cross target`, `embedded`, `microzig`, `board`, `flash`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -175,6 +181,10 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - normalize coverage evidence: prefer `zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check`
 - run and compare benchmarks: prefer `zig_bench_discover, zig_bench_run, zig_bench_compare, zig_perf_budget_check`
 - record profiler evidence: prefer `zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack`
+- debug runtime crashes: prefer `zig_debug_plan, zig_lldb_backtrace, zig_core_inspect, zig_sanitizer_fusion, zig_panic_trace_analyze, zig_crash_repro_plan`
+- run memory and fuzz diagnostics: prefer `zig_heaptrack_run, zig_valgrind_memcheck, zig_callgrind_report, zig_fuzz_plan, zig_afl_run, zig_libfuzzer_run`
+- inspect binary and cross-target runtime artifacts: prefer `zig_binary_size, zig_binary_size_diff, zig_objdump_summary, zig_dwarfdump_check, zig_symbolize, zig_qemu_test, zig_cross_smoke`
+- plan embedded and flash workflows: prefer `zig_embedded_detect, zig_microzig_plan, zig_board_profile, zig_flash_plan`
 - inspect generated evidence artifacts: prefer `zigar_artifact_index, zigar_artifact_read`
 - inspect zigar runtime health: prefer `zigar_metrics_v2, zigar_tool_latency`
 - explain zigar safety posture: prefer `zigar_trust_report, zigar_risk_audit`
@@ -185,6 +195,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 
 ## Compact Argument Hints
 
+- `zig_afl_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_allocations`: required `file: string`
 - `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
 - `zig_api_baseline_init`: optional `file: string`, `content: string`, `output: string`, `apply: boolean`, `limit: integer`
@@ -200,10 +211,14 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_bench_discover`: optional `limit: integer`
 - `zig_bench_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_benchmark_history`: optional `path: string`, `limit: integer`
+- `zig_binary_size`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
+- `zig_binary_size_diff`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
+- `zig_board_profile`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
 - `zig_build`: optional `args: string`, `timeout_ms: integer`
 - `zig_build_events`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_builtin_doc`: required `query: string`; optional `limit: integer`
 - `zig_builtin_doc_json`: required `query: string`; optional `limit: integer`
+- `zig_callgrind_report`: optional `command: string`, `text: string`, `content: string`, `path: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `valgrind_path: string`
 - `zig_changed_files_plan`: optional `timeout_ms: integer`
 - `zig_check`: required `file: string`; optional `timeout_ms: integer`
 - `zig_ci_annotations`: required `file: string`; optional `timeout_ms: integer`
@@ -217,13 +232,18 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
 - `zig_compile_error_index`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_completion`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_core_inspect`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_coverage_baseline`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `limit: integer`
 - `zig_coverage_budget_check`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
 - `zig_coverage_diff`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
 - `zig_coverage_map`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_coverage_merge`: optional `current: string`, `baseline: string`, `left: string`, `right: string`, `output: string`, `apply: boolean`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
 - `zig_coverage_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `target: string`, `coverage_backend: string`, `coverage_artifacts: string`
+- `zig_crash_repro_plan`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
+- `zig_cross_smoke`: optional `target: string`, `targets: string`, `command: string`, `binary: string`, `qemu_path: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_dead_decl_candidates`: required `file: string`
+- `zig_debug_frame_summary`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
+- `zig_debug_plan`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_decl_summary`: required `file: string`
 - `zig_decl_summary_json`: required `file: string`
 - `zig_definition`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
@@ -244,6 +264,8 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_document_open`: required `file: string`, `content: string`
 - `zig_document_status`: required `file: string`
 - `zig_document_symbols`: required `file: string`; optional `content: string`
+- `zig_dwarfdump_check`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
+- `zig_embedded_detect`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
 - `zig_error_sets`: required `file: string`
 - `zig_explain_errors`: optional `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_extract_decl`: required `file: string`, `target_file: string`, `start_line: integer`, `end_line: integer`; optional `apply: boolean`
@@ -251,10 +273,16 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_file_owner`: required `file: string`
 - `zig_flamegraph`: required `format: string`, `input: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `intermediate: string`, `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
+- `zig_flash_plan`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
 - `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
+- `zig_fuzz_corpus_summary`: required `path: string`; optional `limit: integer`
+- `zig_fuzz_crash_minimize`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
+- `zig_fuzz_plan`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_generated_file_trace`: required `path: string`
 - `zig_github_dependency_submit_plan`: optional `manifest: string`, `job: string`, `ref: string`, `sha: string`
+- `zig_heaptrack_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `heaptrack_path: string`, `valgrind_path: string`
+- `zig_heaptrack_summary`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_impact_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
 - `zig_import_graph`: optional `limit: integer`
@@ -264,6 +292,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_lang_ref_search`: required `query: string`; optional `limit: integer`
 - `zig_lang_ref_search_json`: required `query: string`; optional `limit: integer`
 - `zig_langref_item`: required `query: string`; optional `limit: integer`
+- `zig_libfuzzer_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
 - `zig_lint_baseline`: required `findings: string`; optional `baseline: string`, `output: string`, `apply: boolean`
 - `zig_lint_compare`: optional `zlint_findings: string`, `zwanzig_findings: string`
@@ -273,11 +302,15 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_lint_sarif`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
 - `zig_lint_suppressions`: required `findings: string`; optional `suppressions: string`
 - `zig_lint_trend`: required `before: string`, `after: string`
+- `zig_lldb_backtrace`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
+- `zig_microzig_plan`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
 - `zig_move_decl`: required `source_file: string`, `target_file: string`, `name: string`; optional `apply: boolean`
+- `zig_objdump_summary`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_organize_imports`: required `file: string`; optional `apply: boolean`
 - `zig_osv_scan`: optional `path: string`, `content: string`
 - `zig_package_cache_doctor`: optional `timeout_ms: integer`
+- `zig_panic_trace_analyze`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
 - `zig_perf_budget_check`: optional `comparison: string`, `results: string`, `max_regression_pct: integer`
 - `zig_perf_evidence_pack`: optional `coverage: string`, `benchmarks: string`, `samply: string`, `tracy: string`, `flamegraph: string`, `validation: string`, `output: string`, `apply: boolean`
@@ -288,6 +321,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_project_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`
 - `zig_public_api`: required `file: string`
 - `zig_public_api_diff`: optional `file: string`, `before: string`, `after: string`, `baseline_ref: string`
+- `zig_qemu_test`: optional `target: string`, `targets: string`, `command: string`, `binary: string`, `qemu_path: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_readme_command_check`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_references`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`, `include_declaration: boolean`
 - `zig_release_evidence_pack`: optional `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `artifacts: string`
@@ -298,6 +332,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_samply_import`: optional `command: string`, `path: string`, `content: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`, `tracy_capture_path: string`, `probe_backend: boolean`, `address: string`, `port: integer`, `seconds: integer`, `limit: integer`
 - `zig_samply_record`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`
 - `zig_samply_summary`: optional `path: string`, `content: string`, `profile: string`, `limit: integer`
+- `zig_sanitizer_fusion`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_sbom`: optional `manifest: string`, `output: string`, `apply: boolean`
 - `zig_scip_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`
@@ -315,7 +350,9 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_std_search`: required `query: string`; optional `limit: integer`
 - `zig_std_search_json`: required `query: string`; optional `limit: integer`
 - `zig_std_signature`: required `name: string`; optional `limit: integer`
+- `zig_symbolize`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_target_matrix_plan`: optional `targets: string`, `steps: string`
+- `zig_target_runtime_plan`: optional `target: string`, `targets: string`, `command: string`, `binary: string`, `qemu_path: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_test`: optional `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_discover`: optional `limit: integer`
 - `zig_test_events`: optional `text: string`, `command: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
@@ -336,6 +373,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_tracy_probe`: optional `tracy_capture_path: string`, `probe_backend: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_update_imports`: required `old_import: string`, `new_import: string`; optional `file: string`, `files: string`, `apply: boolean`
+- `zig_valgrind_memcheck`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `heaptrack_path: string`, `valgrind_path: string`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
 - `zig_zat_scan`: optional `path: string`, `content: string`
@@ -420,6 +458,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 
 ## Planning Support
 
+- `zig_afl_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_allocations`: `pure_analysis` read-only analysis
 - `zig_analysis_graphs`: `workspace_artifact` explicit workspace artifact
 - `zig_api_baseline_init`: `workspace_artifact` explicit workspace artifact
@@ -435,6 +474,9 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_bench_discover`: `pure_analysis` read-only analysis
 - `zig_bench_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_benchmark_history`: `pure_analysis` read-only analysis
+- `zig_binary_size`: `pure_analysis` read-only analysis
+- `zig_binary_size_diff`: `pure_analysis` read-only analysis
+- `zig_board_profile`: `pure_analysis` read-only analysis
 - `zig_build`: `exact_command` exact argv
 - `zig_build_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_build_graph`: `pure_analysis` read-only analysis
@@ -444,6 +486,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_builtin_doc_json`: `pure_analysis` read-only analysis
 - `zig_builtin_list`: `pure_analysis` read-only analysis
 - `zig_builtin_list_json`: `pure_analysis` read-only analysis
+- `zig_callgrind_report`: `apply_gated_mutation` preview/apply mutation
 - `zig_changed_files_plan`: `dynamic_command` runtime-dependent backend plan
 - `zig_check`: `exact_command` exact argv
 - `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
@@ -457,13 +500,18 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_command_plan`: `pure_analysis` read-only analysis
 - `zig_compile_error_index`: `dynamic_command` runtime-dependent backend plan
 - `zig_completion`: `zls_request` `textDocument/completion`
+- `zig_core_inspect`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_baseline`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_budget_check`: `pure_analysis` read-only analysis
 - `zig_coverage_diff`: `pure_analysis` read-only analysis
 - `zig_coverage_map`: `pure_analysis` read-only analysis
 - `zig_coverage_merge`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_run`: `apply_gated_mutation` preview/apply mutation
+- `zig_crash_repro_plan`: `pure_analysis` read-only analysis
+- `zig_cross_smoke`: `pure_analysis` read-only analysis
 - `zig_dead_decl_candidates`: `pure_analysis` read-only analysis
+- `zig_debug_frame_summary`: `pure_analysis` read-only analysis
+- `zig_debug_plan`: `dynamic_command` runtime-dependent backend plan
 - `zig_decl_summary`: `pure_analysis` read-only analysis
 - `zig_decl_summary_json`: `pure_analysis` read-only analysis
 - `zig_definition`: `zls_request` `textDocument/definition`
@@ -486,6 +534,8 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_document_open`: `zls_request` `textDocument/didOpen`
 - `zig_document_status`: `pure_analysis` read-only analysis
 - `zig_document_symbols`: `zls_request` `textDocument/documentSymbol`
+- `zig_dwarfdump_check`: `apply_gated_mutation` preview/apply mutation
+- `zig_embedded_detect`: `pure_analysis` read-only analysis
 - `zig_env`: `exact_command` exact argv
 - `zig_error_sets`: `pure_analysis` read-only analysis
 - `zig_explain_errors`: `dynamic_command` runtime-dependent backend plan
@@ -494,10 +544,16 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_file_owner`: `pure_analysis` read-only analysis
 - `zig_flamegraph`: `workspace_artifact` explicit workspace artifact
 - `zig_flamegraph_diff`: `workspace_artifact` explicit workspace artifact
+- `zig_flash_plan`: `dynamic_command` runtime-dependent backend plan
 - `zig_format`: `apply_gated_mutation` preview/apply mutation
 - `zig_format_check`: `exact_command` exact argv
+- `zig_fuzz_corpus_summary`: `pure_analysis` read-only analysis
+- `zig_fuzz_crash_minimize`: `pure_analysis` read-only analysis
+- `zig_fuzz_plan`: `pure_analysis` read-only analysis
 - `zig_generated_file_trace`: `pure_analysis` read-only analysis
 - `zig_github_dependency_submit_plan`: `pure_analysis` read-only analysis
+- `zig_heaptrack_run`: `apply_gated_mutation` preview/apply mutation
+- `zig_heaptrack_summary`: `pure_analysis` read-only analysis
 - `zig_hover`: `zls_request` `textDocument/hover`
 - `zig_impact_semantic`: `pure_analysis` read-only analysis
 - `zig_import_graph`: `pure_analysis` read-only analysis
@@ -507,6 +563,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_lang_ref_search`: `pure_analysis` read-only analysis
 - `zig_lang_ref_search_json`: `pure_analysis` read-only analysis
 - `zig_langref_item`: `pure_analysis` read-only analysis
+- `zig_libfuzzer_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_lint`: `dynamic_command` runtime-dependent backend plan
 - `zig_lint_baseline`: `workspace_artifact` explicit workspace artifact
 - `zig_lint_compare`: `pure_analysis` read-only analysis
@@ -517,11 +574,15 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_lint_sarif`: `dynamic_command` runtime-dependent backend plan
 - `zig_lint_suppressions`: `pure_analysis` read-only analysis
 - `zig_lint_trend`: `pure_analysis` read-only analysis
+- `zig_lldb_backtrace`: `apply_gated_mutation` preview/apply mutation
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
+- `zig_microzig_plan`: `pure_analysis` read-only analysis
 - `zig_move_decl`: `apply_gated_mutation` preview/apply mutation
+- `zig_objdump_summary`: `apply_gated_mutation` preview/apply mutation
 - `zig_organize_imports`: `apply_gated_mutation` preview/apply mutation
 - `zig_osv_scan`: `pure_analysis` read-only analysis
 - `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
+- `zig_panic_trace_analyze`: `pure_analysis` read-only analysis
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
 - `zig_perf_budget_check`: `pure_analysis` read-only analysis
 - `zig_perf_evidence_pack`: `apply_gated_mutation` preview/apply mutation
@@ -532,6 +593,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_project_docs_query`: `pure_analysis` read-only analysis
 - `zig_public_api`: `pure_analysis` read-only analysis
 - `zig_public_api_diff`: `dynamic_command` runtime-dependent backend plan
+- `zig_qemu_test`: `apply_gated_mutation` preview/apply mutation
 - `zig_readme_command_check`: `pure_analysis` read-only analysis
 - `zig_references`: `zls_request` `textDocument/references`
 - `zig_release_evidence_pack`: `pure_analysis` read-only analysis
@@ -542,6 +604,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_samply_import`: `apply_gated_mutation` preview/apply mutation
 - `zig_samply_record`: `apply_gated_mutation` preview/apply mutation
 - `zig_samply_summary`: `pure_analysis` read-only analysis
+- `zig_sanitizer_fusion`: `pure_analysis` read-only analysis
 - `zig_sbom`: `workspace_artifact` explicit workspace artifact
 - `zig_scip_export`: `workspace_artifact` explicit workspace artifact
 - `zig_semantic_callers`: `pure_analysis` read-only analysis
@@ -560,7 +623,9 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_std_search`: `pure_analysis` read-only analysis
 - `zig_std_search_json`: `pure_analysis` read-only analysis
 - `zig_std_signature`: `pure_analysis` read-only analysis
+- `zig_symbolize`: `apply_gated_mutation` preview/apply mutation
 - `zig_target_matrix_plan`: `pure_analysis` read-only analysis
+- `zig_target_runtime_plan`: `pure_analysis` read-only analysis
 - `zig_targets`: `exact_command` exact argv
 - `zig_test`: `exact_command` exact argv
 - `zig_test_discover`: `pure_analysis` read-only analysis
@@ -582,6 +647,7 @@ Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `benc
 - `zig_tracy_probe`: `dynamic_command` runtime-dependent backend plan
 - `zig_translate_c`: `exact_command` exact argv
 - `zig_update_imports`: `apply_gated_mutation` preview/apply mutation
+- `zig_valgrind_memcheck`: `apply_gated_mutation` preview/apply mutation
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`

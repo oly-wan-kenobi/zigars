@@ -24,4 +24,5 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .api_lifecycle, .keywords = &.{ "api lifecycle", "api baseline", "api check", "api docs diff", "breaking change", "public api review" } },
     .{ .group = .dependency_security, .keywords = &.{ "dependency update", "dependency fetch", "lock audit", "sbom", "cyclonedx", "security scan", "osv", "zat", "license", "dependency submission", "provenance" } },
     .{ .group = .performance_workflows, .keywords = &.{ "coverage", "coverage baseline", "coverage budget", "benchmark", "bench baseline", "performance budget", "profile regression", "samply", "tracy", "profile artifact", "performance evidence" } },
+    .{ .group = .runtime_diagnostics, .keywords = &.{ "debug", "lldb", "core dump", "sanitizer", "panic trace", "crash repro", "heaptrack", "valgrind", "callgrind", "fuzz", "afl", "libfuzzer", "binary size", "objdump", "dwarf", "symbolize", "qemu", "cross target", "embedded", "microzig", "board", "flash" } },
 };

@@ -6,6 +6,7 @@ const ci = @import("tools/ci.zig");
 const core = @import("tools/core.zig");
 const discovery = @import("tools/discovery.zig");
 const docs = @import("tools/docs.zig");
+const diagnostics = @import("tools/diagnostics.zig");
 const edit_zls = @import("tools/edit_zls.zig");
 const edit_zls_diagnostics = @import("tools/edit_zls_diagnostics.zig");
 const observability = @import("tools/observability.zig");
@@ -37,6 +38,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .edit_zls => @field(edit_zls, ref.name),
         .edit_zls_diagnostics => @field(edit_zls_diagnostics, ref.name),
         .docs => @field(docs, ref.name),
+        .diagnostics => @field(diagnostics, ref.name),
         .static_analysis => @field(static_analysis, ref.name),
         .ci => @field(ci, ref.name),
         .observability => @field(observability, ref.name),

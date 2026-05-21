@@ -7,7 +7,8 @@
     "zig_impact_semantic", "zig_test_select_semantic", "zigar_validation_plan", "zigar_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigar_validation_history", "zig_test_flake_history", "zig_failure_history", "zigar_session_snapshot", "zigar_handoff_pack", "zigar_decision_record", "zigar_project_notes", "zigar_project_memory", "zigar_capability_match", "zigar_tool_sequence_plan",
     "zigar_patch_session_create", "zigar_patch_session_preview", "zigar_patch_session_apply", "zigar_patch_session_validate", "zigar_patch_session_revert", "zig_generated_file_trace", "zigar_edit_policy_check", "zigar_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch",
     "zig_ci_ingest", "zig_ci_repro_plan", "zig_ci_failure_map", "zig_release_plan", "zig_semver_suggest", "zig_release_notes_draft", "zig_release_evidence_pack", "zig_api_baseline_init", "zig_api_check", "zig_api_diff_baseline", "zig_api_docs_diff", "zig_docs_index_build", "zig_docs_query", "zig_std_signature", "zig_langref_item", "zig_autodoc_ingest", "zig_project_docs_query", "zig_doc_example_check", "zig_snippet_check", "zig_readme_command_check", "zig_dependency_update_plan", "zig_dependency_fetch_check", "zig_dependency_lock_audit", "zig_dependency_impact", "zig_sbom", "zig_zat_scan", "zig_osv_scan", "zig_dependency_security_report", "zig_dependency_provenance", "zig_dependency_license_summary", "zig_github_dependency_submit_plan",
-    "zig_coverage_run", "zig_coverage_map", "zig_coverage_merge", "zig_coverage_diff", "zig_coverage_baseline", "zig_coverage_budget_check", "zig_bench_discover", "zig_bench_run", "zig_bench_baseline", "zig_benchmark_history", "zig_bench_compare", "zig_perf_budget_check", "zig_profile_regression", "zig_samply_record", "zig_samply_summary", "zig_samply_import", "zig_samply_artifact", "zig_profile_open", "zig_tracy_plan", "zig_tracy_probe", "zig_tracy_capture", "zig_tracy_artifacts", "zig_tracy_hints", "zig_perf_evidence_pack"
+    "zig_coverage_run", "zig_coverage_map", "zig_coverage_merge", "zig_coverage_diff", "zig_coverage_baseline", "zig_coverage_budget_check", "zig_bench_discover", "zig_bench_run", "zig_bench_baseline", "zig_benchmark_history", "zig_bench_compare", "zig_perf_budget_check", "zig_profile_regression", "zig_samply_record", "zig_samply_summary", "zig_samply_import", "zig_samply_artifact", "zig_profile_open", "zig_tracy_plan", "zig_tracy_probe", "zig_tracy_capture", "zig_tracy_artifacts", "zig_tracy_hints", "zig_perf_evidence_pack",
+    "zig_debug_plan", "zig_lldb_backtrace", "zig_core_inspect", "zig_debug_frame_summary", "zig_sanitizer_fusion", "zig_panic_trace_analyze", "zig_crash_repro_plan", "zig_heaptrack_run", "zig_heaptrack_summary", "zig_valgrind_memcheck", "zig_callgrind_report", "zig_fuzz_plan", "zig_afl_run", "zig_libfuzzer_run", "zig_fuzz_crash_minimize", "zig_fuzz_corpus_summary", "zig_binary_size", "zig_binary_size_diff", "zig_objdump_summary", "zig_dwarfdump_check", "zig_symbolize", "zig_qemu_test", "zig_cross_smoke", "zig_target_runtime_plan", "zig_embedded_detect", "zig_microzig_plan", "zig_board_profile", "zig_flash_plan"
   ],
   "tools_list_schema_paths": {
     "zig_format": {
@@ -194,6 +195,28 @@
     "zig_perf_evidence_pack": {
       "inputSchema.properties.output.x-zigar-path-kind": "output_path",
       "inputSchema.properties.apply.default": false
+    },
+    "zig_lldb_backtrace": {
+      "inputSchema.properties.binary.type": "string",
+      "inputSchema.properties.apply.default": false
+    },
+    "zig_heaptrack_run": {
+      "inputSchema.required.0": "command",
+      "inputSchema.properties.apply.default": false
+    },
+    "zig_afl_run": {
+      "inputSchema.properties.corpus.x-zigar-path-kind": "input_path",
+      "inputSchema.properties.apply.default": false
+    },
+    "zig_binary_size": {
+      "inputSchema.required.0": "path"
+    },
+    "zig_qemu_test": {
+      "inputSchema.properties.qemu_path.type": "string",
+      "inputSchema.properties.apply.default": false
+    },
+    "zig_flash_plan": {
+      "inputSchema.properties.probe_backend.default": false
     }
   },
   "schema_paths": {
@@ -269,6 +292,14 @@
     "registry_tool_arguments.zig_samply_record.risk.executes_backend": true,
     "registry_tool_arguments.zig_tracy_capture.risk.writes_artifacts": true,
     "registry_tool_arguments.zig_perf_evidence_pack.risk.writes_require_apply": true,
+    "registry_tool_arguments.zig_lldb_backtrace.risk.executes_backend": true,
+    "registry_tool_arguments.zig_heaptrack_run.risk.writes_require_apply": true,
+    "registry_tool_arguments.zig_afl_run.risk.executes_backend": true,
+    "registry_tool_arguments.zig_libfuzzer_run.risk.executes_user_command": true,
+    "registry_tool_arguments.zig_objdump_summary.risk.executes_backend": true,
+    "registry_tool_arguments.zig_qemu_test.risk.executes_project_code": true,
+    "registry_tool_arguments.zig_flash_plan.optional.probe_backend": "boolean",
+    "registry_tool_planning.zig_fuzz_plan.kind": "pure_analysis",
     "registry_tool_arguments.zig_osv_scan.optional.content": "string",
     "registry_tool_planning.zig_sbom.kind": "workspace_artifact",
     "common_intents.0.prefer": "zig_format"
@@ -837,6 +868,131 @@
     "kind": "zig_perf_evidence_pack",
     "evidence_count": 6,
     "applied": false
+  },
+  "debug_plan_paths": {
+    "kind": "zig_debug_plan",
+    "backend_status.status": "not_probed"
+  },
+  "lldb_backtrace_paths": {
+    "kind": "zig_lldb_backtrace",
+    "applied": false,
+    "requires_apply": true,
+    "backend_status.backend": "lldb"
+  },
+  "core_inspect_paths": {
+    "kind": "zig_core_inspect",
+    "applied": false
+  },
+  "debug_frame_paths": {
+    "kind": "zig_debug_frame_summary",
+    "frame_count": 1
+  },
+  "sanitizer_fusion_paths": {
+    "kind": "zig_sanitizer_fusion",
+    "sanitizer": "asan",
+    "failure_kind": "use_after_free"
+  },
+  "panic_trace_paths": {
+    "kind": "zig_panic_trace_analyze",
+    "failure_kind": "use_after_free"
+  },
+  "crash_repro_paths": {
+    "kind": "zig_crash_repro_plan",
+    "failure_kind": "use_after_free"
+  },
+  "heaptrack_run_paths": {
+    "kind": "zig_heaptrack_run",
+    "applied": false,
+    "backend_status.backend": "heaptrack"
+  },
+  "heaptrack_summary_paths": {
+    "kind": "zig_heaptrack_summary",
+    "memory_backend": "heaptrack",
+    "findings.allocation_count": 7
+  },
+  "valgrind_memcheck_paths": {
+    "kind": "zig_valgrind_memcheck",
+    "applied": false,
+    "backend_status.backend": "valgrind"
+  },
+  "callgrind_report_paths": {
+    "kind": "zig_callgrind_report",
+    "events.0": "Ir"
+  },
+  "fuzz_plan_paths": {
+    "kind": "zig_fuzz_plan",
+    "target": "native"
+  },
+  "afl_run_paths": {
+    "kind": "zig_afl_run",
+    "applied": false,
+    "backend_status.backend": "afl-fuzz"
+  },
+  "libfuzzer_run_paths": {
+    "kind": "zig_libfuzzer_run",
+    "applied": false,
+    "backend_status.backend": "project_command"
+  },
+  "fuzz_minimize_paths": {
+    "kind": "zig_fuzz_crash_minimize",
+    "stop_condition": "The minimized input must reproduce the same crash identity under the original command."
+  },
+  "fuzz_corpus_paths": {
+    "kind": "zig_fuzz_corpus_summary",
+    "path": "tests/fixtures/static-analysis"
+  },
+  "binary_size_paths": {
+    "kind": "zig_binary_size",
+    "format": "unknown"
+  },
+  "binary_size_diff_paths": {
+    "kind": "zig_binary_size_diff",
+    "current_binary.path": "build.zig",
+    "baseline_binary.path": "README.md"
+  },
+  "objdump_summary_paths": {
+    "kind": "zig_objdump_summary",
+    "applied": false,
+    "backend_status.backend": "llvm-objdump"
+  },
+  "dwarfdump_check_paths": {
+    "kind": "zig_dwarfdump_check",
+    "applied": false,
+    "backend_status.backend": "llvm-dwarfdump"
+  },
+  "symbolize_paths": {
+    "kind": "zig_symbolize",
+    "applied": false,
+    "backend_status.backend": "llvm-symbolizer"
+  },
+  "qemu_test_paths": {
+    "kind": "zig_qemu_test",
+    "applied": false,
+    "backend_status.backend": "qemu"
+  },
+  "cross_smoke_paths": {
+    "kind": "zig_cross_smoke",
+    "targets.0.target": "x86_64-linux-gnu"
+  },
+  "target_runtime_plan_paths": {
+    "kind": "zig_target_runtime_plan",
+    "targets.0.runtime_class": "wasm"
+  },
+  "embedded_detect_paths": {
+    "kind": "zig_embedded_detect"
+  },
+  "microzig_plan_paths": {
+    "kind": "zig_microzig_plan",
+    "board": "rp2040"
+  },
+  "board_profile_paths": {
+    "kind": "zig_board_profile",
+    "runtime": "bare_metal_arm_cortex_m"
+  },
+  "flash_plan_paths": {
+    "kind": "zig_flash_plan",
+    "mutates_hardware": false,
+    "backend_status.status": "not_probed"
   },
   "package_cache_doctor_paths": {
     "kind": "zig_package_cache_doctor"
