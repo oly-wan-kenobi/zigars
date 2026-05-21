@@ -87,6 +87,13 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try assertToolPaths(allocator, io, port, 23, "zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}", expected.value, "public_api_diff_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 24, "zigar_project_profile", "{}", expected.value, "project_profile_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 25, "zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\",\"stop_on_failure\":true}", expected.value, "validate_patch_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 50, "zigar_result_shape", "{\"mode\":\"compact\"}", expected.value, "result_shape_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 51, "zigar_output_budget_plan", "{\"mode\":\"deep\",\"token_budget\":12,\"tool\":\"zig_check\"}", expected.value, "output_budget_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 52, "zigar_metrics_v2", "{}", expected.value, "metrics_v2_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 53, "zigar_command_provenance", "{\"tool\":\"zigar_artifact_prune\"}", expected.value, "command_provenance_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 54, "zigar_risk_audit", "{\"include_none\":false}", expected.value, "risk_audit_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 55, "zigar_docs_drift_check", "{\"mode\":\"compact\"}", expected.value, "docs_drift_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 56, "zigar_artifact_index", "{\"include_hashes\":false,\"limit\":1,\"mode\":\"compact\"}", expected.value, "artifact_index_paths", &scenarios);
 
     try smoke.assertMinimumCount(io, "http-smoke scenarios", scenarios, coverage_config.min_http_smoke_scenarios);
     try stdoutWrite(io, "http smoke ok\n");
