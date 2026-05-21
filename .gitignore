@@ -4,6 +4,7 @@
 /zig-pkg/
 /dist/
 /coverage/
+/project/
 
 .DS_Store
 *.swp
