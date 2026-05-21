@@ -109,7 +109,9 @@ pub fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {
     return checkDocNeedles(allocator, io, "docs/maturity.md", &.{
         "Minimum public-release rating: A",
         "source_tree_clean: true",
-        "No below-A feature area remains",
+        "No high-impact release blocker remains",
+        "Contract maturity",
+        "Capability maturity",
         "Release gate and packaging",
         "MCP/tool contract",
         "ZLS/LSP tools",

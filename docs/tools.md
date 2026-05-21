@@ -128,13 +128,16 @@ metadata includes `installed_doc_available`, `fallback_reason`, and
 `parse_failure_count` so fallback mode is explicit rather than silent.
 
 Structured docs outputs use the same contract across builtin, stdlib source, std
-item, and language-reference workflows: `source`, `query`, `limit`,
-`result_count`, `no_result_reason`, `ranking`, and `index_metadata`. The
-`source` object includes `id`, `label`, `provenance`, `completeness`, explicit
+item, and language-reference workflows: `source`, `completeness_level`, `query`,
+`limit`, `result_count`, `no_result_reason`, `ranking`, and `index_metadata`.
+The top-level `completeness_level` mirrors `source.completeness` so clients do
+not need to parse nested provenance before deciding whether a result is
+complete, source-scanned, or partial curated fallback. The `source` object
+includes `id`, `label`, `provenance`, `completeness`, explicit
 `version`/`version_status`, and `path`/`source_path` when a local file or
 directory is known. `index_metadata` records the in-memory index strategy,
-source roots, per-call creation status, scanned/skipped counts where applicable, and
-curated fallback status. Stdlib and installed language-reference hits also
+source roots, per-call creation status, scanned/skipped counts where applicable,
+and curated fallback status. Stdlib and installed language-reference hits also
 include result-level `source_path` for the exact local file behind the match.
 Text docs tools are human-readable projections of the same contract, and the
 `_json` companions

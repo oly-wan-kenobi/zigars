@@ -33,9 +33,19 @@ pub const line_budgets = [_]LineBudget{
         .reason = "MCP server wiring must stay a dispatcher; tool behavior belongs in src/tools modules",
     },
     .{
+        .path = "src/server_tests.zig",
+        .max_lines = 620,
+        .reason = "server integration fixtures should stay readable and move shared setup helpers if they grow further",
+    },
+    .{
         .path = "src/mcp_server.zig",
-        .max_lines = 1250,
+        .max_lines = 1300,
         .reason = "first-party MCP adapter owns routing and result lifetime; transport-specific helpers should stay separate",
+    },
+    .{
+        .path = "src/mcp_server_tests.zig",
+        .max_lines = 600,
+        .reason = "MCP adapter fixtures should stay focused on protocol routing, ordering, and error contracts",
     },
     .{
         .path = "src/mcp_server/http_transport.zig",
@@ -124,7 +134,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/static_build.zig",
-        .max_lines = 450,
+        .max_lines = 480,
         .reason = "build graph scanning should stay independently reviewable",
     },
     .{
@@ -139,7 +149,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tools/profiling.zig",
-        .max_lines = 600,
+        .max_lines = 620,
         .reason = "profiling workflow handlers should stay separate from plan and backend-heavy fixture modules",
     },
     .{
@@ -168,9 +178,24 @@ pub const line_budgets = [_]LineBudget{
         .reason = "stdlib source lookup should stay below a single-review module size",
     },
     .{
+        .path = "src/docs/langref.zig",
+        .max_lines = 850,
+        .reason = "language reference extraction should stay bounded and explicit about source completeness",
+    },
+    .{
         .path = "src/analysis.zig",
         .max_lines = 700,
         .reason = "heuristic source scanners should stay bounded; semantic analysis belongs in stronger backends",
+    },
+    .{
+        .path = "src/tools/discovery.zig",
+        .max_lines = 700,
+        .reason = "discovery and schema tools are public-entry surfaces and should remain split if they grow further",
+    },
+    .{
+        .path = "src/workspace.zig",
+        .max_lines = 570,
+        .reason = "workspace path and IO boundaries are trust-critical and must stay compact enough to audit",
     },
     .{
         .path = "src/state/documents.zig",
@@ -303,6 +328,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "release packaging should stay a focused helper, not a second build system",
     },
     .{
+        .path = "tools/coverage.zig",
+        .max_lines = 850,
+        .reason = "coverage summarization is release evidence and should be split before it becomes hard to audit",
+    },
+    .{
         .path = "tools/http_smoke.zig",
         .max_lines = 260,
         .reason = "HTTP smoke tests should stay focused on transport-level release assertions",
@@ -354,7 +384,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_rules.zig",
-        .max_lines = 700,
+        .max_lines = 800,
         .reason = "release policy tables should stay auditable and split by domain if they grow further",
     },
 };

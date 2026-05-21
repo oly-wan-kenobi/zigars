@@ -300,9 +300,10 @@ zBench archive patch documented in `tools/real_backend_pins.json`.
 
 `zig_flamegraph` and `zig_flamegraph_diff` return auditable artifact metadata:
 input/output paths, explicit input format, backend executable path, argv shape
-and argv, cached probe status when available, unknown version when no stable
-version probe is available, compatibility status, and warnings. Diff results
-also include intermediate folded metadata for the diff-folded stage. All
+and argv, output byte count, output SHA-256, cached probe status when available,
+unknown version when no stable version probe is available, compatibility status,
+and warnings. Diff results also include intermediate folded metadata and an
+intermediate folded SHA-256 for the diff-folded stage. All
 zigar-generated SVG, DOT, and folded-diff outputs must use workspace-local
 paths. This keeps profiler artifacts inspectable and prevents accidental writes
 outside the active workspace.

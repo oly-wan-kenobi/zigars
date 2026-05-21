@@ -42,6 +42,9 @@ the source commit, clean-tree status, `zig build release-check`, `zig build dist
 release-asset-smoke`, fake-backend fixtures, and real-backend validation status.
 For real optional backends, cite only clean-tree `Release Readiness` evidence or
 say `not run`; do not claim real backend coverage from fake-backend fixtures.
+The evidence block must name the backend executable paths, probe/version status,
+scenario matrix status, and artifact hashes used for every optional backend
+claim, or explicitly state that the backend was not claimed for that release.
 
 When the `Release Readiness` workflow runs, use its generated
 `release-readiness.md`, `backend-conformance/summary.md`, and

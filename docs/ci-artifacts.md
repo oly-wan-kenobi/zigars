@@ -33,6 +33,17 @@ zigar --transport stdio
 # then translate annotations[] to the runner's native annotation syntax.
 ```
 
+Adapter shape for GitHub Actions:
+
+```sh
+# For each located annotation from zig_ci_annotations:
+printf '::%s file=%s,line=%s,col=%s,endColumn=%s::%s\n' \
+  "$severity" "$path" "$line" "$column" "$end_column" "$message"
+```
+
+Keep the adapter in client or CI script code so zigar remains platform-neutral
+and the raw `zig_ci_annotations.raw` output stays available for audit.
+
 ## JUnit
 
 `zig_junit` returns `artifact_kind: "command_level_junit"` and

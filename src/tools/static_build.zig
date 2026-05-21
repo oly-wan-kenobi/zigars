@@ -253,10 +253,10 @@ pub fn fileOwnerValue(allocator: std.mem.Allocator, graph: std.json.Value, rel: 
     try obj.put(allocator, "owner_count", .{ .integer = @intCast(owners.items.len) });
     try obj.put(allocator, "likely_commands", .{ .array = commands });
     if (owners.items.len == 0) {
-        try obj.put(allocator, "confidence", .{ .string = "low" });
+        try obj.put(allocator, "owner_match_confidence", .{ .string = "low" });
         try obj.put(allocator, "reason", try ownedString(allocator, "No exact root_source_file match found in build.zig; commands are file-focused fallbacks."));
     } else {
-        try obj.put(allocator, "confidence", .{ .string = "high" });
+        try obj.put(allocator, "owner_match_confidence", .{ .string = "high" });
         try obj.put(allocator, "reason", try ownedString(allocator, "File is referenced directly by build.zig root_source_file metadata."));
     }
     return .{ .object = obj };
@@ -376,4 +376,29 @@ pub fn relativeImportCandidate(allocator: std.mem.Allocator, from: ?[]const u8, 
         if (std.fs.path.dirname(from_file)) |dir| return std.fs.path.join(allocator, &.{ dir, import_name });
     }
     return allocator.dupe(u8, import_name);
+}
+
+test "file owner keeps analysis contract confidence separate from owner match confidence" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var source_file = std.json.ObjectMap.empty;
+    try source_file.put(allocator, "path", .{ .string = "src/main.zig" });
+    var source_files = std.json.Array.init(allocator);
+    try source_files.append(.{ .object = source_file });
+    var build_zig = std.json.ObjectMap.empty;
+    try build_zig.put(allocator, "source_files", .{ .array = source_files });
+    var graph_obj = std.json.ObjectMap.empty;
+    try graph_obj.put(allocator, "build_zig", .{ .object = build_zig });
+
+    const matched = try fileOwnerValue(allocator, .{ .object = graph_obj }, "src/main.zig");
+    try std.testing.expectEqualStrings("medium", matched.object.get("confidence").?.string);
+    try std.testing.expectEqualStrings("high", matched.object.get("owner_match_confidence").?.string);
+    try std.testing.expectEqual(@as(i64, 1), matched.object.get("owner_count").?.integer);
+
+    const missed = try fileOwnerValue(allocator, .{ .object = graph_obj }, "src/missing.zig");
+    try std.testing.expectEqualStrings("medium", missed.object.get("confidence").?.string);
+    try std.testing.expectEqualStrings("low", missed.object.get("owner_match_confidence").?.string);
+    try std.testing.expectEqual(@as(i64, 0), missed.object.get("owner_count").?.integer);
 }

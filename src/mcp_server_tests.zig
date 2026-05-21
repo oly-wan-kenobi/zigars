@@ -96,8 +96,16 @@ fn testResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []c
     };
 }
 
+fn failResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) !mcp.resources.ResourceContent {
+    return error.ReadFailed;
+}
+
 fn testPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
     return fixture_prompt_messages[0..];
+}
+
+fn failPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
+    return error.GenerationFailed;
 }
 
 test "Server initialization" {
@@ -301,6 +309,8 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"structuredContent\":true") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_link\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "ExecutionFailed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_tool_handler_error") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"error_kind\":\"execution_failed\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Tool not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resources\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resourceTemplates\"") != null);
@@ -351,6 +361,41 @@ test "Server discovery lists follow registration order" {
     try expectBefore(sent, "\"uri\":\"file:///z-first\"", "\"uri\":\"file:///a-second\"");
     try expectBefore(sent, "\"uriTemplate\":\"file:///z/{name}\"", "\"uriTemplate\":\"file:///a/{name}\"");
     try expectBefore(sent, "\"name\":\"prompt_z_first\"", "\"name\":\"prompt_a_second\"");
+}
+
+test "Server returns structured internal errors for resource and prompt handler failures" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server: Server = .init(allocator, .{
+        .name = "failure-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+
+    try server.addResource(.{ .uri = "file:///fails", .name = "Failing Resource", .handler = failResourceHandler });
+    try server.addPrompt(.{ .name = "fails", .description = "Failing Prompt", .handler = failPromptHandler });
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///fails\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"prompts/get\",\"params\":{\"name\":\"fails\"}}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    const sent = try joinedSent(allocator, &transport);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"code\":-32603") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_resource_handler_error") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_uri\":\"file:///fails\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "ReadFailed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_prompt_handler_error") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompt\":\"fails\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "GenerationFailed") != null);
 }
 
 test "Server rejects unsupported subscriptions and invalid log levels" {

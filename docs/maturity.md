@@ -30,21 +30,21 @@ feature below A.
 
 ## Reassessment
 
-| Feature area | Previous rating | Public-release rating | Evidence |
+| Feature area | Contract maturity | Capability maturity | Evidence and boundary |
 | --- | --- | --- | --- |
-| Release gate and packaging | A- | A | `release-check`, release asset smoke, dirty-tree refusal for release-readiness, schema-v2 evidence with source commit, subreport commit agreement, backend path/hash inputs, and release-note-ready summaries. |
-| MCP/tool contract | A- | A | Every public tool is checked for discovery/schema/required-field coverage, structured invalid-input behavior, apply gates where source writes exist, backend/artifact planning coverage, resource/prompt routing, cleanup hooks, and report schema tokens. |
-| ZLS/LSP tools | B+ | A | Structured unavailable-vs-unsupported capability reporting, fake-LSP regression tests, troubleshooting docs, and real-ZLS conformance scenarios for document open, symbols, hover, diagnostics, formatting, rename, and workspace symbols. |
-| Docs lookup | B+ | A | Source/provenance/completeness metadata across docs tools, installed langref availability/fallback/parse-failure metadata, stdlib qualified-name/import-hint/doc-comment extraction, builtin drift checks against active toolchain source, and offline fallback tests. |
-| Static analysis | B | A | Capability tiers (`advisory_orientation`, `parser_backed`, `zwanzig_backed`), parser-backed fixtures for tricky Zig syntax, `parse_status`/`partial_result`, structured `evidence_basis` and `cross_check`, and guards preventing advisory tools from release-gating language. |
-| zwanzig optional backend | B | A | Repo-pinned provisioning, JSON/SARIF/rules/CFG graph real scenarios, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and generated scenario evidence in the compatibility matrix. |
-| Profiling/zflame | B | A | Explicit `zig_profile_run` argv contract, external-capture docs, zflame recursive SVG validation, XML-prologue SVG acceptance, diff-folded intermediate metadata/hash checks, and release-check docs guards. |
-| Agent workflows | B | A- | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, heuristic limitations, focused tests, and stdio coverage for agent routing/validation output. |
-| CI artifact tools | B- | A- | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. |
-| HTTP/MCP substrate | B | A | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
+| Release gate and packaging | A | A | `release-check`, release asset smoke, dirty-tree refusal for release-readiness, schema-v2 evidence with source commit, subreport commit agreement, backend path/hash inputs, and release-note-ready summaries. |
+| MCP/tool contract | A | A- | Discovery/schema/required-field coverage, structured invalid-input behavior, apply gates where source writes exist, backend/artifact planning coverage, structured unexpected handler errors, resource/prompt routing, cleanup hooks, and report schema tokens. |
+| ZLS/LSP tools | A | A- | Structured unavailable-vs-unsupported capability reporting, fake-LSP regression tests, troubleshooting docs, and real-ZLS conformance scenarios for document open, symbols, hover, diagnostics, formatting, rename, and workspace symbols. Coverage is tied to the configured ZLS backend. |
+| Docs lookup | A | B+ | Source/provenance/completeness metadata across docs tools, installed langref availability/fallback/parse-failure metadata, stdlib qualified-name/import-hint/doc-comment extraction, builtin drift checks against active toolchain source, and offline fallback tests. It is scoped lookup, not complete rendered Zig documentation. |
+| Static analysis | A | B+ | Capability tiers (`advisory_orientation`, `parser_backed`, `zwanzig_backed`), parser-backed fixtures for tricky Zig syntax, `parse_status`/`partial_result`, structured `evidence_basis` and `cross_check`, and guards preventing advisory tools from release-gating language. Advisory tools are orientation aids, not semantic proof. |
+| zwanzig optional backend | A | B+ | Repo-pinned provisioning, JSON/SARIF/rules/CFG graph real scenarios, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and generated scenario evidence in the compatibility matrix. Public claims must name the actual backend evidence. |
+| Profiling/zflame | A | B+ | Explicit `zig_profile_run` argv contract, external-capture docs, zflame recursive SVG validation, XML-prologue SVG acceptance, rendered and intermediate artifact hashes, diff-folded metadata checks, and release-check docs guards. Capture correctness remains the profiler's responsibility. |
+| Agent workflows | A- | B+ | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, heuristic limitations, focused tests, and stdio coverage for agent routing/validation output. Workflow output helps route validation; it does not prove code correctness. |
+| CI artifact tools | A- | B+ | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. `zig_junit` remains command-level JUnit. |
+| HTTP/MCP substrate | A | A- | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
 
-No below-A feature area remains without a blocking follow-up. Remaining limits
-are documented as product boundaries rather than hidden defects.
+No high-impact release blocker remains, but scoped feature areas must be
+marketed as scoped capabilities rather than full semantic or backend proof.
 
 ## Remaining Limits
 

@@ -197,6 +197,7 @@ test "flamegraph handler writes svg and reports zflame metadata" {
     try std.testing.expectEqualStrings("recursive", obj.get("format").?.string);
     try std.testing.expectEqualStrings("recursive", obj.get("input_format").?.string);
     try std.testing.expect(obj.get("bytes").?.integer > 0);
+    try std.testing.expectEqual(@as(usize, 64), obj.get("sha256").?.string.len);
     try std.testing.expectEqualStrings(env.zflame_path, obj.get("backend_executable_path").?.string);
     try std.testing.expectEqualStrings("rendered_ok", obj.get("compatibility_status").?.string);
     try std.testing.expectEqualStrings("rendered_ok", obj.get("backend_metadata").?.object.get("compatibility_status").?.string);
@@ -231,10 +232,13 @@ test "flamegraph diff handler reports diff-folded metadata and rendered svg" {
     try std.testing.expectEqualStrings("diff-folded", obj.get("diff_backend").?.string);
     try std.testing.expectEqualStrings("profile/delta.folded", obj.get("intermediate").?.string);
     try std.testing.expect(obj.get("intermediate_bytes").?.integer > 0);
+    try std.testing.expectEqual(@as(usize, 64), obj.get("sha256").?.string.len);
+    try std.testing.expectEqual(@as(usize, 64), obj.get("intermediate_sha256").?.string.len);
     try std.testing.expectEqualStrings("recursive", obj.get("argv").?.array.items[1].string);
 
     const folded_meta = obj.get("intermediate_folded").?.object;
     try std.testing.expectEqualStrings("diff-folded", folded_meta.get("backend").?.string);
+    try std.testing.expectEqual(@as(usize, 64), folded_meta.get("sha256").?.string.len);
     try std.testing.expectEqualStrings("diff_written_and_read_ok", folded_meta.get("compatibility_status").?.string);
     try std.testing.expectEqualStrings("diff_written_and_read_ok", folded_meta.get("backend_metadata").?.object.get("compatibility_status").?.string);
     try std.testing.expectEqualStrings("probe_ok", folded_meta.get("backend_metadata").?.object.get("probe_status").?.string);

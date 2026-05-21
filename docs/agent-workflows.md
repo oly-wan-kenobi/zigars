@@ -27,6 +27,10 @@ touched-file formatting and `zig ast-check`. In `standard` mode it also runs
 `zig build test`. The result includes failing phases, `skipped_phases` with
 reasons, and the next diagnostic tool.
 
+Fixture coverage asserts routing contracts, included/omitted sections, and
+skipped-phase reporting. It does not turn a workflow recommendation into proof
+that a patch is correct.
+
 ## Output Contract
 
 Agent workflow tools are routers and gates, not autonomous correctness engines.

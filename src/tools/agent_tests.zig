@@ -35,6 +35,25 @@ test "agent workflow values expose evidence and limitations" {
     try std.testing.expectEqualStrings("zigar_validate_patch", impact_obj.get("workflow_contract").?.object.get("verification").?.string);
 }
 
+test "next action routes common workflow goals to concrete tools" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]struct { goal: []const u8, expected_tool: []const u8 }{
+        .{ .goal = "fix failing tests", .expected_tool = "zig_test_failure_triage" },
+        .{ .goal = "fix compile error", .expected_tool = "zig_compile_error_index" },
+        .{ .goal = "format changed files", .expected_tool = "zig_format_check" },
+        .{ .goal = "profile hot path", .expected_tool = "zig_profile_plan" },
+        .{ .goal = "review before done", .expected_tool = "zigar_validate_patch" },
+    };
+    for (cases) |entry| {
+        const plan = (try agent_values.nextActionPlanValue(allocator, entry.goal, "src/main.zig", null)).object;
+        const first_step = plan.get("recommended_steps").?.array.items[0].object;
+        try std.testing.expectEqualStrings(entry.expected_tool, first_step.get("tool").?.string);
+    }
+}
+
 test "validate patch exposes skipped phase reasons" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -25,6 +25,16 @@ Known limitations:
 - ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
   that need a missing backend return an explicit error, and public real-backend
   claims come from generated conformance evidence.
+- Docs lookup is scoped lookup over installed source, installed langref HTML, or
+  curated fallback data. It is not a complete rendered documentation browser.
+- Static-analysis and agent-workflow tools expose confidence, limitations, and
+  verification fields. Heuristic/advisory outputs are routing aids; release
+  decisions still need parser-backed, command-backed, ZLS, zwanzig, or CI
+  evidence.
+- `zig_junit` reports command-level JUnit because Zig does not expose a stable
+  per-test event stream for every invocation.
+- Profiling tools render and describe captured data, including artifact hashes;
+  profiler capture correctness belongs to the external profiler backend.
 
 ## Requirements
 

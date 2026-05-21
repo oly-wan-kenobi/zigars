@@ -170,6 +170,7 @@ pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
         .resolution = "The diff-folded command completed but wrote an empty folded diff file.",
         .details = &.{.{ .key = "output", .value = .{ .string = folded_out } }},
     });
+    diff_render.sha256 = sha256Hex(allocator, folded) catch return error.OutOfMemory;
     var render = switch (try renderFlamegraphToWorkspace(a, allocator, .{
         .tool_name = "zig_flamegraph_diff",
         .operation = "render_differential_flamegraph",
@@ -275,18 +276,22 @@ const OwnedArgv = struct {
 
 const FlamegraphArtifact = struct {
     bytes: usize,
+    sha256: []const u8,
     argv: OwnedArgv,
 
     fn deinit(self: *FlamegraphArtifact, allocator: std.mem.Allocator) void {
+        allocator.free(self.sha256);
         self.argv.deinit(allocator);
     }
 };
 
 const DiffFoldedArtifact = struct {
     bytes: usize,
+    sha256: ?[]const u8 = null,
     argv: OwnedArgv,
 
     fn deinit(self: *DiffFoldedArtifact, allocator: std.mem.Allocator) void {
+        if (self.sha256) |hash| allocator.free(hash);
         self.argv.deinit(allocator);
     }
 };
@@ -358,9 +363,14 @@ fn renderFlamegraphToWorkspace(a: *App, allocator: std.mem.Allocator, request: R
             .{ .key = "output_abs", .value = .{ .string = request.output_abs } },
         },
     }, err) };
+    var rendered_argv = cloneArgv(allocator, argv.argv.items) catch return error.OutOfMemory;
+    errdefer rendered_argv.deinit(allocator);
+    const rendered_sha256 = sha256Hex(allocator, result.stdout) catch return error.OutOfMemory;
+    errdefer allocator.free(rendered_sha256);
     return .{ .ok = .{
         .bytes = result.stdout.len,
-        .argv = cloneArgv(allocator, argv.argv.items) catch return error.OutOfMemory,
+        .sha256 = rendered_sha256,
+        .argv = rendered_argv,
     } };
 }
 
@@ -376,6 +386,7 @@ fn flamegraphResultValue(allocator: std.mem.Allocator, a: *App, request: RenderR
     try obj.put(allocator, "format", .{ .string = request.format.name() });
     try obj.put(allocator, "input_format", .{ .string = request.format.name() });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(artifact.bytes) });
+    try obj.put(allocator, "sha256", .{ .string = artifact.sha256 });
     try obj.put(allocator, "backend_executable_path", .{ .string = a.config.zflame_path });
     try obj.put(allocator, "backend_metadata", try backendMetadataValue(allocator, a, .zflame, a.config.zflame_path, "rendered_ok", backend_contracts.zflame_compatibility_baseline));
     try obj.put(allocator, "argv_shape", .{ .string = zflameArgvShape() });
@@ -398,6 +409,7 @@ fn flamegraphDiffResultValue(allocator: std.mem.Allocator, a: *App, request: Ren
     try obj.put(allocator, "intermediate", .{ .string = diff.intermediate });
     try obj.put(allocator, "intermediate_abs", .{ .string = diff.intermediate_abs });
     try obj.put(allocator, "intermediate_bytes", .{ .integer = @intCast(diff.artifact.bytes) });
+    try obj.put(allocator, "intermediate_sha256", .{ .string = diff.artifact.sha256.? });
     try obj.put(allocator, "intermediate_folded", try intermediateFoldedValue(allocator, a, diff));
     return .{ .object = obj };
 }
@@ -409,6 +421,7 @@ fn intermediateFoldedValue(allocator: std.mem.Allocator, a: *App, diff: DiffMeta
     try obj.put(allocator, "abs_path", .{ .string = diff.intermediate_abs });
     try obj.put(allocator, "input_format", .{ .string = backend_contracts.ZflameFormat.recursive.name() });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(diff.artifact.bytes) });
+    try obj.put(allocator, "sha256", .{ .string = diff.artifact.sha256.? });
     try obj.put(allocator, "source_before", .{ .string = diff.before });
     try obj.put(allocator, "source_before_abs", .{ .string = diff.before_abs });
     try obj.put(allocator, "source_after", .{ .string = diff.after });
@@ -471,6 +484,13 @@ fn cachedProbeFor(a: *App, id: backend_contracts.BackendId) ?doctor.Probe {
         .zflame => a.backend_probe_cache.zflame,
         .diff_folded => a.backend_probe_cache.diff_folded,
     };
+}
+
+fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+    const hex = std.fmt.bytesToHex(digest, .lower);
+    return allocator.dupe(u8, &hex);
 }
 
 fn zflameArgvShape() []const u8 {

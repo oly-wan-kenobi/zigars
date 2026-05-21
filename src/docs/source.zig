@@ -143,6 +143,7 @@ fn valueImpl(allocator: std.mem.Allocator, source: Source) !std.json.Value {
 
 pub fn putContractFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, source: Source, contract: Contract) !void {
     try obj.put(allocator, "source", try valueImpl(allocator, source));
+    try obj.put(allocator, "completeness_level", .{ .string = source.completeness.text() });
     if (contract.query) |query| {
         try obj.put(allocator, "query", .{ .string = query });
     } else {
@@ -197,6 +198,7 @@ test "docs source JSON exposes explicit version and source path state" {
     });
     const query = contract_obj.get("query").?;
     try std.testing.expectEqualStrings("@import", query.string);
+    try std.testing.expectEqualStrings("partial_curated", contract_obj.get("completeness_level").?.string);
     try std.testing.expectEqual(@as(i64, 1), contract_obj.get("limit").?.integer);
     try std.testing.expectEqual(@as(i64, 1), contract_obj.get("result_count").?.integer);
     try std.testing.expect(contract_obj.get("no_result_reason").? == .null);

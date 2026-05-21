@@ -17,6 +17,7 @@ const transport_mod = mcp.transport;
 const prompts_mod = mcp.prompts;
 const resources_mod = mcp.resources;
 const HttpRequestTransport = @import("mcp_server/http_transport.zig").HttpRequestTransport;
+const tool_errors = @import("tool_errors.zig");
 
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
 pub const ResourceContentDeinit = *const fn (allocator: std.mem.Allocator, content: mcp.resources.ResourceContent) void;
@@ -624,19 +625,7 @@ pub const Server = struct {
 
         if (self.tools.get(tool_name)) |tool| {
             const tool_result = tool.handler(tool.user_data, io, allocator, arguments) catch |err| {
-                var content_array: std.json.Array = .init(allocator);
-                var content_array_in_result = false;
-                defer if (!content_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = content_array });
-                try appendToolContentValue(allocator, &content_array, .{ .text = .{ .text = @errorName(err) } });
-
-                var result: std.json.ObjectMap = .empty;
-                defer deinitToolCallResponseObject(allocator, &result);
-                try result.put(allocator, "content", .{ .array = content_array });
-                content_array_in_result = true;
-                try result.put(allocator, "isError", .{ .bool = true });
-
-                const response = jsonrpc.createResponse(request.id, .{ .object = result });
-                try self.sendResponse(io, allocator, .{ .response = response });
+                try self.sendToolHandlerErrorResponse(io, allocator, request, tool_name, err);
                 return;
             };
             defer if (tool.deinit_result) |deinit_result| deinit_result(allocator, tool_result);
@@ -663,6 +652,34 @@ pub const Server = struct {
             const error_response = jsonrpc.createInvalidParams(request.id, "Tool not found");
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
         }
+    }
+
+    fn sendToolHandlerErrorResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, tool_name: []const u8, err: anyerror) !void {
+        var response_arena = std.heap.ArenaAllocator.init(allocator);
+        defer response_arena.deinit();
+        const response_allocator = response_arena.allocator();
+
+        var content_array: std.json.Array = .init(response_allocator);
+        try appendToolContentValue(response_allocator, &content_array, .{ .text = .{ .text = @errorName(err) } });
+
+        var result: std.json.ObjectMap = .empty;
+        try result.put(response_allocator, "content", .{ .array = content_array });
+        try result.put(response_allocator, "isError", .{ .bool = true });
+        try result.put(response_allocator, "structuredContent", try toolHandlerErrorValue(response_allocator, tool_name, err));
+
+        const response = jsonrpc.createResponse(request.id, .{ .object = result });
+        try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn toolHandlerErrorValue(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) !std.json.Value {
+        return tool_errors.valueFromError(allocator, .{
+            .tool = tool_name,
+            .operation = "dispatch_tool",
+            .phase = "tool_handler",
+            .code = "unexpected_tool_handler_error",
+            .category = "server_state",
+            .resolution = "Inspect zigar stderr logs, fix the tool handler failure, then retry. Expected user errors should return structured tool_error results before this fallback.",
+        }, err);
     }
 
     fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.json.Array, content_item: types.ContentBlock) !void {
@@ -786,7 +803,9 @@ pub const Server = struct {
 
         if (self.resources.get(uri)) |resource| {
             const content = resource.handler(resource.user_data, io, allocator, uri) catch |err| {
-                const error_response = jsonrpc.createInternalError(request.id, .{ .string = @errorName(err) });
+                var response_arena = std.heap.ArenaAllocator.init(allocator);
+                defer response_arena.deinit();
+                const error_response = jsonrpc.createInternalError(request.id, try resourceHandlerErrorValue(response_arena.allocator(), uri, err));
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
                 return;
             };
@@ -822,6 +841,18 @@ pub const Server = struct {
             const error_response = jsonrpc.createInvalidParams(request.id, "Resource not found");
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
         }
+    }
+
+    fn resourceHandlerErrorValue(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) !std.json.Value {
+        return tool_errors.valueFromError(allocator, .{
+            .tool = "resources/read",
+            .operation = "read_resource",
+            .phase = "resource_handler",
+            .code = "unexpected_resource_handler_error",
+            .category = "server_state",
+            .resolution = "Inspect zigar stderr logs, fix the resource handler failure, then retry.",
+            .details = &.{.{ .key = "resource_uri", .value = .{ .string = uri } }},
+        }, err);
     }
 
     fn handleResourceTemplatesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
@@ -943,7 +974,9 @@ pub const Server = struct {
 
         if (self.prompts.get(prompt_name)) |prompt| {
             const messages = prompt.handler(prompt.user_data, io, allocator, arguments) catch |err| {
-                const error_response = jsonrpc.createInternalError(request.id, .{ .string = @errorName(err) });
+                var response_arena = std.heap.ArenaAllocator.init(allocator);
+                defer response_arena.deinit();
+                const error_response = jsonrpc.createInternalError(request.id, try promptHandlerErrorValue(response_arena.allocator(), prompt_name, err));
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
                 return;
             };
@@ -1011,6 +1044,18 @@ pub const Server = struct {
             const error_response = jsonrpc.createInvalidParams(request.id, "Prompt not found");
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
         }
+    }
+
+    fn promptHandlerErrorValue(allocator: std.mem.Allocator, prompt_name: []const u8, err: anyerror) !std.json.Value {
+        return tool_errors.valueFromError(allocator, .{
+            .tool = "prompts/get",
+            .operation = "get_prompt",
+            .phase = "prompt_handler",
+            .code = "unexpected_prompt_handler_error",
+            .category = "server_state",
+            .resolution = "Inspect zigar stderr logs, fix the prompt handler failure, then retry.",
+            .details = &.{.{ .key = "prompt", .value = .{ .string = prompt_name } }},
+        }, err);
     }
 
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
