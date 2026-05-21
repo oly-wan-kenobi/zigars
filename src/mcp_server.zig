@@ -624,11 +624,14 @@ pub const Server = struct {
         }
 
         if (self.tools.get(tool_name)) |tool| {
-            const tool_result = tool.handler(tool.user_data, io, allocator, arguments) catch |err| {
+            var tool_arena = std.heap.ArenaAllocator.init(allocator);
+            defer tool_arena.deinit();
+            const tool_allocator = tool_arena.allocator();
+            const tool_result = tool.handler(tool.user_data, io, tool_allocator, arguments) catch |err| {
                 try self.sendToolHandlerErrorResponse(io, allocator, request, tool_name, err);
                 return;
             };
-            defer if (tool.deinit_result) |deinit_result| deinit_result(allocator, tool_result);
+            defer if (tool.deinit_result) |deinit_result| deinit_result(tool_allocator, tool_result);
 
             var content_array: std.json.Array = .init(allocator);
             var content_array_in_result = false;

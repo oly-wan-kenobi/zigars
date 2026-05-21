@@ -22,6 +22,7 @@ pub const ToolGroup = enum {
     trust_safety,
     result_contracts,
     release_drift,
+    environment_profiles,
 };
 
 pub const StaticAnalysisTier = enum {
@@ -48,6 +49,7 @@ pub const HandlerModule = enum {
     trust,
     result_shape,
     release_drift,
+    environment_profiles,
 };
 
 pub const HandlerRef = struct {

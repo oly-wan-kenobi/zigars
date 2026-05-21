@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const cli_io = @import("cli_io.zig");
 const coverage_config = @import("coverage_config.zig");
 const smoke = @import("smoke_support.zig");
+const stdio_environment_fixtures = @import("stdio_environment_fixtures.zig");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;
@@ -159,6 +160,9 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_patch_preview");
         try self.expectTool(tools, "zigar_context_pack");
         try self.expectTool(tools, "zigar_validate_patch");
+        try self.expectTool(tools, "zigar_project_profile_v2");
+        try self.expectTool(tools, "zigar_env_pack");
+        try self.expectTool(tools, "zigar_backend_conformance");
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
@@ -188,6 +192,8 @@ const StdioClient = struct {
         const workspace_info = try self.callTool("zigar_workspace_info", "{}");
         defer self.allocator.free(workspace_info);
         if (std.mem.indexOf(u8, workspace_info, "\"diff_folded\"") == null) return error.AssertionFailed;
+
+        try stdio_environment_fixtures.run(self);
 
         const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
         defer self.allocator.free(profile_plan);
@@ -322,7 +328,7 @@ const StdioClient = struct {
         try self.write(payload);
     }
 
-    fn callTool(self: *StdioClient, name: []const u8, args_json: []const u8) ![]u8 {
+    pub fn callTool(self: *StdioClient, name: []const u8, args_json: []const u8) ![]u8 {
         const params = try std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"arguments\":{s}}}", .{ name, args_json });
         defer self.allocator.free(params);
         self.tool_calls += 1;
@@ -368,11 +374,11 @@ const StdioClient = struct {
         return error.AssertionFailed;
     }
 
-    fn expectPathString(self: *StdioClient, json: []const u8, path: []const u8, expected: []const u8) !void {
+    pub fn expectPathString(self: *StdioClient, json: []const u8, path: []const u8, expected: []const u8) !void {
         try self.expectPathJson(json, path, .{ .string = expected });
     }
 
-    fn expectPathJson(self: *StdioClient, json: []const u8, path: []const u8, expected: JsonValue) !void {
+    pub fn expectPathJson(self: *StdioClient, json: []const u8, path: []const u8, expected: JsonValue) !void {
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, json, .{});
         defer parsed.deinit();
         const value = valueAt(parsed.value, path) orelse return error.AssertionFailed;

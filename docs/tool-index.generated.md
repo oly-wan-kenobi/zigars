@@ -98,6 +98,12 @@ Tools: `zigar_docs_drift_check`, `zigar_release_claim_check`, `zigar_tool_index_
 
 Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `public claims`, `release-check`
 
+### environment_profiles
+
+Tools: `zigar_setup_elicit`, `zigar_profile_elicit`, `zigar_backend_elicit`, `zigar_project_profile_v2`, `zigar_profile_validate`, `zigar_profile_read`, `zigar_profile_bootstrap`, `zigar_profile_import`, `zigar_profile_diff`, `zigar_env_pack`, `zigar_env_export`, `zigar_zvm_probe`, `zigar_zvm_install_plan`, `zigar_zvm_switch_plan`, `zig_zls_match_check`, `zig_toolchain_pin`, `zig_toolchain_pin_check`, `zigar_backend_install_plan`, `zigar_backend_verify`, `zigar_dev_env_generate`, `zigar_backend_conformance`, `zigar_backend_evidence_pack`
+
+Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `toolchain pin`, `zvm`, `zls compatibility`, `dev environment`, `backend conformance`, `setup elicitation`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -194,32 +200,54 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 - `zig_test_map`: optional `limit: integer`
 - `zig_test_select`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zig_tool_plan`: required `tool: string`; optional `file: string`, `path: string`, `input: string`, `output: string`, `command: string`, `args: string`, `timeout_ms: integer`
+- `zig_toolchain_pin`: optional `apply: boolean`, `output: string`, `zig_version: string`, `zls_version: string`, `zwanzig_version: string`, `zflame_version: string`, `diff_folded_version: string`
+- `zig_toolchain_pin_check`: optional `input: string`, `probe_backends: boolean`, `timeout_ms: integer`
 - `zig_toolchain_resolve`: optional `probe_managers: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
+- `zig_zls_match_check`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
 - `zigar_artifact_index`: optional `path: string`, `limit: integer`, `include_hashes: boolean`, `mode: string`
 - `zigar_artifact_prune`: optional `apply: boolean`, `mode: string`
 - `zigar_artifact_read`: required `path: string`; optional `max_bytes: integer`, `mode: string`
 - `zigar_backend_catalog`: optional `include_configured_paths: boolean`
+- `zigar_backend_conformance`: optional `backend: string`, `probe_backends: boolean`, `timeout_ms: integer`
+- `zigar_backend_elicit`: optional `backend: string`, `mode: string`
+- `zigar_backend_evidence_pack`: optional `input: string`, `output: string`, `apply: boolean`
+- `zigar_backend_install_plan`: optional `backend: string`, `manager: string`
+- `zigar_backend_verify`: optional `backend: string`, `timeout_ms: integer`
 - `zigar_clean_tree_gate`: optional `timeout_ms: integer`
 - `zigar_command_provenance`: optional `tool: string`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
+- `zigar_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
 - `zigar_docs_drift_check`: optional `mode: string`
 - `zigar_doctor`: optional `probe_backends: boolean`, `timeout_ms: integer`
+- `zigar_env_export`: optional `output: string`, `apply: boolean`, `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
+- `zigar_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zigar_next_action`: required `goal: string`; optional `changed_files: string`, `last_error: string`
 - `zigar_output_budget_plan`: optional `mode: string`, `token_budget: integer`, `tool: string`
 - `zigar_patch_guard`: optional `files: string`, `patch: string`
+- `zigar_profile_bootstrap`: optional `mode: string`
+- `zigar_profile_diff`: optional `content: string`, `path: string`
+- `zigar_profile_elicit`: optional `content: string`, `mode: string`
+- `zigar_profile_import`: required `content: string`; optional `apply: boolean`
+- `zigar_profile_read`: optional `path: string`
+- `zigar_profile_validate`: optional `content: string`, `path: string`
 - `zigar_project_profile`: optional `apply: boolean`, `content: string`
+- `zigar_project_profile_v2`: optional `apply: boolean`, `content: string`
 - `zigar_release_claim_check`: optional `mode: string`
 - `zigar_result_shape`: optional `mode: string`
 - `zigar_risk_audit`: optional `include_none: boolean`
+- `zigar_setup_elicit`: optional `topic: string`, `mode: string`
 - `zigar_tool_index_check`: optional `mode: string`
 - `zigar_trust_report`: optional `include_clean_tree: boolean`, `timeout_ms: integer`
 - `zigar_validate_patch`: optional `mode: string`, `changed_files: string`, `stop_on_failure: boolean`, `timeout_ms: integer`
+- `zigar_zvm_install_plan`: required `version: string`; optional `zvm_path: string`
+- `zigar_zvm_probe`: optional `zvm_path: string`, `timeout_ms: integer`
+- `zigar_zvm_switch_plan`: required `version: string`; optional `zvm_path: string`
 
 ## Planning Support
 
@@ -297,23 +325,34 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 - `zig_test_map`: `pure_analysis` read-only analysis
 - `zig_test_select`: `pure_analysis` read-only analysis
 - `zig_tool_plan`: `pure_analysis` read-only analysis
+- `zig_toolchain_pin`: `apply_gated_mutation` preview/apply mutation
+- `zig_toolchain_pin_check`: `dynamic_command` runtime-dependent backend plan
 - `zig_toolchain_resolve`: `dynamic_command` runtime-dependent backend plan
 - `zig_translate_c`: `exact_command` exact argv
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
+- `zig_zls_match_check`: `dynamic_command` runtime-dependent backend plan
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
 - `zigar_artifact_index`: `pure_analysis` read-only analysis
 - `zigar_artifact_prune`: `apply_gated_mutation` preview/apply mutation
 - `zigar_artifact_read`: `pure_analysis` read-only analysis
 - `zigar_backend_catalog`: `pure_analysis` read-only analysis
+- `zigar_backend_conformance`: `dynamic_command` runtime-dependent backend plan
+- `zigar_backend_elicit`: `pure_analysis` read-only analysis
+- `zigar_backend_evidence_pack`: `apply_gated_mutation` preview/apply mutation
 - `zigar_backend_health_history`: `pure_analysis` read-only analysis
+- `zigar_backend_install_plan`: `pure_analysis` read-only analysis
+- `zigar_backend_verify`: `dynamic_command` runtime-dependent backend plan
 - `zigar_capabilities`: `pure_analysis` read-only analysis
 - `zigar_clean_tree_gate`: `dynamic_command` runtime-dependent backend plan
 - `zigar_command_provenance`: `pure_analysis` read-only analysis
 - `zigar_context_pack`: `pure_analysis` read-only analysis
+- `zigar_dev_env_generate`: `apply_gated_mutation` preview/apply mutation
 - `zigar_docs_drift_check`: `pure_analysis` read-only analysis
 - `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
+- `zigar_env_export`: `apply_gated_mutation` preview/apply mutation
+- `zigar_env_pack`: `dynamic_command` runtime-dependent backend plan
 - `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
 - `zigar_http_status`: `pure_analysis` read-only analysis
 - `zigar_impact`: `pure_analysis` read-only analysis
@@ -322,11 +361,19 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 - `zigar_next_action`: `pure_analysis` read-only analysis
 - `zigar_output_budget_plan`: `pure_analysis` read-only analysis
 - `zigar_patch_guard`: `pure_analysis` read-only analysis
+- `zigar_profile_bootstrap`: `pure_analysis` read-only analysis
+- `zigar_profile_diff`: `pure_analysis` read-only analysis
+- `zigar_profile_elicit`: `pure_analysis` read-only analysis
+- `zigar_profile_import`: `apply_gated_mutation` preview/apply mutation
+- `zigar_profile_read`: `pure_analysis` read-only analysis
+- `zigar_profile_validate`: `pure_analysis` read-only analysis
 - `zigar_project_profile`: `apply_gated_mutation` preview/apply mutation
+- `zigar_project_profile_v2`: `apply_gated_mutation` preview/apply mutation
 - `zigar_release_claim_check`: `pure_analysis` read-only analysis
 - `zigar_result_shape`: `pure_analysis` read-only analysis
 - `zigar_risk_audit`: `pure_analysis` read-only analysis
 - `zigar_schema`: `pure_analysis` read-only analysis
+- `zigar_setup_elicit`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
 - `zigar_tool_index_check`: `pure_analysis` read-only analysis
 - `zigar_tool_latency`: `pure_analysis` read-only analysis
@@ -334,6 +381,9 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 - `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
 - `zigar_workspace_info`: `pure_analysis` read-only analysis
 - `zigar_zls_timeline`: `pure_analysis` read-only analysis
+- `zigar_zvm_install_plan`: `pure_analysis` read-only analysis
+- `zigar_zvm_probe`: `dynamic_command` runtime-dependent backend plan
+- `zigar_zvm_switch_plan`: `pure_analysis` read-only analysis
 
 ## Static Analysis Capability Tiers
 

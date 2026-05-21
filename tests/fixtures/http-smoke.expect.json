@@ -1,5 +1,8 @@
 {
-  "required_tools": ["zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check"],
+  "required_tools": [
+    "zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check",
+    "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack"
+  ],
   "tools_list_schema_paths": {
     "zig_format": {
       "inputSchema.type": "object",
@@ -58,6 +61,24 @@
     },
     "zigar_metrics_v2": {
       "inputSchema.type": "object"
+    },
+    "zigar_project_profile_v2": {
+      "inputSchema.properties.apply.type": "boolean",
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.properties.content.type": "string"
+    },
+    "zigar_env_export": {
+      "inputSchema.properties.output.x-zigar-path-kind": "output_path",
+      "inputSchema.properties.apply.default": false,
+      "inputSchema.properties.probe_backends.type": "boolean"
+    },
+    "zigar_zvm_install_plan": {
+      "inputSchema.properties.version.type": "string",
+      "inputSchema.required.0": "version"
+    },
+    "zigar_backend_conformance": {
+      "inputSchema.properties.backend.enum.4": "zflame",
+      "inputSchema.properties.probe_backends.type": "boolean"
     }
   },
   "schema_paths": {
@@ -90,6 +111,17 @@
     "registry_tool_arguments.zigar_clean_tree_gate.risk.executes_backend": true,
     "registry_tool_arguments.zigar_result_shape.optional.mode": "string",
     "registry_tool_arguments.zigar_docs_drift_check.optional.mode": "string",
+    "registry_tool_arguments.zigar_project_profile_v2.optional.apply": "boolean",
+    "registry_tool_arguments.zigar_project_profile_v2.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigar_env_export.risk.writes_artifacts": true,
+    "registry_tool_arguments.zigar_env_export.risk.executes_backend": true,
+    "registry_tool_arguments.zigar_zvm_install_plan.required.version": "string",
+    "registry_tool_planning.zigar_zvm_install_plan.kind": "pure_analysis",
+    "registry_tool_arguments.zig_zls_match_check.risk.executes_backend": true,
+    "registry_tool_arguments.zig_toolchain_pin.optional.apply": "boolean",
+    "registry_tool_arguments.zigar_dev_env_generate.optional.kind": "string",
+    "registry_tool_arguments.zigar_backend_conformance.optional.backend": "string",
+    "registry_tool_arguments.zigar_backend_evidence_pack.risk.writes_require_apply": true,
     "common_intents.0.prefer": "zig_format"
   },
   "doctor_paths": {
@@ -196,6 +228,74 @@
   "project_profile_paths": {
     "kind": "zigar_project_profile",
     "applied": false
+  },
+  "project_profile_v2_paths": {
+    "kind": "zigar_project_profile_v2",
+    "schema_version": 2,
+    "applied": false,
+    "requires_apply": true,
+    "profile.schema_version": 2,
+    "validation.valid": true
+  },
+  "profile_bootstrap_paths": {
+    "kind": "zigar_profile_bootstrap",
+    "path": ".zigar/profile.json",
+    "profile.schema_version": 2
+  },
+  "env_pack_paths": {
+    "kind": "zigar_env_pack",
+    "schema_version": 1,
+    "toolchain.zig.status": "not_probed",
+    "compatibility.status": "unknown"
+  },
+  "zvm_install_plan_paths": {
+    "kind": "zigar_zvm_install_plan",
+    "version": "0.16.0",
+    "argv.0": "zvm",
+    "argv.1": "install",
+    "plan_only": true,
+    "mutates_environment": false
+  },
+  "zig_zls_match_paths": {
+    "kind": "zig_zls_match_check",
+    "status": "unknown",
+    "match": false
+  },
+  "toolchain_pin_paths": {
+    "kind": "zig_toolchain_pin",
+    "path": ".zigar/toolchain.json",
+    "applied": false,
+    "requires_apply": true,
+    "pin.schema_version": 1
+  },
+  "backend_install_plan_paths": {
+    "kind": "zigar_backend_install_plan",
+    "backend": "zflame",
+    "manager": "manual",
+    "plan_only": true,
+    "mutates_environment": false,
+    "plans.0.backend": "zflame"
+  },
+  "dev_env_generate_paths": {
+    "kind": "zigar_dev_env_generate",
+    "artifact_kind": "mise",
+    "path": ".zigar-cache/dev-env/mise.toml",
+    "applied": false,
+    "requires_apply": true
+  },
+  "backend_conformance_paths": {
+    "kind": "zigar_backend_conformance",
+    "backend": "zflame",
+    "schema_version": 1,
+    "run_state": "plan_only",
+    "scenarios.0.name": "zflame_recursive_folded_svg"
+  },
+  "backend_evidence_pack_paths": {
+    "kind": "zigar_backend_evidence_pack",
+    "path": ".zigar-cache/backend-conformance/evidence-pack.json",
+    "applied": false,
+    "requires_apply": true,
+    "evidence.available": false
   },
   "validate_patch_paths": {
     "kind": "zigar_validate_patch",

@@ -15,6 +15,7 @@ const result_shape = @import("tools/result_shape.zig");
 const static_analysis = @import("tools/static_analysis.zig");
 const trust = @import("tools/trust.zig");
 const zwanzig = @import("tools/zwanzig.zig");
+const environment_profiles = @import("tools/environment_profiles.zig");
 
 pub const ToolHandler = tool_manifest.ToolHandler;
 
@@ -39,6 +40,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .trust => @field(trust, ref.name),
         .result_shape => @field(result_shape, ref.name),
         .release_drift => @field(release_drift, ref.name),
+        .environment_profiles => @field(environment_profiles, ref.name),
     };
 }
 

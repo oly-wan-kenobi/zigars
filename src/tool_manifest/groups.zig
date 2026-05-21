@@ -18,4 +18,5 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .trust_safety, .keywords = &.{ "trust", "safety", "risk", "clean tree", "command provenance", "apply gate", "path policy", "backend identity" } },
     .{ .group = .result_contracts, .keywords = &.{ "result shape", "compact", "standard", "deep", "output budget", "omitted sections", "token budget" } },
     .{ .group = .release_drift, .keywords = &.{ "docs drift", "release claims", "tool index", "generated docs", "public claims", "release-check" } },
+    .{ .group = .environment_profiles, .keywords = &.{ "profile v2", "project profile", "bootstrap", "environment pack", "toolchain pin", "zvm", "zls compatibility", "dev environment", "backend conformance", "setup elicitation" } },
 };

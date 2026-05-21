@@ -112,9 +112,6 @@ test "executable module links runtime lifecycle types" {
     try std.testing.expect(@sizeOf(LspClient) > 0);
     try std.testing.expect(@sizeOf(DocumentState) > 0);
     try std.testing.expect(@sizeOf(ZlsProcess) > 0);
-}
-
-test "executable usage names the command" {
     try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigar") != null);
 }
 
@@ -124,6 +121,7 @@ test {
     _ = @import("tools/command_result_mcp_tests.zig");
     _ = @import("tools/edit_zls_edits_tests.zig");
     _ = @import("tools/edit_zls_tests.zig");
+    _ = @import("tools/environment_profiles_tests.zig");
     _ = @import("tools/foundation_tests.zig");
     _ = @import("tools/profiling_backends.zig");
     _ = @import("tools/profiling.zig");

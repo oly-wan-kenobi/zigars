@@ -110,6 +110,18 @@ archives include a machine-readable setup contract instead of only prose setup
 notes. Use it to generate project docs, dev-shell checks, or CI bootstrap output
 without scraping this document.
 
+`zigar_backend_install_plan` is the setup-oriented companion to the catalog. It
+returns backend-specific commands, compatibility notes, and verify steps for a
+selected backend and package manager, but it never installs packages or mutates
+the developer environment. `zigar_backend_elicit` reports unresolved backend
+policy questions such as which optional tools should be release-claimed and how
+they will be pinned.
+
+`zigar_dev_env_generate` can preview or write pinned setup artifacts for mise,
+asdf, Nix, devcontainer, and GitHub Actions. Generated files are workspace
+artifacts and require `apply=true`; applied artifacts are recorded in the zigar
+artifact registry with provenance.
+
 ## Configuration
 
 All backend path flags are optional:
@@ -161,6 +173,15 @@ diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
 If a direct shell check fails, fix the backend before debugging zigar. If the
 shell check passes but zigar reports an error, compare the path in
 `zigar_workspace_info` with the binary you invoked by hand.
+
+For MCP-visible setup evidence, call `zigar_env_pack` with
+`probe_backends=true` after configuring paths. Use `zigar_backend_verify` for a
+bounded probe of one backend or `all`, and use
+`zigar_backend_conformance` to inspect the conformance scenarios and evidence
+paths expected by the script-backed release flow. `zigar_backend_evidence_pack`
+reads an existing conformance report and can register a compact evidence pack,
+but consumers still need to inspect scenario statuses before claiming backend
+support.
 
 ## ZLS
 

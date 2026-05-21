@@ -308,6 +308,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "tool definition facade should preserve public order and delegate group bodies",
     },
     .{
+        .path = "src/tool_manifest/all_definitions.zig",
+        .max_lines = 190,
+        .reason = "combined tool definition aliases should stay a compact ordered table over group bodies",
+    },
+    .{
         .path = "src/tool_manifest/definitions/discovery.zig",
         .max_lines = 140,
         .reason = "discovery and planning tool definitions should remain independently reviewable",
@@ -341,6 +346,11 @@ pub const line_budgets = [_]LineBudget{
         .path = "src/tool_manifest/definitions/foundation.zig",
         .max_lines = 180,
         .reason = "foundation contract tool definitions should remain compact and additive",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/environment_profiles.zig",
+        .max_lines = 260,
+        .reason = "environment/profile tool definitions should remain independently reviewable",
     },
     .{
         .path = "src/tool_manifest/definitions/static_analysis.zig",

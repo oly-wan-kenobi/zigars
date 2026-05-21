@@ -86,6 +86,16 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try assertToolPaths(allocator, io, port, 22, "zig_test_select", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected.value, "test_select_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 23, "zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}", expected.value, "public_api_diff_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 24, "zigar_project_profile", "{}", expected.value, "project_profile_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 57, "zigar_project_profile_v2", "{}", expected.value, "project_profile_v2_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 58, "zigar_profile_bootstrap", "{}", expected.value, "profile_bootstrap_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 59, "zigar_env_pack", "{\"probe_backends\":false,\"include_hashes\":false}", expected.value, "env_pack_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 60, "zigar_zvm_install_plan", "{\"version\":\"0.16.0\"}", expected.value, "zvm_install_plan_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 61, "zig_zls_match_check", "{\"probe_backends\":false}", expected.value, "zig_zls_match_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 62, "zig_toolchain_pin", "{\"apply\":false,\"zig_version\":\"0.16.0\",\"zls_version\":\"0.16.0\"}", expected.value, "toolchain_pin_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 63, "zigar_backend_install_plan", "{\"backend\":\"zflame\",\"manager\":\"manual\"}", expected.value, "backend_install_plan_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 64, "zigar_dev_env_generate", "{\"kind\":\"mise\",\"apply\":false}", expected.value, "dev_env_generate_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 65, "zigar_backend_conformance", "{\"backend\":\"zflame\",\"probe_backends\":false}", expected.value, "backend_conformance_paths", &scenarios);
+    try assertToolPaths(allocator, io, port, 66, "zigar_backend_evidence_pack", "{\"apply\":false}", expected.value, "backend_evidence_pack_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 25, "zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\",\"stop_on_failure\":true}", expected.value, "validate_patch_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 50, "zigar_result_shape", "{\"mode\":\"compact\"}", expected.value, "result_shape_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 51, "zigar_output_budget_plan", "{\"mode\":\"deep\",\"token_budget\":12,\"tool\":\"zig_check\"}", expected.value, "output_budget_paths", &scenarios);

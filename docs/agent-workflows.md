@@ -73,12 +73,28 @@ change risk.
 Use `zigar_project_profile` to inspect the generated deterministic profile.
 Writing `.zigar/profile.json` requires `apply: true`.
 
+Use `zigar_project_profile_v2` for the structured profile contract. It previews
+or writes `.zigar/profile.json` with `schema_version: 2`; `zigar_profile_read`,
+`zigar_profile_validate`, `zigar_profile_bootstrap`, `zigar_profile_import`, and
+`zigar_profile_diff` cover bounded reads, validation, generation, import, and
+top-level comparison.
+
+For setup work, start with `zigar_setup_elicit` or the narrower
+`zigar_profile_elicit` and `zigar_backend_elicit` tools. They return questions
+and unknowns without blocking non-interactive automation. Then use
+`zigar_env_pack`, `zig_toolchain_pin`, `zig_zls_match_check`,
+`zigar_backend_install_plan`, `zigar_dev_env_generate`, and
+`zigar_backend_conformance` to make the toolchain, setup files, and backend
+evidence reproducible.
+
 ## Examples
 
 - Compile error triage: `zigar_context_pack -> zigar_next_action ->
   zig_compile_error_index -> zigar_failure_fusion -> zigar_validate_patch`.
 - Changed Zig file validation: `zigar_patch_guard -> zigar_impact ->
   zig_test_select -> zigar_validate_patch`.
+- Reproducible setup: `zigar_setup_elicit -> zigar_project_profile_v2 ->
+  zigar_env_pack -> zig_zls_match_check -> zigar_backend_conformance`.
 - Profiling workflow routing: `zigar_next_action -> zig_profile_plan ->
   zig_profile_run` when an explicit command is needed, then `zig_flamegraph` or
   `zig_flamegraph_diff` for rendering captured data.

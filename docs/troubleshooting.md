@@ -36,6 +36,13 @@ For project-level version mismatches, call `zig_toolchain_resolve`. It inspects
 `.zigversion`, `.tool-versions`, `mise.toml`, `build.zig.zon`, active Zig/ZLS
 versions, and common managers such as mise, asdf, zvm, and zigup.
 
+Use `zig_zls_match_check` when you need a focused compatibility result for the
+configured Zig and ZLS paths. Use `zig_toolchain_pin` to preview or write
+`.zigar/toolchain.json`, then `zig_toolchain_pin_check` to compare that pin with
+the current environment. If ZVM is the project-approved manager,
+`zigar_zvm_install_plan` and `zigar_zvm_switch_plan` return explicit commands;
+they do not install or switch versions on their own.
+
 For executable checks, call:
 
 ```json

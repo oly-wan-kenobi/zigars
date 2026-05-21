@@ -103,6 +103,50 @@ the omissions name the skipped section, the reason, and the recovery path.
 Before release decisions, treat artifact entries as evidence pointers and verify
 the producing command, source tree, and release gate that generated them.
 
+## Environment Profiles
+
+Environment profile tools make setup state explicit and reproducible. The
+profile contract is `.zigar/profile.json` with `schema_version: 2`; it records
+workspace facts, source sets, generated directories, targets, tests, toolchain
+paths, optional backend policy, unresolved unknowns, and verification tools.
+`zigar_project_profile_v2` previews or writes that file, and
+`zigar_profile_bootstrap`, `zigar_profile_import`, `zigar_profile_diff`,
+`zigar_profile_validate`, and `zigar_profile_read` cover generation, import,
+comparison, validation, and bounded reads. Writes are preview-first and require
+`apply=true`.
+
+`zigar_setup_elicit`, `zigar_profile_elicit`, and `zigar_backend_elicit` return
+detected facts, questions, and unknowns for client-mediated setup. They do not
+block deterministic non-interactive flows; unresolved ambiguity stays visible in
+the result so a client can either ask a human or continue with conservative
+defaults.
+
+`zigar_env_pack` returns a reproducible environment pack with configured Zig,
+ZLS, optional backend paths, probe argv, optional executable hashes, project
+version hints, pins, compatibility state, setup hints, and limitations.
+`zigar_env_export` writes the pack under `.zigar-cache/env/` only when
+`apply=true` and registers artifact provenance. `zig_toolchain_pin` previews or
+writes `.zigar/toolchain.json`; `zig_toolchain_pin_check` compares that pin with
+the current environment pack. `zig_zls_match_check` compares observed Zig and
+ZLS release prefixes when probes are enabled and reports `unknown` rather than
+claiming compatibility when version evidence is missing.
+
+ZVM tools are inert by default. `zigar_zvm_probe` runs bounded read-only ZVM
+commands, while `zigar_zvm_install_plan` and `zigar_zvm_switch_plan` return
+exact argv plans with `plan_only=true`, `mutates_environment=false`, and
+`requires_user_execution=true`. They never install Zig or switch the developer
+environment.
+
+Backend setup tools follow the same contract. `zigar_backend_install_plan`
+returns setup commands and verification steps from the backend catalog without
+running them. `zigar_backend_verify` runs bounded probes for configured paths.
+`zigar_dev_env_generate` previews or writes pinned mise, asdf, Nix,
+devcontainer, or GitHub Actions setup artifacts. `zigar_backend_conformance`
+returns conformance scenarios and evidence paths, and
+`zigar_backend_evidence_pack` turns an existing conformance report into a compact
+registered artifact when applied. The MCP conformance tool does not replace the
+script-backed release evidence path.
+
 ## Result Shapes
 
 `zigar_result_shape` describes the public compact, standard, and deep response
