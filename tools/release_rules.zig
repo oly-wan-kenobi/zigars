@@ -344,8 +344,13 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_checks.zig",
-        .max_lines = 650,
-        .reason = "release checks are critical trust infrastructure; policy tables belong in release_rules.zig",
+        .max_lines = 520,
+        .reason = "release checks are critical trust infrastructure; policy tables and fake backends belong in focused modules",
+    },
+    .{
+        .path = "tools/fake_backends.zig",
+        .max_lines = 150,
+        .reason = "fake backend fixtures should stay small and focused on conformance smoke behavior",
     },
     .{
         .path = "tools/release_rules.zig",
@@ -467,7 +472,7 @@ pub const ignored_error_hygiene_tokens = [_]HygieneToken{
         .reason = "HTTP smoke retry sleep failures must be visible",
     },
     .{
-        .path = "tools/release_checks.zig",
+        .path = "tools/fake_backends.zig",
         .token = "writeStreamingAll(io, message) catch " ++ "{};",
         .reason = "release-check fake backend diagnostics must not be silently dropped",
     },

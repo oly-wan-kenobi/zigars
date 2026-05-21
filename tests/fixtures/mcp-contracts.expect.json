@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "tool_contracts": {
+    "discovery": "Every src/tool_manifest.zig entry is registered through src/server.zig and must pass tools/list schema checks.",
+    "invalid_input": "Every public tool must return structured argument_error content for an unknown argument before handler execution.",
+    "writes_source": "Source-writing tools must expose an apply gate.",
+    "backend_or_artifact": "Backend and artifact tools must have a non-empty plan so release-check can name missing coverage by tool."
+  },
+  "resources": [
+    "zigar://workspace",
+    "zigar://zls/status",
+    "zigar://tools/capabilities",
+    "zigar://tools/schema",
+    "zigar://workspace/import-graph",
+    "zigar://metrics"
+  ],
+  "resource_templates": [
+    "zigar://file/{path}/symbols",
+    "zigar://file/{path}/diagnostics",
+    "zigar://file/{path}/imports"
+  ],
+  "prompts": [
+    "zigar_profile_workflow"
+  ],
+  "report_kinds": [
+    "zigar_backend_conformance_report",
+    "zigar_release_readiness_report",
+    "zigar_real_zls_conformance_report"
+  ]
+}
