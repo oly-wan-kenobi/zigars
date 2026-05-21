@@ -11,6 +11,7 @@ pub fn checkPublicClaimDocs(allocator: Allocator, io: Io) !bool {
         "LSP-backed tools",
         "heuristic/advisory tools",
         "Real\noptional-backend support is claimed only from a release evidence artifact",
+        "claim clean A only from\na clean-tree `Release Readiness` evidence package",
     })) and ok;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "## Evidence Labels",

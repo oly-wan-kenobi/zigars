@@ -32,9 +32,9 @@ enforce them, and the product boundaries that should stay visible.
 8. `tools/list`, `zigar_schema`, `zigar_tool_index`, and
    `zigar://tools/schema` expose the public contract. Compatibility-sensitive
    changes should be called out in the changelog before a tag.
-9. Release notes must include a validation evidence block before a public tag.
-   This prevents maturity docs from claiming readiness without the exact local
-   gate results and real-backend validation status.
+9. Release notes must include a clean-tree validation evidence block before a
+   public tag. This prevents maturity docs from claiming readiness without the
+   exact source commit, local gate results, and real-backend validation status.
 
 ## Feature Maturity
 
@@ -87,9 +87,11 @@ Some quality signals cannot be forced by the local repository alone:
   when release notes need to claim exact real-backend validation. Every public
   release note should still state real-backend validation status explicitly,
   using `not run` when no real-backend evidence artifact exists.
-- Public optional-backend claims should come from the manual `Release Readiness`
-  artifact, including the generated backend compatibility matrix and the
-  `ZLS Conformance` report for real ZLS behavior.
+- Public optional-backend claims should come from a clean-tree manual
+  `Release Readiness` artifact, including the generated backend compatibility
+  matrix and the `ZLS Conformance` report for real ZLS behavior. A run with
+  `source_tree_clean: false` is useful for debugging but is not citable release
+  evidence.
 - Agent-client behavior varies by client. zigar documents Codex, Claude, Gemini,
   Hermes, and generic stdio setup, but clients still own launch environment and
   workspace selection.

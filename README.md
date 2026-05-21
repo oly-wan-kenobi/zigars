@@ -12,17 +12,19 @@ run, format, and analyze Zig projects. Any source write requires an explicit
 ## Status
 
 `zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
-transports. Major feature areas are documented at A- or better in
+transports. Major feature areas are documented against the clean A rubric in
 [docs/maturity.md](docs/maturity.md), and the release-facing trust checklist is
-kept in [docs/trust.md](docs/trust.md). The current package version is `0.2.0`;
-see [CHANGELOG.md](CHANGELOG.md).
+kept in [docs/trust.md](docs/trust.md). A release should claim clean A only from
+a clean-tree `Release Readiness` evidence package for the exact tagged commit.
+The current package version is `0.2.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 Known limitations:
 
 - `mcp.zig` is consumed as a pinned URL dependency without local patches.
   `zig-pkg/` is a local cache/artifact directory and is ignored.
 - ZLS, zwanzig, zflame, and diff-folded are optional runtime backends. Tools
-  that need a missing backend return an explicit error.
+  that need a missing backend return an explicit error, and public real-backend
+  claims come from generated conformance evidence.
 
 ## Requirements
 
@@ -37,8 +39,10 @@ in [docs/backends.md](docs/backends.md). The same backend setup contract is
 available at runtime through `zigar_backend_catalog` and in `zigar_schema` under
 `backend_setup`.
 Release candidates that claim real optional-backend coverage should also run the
-manual `Release Readiness` workflow with the exact backend versions and cite its
-generated backend compatibility matrix.
+manual `Release Readiness` workflow with the exact backend versions, clean-tree
+source metadata, and generated backend compatibility matrix. Maintainers can use
+the repo-pinned setup in `tools/real_backend_pins.json` through
+`.github/scripts/setup-real-backends.sh`.
 
 ## Install
 
@@ -88,7 +92,8 @@ zig-out/bin/zigar
 docs/JSON checks, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke
 fixtures, kcov line coverage floors, fake-backend conformance report-contract
 smoke, artifact hygiene, structured error-contract scans, trust/maturity docs
-checks, and line-budget headroom checks.
+checks, MCP public-surface contract checks, static/docs maturity guards, and
+line-budget headroom checks.
 
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics

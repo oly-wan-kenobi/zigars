@@ -1,14 +1,14 @@
 # Feature Maturity
 
-This document is the public-release maturity checkpoint. It records the rubric
-used to re-rate feature areas that were previously below A- and the evidence
-that keeps those ratings honest.
+This document is the public-release maturity checkpoint. It records the clean
+A rubric, the evidence that keeps that rating honest, and the product
+boundaries that remain visible even when the release gate is green.
 
 ## Rubric
 
-Minimum public-release rating: A-.
+Minimum public-release rating: A.
 
-A feature area reaches A- only when it has:
+A feature area reaches A only when it has:
 
 - a clear public contract in docs and structured output;
 - tests for successful use and major failure modes;
@@ -17,25 +17,33 @@ A feature area reaches A- only when it has:
 - release-check, smoke-test, generated-doc, or CI coverage against drift;
 - no known high-impact adoption blocker.
 
-Known limitations are allowed at A- when they are explicit, non-surprising, and
+Clean A release status also requires a citable `Release Readiness` package from
+the exact tagged source commit with `source_tree_clean: true`, matching backend
+and ZLS subreport commits, release-check and release-asset-smoke results,
+repo-pinned backend setup provenance when used, and a generated compatibility
+matrix for every claimed optional backend.
+
+Known limitations are allowed at A when they are explicit, non-surprising, and
 paired with a reliable fallback or verification path. Hidden precision claims,
 silent fallbacks, missing raw evidence, or untested public contracts keep a
-feature below A-.
+feature below A.
 
 ## Reassessment
 
 | Feature area | Previous rating | Public-release rating | Evidence |
 | --- | --- | --- | --- |
-| ZLS/LSP tools | B+ | A- | Structured unavailable-vs-unsupported capability reporting in ZLS tool results, degraded advisory fallbacks for symbols/diagnostics, fake-LSP regression tests, and troubleshooting docs for backend status and timeouts. |
-| Docs lookup | B+ | A- | Source/provenance/completeness metadata across docs tools, generated tool-index checks, source/bundled fallback disclosure, and docs contract coverage in `docs/tools.md`. |
-| Static analysis | B | A- | Capability tiers (`advisory_orientation`, `parser_backed`, `zwanzig_backed`), parser-backed AST tools, limitations and `verify_with` metadata, stdio coverage, and generated tool-index/release checks. |
-| zwanzig optional backend | B | A- | Optional-backend contract docs, explicit backend probes, fake-backend stdio fixtures for JSON/SARIF/rules/graphs, and stable errors when zwanzig is unavailable. |
-| Profiling/zflame | B | A- | Explicit `zig_profile_run` argv contract, external-capture docs, zflame/diff-folded backend metadata, SVG/intermediate artifact smoke tests, and release-check docs guards. |
+| Release gate and packaging | A- | A | `release-check`, release asset smoke, dirty-tree refusal for release-readiness, schema-v2 evidence with source commit, subreport commit agreement, backend path/hash inputs, and release-note-ready summaries. |
+| MCP/tool contract | A- | A | Every public tool is checked for discovery/schema/required-field coverage, structured invalid-input behavior, apply gates where source writes exist, backend/artifact planning coverage, resource/prompt routing, cleanup hooks, and report schema tokens. |
+| ZLS/LSP tools | B+ | A | Structured unavailable-vs-unsupported capability reporting, fake-LSP regression tests, troubleshooting docs, and real-ZLS conformance scenarios for document open, symbols, hover, diagnostics, formatting, rename, and workspace symbols. |
+| Docs lookup | B+ | A | Source/provenance/completeness metadata across docs tools, installed langref availability/fallback/parse-failure metadata, stdlib qualified-name/import-hint/doc-comment extraction, builtin drift checks against active toolchain source, and offline fallback tests. |
+| Static analysis | B | A | Capability tiers (`advisory_orientation`, `parser_backed`, `zwanzig_backed`), parser-backed fixtures for tricky Zig syntax, `parse_status`/`partial_result`, structured `evidence_basis` and `cross_check`, and guards preventing advisory tools from release-gating language. |
+| zwanzig optional backend | B | A | Repo-pinned provisioning, JSON/SARIF/rules/CFG graph real scenarios, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and generated scenario evidence in the compatibility matrix. |
+| Profiling/zflame | B | A | Explicit `zig_profile_run` argv contract, external-capture docs, zflame recursive SVG validation, XML-prologue SVG acceptance, diff-folded intermediate metadata/hash checks, and release-check docs guards. |
 | Agent workflows | B | A- | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, heuristic limitations, focused tests, and stdio coverage for agent routing/validation output. |
 | CI artifact tools | B- | A- | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. |
-| HTTP/MCP substrate | B | A- | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
+| HTTP/MCP substrate | B | A | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
 
-No below-A- feature area remains without a blocking follow-up. Remaining limits
+No below-A feature area remains without a blocking follow-up. Remaining limits
 are documented as product boundaries rather than hidden defects.
 
 ## Remaining Limits
@@ -43,8 +51,8 @@ are documented as product boundaries rather than hidden defects.
 - Optional backends remain optional. ZLS, zwanzig, zflame, and diff-folded tools
   return structured unavailable errors or degraded advisory output instead of
   requiring those binaries in default CI. Public release notes should claim real
-  optional-backend coverage only from the manual `Release Readiness` evidence
-  package or a specific conformance artifact.
+  optional-backend coverage only from a clean-tree manual `Release Readiness`
+  evidence package or a specific conformance artifact.
 - Static-analysis and agent-routing features disclose heuristic scope. Use
   parser-backed tools, compiler-backed commands, ZLS, or project CI before
   making release decisions from advisory output.
@@ -63,6 +71,7 @@ Before publishing, the releaser must run:
 ```sh
 zig build release-check
 zig build dist release-asset-smoke
+ZIGAR_USE_PINNED_BACKEND_SETUP=1 bash .github/scripts/release-readiness.sh
 ```
 
 `release-check` validates this maturity document, generated docs/JSON, unit and
