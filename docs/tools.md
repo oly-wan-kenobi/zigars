@@ -85,18 +85,20 @@ unsupported response for other known tools instead of `InvalidArguments`.
 
 Static-analysis tools use a shared confidence and capability-tier contract.
 Structured results include `analysis_kind`, `capability_tier`, `confidence`,
-`confidence_class`, `source_coverage`, `limitations`, `verify_with`, and a
-`recommended_cross_check`. Text results carry the same metadata beside their
-human-readable body. Treat `advisory_orientation` tools as navigation aids:
-`zig_dead_decl_candidates` still needs reference checks before deletion,
-`zig_public_api_diff` has a public declaration line comparison basis with known
-blind spots, and `zig_test_select` returns recommendations unless a stronger
-dependency model validates them. Use `parser_backed` tools such as
-`zig_ast_decl_summary`, `zig_ast_imports`, and `zig_ast_tests` when syntactic
-precision matters, then verify release decisions with Zig compiler, ZLS, CI, or
-optional zwanzig-backed tools. `zwanzig_backed` tools are optional
-zwanzig-backed static-analysis/lint integrations; zigar reports their tier and
-does not require zwanzig to be installed.
+`confidence_class`, `source_coverage`, `limitations`, `verify_with`,
+`evidence_basis`, `cross_check`, and a `recommended_cross_check`. Text results
+carry the same metadata beside their human-readable body. Treat
+`advisory_orientation` tools as navigation aids: `zig_dead_decl_candidates`
+still needs reference checks before deletion, `zig_public_api_diff` has a public
+declaration line comparison basis with known blind spots, and `zig_test_select`
+returns recommendations unless a stronger dependency model validates them. Use
+`parser_backed` tools such as `zig_ast_decl_summary`, `zig_ast_imports`, and
+`zig_ast_tests` when syntactic precision matters. Parser-backed results expose
+`parse_status`, `partial_result`, `result_complete`, and `parse_error_count` so
+malformed source cannot look complete. Verify release decisions with Zig
+compiler, ZLS, CI, or optional zwanzig-backed tools. `zwanzig_backed` tools are
+optional zwanzig-backed static-analysis/lint integrations; zigar reports their
+tier and does not require zwanzig to be installed.
 
 CI artifact tools use an explicit artifact contract. `zig_ci_annotations`
 reports `parser_confidence`, `parsing_basis`, limitations, parse summaries, and
@@ -113,12 +115,17 @@ server process and surfaced through `zigar_workspace_info` and `zigar_metrics`.
 Docs tools are intentionally split by source, and each source reports
 provenance/completeness. `zig_builtin_*` uses curated zigar data, records the
 active Zig version when `zig env` is available, and is marked
-`partial_curated`. `zig_std_search` scans local Zig standard-library `.zig`
-source files and is marked `source_scan`. `zig_std_item` extracts adjacent
-triple-slash doc comments for declaration matches. `zig_lang_ref_search`
-searches language-reference sections, reports whether it used
-`installed_langref_html` or `bundled_langref_index`, marks bundled fallback data
-as `partial_curated`, and does not scan Zig autodoc implementation files.
+`partial_curated`. Builtin metadata includes `drift_check_status` and, when the
+active toolchain source is available, `active_builtin_source_path`.
+`zig_std_search` scans local Zig standard-library `.zig` source files and is
+marked `source_scan`. `zig_std_item` extracts adjacent triple-slash doc comments
+for declaration matches and returns `qualified_name`, `import_hint`, and
+`source_scan_limitations`. `zig_lang_ref_search` searches language-reference
+sections, reports whether it used `installed_langref_html` or
+`bundled_langref_index`, marks bundled fallback data as `partial_curated`, and
+does not scan Zig autodoc implementation files. Installed language-reference
+metadata includes `installed_doc_available`, `fallback_reason`, and
+`parse_failure_count` so fallback mode is explicit rather than silent.
 
 Structured docs outputs use the same contract across builtin, stdlib source, std
 item, and language-reference workflows: `source`, `query`, `limit`,

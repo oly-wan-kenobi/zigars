@@ -49,17 +49,43 @@ pub fn searchValue(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8
 
 fn searchValueImpl(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8, query: []const u8, limit: usize) !std.json.Value {
     const normalized_limit = @max(limit, 1);
-    if (try findHtml(allocator, io, lib_dir)) |path| {
+    const probe = try findHtml(allocator, io, lib_dir);
+    if (probe.path) |path| {
         const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024)) catch {
-            return searchBundledValue(allocator, query, normalized_limit);
+            return searchBundledValue(allocator, query, normalized_limit, .{
+                .installed_doc_available = true,
+                .candidate_count = probe.candidates_checked,
+                .skipped_candidate_count = probe.skippedCandidates(),
+                .rejected_candidate_count = probe.rejected_candidates,
+                .unreadable_candidate_count = probe.unreadable_candidates + 1,
+                .parse_failure_count = 1,
+                .fallback_reason = "installed_langref_read_failed",
+            });
         };
         defer allocator.free(contents);
-        return searchHtmlValue(allocator, path, contents, query, normalized_limit);
+        return searchHtmlValue(allocator, path, contents, query, normalized_limit, probe);
     }
-    return searchBundledValue(allocator, query, normalized_limit);
+    return searchBundledValue(allocator, query, normalized_limit, .{
+        .candidate_count = probe.candidates_checked,
+        .skipped_candidate_count = probe.skippedCandidates(),
+        .rejected_candidate_count = probe.rejected_candidates,
+        .unreadable_candidate_count = probe.unreadable_candidates,
+        .fallback_reason = "installed_langref_not_found",
+    });
 }
 
-fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !?[]u8 {
+const LangRefHtmlProbe = struct {
+    path: ?[]const u8 = null,
+    candidates_checked: usize = 0,
+    rejected_candidates: usize = 0,
+    unreadable_candidates: usize = 0,
+
+    fn skippedCandidates(self: LangRefHtmlProbe) usize {
+        return self.rejected_candidates + self.unreadable_candidates;
+    }
+};
+
+fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !LangRefHtmlProbe {
     const candidates = [_][]const u8{
         "doc/langref.html",
         "doc/langref.html.in",
@@ -68,18 +94,25 @@ fn findHtml(allocator: std.mem.Allocator, io: std.Io, lib_dir: []const u8) !?[]u
         "langref.html",
         "docs/index.html",
     };
+    var probe: LangRefHtmlProbe = .{};
     for (candidates) |rel| {
+        probe.candidates_checked += 1;
         const path = try std.fs.path.join(allocator, &.{ lib_dir, rel });
         errdefer allocator.free(path);
         const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(128 * 1024)) catch {
             allocator.free(path);
+            probe.unreadable_candidates += 1;
             continue;
         };
         defer allocator.free(bytes);
-        if (looksLikeLangRef(rel, bytes)) return path;
+        if (looksLikeLangRef(rel, bytes)) {
+            probe.path = path;
+            return probe;
+        }
+        probe.rejected_candidates += 1;
         allocator.free(path);
     }
-    return null;
+    return probe;
 }
 
 fn looksLikeLangRef(rel_path: []const u8, bytes: []const u8) bool {
@@ -93,7 +126,17 @@ fn looksLikeLangRef(rel_path: []const u8, bytes: []const u8) bool {
     return std.mem.indexOf(u8, bytes, "Zig") != null or std.mem.indexOf(u8, bytes, "zig") != null;
 }
 
-fn searchBundledValue(allocator: std.mem.Allocator, query: []const u8, limit: usize) !std.json.Value {
+const BundledFallbackMetadata = struct {
+    installed_doc_available: bool = false,
+    candidate_count: usize = 0,
+    skipped_candidate_count: usize = 0,
+    rejected_candidate_count: usize = 0,
+    unreadable_candidate_count: usize = 0,
+    parse_failure_count: usize = 0,
+    fallback_reason: []const u8 = "installed_langref_not_found",
+};
+
+fn searchBundledValue(allocator: std.mem.Allocator, query: []const u8, limit: usize, fallback: BundledFallbackMetadata) !std.json.Value {
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
@@ -113,7 +156,17 @@ fn searchBundledValue(allocator: std.mem.Allocator, query: []const u8, limit: us
         .no_result_reason = if (count == 0) "no_langref_match" else null,
         .ranking = bundled_ranking,
     });
-    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, "bundled_curated_langref_index", null, sections.len));
+    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, .{
+        .strategy = "bundled_curated_langref_index",
+        .indexed_sections = sections.len,
+        .installed_doc_available = fallback.installed_doc_available,
+        .candidate_count = fallback.candidate_count,
+        .skipped_candidate_count = fallback.skipped_candidate_count,
+        .rejected_candidate_count = fallback.rejected_candidate_count,
+        .unreadable_candidate_count = fallback.unreadable_candidate_count,
+        .parse_failure_count = fallback.parse_failure_count,
+        .fallback_reason = fallback.fallback_reason,
+    }));
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -160,34 +213,44 @@ fn containsLowered(haystack: []const u8, lower_query: []const u8) bool {
     return false;
 }
 
-fn searchHtmlValue(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize) !std.json.Value {
+fn searchHtmlValue(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize, probe: LangRefHtmlProbe) !std.json.Value {
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
 
     var matches = std.json.Array.init(allocator);
     errdefer matches.deinit();
     var count: usize = 0;
+    var heading_count: usize = 0;
+    var skipped_heading_count: usize = 0;
     var pos: usize = 0;
-    while (count < limit) {
+    while (true) {
         const heading = nextHeading(html, pos) orelse break;
+        heading_count += 1;
         pos = heading.end;
         const next = nextHeading(html, pos);
         const section_end = if (next) |n| n.start else html.len;
         const section_html = html[heading.start..section_end];
         const text = try stripHtmlAlloc(allocator, section_html);
         defer allocator.free(text);
+        const title = std.mem.trim(u8, try stripHtmlAlloc(allocator, heading.title_html), " \t\r\n");
+        if (title.len == 0 or heading.anchor.len == 0) {
+            skipped_heading_count += 1;
+            continue;
+        }
         const lower_text = try asciiLowerAlloc(allocator, text);
         defer allocator.free(lower_text);
         if (std.mem.indexOf(u8, lower_text, lower_query) == null) continue;
+        if (count >= limit) continue;
 
         count += 1;
-        const title = try stripHtmlAlloc(allocator, heading.title_html);
         const snippet = snippetForQuery(text, lower_text, lower_query);
+        const summary = boundedSummary(text);
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
         try obj.put(allocator, "rank", .{ .integer = @intCast(count) });
-        try obj.put(allocator, "title", .{ .string = std.mem.trim(u8, title, " \t\r\n") });
+        try obj.put(allocator, "title", .{ .string = title });
         try obj.put(allocator, "anchor", .{ .string = try allocator.dupe(u8, heading.anchor) });
+        try obj.put(allocator, "summary", .{ .string = try allocator.dupe(u8, summary) });
         try obj.put(allocator, "snippet", .{ .string = try allocator.dupe(u8, std.mem.trim(u8, snippet, " \t\r\n")) });
         try obj.put(allocator, "match_pass", .{ .string = "html_section" });
         try obj.put(allocator, "source_path", .{ .string = path });
@@ -203,7 +266,19 @@ fn searchHtmlValue(allocator: std.mem.Allocator, path: []const u8, html: []const
         .no_result_reason = if (count == 0) "no_langref_match" else null,
         .ranking = installed_ranking,
     });
-    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, "installed_html_heading_scan", path, countHeadings(html)));
+    const indexed_sections = heading_count - skipped_heading_count;
+    try obj.put(allocator, "index_metadata", try indexMetadataValue(allocator, .{
+        .strategy = "installed_html_heading_scan",
+        .source_path = path,
+        .indexed_sections = indexed_sections,
+        .heading_count = heading_count,
+        .skipped_heading_count = skipped_heading_count,
+        .installed_doc_available = true,
+        .candidate_count = probe.candidates_checked,
+        .skipped_candidate_count = probe.skippedCandidates(),
+        .rejected_candidate_count = probe.rejected_candidates,
+        .unreadable_candidate_count = probe.unreadable_candidates,
+    }));
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -224,7 +299,7 @@ fn searchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u
         const source_path = match.get("source_path").?;
         if (source_path == .string) {
             try out.print(allocator, "Source: {s}\n\n", .{source_path.string});
-            try out.print(allocator, "{s}\n\n", .{match.get("snippet").?.string});
+            try out.print(allocator, "{s}\n\n", .{match.get("summary").?.string});
         } else {
             try out.appendSlice(allocator, "Source: bundled Zig language reference index\n\n");
             try out.print(allocator, "{s}\n\n{s}\n\n", .{ match.get("summary").?.string, match.get("body").?.string });
@@ -292,30 +367,44 @@ const HtmlHeading = struct {
     title_html: []const u8,
 };
 
-fn indexMetadataValue(allocator: std.mem.Allocator, strategy: []const u8, source_path: ?[]const u8, indexed_sections: usize) !std.json.Value {
+const LangrefIndexMetadata = struct {
+    strategy: []const u8,
+    source_path: ?[]const u8 = null,
+    indexed_sections: usize,
+    heading_count: usize = 0,
+    skipped_heading_count: usize = 0,
+    installed_doc_available: bool,
+    candidate_count: usize = 0,
+    skipped_candidate_count: usize = 0,
+    rejected_candidate_count: usize = 0,
+    unreadable_candidate_count: usize = 0,
+    parse_failure_count: usize = 0,
+    fallback_reason: ?[]const u8 = null,
+};
+
+fn indexMetadataValue(allocator: std.mem.Allocator, metadata: LangrefIndexMetadata) !std.json.Value {
     var roots = std.json.Array.init(allocator);
     errdefer roots.deinit();
-    if (source_path) |path| try roots.append(.{ .string = path });
+    if (metadata.source_path) |path| try roots.append(.{ .string = path });
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "index_strategy", .{ .string = strategy });
+    try obj.put(allocator, "index_strategy", .{ .string = metadata.strategy });
     try obj.put(allocator, "generated_unix", .null);
     try obj.put(allocator, "generated_at", .{ .string = "per_call_in_memory_index" });
-    try obj.put(allocator, "indexed_section_count", .{ .integer = @intCast(indexed_sections) });
+    try obj.put(allocator, "indexed_section_count", .{ .integer = @intCast(metadata.indexed_sections) });
+    try obj.put(allocator, "heading_count", .{ .integer = @intCast(metadata.heading_count) });
+    try obj.put(allocator, "skipped_heading_count", .{ .integer = @intCast(metadata.skipped_heading_count) });
+    try obj.put(allocator, "installed_doc_available", .{ .bool = metadata.installed_doc_available });
+    try obj.put(allocator, "candidate_count", .{ .integer = @intCast(metadata.candidate_count) });
+    try obj.put(allocator, "skipped_candidate_count", .{ .integer = @intCast(metadata.skipped_candidate_count) });
+    try obj.put(allocator, "rejected_candidate_count", .{ .integer = @intCast(metadata.rejected_candidate_count) });
+    try obj.put(allocator, "unreadable_candidate_count", .{ .integer = @intCast(metadata.unreadable_candidate_count) });
+    try obj.put(allocator, "parse_failure_count", .{ .integer = @intCast(metadata.parse_failure_count) });
+    if (metadata.fallback_reason) |reason| try obj.put(allocator, "fallback_reason", .{ .string = reason }) else try obj.put(allocator, "fallback_reason", .null);
     try obj.put(allocator, "source_roots", .{ .array = roots });
-    try obj.put(allocator, "section_summary", .{ .string = "heading and nearby text search with source/completeness metadata" });
+    try obj.put(allocator, "section_summary", .{ .string = "HTML headings and anchors indexed with bounded section summaries, source path, and fallback counters" });
     return .{ .object = obj };
-}
-
-fn countHeadings(html: []const u8) usize {
-    var count: usize = 0;
-    var pos: usize = 0;
-    while (nextHeading(html, pos)) |heading| {
-        count += 1;
-        pos = heading.end;
-    }
-    return count;
 }
 
 fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
@@ -329,22 +418,44 @@ fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
         const close = std.mem.indexOfPos(u8, html, open_end, "</h") orelse return null;
         const close_end = std.mem.indexOfScalarPos(u8, html, close, '>') orelse return null;
         const open_tag = html[start .. open_end + 1];
-        const anchor = headingAnchor(open_tag) orelse "";
+        const title_html = html[open_end + 1 .. close];
+        const anchor = headingAnchor(open_tag, title_html) orelse "";
         return .{
             .start = start,
             .end = close_end + 1,
             .anchor = anchor,
-            .title_html = html[open_end + 1 .. close],
+            .title_html = title_html,
         };
     }
     return null;
 }
 
-fn headingAnchor(open_tag: []const u8) ?[]const u8 {
-    const id_pos = std.mem.indexOf(u8, open_tag, "id=\"") orelse return null;
-    const start = id_pos + 4;
-    const end = std.mem.indexOfScalarPos(u8, open_tag, start, '"') orelse return null;
-    return open_tag[start..end];
+fn headingAnchor(open_tag: []const u8, title_html: []const u8) ?[]const u8 {
+    return attrValue(open_tag, "id") orelse
+        attrValue(open_tag, "name") orelse
+        attrValue(title_html, "id") orelse
+        attrValue(title_html, "name") orelse
+        anchorHrefFragment(title_html);
+}
+
+fn attrValue(text: []const u8, name: []const u8) ?[]const u8 {
+    const start = std.mem.indexOf(u8, text, name) orelse return null;
+    var pos = start + name.len;
+    while (pos < text.len and std.ascii.isWhitespace(text[pos])) pos += 1;
+    if (pos >= text.len or text[pos] != '=') return null;
+    pos += 1;
+    while (pos < text.len and std.ascii.isWhitespace(text[pos])) pos += 1;
+    if (pos >= text.len or (text[pos] != '"' and text[pos] != '\'')) return null;
+    const quote = text[pos];
+    const value_start = pos + 1;
+    const value_end = std.mem.indexOfScalarPos(u8, text, value_start, quote) orelse return null;
+    return text[value_start..value_end];
+}
+
+fn anchorHrefFragment(text: []const u8) ?[]const u8 {
+    const href = attrValue(text, "href") orelse return null;
+    if (href.len < 2 or href[0] != '#') return null;
+    return href[1..];
 }
 
 fn stripHtmlAlloc(allocator: std.mem.Allocator, html: []const u8) ![]u8 {
@@ -403,6 +514,11 @@ fn snippetForQuery(text: []const u8, lower_text: []const u8, lower_query: []cons
     return text[start..end];
 }
 
+fn boundedSummary(text: []const u8) []const u8 {
+    const trimmed = std.mem.trim(u8, text, " \t\r\n");
+    return trimmed[0..@min(trimmed.len, 360)];
+}
+
 fn asciiLowerAlloc(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     const out = try allocator.alloc(u8, input.len);
     for (input, 0..) |c, i| out[i] = std.ascii.toLower(c);
@@ -431,6 +547,8 @@ test "bundled langref JSON labels partial curated fallback and no-match reason" 
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("limit").?.integer);
     try std.testing.expectEqual(@as(i64, 1), hit_obj.get("result_count").?.integer);
     try std.testing.expectEqualStrings("bundled_curated_langref_index", hit_obj.get("index_metadata").?.object.get("index_strategy").?.string);
+    try std.testing.expectEqual(false, hit_obj.get("index_metadata").?.object.get("installed_doc_available").?.bool);
+    try std.testing.expectEqualStrings("installed_langref_not_found", hit_obj.get("index_metadata").?.object.get("fallback_reason").?.string);
     try std.testing.expectEqualStrings("Defer", hit_obj.get("matches").?.array.items[0].object.get("title").?.string);
     try std.testing.expect(hit_obj.get("no_result_reason").? == .null);
 
@@ -566,8 +684,11 @@ test "uses installed language reference html when present" {
     try std.testing.expectEqualStrings("installed_complete", obj.get("source").?.object.get("completeness").?.string);
     try std.testing.expectEqualStrings("installed_html_heading_scan", obj.get("index_metadata").?.object.get("index_strategy").?.string);
     try std.testing.expectEqual(@as(i64, 2), obj.get("index_metadata").?.object.get("indexed_section_count").?.integer);
+    try std.testing.expectEqual(true, obj.get("index_metadata").?.object.get("installed_doc_available").?.bool);
+    try std.testing.expectEqual(@as(i64, 0), obj.get("index_metadata").?.object.get("parse_failure_count").?.integer);
     try std.testing.expect(std.mem.indexOf(u8, obj.get("source").?.object.get("path").?.string, "langref.html") != null);
     try std.testing.expectEqualStrings("defer", obj.get("matches").?.array.items[0].object.get("anchor").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, obj.get("matches").?.array.items[0].object.get("summary").?.string, "scope exit sentinel") != null);
 }
 
 test "respects limit for installed html" {

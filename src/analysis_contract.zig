@@ -29,7 +29,7 @@ pub const Contract = struct {
 const single_file_text_coverage = "Single caller-provided Zig source file scanned as text.";
 const workspace_text_coverage = "Readable workspace Zig files up to the requested limit; skipped files are reported when supported.";
 const build_text_coverage = "Root build.zig/build.zig.zon files scanned as text without executing the build script.";
-const parser_file_coverage = "Single caller-provided Zig source file parsed with std.zig.Ast; parse_error_count reports syntax errors.";
+const parser_file_coverage = "Single caller-provided Zig source file parsed with std.zig.Ast; parse_status, partial_result, and parse_error_count report syntax completeness.";
 const git_status_coverage = "Current git status plus workspace file-name checks.";
 const compiler_output_coverage = "Compiler/test-runner output from a supplied transcript or a focused Zig command.";
 const zwanzig_output_coverage = "Optional zwanzig backend output for the requested workspace path or graph mode.";
@@ -124,6 +124,8 @@ pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_
     try obj.put(allocator, "source_coverage", .{ .string = contract.source_coverage });
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, contract.limitations));
     try obj.put(allocator, "verify_with", try stringArrayValue(allocator, contract.verify_with));
+    try obj.put(allocator, "evidence_basis", try evidenceBasisValue(allocator, contract));
+    try obj.put(allocator, "cross_check", try crossCheckValue(allocator, contract));
     if (contract.verify_with.len > 0) try obj.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
 }
 
@@ -144,6 +146,31 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     errdefer array.deinit();
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
+}
+
+fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
+    try obj.put(allocator, "capability_tier", .{ .string = capabilityTierName(contract.tier) });
+    try obj.put(allocator, "confidence", .{ .string = confidenceName(contract.confidence) });
+    try obj.put(allocator, "confidence_class", .{ .string = classificationName(contract.classification) });
+    try obj.put(allocator, "source_coverage", .{ .string = contract.source_coverage });
+    try obj.put(allocator, "limitations", try stringArrayValue(allocator, contract.limitations));
+    return .{ .object = obj };
+}
+
+fn crossCheckValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "required_for_release_gate", .{ .bool = contract.classification == .release_gating_candidate });
+    if (contract.verify_with.len > 0) {
+        try obj.put(allocator, "primary", .{ .string = contract.verify_with[0] });
+    } else {
+        try obj.put(allocator, "primary", .null);
+    }
+    try obj.put(allocator, "verify_with", try stringArrayValue(allocator, contract.verify_with));
+    return .{ .object = obj };
 }
 
 fn isStaticAnalysisProductGroup(group: tool_manifest.ToolGroup) bool {
@@ -176,12 +203,18 @@ test "static analysis contracts do not overstate evidence maturity" {
         .advisory_orientation => {
             try std.testing.expect(contract.confidence != .high);
             try std.testing.expect(contract.classification != .release_gating_candidate);
+            const entry = tool_manifest.findEntry(contract.tool).?;
+            try std.testing.expect(!contains(entry.meta.description, "release-gating"));
+            try std.testing.expect(!contains(entry.meta.description, "release gating"));
+            try std.testing.expect(!contains(entry.meta.description, "high confidence"));
         },
         .parser_backed => {
             try std.testing.expectEqual(Confidence.high, contract.confidence);
             try std.testing.expectEqual(Classification.advisory, contract.classification);
             try std.testing.expect(contains(contract.analysis_kind, "parser_backed"));
             try std.testing.expect(contains(contract.source_coverage, "std.zig.Ast"));
+            try std.testing.expect(contains(contract.source_coverage, "parse_status"));
+            try std.testing.expect(contains(contract.source_coverage, "partial_result"));
             try std.testing.expect(contains(contract.source_coverage, "parse_error_count"));
             try std.testing.expect(anyContains(contract.limitations, "Parse errors"));
             try std.testing.expect(contract.verify_with.len > 0);
@@ -210,9 +243,33 @@ test "release-gating static analysis claims require executable-backed evidence" 
             .compiler_backed, .zwanzig_backed => {},
             else => return error.ReleaseGatingClaimWithoutExecutableEvidence,
         }
+        const entry = tool_manifest.findEntry(contract.tool).?;
+        try std.testing.expect(entry.risk.executes_backend or entry.risk.executes_project_code);
         try std.testing.expectEqual(Confidence.high, contract.confidence);
         try std.testing.expect(contract.verify_with.len > 0);
         try std.testing.expect(contains(contract.source_coverage, "output") or contains(contract.source_coverage, "Compiler") or contains(contract.source_coverage, "zwanzig"));
+    }
+}
+
+test "static analysis metadata exposes structured evidence and cross-checks" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    for (contracts) |contract| {
+        var obj = std.json.ObjectMap.empty;
+        try putMetadata(allocator, &obj, contract.tool);
+        const evidence = obj.get("evidence_basis").?.object;
+        const cross_check = obj.get("cross_check").?.object;
+        try std.testing.expectEqualStrings(contract.analysis_kind, evidence.get("analysis_kind").?.string);
+        try std.testing.expectEqualStrings(capabilityTierName(contract.tier), evidence.get("capability_tier").?.string);
+        try std.testing.expectEqualStrings(confidenceName(contract.confidence), evidence.get("confidence").?.string);
+        try std.testing.expectEqualStrings(classificationName(contract.classification), evidence.get("confidence_class").?.string);
+        try std.testing.expect(evidence.get("limitations").?.array.items.len > 0);
+        try std.testing.expect(cross_check.get("verify_with").?.array.items.len > 0);
+        try std.testing.expectEqual(contract.classification == .release_gating_candidate, cross_check.get("required_for_release_gate").?.bool);
+        try std.testing.expectEqualStrings(contract.verify_with[0], cross_check.get("primary").?.string);
+        try std.testing.expectEqualStrings(contract.verify_with[0], obj.get("recommended_cross_check").?.string);
     }
 }
 

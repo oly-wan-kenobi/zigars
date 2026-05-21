@@ -3,8 +3,9 @@ const builtin = @import("builtin");
 const docs_source = @import("source.zig");
 const json_result = @import("../json_result.zig");
 
-const std_search_ranking = "case-insensitive source hit sorted by relative path then line; limit is applied after sorting";
+const std_search_ranking = "case-insensitive declaration/source hit sorted by relative path then line; limit is applied after sorting";
 const std_item_ranking = "exact declaration-name match, preferring the path implied by a qualified std name, then relative path and line; limit is applied after sorting";
+const std_scan_limitations = "Source scan only: no semantic import resolution, no rendered autodoc, and declaration docs are adjacent triple-slash comments only.";
 
 pub fn searchStd(
     allocator: std.mem.Allocator,
@@ -73,10 +74,21 @@ fn stdSearchValueImpl(
         defer allocator.free(lower_contents);
         const hit = std.mem.indexOf(u8, lower_contents, lower_query) orelse continue;
 
+        const hit_line = lineAt(contents, hit);
+        const parsed_decl = parseDeclaration(hit_line);
+        const qualified_name = if (parsed_decl) |decl| try qualifiedNameForDecl(allocator, entry.path, decl.name) else null;
+        const doc_comments = if (parsed_decl != null) try docCommentsBefore(allocator, contents, hit) else try allocator.dupe(u8, "");
+
         try collected.append(allocator, .{
             .path = try allocator.dupe(u8, entry.path),
             .line = lineNumber(contents, hit),
-            .snippet = try allocator.dupe(u8, lineAt(contents, hit)),
+            .snippet = try allocator.dupe(u8, hit_line),
+            .match_kind = if (parsed_decl) |decl| decl.kind else "source_line",
+            .decl_name = if (parsed_decl) |decl| try allocator.dupe(u8, decl.name) else null,
+            .qualified_name = qualified_name,
+            .import_hint = if (qualified_name) |name| try allocator.dupe(u8, name) else null,
+            .doc_comments = doc_comments,
+            .doc_comment_count = countDocCommentLines(doc_comments),
         });
     }
     std.mem.sort(StdSourceMatch, collected.items, {}, stdSourceMatchLessThan);
@@ -94,6 +106,12 @@ fn stdSearchValueImpl(
         try obj.put(allocator, "source_path", .{ .string = source_path });
         try obj.put(allocator, "line", .{ .integer = @intCast(match.line) });
         try obj.put(allocator, "snippet", .{ .string = match.snippet });
+        try obj.put(allocator, "match_kind", .{ .string = match.match_kind });
+        try putOptionalString(allocator, &obj, "decl_name", match.decl_name);
+        try putOptionalString(allocator, &obj, "qualified_name", match.qualified_name);
+        try putOptionalString(allocator, &obj, "import_hint", match.import_hint);
+        try obj.put(allocator, "doc_comments", .{ .string = match.doc_comments });
+        try obj.put(allocator, "doc_comment_count", .{ .integer = @intCast(match.doc_comment_count) });
         try matches.append(.{ .object = obj });
     }
 
@@ -111,6 +129,7 @@ fn stdSearchValueImpl(
     try obj.put(allocator, "files_scanned", .{ .integer = @intCast(files_scanned) });
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
     try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
+    try obj.put(allocator, "source_scan_limitations", .{ .string = std_scan_limitations });
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -202,6 +221,7 @@ fn stdItemValueImpl(
                 .preferred_path = if (path_hint) |hint| pathMatchesHint(entry.path, hint) else false,
                 .doc_comments = try allocator.dupe(u8, pending_doc_comments.items),
                 .doc_comment_count = pending_doc_comment_count,
+                .qualified_name = try qualifiedNameForDecl(allocator, entry.path, item_name),
             });
             pending_doc_comments.clearRetainingCapacity();
             pending_doc_comment_count = 0;
@@ -227,6 +247,8 @@ fn stdItemValueImpl(
         try obj.put(allocator, "doc_comments", .{ .string = match.doc_comments });
         try obj.put(allocator, "doc_comment_count", .{ .integer = @intCast(match.doc_comment_count) });
         try obj.put(allocator, "preferred_path", .{ .bool = match.preferred_path });
+        try obj.put(allocator, "qualified_name", .{ .string = match.qualified_name });
+        try obj.put(allocator, "import_hint", .{ .string = match.qualified_name });
         try matches.append(.{ .object = obj });
     }
 
@@ -251,6 +273,7 @@ fn stdItemValueImpl(
     try obj.put(allocator, "files_scanned", .{ .integer = @intCast(files_scanned) });
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
     try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
+    try obj.put(allocator, "source_scan_limitations", .{ .string = std_scan_limitations });
     try obj.put(allocator, "matches", .{ .array = matches });
     return .{ .object = obj };
 }
@@ -258,6 +281,12 @@ const StdSourceMatch = struct {
     path: []const u8,
     line: usize,
     snippet: []const u8,
+    match_kind: []const u8,
+    decl_name: ?[]const u8,
+    qualified_name: ?[]const u8,
+    import_hint: ?[]const u8,
+    doc_comments: []const u8,
+    doc_comment_count: usize,
 };
 
 fn stdSourceMatchLessThan(_: void, lhs: StdSourceMatch, rhs: StdSourceMatch) bool {
@@ -274,6 +303,7 @@ const StdItemMatch = struct {
     preferred_path: bool,
     doc_comments: []const u8,
     doc_comment_count: usize,
+    qualified_name: []const u8,
 };
 
 fn stdItemMatchLessThan(_: void, lhs: StdItemMatch, rhs: StdItemMatch) bool {
@@ -306,6 +336,7 @@ fn stdIndexMetadataValue(
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(skipped_files) });
     try obj.put(allocator, "walk_errors", .{ .integer = @intCast(walk_errors) });
     try obj.put(allocator, "doc_comment_extraction", .{ .string = "adjacent_triple_slash_comments_for_std_item_matches" });
+    try obj.put(allocator, "source_scan_limitations", .{ .string = std_scan_limitations });
     return .{ .object = obj };
 }
 
@@ -330,6 +361,10 @@ fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) !
             match.get("line").?.integer,
             match.get("snippet").?.string,
         });
+        const qualified_name = match.get("qualified_name").?;
+        if (qualified_name == .string) try out.print(allocator, "Qualified name: {s}\nImport hint: {s}\n\n", .{ qualified_name.string, match.get("import_hint").?.string });
+        const doc_comments = match.get("doc_comments").?.string;
+        if (doc_comments.len > 0) try out.print(allocator, "Doc comments:\n{s}\n\n", .{doc_comments});
     }
     if (matches.len == 0) {
         try out.print(allocator, "No stdlib matches for `{s}` under {s}.\n", .{
@@ -358,6 +393,7 @@ fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
             match.get("match_kind").?.string,
             match.get("snippet").?.string,
         });
+        try out.print(allocator, "Qualified name: {s}\nImport hint: {s}\n\n", .{ match.get("qualified_name").?.string, match.get("import_hint").?.string });
         const doc_comments = match.get("doc_comments").?.string;
         if (doc_comments.len > 0) {
             try out.print(allocator, "Doc comments:\n{s}\n\n", .{doc_comments});
@@ -438,23 +474,90 @@ fn pathMatchesHint(path: []const u8, hint: []const u8) bool {
     return std.mem.eql(u8, path, hint) or std.mem.endsWith(u8, path, hint);
 }
 
+const ParsedDecl = struct { name: []const u8, kind: []const u8 };
+
 fn declarationKind(line: []const u8, name: []const u8) ?[]const u8 {
-    const trimmed = std.mem.trim(u8, line, " \t");
-    if (hasDeclarationName(trimmed, "pub const ", name) or hasDeclarationName(trimmed, "const ", name)) return "const";
-    if (hasDeclarationName(trimmed, "pub fn ", name) or hasDeclarationName(trimmed, "fn ", name)) return "fn";
-    if (hasDeclarationName(trimmed, "pub var ", name) or hasDeclarationName(trimmed, "var ", name)) return "var";
-    return null;
+    const decl = parseDeclaration(line) orelse return null;
+    return if (std.mem.eql(u8, decl.name, name)) decl.kind else null;
 }
 
-fn hasDeclarationName(line: []const u8, prefix: []const u8, name: []const u8) bool {
-    if (!std.mem.startsWith(u8, line, prefix)) return false;
-    const rest = line[prefix.len..];
-    if (!std.mem.startsWith(u8, rest, name)) return false;
-    return rest.len == name.len or !isIdentChar(rest[name.len]);
+fn parseDeclaration(line: []const u8) ?ParsedDecl {
+    var rest = std.mem.trim(u8, line, " \t");
+    if (std.mem.startsWith(u8, rest, "pub ")) rest = rest[4..];
+    while (true) {
+        if (std.mem.startsWith(u8, rest, "inline ")) rest = rest[7..] else if (std.mem.startsWith(u8, rest, "extern ")) rest = rest[7..] else break;
+    }
+    const kinds = [_]struct { prefix: []const u8, kind: []const u8 }{
+        .{ .prefix = "const ", .kind = "const" },
+        .{ .prefix = "fn ", .kind = "fn" },
+        .{ .prefix = "var ", .kind = "var" },
+    };
+    for (kinds) |entry| {
+        if (!std.mem.startsWith(u8, rest, entry.prefix)) continue;
+        const name_start = entry.prefix.len;
+        var name_end = name_start;
+        while (name_end < rest.len and isIdentChar(rest[name_end])) name_end += 1;
+        if (name_end > name_start) return .{ .name = rest[name_start..name_end], .kind = entry.kind };
+    }
+    return null;
 }
 
 fn isIdentChar(c: u8) bool {
     return std.ascii.isAlphanumeric(c) or c == '_';
+}
+
+fn qualifiedNameForDecl(allocator: std.mem.Allocator, path: []const u8, decl_name: []const u8) ![]const u8 {
+    const stem = if (std.mem.endsWith(u8, path, ".zig")) path[0 .. path.len - 4] else path;
+    var module: std.ArrayList(u8) = .empty;
+    defer module.deinit(allocator);
+    try module.appendSlice(allocator, "std");
+    if (!std.mem.eql(u8, stem, "std")) {
+        try module.append(allocator, '.');
+        for (stem) |c| try module.append(allocator, if (c == '/') '.' else c);
+    }
+    return std.fmt.allocPrint(allocator, "{s}.{s}", .{ module.items, decl_name });
+}
+
+fn docCommentsBefore(allocator: std.mem.Allocator, text: []const u8, index: usize) ![]const u8 {
+    const start = lineStart(text, index);
+    var first = start;
+    while (first > 0) {
+        const prev_end = first - 1;
+        const prev_start = lineStart(text, prev_end);
+        const trimmed = std.mem.trim(u8, text[prev_start..prev_end], " \t\r\n");
+        if (docCommentText(trimmed) == null) break;
+        first = prev_start;
+    }
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    while (first < start) {
+        const end = std.mem.indexOfScalarPos(u8, text, first, '\n') orelse start;
+        if (docCommentText(std.mem.trim(u8, text[first..end], " \t\r\n"))) |comment| {
+            if (out.items.len > 0) try out.append(allocator, '\n');
+            try out.appendSlice(allocator, comment);
+        }
+        first = @min(end + 1, start);
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn countDocCommentLines(comments: []const u8) usize {
+    if (comments.len == 0) return 0;
+    var count: usize = 1;
+    for (comments) |c| {
+        if (c == '\n') count += 1;
+    }
+    return count;
+}
+
+fn lineStart(text: []const u8, index: usize) usize {
+    var start = @min(index, text.len);
+    while (start > 0 and text[start - 1] != '\n') start -= 1;
+    return start;
+}
+
+fn putOptionalString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: ?[]const u8) !void {
+    if (value) |string| try obj.put(allocator, key, .{ .string = string }) else try obj.put(allocator, key, .null);
 }
 
 fn asciiLowerAlloc(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
@@ -477,109 +580,4 @@ fn lineAt(text: []const u8, index: usize) []const u8 {
     var end = index;
     while (end < text.len and text[end] != '\n') end += 1;
     return text[start..end];
-}
-
-test "std search ignores non-zig documentation files" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
-    const allocator = std.testing.allocator;
-    const io = std.testing.io;
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    try tmp.dir.createDirPath(io, "std");
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/readme.md", .data = "docs_only_token\n" });
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/main.zig", .data = "pub const x = 1;\n" });
-
-    const std_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "std");
-    defer allocator.free(std_dir);
-    const text = try searchStd(allocator, io, std_dir, "docs_only_token", 10);
-    defer allocator.free(text);
-
-    try std.testing.expect(std.mem.indexOf(u8, text, "No stdlib matches") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "readme.md") == null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "Docs source: local_stdlib_zig_source") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "Completeness: source_scan") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "No result reason: no_std_source_match") != null);
-}
-
-test "std search JSON applies deterministic sorted limit and source contract" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
-    const allocator = std.testing.allocator;
-    const io = std.testing.io;
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    try tmp.dir.createDirPath(io, "std");
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/z_last.zig", .data = "pub const token = 1;\n" });
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/a_first.zig", .data = "pub const token = 2;\n" });
-
-    const std_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "std");
-    defer allocator.free(std_dir);
-
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const value = try stdSearchValue(arena.allocator(), io, std_dir, "token", 1);
-    const obj = value.object;
-    try std.testing.expectEqualStrings("local_stdlib_zig_source", obj.get("source").?.object.get("id").?.string);
-    try std.testing.expectEqualStrings("source_scan", obj.get("source").?.object.get("completeness").?.string);
-    try std.testing.expectEqual(@as(i64, 1), obj.get("limit").?.integer);
-    try std.testing.expectEqual(@as(i64, 1), obj.get("result_count").?.integer);
-    try std.testing.expectEqual(@as(i64, 2), obj.get("total_match_count").?.integer);
-    try std.testing.expectEqualStrings("a_first.zig", obj.get("matches").?.array.items[0].object.get("path").?.string);
-    try std.testing.expect(std.mem.endsWith(u8, obj.get("matches").?.array.items[0].object.get("source_path").?.string, "std/a_first.zig"));
-    try std.testing.expect(obj.get("no_result_reason").? == .null);
-}
-
-test "std item JSON uses exact declaration lookup and no-match contract" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
-    const allocator = std.testing.allocator;
-    const io = std.testing.io;
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    try tmp.dir.createDirPath(io, "std/fs");
-    try tmp.dir.writeFile(io, .{
-        .sub_path = "std/fs/path.zig",
-        .data =
-        \\/// Join path segments.
-        \\/// Returns an owned path buffer.
-        \\pub fn join() void {}
-        \\
-        ,
-    });
-    try tmp.dir.writeFile(io, .{ .sub_path = "std/other.zig", .data = "pub fn join() void {}\n" });
-
-    const std_dir = try tmpAbs(allocator, io, tmp.sub_path[0..], "std");
-    defer allocator.free(std_dir);
-
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const hit = try stdItemValue(arena.allocator(), io, std_dir, "std.fs.path.join", 1);
-    const hit_obj = hit.object;
-    const first = hit_obj.get("matches").?.array.items[0].object;
-    try std.testing.expectEqualStrings("local_stdlib_zig_source", hit_obj.get("source").?.object.get("id").?.string);
-    try std.testing.expectEqualStrings("source_scan", hit_obj.get("source").?.object.get("completeness").?.string);
-    try std.testing.expectEqualStrings("fs/path.zig", hit_obj.get("qualified_path_hint").?.string);
-    try std.testing.expectEqualStrings("fs/path.zig", first.get("path").?.string);
-    try std.testing.expect(std.mem.endsWith(u8, first.get("source_path").?.string, "std/fs/path.zig"));
-    try std.testing.expect(first.get("preferred_path").?.bool);
-    try std.testing.expectEqualStrings("fn", first.get("match_kind").?.string);
-    try std.testing.expectEqual(@as(i64, 2), first.get("doc_comment_count").?.integer);
-    try std.testing.expect(std.mem.indexOf(u8, first.get("doc_comments").?.string, "Join path segments.") != null);
-    try std.testing.expectEqualStrings("in_memory_stdlib_source_scan", hit_obj.get("index_metadata").?.object.get("index_strategy").?.string);
-
-    const miss = try stdItemValue(arena.allocator(), io, std_dir, "std.fs.path.missing", 3);
-    const miss_obj = miss.object;
-    try std.testing.expectEqual(@as(i64, 0), miss_obj.get("result_count").?.integer);
-    try std.testing.expectEqualStrings("no_std_item_declaration_match", miss_obj.get("no_result_reason").?.string);
-}
-fn tmpAbs(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8, child: []const u8) ![]u8 {
-    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp_sub_path });
-    defer allocator.free(rel_base);
-    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
-    defer allocator.free(base_z);
-    return std.fs.path.join(allocator, &.{ base_z[0..], child });
 }

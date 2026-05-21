@@ -206,7 +206,7 @@ pub fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, conten
     try obj.put(allocator, "kind", .{ .string = "zig_ast_decl_summary" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_decl_summary");
-    try obj.put(allocator, "parse_error_count", .{ .integer = @intCast(tree.errors.len) });
+    try putParseMetadata(allocator, &obj, tree);
     try obj.put(allocator, "declarations", .{ .array = declarations });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
@@ -232,6 +232,7 @@ pub fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: 
         try item.put(allocator, "file", try ownedString(allocator, file));
         try item.put(allocator, "line", .{ .integer = @intCast(lineForNode(tree, node)) });
         try item.put(allocator, "import", try astStringLiteralValue(allocator, tree, params[0]));
+        try item.put(allocator, "alias", try astImportAliasValue(allocator, tree, node));
         try item.put(allocator, "declaration", try ownedString(allocator, tree.getNodeSource(node)));
         try imports.append(.{ .object = item });
     }
@@ -241,7 +242,7 @@ pub fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: 
     try obj.put(allocator, "kind", .{ .string = "zig_ast_imports" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_imports");
-    try obj.put(allocator, "parse_error_count", .{ .integer = @intCast(tree.errors.len) });
+    try putParseMetadata(allocator, &obj, tree);
     try obj.put(allocator, "imports", .{ .array = imports });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
@@ -272,7 +273,7 @@ pub fn astTestsJson(allocator: std.mem.Allocator, file: []const u8, contents: []
     try obj.put(allocator, "kind", .{ .string = "zig_ast_tests" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_tests");
-    try obj.put(allocator, "parse_error_count", .{ .integer = @intCast(tree.errors.len) });
+    try putParseMetadata(allocator, &obj, tree);
     try obj.put(allocator, "tests", .{ .array = tests });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
@@ -338,6 +339,14 @@ fn skippedFileValue(allocator: std.mem.Allocator, path: []const u8, err: anyerro
 fn parseAst(allocator: std.mem.Allocator, contents: []const u8) !std.zig.Ast {
     const source = try allocator.dupeZ(u8, contents);
     return std.zig.Ast.parse(allocator, source, .zig);
+}
+
+fn putParseMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tree: std.zig.Ast) !void {
+    const has_errors = tree.errors.len != 0;
+    try obj.put(allocator, "parse_status", .{ .string = if (has_errors) "syntax_errors" else "ok" });
+    try obj.put(allocator, "partial_result", .{ .bool = has_errors });
+    try obj.put(allocator, "result_complete", .{ .bool = !has_errors });
+    try obj.put(allocator, "parse_error_count", .{ .integer = @intCast(tree.errors.len) });
 }
 
 fn appendAstDecls(allocator: std.mem.Allocator, tree: *const std.zig.Ast, nodes: []const std.zig.Ast.Node.Index, declarations: *std.json.Array, depth: usize) anyerror!void {
@@ -423,6 +432,21 @@ fn astTestNameValue(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.z
 
 fn astStringLiteralValue(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !std.json.Value {
     return astStringLiteralTokenValue(allocator, tree, tree.nodeMainToken(node));
+}
+
+fn astImportAliasValue(allocator: std.mem.Allocator, tree: std.zig.Ast, import_node: std.zig.Ast.Node.Index) !std.json.Value {
+    for (0..tree.nodes.len) |node_i| {
+        const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
+        switch (tree.nodeTag(node)) {
+            .global_var_decl, .simple_var_decl, .aligned_var_decl => {
+                const decl = tree.fullVarDecl(node).?;
+                const init_node = decl.ast.init_node.unwrap() orelse continue;
+                if (init_node == import_node) return astOptionalTokenValue(allocator, tree, decl.ast.mut_token + 1);
+            },
+            else => {},
+        }
+    }
+    return .null;
 }
 
 fn astStringLiteralTokenValue(allocator: std.mem.Allocator, tree: std.zig.Ast, token: std.zig.Ast.TokenIndex) !std.json.Value {
@@ -569,66 +593,4 @@ test "heuristic JSON scans report skipped file count" {
     try std.testing.expectEqualStrings("orientation_only", tests.object.get("confidence_class").?.string);
     try std.testing.expect(tests.object.get("verify_with").?.array.items.len > 0);
     try std.testing.expectEqual(@as(i64, 1), tests.object.get("skipped_file_count").?.integer);
-}
-
-test "parser-backed scans ignore comments and strings and expose high confidence tier" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const source =
-        \\const fake_text = "@import(\"fake.zig\")";
-        \\// pub fn commented() void {}
-        \\const std = @import("std");
-        \\const dep = @import("dep.zig");
-        \\pub const Outer = struct {
-        \\    pub fn nested() void {}
-        \\    const Private = struct {
-        \\        pub const Value = 1;
-        \\    };
-        \\};
-        \\comptime {
-        \\    const Generated = 1;
-        \\}
-        \\test "outer works" {}
-        \\test named {}
-        \\
-    ;
-
-    const decls = try astDeclSummaryJson(allocator, "fixture.zig", source);
-    try std.testing.expectEqualStrings("parser_backed", decls.object.get("capability_tier").?.string);
-    try std.testing.expectEqualStrings("high", decls.object.get("confidence").?.string);
-    try std.testing.expectEqual(@as(i64, 0), decls.object.get("parse_error_count").?.integer);
-    const decl_items = decls.object.get("declarations").?.array.items;
-    try std.testing.expect(arrayHasStringField(decl_items, "name", "Outer"));
-    try std.testing.expect(arrayHasStringField(decl_items, "name", "nested"));
-    try std.testing.expect(arrayHasStringField(decl_items, "name", "Generated"));
-    try std.testing.expect(!arrayHasStringField(decl_items, "name", "commented"));
-
-    const imports = try astImportsJson(allocator, "fixture.zig", source);
-    const import_items = imports.object.get("imports").?.array.items;
-    try std.testing.expectEqualStrings("parser_backed", imports.object.get("capability_tier").?.string);
-    try std.testing.expect(arrayHasStringField(import_items, "import", "std"));
-    try std.testing.expect(arrayHasStringField(import_items, "import", "dep.zig"));
-    try std.testing.expect(!arrayHasStringField(import_items, "import", "fake.zig"));
-
-    const tests = try astTestsJson(allocator, "fixture.zig", source);
-    const test_items = tests.object.get("tests").?.array.items;
-    try std.testing.expectEqualStrings("parser_backed", tests.object.get("capability_tier").?.string);
-    try std.testing.expect(arrayHasStringField(test_items, "name", "outer works"));
-    try std.testing.expect(arrayHasStringField(test_items, "name", "named"));
-}
-
-fn arrayHasStringField(items: []const std.json.Value, field: []const u8, expected: []const u8) bool {
-    for (items) |item| {
-        const obj = switch (item) {
-            .object => |o| o,
-            else => continue,
-        };
-        const actual = switch (obj.get(field) orelse .null) {
-            .string => |s| s,
-            else => continue,
-        };
-        if (std.mem.eql(u8, actual, expected)) return true;
-    }
-    return false;
 }

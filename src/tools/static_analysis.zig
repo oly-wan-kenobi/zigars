@@ -1,6 +1,10 @@
 const static_core = @import("static_core.zig");
 const static_tests = @import("static_tests.zig");
 
+test {
+    _ = @import("static_ast_fixture_tests.zig");
+}
+
 pub const zigImportGraph = static_core.zigImportGraph;
 pub const zigImportGraphJson = static_core.zigImportGraphJson;
 pub const sourceJsonResult = static_core.sourceJsonResult;

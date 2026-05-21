@@ -9,15 +9,21 @@ const langref = @import("docs/langref.zig");
 const std_docs = @import("docs/std.zig");
 
 pub const BuiltinDoc = builtin_docs.BuiltinDoc;
+pub const BuiltinDriftInfo = builtin_docs.BuiltinDriftInfo;
+pub const BuiltinIndexInput = builtin_docs.BuiltinIndexInput;
 pub const LangRefSection = langref.Section;
 
 pub const builtins = builtin_docs.builtins;
 pub const langref_sections = langref.sections;
 
 pub const builtinList = builtin_docs.builtinList;
+pub const builtinListWithInput = builtin_docs.builtinListWithInput;
 pub const builtinListValue = builtin_docs.builtinListValue;
+pub const builtinListValueWithInput = builtin_docs.builtinListValueWithInput;
 pub const builtinDoc = builtin_docs.builtinDoc;
+pub const builtinDocWithInput = builtin_docs.builtinDocWithInput;
 pub const builtinDocValue = builtin_docs.builtinDocValue;
+pub const builtinDocValueWithInput = builtin_docs.builtinDocValueWithInput;
 pub const searchStd = std_docs.searchStd;
 pub const stdSearchValue = std_docs.stdSearchValue;
 pub const stdItem = std_docs.stdItem;
@@ -46,6 +52,23 @@ test "docs JSON values are fully owned and compatible with structuredOwned" {
         try std.testing.expectEqualStrings("curated_zigar_builtins", result.structuredContent.?.object.get("source").?.object.get("id").?.string);
     }
     {
+        const value = try builtinListValueWithInput(allocator, .{
+            .toolchain_version = "0.16.0",
+            .drift = .{
+                .status = "curated_subset_matches_active_builtin_source",
+                .confidence = "source_backed",
+                .active_source_path = "/zig/std/zig/BuiltinFn.zig",
+                .active_count = builtins.len + 1,
+                .active_extra_count = 1,
+                .extra_names_sample = &.{"@newBuiltin"},
+            },
+        });
+        defer json_result.deinitOwnedValue(allocator, value);
+        const metadata = value.object.get("index_metadata").?.object;
+        try std.testing.expectEqualStrings("source_backed", metadata.get("drift_check_confidence").?.string);
+        try std.testing.expectEqualStrings("@newBuiltin", metadata.get("extra_active_builtins_sample").?.array.items[0].string);
+    }
+    {
         const value = try builtinDocValue(allocator, "import", 1, null);
         const result = try json_result.structuredOwned(allocator, value);
         defer json_result.deinitToolResult(allocator, result);
@@ -62,14 +85,17 @@ test "docs JSON values are fully owned and compatible with structuredOwned" {
         const result = try json_result.structuredOwned(allocator, value);
         defer json_result.deinitToolResult(allocator, result);
         try std.testing.expectEqualStrings("join", result.structuredContent.?.object.get("decl_name").?.string);
+        try std.testing.expectEqualStrings("std.fs.path.join", result.structuredContent.?.object.get("matches").?.array.items[0].object.get("qualified_name").?.string);
     }
 }
 
 test {
     _ = docs_source;
     _ = builtin_docs;
+    _ = @import("docs/builtins_tests.zig");
     _ = langref;
     _ = std_docs;
+    _ = @import("docs/std_tests.zig");
 }
 
 fn tmpAbs(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8, child: []const u8) ![]u8 {
