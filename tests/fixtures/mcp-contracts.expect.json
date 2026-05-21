@@ -12,7 +12,10 @@
     "zigar://tools/capabilities",
     "zigar://tools/schema",
     "zigar://workspace/import-graph",
-    "zigar://metrics"
+    "zigar://metrics",
+    "zigar://jobs",
+    "zigar://run/events",
+    "zigar://workspace/roots"
   ],
   "resource_templates": [
     "zigar://file/{path}/symbols",
@@ -20,7 +23,13 @@
     "zigar://file/{path}/imports"
   ],
   "prompts": [
-    "zigar_profile_workflow"
+    "zigar_profile_workflow",
+    "zigar_compile_error_workflow",
+    "zigar_test_workflow",
+    "zigar_refactor_workflow",
+    "zigar_api_change_workflow",
+    "zigar_release_workflow",
+    "zigar_perf_workflow"
   ],
   "report_kinds": [
     "zigar_backend_conformance_report",

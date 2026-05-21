@@ -19,4 +19,5 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .result_contracts, .keywords = &.{ "result shape", "compact", "standard", "deep", "output budget", "omitted sections", "token budget" } },
     .{ .group = .release_drift, .keywords = &.{ "docs drift", "release claims", "tool index", "generated docs", "public claims", "release-check" } },
     .{ .group = .environment_profiles, .keywords = &.{ "profile v2", "project profile", "bootstrap", "environment pack", "toolchain pin", "zvm", "zls compatibility", "dev environment", "backend conformance", "setup elicitation" } },
+    .{ .group = .runtime_ux, .keywords = &.{ "job", "task", "run stream", "events", "cancellation", "resource query", "subscription", "completion", "roots", "workspace map", "prompt pack", "client guide" } },
 };

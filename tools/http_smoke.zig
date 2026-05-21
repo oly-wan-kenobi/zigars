@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli_io = @import("cli_io.zig");
 const coverage_config = @import("coverage_config.zig");
+const runtime_ux_smoke = @import("http_runtime_ux_smoke.zig");
 const smoke = @import("smoke_support.zig");
 
 const Io = std.Io;
@@ -104,6 +105,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try assertToolPaths(allocator, io, port, 54, "zigar_risk_audit", "{\"include_none\":false}", expected.value, "risk_audit_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 55, "zigar_docs_drift_check", "{\"mode\":\"compact\"}", expected.value, "docs_drift_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 56, "zigar_artifact_index", "{\"include_hashes\":false,\"limit\":1,\"mode\":\"compact\"}", expected.value, "artifact_index_paths", &scenarios);
+    try runtime_ux_smoke.run(allocator, io, port, expected.value, &scenarios);
 
     try smoke.assertMinimumCount(io, "http-smoke scenarios", scenarios, coverage_config.min_http_smoke_scenarios);
     try stdoutWrite(io, "http smoke ok\n");

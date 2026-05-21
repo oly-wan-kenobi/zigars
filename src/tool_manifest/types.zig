@@ -23,6 +23,7 @@ pub const ToolGroup = enum {
     result_contracts,
     release_drift,
     environment_profiles,
+    runtime_ux,
 };
 
 pub const StaticAnalysisTier = enum {
@@ -50,6 +51,7 @@ pub const HandlerModule = enum {
     result_shape,
     release_drift,
     environment_profiles,
+    runtime_ux,
 };
 
 pub const HandlerRef = struct {
@@ -120,7 +122,6 @@ pub fn schema(comptime fields: []const tooling.SchemaField) tooling.SchemaSpec {
 pub fn schemaWithHints(comptime fields: []const tooling.SchemaField, comptime field_hints: []const tooling.SchemaFieldHint) tooling.SchemaSpec {
     return tooling.schemaWithHints(fields, field_hints);
 }
-
 pub fn fieldHint(comptime field_name: []const u8, comptime hint: tooling.FieldHint) tooling.SchemaFieldHint {
     return .{ .field_name = field_name, .hint = hint };
 }

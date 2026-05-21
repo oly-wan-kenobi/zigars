@@ -43,12 +43,16 @@ After connection, useful first calls are:
 
 ```text
 zigar_context_pack {"mode":"standard"}
-zigar_agent_guide {"client":"generic"}
+zigar_agent_guide_v2 {"client":"generic"}
 zigar_next_action {"goal":"orient in this Zig repository"}
+zigar_workspace_map {}
+zigar_prompt_pack {}
 ```
 
-`zigar_agent_guide` accepts `codex`, `claude`, `gemini`, `hermes`, and `generic`
-client profiles.
+`zigar_agent_guide_v2` and `zigar_client_guide` accept client labels such as
+`codex`, `claude`, `gemini`, and `generic`. Clients that support completions can
+use `completion/complete` for workflow names, resource URIs, command names, and
+client names.
 
 ## Codex
 
@@ -61,7 +65,8 @@ Codex uses TOML config. Keep using the focused setup guide and examples:
 Use:
 
 ```text
-zigar_agent_guide {"client":"codex"}
+zigar_agent_guide_v2 {"client":"codex"}
+zigar_client_guide {"client":"codex"}
 ```
 
 ## Claude Code And Claude Desktop
@@ -102,7 +107,8 @@ Use absolute executable paths when the desktop app does not inherit the shell
 Use:
 
 ```text
-zigar_agent_guide {"client":"claude"}
+zigar_agent_guide_v2 {"client":"claude"}
+zigar_client_guide {"client":"claude"}
 ```
 
 ## Gemini CLI
@@ -134,7 +140,8 @@ Template: [examples/gemini-settings.json](../examples/gemini-settings.json).
 Use:
 
 ```text
-zigar_agent_guide {"client":"gemini"}
+zigar_agent_guide_v2 {"client":"gemini"}
+zigar_client_guide {"client":"gemini"}
 ```
 
 ## Hermes And Skill-Based Agents
@@ -157,7 +164,8 @@ treated as an unauthenticated remote mode.
 Use:
 
 ```text
-zigar_agent_guide {"client":"hermes"}
+zigar_agent_guide_v2 {"client":"generic"}
+zigar_client_guide {"client":"generic"}
 ```
 
 If an agent can only run shell commands and cannot speak MCP, zigar currently
@@ -186,5 +194,11 @@ client's behavior.
 - Call `zigar_workspace_info` first when paths resolve unexpectedly.
 - Call `zigar_doctor {"probe_backends":true,"timeout_ms":1000}` when backend
   tools are missing or executable paths are unclear.
+- Use `zigar_job_start`, `zigar_job_result`, `tasks/list`, or `tasks/result`
+  when the client wants retained build/test evidence instead of a one-shot tool
+  response.
+- Use `zigar_resource_query` or `resources/read` for `zigar://jobs`,
+  `zigar://run/events`, `zigar://workspace/roots`, and dynamic
+  `zigar://file/{path}/...` resources.
 - Keep source writes explicit: source-mutating tools remain preview-first until
   `apply=true` is present in the tool arguments.

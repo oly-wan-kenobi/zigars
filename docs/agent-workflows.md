@@ -15,10 +15,16 @@ Use `zigar_next_action` with the current goal when the next step is unclear.
 Common goals such as `fix compile error`, `fix failing tests`, `format`, `review`,
 and `profile` route to concrete zigar tools.
 
-Use `zigar_agent_guide` when a client needs compact operating instructions. It
-includes Codex, Claude, Gemini, Hermes, and generic rules, workflow hints, and
-common aliases such as `fmt -> zig_format` and
-`done -> zigar_validate_patch`.
+Use `zigar_agent_guide_v2`, `zigar_client_guide`, and `zigar_prompt_pack` when
+a client needs compact operating instructions, client-specific MCP guidance, or
+workflow prompt text for compile errors, tests, refactors, API changes,
+releases, and performance work.
+
+When a client wants retained build or test evidence, use `zigar_job_start` or
+`zigar_run_stream` instead of a direct one-shot command. Then read
+`zigar_job_status`, `zigar_job_result`, `zigar_run_events`, or the MCP task
+methods for the retained job id. Job state is bounded and process-local, so
+long-term evidence should still be captured in normal CI or artifact outputs.
 
 ## Finish Gate
 
@@ -90,9 +96,12 @@ evidence reproducible.
 ## Examples
 
 - Compile error triage: `zigar_context_pack -> zigar_next_action ->
-  zig_compile_error_index -> zigar_failure_fusion -> zigar_validate_patch`.
+  zigar_run_stream -> zig_compile_error_index -> zigar_failure_fusion ->
+  zigar_validate_patch`.
 - Changed Zig file validation: `zigar_patch_guard -> zigar_impact ->
   zig_test_select -> zigar_validate_patch`.
+- Retained test evidence: `zigar_prompt_pack -> zig_test_select ->
+  zigar_job_start -> zigar_job_result -> tasks/result`.
 - Reproducible setup: `zigar_setup_elicit -> zigar_project_profile_v2 ->
   zigar_env_pack -> zig_zls_match_check -> zigar_backend_conformance`.
 - Profiling workflow routing: `zigar_next_action -> zig_profile_plan ->

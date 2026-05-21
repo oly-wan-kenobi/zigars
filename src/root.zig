@@ -16,6 +16,7 @@ pub const observability = @import("observability.zig");
 pub const resource_errors = @import("resource_errors.zig");
 pub const result_shape = @import("result_shape.zig");
 pub const runtime = @import("runtime.zig");
+pub const runtime_ux = @import("runtime_ux.zig");
 pub const tooling = @import("tooling.zig");
 pub const tool_errors = @import("tool_errors.zig");
 pub const tool_manifest = @import("tool_manifest.zig");
@@ -55,6 +56,7 @@ test {
     _ = resource_errors;
     _ = result_shape;
     _ = runtime;
+    _ = runtime_ux;
     _ = tooling;
     _ = tool_errors;
     _ = tool_manifest;

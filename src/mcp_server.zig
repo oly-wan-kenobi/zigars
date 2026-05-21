@@ -1,10 +1,5 @@
 //! First-party MCP server adapter for zigar.
-//!
-//! zigar imports protocol data structures, JSON-RPC helpers, content types, and
-//! transports from the pinned upstream MCP dependency. This module owns the
-//! server-side routing boundary and the lifetime of zigar-owned results.
-//! Tool/resource/prompt results stay alive until after the JSON-RPC response is
-//! serialized, then registered deinitializers release owned allocations.
+//! Owns routing and zigar result lifetimes over the pinned upstream MCP dependency.
 
 const std = @import("std");
 const http = std.http;
@@ -17,6 +12,12 @@ const transport_mod = mcp.transport;
 const prompts_mod = mcp.prompts;
 const resources_mod = mcp.resources;
 const HttpRequestTransport = @import("mcp_server/http_transport.zig").HttpRequestTransport;
+const completion_ext = @import("mcp_server/completion.zig");
+const json_helpers = @import("mcp_server/json_helpers.zig");
+const pagination = @import("mcp_server/pagination.zig");
+const resource_subscriptions = @import("mcp_server/resource_subscriptions.zig");
+const tasks_ext = @import("mcp_server/tasks.zig");
+const runtime_ux = @import("runtime_ux.zig");
 const tool_errors = @import("tool_errors.zig");
 
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
@@ -36,6 +37,8 @@ pub const Tool = struct {
     deinit_result: ?ToolResultDeinit = null,
     user_data: ?*anyopaque = null,
 };
+
+pub const DynamicResourceHandler = *const fn (user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent;
 
 /// Configuration for an MCP Server
 pub const ServerConfig = struct {
@@ -68,6 +71,10 @@ pub const Server = struct {
     resource_templates: std.StringArrayHashMapUnmanaged(resources_mod.ResourceTemplate),
     prompts: std.StringArrayHashMapUnmanaged(prompts_mod.Prompt),
     prompt_message_deinits: std.StringHashMap(PromptMessagesDeinit),
+    dynamic_resource_handler: ?DynamicResourceHandler = null,
+    dynamic_resource_deinit: ?ResourceContentDeinit = null,
+    dynamic_resource_user_data: ?*anyopaque = null,
+    task_state: ?*runtime_ux.State = null,
     capabilities: types.ServerCapabilities = .{},
     client_info: ?types.Implementation = null,
     client_capabilities: ?types.ClientCapabilities = null,
@@ -125,7 +132,8 @@ pub const Server = struct {
     /// Add a resource to the server
     pub fn addResource(self: *Self, resource: resources_mod.Resource) !void {
         try self.resources.put(self.allocator, resource.uri, resource);
-        self.capabilities.resources = .{ .listChanged = true, .subscribe = false };
+        const subscribe = if (self.capabilities.resources) |cap| cap.subscribe else false;
+        self.capabilities.resources = .{ .listChanged = true, .subscribe = subscribe };
     }
 
     /// Add a resource whose returned content follows a zigar-owned cleanup contract.
@@ -139,7 +147,7 @@ pub const Server = struct {
     pub fn addResourceTemplate(self: *Self, template: resources_mod.ResourceTemplate) !void {
         try self.resource_templates.put(self.allocator, template.name, template);
         if (self.capabilities.resources == null) {
-            self.capabilities.resources = .{};
+            self.capabilities.resources = .{ .listChanged = true };
         }
     }
 
@@ -164,6 +172,31 @@ pub const Server = struct {
     /// Enable completion capability
     pub fn enableCompletions(self: *Self) void {
         self.capabilities.completions = .{};
+    }
+
+    /// Enable resource subscription acknowledgement.
+    pub fn enableResourceSubscriptions(self: *Self) void {
+        const list_changed = if (self.capabilities.resources) |cap| cap.listChanged else false;
+        self.capabilities.resources = .{ .listChanged = list_changed, .subscribe = true };
+    }
+
+    /// Enable task-augmented tools/call support backed by zigar runtime jobs.
+    pub fn enableTasks(self: *Self, state: *runtime_ux.State) void {
+        self.task_state = state;
+        self.capabilities.tasks = .{
+            .list = .{},
+            .cancel = .{},
+            .requests = .{
+                .tools = .{ .call = .{} },
+            },
+        };
+    }
+
+    /// Register a fallback resource handler for template-backed dynamic URIs.
+    pub fn setDynamicResourceHandler(self: *Self, handler: DynamicResourceHandler, user_data: ?*anyopaque, deinit_content: ?ResourceContentDeinit) void {
+        self.dynamic_resource_handler = handler;
+        self.dynamic_resource_user_data = user_data;
+        self.dynamic_resource_deinit = deinit_content;
     }
 
     /// Options for running the server
@@ -428,9 +461,9 @@ pub const Server = struct {
         } else if (std.mem.eql(u8, request.method, "resources/templates/list")) {
             try self.handleResourceTemplatesList(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "resources/subscribe")) {
-            try self.handleSubscribe(io, allocator, request);
+            try resource_subscriptions.handleSubscribe(self, io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "resources/unsubscribe")) {
-            try self.handleUnsubscribe(io, allocator, request);
+            try resource_subscriptions.handleUnsubscribe(self, io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "prompts/list")) {
             try self.handlePromptsList(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "prompts/get")) {
@@ -438,7 +471,15 @@ pub const Server = struct {
         } else if (std.mem.eql(u8, request.method, "logging/setLevel")) {
             try self.handleSetLogLevel(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "completion/complete")) {
-            try self.handleCompletion(io, allocator, request);
+            try completion_ext.handle(self, io, allocator, request);
+        } else if (std.mem.eql(u8, request.method, "tasks/get")) {
+            try tasks_ext.handleGet(self, io, allocator, request);
+        } else if (std.mem.eql(u8, request.method, "tasks/result")) {
+            try tasks_ext.handleResult(self, io, allocator, request);
+        } else if (std.mem.eql(u8, request.method, "tasks/list")) {
+            try tasks_ext.handleList(self, io, allocator, request);
+        } else if (std.mem.eql(u8, request.method, "tasks/cancel")) {
+            try tasks_ext.handleCancel(self, io, allocator, request);
         } else {
             const error_response = jsonrpc.createMethodNotFound(request.id, request.method);
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
@@ -511,6 +552,21 @@ pub const Server = struct {
         if (self.capabilities.completions != null) {
             try caps.put(response_allocator, "completions", .{ .object = .empty });
         }
+        if (self.capabilities.tasks) |tasks| {
+            var tasks_cap: std.json.ObjectMap = .empty;
+            if (tasks.list != null) try tasks_cap.put(response_allocator, "list", .{ .object = .empty });
+            if (tasks.cancel != null) try tasks_cap.put(response_allocator, "cancel", .{ .object = .empty });
+            if (tasks.requests) |requests| {
+                var requests_obj: std.json.ObjectMap = .empty;
+                if (requests.tools) |tools| {
+                    var tools_obj: std.json.ObjectMap = .empty;
+                    if (tools.call != null) try tools_obj.put(response_allocator, "call", .{ .object = .empty });
+                    try requests_obj.put(response_allocator, "tools", .{ .object = tools_obj });
+                }
+                try tasks_cap.put(response_allocator, "requests", .{ .object = requests_obj });
+            }
+            try caps.put(response_allocator, "tasks", .{ .object = tasks_cap });
+        }
         try result.put(response_allocator, "capabilities", .{ .object = caps });
 
         var server_info: std.json.ObjectMap = .empty;
@@ -547,11 +603,14 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
+        const page = pagination.fromParams(request.params);
 
         var tools_array: std.json.Array = .init(response_allocator);
 
         var iter = self.tools.iterator();
-        while (iter.next()) |entry| {
+        var index: usize = 0;
+        while (iter.next()) |entry| : (index += 1) {
+            if (!pagination.shouldIncludeIndex(page, index)) continue;
             const tool = entry.value_ptr.*;
             var tool_obj: std.json.ObjectMap = .empty;
             try tool_obj.put(response_allocator, "name", .{ .string = tool.name });
@@ -603,6 +662,7 @@ pub const Server = struct {
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "tools", .{ .array = tools_array });
+        try pagination.maybePutNextCursor(response_allocator, &result, page, self.tools.count());
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
@@ -635,13 +695,13 @@ pub const Server = struct {
 
             var content_array: std.json.Array = .init(allocator);
             var content_array_in_result = false;
-            defer if (!content_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = content_array });
+            defer if (!content_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = content_array });
             for (tool_result.content) |content_item| {
-                try appendToolContentValue(allocator, &content_array, content_item);
+                try json_helpers.appendToolContentValue(allocator, &content_array, content_item);
             }
 
             var result: std.json.ObjectMap = .empty;
-            defer deinitToolCallResponseObject(allocator, &result);
+            defer json_helpers.deinitToolCallResponseObject(allocator, &result);
             try result.put(allocator, "content", .{ .array = content_array });
             content_array_in_result = true;
             try result.put(allocator, "isError", .{ .bool = tool_result.is_error });
@@ -663,7 +723,7 @@ pub const Server = struct {
         const response_allocator = response_arena.allocator();
 
         var content_array: std.json.Array = .init(response_allocator);
-        try appendToolContentValue(response_allocator, &content_array, .{ .text = .{ .text = @errorName(err) } });
+        try json_helpers.appendToolContentValue(response_allocator, &content_array, .{ .text = .{ .text = @errorName(err) } });
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "content", .{ .array = content_array });
@@ -685,86 +745,18 @@ pub const Server = struct {
         }, err);
     }
 
-    fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.json.Array, content_item: types.ContentBlock) !void {
-        var item_obj: std.json.ObjectMap = .empty;
-        var item_obj_in_array = false;
-        errdefer if (!item_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = item_obj });
-
-        switch (content_item) {
-            .text => |text| {
-                try item_obj.put(allocator, "type", .{ .string = "text" });
-                try item_obj.put(allocator, "text", .{ .string = text.text });
-            },
-            .image => |img| {
-                try item_obj.put(allocator, "type", .{ .string = "image" });
-                try item_obj.put(allocator, "data", .{ .string = img.data });
-                try item_obj.put(allocator, "mimeType", .{ .string = img.mimeType });
-            },
-            .audio => |aud| {
-                try item_obj.put(allocator, "type", .{ .string = "audio" });
-                try item_obj.put(allocator, "data", .{ .string = aud.data });
-                try item_obj.put(allocator, "mimeType", .{ .string = aud.mimeType });
-            },
-            .resource_link => |link| {
-                try item_obj.put(allocator, "type", .{ .string = "resource_link" });
-                try item_obj.put(allocator, "uri", .{ .string = link.uri });
-                try item_obj.put(allocator, "name", .{ .string = link.name });
-                if (link.title) |t| try item_obj.put(allocator, "title", .{ .string = t });
-                if (link.description) |d| try item_obj.put(allocator, "description", .{ .string = d });
-                if (link.mimeType) |m| try item_obj.put(allocator, "mimeType", .{ .string = m });
-            },
-            .resource => |res| {
-                try item_obj.put(allocator, "type", .{ .string = "resource" });
-                var res_obj: std.json.ObjectMap = .empty;
-                var res_obj_in_item = false;
-                errdefer if (!res_obj_in_item) res_obj.deinit(allocator);
-                try res_obj.put(allocator, "uri", .{ .string = res.resource.uri });
-                if (res.resource.text) |text| try res_obj.put(allocator, "text", .{ .string = text });
-                if (res.resource.mimeType) |mime| try res_obj.put(allocator, "mimeType", .{ .string = mime });
-                try item_obj.put(allocator, "resource", .{ .object = res_obj });
-                res_obj_in_item = true;
-            },
-        }
-
-        try content_array.append(.{ .object = item_obj });
-        item_obj_in_array = true;
-    }
-
-    fn deinitToolCallResponseObject(allocator: std.mem.Allocator, result: *std.json.ObjectMap) void {
-        var it = result.iterator();
-        while (it.next()) |entry| {
-            if (std.mem.eql(u8, entry.key_ptr.*, "structuredContent")) continue;
-            deinitBorrowedJsonContainers(allocator, entry.value_ptr.*);
-        }
-        result.deinit(allocator);
-    }
-
-    fn deinitBorrowedJsonContainers(allocator: std.mem.Allocator, value: std.json.Value) void {
-        switch (value) {
-            .array => |array| {
-                var mutable = array;
-                for (mutable.items) |item| deinitBorrowedJsonContainers(allocator, item);
-                mutable.deinit();
-            },
-            .object => |object| {
-                var mutable = object;
-                var it = mutable.iterator();
-                while (it.next()) |entry| deinitBorrowedJsonContainers(allocator, entry.value_ptr.*);
-                mutable.deinit(allocator);
-            },
-            else => {},
-        }
-    }
-
     fn handleResourcesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
+        const page = pagination.fromParams(request.params);
 
         var resources_array: std.json.Array = .init(response_allocator);
 
         var iter = self.resources.iterator();
-        while (iter.next()) |entry| {
+        var index: usize = 0;
+        while (iter.next()) |entry| : (index += 1) {
+            if (!pagination.shouldIncludeIndex(page, index)) continue;
             const resource = entry.value_ptr.*;
             var resource_obj: std.json.ObjectMap = .empty;
             try resource_obj.put(response_allocator, "uri", .{ .string = resource.uri });
@@ -786,6 +778,7 @@ pub const Server = struct {
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "resources", .{ .array = resources_array });
+        try pagination.maybePutNextCursor(response_allocator, &result, page, self.resources.count());
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
@@ -816,10 +809,10 @@ pub const Server = struct {
 
             var contents_array: std.json.Array = .init(allocator);
             var contents_array_in_result = false;
-            defer if (!contents_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
+            defer if (!contents_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
             var content_obj: std.json.ObjectMap = .empty;
             var content_obj_in_array = false;
-            errdefer if (!content_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
+            errdefer if (!content_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
             try content_obj.put(allocator, "uri", .{ .string = uri });
             if (content.text) |text| {
                 try content_obj.put(allocator, "text", .{ .string = text });
@@ -834,7 +827,38 @@ pub const Server = struct {
             content_obj_in_array = true;
 
             var result: std.json.ObjectMap = .empty;
-            defer deinitBorrowedJsonContainers(allocator, .{ .object = result });
+            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
+            try result.put(allocator, "contents", .{ .array = contents_array });
+            contents_array_in_result = true;
+
+            const response = jsonrpc.createResponse(request.id, .{ .object = result });
+            try self.sendResponse(io, allocator, .{ .response = response });
+        } else if (self.dynamic_resource_handler) |handler| {
+            const content = handler(self.dynamic_resource_user_data, io, allocator, uri) catch |err| {
+                var response_arena = std.heap.ArenaAllocator.init(allocator);
+                defer response_arena.deinit();
+                _ = try resourceHandlerErrorValue(response_arena.allocator(), uri, err);
+                const error_response = jsonrpc.createInvalidParams(request.id, "Dynamic resource not found or could not be read");
+                try self.sendResponse(io, allocator, .{ .error_response = error_response });
+                return;
+            };
+            defer if (self.dynamic_resource_deinit) |deinit_content| deinit_content(allocator, content);
+
+            var contents_array: std.json.Array = .init(allocator);
+            var contents_array_in_result = false;
+            defer if (!contents_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
+            var content_obj: std.json.ObjectMap = .empty;
+            var content_obj_in_array = false;
+            errdefer if (!content_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
+            try content_obj.put(allocator, "uri", .{ .string = uri });
+            if (content.text) |text| try content_obj.put(allocator, "text", .{ .string = text });
+            if (content.blob) |blob| try content_obj.put(allocator, "blob", .{ .string = blob });
+            if (content.mimeType) |mime| try content_obj.put(allocator, "mimeType", .{ .string = mime });
+            try contents_array.append(.{ .object = content_obj });
+            content_obj_in_array = true;
+
+            var result: std.json.ObjectMap = .empty;
+            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
             try result.put(allocator, "contents", .{ .array = contents_array });
             contents_array_in_result = true;
 
@@ -862,11 +886,14 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
+        const page = pagination.fromParams(request.params);
 
         var templates_array: std.json.Array = .init(response_allocator);
 
         var iter = self.resource_templates.iterator();
-        while (iter.next()) |entry| {
+        var index: usize = 0;
+        while (iter.next()) |entry| : (index += 1) {
+            if (!pagination.shouldIncludeIndex(page, index)) continue;
             const template = entry.value_ptr.*;
             var template_obj: std.json.ObjectMap = .empty;
             try template_obj.put(response_allocator, "uriTemplate", .{ .string = template.uriTemplate });
@@ -885,44 +912,24 @@ pub const Server = struct {
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "resourceTemplates", .{ .array = templates_array });
+        try pagination.maybePutNextCursor(response_allocator, &result, page, self.resource_templates.count());
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
-    }
-
-    fn handleSubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        if (!self.resourceSubscriptionsSupported()) {
-            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
-        }
-        var result: std.json.ObjectMap = .empty;
-        defer result.deinit(allocator);
-        const response = jsonrpc.createResponse(request.id, .{ .object = result });
-        try self.sendResponse(io, allocator, .{ .response = response });
-    }
-
-    fn handleUnsubscribe(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        if (!self.resourceSubscriptionsSupported()) {
-            return self.sendInvalidParams(io, allocator, request.id, "Resource subscriptions are not supported by this server");
-        }
-        var result: std.json.ObjectMap = .empty;
-        defer result.deinit(allocator);
-        const response = jsonrpc.createResponse(request.id, .{ .object = result });
-        try self.sendResponse(io, allocator, .{ .response = response });
-    }
-
-    fn resourceSubscriptionsSupported(self: *Self) bool {
-        return if (self.capabilities.resources) |resources_cap| resources_cap.subscribe else false;
     }
 
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
+        const page = pagination.fromParams(request.params);
 
         var prompts_array: std.json.Array = .init(response_allocator);
 
         var iter = self.prompts.iterator();
-        while (iter.next()) |entry| {
+        var index: usize = 0;
+        while (iter.next()) |entry| : (index += 1) {
+            if (!pagination.shouldIncludeIndex(page, index)) continue;
             const prompt = entry.value_ptr.*;
             var prompt_obj: std.json.ObjectMap = .empty;
             try prompt_obj.put(response_allocator, "name", .{ .string = prompt.name });
@@ -955,6 +962,7 @@ pub const Server = struct {
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "prompts", .{ .array = prompts_array });
+        try pagination.maybePutNextCursor(response_allocator, &result, page, self.prompts.count());
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
@@ -987,15 +995,15 @@ pub const Server = struct {
 
             var messages_array: std.json.Array = .init(allocator);
             var messages_array_in_result = false;
-            defer if (!messages_array_in_result) deinitBorrowedJsonContainers(allocator, .{ .array = messages_array });
+            defer if (!messages_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = messages_array });
             for (messages) |msg| {
                 var msg_obj: std.json.ObjectMap = .empty;
                 var msg_obj_in_array = false;
-                errdefer if (!msg_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = msg_obj });
+                errdefer if (!msg_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = msg_obj });
                 try msg_obj.put(allocator, "role", .{ .string = msg.role.toString() });
                 var content_obj: std.json.ObjectMap = .empty;
                 var content_obj_in_msg = false;
-                errdefer if (!content_obj_in_msg) deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
+                errdefer if (!content_obj_in_msg) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
                 switch (msg.content) {
                     .text => |text| {
                         try content_obj.put(allocator, "type", .{ .string = "text" });
@@ -1020,7 +1028,7 @@ pub const Server = struct {
                         try content_obj.put(allocator, "type", .{ .string = "resource" });
                         var res_inner: std.json.ObjectMap = .empty;
                         var res_inner_in_content = false;
-                        errdefer if (!res_inner_in_content) deinitBorrowedJsonContainers(allocator, .{ .object = res_inner });
+                        errdefer if (!res_inner_in_content) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = res_inner });
                         try res_inner.put(allocator, "uri", .{ .string = res.resource.uri });
                         if (res.resource.text) |text| try res_inner.put(allocator, "text", .{ .string = text });
                         try content_obj.put(allocator, "resource", .{ .object = res_inner });
@@ -1034,7 +1042,7 @@ pub const Server = struct {
             }
 
             var result: std.json.ObjectMap = .empty;
-            defer deinitBorrowedJsonContainers(allocator, .{ .object = result });
+            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
             try result.put(allocator, "messages", .{ .array = messages_array });
             messages_array_in_result = true;
             if (prompt.description) |desc| {
@@ -1078,7 +1086,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
-    fn sendInvalidParams(self: *Self, io: std.Io, allocator: std.mem.Allocator, id: types.RequestId, message: []const u8) !void {
+    pub fn sendInvalidParams(self: *Self, io: std.Io, allocator: std.mem.Allocator, id: types.RequestId, message: []const u8) !void {
         const error_response = jsonrpc.createInvalidParams(id, message);
         try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
@@ -1093,23 +1101,6 @@ pub const Server = struct {
         if (std.mem.eql(u8, level, "alert")) return .alert;
         if (std.mem.eql(u8, level, "emergency")) return .emergency;
         return null;
-    }
-
-    fn handleCompletion(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var response_arena = std.heap.ArenaAllocator.init(allocator);
-        defer response_arena.deinit();
-        const response_allocator = response_arena.allocator();
-
-        var completion: std.json.ObjectMap = .empty;
-        const values_array: std.json.Array = .init(response_allocator);
-        try completion.put(response_allocator, "values", .{ .array = values_array });
-        try completion.put(response_allocator, "hasMore", .{ .bool = false });
-
-        var result: std.json.ObjectMap = .empty;
-        try result.put(response_allocator, "completion", .{ .object = completion });
-
-        const response = jsonrpc.createResponse(request.id, .{ .object = result });
-        try self.sendResponse(io, allocator, .{ .response = response });
     }
 
     fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {
@@ -1206,7 +1197,7 @@ pub const Server = struct {
         try self.sendNotification(io, allocator, "notifications/prompts/list_changed", null);
     }
 
-    fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
+    pub fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
         if (self.transport) |t| {
             const json = jsonrpc.serializeMessage(allocator, message) catch {
                 self.logError(io, "Failed to serialize response");

@@ -69,6 +69,31 @@ pub fn registerResources(server: *mcp_server.Server, runtime: *App) !void {
         .handler = resourceHandler(resources.metricsResource),
         .user_data = runtime,
     }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
+        .uri = "zigar://jobs",
+        .name = "Zigar Jobs",
+        .description = "Process-local zigar job status and output tails.",
+        .mimeType = "application/json",
+        .handler = resourceHandler(resources.jobsResource),
+        .user_data = runtime,
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
+        .uri = "zigar://run/events",
+        .name = "Zigar Run Events",
+        .description = "Process-local zigar job event ring.",
+        .mimeType = "application/json",
+        .handler = resourceHandler(resources.runEventsResource),
+        .user_data = runtime,
+    }, json_result.deinitResourceContent);
+    try server.addResourceWithDeinit(.{
+        .uri = "zigar://workspace/roots",
+        .name = "Zigar Workspace Roots",
+        .description = "Configured and client-synced workspace root guidance.",
+        .mimeType = "application/json",
+        .handler = resourceHandler(resources.workspaceRootsResource),
+        .user_data = runtime,
+    }, json_result.deinitResourceContent);
+    server.setDynamicResourceHandler(resourceHandler(resources.dynamicResource), runtime, json_result.deinitResourceContent);
     try server.addResourceTemplate(.{
         .uriTemplate = "zigar://file/{path}/symbols",
         .name = "File Symbols",
@@ -97,6 +122,15 @@ pub fn registerPrompts(server: *mcp_server.Server, runtime: *App) !void {
         .handler = promptHandler(resources.profilePrompt),
         .user_data = runtime,
     }, json_result.deinitPromptMessages);
+    inline for (.{ "zigar_compile_error_workflow", "zigar_test_workflow", "zigar_refactor_workflow", "zigar_api_change_workflow", "zigar_release_workflow", "zigar_perf_workflow" }) |name| {
+        try server.addPromptWithDeinit(.{
+            .name = name,
+            .description = "Deterministic zigar workflow prompt.",
+            .title = "Zigar Workflow",
+            .handler = workflowPromptHandler(name),
+            .user_data = runtime,
+        }, json_result.deinitPromptMessages);
+    }
 }
 
 fn resourceHandler(comptime handler: *const fn (*App, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
@@ -121,6 +155,15 @@ fn promptHandler(comptime handler: *const fn (*App, std.mem.Allocator, ?std.json
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
             const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.GenerationFailed));
             return handler(runtime, allocator, args);
+        }
+    }.call;
+}
+
+fn workflowPromptHandler(comptime name: []const u8) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
+    return struct {
+        fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
+            const runtime: *App = @ptrCast(@alignCast(user_data orelse return error.GenerationFailed));
+            return resources.workflowPromptNamed(runtime, allocator, name);
         }
     }.call;
 }

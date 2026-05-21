@@ -104,6 +104,12 @@ Tools: `zigar_setup_elicit`, `zigar_profile_elicit`, `zigar_backend_elicit`, `zi
 
 Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `toolchain pin`, `zvm`, `zls compatibility`, `dev environment`, `backend conformance`, `setup elicitation`
 
+### runtime_ux
+
+Tools: `zigar_job_start`, `zigar_job_status`, `zigar_job_result`, `zigar_job_cancel`, `zigar_cancel_status`, `zigar_run_stream`, `zigar_run_events`, `zigar_resource_query`, `zigar_resource_subscribe`, `zigar_resource_unsubscribe`, `zigar_roots_sync`, `zigar_workspace_map`, `zigar_workspace_select`, `zigar_agent_guide_v2`, `zigar_client_guide`, `zigar_prompt_pack`
+
+Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query`, `subscription`, `completion`, `roots`, `workspace map`, `prompt pack`, `client guide`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -208,6 +214,7 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
 - `zig_zls_match_check`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
+- `zigar_agent_guide_v2`: optional `client: string`, `task: string`
 - `zigar_artifact_index`: optional `path: string`, `limit: integer`, `include_hashes: boolean`, `mode: string`
 - `zigar_artifact_prune`: optional `apply: boolean`, `mode: string`
 - `zigar_artifact_read`: required `path: string`; optional `max_bytes: integer`, `mode: string`
@@ -217,7 +224,9 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_backend_evidence_pack`: optional `input: string`, `output: string`, `apply: boolean`
 - `zigar_backend_install_plan`: optional `backend: string`, `manager: string`
 - `zigar_backend_verify`: optional `backend: string`, `timeout_ms: integer`
+- `zigar_cancel_status`: optional `job_id: string`
 - `zigar_clean_tree_gate`: optional `timeout_ms: integer`
+- `zigar_client_guide`: optional `client: string`, `task: string`
 - `zigar_command_provenance`: optional `tool: string`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
 - `zigar_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
@@ -227,6 +236,10 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
+- `zigar_job_cancel`: required `job_id: string`; optional `reason: string`
+- `zigar_job_result`: required `job_id: string`; optional `cursor: string`, `limit: integer`, `mode: string`
+- `zigar_job_start`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
+- `zigar_job_status`: required `job_id: string`
 - `zigar_next_action`: required `goal: string`; optional `changed_files: string`, `last_error: string`
 - `zigar_output_budget_plan`: optional `mode: string`, `token_budget: integer`, `tool: string`
 - `zigar_patch_guard`: optional `files: string`, `patch: string`
@@ -238,13 +251,21 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_profile_validate`: optional `content: string`, `path: string`
 - `zigar_project_profile`: optional `apply: boolean`, `content: string`
 - `zigar_project_profile_v2`: optional `apply: boolean`, `content: string`
+- `zigar_prompt_pack`: optional `workflow: string`
 - `zigar_release_claim_check`: optional `mode: string`
+- `zigar_resource_query`: required `uri: string`; optional `cursor: string`, `limit: integer`, `mode: string`
+- `zigar_resource_subscribe`: required `uri: string`
+- `zigar_resource_unsubscribe`: optional `subscription_id: string`, `uri: string`
 - `zigar_result_shape`: optional `mode: string`
 - `zigar_risk_audit`: optional `include_none: boolean`
+- `zigar_roots_sync`: optional `roots: string`, `apply: boolean`
+- `zigar_run_events`: optional `job_id: string`, `cursor: string`, `limit: integer`
+- `zigar_run_stream`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
 - `zigar_setup_elicit`: optional `topic: string`, `mode: string`
 - `zigar_tool_index_check`: optional `mode: string`
 - `zigar_trust_report`: optional `include_clean_tree: boolean`, `timeout_ms: integer`
 - `zigar_validate_patch`: optional `mode: string`, `changed_files: string`, `stop_on_failure: boolean`, `timeout_ms: integer`
+- `zigar_workspace_select`: required `workspace_id: string`; optional `apply: boolean`
 - `zigar_zvm_install_plan`: required `version: string`; optional `zvm_path: string`
 - `zigar_zvm_probe`: optional `zvm_path: string`, `timeout_ms: integer`
 - `zigar_zvm_switch_plan`: required `version: string`; optional `zvm_path: string`
@@ -334,6 +355,7 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
 - `zig_zls_match_check`: `dynamic_command` runtime-dependent backend plan
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
+- `zigar_agent_guide_v2`: `pure_analysis` read-only analysis
 - `zigar_artifact_index`: `pure_analysis` read-only analysis
 - `zigar_artifact_prune`: `apply_gated_mutation` preview/apply mutation
 - `zigar_artifact_read`: `pure_analysis` read-only analysis
@@ -344,8 +366,10 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_backend_health_history`: `pure_analysis` read-only analysis
 - `zigar_backend_install_plan`: `pure_analysis` read-only analysis
 - `zigar_backend_verify`: `dynamic_command` runtime-dependent backend plan
+- `zigar_cancel_status`: `pure_analysis` read-only analysis
 - `zigar_capabilities`: `pure_analysis` read-only analysis
 - `zigar_clean_tree_gate`: `dynamic_command` runtime-dependent backend plan
+- `zigar_client_guide`: `pure_analysis` read-only analysis
 - `zigar_command_provenance`: `pure_analysis` read-only analysis
 - `zigar_context_pack`: `pure_analysis` read-only analysis
 - `zigar_dev_env_generate`: `apply_gated_mutation` preview/apply mutation
@@ -356,6 +380,10 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
 - `zigar_http_status`: `pure_analysis` read-only analysis
 - `zigar_impact`: `pure_analysis` read-only analysis
+- `zigar_job_cancel`: `not_plannable` unsupported
+- `zigar_job_result`: `pure_analysis` read-only analysis
+- `zigar_job_start`: `dynamic_command` runtime-dependent backend plan
+- `zigar_job_status`: `pure_analysis` read-only analysis
 - `zigar_metrics`: `pure_analysis` read-only analysis
 - `zigar_metrics_v2`: `pure_analysis` read-only analysis
 - `zigar_next_action`: `pure_analysis` read-only analysis
@@ -369,9 +397,16 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_profile_validate`: `pure_analysis` read-only analysis
 - `zigar_project_profile`: `apply_gated_mutation` preview/apply mutation
 - `zigar_project_profile_v2`: `apply_gated_mutation` preview/apply mutation
+- `zigar_prompt_pack`: `pure_analysis` read-only analysis
 - `zigar_release_claim_check`: `pure_analysis` read-only analysis
+- `zigar_resource_query`: `pure_analysis` read-only analysis
+- `zigar_resource_subscribe`: `not_plannable` unsupported
+- `zigar_resource_unsubscribe`: `not_plannable` unsupported
 - `zigar_result_shape`: `pure_analysis` read-only analysis
 - `zigar_risk_audit`: `pure_analysis` read-only analysis
+- `zigar_roots_sync`: `apply_gated_mutation` preview/apply mutation
+- `zigar_run_events`: `pure_analysis` read-only analysis
+- `zigar_run_stream`: `dynamic_command` runtime-dependent backend plan
 - `zigar_schema`: `pure_analysis` read-only analysis
 - `zigar_setup_elicit`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
@@ -380,6 +415,8 @@ Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `too
 - `zigar_trust_report`: `dynamic_command` runtime-dependent backend plan
 - `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
 - `zigar_workspace_info`: `pure_analysis` read-only analysis
+- `zigar_workspace_map`: `pure_analysis` read-only analysis
+- `zigar_workspace_select`: `apply_gated_mutation` preview/apply mutation
 - `zigar_zls_timeline`: `pure_analysis` read-only analysis
 - `zigar_zvm_install_plan`: `pure_analysis` read-only analysis
 - `zigar_zvm_probe`: `dynamic_command` runtime-dependent backend plan

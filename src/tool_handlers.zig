@@ -12,6 +12,7 @@ const observability = @import("tools/observability.zig");
 const profiling = @import("tools/profiling.zig");
 const release_drift = @import("tools/release_drift.zig");
 const result_shape = @import("tools/result_shape.zig");
+const runtime_ux = @import("tools/runtime_ux.zig");
 const static_analysis = @import("tools/static_analysis.zig");
 const trust = @import("tools/trust.zig");
 const zwanzig = @import("tools/zwanzig.zig");
@@ -41,6 +42,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .result_shape => @field(result_shape, ref.name),
         .release_drift => @field(release_drift, ref.name),
         .environment_profiles => @field(environment_profiles, ref.name),
+        .runtime_ux => @field(runtime_ux, ref.name),
     };
 }
 

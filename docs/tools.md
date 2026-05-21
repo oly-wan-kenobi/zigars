@@ -180,6 +180,44 @@ through shared zigar helpers, and tool latency is MCP validation plus handler
 dispatch time, not client/network serialization time. Use `zigar_doctor
 probe_backends=true`, project CI, and release gates for stronger evidence.
 
+## Runtime Jobs, Resources, And Client Guides
+
+Runtime UX tools expose process-local state for clients that want richer MCP
+interaction without weakening the workspace guard. `zigar_job_start` and
+`zigar_run_stream` run allow-listed Zig commands (`build`, `build-test`,
+`test`, `check`, and `fmt-check`) without a shell, retain a bounded job record,
+and return output tails, event cursors, and a job id. `zigar_job_status`,
+`zigar_job_result`, `zigar_run_events`, `zigar_job_cancel`, and
+`zigar_cancel_status` read or update that retained state. Jobs and events are
+bounded, process-local, and not persisted across server restarts; cancellation
+records intent for retained jobs but cannot kill a synchronous command that has
+already completed.
+
+MCP task support is advertised for clients that use `tasks/list`, `tasks/get`,
+`tasks/result`, and `tasks/cancel`. The task surface is backed by the same
+retained zigar job records as the tools above, so task ids are job ids.
+
+`zigar_resource_query` reads registered runtime resources and dynamic file
+resources. The server also exposes `zigar://jobs`, `zigar://run/events`, and
+`zigar://workspace/roots`, plus the dynamic templates
+`zigar://file/{path}/symbols`, `zigar://file/{path}/diagnostics`, and
+`zigar://file/{path}/imports`. Dynamic file resources remain workspace-bound.
+Symbols and imports use parser-backed Zig source analysis; diagnostics are
+read-only static placeholders with explicit cross-check guidance for compiler or
+ZLS-backed diagnostics.
+
+Resource subscriptions are acknowledged through MCP and inspectable through
+`zigar_resource_subscribe` and `zigar_resource_unsubscribe`. They are
+process-local subscription records for client coordination; they do not start a
+filesystem watcher. `zigar_roots_sync`, `zigar_workspace_map`, and
+`zigar_workspace_select` expose client root guidance while file tools continue
+to resolve paths inside the configured zigar workspace.
+
+`completion/complete` returns values for prompt names, resource URIs, workflow
+names, allow-listed command names, and client names. `zigar_agent_guide_v2`,
+`zigar_client_guide`, and `zigar_prompt_pack` summarize shipped workflows for
+compile errors, tests, refactors, API changes, releases, and performance work.
+
 ## Release Drift Tools
 
 `zigar_docs_drift_check`, `zigar_release_claim_check`, and

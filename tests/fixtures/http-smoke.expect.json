@@ -1,7 +1,8 @@
 {
   "required_tools": [
     "zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check",
-    "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack"
+    "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack",
+    "zigar_job_start", "zigar_job_status", "zigar_job_result", "zigar_job_cancel", "zigar_cancel_status", "zigar_run_stream", "zigar_run_events", "zigar_resource_query", "zigar_resource_subscribe", "zigar_resource_unsubscribe", "zigar_roots_sync", "zigar_workspace_map", "zigar_workspace_select", "zigar_agent_guide_v2", "zigar_client_guide", "zigar_prompt_pack"
   ],
   "tools_list_schema_paths": {
     "zig_format": {
@@ -79,6 +80,18 @@
     "zigar_backend_conformance": {
       "inputSchema.properties.backend.enum.4": "zflame",
       "inputSchema.properties.probe_backends.type": "boolean"
+    },
+    "zigar_job_start": {
+      "inputSchema.properties.command.enum.1": "build-test",
+      "inputSchema.properties.timeout_ms.minimum": 1,
+      "inputSchema.required.0": "command"
+    },
+    "zigar_resource_query": {
+      "inputSchema.properties.uri.type": "string",
+      "inputSchema.required.0": "uri"
+    },
+    "zigar_roots_sync": {
+      "inputSchema.properties.apply.default": false
     }
   },
   "schema_paths": {
@@ -346,5 +359,66 @@
     "registry_path": ".zigar-cache/artifacts/registry.jsonl",
     "omitted_sections.0.section": "additional_artifacts",
     "omitted_sections.1.section": "artifact_hashes"
+  },
+  "workspace_map_paths": {
+    "kind": "zigar_workspace_map",
+    "workspace.path_safety": "all file tools resolve paths inside configured_root"
+  },
+  "roots_sync_paths": {
+    "kind": "zigar_roots_sync",
+    "apply": false,
+    "workspace.path_safety": "all file tools resolve paths inside configured_root"
+  },
+  "resource_query_jobs_paths": {
+    "kind": "zigar_resource_query",
+    "uri": "zigar://jobs",
+    "job_count": 0
+  },
+  "prompt_pack_paths": {
+    "kind": "zigar_prompt_pack",
+    "workflow": "zigar_test_workflow",
+    "workflow_count": 1
+  },
+  "agent_guide_v2_paths": {
+    "kind": "zigar_agent_guide_v2",
+    "client": "codex"
+  },
+  "client_guide_paths": {
+    "kind": "zigar_client_guide",
+    "client": "codex"
+  },
+  "job_start_paths": {
+    "kind": "zigar_job_start",
+    "ok": true,
+    "job_id": "job-1",
+    "status": "completed",
+    "result_available": true
+  },
+  "job_status_paths": {
+    "kind": "zigar_job_status",
+    "job.job_id": "job-1",
+    "job.status": "completed",
+    "result_available": true
+  },
+  "job_result_paths": {
+    "kind": "zigar_job_result",
+    "ok": true,
+    "job.job_id": "job-1",
+    "job.status": "completed"
+  },
+  "run_events_paths": {
+    "kind": "zigar_run_events",
+    "job_id": "job-1"
+  },
+  "job_cancel_paths": {
+    "kind": "zigar_job_cancel",
+    "ok": true,
+    "cancelled": false,
+    "job.cancellation_requested": true
+  },
+  "cancel_status_paths": {
+    "kind": "zigar_cancel_status",
+    "job_count": 1,
+    "jobs.0.cancellation_requested": true
   }
 }

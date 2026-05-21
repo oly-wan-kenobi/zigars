@@ -88,6 +88,9 @@ pub fn main(init: std.process.Init) !void {
     try server_mod.registerTools(&server, &runtime);
     try server_mod.registerResources(&server, &runtime);
     try server_mod.registerPrompts(&server, &runtime);
+    server.enableCompletions();
+    server.enableResourceSubscriptions();
+    server.enableTasks(&runtime.runtime_ux);
 
     switch (cfg.transport) {
         .stdio => try server.run(init.io, allocator, .stdio),
@@ -106,7 +109,6 @@ test "executable embeds package version" {
     try std.testing.expect(version.len > 0);
     try std.testing.expect(std.mem.indexOfScalar(u8, version, '.') != null);
 }
-
 test "executable module links runtime lifecycle types" {
     try std.testing.expect(@sizeOf(App) > 0);
     try std.testing.expect(@sizeOf(LspClient) > 0);

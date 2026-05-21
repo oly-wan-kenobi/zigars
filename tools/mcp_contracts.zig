@@ -15,9 +15,11 @@ pub fn checkNoPatchContract(allocator: Allocator, io: Io) !bool {
 
 pub fn checkAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
-    ok = (try checkAbsent(allocator, io, "MCP advertised-capability contract", "src/main.zig", &.{"enableTasks("})) and ok;
-    ok = (try checkAbsent(allocator, io, "MCP advertised-capability contract", "src/mcp_server.zig", &.{ "capabilities.tasks", "handleTasks" })) and ok;
-    ok = (try checkAbsent(allocator, io, "MCP advertised-capability contract", "docs/architecture.md", &.{"empty task-list"})) and ok;
+    ok = (try checkPresent(allocator, io, "MCP advertised-capability contract", "src/main.zig", &.{ "enableCompletions()", "enableResourceSubscriptions()", "enableTasks(&runtime.runtime_ux)" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP advertised-capability contract", "src/mcp_server.zig", &.{ "capabilities.tasks", "completion/complete", "tasks/list", "resource_subscriptions.handleSubscribe", "pagination.fromParams" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP tasks extension contract", "src/mcp_server/tasks.zig", &.{ "handleGet", "handleResult", "handleList", "handleCancel", "taskValue" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP completion extension contract", "src/mcp_server/completion.zig", &.{ "completion", "ref/prompt", "ref/resource", "command", "workflow" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP pagination extension contract", "src/mcp_server/pagination.zig", &.{ "fromParams", "shouldIncludeIndex", "maybePutNextCursor" })) and ok;
     return ok;
 }
 
@@ -28,8 +30,8 @@ pub fn checkPublicSurfaceContract(allocator: Allocator, io: Io) !bool {
     }
     ok = (try checkPresent(allocator, io, "MCP tool discovery contract", "src/server.zig", &.{ "inline for (tool_metadata.specs)", "tool_registry.addTool" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP resource/prompt contract fixture", "tests/fixtures/mcp-contracts.expect.json", &.{ "\"resources\"", "\"resource_templates\"", "\"prompts\"", "\"report_kinds\"" })) and ok;
-    ok = (try checkPresent(allocator, io, "MCP resource/prompt contract", "src/server.zig", &.{ "zigar://workspace", "zigar://zls/status", "zigar://tools/capabilities", "zigar://tools/schema", "zigar://workspace/import-graph", "zigar://metrics", "zigar://file/{path}/symbols", "zigar://file/{path}/diagnostics", "zigar://file/{path}/imports", "zigar_profile_workflow" })) and ok;
-    ok = (try checkPresent(allocator, io, "MCP resource/prompt routing contract", "src/mcp_server.zig", &.{ "resources/list", "resources/read", "resources/templates/list", "Resource not found", "prompts/list", "prompts/get", "Prompt not found", "createInvalidParams", "deinit_content", "deinit_messages" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP resource/prompt contract", "src/server.zig", &.{ "zigar://workspace", "zigar://zls/status", "zigar://tools/capabilities", "zigar://tools/schema", "zigar://workspace/import-graph", "zigar://metrics", "zigar://jobs", "zigar://run/events", "zigar://workspace/roots", "zigar://file/{path}/symbols", "zigar://file/{path}/diagnostics", "zigar://file/{path}/imports", "zigar_profile_workflow", "zigar_compile_error_workflow", "zigar_release_workflow" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP resource/prompt routing contract", "src/mcp_server.zig", &.{ "resources/list", "resources/read", "resources/templates/list", "resources/subscribe", "Resource not found", "prompts/list", "prompts/get", "completion/complete", "tasks/list", "Prompt not found", "createInvalidParams", "deinit_content", "deinit_messages" })) and ok;
     ok = (try checkPresent(allocator, io, "backend conformance report contract", ".github/scripts/backend-conformance.sh", &.{ "\"kind\": \"zigar_backend_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"claimed_backends\"", "\"compatibility_matrix\"", "\"tool_evidence\"", "\"artifacts\"", "profile.svg", "diff.svg", "validate_svg_artifact", "ET.parse(path).getroot()" })) and ok;
     ok = (try checkPresent(allocator, io, "release-readiness report contract", ".github/scripts/release-readiness.sh", &.{ "\"kind\": \"zigar_release_readiness_report\"", "\"schema_version\": 2", "\"source_tree_clean\"", "\"backend_conformance\"", "\"zls_conformance\"", "\"subreport_commits\"", "\"compatibility_matrix\"" })) and ok;
     ok = (try checkPresent(allocator, io, "real-ZLS report contract", ".github/scripts/real-zls-conformance.sh", &.{ "\"kind\": \"zigar_real_zls_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"backends\"", "\"scenarios\"", "\"response_count\"" })) and ok;

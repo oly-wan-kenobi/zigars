@@ -19,6 +19,8 @@ auditable:
   small compatibility facade over focused shared helper modules.
 - `src/runtime.zig` owns process-local runtime state such as workspace config,
   ZLS session pointers, counters, backend probes, and heuristic analysis caches.
+  Runtime job, event, subscription, and client-root rings live in
+  `src/runtime_ux.zig` and are intentionally bounded and process-local.
 - `src/tool_manifest.zig` is the typed tool manifest facade. It derives ids,
   tables, and lookup helpers from focused manifest modules:
   `src/tool_manifest/types.zig` defines the schema vocabulary,
@@ -105,8 +107,16 @@ preview workflows from default mutations.
 The build imports the pinned upstream `mcp` package directly. There is no local
 patched MCP dependency in the build graph. The first-party adapter in
 `src/mcp_server.zig` keeps zigar's supported MCP surface explicit:
-`initialize`, `ping`, tools, resources, prompts, logging level, completion
-requests, stdio transport, and loopback HTTP transport.
+`initialize`, `ping`, tools, resources, resource subscriptions, prompts,
+completion requests, tasks, logging level, stdio transport, and loopback HTTP
+transport.
+
+The task methods are backed by retained zigar runtime jobs. `tasks/list`,
+`tasks/get`, `tasks/result`, and `tasks/cancel` expose the same bounded
+process-local state returned by `zigar_job_start`, `zigar_run_stream`, and the
+job result tools. Resource subscriptions are acknowledged at the MCP protocol
+boundary and mirrored by inspectable zigar subscription tools; zigar does not
+claim a filesystem watcher.
 
 `tools/call`, `resources/read`, and `prompts/get` are the lifetime-sensitive
 paths. zigar handlers may return owned `mcp.tools.ToolResult`,

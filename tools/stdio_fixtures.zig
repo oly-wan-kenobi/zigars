@@ -4,6 +4,7 @@ const cli_io = @import("cli_io.zig");
 const coverage_config = @import("coverage_config.zig");
 const smoke = @import("smoke_support.zig");
 const stdio_environment_fixtures = @import("stdio_environment_fixtures.zig");
+const stdio_runtime_ux_fixtures = @import("stdio_runtime_ux_fixtures.zig");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;
@@ -163,6 +164,11 @@ const StdioClient = struct {
         try self.expectTool(tools, "zigar_project_profile_v2");
         try self.expectTool(tools, "zigar_env_pack");
         try self.expectTool(tools, "zigar_backend_conformance");
+        try self.expectTool(tools, "zigar_job_start");
+        try self.expectTool(tools, "zigar_run_stream");
+        try self.expectTool(tools, "zigar_resource_query");
+        try self.expectTool(tools, "zigar_workspace_map");
+        try self.expectTool(tools, "zigar_prompt_pack");
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
@@ -179,7 +185,6 @@ const StdioClient = struct {
         const prompts = try self.request("prompts/list", null);
         defer self.allocator.free(prompts);
         if (std.mem.indexOf(u8, prompts, "zigar_profile_workflow") == null) return error.AssertionFailed;
-
         const prompt = try self.request("prompts/get", "{\"name\":\"zigar_profile_workflow\",\"arguments\":{}}");
         defer self.allocator.free(prompt);
         if (std.mem.indexOf(u8, prompt, "zig_profile_plan") == null) return error.AssertionFailed;
@@ -194,6 +199,7 @@ const StdioClient = struct {
         if (std.mem.indexOf(u8, workspace_info, "\"diff_folded\"") == null) return error.AssertionFailed;
 
         try stdio_environment_fixtures.run(self);
+        try stdio_runtime_ux_fixtures.run(self);
 
         const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
         defer self.allocator.free(profile_plan);
@@ -296,7 +302,7 @@ const StdioClient = struct {
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 
-    fn request(self: *StdioClient, method: []const u8, params: ?[]const u8) ![]u8 {
+    pub fn request(self: *StdioClient, method: []const u8, params: ?[]const u8) ![]u8 {
         const id = self.next_id;
         self.next_id += 1;
         const payload = if (params) |p|
