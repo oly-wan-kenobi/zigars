@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "purpose": "Repo-pinned optional backend set for zigar release-validation evidence.",
+  "setup_script": ".github/scripts/setup-real-backends.sh",
+  "cache_root": ".zigar-cache/real-backends",
+  "bin_dir": ".zigar-cache/real-backends/bin",
+  "required_zig_version": "0.16.0",
+  "backends": [
+    {
+      "name": "zwanzig",
+      "claim_name": "zwanzig",
+      "kind": "github_release_asset",
+      "repository_url": "https://github.com/forketyfork/zwanzig",
+      "release_url": "https://github.com/forketyfork/zwanzig/releases/tag/v0.11.0",
+      "source_archive_url": "https://codeload.github.com/forketyfork/zwanzig/tar.gz/v0.11.0",
+      "source_archive_sha256": "63bbe1eee8160417b2d6bf9a3a8066c5c5e7c388c9c1221624afe4a105a37d83",
+      "version": "0.11.0",
+      "tag": "v0.11.0",
+      "commit": "b28819c041f190e5a839f5b9d6580079d1fb2259",
+      "expected_output_binary_path": ".zigar-cache/real-backends/bin/zwanzig",
+      "probe": {
+        "version": ["{binary}", "--version"],
+        "help": ["{binary}", "--help"]
+      },
+      "platform_support": [
+        {
+          "platform": "linux-x86_64",
+          "setup_supported": true,
+          "archive_url": "https://github.com/forketyfork/zwanzig/releases/download/v0.11.0/zwanzig-v0.11.0-linux-x86_64.tar.gz",
+          "archive_sha256": "b8f05be32f968a45b4643d8c5a1c20a5dcb3bc28859a19162ec898f9ba9e681c",
+          "binary_in_archive": "zwanzig"
+        },
+        {
+          "platform": "macos-aarch64",
+          "setup_supported": true,
+          "archive_url": "https://github.com/forketyfork/zwanzig/releases/download/v0.11.0/zwanzig-v0.11.0-macos-aarch64.tar.gz",
+          "archive_sha256": "8b42de9c4f8ff1ea6323b34944fe2437ab473ab9de2f3b7742b960deafa1813a",
+          "binary_in_archive": "zwanzig"
+        },
+        {
+          "platform": "windows-x86_64",
+          "setup_supported": false,
+          "archive_url": "https://github.com/forketyfork/zwanzig/releases/download/v0.11.0/zwanzig-v0.11.0-windows-x86_64.zip",
+          "archive_sha256": "8c3ca18ddb6772a477991eeb3586b4af67a15571f928aa537f544b3eddb07ffb",
+          "binary_in_archive": "zwanzig.exe"
+        }
+      ],
+      "patches": []
+    },
+    {
+      "name": "zflame",
+      "claim_name": "zflame",
+      "kind": "source_build",
+      "repository_url": "https://github.com/hendriknielaender/zflame",
+      "release_url": "https://github.com/hendriknielaender/zflame/releases/tag/v0.0.2",
+      "source_archive_url": "https://codeload.github.com/hendriknielaender/zflame/tar.gz/4bb890d891390519bf3eec0ce1d08b8175a175ab",
+      "source_archive_sha256": "b7eb71f3f1b43a9ff77374cc51968cde7087da05802690e8806cc24c820ef880",
+      "version": "0.0.2",
+      "tag": "v0.0.2",
+      "commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
+      "expected_output_binary_path": ".zigar-cache/real-backends/bin/zflame",
+      "probe": {
+        "help": ["{binary}", "--help"]
+      },
+      "platform_support": [
+        {
+          "platform": "macos-aarch64",
+          "setup_supported": true,
+          "evidence": "Built in local release-readiness validation with Zig 0.16.0."
+        },
+        {
+          "platform": "linux-x86_64",
+          "setup_supported": true,
+          "evidence": "Source build path; validate on the target runner before claiming release evidence."
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "zbench",
+          "repository_url": "https://github.com/hendriknielaender/zBench",
+          "tag": "v0.13.0",
+          "commit": "b2b89c475e3ef1bb2bd71255c80478a82d3e0ca8",
+          "archive_url": "https://github.com/hendriknielaender/zBench/archive/refs/tags/v0.13.0.tar.gz",
+          "archive_sha256": "38250dac586b59bd76acc45a08f544ee83bb6153844343aeb69206501d003ee4",
+          "zig_package_hash": "zbench-0.13.0-YTdc7xVBAQCCMC-IdLLuotBeiNNNm8k9Pi2V4VYqrwfI"
+        }
+      ],
+      "patches": [
+        {
+          "path": "tools/backend-patches/zflame-pin-zbench-archive.patch",
+          "sha256": "3fc443cb37bac5e8689d5df78a4e5b8780497f05389bba2740399bc0919cadb6",
+          "applies_to_commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
+          "purpose": "Replace zflame's moving zBench main archive with the v0.13.0 tag archive that matches the declared Zig package hash."
+        }
+      ]
+    },
+    {
+      "name": "diff-folded",
+      "claim_name": "diff_folded",
+      "kind": "source_build",
+      "repository_url": "https://github.com/hendriknielaender/zflame",
+      "release_url": "https://github.com/hendriknielaender/zflame/releases/tag/v0.0.2",
+      "source_archive_url": "https://codeload.github.com/hendriknielaender/zflame/tar.gz/4bb890d891390519bf3eec0ce1d08b8175a175ab",
+      "source_archive_sha256": "b7eb71f3f1b43a9ff77374cc51968cde7087da05802690e8806cc24c820ef880",
+      "version": "0.0.2",
+      "tag": "v0.0.2",
+      "commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
+      "expected_output_binary_path": ".zigar-cache/real-backends/bin/diff-folded",
+      "probe": {
+        "help": ["{binary}", "--help"]
+      },
+      "platform_support": [
+        {
+          "platform": "macos-aarch64",
+          "setup_supported": true,
+          "evidence": "Built in local release-readiness validation with Zig 0.16.0."
+        },
+        {
+          "platform": "linux-x86_64",
+          "setup_supported": true,
+          "evidence": "Source build path; validate on the target runner before claiming release evidence."
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "zbench",
+          "repository_url": "https://github.com/hendriknielaender/zBench",
+          "tag": "v0.13.0",
+          "commit": "b2b89c475e3ef1bb2bd71255c80478a82d3e0ca8",
+          "archive_url": "https://github.com/hendriknielaender/zBench/archive/refs/tags/v0.13.0.tar.gz",
+          "archive_sha256": "38250dac586b59bd76acc45a08f544ee83bb6153844343aeb69206501d003ee4",
+          "zig_package_hash": "zbench-0.13.0-YTdc7xVBAQCCMC-IdLLuotBeiNNNm8k9Pi2V4VYqrwfI"
+        }
+      ],
+      "patches": [
+        {
+          "path": "tools/backend-patches/zflame-pin-zbench-archive.patch",
+          "sha256": "3fc443cb37bac5e8689d5df78a4e5b8780497f05389bba2740399bc0919cadb6",
+          "applies_to_commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
+          "purpose": "Shared zflame repository patch used before building diff-folded."
+        }
+      ]
+    }
+  ]
+}

@@ -147,6 +147,11 @@ try:
 except Exception:
     source_commit = os.environ.get("GITHUB_SHA", "unavailable")
 
+source_metadata = {
+    "commit": source_commit,
+    "source_commit": source_commit,
+}
+
 main_source = (workspace / "src/main.zig").read_text()
 formatted_source = subprocess.check_output([os.environ["ZIGAR_ZIG_PATH"], "fmt", "--stdin"], input=main_source, text=True)
 
@@ -353,9 +358,13 @@ for response_id, name, marker in [
         fail(f"{name} did not include expected marker {marker!r}")
     scenario_results.append({
         "name": name,
+        "backend": "zls",
+        "backends": ["zls"],
+        "tool": name.removesuffix("_preview").removesuffix("_apply"),
         "response_id": response_id,
         "status": status,
         "required_marker": marker,
+        "evidence_paths": [str(stdout_path), str(stderr_path)],
         "payload_kind": body.get("kind") if isinstance(body, dict) else None,
     })
 
@@ -365,9 +374,10 @@ if applied_source != formatted_source:
 
 report = {
     "kind": "zigar_real_zls_conformance_report",
-    "schema_version": 1,
+    "schema_version": 2,
     "result": "passed",
     "source_commit": source_commit,
+    "source": source_metadata,
     "generated_unix": int(time.time()),
     "platform": {
         "system": platform.system(),

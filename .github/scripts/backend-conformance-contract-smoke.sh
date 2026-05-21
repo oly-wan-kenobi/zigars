@@ -93,14 +93,47 @@ PY
 
 cat >"$tmpdir/zwanzig" <<'SH'
 #!/bin/sh
-if [ "$1" = "--help" ]; then echo "fake zwanzig help"; exit 0; fi
-echo '{"diagnostics":[]}'
+if [ "$1" = "--help" ]; then
+  cat <<'EOF'
+fake zwanzig help
+--format json|sarif
+--dump-cfg <dir> <file>
+--dump-exploded-graph <dir> <file>
+--dump-annotated-cfg <dir> <file>
+--dump-path-trace <dir> <file>
+EOF
+  exit 0
+fi
+case "$1" in
+  --dump-cfg|--dump-exploded-graph|--dump-annotated-cfg|--dump-path-trace)
+    out="$2"
+    mkdir -p "$out"
+    printf 'digraph fake { start -> end }\n' > "$out/fake-cfg.dot"
+    exit 0
+    ;;
+esac
+if [ "$1" != "--format" ]; then
+  echo "fake zwanzig expected --format" >&2
+  exit 2
+fi
+case "$2" in
+  json)
+    echo '{"diagnostics":[]}'
+    ;;
+  sarif)
+    echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fake-zwanzig"}}}]}'
+    ;;
+  *)
+    echo "fake zwanzig unsupported format" >&2
+    exit 2
+    ;;
+esac
 SH
 
 cat >"$tmpdir/zflame" <<'SH'
 #!/bin/sh
 if [ "$1" = "--help" ]; then echo "fake zflame help"; exit 0; fi
-echo '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+printf '%s\n%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<svg xmlns="http://www.w3.org/2000/svg"><title>fake flamegraph</title></svg>'
 SH
 
 cat >"$tmpdir/diff-folded" <<'SH'
@@ -109,6 +142,9 @@ if [ "$1" = "--help" ]; then echo "fake diff-folded help"; exit 0; fi
 case "$1" in
   --output=*) out="${1#--output=}" ;;
   *) exit 2 ;;
+esac
+case "$out" in
+  */*) mkdir -p "${out%/*}" ;;
 esac
 printf 'root;diff 1\n' > "$out"
 SH
@@ -122,6 +158,7 @@ ZIGAR_ZWANZIG_PATH="$tmpdir/zwanzig" \
 ZIGAR_ZFLAME_PATH="$tmpdir/zflame" \
 ZIGAR_DIFF_FOLDED_PATH="$tmpdir/diff-folded" \
 ZIGAR_CONFORMANCE_REPORT_DIR="$report_dir" \
+ZIGAR_CLAIMED_BACKENDS="zls,zwanzig,zflame,diff_folded" \
 ZIGAR_CONFORMANCE_TIMEOUT_SECONDS=20 \
 bash .github/scripts/backend-conformance.sh >/dev/null
 
@@ -135,13 +172,39 @@ report_dir = pathlib.Path(os.environ["REPORT_DIR"])
 report = json.loads((report_dir / "report.json").read_text())
 if report.get("kind") != "zigar_backend_conformance_report":
     sys.exit("unexpected report kind")
+if report.get("schema_version") != 2:
+    sys.exit("unexpected report schema version")
 if report.get("result") != "passed":
     sys.exit("conformance report did not pass")
+if not report.get("source_commit") or report.get("source", {}).get("commit") != report.get("source_commit"):
+    sys.exit("missing source commit metadata")
 for backend in ("zigar", "zig", "zls", "zwanzig", "zflame", "diff_folded"):
     entry = report["backends"][backend]
     if len(entry.get("sha256", "")) != 64:
         sys.exit(f"missing sha256 for {backend}")
-for artifact in ("profile.svg", "diff.svg"):
+matrix = {row["backend"]: row for row in report["compatibility_matrix"]}
+for backend in ("zls", "zwanzig", "zflame", "diff_folded"):
+    if matrix[backend]["claim"] != "claimed" or matrix[backend]["status"] != "passed":
+        sys.exit(f"claimed backend did not pass matrix coverage: {backend}")
+scenarios = {scenario["name"]: scenario for scenario in report["scenarios"]}
+required_scenarios = (
+    "zls_document_symbols",
+    "zwanzig_lint_json",
+    "zwanzig_lint_sarif",
+    "zwanzig_lint_rules",
+    "zwanzig_analysis_graphs_cfg",
+    "zflame_recursive_folded_svg",
+    "diff_folded_recursive_svg_intermediate",
+)
+for name in required_scenarios:
+    scenario = scenarios.get(name)
+    if not scenario or scenario.get("status") != "passed":
+        sys.exit(f"scenario did not pass: {name}")
+    if not scenario.get("evidence_paths"):
+        sys.exit(f"scenario missing evidence paths: {name}")
+if scenarios["zflame_recursive_folded_svg"].get("svg_validation", {}).get("xml_prologue_present") is not True:
+    sys.exit("XML-prologue SVG acceptance was not exercised")
+for artifact in ("profile.svg", "diff.svg", "diff.folded", "graphs/cfg/fake-cfg.dot"):
     entry = report["artifacts"][artifact]
     if len(entry.get("sha256", "")) != 64 or entry.get("bytes", 0) <= 0:
         sys.exit(f"invalid artifact evidence for {artifact}")

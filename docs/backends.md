@@ -29,6 +29,43 @@ Release notes should distinguish fake-backend fixture coverage from real-backend
 validation. Claim real backend coverage only when the exact binary and version
 were probed or exercised.
 
+There are two supported ways to provide optional backend paths:
+
+- User-provided paths: install backends through your project package manager,
+  dev shell, CI image, or local source checkout, then pass absolute paths with
+  `--zls-path`, `--zwanzig-path`, `--zflame-path`, and
+  `--diff-folded-path`.
+- Repo-pinned release validation: maintainers can run the pinned setup script
+  in this repository to provision the optional release-validation backends under
+  `.zigar-cache/real-backends/bin`. The pins live in
+  `tools/real_backend_pins.json` and are intended for citable zigar release
+  evidence, not for normal CI.
+
+The repo-pinned setup currently provisions zwanzig `v0.11.0` from release
+assets and builds zflame plus diff-folded from zflame `v0.0.2` commit
+`4bb890d891390519bf3eec0ce1d08b8175a175ab`. The zflame source build applies
+`tools/backend-patches/zflame-pin-zbench-archive.patch`, which replaces a
+moving zBench `main` archive URL with the `v0.13.0` tag archive that matches
+the upstream-declared Zig package hash. The setup script verifies the zflame
+commit and patch checksum before building, and fails if the patch no longer
+applies. The Bash setup path currently supports macOS arm64 and Linux x86_64;
+the manifest records other upstream assets when they exist.
+
+Run the pinned optional backend setup with Zig `0.16.0` available:
+
+```sh
+bash .github/scripts/setup-real-backends.sh
+. .zigar-cache/real-backends/env.sh
+```
+
+The script writes `env.sh`, `checksums.sha256`, and a copy of
+`real_backend_pins.json` under `.zigar-cache/real-backends/`. `env.sh` exports
+`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` for the
+manual release-readiness flow. Zig and ZLS remain explicit toolchain inputs:
+set `ZIGAR_ZIG_PATH` and `ZIGAR_ZLS_PATH` to the binaries being validated.
+Normal CI must remain optional-backend-free unless a workflow intentionally
+opts into this setup.
+
 The preferred public-release path is the manual `Release Readiness` workflow.
 It runs the normal release gate, release-asset smoke, real backend conformance,
 and real ZLS conformance, then uploads a single evidence package. Its generated
@@ -186,6 +223,10 @@ zig build
 ./zig-out/bin/zwanzig --help
 ```
 
+For zigar release validation, prefer the repo-pinned setup script above. It
+uses the zwanzig `v0.11.0` release asset and verifies the archive checksum from
+`tools/real_backend_pins.json`.
+
 Project-local configuration:
 
 ```sh
@@ -252,6 +293,10 @@ file explicitly:
 ```sh
 diff-folded --output=delta.folded before.folded after.folded
 ```
+
+For zigar release validation, prefer the repo-pinned setup script. It builds
+both binaries from the pinned zflame source commit after applying the guarded
+zBench archive patch documented in `tools/real_backend_pins.json`.
 
 `zig_flamegraph` and `zig_flamegraph_diff` return auditable artifact metadata:
 input/output paths, explicit input format, backend executable path, argv shape

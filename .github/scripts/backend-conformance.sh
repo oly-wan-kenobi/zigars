@@ -31,10 +31,10 @@ fi
 
 zigar_binary="$(resolve_executable "$zigar_binary" zigar)"
 zig_path="$(resolve_executable "${ZIGAR_ZIG_PATH:-zig}" zig)"
-zls_path="$(resolve_executable "${ZIGAR_ZLS_PATH:-zls}" zls)"
-zwanzig_path="$(resolve_executable "${ZIGAR_ZWANZIG_PATH:-zwanzig}" zwanzig)"
-zflame_path="$(resolve_executable "${ZIGAR_ZFLAME_PATH:-zflame}" zflame)"
-diff_folded_path="$(resolve_executable "${ZIGAR_DIFF_FOLDED_PATH:-diff-folded}" diff-folded)"
+zls_path="${ZIGAR_ZLS_PATH:-zls}"
+zwanzig_path="${ZIGAR_ZWANZIG_PATH:-zwanzig}"
+zflame_path="${ZIGAR_ZFLAME_PATH:-zflame}"
+diff_folded_path="${ZIGAR_DIFF_FOLDED_PATH:-diff-folded}"
 
 command -v python3 >/dev/null || fail "python3 is required for response validation"
 
@@ -108,6 +108,7 @@ printf 'backend-conformance: zls %s\n' "$zls_path"
 printf 'backend-conformance: zwanzig %s\n' "$zwanzig_path"
 printf 'backend-conformance: zflame %s\n' "$zflame_path"
 printf 'backend-conformance: diff-folded %s\n' "$diff_folded_path"
+printf 'backend-conformance: claimed backends %s\n' "${ZIGAR_CLAIMED_BACKENDS:-}"
 
 ZIGAR_BINARY="$zigar_binary" \
 ZIGAR_WORKSPACE="$workspace" \
@@ -120,6 +121,7 @@ ZIGAR_STDOUT_PATH="$stdout_path" \
 ZIGAR_STDERR_PATH="$stderr_path" \
 ZIGAR_REPORT_PATH="$report_path" \
 ZIGAR_SUMMARY_PATH="$summary_path" \
+ZIGAR_CLAIMED_BACKENDS="${ZIGAR_CLAIMED_BACKENDS:-}" \
 ZIGAR_BACKEND_TIMEOUT_MS="${ZIGAR_BACKEND_TIMEOUT_MS:-20000}" \
 ZIGAR_CONFORMANCE_TIMEOUT_SECONDS="${ZIGAR_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
 python3 <<'PY'
@@ -129,9 +131,11 @@ import os
 import platform
 import pathlib
 import selectors
+import shutil
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 
 def fail(message):
@@ -146,36 +150,44 @@ report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
 summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
 backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
 timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
+valid_claimed_backends = {"zls", "zwanzig", "zflame", "diff_folded"}
 claimed_backends = [
-    item.strip()
-    for item in os.environ.get("ZIGAR_CLAIMED_BACKENDS", "zls,zwanzig,zflame,diff_folded").split(",")
+    item.strip().replace("-", "_")
+    for item in os.environ.get("ZIGAR_CLAIMED_BACKENDS", "").split(",")
     if item.strip()
 ]
+unknown_claims = sorted(set(claimed_backends) - valid_claimed_backends)
 
 backend_specs = {
     "zigar": {
         "path": os.environ["ZIGAR_BINARY"],
-        "version_argv": [os.environ["ZIGAR_BINARY"], "--version"],
+        "required": True,
+        "version_args": ["--version"],
     },
     "zig": {
         "path": os.environ["ZIGAR_ZIG_PATH"],
-        "version_argv": [os.environ["ZIGAR_ZIG_PATH"], "version"],
+        "required": True,
+        "version_args": ["version"],
     },
     "zls": {
         "path": os.environ["ZIGAR_ZLS_PATH"],
-        "version_argv": [os.environ["ZIGAR_ZLS_PATH"], "--version"],
+        "required": False,
+        "version_args": ["--version"],
     },
     "zwanzig": {
         "path": os.environ["ZIGAR_ZWANZIG_PATH"],
-        "version_argv": [os.environ["ZIGAR_ZWANZIG_PATH"], "--help"],
+        "required": False,
+        "version_args": ["--help"],
     },
     "zflame": {
         "path": os.environ["ZIGAR_ZFLAME_PATH"],
-        "version_argv": [os.environ["ZIGAR_ZFLAME_PATH"], "--help"],
+        "required": False,
+        "version_args": ["--help"],
     },
     "diff_folded": {
         "path": os.environ["ZIGAR_DIFF_FOLDED_PATH"],
-        "version_argv": [os.environ["ZIGAR_DIFF_FOLDED_PATH"], "--help"],
+        "required": False,
+        "version_args": ["--help"],
     },
 }
 
@@ -211,24 +223,133 @@ def run_probe(argv):
         }
 
 
+def resolve_path(value):
+    if "/" in value:
+        path = pathlib.Path(value)
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path.resolve()), None
+        return None, f"not executable: {value}"
+    resolved = shutil.which(value)
+    if resolved:
+        return str(pathlib.Path(resolved).resolve()), None
+    return None, f"not found on PATH: {value}"
+
+
 backend_evidence = {}
 for name, spec in backend_specs.items():
-    path = pathlib.Path(spec["path"])
+    raw_path = spec["path"]
+    resolved_path, error = resolve_path(raw_path)
+    if spec["required"] and resolved_path is None:
+        fail(f"{name} backend is required and {error}")
     entry = {
-        "path": str(path),
-        "sha256": sha256_file(path),
-        "version_probe": run_probe(spec["version_argv"]),
+        "path": raw_path,
+        "resolved_path": resolved_path,
+        "available": resolved_path is not None,
+        "claim": "required" if spec["required"] else ("claimed" if name in claimed_backends else "not_claimed"),
+        "required": spec["required"],
     }
+    if resolved_path is None:
+        entry["availability_error"] = error
+        entry["version_probe"] = {"skipped": True, "reason": error}
+    else:
+        resolved = pathlib.Path(resolved_path)
+        entry["sha256"] = sha256_file(resolved)
+        entry["version_probe"] = run_probe([resolved_path, *spec["version_args"]])
     backend_evidence[name] = entry
-
-for backend in claimed_backends:
-    if backend not in backend_evidence:
-        fail(f"claimed backend is not part of the conformance report: {backend}")
 
 try:
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 except Exception:
     source_commit = os.environ.get("GITHUB_SHA", "unavailable")
+
+source_metadata = {
+    "commit": source_commit,
+    "source_commit": source_commit,
+}
+
+
+def backend_arg(name):
+    entry = backend_evidence[name]
+    return entry["resolved_path"] or entry["path"]
+
+
+artifacts = {}
+evidence_artifact_dir = report_path.parent / "artifacts"
+evidence_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+
+def evidence_artifact_key(path, key):
+    if key is not None:
+        return key
+    try:
+        return str(path.resolve().relative_to(workspace.resolve()))
+    except ValueError:
+        return path.name
+
+
+def workspace_artifact(rel):
+    return path_artifact(workspace / rel, rel)
+
+
+def path_artifact(path, key=None):
+    path = pathlib.Path(path)
+    key = evidence_artifact_key(path, key)
+    if not path.exists():
+        raise AssertionError(f"expected artifact was not written: {path}")
+    evidence_path = evidence_artifact_dir / key
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, evidence_path)
+    artifacts[key] = {
+        "path": str(evidence_path),
+        "original_path": str(path),
+        "bytes": evidence_path.stat().st_size,
+        "sha256": sha256_file(evidence_path),
+    }
+    return artifacts[key]
+
+
+def scan_dot_artifacts(root):
+    root = pathlib.Path(root)
+    if not root.exists():
+        raise AssertionError(f"graph output directory was not written: {root}")
+    dot_files = sorted(path for path in root.rglob("*.dot") if path.is_file())
+    if not dot_files:
+        raise AssertionError(f"graph output directory has no DOT files: {root}")
+    evidence_paths = []
+    for path in dot_files:
+        text = path.read_text(errors="replace")
+        if "digraph" not in text and "graph" not in text:
+            raise AssertionError(f"DOT artifact does not look like a graph: {path}")
+        evidence_paths.append(path_artifact(path)["path"])
+    return evidence_paths
+
+
+def validate_svg_artifact(rel):
+    path = workspace / rel
+    artifact = workspace_artifact(rel)
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        raise AssertionError(f"{rel} is not parseable XML/SVG: {exc}") from exc
+    if root.tag != "{http://www.w3.org/2000/svg}svg":
+        raise AssertionError(f"{rel} root is not an SVG element in the SVG namespace: {root.tag}")
+    text = path.read_text(errors="replace").lstrip()
+    return {"xml_prologue_present": text.startswith("<?xml"), "root": root.tag, "artifact_path": artifact["path"]}
+
+
+scenario_results = []
+planned_scenarios = {}
+
+
+def scenario_status_for_success(coverage_required):
+    return "passed" if coverage_required else "observed"
+
+
+def add_scenario_record(record):
+    record.setdefault("evidence_paths", [str(stdout_path), str(stderr_path)])
+    scenario_results.append(record)
+    return record
+
 
 requests = [
     {
@@ -252,52 +373,217 @@ requests = [
             "arguments": {"probe_backends": True, "timeout_ms": backend_timeout_ms},
         },
     },
-    {
-        "jsonrpc": "2.0",
-        "id": 4,
-        "method": "tools/call",
-        "params": {
-            "name": "zig_document_symbols",
-            "arguments": {"file": "src/main.zig"},
-        },
-    },
-    {
-        "jsonrpc": "2.0",
-        "id": 5,
-        "method": "tools/call",
-        "params": {"name": "zig_lint_rules", "arguments": {}},
-    },
-    {
-        "jsonrpc": "2.0",
-        "id": 6,
-        "method": "tools/call",
-        "params": {
-            "name": "zig_flamegraph",
-            "arguments": {
-                "format": "recursive",
-                "input": "stacks.folded",
-                "output": "profile.svg",
-                "title": "backend conformance",
-            },
-        },
-    },
-    {
-        "jsonrpc": "2.0",
-        "id": 7,
-        "method": "tools/call",
-        "params": {
-            "name": "zig_flamegraph_diff",
-            "arguments": {
-                "before": "before.folded",
-                "after": "after.folded",
-                "output": "diff.svg",
-                "title": "backend conformance diff",
-            },
-        },
-    },
 ]
 
+next_request_id = 4
+
+
+def add_tool_scenario(name, backends, tool, arguments, validator, evidence_paths=None):
+    global next_request_id
+    coverage_required = backends[0] in claimed_backends
+    missing = [backend for backend in backends if not backend_evidence[backend]["available"]]
+    record = {
+        "name": name,
+        "backend": backends[0],
+        "backends": backends,
+        "tool": tool,
+        "status": "planned",
+        "claim": "claimed" if coverage_required else "not_claimed",
+        "coverage_required": coverage_required,
+        "evidence_paths": [str(stdout_path), str(stderr_path), *(evidence_paths or [])],
+    }
+    if missing:
+        record["status"] = "unsupported" if coverage_required else "skipped"
+        record["reason"] = "; ".join(
+            f"{backend}: {backend_evidence[backend].get('availability_error', 'unavailable')}"
+            for backend in missing
+        )
+        add_scenario_record(record)
+        return
+    request_id = next_request_id
+    next_request_id += 1
+    record["response_id"] = request_id
+    planned_scenarios[request_id] = (record, validator)
+    requests.append({
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments},
+    })
+
+
+def validate_zls_symbols(payload, text, scenario):
+    if "textDocument/documentSymbol" not in text:
+        raise AssertionError("zig_document_symbols did not exercise textDocument/documentSymbol")
+    if "PublicThing" not in text and "main" not in text:
+        raise AssertionError("zig_document_symbols returned no expected fixture symbol names")
+    scenario["required_markers"] = ["textDocument/documentSymbol", "PublicThing or main"]
+
+
+def command_payload_ok(payload, title):
+    if payload.get("kind") != "command":
+        raise AssertionError(f"{title} returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("ok") is not True:
+        raise AssertionError(f"{title} command reported ok=false")
+
+
+def validate_zwanzig_json(payload, text, scenario):
+    command_payload_ok(payload, "zig_lint")
+    if payload.get("backend") != "zwanzig":
+        raise AssertionError("zig_lint did not report zwanzig backend metadata")
+    stdout = payload.get("stdout", "").strip()
+    if not stdout:
+        raise AssertionError("zig_lint produced empty JSON stdout")
+    try:
+        json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"zig_lint stdout is not JSON: {exc}") from exc
+    scenario["required_markers"] = ["--format", "json", "zwanzig"]
+
+
+def validate_zwanzig_sarif(payload, text, scenario):
+    command_payload_ok(payload, "zig_lint_sarif")
+    if payload.get("backend") != "zwanzig":
+        raise AssertionError("zig_lint_sarif did not report zwanzig backend metadata")
+    stdout = payload.get("stdout", "").strip()
+    if not stdout:
+        raise AssertionError("zig_lint_sarif produced empty SARIF stdout")
+    try:
+        sarif = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"zig_lint_sarif stdout is not JSON: {exc}") from exc
+    if sarif.get("version") != "2.1.0" and "runs" not in sarif:
+        raise AssertionError("zig_lint_sarif stdout does not look like SARIF")
+    scenario["required_markers"] = ["--format", "sarif", "zwanzig"]
+
+
+def validate_zwanzig_rules(payload, text, scenario):
+    command_payload_ok(payload, "zig_lint_rules")
+    if payload.get("backend") != "zwanzig":
+        raise AssertionError("zig_lint_rules did not report zwanzig backend metadata")
+    if "--format" not in text and "Usage:" not in text and "fake zwanzig help" not in text:
+        raise AssertionError("zig_lint_rules did not include zwanzig help/rule output")
+    scenario["required_markers"] = ["zwanzig", "help/rules"]
+
+
+def validate_zwanzig_graph(payload, text, scenario):
+    if payload.get("kind") != "zig_analysis_graphs":
+        raise AssertionError(f"zig_analysis_graphs returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zwanzig":
+        raise AssertionError("zig_analysis_graphs did not report zwanzig backend metadata")
+    output_abs = payload.get("output_abs")
+    if not output_abs:
+        raise AssertionError("zig_analysis_graphs did not report output_abs")
+    dot_files = scan_dot_artifacts(output_abs)
+    scenario["artifacts"] = dot_files
+    scenario["evidence_paths"].extend(dot_files)
+    scenario["required_markers"] = ["zig_analysis_graphs", "DOT"]
+
+
+def validate_flamegraph(payload, text, scenario):
+    if payload.get("kind") != "zig_flamegraph":
+        raise AssertionError(f"zig_flamegraph returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("backend") != "zflame":
+        raise AssertionError("zig_flamegraph did not report zflame backend metadata")
+    if payload.get("input_format") != "recursive":
+        raise AssertionError("zig_flamegraph did not report recursive input format")
+    svg = validate_svg_artifact("profile.svg")
+    scenario["svg_validation"] = svg
+    scenario["artifacts"] = [svg["artifact_path"]]
+    scenario["evidence_paths"].append(svg["artifact_path"])
+    scenario["required_markers"] = ["zflame", "recursive", "structural SVG"]
+
+
+def validate_diff_flamegraph(payload, text, scenario):
+    if payload.get("kind") != "zig_flamegraph_diff":
+        raise AssertionError(f"zig_flamegraph_diff returned unexpected payload kind: {payload.get('kind')}")
+    if payload.get("diff_backend") != "diff-folded":
+        raise AssertionError("zig_flamegraph_diff did not report diff-folded backend metadata")
+    svg = validate_svg_artifact("diff.svg")
+    intermediate = payload.get("intermediate")
+    intermediate_abs = payload.get("intermediate_abs")
+    metadata = payload.get("intermediate_folded", {})
+    if intermediate != "diff.folded" or metadata.get("path") != "diff.folded":
+        raise AssertionError("zig_flamegraph_diff did not preserve requested intermediate metadata")
+    if not intermediate_abs:
+        raise AssertionError("zig_flamegraph_diff did not report intermediate_abs")
+    intermediate_artifact = path_artifact(intermediate_abs, "diff.folded")
+    if metadata.get("bytes") != intermediate_artifact["bytes"]:
+        raise AssertionError("diff-folded intermediate byte metadata does not match artifact")
+    if metadata.get("backend") != "diff-folded":
+        raise AssertionError("diff-folded intermediate metadata did not report backend")
+    scenario["svg_validation"] = svg
+    scenario["intermediate"] = intermediate_artifact
+    scenario["artifacts"] = [svg["artifact_path"], intermediate_artifact["path"]]
+    scenario["evidence_paths"].extend([svg["artifact_path"], intermediate_artifact["path"]])
+    scenario["required_markers"] = ["diff-folded", "intermediate metadata", "structural SVG"]
+
+
+add_tool_scenario(
+    "zls_document_symbols",
+    ["zls"],
+    "zig_document_symbols",
+    {"file": "src/main.zig"},
+    validate_zls_symbols,
+)
+add_tool_scenario(
+    "zwanzig_lint_json",
+    ["zwanzig"],
+    "zig_lint",
+    {"path": "src/main.zig"},
+    validate_zwanzig_json,
+)
+add_tool_scenario(
+    "zwanzig_lint_sarif",
+    ["zwanzig"],
+    "zig_lint_sarif",
+    {"path": "src/main.zig"},
+    validate_zwanzig_sarif,
+)
+add_tool_scenario(
+    "zwanzig_lint_rules",
+    ["zwanzig"],
+    "zig_lint_rules",
+    {},
+    validate_zwanzig_rules,
+)
+add_tool_scenario(
+    "zwanzig_analysis_graphs_cfg",
+    ["zwanzig"],
+    "zig_analysis_graphs",
+    {"mode": "cfg", "path": "src/main.zig", "output": "graphs/cfg"},
+    validate_zwanzig_graph,
+)
+add_tool_scenario(
+    "zflame_recursive_folded_svg",
+    ["zflame"],
+    "zig_flamegraph",
+    {
+        "format": "recursive",
+        "input": "stacks.folded",
+        "output": "profile.svg",
+        "title": "backend conformance",
+        "hash": True,
+    },
+    validate_flamegraph,
+)
+add_tool_scenario(
+    "diff_folded_recursive_svg_intermediate",
+    ["diff_folded", "zflame"],
+    "zig_flamegraph_diff",
+    {
+        "before": "before.folded",
+        "after": "after.folded",
+        "output": "diff.svg",
+        "intermediate": "diff.folded",
+        "title": "backend conformance diff",
+        "hash": True,
+    },
+    validate_diff_flamegraph,
+)
+
 stdin = "\n".join(json.dumps(item, separators=(",", ":")) for item in requests) + "\n"
+expected_ids = {item["id"] for item in requests if "id" in item}
 argv = [
     os.environ["ZIGAR_BINARY"],
     "--workspace",
@@ -307,13 +593,13 @@ argv = [
     "--zig-path",
     os.environ["ZIGAR_ZIG_PATH"],
     "--zls-path",
-    os.environ["ZIGAR_ZLS_PATH"],
+    backend_arg("zls"),
     "--zwanzig-path",
-    os.environ["ZIGAR_ZWANZIG_PATH"],
+    backend_arg("zwanzig"),
     "--zflame-path",
-    os.environ["ZIGAR_ZFLAME_PATH"],
+    backend_arg("zflame"),
     "--diff-folded-path",
-    os.environ["ZIGAR_DIFF_FOLDED_PATH"],
+    backend_arg("diff_folded"),
     "--timeout-ms",
     str(backend_timeout_ms),
     "--zls-timeout-ms",
@@ -341,7 +627,6 @@ try:
     assert proc.stdout is not None
     selector.register(proc.stdout, selectors.EVENT_READ)
     deadline = time.monotonic() + timeout_seconds
-    expected_ids = set(range(1, 8))
     line_index = 0
     while not expected_ids.issubset(responses.keys()):
         if time.monotonic() > deadline:
@@ -398,26 +683,35 @@ for index, raw in enumerate(stdout_lines, start=1):
     if response_id is not None:
         responses[response_id] = message
 
-for response_id in range(1, 8):
+for response_id in sorted(expected_ids):
     if response_id not in responses:
         fail(f"missing JSON-RPC response id {response_id}; stdout saved to {stdout_path}")
-    if "error" in responses[response_id]:
+    if response_id in (1, 2, 3) and "error" in responses[response_id]:
         fail(f"JSON-RPC response id {response_id} returned error: {responses[response_id]['error']}")
 
 tools_result = responses[2]["result"]
 tool_names = {tool.get("name") for tool in tools_result.get("tools", [])}
-for tool in ("zigar_doctor", "zig_document_symbols", "zig_lint_rules", "zig_flamegraph", "zig_flamegraph_diff"):
+for tool in (
+    "zigar_doctor",
+    "zig_document_symbols",
+    "zig_lint",
+    "zig_lint_sarif",
+    "zig_lint_rules",
+    "zig_analysis_graphs",
+    "zig_flamegraph",
+    "zig_flamegraph_diff",
+):
     if tool not in tool_names:
         fail(f"tools/list did not include {tool}")
 
 
 def tool_payload(response_id):
+    if "error" in responses[response_id]:
+        return None, json.dumps(responses[response_id]["error"], separators=(",", ":")), True
     result = responses[response_id]["result"]
-    if result.get("isError"):
-        fail(f"tool response id {response_id} returned isError=true: {json.dumps(result, separators=(',', ':'))}")
     if "structuredContent" in result:
         payload = result["structuredContent"]
-        return payload, json.dumps(payload, separators=(",", ":"))
+        return payload, json.dumps(payload, separators=(",", ":")), bool(result.get("isError"))
     texts = [
         item.get("text", "")
         for item in result.get("content", [])
@@ -425,113 +719,156 @@ def tool_payload(response_id):
     ]
     for text in texts:
         try:
-            return json.loads(text), text
+            return json.loads(text), text, bool(result.get("isError"))
         except json.JSONDecodeError:
             pass
-    return result, json.dumps(result, separators=(",", ":"))
+    return result, json.dumps(result, separators=(",", ":")), bool(result.get("isError"))
 
 
-doctor, _ = tool_payload(3)
+add_scenario_record({
+    "name": "zigar_initialize",
+    "backend": "zigar",
+    "backends": ["zigar"],
+    "tool": "initialize",
+    "response_id": 1,
+    "status": "passed",
+    "claim": "required",
+    "coverage_required": True,
+    "evidence_paths": [str(stdout_path), str(stderr_path)],
+})
+add_scenario_record({
+    "name": "zigar_tools_list",
+    "backend": "zigar",
+    "backends": ["zigar"],
+    "tool": "tools/list",
+    "response_id": 2,
+    "status": "passed",
+    "claim": "required",
+    "coverage_required": True,
+    "evidence_paths": [str(stdout_path), str(stderr_path)],
+    "tool_count": len(tool_names),
+})
+
+doctor, _, doctor_error = tool_payload(3)
+if doctor_error:
+    fail("zigar_doctor returned an error response")
 if doctor.get("kind") != "zigar_doctor":
     fail("zigar_doctor returned an unexpected payload")
 checks = {check.get("name"): check for check in doctor.get("checks", []) if isinstance(check, dict)}
-for probe in ("zig_probe", "zls_probe", "zwanzig_probe", "zflame_probe", "diff_folded_probe"):
+for backend, probe in (
+    ("zig", "zig_probe"),
+    ("zls", "zls_probe"),
+    ("zwanzig", "zwanzig_probe"),
+    ("zflame", "zflame_probe"),
+    ("diff_folded", "diff_folded_probe"),
+):
     check = checks.get(probe)
     if not check:
         fail(f"zigar_doctor did not report {probe}")
-    if check.get("ok") is not True:
+    coverage_required = backend == "zig" or backend in claimed_backends
+    if check.get("ok") is True:
+        status = scenario_status_for_success(coverage_required)
+    elif coverage_required:
+        status = "unsupported"
+    else:
+        status = "skipped"
+    add_scenario_record({
+        "name": probe,
+        "backend": backend,
+        "backends": [backend],
+        "tool": "zigar_doctor",
+        "response_id": 3,
+        "status": status,
+        "claim": "required" if backend == "zig" else ("claimed" if backend in claimed_backends else "not_claimed"),
+        "coverage_required": coverage_required,
+        "evidence_paths": [str(stdout_path), str(stderr_path)],
+        "doctor_check": check,
+    })
+    if backend == "zig" and check.get("ok") is not True:
         fail(f"{probe} failed: {check.get('status')} - {check.get('resolution')}")
 
-_, symbols_text = tool_payload(4)
-if "textDocument/documentSymbol" not in symbols_text:
-    fail("zig_document_symbols did not exercise the ZLS documentSymbol request")
-if "PublicThing" not in symbols_text and "main" not in symbols_text:
-    fail("zig_document_symbols returned no expected fixture symbol names")
-
-_, lint_rules_text = tool_payload(5)
-if "zwanzig" not in lint_rules_text:
-    fail("zig_lint_rules did not include zwanzig backend metadata")
-if '"ok":false' in lint_rules_text:
-    fail("zig_lint_rules command reported ok=false")
-
-flame, flame_text = tool_payload(6)
-if flame.get("kind") != "zig_flamegraph":
-    fail("zig_flamegraph returned an unexpected payload")
-if "zflame" not in flame_text:
-    fail("zig_flamegraph did not include zflame backend metadata")
-
-diff, diff_text = tool_payload(7)
-if diff.get("kind") != "zig_flamegraph_diff":
-    fail("zig_flamegraph_diff returned an unexpected payload")
-if "diff-folded" not in diff_text:
-    fail("zig_flamegraph_diff did not include diff-folded backend metadata")
-
-for rel in ("profile.svg", "diff.svg"):
-    path = workspace / rel
-    if not path.exists():
-        fail(f"expected artifact was not written: {rel}")
-    text = path.read_text(errors="replace").lstrip()
-    if not (text.startswith("<svg") or (text.startswith("<?xml") and "<svg" in text[:1024])):
-        fail(f"expected {rel} to be an SVG artifact")
-
-artifacts = {}
-for rel in ("profile.svg", "diff.svg"):
-    path = workspace / rel
-    artifacts[rel] = {
-        "path": str(path),
-        "bytes": path.stat().st_size,
-        "sha256": sha256_file(path),
-    }
+for response_id, (scenario, validator) in planned_scenarios.items():
+    payload, text, is_error = tool_payload(response_id)
+    if is_error:
+        scenario["status"] = "unsupported" if scenario["coverage_required"] else "unsupported"
+        scenario["reason"] = text[:1024]
+    else:
+        try:
+            validator(payload, text, scenario)
+            scenario["status"] = scenario_status_for_success(scenario["coverage_required"])
+        except AssertionError as exc:
+            scenario["status"] = "failed"
+            scenario["reason"] = str(exc)
+    add_scenario_record(scenario)
 
 tool_evidence = {
-    "zigar_doctor": {"response_id": 3, "probe_checks": checks},
-    "zig_document_symbols": {
-        "response_id": 4,
-        "required_markers": ["textDocument/documentSymbol", "PublicThing or main"],
-    },
-    "zig_lint_rules": {"response_id": 5, "required_markers": ["zwanzig"]},
-    "zig_flamegraph": {"response_id": 6, "artifact": "profile.svg"},
-    "zig_flamegraph_diff": {"response_id": 7, "artifact": "diff.svg"},
+    scenario["name"]: {
+        "backend": scenario["backend"],
+        "backends": scenario["backends"],
+        "tool": scenario["tool"],
+        "status": scenario["status"],
+        "response_id": scenario.get("response_id"),
+        "evidence_paths": scenario.get("evidence_paths", []),
+        "artifacts": scenario.get("artifacts", []),
+        "required_markers": scenario.get("required_markers", []),
+    }
+    for scenario in scenario_results
 }
 
+
+def backend_matrix_row(backend):
+    rows = [
+        scenario
+        for scenario in scenario_results
+        if backend in scenario.get("backends", [])
+    ]
+    required = backend in ("zigar", "zig") or backend in claimed_backends
+    if any(row["coverage_required"] and row["status"] != "passed" for row in rows):
+        status = "failed"
+    elif any(row["status"] == "passed" for row in rows):
+        status = "passed"
+    elif any(row["status"] == "observed" for row in rows):
+        status = "observed"
+    elif rows:
+        status = "skipped"
+    else:
+        status = "missing"
+    evidence_paths = []
+    for row in rows:
+        for path in row.get("evidence_paths", []):
+            if path not in evidence_paths:
+                evidence_paths.append(path)
+    return {
+        "backend": backend,
+        "claim": "required" if backend in ("zigar", "zig") else ("claimed" if backend in claimed_backends else "not_claimed"),
+        "status": status,
+        "scenario_names": [row["name"] for row in rows],
+        "scenario_statuses": {row["name"]: row["status"] for row in rows},
+        "evidence_paths": evidence_paths,
+        "coverage_required": required,
+    }
+
+
 compatibility_matrix = [
-    {
-        "backend": "zig",
-        "claim": "required",
-        "status": "passed",
-        "evidence": "zigar_doctor zig_probe and command-backed fixture execution",
-    },
-    {
-        "backend": "zls",
-        "claim": "claimed" if "zls" in claimed_backends else "not_claimed",
-        "status": "passed" if "zls" in claimed_backends else "observed",
-        "evidence": "zigar_doctor zls_probe and zig_document_symbols textDocument/documentSymbol",
-    },
-    {
-        "backend": "zwanzig",
-        "claim": "claimed" if "zwanzig" in claimed_backends else "not_claimed",
-        "status": "passed" if "zwanzig" in claimed_backends else "observed",
-        "evidence": "zig_lint_rules metadata and successful zwanzig probe",
-    },
-    {
-        "backend": "zflame",
-        "claim": "claimed" if "zflame" in claimed_backends else "not_claimed",
-        "status": "passed" if "zflame" in claimed_backends else "observed",
-        "evidence": "zig_flamegraph SVG render and artifact hash",
-    },
-    {
-        "backend": "diff_folded",
-        "claim": "claimed" if "diff_folded" in claimed_backends else "not_claimed",
-        "status": "passed" if "diff_folded" in claimed_backends else "observed",
-        "evidence": "zig_flamegraph_diff diff-folded intermediate and SVG render",
-    },
+    backend_matrix_row(backend)
+    for backend in ("zigar", "zig", "zls", "zwanzig", "zflame", "diff_folded")
 ]
+
+coverage_errors = []
+if unknown_claims:
+    coverage_errors.append(f"unknown claimed backend(s): {', '.join(unknown_claims)}")
+for scenario in scenario_results:
+    if scenario.get("coverage_required") and scenario.get("status") != "passed":
+        coverage_errors.append(f"{scenario['name']}={scenario['status']}")
+
+result = "failed" if coverage_errors else "passed"
 
 report = {
     "kind": "zigar_backend_conformance_report",
-    "schema_version": 1,
+    "schema_version": 2,
     "generated_unix": int(time.time()),
     "source_commit": source_commit,
+    "source": source_metadata,
     "platform": {
         "system": platform.system(),
         "release": platform.release(),
@@ -548,16 +885,18 @@ report = {
     },
     "backends": backend_evidence,
     "compatibility_matrix": compatibility_matrix,
+    "scenarios": scenario_results,
     "tool_evidence": tool_evidence,
     "artifacts": artifacts,
-    "result": "passed",
+    "coverage_errors": coverage_errors,
+    "result": result,
 }
 report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 summary_lines = [
     "# Zigar Backend Conformance",
     "",
-    "Result: passed",
+    f"Result: {result}",
     f"Source commit: `{source_commit}`",
     f"Platform: `{platform.system()} {platform.release()} {platform.machine()}`",
     f"Report: `{report_path}`",
@@ -570,33 +909,44 @@ for name, entry in backend_evidence.items():
     probe = entry["version_probe"]
     output = probe.get("stdout") or probe.get("stderr") or probe.get("message", "")
     first_line = output.splitlines()[0] if output else ""
-    summary_lines.append(f"- {name}: `{entry['path']}` sha256 `{entry['sha256']}` {first_line}")
+    sha = entry.get("sha256", "unavailable")
+    summary_lines.append(f"- {name}: `{entry['path']}` sha256 `{sha}` {first_line}")
 summary_lines.extend([
     "",
     "## Compatibility Matrix",
     "",
-    "| Backend | Claim | Status | Evidence |",
+    "| Backend | Claim | Status | Scenarios |",
     "|---|---|---|---|",
 ])
 for row in compatibility_matrix:
-    summary_lines.append(f"| `{row['backend']}` | {row['claim']} | {row['status']} | {row['evidence']} |")
+    summary_lines.append(f"| `{row['backend']}` | {row['claim']} | {row['status']} | {', '.join(row['scenario_names'])} |")
 summary_lines.extend([
     "",
-    "## Tool Evidence",
+    "## Scenarios",
     "",
-    "- `zigar_doctor` reported successful probes for zig, zls, zwanzig, zflame, and diff-folded.",
-    "- `zig_document_symbols` exercised `textDocument/documentSymbol` and returned fixture symbols.",
-    "- `zig_lint_rules` exercised zwanzig metadata.",
-    "- `zig_flamegraph` and `zig_flamegraph_diff` wrote SVG artifacts.",
+    "| Scenario | Backend | Tool | Status | Evidence |",
+    "|---|---|---|---|---|",
+])
+for scenario in scenario_results:
+    evidence = ", ".join(scenario.get("evidence_paths", [])[:4])
+    summary_lines.append(f"| `{scenario['name']}` | `{scenario['backend']}` | `{scenario['tool']}` | {scenario['status']} | {evidence} |")
+summary_lines.extend([
     "",
     "## Artifacts",
     "",
 ])
 for name, entry in artifacts.items():
     summary_lines.append(f"- {name}: {entry['bytes']} bytes sha256 `{entry['sha256']}`")
+if coverage_errors:
+    summary_lines.extend(["", "## Coverage Errors", ""])
+    for error in coverage_errors:
+        summary_lines.append(f"- {error}")
 summary_path.write_text("\n".join(summary_lines) + "\n")
 
-print("backend-conformance: real backend probes and tool calls passed")
+if coverage_errors:
+    fail(f"claimed backend scenario coverage failed: {', '.join(coverage_errors)}")
+
+print("backend-conformance: backend probes and scenario tool calls passed")
 print(f"backend-conformance: stdout {stdout_path}")
 print(f"backend-conformance: stderr {stderr_path}")
 print(f"backend-conformance: report {report_path}")

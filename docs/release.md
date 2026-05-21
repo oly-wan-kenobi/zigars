@@ -12,7 +12,11 @@ workflow. That workflow creates one evidence package containing the local
 release gate, release-asset smoke result, real optional-backend conformance
 report, real ZLS conformance report, and generated backend compatibility
 matrix. Treat this workflow as release-required when the release notes claim
-support for optional backends.
+support for optional backends. The package is release-citable only when
+`release-readiness.json` records the exact `source_commit` being tagged and
+`source_tree_clean: true`. When maintainers use repo-pinned optional backend
+setup, the evidence package also includes `backend-provisioning/real_backend_pins.json`
+and `backend-provisioning/checksums.sha256`.
 
 The gate includes formatting, generated docs/JSON checks, unit tests,
 ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
@@ -34,11 +38,10 @@ output metadata, CI annotation contracts, structured profiling plans, and
 diff-folded flamegraph flow with fake backend executables.
 
 Release notes must include a short validation evidence block. At minimum, record
-the source commit, `zig build release-check`, `zig build dist
+the source commit, clean-tree status, `zig build release-check`, `zig build dist
 release-asset-smoke`, fake-backend fixtures, and real-backend validation status.
-For real optional backends, either cite the uploaded `Backend Conformance`
-artifact or say `not run`; do not claim real backend coverage from fake-backend
-fixtures.
+For real optional backends, cite only clean-tree `Release Readiness` evidence or
+say `not run`; do not claim real backend coverage from fake-backend fixtures.
 
 When the `Release Readiness` workflow runs, use its generated
 `release-readiness.md`, `backend-conformance/summary.md`, and
@@ -46,7 +49,9 @@ When the `Release Readiness` workflow runs, use its generated
 backend compatibility matrix is generated from executable paths, SHA-256 hashes,
 version/probe output, platform metadata, tested capabilities, and pass/fail
 status. Do not hand-write broader compatibility claims than the generated matrix
-supports.
+supports. If the script was run with `ZIGAR_ALLOW_DIRTY_RELEASE_READINESS=1`,
+the generated summary is non-release evidence and must not be used as final
+release-note validation until rerun from a clean tree.
 
 CI also uploads a `zigar-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
@@ -70,10 +75,15 @@ and runs `zigar --version` from it.
 3. Run `zig build release-check`.
 4. Run `zig build dist release-asset-smoke`.
 5. Run the manual `Release Readiness` workflow with the real backend paths that
-   the release intends to claim. If only ZLS is being refreshed, run the manual
-   `ZLS Conformance` workflow and cite that artifact.
+   the release intends to claim. Prefer `pinned_backend_setup: true` when the
+   release should cite the repo-owned backend pins. Confirm
+   `release-readiness.json` records the intended `source_commit`,
+   `source_tree_clean: true`, matching subreport commits, backend pin evidence
+   when used, and a passed scenario matrix for every claimed backend. If only
+   ZLS is being refreshed, run the manual `ZLS Conformance` workflow and cite
+   that artifact.
 6. Confirm [maturity.md](maturity.md) still says every major feature area is at
-   least A- without hiding known limitations.
+   the intended public rating without hiding known limitations.
 7. Confirm [trust.md](trust.md) still matches the release notes, especially any
    absent external validation for branch protection, optional backends, or
    client-specific behavior.

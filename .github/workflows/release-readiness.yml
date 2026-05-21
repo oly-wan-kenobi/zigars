@@ -7,6 +7,11 @@ on:
         description: "Optional shell command that installs or activates real optional backend binaries."
         required: false
         default: ""
+      pinned_backend_setup:
+        description: "Run the repo-pinned optional backend setup script before generating evidence."
+        required: false
+        type: boolean
+        default: false
       zls_path:
         description: "Path or command name for zls."
         required: false
@@ -62,6 +67,7 @@ jobs:
           ZIGAR_ZFLAME_PATH: ${{ inputs.zflame_path }}
           ZIGAR_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
           ZIGAR_CLAIMED_BACKENDS: ${{ inputs.claimed_backends }}
+          ZIGAR_USE_PINNED_BACKEND_SETUP: ${{ inputs.pinned_backend_setup }}
         run: bash .github/scripts/release-readiness.sh
 
       - name: Upload release readiness evidence

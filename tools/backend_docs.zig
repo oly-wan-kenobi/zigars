@@ -26,6 +26,9 @@ pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
         "Release Readiness",
         "backend compatibility matrix",
         "ZLS Conformance",
+        "tools/real_backend_pins.json",
+        ".github/scripts/setup-real-backends.sh",
+        "Repo-pinned release validation",
     };
     for (required) |needle| {
         if (std.mem.indexOf(u8, bytes, needle) == null) {
