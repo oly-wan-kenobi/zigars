@@ -41,7 +41,7 @@ pub fn addTool(
 
 fn mcpHandler(comptime spec: tool_metadata.ToolMeta, comptime handler: ToolHandler) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return struct {
-        fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+        fn call(user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             const runtime: *App = @ptrCast(@alignCast(user_data orelse return tool_errors.result(allocator, .{
                 .tool = spec.name,
                 .operation = "dispatch_tool",
@@ -50,10 +50,25 @@ fn mcpHandler(comptime spec: tool_metadata.ToolMeta, comptime handler: ToolHandl
                 .category = "server_state",
                 .resolution = "Restart zigar; the MCP server registered this tool without attaching runtime state.",
             })));
-            if (try validateToolArgs(allocator, spec, args)) |validation_error| return validation_error;
-            return handler(runtime, allocator, args);
+            const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
+            if (try validateToolArgs(allocator, spec, args)) |validation_error| {
+                runtime.observability.recordToolCall(spec.name, elapsedMs(io, started_ns), validation_error.is_error);
+                return validation_error;
+            }
+            const result = handler(runtime, allocator, args) catch |err| {
+                runtime.observability.recordToolCall(spec.name, elapsedMs(io, started_ns), true);
+                return err;
+            };
+            runtime.observability.recordToolCall(spec.name, elapsedMs(io, started_ns), result.is_error);
+            return result;
         }
     }.call;
+}
+
+fn elapsedMs(io: std.Io, started_ns: anytype) u64 {
+    const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
+    if (duration_ns <= 0) return 0;
+    return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
 
 pub fn validateToolArgs(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta, args: ?std.json.Value) mcp.tools.ToolError!?mcp.tools.ToolResult {

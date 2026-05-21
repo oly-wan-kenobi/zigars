@@ -38,6 +38,7 @@ pub fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv:
     try obj.put(allocator, "cwd", .{ .string = cwd });
     try obj.put(allocator, "argv", try argvValue(allocator, argv));
     try obj.put(allocator, "timeout_ms", .{ .integer = timeout_ms });
+    try obj.put(allocator, "duration_ms", .{ .integer = result.duration_ms });
     try obj.put(allocator, "term", try commandTermValue(allocator, result.term));
     const stdout = try command_output.safeTextAlloc(allocator, result.stdout);
     const stderr = try command_output.safeTextAlloc(allocator, result.stderr);

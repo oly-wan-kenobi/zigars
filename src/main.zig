@@ -68,6 +68,7 @@ pub fn main(init: std.process.Init) !void {
     zls_session.start(&runtime, &zls_proc, &lsp_client, &doc_state) catch |err| {
         runtime.zls_status = @errorName(err);
         runtime.zls_last_failure = @errorName(err);
+        runtime.observability.recordZlsStatus(runtime.zls_status, runtime.zls_last_failure, runtime.zls_restart_attempts);
         runtime.logger.warn("main", "zls disabled: {}", .{err});
     };
     if (runtime.lsp_client != null) {
@@ -123,6 +124,7 @@ test {
     _ = @import("tools/command_result_mcp_tests.zig");
     _ = @import("tools/edit_zls_edits_tests.zig");
     _ = @import("tools/edit_zls_tests.zig");
+    _ = @import("tools/foundation_tests.zig");
     _ = @import("tools/profiling_backends.zig");
     _ = @import("tools/profiling.zig");
     _ = @import("tools/profiling_tests.zig");

@@ -161,12 +161,15 @@ pub fn runAndFormat(a: *App, allocator: std.mem.Allocator, argv: []const []const
 
 pub fn runAndFormatTimeout(a: *App, allocator: std.mem.Allocator, argv: []const []const u8, title: []const u8, timeout_ms: i64) mcp.tools.ToolError!mcp.tools.ToolResult {
     a.command_calls += 1;
+    const started_ns = std.Io.Clock.now(.real, a.io).nanoseconds;
     const result = command.run(allocator, a.io, a.workspace.root, argv, timeout_ms) catch |err| {
+        a.observability.recordCommand(title, argv, elapsedMs(a.io, started_ns), false, @errorName(err));
         a.tool_errors += 1;
         const value = commandErrorValue(allocator, title, argv, a.workspace.root, timeout_ms, err) catch return error.OutOfMemory;
         return structured(allocator, value);
     };
     defer result.deinit(allocator);
+    a.observability.recordCommand(title, argv, result.duration_ms, result.succeeded(), null);
     const value = commandResultValue(allocator, title, argv, a.workspace.root, timeout_ms, result) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
@@ -252,9 +255,12 @@ pub fn probeBackend(a: *App, allocator: std.mem.Allocator, name: []const u8, arg
         if (slot.*) |probe| return probe;
         const probe = probeBackendDirect(allocator, a, argv, timeout_ms);
         slot.* = probe;
+        a.observability.recordBackendProbe(name, probe.ok, probe.status, probe.resolution);
         return probe;
     }
-    return probeBackendDirect(allocator, a, argv, timeout_ms);
+    const probe = probeBackendDirect(allocator, a, argv, timeout_ms);
+    a.observability.recordBackendProbe(name, probe.ok, probe.status, probe.resolution);
+    return probe;
 }
 
 pub fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
@@ -267,14 +273,23 @@ pub fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
 }
 
 pub fn probeBackendDirect(allocator: std.mem.Allocator, a: *App, argv: []const []const u8, timeout_ms: i64) doctor.Probe {
+    const started_ns = std.Io.Clock.now(.real, a.io).nanoseconds;
     const result = command.run(allocator, a.io, a.workspace.root, argv, timeout_ms) catch |err| {
+        a.observability.recordCommand("backend probe", argv, elapsedMs(a.io, started_ns), false, @errorName(err));
         return .{ .ok = false, .status = @errorName(err), .resolution = "confirm the configured backend path and executable permissions" };
     };
     defer result.deinit(allocator);
+    a.observability.recordCommand("backend probe", argv, result.duration_ms, result.succeeded(), null);
     if (result.succeeded()) {
         return .{ .ok = true, .status = "ok", .resolution = "backend command completed" };
     }
     return .{ .ok = false, .status = command.termText(result.term), .resolution = "backend command exited non-zero; run the configured command directly to inspect stderr" };
+}
+
+fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
+    const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
+    if (duration_ns <= 0) return 0;
+    return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
 
 pub fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeCache) !std.json.Value {

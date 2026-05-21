@@ -17,6 +17,7 @@ pub const RunResult = struct {
     stderr_truncated: bool = false,
     stdout_limit: usize = output_limit,
     stderr_limit: usize = output_limit,
+    duration_ms: i64 = 0,
 
     pub fn deinit(self: RunResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
@@ -117,7 +118,15 @@ fn runWithOutputLimit(
         .stderr_truncated = stderr_truncated or stderr.truncated,
         .stdout_limit = stdout_limit,
         .stderr_limit = stderr_limit,
+        .duration_ms = elapsedMs(io, started_ns),
     };
+}
+
+fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
+    const finished_ns = std.Io.Clock.now(.real, io).nanoseconds;
+    const duration_ns = finished_ns - started_ns;
+    if (duration_ns <= 0) return 0;
+    return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
 
 fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv: []const []const u8) ![]const []const u8 {

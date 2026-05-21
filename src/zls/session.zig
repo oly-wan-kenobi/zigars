@@ -51,6 +51,7 @@ pub fn start(runtime: *App, proc_slot: *?ZlsProcess, client_slot: *?LspClient, d
     runtime.lsp_client = &(client_slot.*.?);
     runtime.doc_state = &(docs_slot.*.?);
     runtime.zls_status = "connected";
+    runtime.observability.recordZlsStatus(runtime.zls_status, runtime.zls_last_failure, runtime.zls_restart_attempts);
 
     if (replay_existing_documents) {
         _ = docs_slot.*.?.reopenAll(&(client_slot.*.?));
@@ -70,9 +71,11 @@ pub fn restart(runtime: *App) !void {
     clear(runtime);
     runtime.zls_status = "restarting";
     runtime.zls_restart_attempts += 1;
+    runtime.observability.recordZlsStatus(runtime.zls_status, runtime.zls_last_failure, runtime.zls_restart_attempts);
     start(runtime, proc_slot, client_slot, docs_slot) catch |err| {
         runtime.zls_status = @errorName(err);
         runtime.zls_last_failure = @errorName(err);
+        runtime.observability.recordZlsStatus(runtime.zls_status, runtime.zls_last_failure, runtime.zls_restart_attempts);
         return err;
     };
 }

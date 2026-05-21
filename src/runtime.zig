@@ -3,6 +3,7 @@ const std = @import("std");
 const config_mod = @import("config.zig");
 const doctor = @import("doctor.zig");
 const logging = @import("logging.zig");
+const observability = @import("observability.zig");
 const workspace_mod = @import("workspace.zig");
 const LspClient = @import("lsp/client.zig").LspClient;
 const DocumentState = @import("state/documents.zig").DocumentState;
@@ -49,6 +50,7 @@ pub const App = struct {
     tool_errors: usize = 0,
     backend_probe_cache: BackendProbeCache = .{},
     analysis_cache: AnalysisCache = .{},
+    observability: observability.State = .{},
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     pub fn deinit(self: *App) void {
