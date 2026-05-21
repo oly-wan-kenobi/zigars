@@ -5,6 +5,7 @@ const coverage_config = @import("coverage_config.zig");
 const smoke = @import("smoke_support.zig");
 const stdio_environment_fixtures = @import("stdio_environment_fixtures.zig");
 const stdio_runtime_ux_fixtures = @import("stdio_runtime_ux_fixtures.zig");
+const stdio_validation_workflow_fixtures = @import("stdio_validation_workflow_fixtures.zig");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;
@@ -274,6 +275,7 @@ const StdioClient = struct {
         defer self.allocator.free(validate);
         try self.expectPathString(validate, "kind", "zigar_validate_patch");
         try self.expectPathString(validate, "workflow_contract.verification", "rerun failed phase or run zigar_validate_patch mode=full");
+        try stdio_validation_workflow_fixtures.run(self);
 
         const lint = try self.callTool("zig_lint", "{\"path\":\"src\",\"config\":\"src/main.zig\",\"rules_do\":\"fake-rule\",\"rules_skip\":\"style\",\"args\":\"--verbose\"}");
         defer self.allocator.free(lint);

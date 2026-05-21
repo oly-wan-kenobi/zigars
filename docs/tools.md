@@ -218,6 +218,41 @@ names, allow-listed command names, and client names. `zigar_agent_guide_v2`,
 `zigar_client_guide`, and `zigar_prompt_pack` summarize shipped workflows for
 compile errors, tests, refactors, API changes, releases, and performance work.
 
+## Validation Workflow State
+
+`zigar_validation_plan` returns a risk-aware validation plan without executing
+commands. It reports changed-file facts, command phases, read-only tool phases,
+skipped phases, unknowns, and a stop condition. `zigar_validation_run` executes
+only allow-listed Zig command phases without a shell and records phase results,
+structured events, skipped phases, next action, and a history record. History is
+preview-first: `.zigar-cache/validation/history.jsonl` is appended only when
+`apply=true`, and the preimage identity is reported before the write.
+
+`zig_build_events`, `zig_test_events`, and `zig_test_timing` expose a stable
+event-shaping contract for captured or executed Zig output. Captured text is
+parsed without running commands. Executed mode uses the same allow-listed Zig
+command vocabulary as runtime jobs and reports argv, cwd, timeout, stdout/stderr
+tails, diagnostic summaries, test failures, timing rows, confidence, and
+limitations.
+
+`zigar_validation_history`, `zig_test_flake_history`, and
+`zig_failure_history` read supplied history text or workspace-local JSONL
+history and summarize last runs, recurring failure fingerprints, slow phases,
+and history availability. They are workflow memory over observed records, not a
+replacement for CI logs.
+
+`zigar_session_snapshot` and `zigar_handoff_pack` package current goal,
+changed files, validation state, profile state, workspace metadata, recommended
+next steps, and limitations for client handoff. `zigar_decision_record`
+previews or appends structured decision records only with `apply=true`;
+`zigar_project_notes` and `zigar_project_memory` read those records and expose
+built-in zigar policies such as generated-path and apply-gate rules.
+
+`zigar_capability_match` ranks registered zigar tools for a goal, error, or
+diff using manifest descriptions, keywords, risk, and confidence metadata.
+`zigar_tool_sequence_plan` returns an ordered tool sequence with execution-risk
+markers and stop conditions. Both are read-only routing aids.
+
 ## Release Drift Tools
 
 `zigar_docs_drift_check`, `zigar_release_claim_check`, and
@@ -238,13 +273,18 @@ still needs reference checks before deletion, `zig_public_api_diff` has a public
 declaration line comparison basis with known blind spots, and `zig_test_select`
 returns recommendations unless a stronger dependency model validates them. Use
 `parser_backed` tools such as `zig_ast_decl_summary`, `zig_ast_imports`,
-`zig_ast_tests`, `zig_semantic_index_build`, `zig_semantic_query`, and
-`zig_semantic_decl` when syntactic precision matters. Parser-backed results
+`zig_ast_tests`, `zig_semantic_index_build`, `zig_semantic_query`,
+`zig_semantic_decl`, `zig_impact_semantic`, and
+`zig_test_select_semantic` when syntactic precision matters. Parser-backed results
 expose `parse_status`, `partial_result`, `result_complete`, and
 `parse_error_count` so malformed source cannot look complete. The semantic
 index cache records declarations, imports, tests, source locations, cache hits,
 refreshes, and evidence sources; `zig_code_index_export` and `zig_scip_export`
 preview workspace-local JSON artifacts and write only with `apply=true`.
+Semantic impact and test-selection tools report affected files, importers,
+declarations, tests, public API, recommended checks, unknowns, skipped
+validation, and conservative fallback commands; they do not prove that
+unselected tests can be skipped.
 `zig_semantic_refs` and `zig_semantic_callers` use ZLint `--print-ast` symbol
 references when the configured backend supports it, then fall back to bounded
 source scans with explicit limits.
@@ -313,14 +353,16 @@ High-signal discovery keywords include:
 
 - `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`,
   `hermes`, `context pack`, `next action`, `validate patch`,
-  `failure fusion`, `impact analysis`
+  `validation plan`, `validation run`, `build events`, `test events`,
+  `validation history`, `handoff`, `project memory`, `capability match`,
+  `tool sequence`, `failure fusion`, `impact analysis`
 - `fmt`, `formatter`, `formatting`, `zig fmt`
 - `toolchain`, `version manager`, `mise`, `asdf`, `zvm`, `zigup`
 - `doctor`, `health`, `workspace`, `PermissionDenied`
 - `compile error index`, `changed files`, `dependency inspector`
 - `build options`, `target matrix`, `test failure triage`, `symbol cache`
 - `semantic index`, `semantic query`, `references`, `callers`, `code index`,
-  `scip`
+  `scip`, `semantic impact`, `semantic test select`
 - `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`
 - `zlint`, `zwanzig`, `lint`, `lint compare`, `lint gate`, `lint baseline`,
   `suppressions`, `trend`, `sarif`
@@ -336,10 +378,11 @@ Source-mutating tools are preview-first and require `apply=true` to write:
 - `zigar_project_profile`
 
 Generated output tools such as `zig_code_index_export`, `zig_scip_export`,
-`zig_lint_baseline`, `zig_flamegraph`, and `zig_analysis_graphs` must write to
-explicit workspace-local output paths and preserve preview-first apply gates
-where advertised. `zig_profile_plan` is read-only and returns structured
-guidance for external profilers; zigar does not define capture semantics.
+`zig_lint_baseline`, `zigar_validation_run`, `zigar_decision_record`,
+`zig_flamegraph`, and `zig_analysis_graphs` must write to explicit
+workspace-local output paths and preserve preview-first apply gates where
+advertised. `zig_profile_plan` is read-only and returns structured guidance for
+external profilers; zigar does not define capture semantics.
 `zig_flamegraph` requires an explicit zflame format and returns
 argv/backend/probe/compatibility metadata with the SVG path.
 `zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to

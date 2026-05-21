@@ -16,9 +16,9 @@ Keywords: `capabilities`, `tool index`, `schema`, `doctor`, `health`, `workspace
 
 ### agent_workflows
 
-Tools: `zigar_context_pack`, `zigar_next_action`, `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`, `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`
+Tools: `zigar_context_pack`, `zigar_next_action`, `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`, `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`, `zigar_validation_plan`, `zigar_validation_run`, `zigar_validation_history`, `zig_build_events`, `zig_test_events`, `zig_test_timing`, `zig_test_flake_history`, `zig_failure_history`, `zigar_session_snapshot`, `zigar_handoff_pack`, `zigar_decision_record`, `zigar_project_notes`, `zigar_project_memory`, `zigar_capability_match`, `zigar_tool_sequence_plan`
 
-Keywords: `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`, `hermes`, `context pack`, `next action`, `validate patch`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
+Keywords: `agent`, `agent client`, `mcp client`, `codex`, `claude`, `gemini`, `hermes`, `context pack`, `next action`, `validate patch`, `validation plan`, `validation run`, `build events`, `test events`, `validation history`, `flake history`, `failure history`, `handoff`, `project memory`, `capability match`, `tool sequence`, `failure fusion`, `impact analysis`, `project profile`, `patch guard`, `done check`, `readiness`
 
 ### core_zig
 
@@ -46,7 +46,7 @@ Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`
 
 ### static_analysis
 
-Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`
+Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`, `zig_impact_semantic`, `zig_test_select_semantic`
 
 Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `declarations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test map`, `test select`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
 
@@ -116,8 +116,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - orient an agent in a Zig repo: prefer `zigar_context_pack`
 - choose the next Zig workflow step: prefer `zigar_next_action`
 - validate an agent patch: prefer `zigar_validate_patch`
+- plan and run validation safely: prefer `zigar_validation_plan, zigar_validation_run`
 - fuse compiler and test failures: prefer `zigar_failure_fusion`
+- parse build and test output events: prefer `zig_build_events, zig_test_events, zig_test_timing`
 - analyze impact of touched files: prefer `zigar_impact`
+- analyze parser-backed semantic impact: prefer `zig_impact_semantic, zig_test_select_semantic`
+- summarize validation history: prefer `zigar_validation_history, zig_test_flake_history, zig_failure_history`
+- prepare an agent handoff: prefer `zigar_session_snapshot, zigar_handoff_pack`
+- read project memory: prefer `zigar_project_memory, zigar_project_notes, zigar_decision_record`
+- match goals to zigar tools: prefer `zigar_capability_match, zigar_tool_sequence_plan`
 - check formatting without writing: prefer `zig_format_check`
 - understand compiler errors: prefer `zig_explain_errors`
 - group compiler errors by file: prefer `zig_compile_error_index`
@@ -149,6 +156,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_ast_imports`: required `file: string`
 - `zig_ast_tests`: required `file: string`
 - `zig_build`: optional `args: string`, `timeout_ms: integer`
+- `zig_build_events`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_builtin_doc`: required `query: string`; optional `limit: integer`
 - `zig_builtin_doc_json`: required `query: string`; optional `limit: integer`
 - `zig_changed_files_plan`: optional `timeout_ms: integer`
@@ -173,12 +181,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_document_symbols`: required `file: string`; optional `content: string`
 - `zig_error_sets`: required `file: string`
 - `zig_explain_errors`: optional `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
+- `zig_failure_history`: optional `history: string`, `path: string`, `limit: integer`
 - `zig_file_owner`: required `file: string`
 - `zig_flamegraph`: required `format: string`, `input: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `intermediate: string`, `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_impact_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
 - `zig_import_graph`: optional `limit: integer`
 - `zig_import_graph_json`: optional `limit: integer`
 - `zig_import_resolve`: required `import: string`; optional `from: string`
@@ -219,9 +229,13 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_target_matrix_plan`: optional `targets: string`, `steps: string`
 - `zig_test`: optional `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_discover`: optional `limit: integer`
+- `zig_test_events`: optional `text: string`, `command: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_failure_triage`: optional `text: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
+- `zig_test_flake_history`: optional `history: string`, `path: string`, `limit: integer`
 - `zig_test_map`: optional `limit: integer`
 - `zig_test_select`: optional `files: string`, `symbols: string`, `limit: integer`
+- `zig_test_select_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
+- `zig_test_timing`: required `text: string`
 - `zig_tool_plan`: required `tool: string`; optional `file: string`, `path: string`, `input: string`, `output: string`, `command: string`, `args: string`, `timeout_ms: integer`
 - `zig_toolchain_pin`: optional `apply: boolean`, `output: string`, `zig_version: string`, `zls_version: string`, `zlint_version: string`, `zwanzig_version: string`, `zflame_version: string`, `diff_folded_version: string`
 - `zig_toolchain_pin_check`: optional `input: string`, `probe_backends: boolean`, `timeout_ms: integer`
@@ -246,16 +260,19 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_backend_install_plan`: optional `backend: string`, `manager: string`
 - `zigar_backend_verify`: optional `backend: string`, `timeout_ms: integer`
 - `zigar_cancel_status`: optional `job_id: string`
+- `zigar_capability_match`: optional `goal: string`, `error: string`, `diff: string`, `limit: integer`
 - `zigar_clean_tree_gate`: optional `timeout_ms: integer`
 - `zigar_client_guide`: optional `client: string`, `task: string`
 - `zigar_command_provenance`: optional `tool: string`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
+- `zigar_decision_record`: required `title: string`, `decision: string`; optional `rationale: string`, `category: string`, `path: string`, `apply: boolean`
 - `zigar_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
 - `zigar_docs_drift_check`: optional `mode: string`
 - `zigar_doctor`: optional `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_env_export`: optional `output: string`, `apply: boolean`, `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
+- `zigar_handoff_pack`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zigar_job_cancel`: required `job_id: string`; optional `reason: string`
 - `zigar_job_result`: required `job_id: string`; optional `cursor: string`, `limit: integer`, `mode: string`
@@ -270,6 +287,8 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_profile_import`: required `content: string`; optional `apply: boolean`
 - `zigar_profile_read`: optional `path: string`
 - `zigar_profile_validate`: optional `content: string`, `path: string`
+- `zigar_project_memory`: optional `content: string`, `path: string`, `query: string`, `category: string`, `limit: integer`
+- `zigar_project_notes`: optional `content: string`, `path: string`, `query: string`, `category: string`, `limit: integer`
 - `zigar_project_profile`: optional `apply: boolean`, `content: string`
 - `zigar_project_profile_v2`: optional `apply: boolean`, `content: string`
 - `zigar_prompt_pack`: optional `workflow: string`
@@ -282,10 +301,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_roots_sync`: optional `roots: string`, `apply: boolean`
 - `zigar_run_events`: optional `job_id: string`, `cursor: string`, `limit: integer`
 - `zigar_run_stream`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
+- `zigar_session_snapshot`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_setup_elicit`: optional `topic: string`, `mode: string`
 - `zigar_tool_index_check`: optional `mode: string`
+- `zigar_tool_sequence_plan`: optional `goal: string`, `error: string`, `diff: string`, `changed_files: string`
 - `zigar_trust_report`: optional `include_clean_tree: boolean`, `timeout_ms: integer`
 - `zigar_validate_patch`: optional `mode: string`, `changed_files: string`, `stop_on_failure: boolean`, `timeout_ms: integer`
+- `zigar_validation_history`: optional `history: string`, `path: string`, `limit: integer`
+- `zigar_validation_plan`: optional `changed_files: string`, `diff: string`, `goal: string`, `mode: string`, `include_semantic: boolean`
+- `zigar_validation_run`: optional `changed_files: string`, `diff: string`, `goal: string`, `mode: string`, `include_semantic: boolean`, `stop_on_failure: boolean`, `apply: boolean`, `output: string`, `timeout_ms: integer`
 - `zigar_workspace_select`: required `workspace_id: string`; optional `apply: boolean`
 - `zigar_zvm_install_plan`: required `version: string`; optional `zvm_path: string`
 - `zigar_zvm_probe`: optional `zvm_path: string`, `timeout_ms: integer`
@@ -299,6 +323,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_ast_imports`: `pure_analysis` read-only analysis
 - `zig_ast_tests`: `pure_analysis` read-only analysis
 - `zig_build`: `exact_command` exact argv
+- `zig_build_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_build_graph`: `pure_analysis` read-only analysis
 - `zig_build_options`: `pure_analysis` read-only analysis
 - `zig_build_targets`: `pure_analysis` read-only analysis
@@ -331,12 +356,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_env`: `exact_command` exact argv
 - `zig_error_sets`: `pure_analysis` read-only analysis
 - `zig_explain_errors`: `dynamic_command` runtime-dependent backend plan
+- `zig_failure_history`: `pure_analysis` read-only analysis
 - `zig_file_owner`: `pure_analysis` read-only analysis
 - `zig_flamegraph`: `workspace_artifact` explicit workspace artifact
 - `zig_flamegraph_diff`: `workspace_artifact` explicit workspace artifact
 - `zig_format`: `apply_gated_mutation` preview/apply mutation
 - `zig_format_check`: `exact_command` exact argv
 - `zig_hover`: `zls_request` `textDocument/hover`
+- `zig_impact_semantic`: `pure_analysis` read-only analysis
 - `zig_import_graph`: `pure_analysis` read-only analysis
 - `zig_import_graph_json`: `pure_analysis` read-only analysis
 - `zig_import_resolve`: `pure_analysis` read-only analysis
@@ -380,9 +407,13 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_targets`: `exact_command` exact argv
 - `zig_test`: `exact_command` exact argv
 - `zig_test_discover`: `pure_analysis` read-only analysis
+- `zig_test_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_test_failure_triage`: `dynamic_command` runtime-dependent backend plan
+- `zig_test_flake_history`: `pure_analysis` read-only analysis
 - `zig_test_map`: `pure_analysis` read-only analysis
 - `zig_test_select`: `pure_analysis` read-only analysis
+- `zig_test_select_semantic`: `pure_analysis` read-only analysis
+- `zig_test_timing`: `pure_analysis` read-only analysis
 - `zig_tool_plan`: `pure_analysis` read-only analysis
 - `zig_toolchain_pin`: `apply_gated_mutation` preview/apply mutation
 - `zig_toolchain_pin_check`: `dynamic_command` runtime-dependent backend plan
@@ -410,16 +441,19 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_backend_verify`: `dynamic_command` runtime-dependent backend plan
 - `zigar_cancel_status`: `pure_analysis` read-only analysis
 - `zigar_capabilities`: `pure_analysis` read-only analysis
+- `zigar_capability_match`: `pure_analysis` read-only analysis
 - `zigar_clean_tree_gate`: `dynamic_command` runtime-dependent backend plan
 - `zigar_client_guide`: `pure_analysis` read-only analysis
 - `zigar_command_provenance`: `pure_analysis` read-only analysis
 - `zigar_context_pack`: `pure_analysis` read-only analysis
+- `zigar_decision_record`: `workspace_artifact` explicit workspace artifact
 - `zigar_dev_env_generate`: `apply_gated_mutation` preview/apply mutation
 - `zigar_docs_drift_check`: `pure_analysis` read-only analysis
 - `zigar_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zigar_env_export`: `apply_gated_mutation` preview/apply mutation
 - `zigar_env_pack`: `dynamic_command` runtime-dependent backend plan
 - `zigar_failure_fusion`: `dynamic_command` runtime-dependent backend plan
+- `zigar_handoff_pack`: `pure_analysis` read-only analysis
 - `zigar_http_status`: `pure_analysis` read-only analysis
 - `zigar_impact`: `pure_analysis` read-only analysis
 - `zigar_job_cancel`: `not_plannable` unsupported
@@ -437,6 +471,8 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_profile_import`: `apply_gated_mutation` preview/apply mutation
 - `zigar_profile_read`: `pure_analysis` read-only analysis
 - `zigar_profile_validate`: `pure_analysis` read-only analysis
+- `zigar_project_memory`: `pure_analysis` read-only analysis
+- `zigar_project_notes`: `pure_analysis` read-only analysis
 - `zigar_project_profile`: `apply_gated_mutation` preview/apply mutation
 - `zigar_project_profile_v2`: `apply_gated_mutation` preview/apply mutation
 - `zigar_prompt_pack`: `pure_analysis` read-only analysis
@@ -450,12 +486,17 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zigar_run_events`: `pure_analysis` read-only analysis
 - `zigar_run_stream`: `dynamic_command` runtime-dependent backend plan
 - `zigar_schema`: `pure_analysis` read-only analysis
+- `zigar_session_snapshot`: `pure_analysis` read-only analysis
 - `zigar_setup_elicit`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
 - `zigar_tool_index_check`: `pure_analysis` read-only analysis
 - `zigar_tool_latency`: `pure_analysis` read-only analysis
+- `zigar_tool_sequence_plan`: `pure_analysis` read-only analysis
 - `zigar_trust_report`: `dynamic_command` runtime-dependent backend plan
 - `zigar_validate_patch`: `dynamic_command` runtime-dependent backend plan
+- `zigar_validation_history`: `pure_analysis` read-only analysis
+- `zigar_validation_plan`: `pure_analysis` read-only analysis
+- `zigar_validation_run`: `dynamic_command` runtime-dependent backend plan
 - `zigar_workspace_info`: `pure_analysis` read-only analysis
 - `zigar_workspace_map`: `pure_analysis` read-only analysis
 - `zigar_workspace_select`: `apply_gated_mutation` preview/apply mutation
@@ -482,6 +523,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_dependency_inspect`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_zon_dependency_scan`; cross-check `zig build --fetch`
 - `zig_error_sets`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_keyword_scan`; cross-check `zig ast-check`
 - `zig_file_owner`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_owner_scan`; cross-check `zig build test`
+- `zig_impact_semantic`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_impact`; cross-check `zig ast-check on impacted files`
 - `zig_import_graph`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_import_scan`; cross-check `zig_ast_imports`
 - `zig_import_graph_json`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_import_scan`; cross-check `zig_ast_imports`
 - `zig_import_resolve`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_import_resolution`; cross-check `zig build test`
@@ -512,6 +554,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_test_failure_triage`: tier `compiler_backed`, confidence `medium`, class `advisory`, kind `compiler_output_triage`; cross-check `rerun failing command`
 - `zig_test_map`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_test_declaration_scan`; cross-check `zig_ast_tests`
 - `zig_test_select`: tier `advisory_orientation`, confidence `low`, class `advisory`, kind `heuristic_test_impact_selection`; cross-check `zig build test`
+- `zig_test_select_semantic`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_test_selection`; cross-check `zig ast-check on selected test files`
 - `zig_workspace_symbol_cache`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `cached_heuristic_symbol_import_scan`; cross-check `ZLS workspace symbols`
 - `zig_zlint`: tier `zlint_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zlint_diagnostics`; cross-check `configured ZLint --help`
 - `zig_zlint_fix`: tier `zlint_backed`, confidence `medium`, class `advisory`, kind `optional_zlint_apply_gated_fix`; cross-check `configured ZLint --help`

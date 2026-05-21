@@ -51,8 +51,8 @@ pub const HandlerModule = enum {
     release_drift,
     environment_profiles,
     runtime_ux,
+    validation_workflows,
 };
-
 pub const HandlerRef = struct {
     module: HandlerModule,
     name: []const u8,

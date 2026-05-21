@@ -34,6 +34,7 @@ const git_status_coverage = "Current git status plus workspace file-name checks.
 const compiler_output_coverage = "Compiler/test-runner output from a supplied transcript or a focused Zig command.";
 const zwanzig_output_coverage = "Optional zwanzig backend output for the requested workspace path or graph mode.";
 const semantic_index_coverage = "Readable workspace Zig files up to the requested limit; declarations/imports/tests are parser-backed where std.zig.Ast can parse the file, with parse_status, partial_result, and parse_error_count carried from parser-backed evidence when available.";
+const semantic_impact_coverage = "Readable workspace Zig files up to the requested limit; changed files, diff paths, symbols, imports, declarations, and tests are matched against the std.zig.Ast parser-backed semantic index; parse_status, partial_result, and parse_error_count are preserved with heuristic fallbacks called out explicitly.";
 const semantic_refs_coverage = "Readable workspace Zig files up to the requested limit; matching lines are confirmed with optional ZLint --print-ast symbol references when the configured backend supports it, with source-scan fallback.";
 const lint_evidence_coverage = "Caller-supplied normalized lint JSON or optional lint backend output, depending on the tool and arguments.";
 const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigar lint findings.";
@@ -84,6 +85,13 @@ const semantic_index_limits = &.{
     "Parser-backed syntax view plus source-scan evidence; it does not resolve comptime execution, aliases, or conditional imports.",
     "Parse errors are reported through parser metadata when available and can make file-level evidence partial.",
     "Workspace walks are bounded by the requested limit and skip generated/cache paths.",
+};
+
+const semantic_impact_limits = &.{
+    "Advisory impact and test-selection evidence; it does not prove that unselected tests can be skipped.",
+    "Parse errors are reported through parser metadata when available and can make file-level impact evidence partial.",
+    "Import matching uses parser-backed import declarations plus path/basename matching and can miss generated, aliased, or comptime-selected dependencies.",
+    "Release decisions still require compiler-backed validation such as zig build test or project CI.",
 };
 
 const semantic_refs_limits = &.{
@@ -156,6 +164,8 @@ pub const contracts = [_]Contract{
     .{ .tool = "zig_lint_baseline", .analysis_kind = "lint_baseline_comparison", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "zig_lint_gate", "configured linters" } },
     .{ .tool = "zig_lint_suppressions", .analysis_kind = "lint_suppression_filter", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "code review", "configured linters" } },
     .{ .tool = "zig_lint_trend", .analysis_kind = "lint_trend_comparison", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "configured linters", "project CI" } },
+    .{ .tool = "zig_impact_semantic", .analysis_kind = "parser_backed_semantic_impact", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on impacted files", "zig_test_select_semantic", "zigar_validation_plan", "zig build test" } },
+    .{ .tool = "zig_test_select_semantic", .analysis_kind = "parser_backed_semantic_test_selection", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on selected test files", "zigar_validation_run", "zig build test", "project CI" } },
     .{ .tool = "zig_lint", .analysis_kind = "optional_zwanzig_lint_json", .tier = .zwanzig_backed, .confidence = .high, .classification = .release_gating_candidate, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },
     .{ .tool = "zig_lint_sarif", .analysis_kind = "optional_zwanzig_lint_sarif", .tier = .zwanzig_backed, .confidence = .high, .classification = .release_gating_candidate, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },
     .{ .tool = "zig_lint_rules", .analysis_kind = "optional_zwanzig_rule_catalog", .tier = .zwanzig_backed, .confidence = .medium, .classification = .advisory, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },

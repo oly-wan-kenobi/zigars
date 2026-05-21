@@ -407,14 +407,13 @@ pub fn zigChangedFilesPlan(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 pub fn workspacePathExists(allocator: std.mem.Allocator, a: *App, path: []const u8) bool {
     const resolved = a.workspace.resolve(path) catch return false;
     defer allocator.free(resolved);
-    if (countTopLevelEntries(allocator, a.io, resolved)) |_| {
+    var dir = std.Io.Dir.openDirAbsolute(a.io, resolved, .{}) catch {
+        var file = std.Io.Dir.cwd().openFile(a.io, resolved, .{}) catch return false;
+        file.close(a.io);
         return true;
-    } else |_| {}
-    if (std.Io.Dir.cwd().readFileAlloc(a.io, resolved, allocator, .limited(1)) catch null) |bytes| {
-        allocator.free(bytes);
-        return true;
-    }
-    return false;
+    };
+    dir.close(a.io);
+    return true;
 }
 
 pub fn zigDependencyInspect(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {

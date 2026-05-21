@@ -309,7 +309,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "src/tool_manifest/all_definitions.zig",
-        .max_lines = 210,
+        .max_lines = 230,
         .reason = "combined tool definition aliases should stay a compact ordered table over group bodies",
     },
     .{
