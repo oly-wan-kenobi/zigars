@@ -5,7 +5,8 @@
     "zigar_job_start", "zigar_job_status", "zigar_job_result", "zigar_job_cancel", "zigar_cancel_status", "zigar_run_stream", "zigar_run_events", "zigar_resource_query", "zigar_resource_subscribe", "zigar_resource_unsubscribe", "zigar_roots_sync", "zigar_workspace_map", "zigar_workspace_select", "zigar_agent_guide_v2", "zigar_client_guide", "zigar_prompt_pack",
     "zig_semantic_index_build", "zig_semantic_index_status", "zig_semantic_index_refresh", "zig_semantic_query", "zig_semantic_refs", "zig_semantic_decl", "zig_semantic_callers", "zig_static_fusion", "zig_code_index_export", "zig_scip_export", "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix", "zig_lint_compare", "zig_lint_profile", "zig_lint_gate", "zig_lint_fix_plan", "zig_lint_baseline", "zig_lint_suppressions", "zig_lint_trend",
     "zig_impact_semantic", "zig_test_select_semantic", "zigar_validation_plan", "zigar_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigar_validation_history", "zig_test_flake_history", "zig_failure_history", "zigar_session_snapshot", "zigar_handoff_pack", "zigar_decision_record", "zigar_project_notes", "zigar_project_memory", "zigar_capability_match", "zigar_tool_sequence_plan",
-    "zigar_patch_session_create", "zigar_patch_session_preview", "zigar_patch_session_apply", "zigar_patch_session_validate", "zigar_patch_session_revert", "zig_generated_file_trace", "zigar_edit_policy_check", "zigar_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch"
+    "zigar_patch_session_create", "zigar_patch_session_preview", "zigar_patch_session_apply", "zigar_patch_session_validate", "zigar_patch_session_revert", "zig_generated_file_trace", "zigar_edit_policy_check", "zigar_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch",
+    "zig_ci_ingest", "zig_ci_repro_plan", "zig_ci_failure_map", "zig_release_plan", "zig_semver_suggest", "zig_release_notes_draft", "zig_release_evidence_pack", "zig_api_baseline_init", "zig_api_check", "zig_api_diff_baseline", "zig_api_docs_diff", "zig_docs_index_build", "zig_docs_query", "zig_std_signature", "zig_langref_item", "zig_autodoc_ingest", "zig_project_docs_query", "zig_doc_example_check", "zig_snippet_check", "zig_readme_command_check", "zig_dependency_update_plan", "zig_dependency_fetch_check", "zig_dependency_lock_audit", "zig_dependency_impact", "zig_sbom", "zig_zat_scan", "zig_osv_scan", "zig_dependency_security_report", "zig_dependency_provenance", "zig_dependency_license_summary", "zig_github_dependency_submit_plan"
   ],
   "tools_list_schema_paths": {
     "zig_format": {
@@ -148,6 +149,27 @@
       "inputSchema.properties.apply.default": false,
       "inputSchema.required.0": "file",
       "inputSchema.required.5": "action_indices"
+    },
+    "zig_ci_ingest": {
+      "inputSchema.properties.content.type": "string",
+      "inputSchema.properties.format.default": "auto"
+    },
+    "zig_release_plan": {
+      "inputSchema.properties.validation.type": "string"
+    },
+    "zig_api_baseline_init": {
+      "inputSchema.properties.apply.type": "boolean",
+      "inputSchema.properties.apply.default": false
+    },
+    "zig_docs_query": {
+      "inputSchema.required.0": "query"
+    },
+    "zig_snippet_check": {
+      "inputSchema.required.0": "content"
+    },
+    "zig_sbom": {
+      "inputSchema.properties.apply.type": "boolean",
+      "inputSchema.properties.apply.default": false
     }
   },
   "schema_paths": {
@@ -209,6 +231,16 @@
     "registry_tool_arguments.zigar_patch_session_validate.risk.executes_project_code": true,
     "registry_tool_arguments.zig_move_decl.risk.preview_by_default": true,
     "registry_tool_arguments.zig_code_action_batch.risk.mutates_lsp_state": true,
+    "registry_tool_arguments.zig_ci_ingest.optional.content": "string",
+    "registry_tool_arguments.zig_release_plan.optional.validation": "string",
+    "registry_tool_arguments.zig_api_baseline_init.optional.apply": "boolean",
+    "registry_tool_arguments.zig_api_baseline_init.risk.writes_require_apply": true,
+    "registry_tool_arguments.zig_docs_query.required.query": "string",
+    "registry_tool_arguments.zig_snippet_check.required.content": "string",
+    "registry_tool_arguments.zig_sbom.risk.writes_artifacts": true,
+    "registry_tool_arguments.zig_sbom.risk.writes_require_apply": true,
+    "registry_tool_arguments.zig_osv_scan.optional.content": "string",
+    "registry_tool_planning.zig_sbom.kind": "workspace_artifact",
     "common_intents.0.prefer": "zig_format"
   },
   "doctor_paths": {
@@ -504,6 +536,161 @@
     "kind": "backend_error",
     "backend": "zls",
     "error_kind": "unavailable"
+  },
+  "phase6_ci_ingest_paths": {
+    "kind": "zig_ci_ingest",
+    "format": "log",
+    "failure_count": 1,
+    "raw_reference.source_kind": "inline_content"
+  },
+  "phase6_ci_repro_plan_paths": {
+    "kind": "zig_ci_repro_plan",
+    "commands.0": "zig ast-check src/main.zig",
+    "skipped_validation.0.id": "local_execution"
+  },
+  "phase6_ci_failure_map_paths": {
+    "kind": "zig_ci_failure_map",
+    "failure_count": 1,
+    "by_file.0.key": "src/main.zig"
+  },
+  "phase6_release_plan_paths": {
+    "kind": "zig_release_plan",
+    "release_blocked": false,
+    "verification_commands.0": "zig build test --summary all"
+  },
+  "phase6_semver_suggest_paths": {
+    "kind": "zig_semver_suggest",
+    "suggested_bump": "major"
+  },
+  "phase6_release_notes_draft_paths": {
+    "kind": "zig_release_notes_draft",
+    "requires_review": true,
+    "sections.0.title": "Changes"
+  },
+  "phase6_release_evidence_pack_paths": {
+    "kind": "zig_release_evidence_pack",
+    "evidence_count": 7,
+    "ready_for_release_review": true
+  },
+  "phase6_api_baseline_init_paths": {
+    "kind": "zig_api_baseline_init",
+    "baseline.declaration_count": 1,
+    "applied": false,
+    "requires_apply": true
+  },
+  "phase6_api_check_paths": {
+    "kind": "zig_api_check",
+    "breaking_change_risk": true,
+    "removed.0.name": "old"
+  },
+  "phase6_api_diff_baseline_paths": {
+    "kind": "zig_api_diff_baseline",
+    "breaking_change_risk": true,
+    "added.0.name": "new"
+  },
+  "phase6_api_docs_diff_paths": {
+    "kind": "zig_api_docs_diff",
+    "undocumented_count": 1,
+    "undocumented.0.name": "visible"
+  },
+  "phase6_docs_index_build_paths": {
+    "kind": "zig_docs_index_build",
+    "scope": "docs",
+    "index_version": "zigar.docs_index.v1"
+  },
+  "phase6_docs_query_paths": {
+    "kind": "zig_docs_query",
+    "query": "zigar"
+  },
+  "phase6_std_signature_paths": {
+    "kind": "zig_std_signature",
+    "name": "std.mem.eql"
+  },
+  "phase6_langref_item_paths": {
+    "kind": "zig_langref_item",
+    "query": "defer"
+  },
+  "phase6_autodoc_ingest_paths": {
+    "kind": "zig_autodoc_ingest",
+    "entry_count": 1,
+    "entries.0.name": "FixtureSymbol"
+  },
+  "phase6_project_docs_query_paths": {
+    "kind": "zig_project_docs_query",
+    "query": "FixtureSymbol",
+    "result_count": 1,
+    "matches.0.path": "inline_autodoc"
+  },
+  "phase6_doc_example_check_paths": {
+    "kind": "zig_doc_example_check",
+    "ok": true,
+    "snippet_count": 1
+  },
+  "phase6_snippet_check_paths": {
+    "kind": "zig_snippet_check",
+    "snippet.ok": false,
+    "snippet.parse_status": "syntax_errors"
+  },
+  "phase6_readme_command_check_paths": {
+    "kind": "zig_readme_command_check",
+    "command_count": 1,
+    "commands.0.command": "zig build test"
+  },
+  "phase6_dependency_update_plan_paths": {
+    "kind": "zig_dependency_update_plan",
+    "plan_count": 1,
+    "plans.0.name": "dep_a"
+  },
+  "phase6_dependency_fetch_check_paths": {
+    "kind": "zig_dependency_fetch_check",
+    "ok": true,
+    "missing_hash_count": 0
+  },
+  "phase6_dependency_lock_audit_paths": {
+    "kind": "zig_dependency_lock_audit",
+    "lockfile_present": false,
+    "issue_count": 1
+  },
+  "phase6_dependency_impact_paths": {
+    "kind": "zig_dependency_impact",
+    "dependency": "dep_a",
+    "recommended_checks.0": "zig build --fetch"
+  },
+  "phase6_sbom_paths": {
+    "kind": "zig_sbom",
+    "sbom.bomFormat": "CycloneDX",
+    "sbom.components.0.name": "dep_a",
+    "applied": false
+  },
+  "phase6_zat_scan_paths": {
+    "kind": "zig_zat_scan",
+    "status": "unavailable",
+    "backend": "zat"
+  },
+  "phase6_osv_scan_paths": {
+    "kind": "zig_osv_scan",
+    "status": "ingested",
+    "backend": "osv"
+  },
+  "phase6_dependency_security_report_paths": {
+    "kind": "zig_dependency_security_report",
+    "scanner_finding_count": 1,
+    "risk": "review_required"
+  },
+  "phase6_dependency_provenance_paths": {
+    "kind": "zig_dependency_provenance",
+    "dependency_count": 2,
+    "dependencies.0.name": "dep_a"
+  },
+  "phase6_dependency_license_summary_paths": {
+    "kind": "zig_dependency_license_summary",
+    "licenses.0.license": "MIT",
+    "dependency_license_unknown_count": 2
+  },
+  "phase6_github_dependency_submit_plan_paths": {
+    "kind": "zig_github_dependency_submit_plan",
+    "submit": false,
+    "payload.job": "fixture"
   },
   "package_cache_doctor_paths": {
     "kind": "zig_package_cache_doctor"

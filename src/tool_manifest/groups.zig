@@ -8,7 +8,7 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .core_zig, .keywords = &.{ "zig", "build", "test", "check", "ast-check", "compiler diagnostics", "compile error index", "translate-c" } },
     .{ .group = .formatting_and_edits, .keywords = &.{ "fmt", "formatter", "formatting", "zig fmt", "patch preview", "patch session", "transactional edit", "rollback", "unified diff", "rename", "refactor", "move declaration", "extract declaration", "imports", "code action", "apply=true", "zlint fix" } },
     .{ .group = .zls, .keywords = &.{ "zls", "lsp", "diagnostics", "hover", "definition", "references", "completion", "symbols", "unsaved document" } },
-    .{ .group = .docs, .keywords = &.{ "docs", "stdlib", "builtin", "langref", "language reference" } },
+    .{ .group = .docs, .keywords = &.{ "docs", "stdlib", "builtin", "langref", "language reference", "autodoc", "snippet", "readme examples" } },
     .{ .group = .static_analysis, .keywords = &.{ "heuristic", "parser backed", "capability tier", "confidence", "evidence source", "semantic index", "semantic query", "references", "callers", "code index", "scip", "imports", "declarations", "allocation", "error set", "public api", "api diff", "breaking change", "build graph", "build options", "test discovery", "test map", "test select", "changed files", "dependency inspector", "target matrix", "test failure triage", "symbol cache", "package cache doctor", "zlint", "zlint fix", "lint compare", "lint gate", "lint baseline", "suppressions", "trend" } },
     .{ .group = .ci_artifacts, .keywords = &.{ "ci", "annotations", "junit", "matrix", "multiple zig versions", "test report" } },
     .{ .group = .zwanzig, .keywords = &.{ "zwanzig", "lint", "linter", "static analysis", "sarif", "rules", "dot graph" } },
@@ -20,4 +20,7 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .release_drift, .keywords = &.{ "docs drift", "release claims", "tool index", "generated docs", "public claims", "release-check" } },
     .{ .group = .environment_profiles, .keywords = &.{ "profile v2", "project profile", "bootstrap", "environment pack", "toolchain pin", "zvm", "zls compatibility", "dev environment", "backend conformance", "setup elicitation" } },
     .{ .group = .runtime_ux, .keywords = &.{ "job", "task", "run stream", "events", "cancellation", "resource query", "subscription", "completion", "roots", "workspace map", "prompt pack", "client guide" } },
+    .{ .group = .release_intelligence, .keywords = &.{ "release", "semver", "release notes", "evidence pack", "release readiness", "changelog", "ci evidence", "docs evidence" } },
+    .{ .group = .api_lifecycle, .keywords = &.{ "api lifecycle", "api baseline", "api check", "api docs diff", "breaking change", "public api review" } },
+    .{ .group = .dependency_security, .keywords = &.{ "dependency update", "dependency fetch", "lock audit", "sbom", "cyclonedx", "security scan", "osv", "zat", "license", "dependency submission", "provenance" } },
 };

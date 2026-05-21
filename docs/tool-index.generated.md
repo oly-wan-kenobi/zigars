@@ -40,9 +40,9 @@ Keywords: `zls`, `lsp`, `diagnostics`, `hover`, `definition`, `references`, `com
 
 ### docs
 
-Tools: `zig_builtin_list`, `zig_builtin_list_json`, `zig_builtin_doc`, `zig_builtin_doc_json`, `zig_std_search`, `zig_std_search_json`, `zig_std_item`, `zig_std_item_json`, `zig_lang_ref_search`, `zig_lang_ref_search_json`
+Tools: `zig_builtin_list`, `zig_builtin_list_json`, `zig_builtin_doc`, `zig_builtin_doc_json`, `zig_std_search`, `zig_std_search_json`, `zig_std_item`, `zig_std_item_json`, `zig_lang_ref_search`, `zig_lang_ref_search_json`, `zig_docs_index_build`, `zig_docs_query`, `zig_std_signature`, `zig_langref_item`, `zig_autodoc_ingest`, `zig_project_docs_query`, `zig_doc_example_check`, `zig_snippet_check`, `zig_readme_command_check`
 
-Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`
+Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`, `autodoc`, `snippet`, `readme examples`
 
 ### static_analysis
 
@@ -52,7 +52,7 @@ Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `eviden
 
 ### ci_artifacts
 
-Tools: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`
+Tools: `zig_ci_annotations`, `zig_junit`, `zig_matrix_check`, `zig_ci_ingest`, `zig_ci_repro_plan`, `zig_ci_failure_map`
 
 Keywords: `ci`, `annotations`, `junit`, `matrix`, `multiple zig versions`, `test report`
 
@@ -110,6 +110,24 @@ Tools: `zigar_job_start`, `zigar_job_status`, `zigar_job_result`, `zigar_job_can
 
 Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query`, `subscription`, `completion`, `roots`, `workspace map`, `prompt pack`, `client guide`
 
+### release_intelligence
+
+Tools: `zig_release_plan`, `zig_semver_suggest`, `zig_release_notes_draft`, `zig_release_evidence_pack`
+
+Keywords: `release`, `semver`, `release notes`, `evidence pack`, `release readiness`, `changelog`, `ci evidence`, `docs evidence`
+
+### api_lifecycle
+
+Tools: `zig_api_baseline_init`, `zig_api_check`, `zig_api_diff_baseline`, `zig_api_docs_diff`
+
+Keywords: `api lifecycle`, `api baseline`, `api check`, `api docs diff`, `breaking change`, `public api review`
+
+### dependency_security
+
+Tools: `zig_dependency_update_plan`, `zig_dependency_fetch_check`, `zig_dependency_lock_audit`, `zig_dependency_impact`, `zig_sbom`, `zig_zat_scan`, `zig_osv_scan`, `zig_dependency_security_report`, `zig_dependency_provenance`, `zig_dependency_license_summary`, `zig_github_dependency_submit_plan`
+
+Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclonedx`, `security scan`, `osv`, `zat`, `license`, `dependency submission`, `provenance`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -137,6 +155,11 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - select focused tests: prefer `zig_test_select`
 - detect public API changes: prefer `zig_public_api_diff`
 - inspect build dependencies: prefer `zig_dependency_inspect`
+- ingest CI failure evidence: prefer `zig_ci_ingest, zig_ci_repro_plan, zig_ci_failure_map`
+- plan release readiness: prefer `zig_release_plan, zig_semver_suggest, zig_release_notes_draft, zig_release_evidence_pack`
+- manage public API lifecycle evidence: prefer `zig_api_baseline_init, zig_api_check, zig_api_diff_baseline, zig_api_docs_diff`
+- verify docs examples and snippets: prefer `zig_docs_query, zig_project_docs_query, zig_doc_example_check, zig_snippet_check, zig_readme_command_check`
+- audit dependency and security evidence: prefer `zig_dependency_update_plan, zig_dependency_fetch_check, zig_dependency_lock_audit, zig_sbom, zig_osv_scan, zig_zat_scan, zig_dependency_security_report, zig_dependency_provenance`
 - find symbol information: prefer `zig_hover, zig_definition, zig_references, zig_document_symbols`
 - search Zig docs: prefer `zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json`
 - query parser-backed Zig symbols: prefer `zig_semantic_query, zig_semantic_decl, zig_semantic_refs, zig_semantic_callers`
@@ -155,9 +178,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 
 - `zig_allocations`: required `file: string`
 - `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
+- `zig_api_baseline_init`: optional `file: string`, `content: string`, `output: string`, `apply: boolean`, `limit: integer`
+- `zig_api_check`: optional `file: string`, `content: string`, `baseline: string`, `baseline_path: string`, `limit: integer`
+- `zig_api_diff_baseline`: optional `file: string`, `content: string`, `baseline: string`, `baseline_path: string`, `limit: integer`
+- `zig_api_docs_diff`: optional `file: string`, `content: string`, `docs_path: string`, `docs_content: string`, `limit: integer`
 - `zig_ast_decl_summary`: required `file: string`
 - `zig_ast_imports`: required `file: string`
 - `zig_ast_tests`: required `file: string`
+- `zig_autodoc_ingest`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_build`: optional `args: string`, `timeout_ms: integer`
 - `zig_build_events`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_builtin_doc`: required `query: string`; optional `limit: integer`
@@ -165,6 +193,9 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_changed_files_plan`: optional `timeout_ms: integer`
 - `zig_check`: required `file: string`; optional `timeout_ms: integer`
 - `zig_ci_annotations`: required `file: string`; optional `timeout_ms: integer`
+- `zig_ci_failure_map`: optional `path: string`, `content: string`, `format: string`, `limit: integer`
+- `zig_ci_ingest`: optional `path: string`, `content: string`, `format: string`, `limit: integer`
+- `zig_ci_repro_plan`: optional `path: string`, `content: string`, `format: string`, `changed_files: string`, `limit: integer`
 - `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`, `apply: boolean`
 - `zig_code_action_batch`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_indices: string`; optional `content: string`, `apply: boolean`
 - `zig_code_actions`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`; optional `content: string`
@@ -176,8 +207,18 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_decl_summary`: required `file: string`
 - `zig_decl_summary_json`: required `file: string`
 - `zig_definition`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_dependency_fetch_check`: optional `manifest: string`
+- `zig_dependency_impact`: optional `dependency: string`, `before: string`, `after: string`, `changed_files: string`, `limit: integer`
+- `zig_dependency_license_summary`: optional `manifest: string`, `license_text: string`
+- `zig_dependency_lock_audit`: optional `manifest: string`, `lockfile: string`
+- `zig_dependency_provenance`: optional `manifest: string`
+- `zig_dependency_security_report`: optional `manifest: string`, `sbom: string`, `zat: string`, `osv: string`
+- `zig_dependency_update_plan`: optional `dependency: string`, `target_version: string`, `manifest: string`
 - `zig_diagnostics`: required `file: string`; optional `content: string`, `wait_ms: integer`
 - `zig_diagnostics_all`: required `file: string`; optional `content: string`, `wait_ms: integer`, `timeout_ms: integer`
+- `zig_doc_example_check`: optional `path: string`, `content: string`, `limit: integer`
+- `zig_docs_index_build`: optional `scope: string`, `limit: integer`
+- `zig_docs_query`: required `query: string`; optional `scope: string`, `limit: integer`
 - `zig_document_change`: required `file: string`, `content: string`
 - `zig_document_close`: required `file: string`
 - `zig_document_open`: required `file: string`, `content: string`
@@ -193,6 +234,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
 - `zig_generated_file_trace`: required `path: string`
+- `zig_github_dependency_submit_plan`: optional `manifest: string`, `job: string`, `ref: string`, `sha: string`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_impact_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
 - `zig_import_graph`: optional `limit: integer`
@@ -201,6 +243,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_junit`: optional `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_lang_ref_search`: required `query: string`; optional `limit: integer`
 - `zig_lang_ref_search_json`: required `query: string`; optional `limit: integer`
+- `zig_langref_item`: required `query: string`; optional `limit: integer`
 - `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
 - `zig_lint_baseline`: required `findings: string`; optional `baseline: string`, `output: string`, `apply: boolean`
 - `zig_lint_compare`: optional `zlint_findings: string`, `zwanzig_findings: string`
@@ -213,14 +256,21 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
 - `zig_move_decl`: required `source_file: string`, `target_file: string`, `name: string`; optional `apply: boolean`
 - `zig_organize_imports`: required `file: string`; optional `apply: boolean`
+- `zig_osv_scan`: optional `path: string`, `content: string`
 - `zig_package_cache_doctor`: optional `timeout_ms: integer`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
 - `zig_profile_plan`: optional `binary: string`, `platform: string`, `output_prefix: string`
 - `zig_profile_run`: required `command: string`; optional `timeout_ms: integer`
+- `zig_project_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`
 - `zig_public_api`: required `file: string`
 - `zig_public_api_diff`: optional `file: string`, `before: string`, `after: string`, `baseline_ref: string`
+- `zig_readme_command_check`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_references`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`, `include_declaration: boolean`
+- `zig_release_evidence_pack`: optional `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `artifacts: string`
+- `zig_release_notes_draft`: optional `changes: string`, `api_diff: string`, `validation: string`, `ci: string`, `dependencies: string`, `security: string`, `version: string`
+- `zig_release_plan`: optional `goal: string`, `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `changelog: string`, `changed_files: string`
 - `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`, `apply: boolean`
+- `zig_sbom`: optional `manifest: string`, `output: string`, `apply: boolean`
 - `zig_scip_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`
 - `zig_semantic_decl`: required `symbol: string`; optional `limit: integer`, `refresh: boolean`
@@ -228,12 +278,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_semantic_index_refresh`: optional `limit: integer`
 - `zig_semantic_query`: required `query: string`; optional `kind: string`, `limit: integer`, `refresh: boolean`
 - `zig_semantic_refs`: required `symbol: string`; optional `limit: integer`
+- `zig_semver_suggest`: optional `api_diff: string`, `changelog: string`, `current_version: string`, `release_notes: string`
 - `zig_signature_help`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_snippet_check`: required `content: string`
 - `zig_static_fusion`: required `query: string`; optional `zlint_findings: string`, `zwanzig_findings: string`, `limit: integer`
 - `zig_std_item`: required `name: string`; optional `limit: integer`
 - `zig_std_item_json`: required `name: string`; optional `limit: integer`
 - `zig_std_search`: required `query: string`; optional `limit: integer`
 - `zig_std_search_json`: required `query: string`; optional `limit: integer`
+- `zig_std_signature`: required `name: string`; optional `limit: integer`
 - `zig_target_matrix_plan`: optional `targets: string`, `steps: string`
 - `zig_test`: optional `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_discover`: optional `limit: integer`
@@ -252,6 +305,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_update_imports`: required `old_import: string`, `new_import: string`; optional `file: string`, `files: string`, `apply: boolean`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
 - `zig_workspace_symbols`: required `query: string`; optional `limit: integer`
+- `zig_zat_scan`: optional `path: string`, `content: string`
 - `zig_zlint`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
 - `zig_zlint_fix`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `dangerous: boolean`, `apply: boolean`, `timeout_ms: integer`
 - `zig_zlint_rules`: optional `timeout_ms: integer`
@@ -335,9 +389,14 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 
 - `zig_allocations`: `pure_analysis` read-only analysis
 - `zig_analysis_graphs`: `workspace_artifact` explicit workspace artifact
+- `zig_api_baseline_init`: `workspace_artifact` explicit workspace artifact
+- `zig_api_check`: `pure_analysis` read-only analysis
+- `zig_api_diff_baseline`: `pure_analysis` read-only analysis
+- `zig_api_docs_diff`: `pure_analysis` read-only analysis
 - `zig_ast_decl_summary`: `pure_analysis` read-only analysis
 - `zig_ast_imports`: `pure_analysis` read-only analysis
 - `zig_ast_tests`: `pure_analysis` read-only analysis
+- `zig_autodoc_ingest`: `pure_analysis` read-only analysis
 - `zig_build`: `exact_command` exact argv
 - `zig_build_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_build_graph`: `pure_analysis` read-only analysis
@@ -350,6 +409,9 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_changed_files_plan`: `dynamic_command` runtime-dependent backend plan
 - `zig_check`: `exact_command` exact argv
 - `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
+- `zig_ci_failure_map`: `pure_analysis` read-only analysis
+- `zig_ci_ingest`: `pure_analysis` read-only analysis
+- `zig_ci_repro_plan`: `pure_analysis` read-only analysis
 - `zig_code_action_apply`: `apply_gated_mutation` preview/apply mutation
 - `zig_code_action_batch`: `apply_gated_mutation` preview/apply mutation
 - `zig_code_actions`: `zls_request` `textDocument/codeAction`
@@ -361,10 +423,20 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_decl_summary`: `pure_analysis` read-only analysis
 - `zig_decl_summary_json`: `pure_analysis` read-only analysis
 - `zig_definition`: `zls_request` `textDocument/definition`
+- `zig_dependency_fetch_check`: `pure_analysis` read-only analysis
+- `zig_dependency_impact`: `pure_analysis` read-only analysis
 - `zig_dependency_inspect`: `pure_analysis` read-only analysis
+- `zig_dependency_license_summary`: `pure_analysis` read-only analysis
+- `zig_dependency_lock_audit`: `pure_analysis` read-only analysis
+- `zig_dependency_provenance`: `pure_analysis` read-only analysis
+- `zig_dependency_security_report`: `pure_analysis` read-only analysis
+- `zig_dependency_update_plan`: `pure_analysis` read-only analysis
 - `zig_diagnostics`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
 - `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic plus ast-check fallback`
 - `zig_diagnostics_workspace`: `pure_analysis` read-only analysis
+- `zig_doc_example_check`: `pure_analysis` read-only analysis
+- `zig_docs_index_build`: `pure_analysis` read-only analysis
+- `zig_docs_query`: `pure_analysis` read-only analysis
 - `zig_document_change`: `zls_request` `textDocument/didChange`
 - `zig_document_close`: `zls_request` `textDocument/didClose`
 - `zig_document_open`: `zls_request` `textDocument/didOpen`
@@ -381,6 +453,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_format`: `apply_gated_mutation` preview/apply mutation
 - `zig_format_check`: `exact_command` exact argv
 - `zig_generated_file_trace`: `pure_analysis` read-only analysis
+- `zig_github_dependency_submit_plan`: `pure_analysis` read-only analysis
 - `zig_hover`: `zls_request` `textDocument/hover`
 - `zig_impact_semantic`: `pure_analysis` read-only analysis
 - `zig_import_graph`: `pure_analysis` read-only analysis
@@ -389,6 +462,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_junit`: `dynamic_command` runtime-dependent backend plan
 - `zig_lang_ref_search`: `pure_analysis` read-only analysis
 - `zig_lang_ref_search_json`: `pure_analysis` read-only analysis
+- `zig_langref_item`: `pure_analysis` read-only analysis
 - `zig_lint`: `dynamic_command` runtime-dependent backend plan
 - `zig_lint_baseline`: `workspace_artifact` explicit workspace artifact
 - `zig_lint_compare`: `pure_analysis` read-only analysis
@@ -402,14 +476,21 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
 - `zig_move_decl`: `apply_gated_mutation` preview/apply mutation
 - `zig_organize_imports`: `apply_gated_mutation` preview/apply mutation
+- `zig_osv_scan`: `pure_analysis` read-only analysis
 - `zig_package_cache_doctor`: `dynamic_command` runtime-dependent backend plan
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
 - `zig_profile_plan`: `pure_analysis` read-only analysis
 - `zig_profile_run`: `dynamic_command` runtime-dependent backend plan
+- `zig_project_docs_query`: `pure_analysis` read-only analysis
 - `zig_public_api`: `pure_analysis` read-only analysis
 - `zig_public_api_diff`: `dynamic_command` runtime-dependent backend plan
+- `zig_readme_command_check`: `pure_analysis` read-only analysis
 - `zig_references`: `zls_request` `textDocument/references`
+- `zig_release_evidence_pack`: `pure_analysis` read-only analysis
+- `zig_release_notes_draft`: `pure_analysis` read-only analysis
+- `zig_release_plan`: `pure_analysis` read-only analysis
 - `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_sbom`: `workspace_artifact` explicit workspace artifact
 - `zig_scip_export`: `workspace_artifact` explicit workspace artifact
 - `zig_semantic_callers`: `pure_analysis` read-only analysis
 - `zig_semantic_decl`: `pure_analysis` read-only analysis
@@ -418,12 +499,15 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_semantic_index_status`: `pure_analysis` read-only analysis
 - `zig_semantic_query`: `pure_analysis` read-only analysis
 - `zig_semantic_refs`: `pure_analysis` read-only analysis
+- `zig_semver_suggest`: `pure_analysis` read-only analysis
 - `zig_signature_help`: `zls_request` `textDocument/signatureHelp`
+- `zig_snippet_check`: `pure_analysis` read-only analysis
 - `zig_static_fusion`: `pure_analysis` read-only analysis
 - `zig_std_item`: `pure_analysis` read-only analysis
 - `zig_std_item_json`: `pure_analysis` read-only analysis
 - `zig_std_search`: `pure_analysis` read-only analysis
 - `zig_std_search_json`: `pure_analysis` read-only analysis
+- `zig_std_signature`: `pure_analysis` read-only analysis
 - `zig_target_matrix_plan`: `pure_analysis` read-only analysis
 - `zig_targets`: `exact_command` exact argv
 - `zig_test`: `exact_command` exact argv
@@ -444,6 +528,7 @@ Keywords: `job`, `task`, `run stream`, `events`, `cancellation`, `resource query
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
 - `zig_workspace_symbol_cache`: `pure_analysis` read-only analysis
 - `zig_workspace_symbols`: `zls_request` `workspace/symbol`
+- `zig_zat_scan`: `pure_analysis` read-only analysis
 - `zig_zlint`: `dynamic_command` runtime-dependent backend plan
 - `zig_zlint_fix`: `apply_gated_mutation` preview/apply mutation
 - `zig_zlint_rules`: `dynamic_command` runtime-dependent backend plan

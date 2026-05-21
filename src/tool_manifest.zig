@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const types = @import("tool_manifest/types.zig");
-const definitions_mod = @import("tool_manifest/definitions.zig");
+const aggregate = @import("tool_manifest/aggregate.zig");
 const groups_mod = @import("tool_manifest/groups.zig");
 
 pub const ToolHandler = types.ToolHandler;
@@ -17,65 +17,14 @@ pub const PlanPolicy = types.PlanPolicy;
 pub const ToolDefinition = types.ToolDefinition;
 pub const GroupSpec = types.GroupSpec;
 
-pub const ToolMeta = struct {
-    id: ToolId,
-    name: []const u8,
-    description: []const u8,
-    input_schema: types.tooling.SchemaSpec,
-    read_only: bool,
-};
-
-pub const ToolEntry = struct {
-    id: ToolId,
-    name: []const u8,
-    meta: ToolMeta,
-    group: ToolGroup,
-    risk: ToolRisk,
-    handler: HandlerRef,
-    plan: PlanPolicy,
-    static_analysis_tier: ?StaticAnalysisTier,
-};
-
-pub const definitions = definitions_mod.definitions;
+pub const ToolId = aggregate.ToolId;
+pub const ToolMeta = aggregate.ToolMeta;
+pub const ToolEntry = aggregate.ToolEntry;
+pub const definitions = aggregate.definitions;
 pub const group_specs = groups_mod.group_specs;
 
-pub const ToolId = std.meta.DeclEnum(definitions);
-const definition_decls = std.meta.declarations(definitions);
-
-pub const entries = buildEntries();
-pub const specs = buildSpecs();
-
-fn buildEntries() [definition_decls.len]ToolEntry {
-    var result: [definition_decls.len]ToolEntry = undefined;
-    inline for (definition_decls, 0..) |decl, index| {
-        const id = @field(ToolId, decl.name);
-        const definition = @field(definitions, decl.name);
-        const meta = ToolMeta{
-            .id = id,
-            .name = decl.name,
-            .description = definition.description,
-            .input_schema = definition.input_schema,
-            .read_only = definition.read_only,
-        };
-        result[index] = .{
-            .id = id,
-            .name = decl.name,
-            .meta = meta,
-            .group = definition.group,
-            .risk = definition.risk,
-            .handler = definition.handler,
-            .plan = definition.plan,
-            .static_analysis_tier = definition.static_analysis_tier,
-        };
-    }
-    return result;
-}
-
-fn buildSpecs() [definition_decls.len]ToolMeta {
-    var result: [definition_decls.len]ToolMeta = undefined;
-    inline for (entries, 0..) |entry, index| result[index] = entry.meta;
-    return result;
-}
+pub const entries = aggregate.entries;
+pub const specs = aggregate.specs;
 
 pub fn entryFor(id: ToolId) ToolEntry {
     return entries[@intFromEnum(id)];

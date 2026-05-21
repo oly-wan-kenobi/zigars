@@ -281,6 +281,63 @@ only with `apply=true` and returns limitations plus validation guidance.
 `zig_code_action_batch` reports ZLS unavailability or unsupported transaction
 state rather than guessing when safe batch code actions are not available.
 
+## CI, Release, And API Evidence
+
+CI evidence tools consume artifacts that already exist and keep local execution
+separate from interpretation. `zig_ci_ingest` parses inline or workspace-local
+logs, GitHub-style annotations, JUnit, and SARIF into failure records with
+parser confidence, raw-reference hashes, limitations, and next actions.
+`zig_ci_repro_plan` turns those records and changed-file hints into candidate
+local commands without running them, while `zig_ci_failure_map` groups parsed
+failures by file and kind for triage. Raw CI artifacts remain authoritative.
+
+Release planning tools are read-only evidence organizers. `zig_release_plan`
+lists observed and missing validation, CI, API, docs, dependency, security, and
+changelog evidence, then names the release gate commands that still need to
+pass. `zig_semver_suggest` classifies supplied API/release text into a
+conservative bump suggestion, `zig_release_notes_draft` produces editable notes
+from supplied evidence, and `zig_release_evidence_pack` packages evidence
+pointers and verification commands for review. None of these tools tag,
+publish, or mark skipped checks as passed.
+
+API lifecycle tools use public-declaration snapshots as review evidence.
+`zig_api_baseline_init` previews or writes a `.zigar-cache` baseline artifact
+only with `apply=true` and reports artifact/preimage identities. `zig_api_check`
+and `zig_api_diff_baseline` compare a supplied or workspace baseline with
+current source and report added, removed, changed, and likely breaking entries.
+`zig_api_docs_diff` checks public declaration names against supplied docs text
+or a docs file. These are source-text and snapshot checks, not ABI or behavior
+proofs.
+
+## Docs, Examples, And Dependency Security
+
+Docs-oracle tools expose local documentation evidence without network access.
+`zig_docs_index_build` and `zig_docs_query` scan README, docs files, and source
+comments with source-family labels and skipped-file counts. `zig_std_signature`
+and `zig_langref_item` wrap local Zig stdlib and language-reference lookup with
+the same evidence/limitations envelope. `zig_autodoc_ingest` normalizes supplied
+autodoc JSON or text into response-local entries, and
+`zig_project_docs_query` can query that inline autodoc together with workspace
+docs.
+
+Example-validation tools parse text but do not execute it.
+`zig_doc_example_check` extracts fenced Zig snippets from supplied docs content
+or a docs file and parses them with `std.zig.Ast`; `zig_snippet_check` checks one
+inline snippet; `zig_readme_command_check` extracts Zig shell commands from
+README-style text and marks them unsafe for automatic execution.
+
+Dependency and security tools inspect `build.zig.zon` and supplied scanner
+evidence. `zig_dependency_update_plan`, `zig_dependency_fetch_check`,
+`zig_dependency_lock_audit`, and `zig_dependency_impact` plan updates, fetch
+verification, lock/hash review, and likely source impact without fetching
+packages. `zig_sbom` previews or writes a CycloneDX-style SBOM artifact only
+with `apply=true`. `zig_zat_scan` and `zig_osv_scan` ingest externally produced
+reports when supplied, otherwise they return explicit unavailable results
+instead of contacting services. `zig_dependency_security_report`,
+`zig_dependency_provenance`, `zig_dependency_license_summary`, and
+`zig_github_dependency_submit_plan` summarize observed security, origin,
+license, and dependency-submission evidence for human or CI review.
+
 ## Release Drift Tools
 
 `zigar_docs_drift_check`, `zigar_release_claim_check`, and
@@ -391,6 +448,11 @@ High-signal discovery keywords include:
 - `build options`, `target matrix`, `test failure triage`, `symbol cache`
 - `semantic index`, `semantic query`, `references`, `callers`, `code index`,
   `scip`, `semantic impact`, `semantic test select`
+- `ci ingest`, `ci repro`, `failure map`, `release plan`, `semver`,
+  `release notes`, `api baseline`, `api docs diff`
+- `docs query`, `autodoc`, `doc examples`, `snippet check`, `readme commands`
+- `dependency update`, `fetch check`, `lock audit`, `sbom`, `osv`, `zat`,
+  `security report`, `license`, `dependency provenance`
 - `patch session`, `transactional edit`, `rollback`, `preimage`,
   `generated route`, `vendor`, `refactor`, `move declaration`,
   `extract declaration`, `update imports`, `organize imports`
@@ -416,11 +478,12 @@ Source-mutating tools are preview-first and require `apply=true` to write:
 - `zigar_project_profile`
 
 Generated output tools such as `zig_code_index_export`, `zig_scip_export`,
-`zig_lint_baseline`, `zigar_validation_run`, `zigar_decision_record`,
-`zig_flamegraph`, and `zig_analysis_graphs` must write to explicit
-workspace-local output paths and preserve preview-first apply gates where
-advertised. `zig_profile_plan` is read-only and returns structured guidance for
-external profilers; zigar does not define capture semantics.
+`zig_lint_baseline`, `zig_api_baseline_init`, `zig_sbom`,
+`zigar_validation_run`, `zigar_decision_record`, `zig_flamegraph`, and
+`zig_analysis_graphs` must write to explicit workspace-local output paths and
+preserve preview-first apply gates where advertised. `zig_profile_plan` is
+read-only and returns structured guidance for external profilers; zigar does not
+define capture semantics.
 `zig_flamegraph` requires an explicit zflame format and returns
 argv/backend/probe/compatibility metadata with the SVG path.
 `zig_flamegraph_diff` also reports the diff-folded intermediate, defaulting to

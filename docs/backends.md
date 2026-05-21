@@ -144,7 +144,7 @@ manager shim, or a project-local build artifact:
 
 ```sh
 #!/bin/sh
-exec /path/to/project/.tools/zwanzig "$@"
+exec /path/to/repo/.tools/zwanzig "$@"
 ```
 
 Then pass that wrapper with `--zwanzig-path`.

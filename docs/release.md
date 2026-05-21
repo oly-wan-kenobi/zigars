@@ -33,6 +33,13 @@ generated-index coverage, `zigar_release_claim_check` scans public docs for
 conservative overclaim tokens, and `zigar_tool_index_check` compares registered
 tools to `docs/tool-index.generated.md`. These tools are read-only convenience
 checks; the release authority remains the build targets above.
+Release-intelligence tools can organize supporting evidence before the gate:
+`zig_release_plan` lists observed and missing release evidence,
+`zig_semver_suggest` suggests a conservative bump from supplied API/release
+text, `zig_release_notes_draft` drafts editable notes, and
+`zig_release_evidence_pack` packages evidence pointers and verification
+commands. They do not execute release gates, tag, publish, or certify skipped
+checks.
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow
@@ -148,6 +155,12 @@ Release assets are named:
   intentionally when bumping the dependency. Do not add local patches under
   `third_party` or route `mcp` through a wrapper module; if zigar needs
   server-side behavior, keep it in the first-party adapter under `src/`.
+- Dependency review can use `zig_dependency_update_plan`,
+  `zig_dependency_fetch_check`, `zig_dependency_lock_audit`, `zig_sbom`,
+  `zig_dependency_security_report`, `zig_dependency_provenance`,
+  `zig_dependency_license_summary`, and
+  `zig_github_dependency_submit_plan` as local evidence helpers. Scanner tools
+  ingest supplied ZAT or OSV reports but do not contact external services.
 - Release targets are defined once in `tools/release_targets.zig`; update that
   table when adding or removing a published archive target.
 - `zig-pkg/`, `.zig-cache/`, `.zigar-cache/`, and `zig-out/` are local artifacts

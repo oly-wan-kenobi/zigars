@@ -10,6 +10,21 @@ compare zigar output against the target runner's native upload behavior because
 annotation rendering, test-report retention, and SARIF/JUnit ingestion rules are
 owned by the CI platform.
 
+## Imported Evidence
+
+`zig_ci_ingest` is the read-only path for existing CI artifacts. Pass inline
+`content` or a workspace-local `path`; the tool detects logs, annotations,
+JUnit, and SARIF when `format=auto`, then returns `failure_count`, `failures`,
+`parser_confidence`, `raw_reference`, limitations, and next actions. It does not
+run the failing job or fetch artifacts from CI.
+
+`zig_ci_repro_plan` consumes the same evidence shape and proposes local commands
+such as focused `zig ast-check`, `zig test`, and the project fallback. It records
+`skipped_validation` so a command plan cannot be mistaken for a passed repro.
+`zig_ci_failure_map` groups parsed failures by file and failure kind. These
+tools are useful before a full validation run, but raw CI logs and local release
+gates remain the sources of truth.
+
 ## Annotations
 
 `zig_ci_annotations` runs `zig ast-check <file>` and returns

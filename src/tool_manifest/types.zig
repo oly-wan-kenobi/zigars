@@ -21,8 +21,10 @@ pub const ToolGroup = enum {
     release_drift,
     environment_profiles,
     runtime_ux,
+    release_intelligence,
+    api_lifecycle,
+    dependency_security,
 };
-
 pub const StaticAnalysisTier = enum {
     advisory_orientation,
     parser_backed,
@@ -31,7 +33,6 @@ pub const StaticAnalysisTier = enum {
     zlint_backed,
     zwanzig_backed,
 };
-
 pub const HandlerModule = enum {
     discovery,
     agent,
@@ -52,12 +53,12 @@ pub const HandlerModule = enum {
     runtime_ux,
     validation_workflows,
     transactional_editing,
+    phase6,
 };
 pub const HandlerRef = struct {
     module: HandlerModule,
     name: []const u8,
 };
-
 pub const ToolRisk = struct {
     writes_source: bool = false,
     writes_artifacts: bool = false,
@@ -68,7 +69,6 @@ pub const ToolRisk = struct {
     executes_user_command: bool = false,
     executes_backend: bool = false,
 };
-
 pub const FileCommandPlan = struct {
     file_args: []const []const u8,
     fallback_args: []const []const u8,
