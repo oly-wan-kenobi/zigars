@@ -223,9 +223,24 @@ pub const line_budgets = [_]LineBudget{
         .reason = "runtime diagnostic handlers should stay bounded and split before backend lanes become hard to audit",
     },
     .{
+        .path = "src/tools/adoption.zig",
+        .max_lines = 860,
+        .reason = "public adoption handlers should stay evidence-focused and split if report/config shaping grows further",
+    },
+    .{
+        .path = "src/tools/adoption_tests.zig",
+        .max_lines = 260,
+        .reason = "adoption handler fixtures cover public contract regressions, provenance, conformance claims, and coverage floor branches",
+    },
+    .{
         .path = "src/tool_manifest/definitions/diagnostics.zig",
         .max_lines = 170,
         .reason = "runtime diagnostic tool definitions should remain compact and additive",
+    },
+    .{
+        .path = "src/tool_manifest/definitions/adoption.zig",
+        .max_lines = 100,
+        .reason = "adoption tool definitions should remain compact and centralized",
     },
     .{
         .path = "src/docs.zig",
@@ -428,9 +443,19 @@ pub const line_budgets = [_]LineBudget{
         .reason = "performance HTTP smoke coverage should stay a focused fixture module",
     },
     .{
+        .path = "tools/http_adoption_smoke.zig",
+        .max_lines = 80,
+        .reason = "adoption HTTP smoke coverage should stay a focused fixture module",
+    },
+    .{
         .path = "tools/stdio_fixtures.zig",
         .max_lines = 510,
         .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
+    },
+    .{
+        .path = "tools/stdio_adoption_fixtures.zig",
+        .max_lines = 60,
+        .reason = "adoption stdio fixture coverage should stay compact",
     },
     .{
         .path = "tools/smoke_support.zig",
@@ -444,8 +469,8 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/release_docs.zig",
-        .max_lines = 240,
-        .reason = "release documentation checks should stay separate from the release-check dispatcher",
+        .max_lines = 260,
+        .reason = "release documentation checks include public adoption contract needles and should stay separate from the release-check dispatcher",
     },
     .{
         .path = "tools/backend_docs.zig",
@@ -618,6 +643,7 @@ pub const tool_error_contract_paths = [_][]const u8{
     "src/tools/discovery.zig",
     "src/tools/docs.zig",
     "src/tools/diagnostics.zig",
+    "src/tools/adoption.zig",
     "src/tools/edit_zls.zig",
     "src/tools/edit_zls_diagnostics.zig",
     "src/tools/observability.zig",

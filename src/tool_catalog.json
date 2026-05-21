@@ -59,6 +59,7 @@
     {"intent": "explain zigar safety posture", "prefer": "zigar_trust_report, zigar_risk_audit", "keywords": ["trust", "safety", "risk", "command provenance", "clean tree"]},
     {"intent": "choose compact or deep output", "prefer": "zigar_result_shape, zigar_output_budget_plan", "keywords": ["result shape", "compact", "deep", "omitted sections", "token budget"]},
     {"intent": "check docs and release drift", "prefer": "zigar_docs_drift_check, zigar_tool_index_check", "keywords": ["docs drift", "release claims", "tool index", "release-check"]},
+    {"intent": "package zigar adoption evidence", "prefer": "zigar_adoption_pack, zigar_client_config_generate, zigar_smoke_plan, zigar_conformance_report", "keywords": ["adoption", "client config", "mcp config", "smoke plan", "conformance report", "public claims"]},
     {"intent": "install optional backends", "prefer": "zigar_backend_catalog", "keywords": ["backend setup", "zls", "zlint", "zwanzig", "zflame", "diff-folded", "samply", "tracy"]},
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],

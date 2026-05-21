@@ -176,6 +176,26 @@ pub fn checkFoundationContractDocs(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+pub fn checkPublicAdoptionDocs(allocator: Allocator, io: Io) !bool {
+    var ok = true;
+    ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
+        "Public Adoption Tools",
+        "zigar_adoption_pack",
+        "zigar_client_config_generate",
+        "zigar_smoke_plan",
+        "zigar_conformance_report",
+        "missing_evidence",
+        "failed rows do not",
+    })) and ok;
+    ok = (try checkDocNeedles(allocator, io, "docs/agent-clients.md", &.{
+        "zigar_client_config_generate",
+        "zigar_adoption_pack",
+        "zigar_smoke_plan",
+        "zigar_conformance_report",
+    })) and ok;
+    return ok;
+}
+
 fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
     const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "docs check could not read {s}: {s}\n", .{ path, @errorName(err) });

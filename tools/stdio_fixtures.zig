@@ -182,6 +182,10 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_fuzz_plan");
         try self.expectTool(tools, "zig_binary_size");
         try self.expectTool(tools, "zig_flash_plan");
+        try self.expectTool(tools, "zigar_adoption_pack");
+        try self.expectTool(tools, "zigar_client_config_generate");
+        try self.expectTool(tools, "zigar_smoke_plan");
+        try self.expectTool(tools, "zigar_conformance_report");
 
         const resources = try self.request("resources/list", null);
         defer self.allocator.free(resources);
@@ -210,6 +214,7 @@ const StdioClient = struct {
 
         try stdio_environment_fixtures.run(self);
         try stdio_runtime_ux_fixtures.run(self);
+        try @import("stdio_adoption_fixtures.zig").run(self);
 
         const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
         defer self.allocator.free(profile_plan);

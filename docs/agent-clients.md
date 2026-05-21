@@ -26,6 +26,12 @@ Use a pinned `--workspace` for one-project configs. For current-workspace
 configs, omit `--workspace` only when the client starts the MCP server with the
 active project as its process working directory.
 
+`zigar_client_config_generate` can preview client config content before you
+write it. Use `apply=false` to inspect the generated MCP JSON, Codex TOML,
+Claude JSON, Gemini JSON, or Markdown notes; use `apply=true` only after the
+target path is correct for the active workspace. Applied configs are registered
+with artifact provenance, preimage identity, and a generated content hash.
+
 ## Shared Agent Instructions
 
 Use this instruction block for agents that do not discover MCP tools reliably:
@@ -180,6 +186,12 @@ one read-only Zig command, one docs/static-analysis call, and one preview-first
 source-write tool without `apply=true`. The transcript should show the command
 path, workspace path, and whether the client preserved structured MCP result
 fields.
+
+Use `zigar_adoption_pack` for the initial evidence bundle, then
+`zigar_smoke_plan` to list client and backend smoke scenarios. If public
+backend support is part of the recommendation, feed observed backend
+conformance JSON into `zigar_conformance_report`; do not treat configured paths
+or planning output as proof that an optional backend works.
 
 Client launch environments differ. A profile is mature only when path handling,
 workspace selection, stdio framing, refresh after tool changes, and structured

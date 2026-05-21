@@ -4,4 +4,5 @@ pub const definition_groups = .{
     @import("definitions/phase6.zig"),
     @import("definitions/performance.zig"),
     @import("definitions/diagnostics.zig"),
+    @import("definitions/adoption.zig"),
 };

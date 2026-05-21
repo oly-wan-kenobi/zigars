@@ -1,5 +1,6 @@
 const tool_manifest = @import("zigar").tool_manifest;
 
+const adoption = @import("tools/adoption.zig");
 const agent = @import("tools/agent.zig");
 const artifacts = @import("tools/artifacts.zig");
 const ci = @import("tools/ci.zig");
@@ -53,6 +54,7 @@ fn handler(comptime ref: tool_manifest.HandlerRef) ToolHandler {
         .transactional_editing => @field(transactional_editing, ref.name),
         .phase6 => @field(phase6, ref.name),
         .performance => @field(performance, ref.name),
+        .adoption => @field(adoption, ref.name),
     };
 }
 

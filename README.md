@@ -184,6 +184,12 @@ starts servers from the active project directory.
 For Claude, Gemini CLI, Hermes, and generic client guidance, see
 [docs/agent-clients.md](docs/agent-clients.md).
 
+Use `zigar_client_config_generate` when you want zigar to preview a client
+configuration artifact with preimage, hash, and provenance metadata. Use
+`zigar_adoption_pack`, `zigar_smoke_plan`, and `zigar_conformance_report` to
+package observed setup evidence, client smoke scenarios, and conservative
+public support claims before recommending a client/backend profile.
+
 ### Codex
 
 Add a server entry to `~/.codex/config.toml`:
@@ -349,6 +355,11 @@ optional-backend support is claimed only from a release evidence artifact.
   `zigar_release_claim_check`, and `zigar_tool_index_check` provide fast
   public-doc and generated-index drift checks before running the full release
   gate.
+- Public adoption: `zigar_adoption_pack`, `zigar_client_config_generate`,
+  `zigar_smoke_plan`, and `zigar_conformance_report` package client setup
+  evidence, preview/apply-gated config artifacts, transport smoke scenarios,
+  and conservative conformance claims without installing tools or claiming
+  unobserved optional-backend support.
 
 Standard MCP `tools/list` publishes each registered argument schema with
 properties, required fields, defaults, enums, and path hints. `zigar_schema`

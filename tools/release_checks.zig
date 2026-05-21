@@ -78,6 +78,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try release_docs.checkMaturityDocs(allocator, io)) and ok;
     ok = (try release_docs.checkTrustDocs(allocator, io)) and ok;
     ok = (try release_docs.checkFoundationContractDocs(allocator, io)) and ok;
+    ok = (try release_docs.checkPublicAdoptionDocs(allocator, io)) and ok;
     ok = (try checkSecurityPolicy(allocator, io)) and ok;
     ok = (try mcp_contracts.checkNoPatchContract(allocator, io)) and ok;
     ok = (try mcp_contracts.checkAdvertisedCapabilityContract(allocator, io)) and ok;

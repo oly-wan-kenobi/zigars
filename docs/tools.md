@@ -149,6 +149,37 @@ returns conformance scenarios and evidence paths, and
 registered artifact when applied. The MCP conformance tool does not replace the
 script-backed release evidence path.
 
+## Public Adoption Tools
+
+Public adoption tools package existing evidence for MCP clients without
+installing dependencies or broadening setup claims. `zigar_adoption_pack` is
+read-only: it combines client identity, transport, workspace roots, backend
+catalog state, generated-config basis, smoke-plan basis, conformance-report
+basis, limitations, skipped validation, and verification commands. Optional
+backends remain `not_probed` or `missing_configured_path` until a separate
+backend verification or conformance run observes them.
+
+`zigar_client_config_generate` previews deterministic client configuration for
+generic MCP JSON, Codex TOML, Claude JSON, Gemini JSON, or Markdown notes.
+The result includes generated content, target path, preimage identity, artifact
+identity, server argv, provenance, skipped validation, and verification
+commands. It writes only with `apply=true`, resolves the output path under the
+workspace, and registers the generated config in the artifact registry.
+
+`zigar_smoke_plan` returns a client, transport, platform, timeout, and backend
+aware smoke checklist. It does not start a server or run backends; unsupported
+platforms and too-small timeout budgets are structured planning results with a
+resolution. Use the plan to capture startup, `tools/list`, schema, workspace,
+doctor, config preview, smoke-plan, conformance-report, and optional-backend
+verification evidence for the target client.
+
+`zigar_conformance_report` ingests inline or workspace conformance JSON and
+maps it to conservative public claims. Missing evidence returns a structured
+`missing_evidence` report with the verification path. Passing conformance rows
+can allow a backend claim; configured paths, availability, planning output, or
+failed rows do not. Report artifacts are preview-first, workspace-bound, and
+provenance-registered only when `apply=true`.
+
 ## Result Shapes
 
 `zigar_result_shape` describes the public compact, standard, and deep response

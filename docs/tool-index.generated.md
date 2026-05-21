@@ -140,6 +140,12 @@ Tools: `zig_debug_plan`, `zig_lldb_backtrace`, `zig_core_inspect`, `zig_debug_fr
 
 Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro`, `heaptrack`, `valgrind`, `callgrind`, `fuzz`, `afl`, `libfuzzer`, `binary size`, `objdump`, `dwarf`, `symbolize`, `qemu`, `cross target`, `embedded`, `microzig`, `board`, `flash`
 
+### public_rollout
+
+Tools: `zigar_adoption_pack`, `zigar_client_config_generate`, `zigar_smoke_plan`, `zigar_conformance_report`
+
+Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`, `smoke plan`, `conformance report`, `public claims`, `evidence basis`, `rollout`
+
 ## Common Intents
 
 - format a Zig file: prefer `zig_format`
@@ -190,6 +196,7 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - explain zigar safety posture: prefer `zigar_trust_report, zigar_risk_audit`
 - choose compact or deep output: prefer `zigar_result_shape, zigar_output_budget_plan`
 - check docs and release drift: prefer `zigar_docs_drift_check, zigar_tool_index_check`
+- package zigar adoption evidence: prefer `zigar_adoption_pack, zigar_client_config_generate, zigar_smoke_plan, zigar_conformance_report`
 - install optional backends: prefer `zigar_backend_catalog`
 - diagnose zigar setup: prefer `zigar_doctor`
 
@@ -382,6 +389,7 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zig_zlint_rules`: optional `timeout_ms: integer`
 - `zig_zlint_sarif`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
 - `zig_zls_match_check`: optional `probe_backends: boolean`, `timeout_ms: integer`
+- `zigar_adoption_pack`: optional `client: string`, `transport: string`, `backend: string`, `mode: string`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
 - `zigar_agent_guide_v2`: optional `client: string`, `task: string`
 - `zigar_artifact_index`: optional `path: string`, `limit: integer`, `include_hashes: boolean`, `mode: string`
@@ -396,8 +404,10 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zigar_cancel_status`: optional `job_id: string`
 - `zigar_capability_match`: optional `goal: string`, `error: string`, `diff: string`, `limit: integer`
 - `zigar_clean_tree_gate`: optional `timeout_ms: integer`
+- `zigar_client_config_generate`: optional `client: string`, `transport: string`, `kind: string`, `output: string`, `server_path: string`, `apply: boolean`
 - `zigar_client_guide`: optional `client: string`, `task: string`
 - `zigar_command_provenance`: optional `tool: string`
+- `zigar_conformance_report`: optional `input: string`, `content: string`, `backend: string`, `output: string`, `apply: boolean`
 - `zigar_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
 - `zigar_decision_record`: required `title: string`, `decision: string`; optional `rationale: string`, `category: string`, `path: string`, `apply: boolean`
 - `zigar_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
@@ -444,6 +454,7 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zigar_run_stream`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
 - `zigar_session_snapshot`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_setup_elicit`: optional `topic: string`, `mode: string`
+- `zigar_smoke_plan`: optional `client: string`, `transport: string`, `backend: string`, `platform: string`, `timeout_ms: integer`
 - `zigar_tool_index_check`: optional `mode: string`
 - `zigar_tool_sequence_plan`: optional `goal: string`, `error: string`, `diff: string`, `changed_files: string`
 - `zigar_trust_report`: optional `include_clean_tree: boolean`, `timeout_ms: integer`
@@ -657,6 +668,7 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zig_zlint_rules`: `dynamic_command` runtime-dependent backend plan
 - `zig_zlint_sarif`: `dynamic_command` runtime-dependent backend plan
 - `zig_zls_match_check`: `dynamic_command` runtime-dependent backend plan
+- `zigar_adoption_pack`: `pure_analysis` read-only analysis
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
 - `zigar_agent_guide_v2`: `pure_analysis` read-only analysis
 - `zigar_artifact_index`: `pure_analysis` read-only analysis
@@ -673,8 +685,10 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zigar_capabilities`: `pure_analysis` read-only analysis
 - `zigar_capability_match`: `pure_analysis` read-only analysis
 - `zigar_clean_tree_gate`: `dynamic_command` runtime-dependent backend plan
+- `zigar_client_config_generate`: `apply_gated_mutation` preview/apply mutation
 - `zigar_client_guide`: `pure_analysis` read-only analysis
 - `zigar_command_provenance`: `pure_analysis` read-only analysis
+- `zigar_conformance_report`: `apply_gated_mutation` preview/apply mutation
 - `zigar_context_pack`: `pure_analysis` read-only analysis
 - `zigar_decision_record`: `workspace_artifact` explicit workspace artifact
 - `zigar_dev_env_generate`: `apply_gated_mutation` preview/apply mutation
@@ -725,6 +739,7 @@ Keywords: `debug`, `lldb`, `core dump`, `sanitizer`, `panic trace`, `crash repro
 - `zigar_schema`: `pure_analysis` read-only analysis
 - `zigar_session_snapshot`: `pure_analysis` read-only analysis
 - `zigar_setup_elicit`: `pure_analysis` read-only analysis
+- `zigar_smoke_plan`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
 - `zigar_tool_index_check`: `pure_analysis` read-only analysis
 - `zigar_tool_latency`: `pure_analysis` read-only analysis
