@@ -6,11 +6,13 @@ const backend_contracts = zigar.backend_contracts;
 const command = zigar.command;
 const common = @import("common.zig");
 const doctor = zigar.doctor;
+const flamegraph_model = zigar.domain.profiling.flamegraph;
 const profiling_backends = @import("profiling_backends.zig");
+const profiling_flamegraph_adapter = @import("profiling_flamegraph_adapter.zig");
 const profiling_plan = @import("profiling_plan.zig");
 
 const App = common.App;
-const ZflameRenderOptions = profiling_backends.ZflameRenderOptions;
+const ZflameRenderOptions = flamegraph_model.ZflameRenderOptions;
 const structured = common.structured;
 const argString = common.argString;
 const argBool = common.argBool;
@@ -48,47 +50,7 @@ pub fn zigProfileRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 }
 
 pub fn zigFlamegraph(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const format_raw = argString(args, "format") orelse return missingArgumentResult(allocator, "zig_flamegraph", "format", backend_contracts.supportedZflameFormatsText());
-    const format = backend_contracts.parseZflameFormat(format_raw) orelse return invalidZflameFormat(allocator, "zig_flamegraph", format_raw);
-    const input = argString(args, "input") orelse return missingArgumentResult(allocator, "zig_flamegraph", "input", "workspace-relative profiler input path");
-    const output = argString(args, "output") orelse return missingArgumentResult(allocator, "zig_flamegraph", "output", "workspace-relative SVG output path");
-    const options = switch (try zflameOptionsFromArgs(allocator, "zig_flamegraph", args)) {
-        .ok => |value| value,
-        .err => |result| return result,
-    };
-    const input_abs = a.workspace.resolve(input) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", input, err);
-    defer allocator.free(input_abs);
-    if (try ensureInputReadable(a, allocator, "zig_flamegraph", "render_flamegraph", input, input_abs)) |result| return result;
-    const output_abs = a.workspace.resolveOutput(output) catch |err| return workspacePathErrorResult(a, allocator, "zig_flamegraph", output, err);
-    defer allocator.free(output_abs);
-
-    var render = switch (try renderFlamegraphToWorkspace(a, allocator, .{
-        .tool_name = "zig_flamegraph",
-        .operation = "render_flamegraph",
-        .input = input,
-        .input_abs = input_abs,
-        .output = output,
-        .output_abs = output_abs,
-        .format = format,
-        .options = options,
-    })) {
-        .ok => |value| value,
-        .err => |result| return result,
-    };
-    defer render.deinit(allocator);
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const value = flamegraphResultValue(arena.allocator(), a, .{
-        .tool_name = "zig_flamegraph",
-        .operation = "render_flamegraph",
-        .input = input,
-        .input_abs = input_abs,
-        .output = output,
-        .output_abs = output_abs,
-        .format = format,
-        .options = options,
-    }, render) catch return error.OutOfMemory;
-    return structured(allocator, value);
+    return profiling_flamegraph_adapter.zigFlamegraph(a, allocator, args);
 }
 
 pub fn zigFlamegraphDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -243,17 +205,6 @@ fn positiveIntArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?st
     return .{ .err = try invalidArgumentResult(allocator, tool_name, name, "positive integer", "zero or negative", "Use positive pixel values for zflame sizing options.") };
 }
 
-fn invalidZflameFormat(allocator: std.mem.Allocator, tool_name: []const u8, actual: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invalidArgumentResult(
-        allocator,
-        tool_name,
-        "format",
-        backend_contracts.supportedZflameFormatsText(),
-        actual,
-        "Choose an explicit zflame input format from the tools/list schema; zigar does not expose format guessing.",
-    );
-}
-
 const RenderRequest = struct {
     tool_name: []const u8,
     operation: []const u8,
@@ -261,7 +212,7 @@ const RenderRequest = struct {
     input_abs: []const u8,
     output: []const u8,
     output_abs: []const u8,
-    format: backend_contracts.ZflameFormat,
+    format: flamegraph_model.ZflameFormat,
     options: ZflameRenderOptions,
 };
 
@@ -374,7 +325,7 @@ fn renderFlamegraphToWorkspace(a: *App, allocator: std.mem.Allocator, request: R
     } };
 }
 
-fn flamegraphResultValue(allocator: std.mem.Allocator, a: *App, request: RenderRequest, artifact: FlamegraphArtifact) !std.json.Value {
+fn flamegraphResultValue(allocator: std.mem.Allocator, a: *App, request: anytype, artifact: anytype) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = request.tool_name });

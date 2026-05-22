@@ -9,6 +9,7 @@ const lsp_edits = zigar.lsp_edits;
 const common = @import("common.zig");
 const edit_documents = @import("edit_zls_documents.zig");
 const edit_edits = @import("edit_zls_edits.zig");
+const hover_adapter = @import("edit_zls_hover_adapter.zig");
 const static_analysis = @import("static_analysis.zig");
 const zls_document = @import("zls_document.zig");
 
@@ -49,6 +50,7 @@ pub const zigDocumentOpen = edit_documents.zigDocumentOpen;
 pub const zigDocumentClose = edit_documents.zigDocumentClose;
 pub const zigDocumentStatus = edit_documents.zigDocumentStatus;
 pub const reopenSummaryValue = edit_documents.reopenSummaryValue;
+pub const zigHover = hover_adapter.zigHover;
 
 pub fn zigFormat(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_format", "file", "string");
@@ -144,9 +146,6 @@ pub fn zigPatchPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     return structured(allocator, .{ .object = obj });
 }
 
-pub fn zigHover(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return zlsPositionRequest(a, allocator, args, "textDocument/hover");
-}
 pub fn zigDefinition(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zlsPositionRequest(a, allocator, args, "textDocument/definition");
 }

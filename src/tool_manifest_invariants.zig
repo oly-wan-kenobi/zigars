@@ -72,6 +72,30 @@ test "tool group keyword metadata covers each group once" {
     }
 }
 
+test "manifest handler references stay resolvable by adapter compatibility modules" {
+    inline for (tool_manifest.entries) |entry| {
+        try std.testing.expect(entry.handler.name.len > 0);
+        switch (entry.handler.module) {
+            inline else => {},
+        }
+    }
+}
+
+test "each declared handler module owns at least one public tool" {
+    const fields = @typeInfo(tool_manifest.HandlerModule).@"enum".fields;
+    inline for (fields) |field| {
+        const module: tool_manifest.HandlerModule = @enumFromInt(field.value);
+        var found = false;
+        for (tool_manifest.entries) |entry| {
+            if (entry.handler.module == module) {
+                found = true;
+                break;
+            }
+        }
+        try std.testing.expect(found);
+    }
+}
+
 fn fieldByName(spec: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField {
     for (spec.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return field;

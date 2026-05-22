@@ -13,6 +13,7 @@ test {
     _ = @import("profiling_backends.zig");
     _ = @import("profiling.zig");
     _ = @import("profiling_tests.zig");
+    _ = @import("static_source_summary_adapter_tests.zig");
     _ = @import("tool_result_errors_tests.zig");
     _ = @import("transactional_editing_tests.zig");
     _ = @import("validation_workflows_tests.zig");

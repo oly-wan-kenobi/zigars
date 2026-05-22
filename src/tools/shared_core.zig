@@ -9,9 +9,10 @@ const json_result = zigar.json_result;
 const runtime_mod = zigar.runtime;
 const tool_errors = zigar.tool_errors;
 const command_result = @import("command_result.zig");
+const command_result_ports = @import("command_result_ports.zig");
 
 pub const App = runtime_mod.App;
-pub const BackendProbeCache = runtime_mod.BackendProbeCache;
+const BackendProbeCache = runtime_mod.BackendProbeCache;
 pub const LspClient = zigar.lsp_client.LspClient;
 pub const source_read_limit = zigar.document_state.DocumentState.default_max_document_bytes;
 
@@ -22,21 +23,16 @@ pub fn scratchApp(a: *App, allocator: std.mem.Allocator) App {
     return copy;
 }
 
-pub const commandTermValue = command_result.commandTermValue;
 pub const commandResultValue = command_result.commandResultValue;
+pub const portCommandResultValue = command_result_ports.commandResultValue;
 pub const commandErrorValue = command_result.commandErrorValue;
+pub const portCommandErrorValue = command_result_ports.commandErrorValue;
 pub const failureSummaryValue = command_result.failureSummaryValue;
 pub const commandErrorSummaryValue = command_result.commandErrorSummaryValue;
-pub const likelyFailureScopeValue = command_result.likelyFailureScopeValue;
 pub const CompilerLine = command_result.CompilerLine;
 pub const compilerInsightsValue = command_result.compilerInsightsValue;
-pub const collectCompilerLines = command_result.collectCompilerLines;
 pub const parseCompilerLine = command_result.parseCompilerLine;
-pub const parseLocatedCompilerLine = command_result.parseLocatedCompilerLine;
-pub const compilerLineValue = command_result.compilerLineValue;
 pub const classifyDiagnosticMessage = command_result.classifyDiagnosticMessage;
-pub const compilerNextCommand = command_result.compilerNextCommand;
-pub const compilerNextActions = command_result.compilerNextActions;
 pub const commandString = command_result.commandString;
 pub const argvContains = command_result.argvContains;
 pub const argvValue = command_result.argvValue;
@@ -155,10 +151,6 @@ pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []cons
     );
 }
 
-pub fn runAndFormat(a: *App, allocator: std.mem.Allocator, argv: []const []const u8, title: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return runAndFormatTimeout(a, allocator, argv, title, a.config.timeout_ms);
-}
-
 pub fn runAndFormatTimeout(a: *App, allocator: std.mem.Allocator, argv: []const []const u8, title: []const u8, timeout_ms: i64) mcp.tools.ToolError!mcp.tools.ToolResult {
     a.command_calls += 1;
     const started_ns = std.Io.Clock.now(.real, a.io).nanoseconds;
@@ -178,7 +170,7 @@ pub fn toolTimeout(a: *App, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", a.config.timeout_ms), 60 * 60 * 1000));
 }
 
-pub fn backendErrorKind(err: anyerror) []const u8 {
+fn backendErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.NotConnected, error.EndOfStream, error.BrokenPipe => "unavailable",
@@ -263,7 +255,7 @@ pub fn probeBackend(a: *App, allocator: std.mem.Allocator, name: []const u8, arg
     return probe;
 }
 
-pub fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
+fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
     if (std.mem.eql(u8, name, "zig")) return &a.backend_probe_cache.zig;
     if (std.mem.eql(u8, name, "zls")) return &a.backend_probe_cache.zls;
     if (std.mem.eql(u8, name, "zlint")) return &a.backend_probe_cache.zlint;
@@ -273,7 +265,7 @@ pub fn backendProbeSlot(a: *App, name: []const u8) ?*?doctor.Probe {
     return null;
 }
 
-pub fn probeBackendDirect(allocator: std.mem.Allocator, a: *App, argv: []const []const u8, timeout_ms: i64) doctor.Probe {
+fn probeBackendDirect(allocator: std.mem.Allocator, a: *App, argv: []const []const u8, timeout_ms: i64) doctor.Probe {
     const started_ns = std.Io.Clock.now(.real, a.io).nanoseconds;
     const result = command.run(allocator, a.io, a.workspace.root, argv, timeout_ms) catch |err| {
         a.observability.recordCommand("backend probe", argv, elapsedMs(a.io, started_ns), false, @errorName(err));
@@ -391,7 +383,7 @@ pub fn appendPatchPaths(allocator: std.mem.Allocator, list: *std.ArrayList([]con
     }
 }
 
-pub fn appendPatchPathToken(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), raw: []const u8) !void {
+fn appendPatchPathToken(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), raw: []const u8) !void {
     var path = raw;
     if (std.mem.startsWith(u8, path, "a/") or std.mem.startsWith(u8, path, "b/")) path = path[2..];
     if (std.mem.eql(u8, path, "/dev/null")) return;
@@ -421,25 +413,12 @@ pub fn jsonArrayLen(value: std.json.Value) usize {
     };
 }
 
-pub fn asciiLowerAllocLocal(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
-    const out = try allocator.dupe(u8, input);
-    for (out) |*ch| ch.* = std.ascii.toLower(ch.*);
-    return out;
-}
-
 pub fn lineNumberLocal(text_value: []const u8, index: usize) usize {
     var line: usize = 1;
     for (text_value[0..@min(index, text_value.len)]) |ch| {
         if (ch == '\n') line += 1;
     }
     return line;
-}
-
-pub fn lineAtLocal(text_value: []const u8, index: usize) []const u8 {
-    const safe_index = @min(index, text_value.len);
-    const start = std.mem.lastIndexOfScalar(u8, text_value[0..safe_index], '\n') orelse 0;
-    const end = std.mem.indexOfScalarPos(u8, text_value, safe_index, '\n') orelse text_value.len;
-    return std.mem.trim(u8, text_value[if (start == 0) 0 else start + 1..end], " \t\r\n");
 }
 
 pub fn zlsUnavailable(a: *App, allocator: std.mem.Allocator) mcp.tools.ToolError!mcp.tools.ToolResult {

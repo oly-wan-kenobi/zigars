@@ -7,6 +7,7 @@ const artifacts = zigar.artifacts;
 const command = zigar.command;
 const docs = zigar.docs;
 const json_result = zigar.json_result;
+const release_intelligence = zigar.app.usecases.release.release_intelligence;
 
 const ci = @import("ci.zig");
 const common = @import("common.zig");
@@ -110,14 +111,18 @@ pub fn zigReleasePlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
+    var plan = release_intelligence.plan(scratch, .{
+        .validation = argString(args, "validation"),
+        .ci = argString(args, "ci"),
+        .api = argString(args, "api"),
+        .docs = argString(args, "docs"),
+        .dependencies = argString(args, "dependencies"),
+        .security = argString(args, "security"),
+        .changelog = argString(args, "changelog"),
+    }) catch return error.OutOfMemory;
+    defer plan.deinit(scratch);
     var checks = std.json.Array.init(scratch);
-    try appendEvidenceCheck(scratch, &checks, "validation", argString(args, "validation"), "zigar_validation_run or zig build test");
-    try appendEvidenceCheck(scratch, &checks, "ci", argString(args, "ci"), "zig_ci_ingest plus local repro plan");
-    try appendEvidenceCheck(scratch, &checks, "api", argString(args, "api"), "zig_api_check or zig_api_diff_baseline");
-    try appendEvidenceCheck(scratch, &checks, "docs", argString(args, "docs"), "zig build docs-check and snippet checks");
-    try appendEvidenceCheck(scratch, &checks, "dependencies", argString(args, "dependencies"), "zig_dependency_fetch_check and lock audit");
-    try appendEvidenceCheck(scratch, &checks, "security", argString(args, "security"), "zig_dependency_security_report");
-    try appendEvidenceCheck(scratch, &checks, "changelog", argString(args, "changelog"), "release notes review");
+    for (plan.checks.items) |check| try checks.append(try releaseEvidenceCheckValue(scratch, check));
     var commands = std.json.Array.init(scratch);
     for ([_][]const u8{
         "zig build test --summary all",
@@ -133,7 +138,7 @@ pub fn zigReleasePlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     try obj.put(scratch, "goal", if (argString(args, "goal")) |goal| try ownedString(scratch, goal) else .null);
     try obj.put(scratch, "checks", .{ .array = checks });
     try obj.put(scratch, "verification_commands", .{ .array = commands });
-    try obj.put(scratch, "release_blocked", .{ .bool = hasMissingEvidence(checks) });
+    try obj.put(scratch, "release_blocked", .{ .bool = plan.release_blocked });
     try obj.put(scratch, "stop_condition", .{ .string = "Do not release until every required evidence item is present and release-check passes on the target commit." });
     return structured(allocator, .{ .object = obj });
 }
@@ -142,28 +147,20 @@ pub fn zigSemverSuggest(_: *App, allocator: std.mem.Allocator, args: ?std.json.V
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    const api = argString(args, "api_diff") orelse "";
-    const changelog = argString(args, "changelog") orelse "";
-    const notes = argString(args, "release_notes") orelse "";
-    const basis = try std.fmt.allocPrint(scratch, "{s}\n{s}\n{s}", .{ api, changelog, notes });
-    const lower = try asciiLowerAlloc(scratch, basis);
-    const bump: []const u8 = if (containsAny(lower, &.{ "breaking_change_risk\":true", "breaking change", "removed", "incompatible" }))
-        "major"
-    else if (containsAny(lower, &.{ "added", "feature", "new tool", "capability" }))
-        "minor"
-    else
-        "patch";
+    const suggestion = release_intelligence.suggestSemver(.{
+        .api_diff = argString(args, "api_diff") orelse "",
+        .changelog = argString(args, "changelog") orelse "",
+        .release_notes = argString(args, "release_notes") orelse "",
+    });
     var reasons = std.json.Array.init(scratch);
-    if (std.mem.eql(u8, bump, "major")) try reasons.append(.{ .string = "Observed API/removal/breaking-change evidence." });
-    if (std.mem.eql(u8, bump, "minor")) try reasons.append(.{ .string = "Observed additive feature evidence without explicit breaking-change evidence." });
-    if (std.mem.eql(u8, bump, "patch")) try reasons.append(.{ .string = "No explicit breaking or additive API evidence was provided." });
+    try reasons.append(.{ .string = suggestion.reason });
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, "zig_semver_suggest", "Textual API/release evidence classifier", "medium", &.{
         "Semver suggestion is conservative advice over supplied evidence, not a release decision.",
         "Generated APIs, behavior changes, and ecosystem commitments require maintainer review.",
     });
     try obj.put(scratch, "current_version", if (argString(args, "current_version")) |version| try ownedString(scratch, version) else .null);
-    try obj.put(scratch, "suggested_bump", .{ .string = bump });
+    try obj.put(scratch, "suggested_bump", .{ .string = suggestion.bump.text() });
     try obj.put(scratch, "reasons", .{ .array = reasons });
     try obj.put(scratch, "verify_with", try stringArrayValue(scratch, &.{ "zig_api_check", "release notes review", "project semver policy" }));
     return structured(allocator, .{ .object = obj });
@@ -173,14 +170,18 @@ pub fn zigReleaseNotesDraft(_: *App, allocator: std.mem.Allocator, args: ?std.js
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
+    var draft = release_intelligence.draftNotes(scratch, .{
+        .version = argString(args, "version"),
+        .changes = argString(args, "changes"),
+        .api_diff = argString(args, "api_diff"),
+        .validation = argString(args, "validation"),
+        .ci = argString(args, "ci"),
+        .dependencies = argString(args, "dependencies"),
+        .security = argString(args, "security"),
+    }) catch return error.OutOfMemory;
+    defer draft.deinit(scratch);
     var sections = std.json.Array.init(scratch);
-    try appendReleaseNoteSection(scratch, &sections, "Changes", argString(args, "changes"));
-    try appendReleaseNoteSection(scratch, &sections, "API", argString(args, "api_diff"));
-    try appendReleaseNoteSection(scratch, &sections, "Validation", argString(args, "validation"));
-    try appendReleaseNoteSection(scratch, &sections, "CI", argString(args, "ci"));
-    try appendReleaseNoteSection(scratch, &sections, "Dependencies", argString(args, "dependencies"));
-    try appendReleaseNoteSection(scratch, &sections, "Security", argString(args, "security"));
-    const markdown = releaseNotesMarkdown(scratch, argString(args, "version") orelse "next", sections) catch return error.OutOfMemory;
+    for (draft.sections.items) |section| try sections.append(try releaseNoteSectionValue(scratch, section));
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, "zig_release_notes_draft", "Structured release evidence projected into editable notes", "medium", &.{
         "Draft notes preserve supplied evidence but still require maintainer editing.",
@@ -188,8 +189,8 @@ pub fn zigReleaseNotesDraft(_: *App, allocator: std.mem.Allocator, args: ?std.js
     });
     try obj.put(scratch, "version", if (argString(args, "version")) |version| try ownedString(scratch, version) else .null);
     try obj.put(scratch, "sections", .{ .array = sections });
-    try obj.put(scratch, "markdown", .{ .string = markdown });
-    try obj.put(scratch, "requires_review", .{ .bool = true });
+    try obj.put(scratch, "markdown", .{ .string = draft.markdown });
+    try obj.put(scratch, "requires_review", .{ .bool = draft.requires_review });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -197,21 +198,25 @@ pub fn zigReleaseEvidencePack(_: *App, allocator: std.mem.Allocator, args: ?std.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
+    var pack = release_intelligence.evidencePack(scratch, .{
+        .validation = argString(args, "validation"),
+        .ci = argString(args, "ci"),
+        .api = argString(args, "api"),
+        .docs = argString(args, "docs"),
+        .dependencies = argString(args, "dependencies"),
+        .security = argString(args, "security"),
+        .artifacts = argString(args, "artifacts"),
+    }) catch return error.OutOfMemory;
+    defer pack.deinit(scratch);
     var evidence = std.json.Array.init(scratch);
-    try appendEvidencePointer(scratch, &evidence, "validation", argString(args, "validation"));
-    try appendEvidencePointer(scratch, &evidence, "ci", argString(args, "ci"));
-    try appendEvidencePointer(scratch, &evidence, "api", argString(args, "api"));
-    try appendEvidencePointer(scratch, &evidence, "docs", argString(args, "docs"));
-    try appendEvidencePointer(scratch, &evidence, "dependencies", argString(args, "dependencies"));
-    try appendEvidencePointer(scratch, &evidence, "security", argString(args, "security"));
-    try appendEvidencePointer(scratch, &evidence, "artifacts", argString(args, "artifacts"));
+    for (pack.evidence.items) |pointer| try evidence.append(try releaseEvidencePointerValue(scratch, pointer));
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, "zig_release_evidence_pack", "Release evidence packaging from caller-supplied report fragments", "medium", &.{
         "Evidence pack stores pointers and supplied fragments; it does not execute release gates.",
     });
     try obj.put(scratch, "evidence", .{ .array = evidence });
     try obj.put(scratch, "evidence_count", .{ .integer = @intCast(evidence.items.len) });
-    try obj.put(scratch, "ready_for_release_review", .{ .bool = evidence.items.len > 0 });
+    try obj.put(scratch, "ready_for_release_review", .{ .bool = pack.ready_for_release_review });
     try obj.put(scratch, "verification_commands", try stringArrayValue(scratch, &.{ "zig build release-check --summary all", "git diff --check" }));
     return structured(allocator, .{ .object = obj });
 }
@@ -721,53 +726,29 @@ fn groupFailures(allocator: std.mem.Allocator, failures: std.json.Value, field: 
     }
 }
 
-fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.json.Array, name: []const u8, evidence_text: ?[]const u8, verify: []const u8) !void {
+fn releaseEvidenceCheckValue(allocator: std.mem.Allocator, check: release_intelligence.EvidenceCheck) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "name", .{ .string = name });
-    try obj.put(allocator, "status", .{ .string = if (evidence_text != null and evidence_text.?.len > 0) "observed" else "missing" });
-    try obj.put(allocator, "observed", .{ .bool = evidence_text != null and evidence_text.?.len > 0 });
-    try obj.put(allocator, "verify_with", .{ .string = verify });
-    if (evidence_text) |text| try obj.put(allocator, "summary", .{ .string = try shortString(allocator, text, 240) }) else try obj.put(allocator, "summary", .null);
-    try checks.append(.{ .object = obj });
+    try obj.put(allocator, "name", .{ .string = check.name });
+    try obj.put(allocator, "status", .{ .string = check.status });
+    try obj.put(allocator, "observed", .{ .bool = check.observed });
+    try obj.put(allocator, "verify_with", .{ .string = check.verify_with });
+    try obj.put(allocator, "summary", if (check.summary) |summary| .{ .string = summary } else .null);
+    return .{ .object = obj };
 }
 
-fn hasMissingEvidence(checks: std.json.Array) bool {
-    for (checks.items) |check| {
-        const obj = objectValue(check) orelse continue;
-        if (!boolField(obj, "observed", false)) return true;
-    }
-    return false;
-}
-
-fn appendReleaseNoteSection(allocator: std.mem.Allocator, sections: *std.json.Array, title: []const u8, text: ?[]const u8) !void {
-    const body = text orelse return;
-    if (std.mem.trim(u8, body, " \t\r\n").len == 0) return;
+fn releaseNoteSectionValue(allocator: std.mem.Allocator, section: release_intelligence.ReleaseNoteSection) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "title", .{ .string = title });
-    try obj.put(allocator, "body", .{ .string = try shortString(allocator, body, 1200) });
-    try sections.append(.{ .object = obj });
+    try obj.put(allocator, "title", .{ .string = section.title });
+    try obj.put(allocator, "body", .{ .string = section.body });
+    return .{ .object = obj };
 }
 
-fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, sections: std.json.Array) ![]u8 {
-    var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
-    try out.writer.print("# {s}\n\n", .{version});
-    if (sections.items.len == 0) {
-        try out.writer.writeAll("_No release evidence was supplied._\n");
-    }
-    for (sections.items) |section| {
-        const obj = objectValue(section) orelse continue;
-        try out.writer.print("## {s}\n\n{s}\n\n", .{ stringField(obj, "title") orelse "Section", stringField(obj, "body") orelse "" });
-    }
-    return try out.toOwnedSlice();
-}
-
-fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.json.Array, name: []const u8, text: ?[]const u8) !void {
+fn releaseEvidencePointerValue(allocator: std.mem.Allocator, pointer: release_intelligence.EvidencePointer) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "name", .{ .string = name });
-    try obj.put(allocator, "provided", .{ .bool = text != null and text.?.len > 0 });
-    try obj.put(allocator, "summary", if (text) |value| .{ .string = try shortString(allocator, value, 400) } else .null);
-    try evidence.append(.{ .object = obj });
+    try obj.put(allocator, "name", .{ .string = pointer.name });
+    try obj.put(allocator, "provided", .{ .bool = pointer.provided });
+    try obj.put(allocator, "summary", if (pointer.summary) |summary| .{ .string = summary } else .null);
+    return .{ .object = obj };
 }
 
 fn apiDiffTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -1704,13 +1685,6 @@ fn asciiLowerAlloc(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     const out = try allocator.alloc(u8, input.len);
     for (input, 0..) |c, index| out[index] = std.ascii.toLower(c);
     return out;
-}
-
-fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
-    for (needles) |needle| {
-        if (std.mem.indexOf(u8, haystack, needle) != null) return true;
-    }
-    return false;
 }
 
 fn countOccurrences(haystack: []const u8, needle: []const u8) usize {

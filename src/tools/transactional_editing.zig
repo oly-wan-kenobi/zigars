@@ -2,8 +2,9 @@ const std = @import("std");
 const mcp = @import("mcp");
 const zigar = @import("zigar");
 
-const analysis = zigar.analysis;
 const artifacts = zigar.artifacts;
+const bootstrap_runtime_ports = zigar.bootstrap.runtime_ports;
+const editing_usecase = zigar.app.usecases.editing.patch_sessions;
 const json_result = zigar.json_result;
 const lsp_edits = zigar.lsp_edits;
 const validation_workflows = @import("validation_workflows.zig");
@@ -25,9 +26,16 @@ const stringListContains = common.stringListContains;
 const freeStringList = common.freeStringList;
 const ownedString = common.ownedString;
 
-const schema_version = 1;
-const patch_history_path_default = ".zigar-cache/patch-sessions/history.jsonl";
-const max_session_file_bytes = common.source_read_limit;
+const schema_version = editing_usecase.schema_version;
+const patch_history_path_default = editing_usecase.history_path_default;
+const max_session_file_bytes = editing_usecase.max_session_file_bytes;
+
+fn editingRuntimePorts(a: *App) bootstrap_runtime_ports.RuntimePorts {
+    return bootstrap_runtime_ports.RuntimePorts.init(a, .{
+        .workspace_read_resolution = .output,
+        .default_read_limit = max_session_file_bytes,
+    });
+}
 
 const FileSnapshot = struct {
     rel: []const u8,
@@ -43,10 +51,8 @@ const FileSnapshot = struct {
     }
 };
 
-const Replacement = struct {
-    file: []const u8,
-    content: []const u8,
-};
+const Replacement = editing_usecase.Replacement;
+const PathPolicy = editing_usecase.PathPolicy;
 
 const ByteRange = struct {
     start: usize,
@@ -64,36 +70,18 @@ pub fn zigarPatchSessionCreate(a: *App, allocator: std.mem.Allocator, args: ?std
     try appendPathTokens(scratch, &paths, argString(args, "files"));
     try appendPatchPaths(scratch, &paths, argString(args, "patch"));
     if (argString(args, "edits")) |raw| try appendEditPaths(scratch, &paths, raw);
+    const normalized_paths = try normalizePathsBestEffort(scratch, a, paths.items);
 
     const session_id = try sessionId(scratch, "create", argString(args, "goal"), argString(args, "files"), argString(args, "patch"), argString(args, "edits"));
-    var files = std.json.Array.init(scratch);
-    var expected = std.json.Array.init(scratch);
-    var safe = true;
-    for (paths.items) |path| {
-        const snap = readSnapshot(scratch, a, path) catch |err| {
-            try files.append(try pathFailureValue(scratch, path, err));
-            safe = false;
-            continue;
-        };
-        const policy = classifyPath(snap.rel);
-        if (!policy.direct_edit_allowed) safe = false;
-        const preimage = try identityValue(scratch, snap.exists, snap.bytes);
-        try expected.append(try expectedPreimageValue(scratch, snap.rel, snap.exists, snap.bytes));
-        try files.append(try sessionFileStateValue(scratch, snap.rel, preimage, policy));
-    }
-
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_patch_session_create" });
-    try obj.put(scratch, "schema_version", .{ .integer = schema_version });
-    try obj.put(scratch, "session_id", try ownedString(scratch, session_id));
-    try obj.put(scratch, "goal", optionalStringValue(scratch, argString(args, "goal")) catch .null);
-    try obj.put(scratch, "status", .{ .string = "created" });
-    try obj.put(scratch, "safe_to_edit", .{ .bool = safe });
-    try obj.put(scratch, "files", .{ .array = files });
-    try obj.put(scratch, "expected_preimages", .{ .array = expected });
-    try obj.put(scratch, "next_action", try nextToolValue(scratch, if (safe) "zigar_patch_session_preview" else "zigar_generated_route", if (safe) "preview replacement content before applying" else "route generated or vendored paths to source/regeneration"));
-    try obj.put(scratch, "limitations", .{ .string = "Session creation captures current file identity and policy only; no source writes or validation commands have run." });
-    return structured(allocator, .{ .object = obj });
+    var runtime_ports = editingRuntimePorts(a);
+    const ctx = runtime_ports.editingContext() catch |err| return validationError(allocator, "zigar_patch_session_create", "build_app_context", err);
+    var result = editing_usecase.create(scratch, ctx, .{
+        .session_id = session_id,
+        .goal = argString(args, "goal"),
+        .paths = normalized_paths,
+    }) catch |err| return validationError(allocator, "zigar_patch_session_create", "create_session", err);
+    defer result.deinit(scratch);
+    return structured(allocator, try patchSessionCreateValue(scratch, result));
 }
 
 pub fn zigarPatchSessionPreview(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -109,18 +97,23 @@ pub fn zigarPatchSessionValidate(a: *App, allocator: std.mem.Allocator, args: ?s
     defer arena.deinit();
     const scratch = arena.allocator();
     const validation_args = try validationArgsFromSessionArgs(scratch, args);
-    const validation = validation_workflows.zigarValidationRun(a, scratch, validation_args) catch |err| return validationError(allocator, "zigar_patch_session_validate", "run_validation", err);
-    const validation_value = validation.structuredContent orelse .null;
-    const validation_ok = switch (validation_value) {
-        .object => |o| boolField(o, "ok") orelse false,
-        else => false,
+    var runtime_ports = bootstrap_runtime_ports.RuntimePorts.init(a, .{});
+    const validation_ctx = runtime_ports.validationContext() catch |err| return validationError(allocator, "zigar_patch_session_validate", "build_validation_context", err);
+    var parsed = validation_workflows.validationRunRequestFromArgs(a, scratch, validation_args) catch |err| return validationError(allocator, "zigar_patch_session_validate", "parse_validation_request", err);
+    defer parsed.deinit(scratch);
+    var validation_outcome = editing_usecase.validate(scratch, validation_ctx, parsed.request) catch |err| return validationError(allocator, "zigar_patch_session_validate", "run_validation", err);
+    defer validation_outcome.deinit(scratch);
+    const validation_report = switch (validation_outcome) {
+        .ok => |report| report,
+        .err => return validationError(allocator, "zigar_patch_session_validate", "run_validation", error.ValidationHistoryWriteFailed),
     };
+    const validation_value = validation_workflows.validationRunValue(scratch, validation_report) catch |err| return validationError(allocator, "zigar_patch_session_validate", "render_validation", err);
 
     var obj = std.json.ObjectMap.empty;
     try obj.put(scratch, "kind", .{ .string = "zigar_patch_session_validate" });
     try obj.put(scratch, "schema_version", .{ .integer = schema_version });
     try obj.put(scratch, "session_id", optionalStringValue(scratch, argString(args, "session_id")) catch .null);
-    try obj.put(scratch, "ok", .{ .bool = validation_ok });
+    try obj.put(scratch, "ok", .{ .bool = validation_report.ok });
     try obj.put(scratch, "validation", validation_value);
     try obj.put(scratch, "stop_condition", .{ .string = "Treat skipped validation phases as unknown; rollback remains available only for recorded applied sessions." });
     return structured(allocator, .{ .object = obj });
@@ -131,56 +124,19 @@ pub fn zigarPatchSessionRevert(a: *App, allocator: std.mem.Allocator, args: ?std
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-
-    const record = loadSessionRecord(scratch, a, args, session_id) catch |err| return validationError(allocator, "zigar_patch_session_revert", "load_session_record", err);
-    const record_obj = switch (record) {
-        .object => |o| o,
-        else => return sessionNotFound(allocator, session_id),
+    var runtime_ports = editingRuntimePorts(a);
+    const ctx = runtime_ports.editingContext() catch |err| return validationError(allocator, "zigar_patch_session_revert", "build_app_context", err);
+    var outcome = editing_usecase.revert(scratch, ctx, .{
+        .session_id = session_id,
+        .apply = argBool(args, "apply", false),
+        .history = argString(args, "history"),
+        .history_path = argString(args, "history_path") orelse patch_history_path_default,
+    }) catch |err| return validationError(allocator, "zigar_patch_session_revert", "revert_session", err);
+    defer outcome.deinit(scratch);
+    return switch (outcome) {
+        .ok => |result| structured(allocator, try patchSessionRevertValue(scratch, result)),
+        .err => sessionNotFound(allocator, session_id),
     };
-    const apply = argBool(args, "apply", false);
-    const files_value = record_obj.get("files") orelse .null;
-    const files_array = switch (files_value) {
-        .array => |array| array,
-        else => return validationError(allocator, "zigar_patch_session_revert", "read_record", error.InvalidArguments),
-    };
-
-    var files = std.json.Array.init(scratch);
-    var safe = true;
-    for (files_array.items) |item| {
-        const item_obj = switch (item) {
-            .object => |o| o,
-            else => continue,
-        };
-        const preview = revertFilePreviewValue(scratch, a, item_obj) catch |err| return validationError(allocator, "zigar_patch_session_revert", "preview_revert", err);
-        const preview_obj = switch (preview) {
-            .object => |o| o,
-            else => continue,
-        };
-        if (!(boolField(preview_obj, "safe_to_revert") orelse false)) safe = false;
-        try files.append(preview);
-    }
-
-    if (apply and safe) {
-        for (files_array.items) |item| {
-            const item_obj = switch (item) {
-                .object => |o| o,
-                else => continue,
-            };
-            applyRevertFile(a, item_obj) catch |err| return validationError(allocator, "zigar_patch_session_revert", "apply_revert", err);
-        }
-    }
-
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_patch_session_revert" });
-    try obj.put(scratch, "schema_version", .{ .integer = schema_version });
-    try obj.put(scratch, "session_id", try ownedString(scratch, session_id));
-    try obj.put(scratch, "applied", .{ .bool = apply and safe });
-    try obj.put(scratch, "requires_apply", .{ .bool = !apply });
-    try obj.put(scratch, "safe_to_revert", .{ .bool = safe });
-    try obj.put(scratch, "files", .{ .array = files });
-    try obj.put(scratch, "record", record);
-    try obj.put(scratch, "limitations", .{ .string = "Rollback restores only files whose current hash still equals the recorded session output hash; unrelated edits block the revert." });
-    return structured(allocator, .{ .object = obj });
 }
 
 pub fn zigGeneratedFileTrace(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -360,9 +316,242 @@ fn patchSessionReplacementTool(a: *App, allocator: std.mem.Allocator, args: ?std
     var parsed = std.json.parseFromSlice(std.json.Value, scratch, raw_edits, .{}) catch return invalidArgumentResult(allocator, tool_name, "edits", "valid JSON array or object", "invalid_json", "Pass edits as JSON, for example [{\"file\":\"src/main.zig\",\"content\":\"...\"}].");
     defer parsed.deinit();
     const session_id = if (argString(args, "session_id")) |id| id else try sessionId(scratch, tool_name, argString(args, "goal"), null, null, raw_edits);
-    const expected_value = parseOptionalJson(scratch, argString(args, "expected_preimages")) catch |err| return validationError(allocator, tool_name, "parse_expected_preimages", err);
-    const preview = buildPatchSessionReplacementValue(scratch, a, parsed.value, session_id, argString(args, "goal"), expected_value, apply) catch |err| return validationError(allocator, tool_name, "build_session", err);
-    return structured(allocator, preview);
+    var replacements = std.ArrayList(Replacement).empty;
+    try collectReplacements(scratch, &replacements, parsed.value);
+    const normalized_replacements = try normalizeReplacementsBestEffort(scratch, a, replacements.items);
+    const expected = parseExpectedPreimages(scratch, argString(args, "expected_preimages")) catch |err| return validationError(allocator, tool_name, "parse_expected_preimages", err);
+    var runtime_ports = editingRuntimePorts(a);
+    const ctx = runtime_ports.editingContext() catch |err| return validationError(allocator, tool_name, "build_app_context", err);
+    var result = editing_usecase.replacementSession(scratch, ctx, .{
+        .operation = if (apply) .apply else .preview,
+        .session_id = session_id,
+        .goal = argString(args, "goal"),
+        .replacements = normalized_replacements,
+        .expected_preimages = expected,
+        .apply = apply,
+    }) catch |err| return validationError(allocator, tool_name, "build_session", err);
+    defer result.deinit(scratch);
+    return structured(allocator, try patchSessionReplacementValue(scratch, result));
+}
+
+fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing_usecase.CreateResult) !std.json.Value {
+    var files = std.json.Array.init(allocator);
+    for (result.files) |file| {
+        try files.append(switch (file) {
+            .ok => |state| try sessionFileStateTypedValue(allocator, state),
+            .err => |failure| try pathFailureNameValue(allocator, failure.file, failure.error_name),
+        });
+    }
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_create" });
+    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, result.session_id));
+    try obj.put(allocator, "goal", optionalStringValue(allocator, result.goal) catch .null);
+    try obj.put(allocator, "status", .{ .string = "created" });
+    try obj.put(allocator, "safe_to_edit", .{ .bool = result.safe_to_edit });
+    try obj.put(allocator, "files", .{ .array = files });
+    try obj.put(allocator, "expected_preimages", try expectedPreimagesTypedValue(allocator, result.expected_preimages));
+    try obj.put(allocator, "next_action", try nextToolValue(allocator, if (result.safe_to_edit) "zigar_patch_session_preview" else "zigar_generated_route", if (result.safe_to_edit) "preview replacement content before applying" else "route generated or vendored paths to source/regeneration"));
+    try obj.put(allocator, "limitations", .{ .string = "Session creation captures current file identity and policy only; no source writes or validation commands have run." });
+    return .{ .object = obj };
+}
+
+fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing_usecase.ReplacementResult) !std.json.Value {
+    var files = std.json.Array.init(allocator);
+    for (result.files) |file| try files.append(try replacementFileValue(allocator, file));
+    if (result.blocked) return applyBlockedValueFromUsecase(allocator, result.session_id, files, result.expected_preimages);
+
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = result.operation.kind() });
+    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, result.session_id));
+    try obj.put(allocator, "goal", optionalStringValue(allocator, result.goal) catch .null);
+    try obj.put(allocator, "applied", .{ .bool = result.applied });
+    try obj.put(allocator, "requires_apply", .{ .bool = result.requires_apply });
+    try obj.put(allocator, "safe_to_apply", .{ .bool = result.safe_to_apply });
+    try obj.put(allocator, "changed_file_count", .{ .integer = @intCast(result.changed_file_count) });
+    try obj.put(allocator, "files", .{ .array = files });
+    try obj.put(allocator, "expected_preimages", try expectedPreimagesTypedValue(allocator, result.expected_preimages));
+    try obj.put(allocator, "history_path", .{ .string = patch_history_path_default });
+    try obj.put(allocator, "limitations", .{ .string = "Apply requires expected_preimages from preview and refuses generated/vendor paths; validation must be run separately or through zigar_patch_session_validate." });
+    return .{ .object = obj };
+}
+
+fn patchSessionRevertValue(allocator: std.mem.Allocator, result: editing_usecase.RevertResult) !std.json.Value {
+    var files = std.json.Array.init(allocator);
+    for (result.files) |file| try files.append(try revertFileValue(allocator, file));
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_revert" });
+    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, result.session_id));
+    try obj.put(allocator, "applied", .{ .bool = result.applied });
+    try obj.put(allocator, "requires_apply", .{ .bool = result.requires_apply });
+    try obj.put(allocator, "safe_to_revert", .{ .bool = result.safe_to_revert });
+    try obj.put(allocator, "files", .{ .array = files });
+    try obj.put(allocator, "record", try sessionRecordTypedValue(allocator, result.record));
+    try obj.put(allocator, "limitations", .{ .string = "Rollback restores only files whose current hash still equals the recorded session output hash; unrelated edits block the revert." });
+    return .{ .object = obj };
+}
+
+fn sessionFileStateTypedValue(allocator: std.mem.Allocator, state: editing_usecase.SessionFileState) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, state.file));
+    try obj.put(allocator, "preimage_identity", try identityTypedValue(allocator, state.preimage_identity));
+    try obj.put(allocator, "policy", try policyValue(allocator, state.policy));
+    return .{ .object = obj };
+}
+
+fn replacementFileValue(allocator: std.mem.Allocator, file: editing_usecase.ReplacementFile) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, file.file));
+    try obj.put(allocator, "changed", .{ .bool = file.changed });
+    try obj.put(allocator, "preimage_identity", try identityTypedValue(allocator, file.preimage_identity));
+    try obj.put(allocator, "updated_identity", try identityTypedValue(allocator, file.updated_identity));
+    try obj.put(allocator, "policy", try policyValue(allocator, file.policy));
+    try obj.put(allocator, "expected_preimage_matched", .{ .bool = file.expected_preimage_matched });
+    try obj.put(allocator, "diff", .{ .string = try allocator.dupe(u8, file.diff) });
+    return .{ .object = obj };
+}
+
+fn revertFileValue(allocator: std.mem.Allocator, file: editing_usecase.RevertFile) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, file.file));
+    try obj.put(allocator, "safe_to_revert", .{ .bool = file.safe_to_revert });
+    try obj.put(allocator, "current_matches_session_output", .{ .bool = file.current_matches_session_output });
+    try obj.put(allocator, "current_identity", try identityTypedValue(allocator, file.current_identity));
+    try obj.put(allocator, "target_preimage_identity", try identityTypedValue(allocator, file.target_preimage_identity));
+    try obj.put(allocator, "preimage_content_path", optionalStringValue(allocator, file.preimage_content_path) catch .null);
+    try obj.put(allocator, "would_delete", .{ .bool = file.would_delete });
+    try obj.put(allocator, "diff", .{ .string = try allocator.dupe(u8, file.diff) });
+    return .{ .object = obj };
+}
+
+fn sessionRecordTypedValue(allocator: std.mem.Allocator, record: editing_usecase.SessionRecord) !std.json.Value {
+    var files = std.json.Array.init(allocator);
+    for (record.files) |file| try files.append(try historyFileRecordValue(allocator, file));
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_record" });
+    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, record.session_id));
+    try obj.put(allocator, "goal", optionalStringValue(allocator, record.goal) catch .null);
+    try obj.put(allocator, "recorded_unix_ms", .{ .integer = record.recorded_unix_ms });
+    try obj.put(allocator, "files", .{ .array = files });
+    return .{ .object = obj };
+}
+
+fn historyFileRecordValue(allocator: std.mem.Allocator, file: editing_usecase.HistoryFileRecord) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, file.file));
+    try obj.put(allocator, "preimage_identity", try identityTypedValue(allocator, file.preimage_identity));
+    try obj.put(allocator, "updated_identity", try identityTypedValue(allocator, file.updated_identity));
+    try obj.put(allocator, "preimage_content_path", optionalStringValue(allocator, file.preimage_content_path) catch .null);
+    return .{ .object = obj };
+}
+
+fn identityTypedValue(allocator: std.mem.Allocator, identity: editing_usecase.Identity) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "exists", .{ .bool = identity.exists });
+    try obj.put(allocator, "bytes", .{ .integer = @intCast(identity.bytes) });
+    try obj.put(allocator, "sha256", if (identity.sha256) |hash| try ownedString(allocator, hash) else .null);
+    return .{ .object = obj };
+}
+
+fn expectedPreimagesTypedValue(allocator: std.mem.Allocator, expected: []const editing_usecase.ExpectedPreimage) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (expected) |item| try array.append(try expectedPreimageTypedValue(allocator, item));
+    return .{ .array = array };
+}
+
+fn expectedPreimageTypedValue(allocator: std.mem.Allocator, item: editing_usecase.ExpectedPreimage) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, item.file));
+    try obj.put(allocator, "exists", .{ .bool = item.identity.exists });
+    try obj.put(allocator, "bytes", .{ .integer = @intCast(item.identity.bytes) });
+    try obj.put(allocator, "sha256", if (item.identity.sha256) |hash| try ownedString(allocator, hash) else .null);
+    return .{ .object = obj };
+}
+
+fn applyBlockedValueFromUsecase(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing_usecase.ExpectedPreimage) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
+    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, session_id));
+    try obj.put(allocator, "applied", .{ .bool = false });
+    try obj.put(allocator, "safe_to_apply", .{ .bool = false });
+    try obj.put(allocator, "files", .{ .array = files });
+    try obj.put(allocator, "expected_preimages", try expectedPreimagesTypedValue(allocator, expected_preimages));
+    try obj.put(allocator, "resolution", .{ .string = "Re-run preview, pass its expected_preimages unchanged, and avoid generated or vendored paths." });
+    return .{ .object = obj };
+}
+
+fn pathFailureNameValue(allocator: std.mem.Allocator, path: []const u8, error_name: []const u8) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "file", try ownedString(allocator, path));
+    try obj.put(allocator, "ok", .{ .bool = false });
+    try obj.put(allocator, "error", try ownedString(allocator, error_name));
+    return .{ .object = obj };
+}
+
+fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]const editing_usecase.ExpectedPreimage {
+    const text = raw orelse return &.{};
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+    defer parsed.deinit();
+    const array = switch (parsed.value) {
+        .array => |items| items,
+        else => return error.InvalidArguments,
+    };
+    var out = std.ArrayList(editing_usecase.ExpectedPreimage).empty;
+    for (array.items) |item| {
+        const obj = switch (item) {
+            .object => |value| value,
+            else => return error.InvalidArguments,
+        };
+        try out.append(allocator, .{
+            .file = try allocator.dupe(u8, stringField(obj, "file") orelse return error.InvalidArguments),
+            .identity = .{
+                .exists = boolField(obj, "exists") orelse false,
+                .bytes = @intCast(integerField(obj, "bytes") orelse 0),
+                .sha256 = switch (obj.get("sha256") orelse .null) {
+                    .string => |hash| try allocator.dupe(u8, hash),
+                    else => null,
+                },
+            },
+        });
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn normalizePathsBestEffort(allocator: std.mem.Allocator, a: *App, paths: []const []const u8) std.mem.Allocator.Error![]const []const u8 {
+    var out = std.ArrayList([]const u8).empty;
+    for (paths) |path| {
+        const normalized = normalizePath(allocator, a, path) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => try allocator.dupe(u8, path),
+        };
+        try out.append(allocator, normalized);
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn normalizeReplacementsBestEffort(allocator: std.mem.Allocator, a: *App, replacements: []const Replacement) std.mem.Allocator.Error![]const Replacement {
+    var out = std.ArrayList(Replacement).empty;
+    for (replacements) |replacement| {
+        const normalized = normalizePath(allocator, a, replacement.file) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => try allocator.dupe(u8, replacement.file),
+        };
+        try out.append(allocator, .{
+            .file = normalized,
+            .content = replacement.content,
+        });
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn normalizePath(allocator: std.mem.Allocator, a: *App, path: []const u8) ![]const u8 {
+    const resolved = try a.workspace.resolveOutput(path);
+    defer a.workspace.allocator.free(resolved);
+    return allocator.dupe(u8, a.workspace.relative(resolved));
 }
 
 fn buildPatchSessionReplacementValue(allocator: std.mem.Allocator, a: *App, edits_value: std.json.Value, session_id: []const u8, goal: ?[]const u8, expected: std.json.Value, apply: bool) !std.json.Value {
@@ -485,47 +674,7 @@ fn readSnapshot(allocator: std.mem.Allocator, a: *App, path: []const u8) !FileSn
 }
 
 fn classifyPath(path: []const u8) PathPolicy {
-    if (isCachePath(path)) return .{ .classification = "cache", .direct_edit_allowed = false, .reason = "cache_path", .route = "edit source inputs and regenerate cache output", .sources = &.{ "build.zig", "build.zig.zon", "src" }, .commands = &.{ "zig build", "zig build test" }, .confidence = "high" };
-    if (isZigarArtifactPath(path)) return .{ .classification = "generated_artifact", .direct_edit_allowed = false, .reason = "zigar_artifact_path", .route = "rerun the zigar tool that produced the artifact", .sources = &.{ ".zigar/profile.v2.json", "source files referenced by artifact provenance" }, .commands = &.{ "zigar_artifact_index", "zigar_artifact_read" }, .confidence = "high" };
-    if (isVendorPath(path)) return .{ .classification = "vendor", .direct_edit_allowed = false, .reason = "vendored_dependency_path", .route = "change dependency source, pin, or patch workflow rather than editing vendored output directly", .sources = &.{ "build.zig.zon", "build.zig", "dependency upstream" }, .commands = &.{ "zig build", "zigar_patch_guard" }, .confidence = "high" };
-    if (isGeneratedName(path)) return .{ .classification = "generated", .direct_edit_allowed = false, .reason = "generated_filename", .route = "edit generator inputs and rerun the generator", .sources = &.{ "tools", "src", "build.zig" }, .commands = if (std.mem.eql(u8, path, "docs/tool-index.generated.md")) &.{ "zig build tool-index", "zig build docs-check" } else &.{"zig build"}, .confidence = "medium" };
-    if (analysis.skipWorkspacePath(path)) return .{ .classification = "generated_or_vendored", .direct_edit_allowed = false, .reason = "workspace_skip_policy", .route = "edit source inputs and regenerate", .sources = &.{ "src", "build.zig", "build.zig.zon" }, .commands = &.{"zig build"}, .confidence = "high" };
-    return .{ .classification = "source", .direct_edit_allowed = true, .reason = "workspace_source_path", .route = "direct edit allowed through apply-gated zigar tools", .sources = &.{"requested workspace path"}, .commands = &.{"zigar_patch_session_validate"}, .confidence = "high" };
-}
-
-const PathPolicy = struct {
-    classification: []const u8,
-    direct_edit_allowed: bool,
-    reason: []const u8,
-    route: []const u8,
-    sources: []const []const u8,
-    commands: []const []const u8,
-    confidence: []const u8,
-};
-
-fn isCachePath(path: []const u8) bool {
-    return startsPath(path, ".zig-cache") or startsPath(path, "zig-out") or startsPath(path, "coverage") or startsPath(path, "dist");
-}
-
-fn isZigarArtifactPath(path: []const u8) bool {
-    return startsPath(path, ".zigar-cache");
-}
-
-fn isVendorPath(path: []const u8) bool {
-    return startsPath(path, "zig-pkg") or startsPath(path, "vendor") or startsPath(path, "third_party") or startsPath(path, "deps") or
-        std.mem.indexOf(u8, path, "/vendor/") != null or std.mem.indexOf(u8, path, "/third_party/") != null or std.mem.indexOf(u8, path, "/deps/") != null;
-}
-
-fn isGeneratedName(path: []const u8) bool {
-    return std.mem.endsWith(u8, path, ".generated.md") or
-        std.mem.endsWith(u8, path, ".generated.zig") or
-        std.mem.endsWith(u8, path, ".gen.zig") or
-        std.mem.endsWith(u8, path, ".pb.zig") or
-        std.mem.eql(u8, path, "docs/tool-index.generated.md");
-}
-
-fn startsPath(path: []const u8, prefix: []const u8) bool {
-    return std.mem.eql(u8, path, prefix) or (std.mem.startsWith(u8, path, prefix) and path.len > prefix.len and path[prefix.len] == '/');
+    return editing_usecase.classifyPath(path);
 }
 
 fn policyValue(allocator: std.mem.Allocator, policy: PathPolicy) !std.json.Value {
@@ -1034,6 +1183,13 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
 fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     return switch (obj.get(field) orelse .null) {
         .bool => |b| b,
+        else => null,
+    };
+}
+
+fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
+    return switch (obj.get(field) orelse .null) {
+        .integer => |value| value,
         else => null,
     };
 }

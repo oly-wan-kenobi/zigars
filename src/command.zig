@@ -42,7 +42,7 @@ pub fn run(
     return runWithOutputLimit(allocator, io, cwd, argv, timeout_ms, output_limit, output_limit);
 }
 
-fn runWithOutputLimit(
+pub fn runWithOutputLimit(
     allocator: std.mem.Allocator,
     io: std.Io,
     cwd: []const u8,

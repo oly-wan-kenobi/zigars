@@ -1,4 +1,5 @@
 const std = @import("std");
+const architecture_guard = @import("architecture_guard.zig");
 const cli_io = @import("cli_io.zig");
 const coverage = @import("coverage.zig");
 const dist = @import("dist.zig");
@@ -6,6 +7,7 @@ const http_smoke = @import("http_smoke.zig");
 const http_diagnostics_smoke = @import("http_diagnostics_smoke.zig");
 const json_query = @import("json_query.zig");
 const json_util = @import("json_util.zig");
+const public_contracts = @import("public_contracts.zig");
 const release_checks = @import("release_checks.zig");
 const release_targets = @import("release_targets.zig");
 const stdio_fixtures = @import("stdio_fixtures.zig");
@@ -20,6 +22,7 @@ const reportInvalidArguments = cli_io.reportInvalidArguments;
 const stderrPrint = cli_io.stderrPrint;
 
 test {
+    _ = architecture_guard;
     _ = coverage;
     _ = cli_io;
     _ = dist;
@@ -27,6 +30,7 @@ test {
     _ = http_diagnostics_smoke;
     _ = json_query;
     _ = json_util;
+    _ = public_contracts;
     _ = release_checks;
     _ = release_targets;
     _ = stdio_fixtures;
@@ -90,6 +94,14 @@ pub fn main(init: std.process.Init) !void {
         release_checks.artifactHygiene(allocator, io, args[2..]) catch |err| {
             return reportInvalidArguments(io, cmd, "artifact-hygiene", err);
         };
+    } else if (std.mem.eql(u8, cmd, "public-contracts")) {
+        public_contracts.run(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "public-contracts", err);
+        };
+    } else if (std.mem.eql(u8, cmd, "architecture-guard")) {
+        architecture_guard.run(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "architecture-guard", err);
+        };
     } else {
         try usage(io);
         return failUsage(io, "zigar-tools", "", "unknown command `{s}`", .{cmd});
@@ -110,6 +122,8 @@ fn usage(io: Io) !void {
         \\  dist --package <name> --exe <name> --binary <path>...
         \\  dist-smoke [--assets-dir <path>] [--version <version>]
         \\  artifact-hygiene
+        \\  public-contracts
+        \\  architecture-guard
         \\
     , .{});
 }

@@ -7,6 +7,9 @@ const analysis = zigar.analysis;
 const artifacts = zigar.artifacts;
 const command = zigar.command;
 const json_result = zigar.json_result;
+const crash_evidence = zigar.app.usecases.diagnostics.crash_evidence;
+const diagnostic_crash = zigar.domain.diagnostics.crash;
+const diagnostic_stack = zigar.domain.diagnostics.stacktrace;
 
 const common = @import("common.zig");
 
@@ -41,11 +44,6 @@ const BinaryInfo = struct {
     sha256: []const u8,
     format: []const u8,
     stripped_hint: []const u8,
-};
-
-const ParsedFrames = struct {
-    frames: std.json.Array,
-    count: usize = 0,
 };
 
 pub fn zigDebugPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -99,11 +97,16 @@ pub fn zigDebugFrameSummary(a: *App, allocator: std.mem.Allocator, args: ?std.js
     var obj = try baseValue(scratch, a, "zig_debug_frame_summary", "Debugger frame text summary", "medium", &.{
         "Frame parsing is textual and should be cross-checked against the original debugger output.",
     });
-    const frames = try framesValue(scratch, input.bytes, @intCast(@max(1, argInt(args, "limit", 40))));
+    var summary = try crash_evidence.summarizeFrames(scratch, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+        .limit = @intCast(@max(1, argInt(args, "limit", 40))),
+    });
+    defer summary.deinit(scratch);
     try obj.put(scratch, "source_kind", .{ .string = input.source_kind });
-    try obj.put(scratch, "frames", .{ .array = frames.frames });
-    try obj.put(scratch, "frame_count", .{ .integer = @intCast(frames.count) });
-    try obj.put(scratch, "top_frame", topFrameValue(frames));
+    try obj.put(scratch, "frames", try frameArrayValue(scratch, summary.frames.frames));
+    try obj.put(scratch, "frame_count", .{ .integer = @intCast(summary.frames.count) });
+    try obj.put(scratch, "top_frame", try topFrameValue(scratch, summary.frames));
     return structured(allocator, .{ .object = obj });
 }
 
@@ -116,14 +119,18 @@ pub fn zigSanitizerFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json
     var obj = try baseValue(scratch, a, "zig_sanitizer_fusion", "Sanitizer and crash log fusion", "medium", &.{
         "Sanitizer output identifies a failing symptom; source-level root cause still needs code review and a repro.",
     });
-    const frames = try framesValue(scratch, input.bytes, @intCast(@max(1, argInt(args, "limit", 40))));
-    const sanitizer = classifySanitizer(input.bytes);
+    var fusion = try crash_evidence.fuseSanitizer(scratch, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+        .limit = @intCast(@max(1, argInt(args, "limit", 40))),
+    });
+    defer fusion.deinit(scratch);
     try obj.put(scratch, "source_kind", .{ .string = input.source_kind });
-    try obj.put(scratch, "sanitizer", .{ .string = sanitizer });
-    try obj.put(scratch, "failure_kind", .{ .string = classifyFailure(input.bytes) });
-    try obj.put(scratch, "crash_identity", try identityFromText(scratch, input.bytes, sanitizer));
-    try obj.put(scratch, "frames", .{ .array = frames.frames });
-    try obj.put(scratch, "frame_count", .{ .integer = @intCast(frames.count) });
+    try obj.put(scratch, "sanitizer", .{ .string = fusion.sanitizer.name() });
+    try obj.put(scratch, "failure_kind", .{ .string = fusion.failure_kind.name() });
+    try obj.put(scratch, "crash_identity", .{ .string = fusion.crash_identity.value });
+    try obj.put(scratch, "frames", try frameArrayValue(scratch, fusion.frames.frames));
+    try obj.put(scratch, "frame_count", .{ .integer = @intCast(fusion.frames.count) });
     try obj.put(scratch, "repro_command", stringOrNull(argString(args, "command")));
     try obj.put(scratch, "verify_with", try stringArrayValue(scratch, &.{ "zig_crash_repro_plan", "zig_lldb_backtrace", "zig_valgrind_memcheck" }));
     return structured(allocator, .{ .object = obj });
@@ -138,12 +145,17 @@ pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.js
     var obj = try baseValue(scratch, a, "zig_panic_trace_analyze", "Zig panic trace analysis", "medium", &.{
         "Panic traces show the observed failure path and may omit optimized frames.",
     });
-    const frames = try framesValue(scratch, input.bytes, @intCast(@max(1, argInt(args, "limit", 40))));
-    try obj.put(scratch, "panic_message", .{ .string = panicMessage(input.bytes) orelse "unknown panic" });
-    try obj.put(scratch, "failure_kind", .{ .string = classifyFailure(input.bytes) });
-    try obj.put(scratch, "crash_identity", try identityFromText(scratch, input.bytes, "zig_panic"));
-    try obj.put(scratch, "frames", .{ .array = frames.frames });
-    try obj.put(scratch, "frame_count", .{ .integer = @intCast(frames.count) });
+    var panic = try crash_evidence.analyzePanicTrace(scratch, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+        .limit = @intCast(@max(1, argInt(args, "limit", 40))),
+    });
+    defer panic.deinit(scratch);
+    try obj.put(scratch, "panic_message", .{ .string = panic.panic_message });
+    try obj.put(scratch, "failure_kind", .{ .string = panic.failure_kind.name() });
+    try obj.put(scratch, "crash_identity", .{ .string = panic.crash_identity.value });
+    try obj.put(scratch, "frames", try frameArrayValue(scratch, panic.frames.frames));
+    try obj.put(scratch, "frame_count", .{ .integer = @intCast(panic.frames.count) });
     try obj.put(scratch, "repro_command", stringOrNull(argString(args, "command")));
     return structured(allocator, .{ .object = obj });
 }
@@ -159,8 +171,10 @@ pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     });
     try obj.put(scratch, "repro_command", stringOrNull(argString(args, "command")));
     try obj.put(scratch, "target", stringOrNull(argString(args, "target")));
-    try obj.put(scratch, "failure_kind", .{ .string = classifyFailure(input.bytes) });
-    try obj.put(scratch, "crash_identity", try identityFromText(scratch, input.bytes, "crash"));
+    var plan = try crash_evidence.planCrashRepro(scratch, input.bytes);
+    defer plan.deinit(scratch);
+    try obj.put(scratch, "failure_kind", .{ .string = plan.failure_kind.name() });
+    try obj.put(scratch, "crash_identity", .{ .string = plan.crash_identity.value });
     try obj.put(scratch, "steps", try stringArrayValue(scratch, &.{
         "Record the exact command argv, environment variables, input file, target triple, and binary hash.",
         "Re-run once under the normal test command to confirm the failure is reproducible.",
@@ -571,8 +585,9 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
     try obj.put(scratch, "backend_status", try backendStatusValue(scratch, "lldb", true, "ok", "LLDB command completed.", lldb_path));
     try obj.put(scratch, "command_argv", try common.argvValue(scratch, argv));
     try obj.put(scratch, "command_result", try common.commandResultValue(scratch, "lldb debug capture", argv, a.workspace.root, common.toolTimeout(a, args), result));
-    const frames = try framesValue(scratch, result.stdout, @intCast(@max(1, argInt(args, "limit", 40))));
-    try obj.put(scratch, "frames", .{ .array = frames.frames });
+    var frames = try diagnostic_stack.parseFrames(scratch, result.stdout, @intCast(@max(1, argInt(args, "limit", 40))));
+    defer frames.deinit(scratch);
+    try obj.put(scratch, "frames", try frameArrayValue(scratch, frames.frames));
     try obj.put(scratch, "frame_count", .{ .integer = @intCast(frames.count) });
     try obj.put(scratch, "applied", .{ .bool = true });
     try obj.put(scratch, "requires_apply", .{ .bool = false });
@@ -765,93 +780,29 @@ fn looksInlineEvidence(value: []const u8) bool {
     return trimmed.len == 0 or trimmed[0] == '{' or trimmed[0] == '[' or std.mem.indexOfScalar(u8, trimmed, '\n') != null or std.mem.indexOf(u8, trimmed, "==") != null or std.mem.indexOf(u8, trimmed, "panic") != null;
 }
 
-fn framesValue(allocator: std.mem.Allocator, text: []const u8, limit: usize) !ParsedFrames {
-    var out: ParsedFrames = .{ .frames = std.json.Array.init(allocator) };
-    var lines = std.mem.splitScalar(u8, text, '\n');
-    while (lines.next()) |raw| {
-        const line = std.mem.trim(u8, raw, " \t\r");
-        if (!looksLikeFrame(line)) continue;
-        out.count += 1;
-        if (out.frames.items.len >= limit) continue;
-        try out.frames.append(try frameValue(allocator, line, out.count));
-    }
-    return out;
+fn frameArrayValue(allocator: std.mem.Allocator, frames: []const diagnostic_stack.Frame) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (frames) |frame| try array.append(try frameValue(allocator, frame));
+    return .{ .array = array };
 }
 
-fn looksLikeFrame(line: []const u8) bool {
-    if (line.len == 0) return false;
-    return std.mem.startsWith(u8, line, "#") or
-        std.mem.startsWith(u8, line, "frame #") or
-        std.mem.indexOf(u8, line, " in ") != null or
-        std.mem.indexOf(u8, line, " at ") != null or
-        std.mem.indexOf(u8, line, ":0x") != null;
-}
-
-fn frameValue(allocator: std.mem.Allocator, line: []const u8, index: usize) !std.json.Value {
+fn frameValue(allocator: std.mem.Allocator, frame: diagnostic_stack.Frame) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "index", .{ .integer = @intCast(index - 1) });
-    try obj.put(allocator, "raw", .{ .string = try allocator.dupe(u8, line) });
-    try obj.put(allocator, "symbol", .{ .string = try allocator.dupe(u8, frameSymbol(line)) });
-    try obj.put(allocator, "location", .{ .string = try allocator.dupe(u8, frameLocation(line)) });
+    try obj.put(allocator, "index", .{ .integer = @intCast(frame.index) });
+    try obj.put(allocator, "raw", .{ .string = try allocator.dupe(u8, frame.raw) });
+    try obj.put(allocator, "symbol", .{ .string = try allocator.dupe(u8, frame.symbol) });
+    try obj.put(allocator, "location", .{ .string = try allocator.dupe(u8, frame.location) });
     return .{ .object = obj };
 }
 
-fn frameSymbol(line: []const u8) []const u8 {
-    if (std.mem.indexOf(u8, line, " in ")) |idx| {
-        const rest = line[idx + 4 ..];
-        const end = std.mem.indexOfAny(u8, rest, " (") orelse rest.len;
-        return std.mem.trim(u8, rest[0..end], " \t");
-    }
-    if (std.mem.indexOf(u8, line, "`")) |tick| {
-        const rest = line[tick + 1 ..];
-        const end = std.mem.indexOfAny(u8, rest, " +") orelse rest.len;
-        return std.mem.trim(u8, rest[0..end], " \t");
-    }
-    return "unknown";
-}
-
-fn frameLocation(line: []const u8) []const u8 {
-    if (std.mem.indexOf(u8, line, " at ")) |idx| return std.mem.trim(u8, line[idx + 4 ..], " \t");
-    if (std.mem.lastIndexOfScalar(u8, line, ':')) |idx| if (idx > 0) return std.mem.trim(u8, line[0..idx], " \t");
-    return "";
-}
-
-fn topFrameValue(frames: ParsedFrames) std.json.Value {
-    if (frames.frames.items.len == 0) return .null;
-    return frames.frames.items[0];
-}
-
-fn classifySanitizer(text: []const u8) []const u8 {
-    if (containsAny(text, &.{ "AddressSanitizer", "heap-use-after-free", "stack-buffer-overflow" })) return "asan";
-    if (containsAny(text, &.{ "UndefinedBehaviorSanitizer", "runtime error:" })) return "ubsan";
-    if (containsAny(text, &.{ "ThreadSanitizer", "data race" })) return "tsan";
-    if (containsAny(text, &.{ "MemorySanitizer", "use-of-uninitialized-value" })) return "msan";
-    return "unknown";
-}
-
-fn classifyFailure(text: []const u8) []const u8 {
-    if (containsAny(text, &.{ "heap-use-after-free", "use after free" })) return "use_after_free";
-    if (containsAny(text, &.{ "stack-buffer-overflow", "heap-buffer-overflow", "index out of bounds" })) return "bounds";
-    if (containsAny(text, &.{ "data race", "ThreadSanitizer" })) return "data_race";
-    if (containsAny(text, &.{ "panic:", "thread panic", "reached unreachable" })) return "panic";
-    if (containsAny(text, &.{ "leak", "definitely lost" })) return "leak";
-    if (containsAny(text, &.{ "SIGSEGV", "segmentation fault", "access violation" })) return "segfault";
-    return "unknown";
-}
-
-fn panicMessage(text: []const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, text, '\n');
-    while (lines.next()) |raw| {
-        const line = std.mem.trim(u8, raw, " \t\r");
-        if (std.mem.indexOf(u8, line, "panic:")) |idx| return std.mem.trim(u8, line[idx + "panic:".len ..], " \t");
-        if (std.mem.indexOf(u8, line, "thread") != null and std.mem.indexOf(u8, line, "panic") != null) return line;
-    }
-    return null;
+fn topFrameValue(allocator: std.mem.Allocator, frames: diagnostic_stack.ParsedFrames) !std.json.Value {
+    const top = frames.top() orelse return .null;
+    return frameValue(allocator, top);
 }
 
 fn memoryFindingsValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "failure_kind", .{ .string = classifyFailure(text) });
+    try obj.put(allocator, "failure_kind", .{ .string = diagnostic_crash.classifyFailure(text).name() });
     try obj.put(allocator, "definitely_lost_bytes", .{ .integer = parseMetricBefore(text, "bytes in", "definitely lost") orelse 0 });
     try obj.put(allocator, "error_count", .{ .integer = parseMetricBefore(text, "errors from", "ERROR SUMMARY") orelse 0 });
     try obj.put(allocator, "allocation_count", .{ .integer = parseMetricBefore(text, "allocations", "alloc") orelse 0 });
@@ -1298,31 +1249,69 @@ fn freeArgv(allocator: std.mem.Allocator, argv: []const []const u8) void {
     allocator.free(argv);
 }
 
-test "sanitizer and panic classifiers expose stable identities" {
-    const text =
-        \\==1==ERROR: AddressSanitizer: heap-use-after-free
-        \\#0 0x1 in parse src/main.zig:10
-    ;
-    try std.testing.expectEqualStrings("asan", classifySanitizer(text));
-    try std.testing.expectEqualStrings("use_after_free", classifyFailure(text));
-    const panic_text = "thread 123 panic: reached unreachable code\nsrc/main.zig:2:1: 0xabc in main\n";
-    try std.testing.expectEqualStrings("reached unreachable code", panicMessage(panic_text).?);
-}
-
-test "frame parser extracts symbols and locations" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const frames = try framesValue(arena.allocator(), "#0 0x1 in parse src/main.zig:10\n", 10);
-    try std.testing.expectEqual(@as(usize, 1), frames.count);
-    const frame = frames.frames.items[0].object;
-    try std.testing.expectEqualStrings("parse", frame.get("symbol").?.string);
-}
-
 test "binary format sniffing covers common magic values" {
     try std.testing.expectEqualStrings("elf", sniffBinaryFormat("\x7fELFabc"));
     try std.testing.expectEqualStrings("pe", sniffBinaryFormat("MZabc"));
     try std.testing.expectEqualStrings("wasm", sniffBinaryFormat("\x00asm"));
     try std.testing.expectEqualStrings("unknown", sniffBinaryFormat("text"));
+}
+
+test "crash evidence facade preserves public sanitizer result fields" {
+    const allocator = std.testing.allocator;
+    var config = try zigar.config.parse(allocator, std.testing.io, &.{"zigar"});
+    defer config.deinit(allocator);
+    var workspace = try zigar.workspace.Workspace.init(allocator, std.testing.io, ".", null);
+    defer workspace.deinit();
+    var app = App{ .allocator = allocator, .io = std.testing.io, .config = config, .workspace = workspace };
+
+    const args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"content":"==1==ERROR: AddressSanitizer: heap-use-after-free\n#0 0x1 in parse src/main.zig:10\n","command":"zig test","limit":4}
+    , .{});
+    defer args.deinit();
+    const result = try zigSanitizerFusion(&app, allocator, args.value);
+    defer json_result.deinitToolResult(allocator, result);
+
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_sanitizer_fusion", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("content", obj.get("source_kind").?.string);
+    try std.testing.expectEqualStrings("asan", obj.get("sanitizer").?.string);
+    try std.testing.expectEqualStrings("use_after_free", obj.get("failure_kind").?.string);
+    try std.testing.expect(std.mem.startsWith(u8, obj.get("crash_identity").?.string, "asan:"));
+    try std.testing.expectEqual(@as(i64, 1), obj.get("frame_count").?.integer);
+    try std.testing.expectEqualStrings("parse", obj.get("frames").?.array.items[0].object.get("symbol").?.string);
+    try std.testing.expectEqualStrings("zig test", obj.get("repro_command").?.string);
+}
+
+test "crash evidence facade preserves panic and frame summary fields" {
+    const allocator = std.testing.allocator;
+    var config = try zigar.config.parse(allocator, std.testing.io, &.{"zigar"});
+    defer config.deinit(allocator);
+    var workspace = try zigar.workspace.Workspace.init(allocator, std.testing.io, ".", null);
+    defer workspace.deinit();
+    var app = App{ .allocator = allocator, .io = std.testing.io, .config = config, .workspace = workspace };
+
+    const panic_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"content":"thread 1 panic: reached unreachable code\n#0 0x1 in main src/main.zig:1\n"}
+    , .{});
+    defer panic_args.deinit();
+    const panic_result = try zigPanicTraceAnalyze(&app, allocator, panic_args.value);
+    defer json_result.deinitToolResult(allocator, panic_result);
+    const panic_obj = panic_result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_panic_trace_analyze", panic_obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("reached unreachable code", panic_obj.get("panic_message").?.string);
+    try std.testing.expectEqualStrings("panic", panic_obj.get("failure_kind").?.string);
+    try std.testing.expect(std.mem.startsWith(u8, panic_obj.get("crash_identity").?.string, "zig_panic:"));
+
+    const frame_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"content":"#0 0x1 in parse src/main.zig:10\n"}
+    , .{});
+    defer frame_args.deinit();
+    const frame_result = try zigDebugFrameSummary(&app, allocator, frame_args.value);
+    defer json_result.deinitToolResult(allocator, frame_result);
+    const frame_obj = frame_result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_debug_frame_summary", frame_obj.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 1), frame_obj.get("frame_count").?.integer);
+    try std.testing.expectEqualStrings("parse", frame_obj.get("top_frame").?.object.get("symbol").?.string);
 }
 
 test "memory, callgrind, target, and embedded helpers expose stable fields" {
@@ -1348,15 +1337,6 @@ test "memory, callgrind, target, and embedded helpers expose stable fields" {
 }
 
 test "diagnostic classifiers cover common runtime variants" {
-    try std.testing.expectEqualStrings("ubsan", classifySanitizer("UndefinedBehaviorSanitizer runtime error:"));
-    try std.testing.expectEqualStrings("tsan", classifySanitizer("ThreadSanitizer data race"));
-    try std.testing.expectEqualStrings("msan", classifySanitizer("MemorySanitizer use-of-uninitialized-value"));
-    try std.testing.expectEqualStrings("bounds", classifyFailure("index out of bounds"));
-    try std.testing.expectEqualStrings("data_race", classifyFailure("data race"));
-    try std.testing.expectEqualStrings("leak", classifyFailure("definitely lost"));
-    try std.testing.expectEqualStrings("segfault", classifyFailure("SIGSEGV"));
-    try std.testing.expectEqualStrings("unknown", classifyFailure("ordinary output"));
-    try std.testing.expect(panicMessage("ordinary output") == null);
     try std.testing.expectEqual(@as(?i64, 1234), firstInteger("cost 1,234 samples"));
     try std.testing.expectEqual(@as(?i64, null), firstInteger("no digits"));
     try std.testing.expectEqual(@as(?i64, 9), parseMetricBefore("ERROR SUMMARY: 9 errors\n", "errors", "ERROR SUMMARY"));

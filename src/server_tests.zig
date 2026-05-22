@@ -288,11 +288,20 @@ test "tool argument validation returns structured errors" {
     const missing_obj = std.json.ObjectMap.empty;
     const missing = try tool_registry.validateToolArgs(allocator, spec, .{ .object = missing_obj });
     try std.testing.expect(missing != null);
+    const missing_error = missing.?.structuredContent.?.object;
+    try std.testing.expectEqualStrings("argument_error", missing_error.get("kind").?.string);
+    try std.testing.expectEqualStrings("missing_required_argument", missing_error.get("code").?.string);
+    try std.testing.expectEqualStrings("file", missing_error.get("field").?.string);
 
     var wrong_type_obj = std.json.ObjectMap.empty;
     try wrong_type_obj.put(allocator, "file", .{ .integer = 42 });
     const wrong_type = try tool_registry.validateToolArgs(allocator, spec, .{ .object = wrong_type_obj });
     try std.testing.expect(wrong_type != null);
+    const wrong_type_error = wrong_type.?.structuredContent.?.object;
+    try std.testing.expectEqualStrings("argument_error", wrong_type_error.get("kind").?.string);
+    try std.testing.expectEqualStrings("invalid_type", wrong_type_error.get("code").?.string);
+    try std.testing.expectEqualStrings("string", wrong_type_error.get("expected").?.string);
+    try std.testing.expectEqualStrings("integer", wrong_type_error.get("actual").?.string);
 
     var valid_obj = std.json.ObjectMap.empty;
     try valid_obj.put(allocator, "file", .{ .string = "src/main.zig" });

@@ -6,9 +6,13 @@ const analysis = zigar.analysis;
 const analysis_contract = zigar.analysis_contract;
 const artifacts = zigar.artifacts;
 const command = zigar.command;
+const command_result = @import("command_result.zig");
 const evidence = zigar.evidence;
 const json_result = zigar.json_result;
 const tool_manifest = zigar.tool_manifest;
+const app_ports = zigar.app.ports;
+const bootstrap_runtime_ports = zigar.bootstrap.runtime_ports;
+const validation_usecase = zigar.app.usecases.validation.workflows;
 const common = @import("common.zig");
 const agent_values = @import("agent_values.zig");
 const static_analysis = @import("static_analysis.zig");
@@ -33,31 +37,14 @@ const appendUniqueCommand = common.appendUniqueCommand;
 const appendUniqueString = common.appendUniqueString;
 const stringListContains = common.stringListContains;
 const freeStringList = common.freeStringList;
-const commandResultValue = common.commandResultValue;
 const commandErrorValue = common.commandErrorValue;
 const commandString = common.commandString;
 const compilerInsightsValue = common.compilerInsightsValue;
 const scratchApp = common.scratchApp;
 
 const semantic_limit_default = 500;
-const history_path_default = ".zigar-cache/validation/history.jsonl";
 const memory_path_default = ".zigar/project-memory.jsonl";
 const schema_version = 1;
-
-const ValidationPhase = struct {
-    id: []const u8,
-    kind: []const u8,
-    tool: ?[]const u8 = null,
-    command: ?[]const []const u8 = null,
-    reason: []const u8,
-    required: bool,
-    risk: []const u8,
-};
-
-const ParsedHistory = struct {
-    runs: std.json.Array,
-    unavailable: bool = false,
-};
 
 pub fn zigImpactSemantic(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return semanticImpactTool(a, allocator, args, "zig_impact_semantic");
@@ -197,90 +184,381 @@ fn semanticImpactValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Va
 pub fn zigarValidationPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    var scratch_app = scratchApp(a, arena.allocator());
-    const value = validationPlanValue(arena.allocator(), &scratch_app, args) catch |err| return validationWorkflowError(allocator, "zigar_validation_plan", "plan", err);
+    const value = validationPlanToolValue(a, arena.allocator(), args) catch |err| return validationWorkflowError(allocator, "zigar_validation_plan", "plan", err);
     return structured(allocator, value);
 }
 
 pub fn zigarValidationRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const scratch = arena.allocator();
-    const plan = validationPlanValue(scratch, a, args) catch |err| return validationWorkflowError(allocator, "zigar_validation_run", "plan", err);
-    const plan_obj = switch (plan) {
-        .object => |o| o,
-        else => std.json.ObjectMap.empty,
+    const value = switch (validationRunToolOutcome(a, arena.allocator(), args) catch |err| return validationWorkflowError(allocator, "zigar_validation_run", "run", err)) {
+        .ok => |result| result,
+        .err => |failure| switch (failure) {
+            .history_write_failed => |details| return workspacePathErrorResult(a, allocator, "zigar_validation_run", details.path, details.err),
+        },
     };
-    const timeout_ms = toolTimeout(a, args);
-    const stop_on_failure = argBool(args, "stop_on_failure", false);
-    var phases = std.json.Array.init(scratch);
-    var skipped = std.json.Array.init(scratch);
-    var ok = true;
-    var executed_count: usize = 0;
+    return structured(allocator, value);
+}
 
-    const plan_phases = switch (plan_obj.get("phases") orelse .null) {
-        .array => |array| array,
-        else => std.json.Array.init(scratch),
+pub fn validationRunToolValue(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !std.json.Value {
+    return switch (try validationRunToolOutcome(a, allocator, args)) {
+        .ok => |value| value,
+        .err => error.ValidationHistoryWriteFailed,
     };
-    for (plan_phases.items) |phase_value| {
-        const phase_obj = switch (phase_value) {
-            .object => |o| o,
-            else => continue,
-        };
-        const phase_kind = stringField(phase_obj, "kind") orelse "";
-        if (std.mem.eql(u8, phase_kind, "tool_only")) {
-            try skipped.append(try skippedStepValue(scratch, stringField(phase_obj, "id") orelse "tool_only", "Validation runner executes command phases only; call the named tool separately for read-only evidence."));
-            continue;
-        }
-        const argv_value = phase_obj.get("argv") orelse .null;
-        const argv = try argvFromValue(scratch, argv_value);
-        if (argv.len == 0) {
-            try skipped.append(try skippedStepValue(scratch, stringField(phase_obj, "id") orelse "missing_argv", "Phase has no executable argv."));
-            continue;
-        }
-        executed_count += 1;
-        const phase_ok = try runValidationPhase(scratch, a, &phases, stringField(phase_obj, "id") orelse "phase", argv, timeout_ms);
-        if (!phase_ok) {
-            ok = false;
-            if (stop_on_failure) break;
-        }
-    }
-    if (executed_count == 0) {
-        try skipped.append(try skippedStepValue(scratch, "commands", "No command phases were selected by the validation plan."));
-    }
+}
 
-    const history_record = try validationHistoryRecordValue(scratch, a, plan, phases, skipped, ok);
-    const output = argString(args, "output") orelse history_path_default;
-    const apply = argBool(args, "apply", false);
-    const preimage = preimageIdentityForPath(a, scratch, output) catch .null;
-    if (apply) {
-        const line = try jsonLineForRecord(scratch, history_record);
-        const existing = a.workspace.readFileAlloc(a.io, output, 8 * 1024 * 1024) catch "";
-        const existing_owned = existing.len > 0;
-        defer if (existing_owned) scratch.free(existing);
-        var bytes: std.ArrayList(u8) = .empty;
-        try bytes.appendSlice(scratch, existing);
-        if (bytes.items.len > 0 and bytes.items[bytes.items.len - 1] != '\n') try bytes.append(scratch, '\n');
-        try bytes.appendSlice(scratch, line);
-        try bytes.append(scratch, '\n');
-        a.workspace.writeFile(a.io, output, bytes.items) catch |err| return workspacePathErrorResult(a, allocator, "zigar_validation_run", output, err);
-    }
+const ValidationRunToolOutcome = union(enum) {
+    ok: std.json.Value,
+    err: validation_usecase.RunFailure,
+};
 
+fn validationRunToolOutcome(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !ValidationRunToolOutcome {
+    var runtime_ports = bootstrap_runtime_ports.RuntimePorts.init(a, .{});
+    const ctx = try runtime_ports.validationContext();
+    var parsed = try validationRunRequestFromArgs(a, allocator, args);
+    defer parsed.deinit(allocator);
+    var outcome = try validation_usecase.run(allocator, ctx, parsed.request);
+    defer outcome.deinit(allocator);
+    return switch (outcome) {
+        .ok => |report| .{ .ok = try validationRunValue(allocator, report) },
+        .err => |failure| .{ .err = failure },
+    };
+}
+
+fn validationPlanToolValue(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !std.json.Value {
+    var runtime_ports = bootstrap_runtime_ports.RuntimePorts.init(a, .{});
+    const ctx = try runtime_ports.validationContext();
+    var parsed = try validationPlanRequestFromArgs(allocator, args);
+    defer parsed.deinit(allocator);
+    var result = try validation_usecase.plan(allocator, ctx, parsed.request);
+    defer result.deinit(allocator);
+    return validationPlanValueFromUsecase(allocator, result);
+}
+
+pub const ParsedValidationPlanRequest = struct {
+    request: validation_usecase.PlanRequest,
+    changed_paths: []const []const u8,
+
+    pub fn deinit(self: *ParsedValidationPlanRequest, allocator: std.mem.Allocator) void {
+        freeStringList(allocator, self.changed_paths);
+        self.* = undefined;
+    }
+};
+
+pub const ParsedValidationRunRequest = struct {
+    request: validation_usecase.RunRequest,
+    plan: ParsedValidationPlanRequest,
+
+    pub fn deinit(self: *ParsedValidationRunRequest, allocator: std.mem.Allocator) void {
+        self.plan.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+fn validationPlanRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) !ParsedValidationPlanRequest {
+    var paths = std.ArrayList([]const u8).empty;
+    errdefer {
+        freeStringListItems(allocator, paths.items);
+        paths.deinit(allocator);
+    }
+    try appendPathTokens(allocator, &paths, argString(args, "changed_files"));
+    try appendPatchPaths(allocator, &paths, argString(args, "diff"));
+    const changed_paths = try paths.toOwnedSlice(allocator);
+    return .{
+        .request = .{
+            .mode = argString(args, "mode") orelse "standard",
+            .goal = argString(args, "goal"),
+            .changed_paths = changed_paths,
+            .include_semantic = argBool(args, "include_semantic", true),
+        },
+        .changed_paths = changed_paths,
+    };
+}
+
+pub fn validationRunRequestFromArgs(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !ParsedValidationRunRequest {
+    var plan_request = try validationPlanRequestFromArgs(allocator, args);
+    errdefer plan_request.deinit(allocator);
+    return .{
+        .request = .{
+            .plan = plan_request.request,
+            .output = argString(args, "output") orelse validation_usecase.history_path_default,
+            .apply = argBool(args, "apply", false),
+            .stop_on_failure = argBool(args, "stop_on_failure", false),
+            .timeout_ms = @intCast(@max(1, toolTimeout(a, args))),
+        },
+        .plan = plan_request,
+    };
+}
+
+fn validationPlanValueFromUsecase(allocator: std.mem.Allocator, result: validation_usecase.PlanResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_validation_run" });
-    try obj.put(scratch, "schema_version", .{ .integer = schema_version });
-    try obj.put(scratch, "ok", .{ .bool = ok });
-    try obj.put(scratch, "plan", plan);
-    try obj.put(scratch, "phases", .{ .array = phases });
-    try obj.put(scratch, "skipped_phases", .{ .array = skipped });
-    try obj.put(scratch, "history_record", history_record);
-    try obj.put(scratch, "history_path", try ownedString(scratch, output));
-    try obj.put(scratch, "history_applied", .{ .bool = apply });
-    try obj.put(scratch, "requires_apply_for_history", .{ .bool = !apply });
-    try obj.put(scratch, "preimage_identity", preimage);
-    try obj.put(scratch, "next_action", try validationRunNextActionValue(scratch, ok, phases));
-    try obj.put(scratch, "stop_condition", .{ .string = "Stop when all selected phases pass and skipped_phases are acceptable for the change risk." });
-    return structured(allocator, .{ .object = obj });
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigar_validation_plan" });
+    try obj.put(allocator, "schema_version", .{ .integer = result.schema_version });
+    try obj.put(allocator, "plan_id", try ownedString(allocator, result.plan_id));
+    try obj.put(allocator, "mode", try ownedString(allocator, result.mode));
+    try obj.put(allocator, "goal", if (result.goal) |goal| try ownedString(allocator, goal) else .null);
+    try obj.put(allocator, "facts", try stringArrayValue(allocator, result.facts.items));
+    try obj.put(allocator, "risk", try validationRiskValue(allocator, result.risk));
+    try obj.put(allocator, "phases", try validationPhasesValue(allocator, result.phases));
+    try obj.put(allocator, "skipped_phases", try skippedPhasesValue(allocator, result.skipped_phases));
+    try obj.put(allocator, "unknowns", try stringArrayValue(allocator, result.unknowns.items));
+    try obj.put(allocator, "execution_policy", .{ .string = "plan-first; no environment installs or source writes are performed by this planner" });
+    try obj.put(allocator, "stop_condition", .{ .string = "Run required phases until they pass or the first blocking failure is understood." });
+    try obj.put(allocator, "next_action", try agent_values.toolStepValue(allocator, "zigar_validation_run", "execute command phases and retain structured events/history"));
+    return .{ .object = obj };
+}
+
+pub fn validationRunValue(allocator: std.mem.Allocator, report: validation_usecase.RunReport) !std.json.Value {
+    var phases = std.json.Array.init(allocator);
+    for (report.phases) |phase_run| try phases.append(try validationPhaseRunValue(allocator, phase_run));
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigar_validation_run" });
+    try obj.put(allocator, "schema_version", .{ .integer = report.schema_version });
+    try obj.put(allocator, "ok", .{ .bool = report.ok });
+    try obj.put(allocator, "plan", try validationPlanValueFromUsecase(allocator, report.plan));
+    try obj.put(allocator, "phases", .{ .array = phases });
+    try obj.put(allocator, "skipped_phases", try skippedPhasesValue(allocator, report.skipped_phases));
+    try obj.put(allocator, "history_record", try historyRecordValueFromUsecase(allocator, report.history_record, report.phases, report.skipped_phases));
+    try obj.put(allocator, "history_path", try ownedString(allocator, report.history_path));
+    try obj.put(allocator, "history_applied", .{ .bool = report.history_applied });
+    try obj.put(allocator, "requires_apply_for_history", .{ .bool = report.requires_apply_for_history });
+    try obj.put(allocator, "preimage_identity", try preimageValueFromUsecase(allocator, report.preimage_identity));
+    try obj.put(allocator, "next_action", try validationRunNextActionValue(allocator, report.ok, phases));
+    try obj.put(allocator, "stop_condition", .{ .string = "Stop when all selected phases pass and skipped_phases are acceptable for the change risk." });
+    return .{ .object = obj };
+}
+
+fn validationHistoryToolValue(allocator: std.mem.Allocator, tool_name: []const u8, result: validation_usecase.HistoryResult) !std.json.Value {
+    return switch (result.view) {
+        .runs => validationRunsHistoryValue(allocator, tool_name, result),
+        .flakes => validationFlakeHistoryValue(allocator, tool_name, result),
+        .failures => validationFailureHistoryValue(allocator, tool_name, result),
+    };
+}
+
+fn validationRunsHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: validation_usecase.HistoryResult) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = tool_name });
+    try obj.put(allocator, "schema_version", .{ .integer = result.schema_version });
+    try obj.put(allocator, "history_available", .{ .bool = result.history_available });
+    try obj.put(allocator, "run_count", .{ .integer = @intCast(result.runs.len) });
+    try obj.put(allocator, "last_run", if (result.last_run_index) |index| try historyRunJsonValue(allocator, result.runs[index]) else .null);
+    try obj.put(allocator, "last_good", if (result.last_good_index) |index| try historyRunJsonValue(allocator, result.runs[index]) else .null);
+    try obj.put(allocator, "runs", try historyRunsArrayValue(allocator, result.runs));
+    try obj.put(allocator, "failure_summary", try failureGroupsValueFromUsecase(allocator, result.failure_groups));
+    try obj.put(allocator, "limitations", .{ .string = "History reflects records supplied to or written by zigar validation tools; it is not a complete CI database." });
+    return .{ .object = obj };
+}
+
+fn validationFlakeHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: validation_usecase.HistoryResult) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = tool_name });
+    try obj.put(allocator, "schema_version", .{ .integer = result.schema_version });
+    try obj.put(allocator, "history_available", .{ .bool = result.history_available });
+    try obj.put(allocator, "flakes", try failureGroupsValueFromUsecase(allocator, result.failure_groups));
+    try obj.put(allocator, "confidence", .{ .string = if (result.runs.len >= 3) "medium" else "low" });
+    try obj.put(allocator, "limitations", .{ .string = "Flake detection is recurrence over retained validation records; confirm with repeated test runs before suppressing failures." });
+    return .{ .object = obj };
+}
+
+fn validationFailureHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: validation_usecase.HistoryResult) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = tool_name });
+    try obj.put(allocator, "schema_version", .{ .integer = result.schema_version });
+    try obj.put(allocator, "history_available", .{ .bool = result.history_available });
+    try obj.put(allocator, "recurring_failures", try failureGroupsValueFromUsecase(allocator, result.failure_groups));
+    try obj.put(allocator, "run_count", .{ .integer = @intCast(result.runs.len) });
+    return .{ .object = obj };
+}
+
+fn validationRiskValue(allocator: std.mem.Allocator, risk: validation_usecase.Risk) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "changed_file_count", .{ .integer = @intCast(risk.changed_file_count) });
+    try obj.put(allocator, "touches_zig_source", .{ .bool = risk.touches_zig_source });
+    try obj.put(allocator, "touches_build_config", .{ .bool = risk.touches_build_config });
+    try obj.put(allocator, "touches_docs", .{ .bool = risk.touches_docs });
+    try obj.put(allocator, "level", try ownedString(allocator, risk.level));
+    return .{ .object = obj };
+}
+
+fn validationPhasesValue(allocator: std.mem.Allocator, phases: []const validation_usecase.Phase) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (phases) |phase| try array.append(try validationPhaseValue(allocator, phase));
+    return .{ .array = array };
+}
+
+fn validationPhaseValue(allocator: std.mem.Allocator, phase: validation_usecase.Phase) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "id", try ownedString(allocator, phase.id));
+    try obj.put(allocator, "kind", try ownedString(allocator, phase.kind.name()));
+    try obj.put(allocator, "tool", if (phase.tool) |tool| try ownedString(allocator, tool) else .null);
+    try obj.put(allocator, "argv", if (phase.argv) |argv| try argvOwnedValue(allocator, argv.items) else .null);
+    try obj.put(allocator, "reason", try ownedString(allocator, phase.reason));
+    try obj.put(allocator, "required", .{ .bool = phase.required });
+    try obj.put(allocator, "risk", try ownedString(allocator, phase.risk));
+    return .{ .object = obj };
+}
+
+fn skippedPhasesValue(allocator: std.mem.Allocator, skipped: []const validation_usecase.SkippedPhase) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (skipped) |item| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "name", try ownedString(allocator, item.name));
+        try obj.put(allocator, "reason", try ownedString(allocator, item.reason));
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (values) |value| try array.append(try ownedString(allocator, value));
+    return .{ .array = array };
+}
+
+fn validationPhaseRunValue(allocator: std.mem.Allocator, phase: validation_usecase.PhaseRun) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "name", try ownedString(allocator, phase.name));
+    try obj.put(allocator, "ok", .{ .bool = phase.ok });
+    try obj.put(allocator, "command", try phaseCommandValue(allocator, phase));
+    try obj.put(allocator, "events", try phaseEventsValue(allocator, phase));
+    return .{ .object = obj };
+}
+
+fn phaseCommandValue(allocator: std.mem.Allocator, phase: validation_usecase.PhaseRun) !std.json.Value {
+    const value: std.json.Value = switch (phase.outcome) {
+        .result => |result| try command_result.commandResultValue(allocator, phase.name, phase.argv.items, phase.cwd, phase.timeout_ms, .{
+            .term = legacyCommandTerm(result.term),
+            .stdout = @constCast(result.stdout),
+            .stderr = @constCast(result.stderr),
+            .stdout_truncated = result.stdout_truncated,
+            .stderr_truncated = result.stderr_truncated,
+            .stdout_limit = validation_usecase.command_output_limit,
+            .stderr_limit = validation_usecase.command_output_limit,
+            .duration_ms = @intCast(result.duration_ms),
+        }),
+        .port_error => |err| try commandErrorValue(allocator, phase.name, phase.argv.items, phase.cwd, phase.timeout_ms, err),
+    };
+    return json_result.cloneValue(allocator, value);
+}
+
+fn phaseEventsValue(allocator: std.mem.Allocator, phase: validation_usecase.PhaseRun) !std.json.Value {
+    const value: std.json.Value = switch (phase.outcome) {
+        .result => |result| try buildEventsValue(allocator, "validation_phase", result.stderr, result.stdout, phase.argv.items, phase.ok, "executed_command"),
+        .port_error => |err| try commandErrorEventsValue(allocator, "validation_phase", phase.argv.items, phase.cwd, phase.timeout_ms, err),
+    };
+    return json_result.cloneValue(allocator, value);
+}
+
+fn argvOwnedValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (argv) |arg| try array.append(try ownedString(allocator, arg));
+    return .{ .array = array };
+}
+
+fn legacyCommandTerm(term: app_ports.CommandTerm) std.process.Child.Term {
+    return switch (term) {
+        .exited => |code| .{ .exited = @intCast(code) },
+        .signal => .{ .signal = .TERM },
+        .stopped => .{ .stopped = .STOP },
+        .unknown => .{ .unknown = 0 },
+    };
+}
+
+fn historyRecordValueFromUsecase(
+    allocator: std.mem.Allocator,
+    record: validation_usecase.HistoryRecord,
+    phases: []const validation_usecase.PhaseRun,
+    skipped: []const validation_usecase.SkippedPhase,
+) !std.json.Value {
+    var failures = std.json.Array.init(allocator);
+    for (record.failures) |failure| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "phase", try ownedString(allocator, failure.phase));
+        try obj.put(allocator, "fingerprint", try ownedString(allocator, failure.fingerprint));
+        if (phaseByName(phases, failure.phase)) |phase| try obj.put(allocator, "command", try phaseCommandValue(allocator, phase));
+        try failures.append(.{ .object = obj });
+    }
+    var slow = std.json.Array.init(allocator);
+    for (record.slow_phases) |slow_phase| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "phase", try ownedString(allocator, slow_phase.phase));
+        try obj.put(allocator, "duration_ms", .{ .integer = slow_phase.duration_ms });
+        try slow.append(.{ .object = obj });
+    }
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "schema_version", .{ .integer = validation_usecase.schema_version });
+    try obj.put(allocator, "recorded_unix_ms", .{ .integer = record.recorded_unix_ms });
+    try obj.put(allocator, "ok", .{ .bool = record.ok });
+    try obj.put(allocator, "plan_id", try ownedString(allocator, record.plan_id));
+    try obj.put(allocator, "phase_count", .{ .integer = @intCast(record.phase_count) });
+    try obj.put(allocator, "skipped_count", .{ .integer = @intCast(record.skipped_count) });
+    try obj.put(allocator, "failures", .{ .array = failures });
+    try obj.put(allocator, "slow_phases", .{ .array = slow });
+    var phase_values = std.json.Array.init(allocator);
+    for (phases) |phase| try phase_values.append(try validationPhaseRunValue(allocator, phase));
+    try obj.put(allocator, "phases", .{ .array = phase_values });
+    try obj.put(allocator, "skipped_phases", try skippedPhasesValue(allocator, skipped));
+    return .{ .object = obj };
+}
+
+fn preimageValueFromUsecase(allocator: std.mem.Allocator, preimage: validation_usecase.Preimage) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "exists", .{ .bool = preimage.exists });
+    try obj.put(allocator, "bytes", .{ .integer = @intCast(preimage.bytes) });
+    try obj.put(allocator, "sha256", if (preimage.sha256) |hash| try ownedString(allocator, hash) else .null);
+    return .{ .object = obj };
+}
+
+fn phaseByName(phases: []const validation_usecase.PhaseRun, name: []const u8) ?validation_usecase.PhaseRun {
+    for (phases) |phase| {
+        if (std.mem.eql(u8, phase.name, name)) return phase;
+    }
+    return null;
+}
+
+fn historyRunsArrayValue(allocator: std.mem.Allocator, runs: []const validation_usecase.HistoryRun) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (runs) |run_item| try array.append(try historyRunJsonValue(allocator, run_item));
+    return .{ .array = array };
+}
+
+fn historyRunJsonValue(allocator: std.mem.Allocator, run_item: validation_usecase.HistoryRun) !std.json.Value {
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, run_item.raw_json, .{}) catch return ownedString(allocator, run_item.raw_json);
+    defer parsed.deinit();
+    return json_result.cloneValue(allocator, parsed.value);
+}
+
+fn failureGroupsValueFromUsecase(allocator: std.mem.Allocator, groups: []const validation_usecase.FailureGroup) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    for (groups) |group| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "fingerprint", try ownedString(allocator, group.fingerprint));
+        try obj.put(allocator, "count", .{ .integer = @intCast(group.count) });
+        var parsed = std.json.parseFromSlice(std.json.Value, allocator, group.sample_json, .{}) catch null;
+        if (parsed) |*value| {
+            defer value.deinit();
+            try obj.put(allocator, "sample", try json_result.cloneValue(allocator, value.value));
+        } else {
+            try obj.put(allocator, "sample", try ownedString(allocator, group.sample_json));
+        }
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+fn freeStringListItems(allocator: std.mem.Allocator, items: []const []const u8) void {
+    for (items) |item| allocator.free(item);
 }
 
 pub fn zigBuildEvents(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -343,12 +621,23 @@ fn historyTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    const parsed = parseHistory(scratch, a, args) catch |err| return validationWorkflowError(allocator, tool_name, "parse_history", err);
-    const value = switch (view) {
-        .runs => validationHistoryValue(scratch, tool_name, parsed),
-        .flakes => flakeHistoryValue(scratch, tool_name, parsed),
-        .failures => failureHistoryValue(scratch, tool_name, parsed),
-    } catch return error.OutOfMemory;
+    var runtime_ports = bootstrap_runtime_ports.RuntimePorts.init(a, .{});
+    const ctx = runtime_ports.validationContext() catch |err| return validationWorkflowError(allocator, tool_name, "build_app_context", err);
+    var outcome = validation_usecase.history(scratch, ctx, .{
+        .view = switch (view) {
+            .runs => .runs,
+            .flakes => .flakes,
+            .failures => .failures,
+        },
+        .history_text = argString(args, "history"),
+        .path = argString(args, "path") orelse validation_usecase.history_path_default,
+        .limit = @intCast(@max(1, argInt(args, "limit", 50))),
+    }) catch |err| return validationWorkflowError(allocator, tool_name, "parse_history", err);
+    defer outcome.deinit(scratch);
+    const value = switch (outcome) {
+        .ok => |result| try validationHistoryToolValue(scratch, tool_name, result),
+        .err => |failure| return validationWorkflowError(allocator, tool_name, "read_history", failure.err),
+    };
     return structured(allocator, value);
 }
 
@@ -453,109 +742,6 @@ pub fn zigarToolSequencePlan(_: *App, allocator: std.mem.Allocator, args: ?std.j
     defer arena.deinit();
     const value = toolSequencePlanValue(arena.allocator(), goal, argString(args, "changed_files")) catch return error.OutOfMemory;
     return structured(allocator, value);
-}
-
-fn validationPlanValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !std.json.Value {
-    var paths = std.ArrayList([]const u8).empty;
-    defer paths.deinit(allocator);
-    defer freeStringList(allocator, paths.items);
-    try appendPathTokens(allocator, &paths, argString(args, "changed_files"));
-    try appendPatchPaths(allocator, &paths, argString(args, "diff"));
-
-    var phases = std.json.Array.init(allocator);
-    var skipped = std.json.Array.init(allocator);
-    var facts = std.json.Array.init(allocator);
-    var unknowns = std.json.Array.init(allocator);
-    var saw_zig = false;
-    var saw_build = false;
-    var saw_docs = false;
-    for (paths.items) |path| {
-        if (std.mem.endsWith(u8, path, ".zig")) saw_zig = true;
-        if (std.mem.eql(u8, path, "build.zig") or std.mem.eql(u8, path, "build.zig.zon")) saw_build = true;
-        if (std.mem.endsWith(u8, path, ".md")) saw_docs = true;
-        try facts.append(try ownedString(allocator, path));
-    }
-    const mode = argString(args, "mode") orelse "standard";
-    const include_semantic = argBool(args, "include_semantic", true);
-    if (include_semantic) try phases.append(try phaseValue(allocator, .{ .id = "semantic_impact", .kind = "tool_only", .tool = "zig_impact_semantic", .reason = "Map touched files and symbols to importers, declarations, tests, and public API.", .required = true, .risk = "none" }));
-    if (paths.items.len > 0) try phases.append(try phaseValue(allocator, .{ .id = "patch_guard", .kind = "tool_only", .tool = "zigar_patch_guard", .reason = "Check workspace boundaries and generated-path policy before validating edits.", .required = true, .risk = "none" }));
-    if (saw_zig) {
-        for (paths.items) |path| {
-            if (!std.mem.endsWith(u8, path, ".zig")) continue;
-            if (!workspacePathExists(allocator, a, path)) continue;
-            try phases.append(try phaseValue(allocator, .{ .id = "format_check", .kind = "command", .command = &.{ a.config.zig_path, "fmt", "--check", path }, .reason = "Touched Zig source requires formatting verification.", .required = true, .risk = "project_code" }));
-            try phases.append(try phaseValue(allocator, .{ .id = "ast_check", .kind = "command", .command = &.{ a.config.zig_path, "ast-check", path }, .reason = "Touched Zig source requires compiler syntax validation.", .required = true, .risk = "project_code" }));
-        }
-        try phases.append(try phaseValue(allocator, .{ .id = "semantic_test_select", .kind = "tool_only", .tool = "zig_test_select_semantic", .reason = "Select focused tests from semantic index evidence.", .required = true, .risk = "none" }));
-    } else {
-        try skipped.append(try skippedStepValue(allocator, "source_file_checks", "No changed Zig source files were supplied."));
-    }
-    if (!std.mem.eql(u8, mode, "quick") or saw_build or paths.items.len == 0) {
-        try phases.append(try phaseValue(allocator, .{ .id = "build_test", .kind = "command", .command = &.{ a.config.zig_path, "build", "test" }, .reason = if (saw_build) "Build configuration changed." else "Standard/full validation includes the project build test gate.", .required = true, .risk = "project_code" }));
-    } else {
-        try skipped.append(try skippedStepValue(allocator, "build_test", "quick mode skipped the project build test; do not treat this as pass evidence."));
-    }
-    if (saw_docs) try phases.append(try phaseValue(allocator, .{ .id = "docs_check", .kind = "command", .command = &.{ a.config.zig_path, "build", "docs-check" }, .reason = "Product documentation changed.", .required = true, .risk = "project_code" }));
-    if (paths.items.len == 0) try unknowns.append(try ownedString(allocator, "No changed_files or diff were supplied; plan uses workspace-level fallback checks."));
-
-    var risk = std.json.ObjectMap.empty;
-    try risk.put(allocator, "changed_file_count", .{ .integer = @intCast(paths.items.len) });
-    try risk.put(allocator, "touches_zig_source", .{ .bool = saw_zig });
-    try risk.put(allocator, "touches_build_config", .{ .bool = saw_build });
-    try risk.put(allocator, "touches_docs", .{ .bool = saw_docs });
-    try risk.put(allocator, "level", .{ .string = if (saw_build) "high" else if (saw_zig) "medium" else "low" });
-
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_validation_plan" });
-    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
-    try obj.put(allocator, "plan_id", try planIdValue(allocator, paths.items, mode));
-    try obj.put(allocator, "mode", try ownedString(allocator, mode));
-    try obj.put(allocator, "goal", if (argString(args, "goal")) |goal| try ownedString(allocator, goal) else .null);
-    try obj.put(allocator, "facts", .{ .array = facts });
-    try obj.put(allocator, "risk", .{ .object = risk });
-    try obj.put(allocator, "phases", .{ .array = phases });
-    try obj.put(allocator, "skipped_phases", .{ .array = skipped });
-    try obj.put(allocator, "unknowns", .{ .array = unknowns });
-    try obj.put(allocator, "execution_policy", .{ .string = "plan-first; no environment installs or source writes are performed by this planner" });
-    try obj.put(allocator, "stop_condition", .{ .string = "Run required phases until they pass or the first blocking failure is understood." });
-    try obj.put(allocator, "next_action", try agent_values.toolStepValue(allocator, "zigar_validation_run", "execute command phases and retain structured events/history"));
-    return .{ .object = obj };
-}
-
-fn phaseValue(allocator: std.mem.Allocator, phase: ValidationPhase) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "id", try ownedString(allocator, phase.id));
-    try obj.put(allocator, "kind", try ownedString(allocator, phase.kind));
-    if (phase.tool) |tool| try obj.put(allocator, "tool", try ownedString(allocator, tool)) else try obj.put(allocator, "tool", .null);
-    if (phase.command) |argv| try obj.put(allocator, "argv", try common.argvValue(allocator, argv)) else try obj.put(allocator, "argv", .null);
-    try obj.put(allocator, "reason", try ownedString(allocator, phase.reason));
-    try obj.put(allocator, "required", .{ .bool = phase.required });
-    try obj.put(allocator, "risk", try ownedString(allocator, phase.risk));
-    return .{ .object = obj };
-}
-
-fn runValidationPhase(allocator: std.mem.Allocator, a: *App, phases: *std.json.Array, name: []const u8, argv: []const []const u8, timeout_ms: i64) !bool {
-    a.command_calls += 1;
-    const result = command.run(allocator, a.io, a.workspace.root, argv, timeout_ms) catch |err| {
-        var obj = std.json.ObjectMap.empty;
-        try obj.put(allocator, "name", try ownedString(allocator, name));
-        try obj.put(allocator, "ok", .{ .bool = false });
-        try obj.put(allocator, "command", try commandErrorValue(allocator, name, argv, a.workspace.root, timeout_ms, err));
-        try obj.put(allocator, "events", try commandErrorEventsValue(allocator, "validation_phase", argv, a.workspace.root, timeout_ms, err));
-        try phases.append(.{ .object = obj });
-        return false;
-    };
-    defer result.deinit(allocator);
-    const ok = result.succeeded();
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "name", try ownedString(allocator, name));
-    try obj.put(allocator, "ok", .{ .bool = ok });
-    try obj.put(allocator, "command", try commandResultValue(allocator, name, argv, a.workspace.root, timeout_ms, result));
-    try obj.put(allocator, "events", try buildEventsValue(allocator, "validation_phase", result.stderr, result.stdout, argv, ok, "executed_command"));
-    try phases.append(.{ .object = obj });
-    return ok;
 }
 
 fn buildEventsValue(allocator: std.mem.Allocator, tool_name: []const u8, stderr: []const u8, stdout: []const u8, argv: []const []const u8, ok: bool, basis: []const u8) !std.json.Value {
@@ -702,97 +888,6 @@ fn buildEventArgv(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value, 
     defer freeArgList(allocator, extra);
     try list.appendSlice(allocator, extra);
     return list.toOwnedSlice(allocator);
-}
-
-fn validationHistoryRecordValue(allocator: std.mem.Allocator, a: *App, plan: std.json.Value, phases: std.json.Array, skipped: std.json.Array, ok: bool) !std.json.Value {
-    var failures = std.json.Array.init(allocator);
-    var slow = std.json.Array.init(allocator);
-    for (phases.items) |phase_value| {
-        const phase_obj = switch (phase_value) {
-            .object => |o| o,
-            else => continue,
-        };
-        const phase_ok = boolField(phase_obj, "ok") orelse true;
-        if (!phase_ok) try failures.append(try failureRecordFromPhase(allocator, phase_obj));
-        if (phaseDurationMs(phase_obj) > 1000) try slow.append(try slowPhaseRecordValue(allocator, phase_obj));
-    }
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
-    const recorded_unix_ms: i64 = @intCast(@divTrunc(std.Io.Clock.now(.real, a.io).nanoseconds, std.time.ns_per_ms));
-    try obj.put(allocator, "recorded_unix_ms", .{ .integer = recorded_unix_ms });
-    try obj.put(allocator, "ok", .{ .bool = ok });
-    try obj.put(allocator, "plan_id", switch (plan) {
-        .object => |o| o.get("plan_id") orelse .null,
-        else => .null,
-    });
-    try obj.put(allocator, "phase_count", .{ .integer = @intCast(phases.items.len) });
-    try obj.put(allocator, "skipped_count", .{ .integer = @intCast(skipped.items.len) });
-    try obj.put(allocator, "failures", .{ .array = failures });
-    try obj.put(allocator, "slow_phases", .{ .array = slow });
-    try obj.put(allocator, "phases", .{ .array = phases });
-    try obj.put(allocator, "skipped_phases", .{ .array = skipped });
-    return .{ .object = obj };
-}
-
-fn validationHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, parsed: ParsedHistory) !std.json.Value {
-    var last_good: std.json.Value = .null;
-    var last_run: std.json.Value = .null;
-    for (parsed.runs.items) |run| {
-        last_run = run;
-        const obj = switch (run) {
-            .object => |o| o,
-            else => continue,
-        };
-        if (boolField(obj, "ok") orelse false) last_good = run;
-    }
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", try ownedString(allocator, tool_name));
-    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
-    try obj.put(allocator, "history_available", .{ .bool = !parsed.unavailable });
-    try obj.put(allocator, "run_count", .{ .integer = @intCast(parsed.runs.items.len) });
-    try obj.put(allocator, "last_run", last_run);
-    try obj.put(allocator, "last_good", last_good);
-    try obj.put(allocator, "runs", .{ .array = parsed.runs });
-    try obj.put(allocator, "failure_summary", try failureGroupsValue(allocator, parsed.runs));
-    try obj.put(allocator, "limitations", .{ .string = "History reflects records supplied to or written by zigar validation tools; it is not a complete CI database." });
-    return .{ .object = obj };
-}
-
-fn flakeHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, parsed: ParsedHistory) !std.json.Value {
-    const failures = try failureGroupsValue(allocator, parsed.runs);
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", try ownedString(allocator, tool_name));
-    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
-    try obj.put(allocator, "history_available", .{ .bool = !parsed.unavailable });
-    try obj.put(allocator, "flakes", failures);
-    try obj.put(allocator, "confidence", .{ .string = if (parsed.runs.items.len >= 3) "medium" else "low" });
-    try obj.put(allocator, "limitations", .{ .string = "Flake detection is recurrence over retained validation records; confirm with repeated test runs before suppressing failures." });
-    return .{ .object = obj };
-}
-
-fn failureHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, parsed: ParsedHistory) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", try ownedString(allocator, tool_name));
-    try obj.put(allocator, "schema_version", .{ .integer = schema_version });
-    try obj.put(allocator, "history_available", .{ .bool = !parsed.unavailable });
-    try obj.put(allocator, "recurring_failures", try failureGroupsValue(allocator, parsed.runs));
-    try obj.put(allocator, "run_count", .{ .integer = @intCast(parsed.runs.items.len) });
-    return .{ .object = obj };
-}
-
-fn parseHistory(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !ParsedHistory {
-    const limit: usize = @intCast(@max(1, argInt(args, "limit", 50)));
-    const path = argString(args, "path") orelse history_path_default;
-    const runs = std.json.Array.init(allocator);
-    if (argString(args, "history")) |history| {
-        return .{ .runs = try parseJsonLinesOrArray(allocator, history, limit), .unavailable = false };
-    }
-    const bytes = a.workspace.readFileAlloc(a.io, path, 8 * 1024 * 1024) catch |err| switch (err) {
-        error.FileNotFound => return .{ .runs = runs, .unavailable = true },
-        else => return err,
-    };
-    return .{ .runs = try parseJsonLinesOrArray(allocator, bytes, limit), .unavailable = false };
 }
 
 fn parseJsonLinesOrArray(allocator: std.mem.Allocator, text: []const u8, limit: usize) !std.json.Array {
@@ -1116,103 +1211,9 @@ fn importMatchesTarget(imported: []const u8, target: []const u8) bool {
         std.mem.indexOf(u8, imported, base) != null;
 }
 
-fn workspacePathExists(allocator: std.mem.Allocator, a: *App, path: []const u8) bool {
-    return static_analysis.workspacePathExists(allocator, a, path);
-}
-
-fn argvFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]const []const u8 {
-    const array = switch (value) {
-        .array => |a| a,
-        else => return &.{},
-    };
-    var list: std.ArrayList([]const u8) = .empty;
-    for (array.items) |item| {
-        const s = switch (item) {
-            .string => |v| v,
-            else => continue,
-        };
-        try list.append(allocator, s);
-    }
-    return list.toOwnedSlice(allocator);
-}
-
-fn planIdValue(allocator: std.mem.Allocator, files: []const []const u8, mode: []const u8) !std.json.Value {
-    var hasher = std.hash.Wyhash.init(4);
-    hasher.update(mode);
-    for (files) |file| hasher.update(file);
-    return .{ .string = try std.fmt.allocPrint(allocator, "validation-{x}", .{hasher.final()}) };
-}
-
 fn validationRunNextActionValue(allocator: std.mem.Allocator, ok: bool, phases: std.json.Array) !std.json.Value {
     if (ok) return agent_values.validationNextActionValue(allocator, true, phases);
     return agent_values.validationNextActionValue(allocator, false, phases);
-}
-
-fn failureRecordFromPhase(allocator: std.mem.Allocator, phase_obj: std.json.ObjectMap) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    const name = stringField(phase_obj, "name") orelse "phase";
-    try obj.put(allocator, "phase", try ownedString(allocator, name));
-    try obj.put(allocator, "fingerprint", try ownedString(allocator, try std.fmt.allocPrint(allocator, "phase:{s}", .{name})));
-    const command_value = phase_obj.get("command") orelse .null;
-    try obj.put(allocator, "command", command_value);
-    return .{ .object = obj };
-}
-
-fn slowPhaseRecordValue(allocator: std.mem.Allocator, phase_obj: std.json.ObjectMap) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "phase", try ownedString(allocator, stringField(phase_obj, "name") orelse "phase"));
-    try obj.put(allocator, "duration_ms", .{ .integer = phaseDurationMs(phase_obj) });
-    return .{ .object = obj };
-}
-
-fn phaseDurationMs(phase_obj: std.json.ObjectMap) i64 {
-    const command_value = phase_obj.get("command") orelse .null;
-    const command_obj = switch (command_value) {
-        .object => |o| o,
-        else => return 0,
-    };
-    return integerField(command_obj, "duration_ms") orelse 0;
-}
-
-fn failureGroupsValue(allocator: std.mem.Allocator, runs: std.json.Array) !std.json.Value {
-    var groups = std.json.Array.init(allocator);
-    for (runs.items) |run| {
-        const run_obj = switch (run) {
-            .object => |o| o,
-            else => continue,
-        };
-        const failures = switch (run_obj.get("failures") orelse .null) {
-            .array => |a| a,
-            else => continue,
-        };
-        for (failures.items) |failure| {
-            const failure_obj = switch (failure) {
-                .object => |o| o,
-                else => continue,
-            };
-            const fingerprint = stringField(failure_obj, "fingerprint") orelse stringField(failure_obj, "phase") orelse "unknown";
-            try incrementGroup(allocator, &groups, fingerprint, failure);
-        }
-    }
-    return .{ .array = groups };
-}
-
-fn incrementGroup(allocator: std.mem.Allocator, groups: *std.json.Array, fingerprint: []const u8, sample: std.json.Value) !void {
-    for (groups.items) |*item| {
-        const obj = switch (item.*) {
-            .object => |*o| o,
-            else => continue,
-        };
-        if (!std.mem.eql(u8, stringField(obj.*, "fingerprint") orelse "", fingerprint)) continue;
-        const count = integerField(obj.*, "count") orelse 0;
-        try obj.put(allocator, "count", .{ .integer = count + 1 });
-        return;
-    }
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "fingerprint", try ownedString(allocator, fingerprint));
-    try obj.put(allocator, "count", .{ .integer = 1 });
-    try obj.put(allocator, "sample", sample);
-    try groups.append(.{ .object = obj });
 }
 
 fn jsonLineForRecord(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {

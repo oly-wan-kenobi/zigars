@@ -1,0 +1,230 @@
+const std = @import("std");
+
+pub const EvidenceCheckInput = struct {
+    name: []const u8,
+    text: ?[]const u8,
+    verify_with: []const u8,
+};
+
+pub const EvidenceCheck = struct {
+    name: []const u8,
+    observed: bool,
+    status: []const u8,
+    verify_with: []const u8,
+    summary: ?[]u8,
+
+    pub fn deinit(self: *EvidenceCheck, allocator: std.mem.Allocator) void {
+        if (self.summary) |summary| allocator.free(summary);
+        self.* = undefined;
+    }
+};
+
+pub const ReleasePlan = struct {
+    checks: std.ArrayList(EvidenceCheck) = .empty,
+    release_blocked: bool = true,
+
+    pub fn deinit(self: *ReleasePlan, allocator: std.mem.Allocator) void {
+        for (self.checks.items) |*check| check.deinit(allocator);
+        self.checks.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub const SemverBump = enum {
+    major,
+    minor,
+    patch,
+
+    pub fn text(self: SemverBump) []const u8 {
+        return switch (self) {
+            .major => "major",
+            .minor => "minor",
+            .patch => "patch",
+        };
+    }
+};
+
+pub const SemverSuggestion = struct {
+    bump: SemverBump,
+    reason: []const u8,
+};
+
+pub const ReleaseNoteInput = struct {
+    title: []const u8,
+    text: ?[]const u8,
+};
+
+pub const ReleaseNoteSection = struct {
+    title: []const u8,
+    body: []u8,
+
+    pub fn deinit(self: *ReleaseNoteSection, allocator: std.mem.Allocator) void {
+        allocator.free(self.body);
+        self.* = undefined;
+    }
+};
+
+pub const ReleaseNotesDraft = struct {
+    version: ?[]const u8,
+    sections: std.ArrayList(ReleaseNoteSection) = .empty,
+    markdown: []u8,
+    requires_review: bool = true,
+
+    pub fn deinit(self: *ReleaseNotesDraft, allocator: std.mem.Allocator) void {
+        for (self.sections.items) |*section| section.deinit(allocator);
+        self.sections.deinit(allocator);
+        allocator.free(self.markdown);
+        self.* = undefined;
+    }
+};
+
+pub const EvidencePointerInput = struct {
+    name: []const u8,
+    text: ?[]const u8,
+};
+
+pub const EvidencePointer = struct {
+    name: []const u8,
+    provided: bool,
+    summary: ?[]u8,
+
+    pub fn deinit(self: *EvidencePointer, allocator: std.mem.Allocator) void {
+        if (self.summary) |summary| allocator.free(summary);
+        self.* = undefined;
+    }
+};
+
+pub const EvidencePack = struct {
+    evidence: std.ArrayList(EvidencePointer) = .empty,
+    ready_for_release_review: bool = false,
+
+    pub fn deinit(self: *EvidencePack, allocator: std.mem.Allocator) void {
+        for (self.evidence.items) |*pointer| pointer.deinit(allocator);
+        self.evidence.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub fn buildReleasePlan(allocator: std.mem.Allocator, inputs: []const EvidenceCheckInput) !ReleasePlan {
+    var plan = ReleasePlan{};
+    errdefer plan.deinit(allocator);
+    for (inputs) |input| try appendEvidenceCheck(allocator, &plan.checks, input);
+    plan.release_blocked = hasMissingEvidence(plan.checks.items);
+    return plan;
+}
+
+pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes: []const u8) SemverSuggestion {
+    const bump: SemverBump = if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "breaking_change_risk\":true", "breaking change", "removed", "incompatible" }))
+        .major
+    else if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "added", "feature", "new tool", "capability" }))
+        .minor
+    else
+        .patch;
+
+    return .{
+        .bump = bump,
+        .reason = switch (bump) {
+            .major => "Observed API/removal/breaking-change evidence.",
+            .minor => "Observed additive feature evidence without explicit breaking-change evidence.",
+            .patch => "No explicit breaking or additive API evidence was provided.",
+        },
+    };
+}
+
+pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inputs: []const ReleaseNoteInput) !ReleaseNotesDraft {
+    var sections: std.ArrayList(ReleaseNoteSection) = .empty;
+    errdefer {
+        for (sections.items) |*section| section.deinit(allocator);
+        sections.deinit(allocator);
+    }
+
+    for (inputs) |input| {
+        const body = input.text orelse continue;
+        if (std.mem.trim(u8, body, " \t\r\n").len == 0) continue;
+        try sections.append(allocator, .{
+            .title = input.title,
+            .body = try shortString(allocator, body, 1200),
+        });
+    }
+
+    const markdown = try releaseNotesMarkdown(allocator, version orelse "next", sections.items);
+    return .{
+        .version = version,
+        .sections = sections,
+        .markdown = markdown,
+        .requires_review = true,
+    };
+}
+
+pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidencePointerInput) !EvidencePack {
+    var pack = EvidencePack{};
+    errdefer pack.deinit(allocator);
+    for (inputs) |input| try appendEvidencePointer(allocator, &pack.evidence, input);
+    pack.ready_for_release_review = pack.evidence.items.len > 0;
+    return pack;
+}
+
+fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(EvidenceCheck), input: EvidenceCheckInput) !void {
+    const observed = input.text != null and input.text.?.len > 0;
+    try checks.append(allocator, .{
+        .name = input.name,
+        .observed = observed,
+        .status = if (observed) "observed" else "missing",
+        .verify_with = input.verify_with,
+        .summary = if (input.text) |text| try shortString(allocator, text, 240) else null,
+    });
+}
+
+fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.ArrayList(EvidencePointer), input: EvidencePointerInput) !void {
+    try evidence.append(allocator, .{
+        .name = input.name,
+        .provided = input.text != null and input.text.?.len > 0,
+        .summary = if (input.text) |text| try shortString(allocator, text, 400) else null,
+    });
+}
+
+fn hasMissingEvidence(checks: []const EvidenceCheck) bool {
+    for (checks) |check| {
+        if (!check.observed) return true;
+    }
+    return false;
+}
+
+fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, sections: []const ReleaseNoteSection) ![]u8 {
+    var out: std.Io.Writer.Allocating = .init(allocator);
+    errdefer out.deinit();
+    try out.writer.print("# {s}\n\n", .{version});
+    if (sections.len == 0) try out.writer.writeAll("_No release evidence was supplied._\n");
+    for (sections) |section| {
+        try out.writer.print("## {s}\n\n{s}\n\n", .{ section.title, section.body });
+    }
+    return try out.toOwnedSlice();
+}
+
+fn containsAnyIgnoreCase(haystacks: []const []const u8, needles: []const []const u8) bool {
+    for (haystacks) |haystack| {
+        for (needles) |needle| {
+            if (indexOfIgnoreCase(haystack, needle) != null) return true;
+        }
+    }
+    return false;
+}
+
+fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
+    if (needle.len == 0) return 0;
+    if (needle.len > haystack.len) return null;
+    var index: usize = 0;
+    while (index + needle.len <= haystack.len) : (index += 1) {
+        if (std.ascii.eqlIgnoreCase(haystack[index .. index + needle.len], needle)) return index;
+    }
+    return null;
+}
+
+fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![]u8 {
+    const trimmed = std.mem.trim(u8, input, " \t\r\n");
+    if (trimmed.len <= limit) return allocator.dupe(u8, trimmed);
+    var out = std.ArrayList(u8).empty;
+    try out.appendSlice(allocator, trimmed[0..limit]);
+    try out.appendSlice(allocator, "...");
+    return out.toOwnedSlice(allocator);
+}

@@ -1,74 +1,25 @@
 const std = @import("std");
 const analysis_contract = @import("analysis_contract.zig");
+const zig_analysis = @import("domain/zig/analysis.zig");
 
 pub fn declSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
-    try out.print(allocator, "# Declaration summary for {s}\n\n", .{file});
-    try out.appendSlice(allocator, "Capability tier: advisory_orientation. Confidence: medium heuristic text scan (orientation_only). Verify with `zig_ast_decl_summary`, ZLS, or `zig ast-check` before making destructive edits.\n\n");
-    var lines = std.mem.splitScalar(u8, contents, '\n');
-    var line_no: usize = 1;
-    var count: usize = 0;
-    while (lines.next()) |line| : (line_no += 1) {
-        const trimmed = std.mem.trim(u8, line, " \t");
-        if (isDeclarationLine(trimmed)) {
-            count += 1;
-            try out.print(allocator, "- {d}: `{s}`\n", .{ line_no, trimmed });
-        }
-    }
-    if (count == 0) try out.appendSlice(allocator, "No top-level-looking declarations found.\n");
-    return out.toOwnedSlice(allocator);
+    return zig_analysis.declarationSummaryText(allocator, file, contents);
 }
 
 pub fn allocationSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
-    return keywordSummary(allocator, file, contents, "allocation-related sites", &.{
-        ".alloc(",
-        ".create(",
-        ".dupe(",
-        "ArrayList",
-        "ArenaAllocator",
-        "GeneralPurposeAllocator",
-    }, "Capability tier: advisory_orientation. Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
+    return zig_analysis.allocationSummaryText(allocator, file, contents);
 }
 
 pub fn errorSetSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
-    return keywordSummary(allocator, file, contents, "error-related sites", &.{
-        "error{",
-        "anyerror",
-        "catch",
-        "try ",
-        "!",
-    }, "Capability tier: advisory_orientation. Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
+    return zig_analysis.errorSetSummaryText(allocator, file, contents);
 }
 
 pub fn publicApiSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
-    return keywordSummary(allocator, file, contents, "public API declarations", &.{
-        "pub const ",
-        "pub var ",
-        "pub fn ",
-        "pub extern ",
-        "pub export ",
-    }, "Capability tier: advisory_orientation. Confidence: medium heuristic keyword scan (advisory). Comparison basis is public-looking source lines; verify API changes with `zig_ast_decl_summary`, ZLS, compiler checks, and release review.\n\n");
+    return zig_analysis.publicApiSummaryText(allocator, file, contents);
 }
 
 pub fn deadDeclCandidates(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
-    try out.print(allocator, "# Dead declaration candidates for {s}\n\n", .{file});
-    try out.appendSlice(allocator, "Capability tier: advisory_orientation. Confidence: low heuristic (orientation_only). Private declarations listed here still need ZLS references, workspace search, and tests before deletion.\n\n");
-
-    var lines = std.mem.splitScalar(u8, contents, '\n');
-    var line_no: usize = 1;
-    var count: usize = 0;
-    while (lines.next()) |line| : (line_no += 1) {
-        const trimmed = std.mem.trim(u8, line, " \t");
-        if (std.mem.startsWith(u8, trimmed, "const ") or std.mem.startsWith(u8, trimmed, "fn ")) {
-            count += 1;
-            try out.print(allocator, "- {d}: `{s}`\n", .{ line_no, trimmed });
-        }
-    }
-    if (count == 0) try out.appendSlice(allocator, "No obvious private top-level declarations found.\n");
-    return out.toOwnedSlice(allocator);
+    return zig_analysis.deadDeclCandidatesText(allocator, file, contents);
 }
 
 pub fn importGraph(
@@ -171,17 +122,37 @@ pub fn importGraphJson(
 }
 
 pub fn declSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    const declarations = try zig_analysis.heuristicDeclarations(allocator, contents);
+    defer declarations.deinit(allocator);
+    return declSummaryJsonFromDomain(allocator, file, declarations);
+}
+
+pub fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
+    defer summary.deinit(allocator);
+    return astDeclSummaryJsonFromDomain(allocator, file, summary);
+}
+
+pub fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
+    defer summary.deinit(allocator);
+    return astImportsJsonFromDomain(allocator, file, summary);
+}
+
+pub fn astTestsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
+    defer summary.deinit(allocator);
+    return astTestsJsonFromDomain(allocator, file, summary);
+}
+
+pub fn declSummaryJsonFromDomain(allocator: std.mem.Allocator, file: []const u8, declarations: zig_analysis.DeclarationList) !std.json.Value {
     var decls = std.json.Array.init(allocator);
-    var lines = std.mem.splitScalar(u8, contents, '\n');
-    var line_no: usize = 1;
-    while (lines.next()) |line| : (line_no += 1) {
-        const trimmed = std.mem.trim(u8, line, " \t");
-        const kind = declKind(trimmed) orelse continue;
+    for (declarations.items) |decl| {
         var item = std.json.ObjectMap.empty;
-        try item.put(allocator, "line", .{ .integer = @intCast(line_no) });
-        try item.put(allocator, "kind", .{ .string = kind });
-        try item.put(allocator, "public", .{ .bool = std.mem.startsWith(u8, trimmed, "pub ") });
-        try item.put(allocator, "text", try ownedString(allocator, trimmed));
+        try item.put(allocator, "line", .{ .integer = @intCast(decl.line) });
+        try item.put(allocator, "kind", try ownedString(allocator, decl.kind));
+        try item.put(allocator, "public", .{ .bool = decl.public });
+        try item.put(allocator, "text", try ownedString(allocator, decl.signature));
         try decls.append(.{ .object = item });
     }
     var obj = std.json.ObjectMap.empty;
@@ -192,48 +163,31 @@ pub fn declSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents:
     return .{ .object = obj };
 }
 
-pub fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
-    var tree = try parseAst(allocator, contents);
-    const parsed_source = tree.source;
-    defer tree.deinit(allocator);
-    defer allocator.free(parsed_source);
-
+pub fn astDeclSummaryJsonFromDomain(allocator: std.mem.Allocator, file: []const u8, summary: zig_analysis.SourceSummary) !std.json.Value {
     var declarations = std.json.Array.init(allocator);
-    try appendAstDecls(allocator, &tree, tree.rootDecls(), &declarations, 0);
+    for (summary.declarations) |decl| try declarations.append(try astDeclValueFromDomain(allocator, decl));
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_ast_decl_summary" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_decl_summary");
-    try putParseMetadata(allocator, &obj, tree);
+    try putParseMetadataFromDomain(allocator, &obj, summary.parse);
     try obj.put(allocator, "declarations", .{ .array = declarations });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
     return .{ .object = obj };
 }
 
-pub fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
-    var tree = try parseAst(allocator, contents);
-    const parsed_source = tree.source;
-    defer tree.deinit(allocator);
-    defer allocator.free(parsed_source);
-
+pub fn astImportsJsonFromDomain(allocator: std.mem.Allocator, file: []const u8, summary: zig_analysis.SourceSummary) !std.json.Value {
     var imports = std.json.Array.init(allocator);
-    var buffer: [2]std.zig.Ast.Node.Index = undefined;
-    for (0..tree.nodes.len) |node_i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
-        const tag = tree.nodeTag(node);
-        if (tag != .builtin_call and tag != .builtin_call_comma and tag != .builtin_call_two and tag != .builtin_call_two_comma) continue;
-        if (!std.mem.eql(u8, tree.tokenSlice(tree.nodeMainToken(node)), "@import")) continue;
-        const params = tree.builtinCallParams(&buffer, node) orelse continue;
-        if (params.len == 0 or tree.nodeTag(params[0]) != .string_literal) continue;
+    for (summary.imports) |import_item| {
         var item = std.json.ObjectMap.empty;
-        try item.put(allocator, "file", try ownedString(allocator, file));
-        try item.put(allocator, "line", .{ .integer = @intCast(lineForNode(tree, node)) });
-        try item.put(allocator, "import", try astStringLiteralValue(allocator, tree, params[0]));
-        try item.put(allocator, "alias", try astImportAliasValue(allocator, tree, node));
-        try item.put(allocator, "declaration", try ownedString(allocator, tree.getNodeSource(node)));
+        try item.put(allocator, "file", try ownedString(allocator, import_item.file));
+        try item.put(allocator, "line", .{ .integer = @intCast(import_item.line) });
+        try item.put(allocator, "import", try ownedString(allocator, import_item.import));
+        try item.put(allocator, "alias", if (import_item.alias) |alias| try ownedString(allocator, alias) else .null);
+        try item.put(allocator, "declaration", try ownedString(allocator, import_item.declaration));
         try imports.append(.{ .object = item });
     }
 
@@ -242,29 +196,22 @@ pub fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: 
     try obj.put(allocator, "kind", .{ .string = "zig_ast_imports" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_imports");
-    try putParseMetadata(allocator, &obj, tree);
+    try putParseMetadataFromDomain(allocator, &obj, summary.parse);
     try obj.put(allocator, "imports", .{ .array = imports });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
     return .{ .object = obj };
 }
 
-pub fn astTestsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
-    var tree = try parseAst(allocator, contents);
-    const parsed_source = tree.source;
-    defer tree.deinit(allocator);
-    defer allocator.free(parsed_source);
-
+pub fn astTestsJsonFromDomain(allocator: std.mem.Allocator, file: []const u8, summary: zig_analysis.SourceSummary) !std.json.Value {
     var tests = std.json.Array.init(allocator);
-    for (0..tree.nodes.len) |node_i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
-        if (tree.nodeTag(node) != .test_decl) continue;
+    for (summary.tests) |test_item| {
         var item = std.json.ObjectMap.empty;
-        try item.put(allocator, "file", try ownedString(allocator, file));
-        try item.put(allocator, "line", .{ .integer = @intCast(lineForNode(tree, node)) });
-        try item.put(allocator, "name", try astTestNameValue(allocator, tree, node));
-        try item.put(allocator, "declaration", try ownedString(allocator, compactNodeSource(tree.getNodeSource(node))));
-        try item.put(allocator, "command", .{ .string = try std.fmt.allocPrint(allocator, "zig test {s}", .{file}) });
+        try item.put(allocator, "file", try ownedString(allocator, test_item.file));
+        try item.put(allocator, "line", .{ .integer = @intCast(test_item.line) });
+        try item.put(allocator, "name", if (test_item.name) |name| try ownedString(allocator, name) else .null);
+        try item.put(allocator, "declaration", try ownedString(allocator, test_item.declaration));
+        try item.put(allocator, "command", try ownedString(allocator, test_item.command));
         try tests.append(.{ .object = item });
     }
 
@@ -273,11 +220,31 @@ pub fn astTestsJson(allocator: std.mem.Allocator, file: []const u8, contents: []
     try obj.put(allocator, "kind", .{ .string = "zig_ast_tests" });
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try analysis_contract.putMetadata(allocator, &obj, "zig_ast_tests");
-    try putParseMetadata(allocator, &obj, tree);
+    try putParseMetadataFromDomain(allocator, &obj, summary.parse);
     try obj.put(allocator, "tests", .{ .array = tests });
     try obj.put(allocator, "skipped_files", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "skipped_file_count", .{ .integer = 0 });
     return .{ .object = obj };
+}
+
+fn astDeclValueFromDomain(allocator: std.mem.Allocator, decl: zig_analysis.Declaration) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "line", .{ .integer = @intCast(decl.line) });
+    try obj.put(allocator, "kind", try ownedString(allocator, decl.kind));
+    try obj.put(allocator, "name", if (decl.name) |name| try ownedString(allocator, name) else .null);
+    try obj.put(allocator, "public", .{ .bool = decl.public });
+    try obj.put(allocator, "comptime", .{ .bool = decl.is_comptime });
+    try obj.put(allocator, "depth", .{ .integer = @intCast(decl.depth) });
+    try obj.put(allocator, "signature", try ownedString(allocator, decl.signature));
+    return .{ .object = obj };
+}
+
+fn putParseMetadataFromDomain(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, parse: zig_analysis.ParseMetadata) !void {
+    try obj.put(allocator, "parse_status", .{ .string = zig_analysis.parseStatusName(parse.status) });
+    try obj.put(allocator, "partial_result", .{ .bool = parse.partial_result });
+    try obj.put(allocator, "result_complete", .{ .bool = parse.result_complete });
+    try obj.put(allocator, "parse_error_count", .{ .integer = parse.parse_error_count });
 }
 
 pub fn testDiscoverJson(
@@ -516,24 +483,11 @@ fn isDeclarationLine(line: []const u8) bool {
 }
 
 pub fn declKind(line: []const u8) ?[]const u8 {
-    const rest = if (std.mem.startsWith(u8, line, "pub ")) line["pub ".len..] else line;
-    if (std.mem.startsWith(u8, rest, "const ")) return "const";
-    if (std.mem.startsWith(u8, rest, "var ")) return "var";
-    if (std.mem.startsWith(u8, rest, "fn ")) return "fn";
-    if (std.mem.startsWith(u8, rest, "extern ")) return "extern";
-    if (std.mem.startsWith(u8, rest, "export ")) return "export";
-    return null;
+    return zig_analysis.declKind(line);
 }
 
 pub fn skipWorkspacePath(path: []const u8) bool {
-    return std.mem.startsWith(u8, path, ".zig-cache") or
-        std.mem.startsWith(u8, path, ".zigar-cache") or
-        std.mem.startsWith(u8, path, "zig-out") or
-        std.mem.startsWith(u8, path, "zig-pkg") or
-        std.mem.indexOf(u8, path, "/.zig-cache/") != null or
-        std.mem.indexOf(u8, path, "/.zigar-cache/") != null or
-        std.mem.indexOf(u8, path, "/zig-out/") != null or
-        std.mem.indexOf(u8, path, "/zig-pkg/") != null;
+    return zig_analysis.skipWorkspacePath(path);
 }
 
 test "declaration summary finds pub fn" {

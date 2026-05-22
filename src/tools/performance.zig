@@ -6,6 +6,10 @@ const zigar = @import("zigar");
 const analysis = zigar.analysis;
 const artifacts = zigar.artifacts;
 const command = zigar.command;
+const benchmark_model = zigar.domain.performance.benchmark_model;
+const benchmark_usecase = zigar.app.usecases.performance.benchmark;
+const coverage_model = zigar.domain.performance.coverage_model;
+const coverage_usecase = zigar.app.usecases.performance.coverage;
 const json_result = zigar.json_result;
 
 const common = @import("common.zig");
@@ -39,38 +43,8 @@ const Input = struct {
     }
 };
 
-const CoverageFile = struct {
-    path: []const u8,
-    total: usize,
-    covered: usize,
-};
-
-const CoverageSet = struct {
-    files: std.ArrayList(CoverageFile) = .empty,
-    total: usize = 0,
-    covered: usize = 0,
-    source_kind: []const u8 = "content",
-
-    fn deinit(self: *CoverageSet, allocator: std.mem.Allocator) void {
-        for (self.files.items) |file| allocator.free(file.path);
-        self.files.deinit(allocator);
-    }
-};
-
-const BenchSample = struct {
-    name: []const u8,
-    ns_per_iter: f64,
-};
-
-const BenchSet = struct {
-    samples: std.ArrayList(BenchSample) = .empty,
-    source_kind: []const u8 = "content",
-
-    fn deinit(self: *BenchSet, allocator: std.mem.Allocator) void {
-        for (self.samples.items) |sample| allocator.free(sample.name);
-        self.samples.deinit(allocator);
-    }
-};
+const CoverageSet = coverage_model.CoverageSet;
+const BenchSet = benchmark_model.BenchSet;
 
 pub fn zigCoverageRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_coverage_run", "command", "non-empty command string");
@@ -130,7 +104,11 @@ pub fn zigCoverageRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 pub fn zigCoverageMap(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_map", "coverage", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_map", args, "coverage", err);
     defer input.deinit(allocator);
-    var set = parseCoverage(allocator, input.bytes, input.source_kind, argString(args, "format") orelse "auto") catch |err| return performanceToolError(allocator, "zig_coverage_map", "parse_coverage", err);
+    var set = coverage_usecase.map(allocator, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+        .format = argString(args, "format") orelse "auto",
+    }) catch |err| return performanceToolError(allocator, "zig_coverage_map", "parse_coverage", err);
     defer set.deinit(allocator);
     set.source_kind = input.source_kind;
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -146,11 +124,10 @@ pub fn zigCoverageMerge(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     defer left_input.deinit(allocator);
     var right_input = readEvidenceInput(a, allocator, args, "zig_coverage_merge", right_field, null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_merge", args, right_field, err);
     defer right_input.deinit(allocator);
-    var left = parseCoverage(allocator, left_input.bytes, left_input.source_kind, "auto") catch |err| return performanceToolError(allocator, "zig_coverage_merge", "parse_left", err);
-    defer left.deinit(allocator);
-    var right = parseCoverage(allocator, right_input.bytes, right_input.source_kind, "auto") catch |err| return performanceToolError(allocator, "zig_coverage_merge", "parse_right", err);
-    defer right.deinit(allocator);
-    var merged = mergeCoverage(allocator, left, right) catch return error.OutOfMemory;
+    var merged = coverage_usecase.merge(allocator, .{
+        .left = .{ .bytes = left_input.bytes, .source_kind = left_input.source_kind },
+        .right = .{ .bytes = right_input.bytes, .source_kind = right_input.source_kind },
+    }) catch |err| return performanceToolError(allocator, "zig_coverage_merge", "merge_coverage", err);
     defer merged.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -164,20 +141,25 @@ pub fn zigCoverageDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     defer current_input.deinit(allocator);
     var baseline_input = readEvidenceInput(a, allocator, args, "zig_coverage_diff", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_diff", args, "baseline", err);
     defer baseline_input.deinit(allocator);
-    var current = parseCoverage(allocator, current_input.bytes, current_input.source_kind, "auto") catch |err| return performanceToolError(allocator, "zig_coverage_diff", "parse_current", err);
-    defer current.deinit(allocator);
-    var baseline = parseCoverage(allocator, baseline_input.bytes, baseline_input.source_kind, "auto") catch |err| return performanceToolError(allocator, "zig_coverage_diff", "parse_baseline", err);
-    defer baseline.deinit(allocator);
+    var diff = coverage_usecase.diff(allocator, .{
+        .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
+        .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
+    }) catch |err| return performanceToolError(allocator, "zig_coverage_diff", "diff_coverage", err);
+    defer diff.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const value = coverageDiffValue(arena.allocator(), a, current, baseline) catch return error.OutOfMemory;
+    const value = coverageDiffValue(arena.allocator(), a, diff) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
 
 pub fn zigCoverageBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_baseline", "coverage", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_baseline", args, "coverage", err);
     defer input.deinit(allocator);
-    var set = parseCoverage(allocator, input.bytes, input.source_kind, argString(args, "format") orelse "auto") catch |err| return performanceToolError(allocator, "zig_coverage_baseline", "parse_coverage", err);
+    var set = coverage_usecase.map(allocator, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+        .format = argString(args, "format") orelse "auto",
+    }) catch |err| return performanceToolError(allocator, "zig_coverage_baseline", "parse_coverage", err);
     defer set.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -196,8 +178,6 @@ pub fn zigCoverageBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 pub fn zigCoverageBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_budget_check", "coverage", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_budget_check", args, "coverage", err);
     defer input.deinit(allocator);
-    var set = parseCoverage(allocator, input.bytes, input.source_kind, "auto") catch |err| return performanceToolError(allocator, "zig_coverage_budget_check", "parse_coverage", err);
-    defer set.deinit(allocator);
     var changed = common.changedPathList(allocator, a, argString(args, "changed_files"), common.toolTimeout(a, args)) catch std.ArrayList([]const u8).empty;
     defer {
         common.freeStringList(allocator, changed.items);
@@ -205,7 +185,14 @@ pub fn zigCoverageBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.
     }
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const value = coverageBudgetValue(arena.allocator(), a, set, changed.items, @intCast(argInt(args, "min_line_rate_bp", 8000)), @intCast(argInt(args, "min_changed_line_rate_bp", 0))) catch return error.OutOfMemory;
+    var budget = coverage_usecase.budget(allocator, .{
+        .coverage = .{ .bytes = input.bytes, .source_kind = input.source_kind },
+        .changed_files = changed.items,
+        .min_line_rate_bp = @intCast(argInt(args, "min_line_rate_bp", 8000)),
+        .min_changed_line_rate_bp = @intCast(argInt(args, "min_changed_line_rate_bp", 0)),
+    }) catch |err| return performanceToolError(allocator, "zig_coverage_budget_check", "coverage_budget", err);
+    defer budget.deinit(allocator);
+    const value = coverageBudgetValue(arena.allocator(), a, budget) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
 
@@ -247,7 +234,7 @@ pub fn zigBenchRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     };
     defer result.deinit(allocator);
     a.observability.recordCommand("benchmark command", argv, result.duration_ms, result.succeeded(), null);
-    var parsed = parseBenchText(allocator, result.stdout) catch BenchSet{};
+    var parsed = benchmark_model.parseText(allocator, result.stdout) catch BenchSet{};
     defer parsed.deinit(allocator);
     const value = benchRunArtifactValue(scratch, a, argv, timeout_ms, result, parsed) catch return error.OutOfMemory;
     const bytes = json_result.serializeAlloc(scratch, value) catch return error.OutOfMemory;
@@ -265,7 +252,10 @@ pub fn zigBenchRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
 pub fn zigBenchBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var input = readEvidenceInput(a, allocator, args, "zig_bench_baseline", "results", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_baseline", args, "results", err);
     defer input.deinit(allocator);
-    var set = parseBenchEvidence(allocator, input.bytes, input.source_kind) catch |err| return performanceToolError(allocator, "zig_bench_baseline", "parse_results", err);
+    var set = benchmark_usecase.parse(allocator, .{
+        .bytes = input.bytes,
+        .source_kind = input.source_kind,
+    }) catch |err| return performanceToolError(allocator, "zig_bench_baseline", "parse_results", err);
     defer set.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -317,13 +307,15 @@ pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     defer current_input.deinit(allocator);
     var baseline_input = readEvidenceInput(a, allocator, args, "zig_bench_compare", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_compare", args, "baseline", err);
     defer baseline_input.deinit(allocator);
-    var current = parseBenchEvidence(allocator, current_input.bytes, current_input.source_kind) catch |err| return performanceToolError(allocator, "zig_bench_compare", "parse_current", err);
-    defer current.deinit(allocator);
-    var baseline = parseBenchEvidence(allocator, baseline_input.bytes, baseline_input.source_kind) catch |err| return performanceToolError(allocator, "zig_bench_compare", "parse_baseline", err);
-    defer baseline.deinit(allocator);
+    var comparison = benchmark_usecase.compare(allocator, .{
+        .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
+        .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
+        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+    }) catch |err| return performanceToolError(allocator, "zig_bench_compare", "compare_benchmarks", err);
+    defer comparison.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const value = benchCompareValue(arena.allocator(), a, current, baseline, @intCast(argInt(args, "threshold_pct", 5))) catch return error.OutOfMemory;
+    const value = benchCompareValue(arena.allocator(), a, comparison) catch return error.OutOfMemory;
     return structured(allocator, value);
 }
 
@@ -335,15 +327,21 @@ pub fn zigPerfBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json
     defer arena.deinit();
     const scratch = arena.allocator();
     const max_regression_pct: f64 = @floatFromInt(argInt(args, "max_regression_pct", 5));
-    const summary = compareSummaryFromJson(scratch, input.bytes) catch CompareSummary{ .regression_count = 0, .worst_regression_pct = 0 };
+    const budget = benchmark_usecase.budget(scratch, .{
+        .comparison = input.bytes,
+        .max_regression_pct = max_regression_pct,
+    }) catch benchmark_usecase.BudgetResult{
+        .summary = .{ .regression_count = 0, .worst_regression_pct = 0 },
+        .max_regression_pct = max_regression_pct,
+    };
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, a, "zig_perf_budget_check", "Performance comparison budget check", "medium", &.{
         "Budget check is only as complete as the supplied benchmark comparison evidence.",
     });
     try obj.put(scratch, "max_regression_pct", .{ .float = max_regression_pct });
-    try obj.put(scratch, "regression_count", .{ .integer = @intCast(summary.regression_count) });
-    try obj.put(scratch, "worst_regression_pct", .{ .float = summary.worst_regression_pct });
-    try obj.put(scratch, "passed", .{ .bool = summary.regression_count == 0 or summary.worst_regression_pct <= max_regression_pct });
+    try obj.put(scratch, "regression_count", .{ .integer = @intCast(budget.summary.regression_count) });
+    try obj.put(scratch, "worst_regression_pct", .{ .float = budget.summary.worst_regression_pct });
+    try obj.put(scratch, "passed", .{ .bool = budget.passed() });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -354,16 +352,22 @@ pub fn zigProfileRegression(a: *App, allocator: std.mem.Allocator, args: ?std.js
     defer arena.deinit();
     const scratch = arena.allocator();
     const backend = argString(args, "backend") orelse "samply";
-    const summary = compareSummaryFromJson(scratch, input.bytes) catch CompareSummary{ .regression_count = 0, .worst_regression_pct = 0 };
+    const plan = benchmark_usecase.planProfileRegression(scratch, .{
+        .comparison = input.bytes,
+        .backend = backend,
+    }) catch benchmark_usecase.ProfileRegressionPlan{
+        .summary = .{ .regression_count = 0, .worst_regression_pct = 0 },
+        .backend = backend,
+    };
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, a, "zig_profile_regression", "Regression-focused profiling plan", "medium", &.{
         "This tool plans profiling only; capture tools remain explicit and apply-gated.",
     });
     try obj.put(scratch, "backend", .{ .string = backend });
     try obj.put(scratch, "command", stringOrNull(argString(args, "command")));
-    try obj.put(scratch, "regression_count", .{ .integer = @intCast(summary.regression_count) });
-    try obj.put(scratch, "needs_profile", .{ .bool = summary.regression_count > 0 });
-    try obj.put(scratch, "recommended_tools", if (std.mem.eql(u8, backend, "tracy")) try stringArrayValue(scratch, &.{ "zig_tracy_plan", "zig_tracy_capture", "zig_tracy_hints" }) else try stringArrayValue(scratch, &.{ "zig_samply_record", "zig_samply_summary", "zig_perf_evidence_pack" }));
+    try obj.put(scratch, "regression_count", .{ .integer = @intCast(plan.summary.regression_count) });
+    try obj.put(scratch, "needs_profile", .{ .bool = plan.needsProfile() });
+    try obj.put(scratch, "recommended_tools", try stringArrayValue(scratch, plan.recommendedTools()));
     try obj.put(scratch, "stop_condition", .{ .string = "Capture a focused profile only for benchmarks whose comparison evidence still exceeds the configured regression threshold." });
     return structured(allocator, .{ .object = obj });
 }
@@ -563,120 +567,6 @@ fn looksInlineEvidence(value: []const u8) bool {
     return trimmed.len == 0 or trimmed[0] == '{' or trimmed[0] == '[' or std.mem.indexOfScalar(u8, trimmed, '\n') != null or std.mem.startsWith(u8, trimmed, "SF:") or containsAny(trimmed, &.{ " ns", " us", " ms", " s" });
 }
 
-fn parseCoverage(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8, format: []const u8) !CoverageSet {
-    const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
-    if (trimmed.len == 0) return error.InvalidCoverageEvidence;
-    if (std.mem.eql(u8, format, "lcov") or std.mem.startsWith(u8, trimmed, "TN:") or std.mem.indexOf(u8, trimmed, "\nSF:") != null or std.mem.startsWith(u8, trimmed, "SF:")) {
-        return parseLcov(allocator, trimmed, source_kind);
-    }
-    if (trimmed[0] == '{' or trimmed[0] == '[') return parseCoverageJson(allocator, trimmed, source_kind);
-    return parseLcov(allocator, trimmed, source_kind);
-}
-
-fn parseLcov(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !CoverageSet {
-    var set = CoverageSet{ .source_kind = source_kind };
-    errdefer set.deinit(allocator);
-    var current_path: ?[]const u8 = null;
-    var total: usize = 0;
-    var covered: usize = 0;
-    var lines = std.mem.splitScalar(u8, bytes, '\n');
-    while (lines.next()) |raw| {
-        const line = std.mem.trim(u8, raw, " \t\r");
-        if (std.mem.startsWith(u8, line, "SF:")) {
-            if (current_path) |path| try appendCoverageFile(allocator, &set, path, total, covered);
-            current_path = line["SF:".len..];
-            total = 0;
-            covered = 0;
-        } else if (std.mem.startsWith(u8, line, "DA:")) {
-            total += 1;
-            const payload = line["DA:".len..];
-            if (std.mem.indexOfScalar(u8, payload, ',')) |comma| {
-                const hits_text = std.mem.trim(u8, payload[comma + 1 ..], " \t");
-                const hits = std.fmt.parseInt(i64, hits_text, 10) catch 0;
-                if (hits > 0) covered += 1;
-            }
-        } else if (std.mem.eql(u8, line, "end_of_record")) {
-            if (current_path) |path| try appendCoverageFile(allocator, &set, path, total, covered);
-            current_path = null;
-            total = 0;
-            covered = 0;
-        }
-    }
-    if (current_path) |path| try appendCoverageFile(allocator, &set, path, total, covered);
-    if (set.files.items.len == 0) return error.InvalidCoverageEvidence;
-    return set;
-}
-
-fn parseCoverageJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !CoverageSet {
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
-    defer parsed.deinit();
-    const root = if (parsed.value == .object and parsed.value.object.get("files") != null) parsed.value else coverageRoot(parsed.value);
-    var set = CoverageSet{ .source_kind = source_kind };
-    errdefer set.deinit(allocator);
-    switch (root) {
-        .object => |obj| {
-            if (obj.get("files")) |files| try parseCoverageFilesArray(allocator, &set, files);
-            if (set.files.items.len == 0) {
-                if (obj.get("coverage")) |coverage| {
-                    const nested = coverageRoot(coverage);
-                    if (nested == .object) if (nested.object.get("files")) |files| try parseCoverageFilesArray(allocator, &set, files);
-                }
-            }
-        },
-        .array => try parseCoverageFilesArray(allocator, &set, root),
-        else => return error.InvalidCoverageEvidence,
-    }
-    if (set.files.items.len == 0) return error.InvalidCoverageEvidence;
-    return set;
-}
-
-fn coverageRoot(value: std.json.Value) std.json.Value {
-    if (value == .object) {
-        if (value.object.get("coverage")) |coverage| return coverage;
-        if (value.object.get("baseline")) |baseline| return coverageRoot(baseline);
-    }
-    return value;
-}
-
-fn parseCoverageFilesArray(allocator: std.mem.Allocator, set: *CoverageSet, value: std.json.Value) !void {
-    if (value != .array) return error.InvalidCoverageEvidence;
-    for (value.array.items) |item| {
-        if (item != .object) continue;
-        const path = stringField(item.object, "path") orelse stringField(item.object, "file") orelse continue;
-        const total = intField(item.object, "total_lines") orelse intField(item.object, "total") orelse 0;
-        const covered = intField(item.object, "covered_lines") orelse intField(item.object, "covered") orelse 0;
-        try appendCoverageFile(allocator, set, path, @intCast(@max(0, total)), @intCast(@max(0, covered)));
-    }
-}
-
-fn appendCoverageFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8, total: usize, covered: usize) !void {
-    if (path.len == 0) return;
-    for (set.files.items) |*existing| {
-        if (std.mem.eql(u8, existing.path, path)) {
-            existing.total += total;
-            existing.covered += @min(covered, total);
-            set.total += total;
-            set.covered += @min(covered, total);
-            return;
-        }
-    }
-    try set.files.append(allocator, .{
-        .path = try allocator.dupe(u8, path),
-        .total = total,
-        .covered = @min(covered, total),
-    });
-    set.total += total;
-    set.covered += @min(covered, total);
-}
-
-fn mergeCoverage(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet) !CoverageSet {
-    var merged = CoverageSet{ .source_kind = "merged" };
-    errdefer merged.deinit(allocator);
-    for (left.files.items) |file| try appendCoverageFile(allocator, &merged, file.path, file.total, file.covered);
-    for (right.files.items) |file| try appendCoverageFile(allocator, &merged, file.path, file.total, file.covered);
-    return merged;
-}
-
 fn coverageMapValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, set: CoverageSet, basis: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, a, kind, basis, confidence, &.{
@@ -691,7 +581,7 @@ fn coverageSummaryValue(allocator: std.mem.Allocator, set: CoverageSet) !std.jso
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "total_lines", .{ .integer = @intCast(set.total) });
     try obj.put(allocator, "covered_lines", .{ .integer = @intCast(set.covered) });
-    try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(rateBp(set.covered, set.total)) });
+    try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(set.covered, set.total)) });
     try obj.put(allocator, "file_count", .{ .integer = @intCast(set.files.items.len) });
     try obj.put(allocator, "source_kind", .{ .string = set.source_kind });
     return .{ .object = obj };
@@ -704,149 +594,46 @@ fn coverageFilesValue(allocator: std.mem.Allocator, set: CoverageSet) !std.json.
         try obj.put(allocator, "path", .{ .string = file.path });
         try obj.put(allocator, "total_lines", .{ .integer = @intCast(file.total) });
         try obj.put(allocator, "covered_lines", .{ .integer = @intCast(file.covered) });
-        try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(rateBp(file.covered, file.total)) });
+        try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(file.covered, file.total)) });
         try files.append(.{ .object = obj });
     }
     return .{ .array = files };
 }
 
-fn coverageDiffValue(allocator: std.mem.Allocator, a: *App, current: CoverageSet, baseline: CoverageSet) !std.json.Value {
+fn coverageDiffValue(allocator: std.mem.Allocator, a: *App, diff: coverage_usecase.CoverageDiff) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, a, "zig_coverage_diff", "Coverage baseline comparison", "high", &.{
         "Only file paths present in supplied evidence can be compared.",
     });
-    const current_bp = rateBp(current.covered, current.total);
-    const baseline_bp = rateBp(baseline.covered, baseline.total);
-    try obj.put(allocator, "current", try coverageSummaryValue(allocator, current));
-    try obj.put(allocator, "baseline", try coverageSummaryValue(allocator, baseline));
-    try obj.put(allocator, "line_rate_delta_bp", .{ .integer = @as(i64, @intCast(current_bp)) - @as(i64, @intCast(baseline_bp)) });
+    try obj.put(allocator, "current", try coverageSummaryValue(allocator, diff.current));
+    try obj.put(allocator, "baseline", try coverageSummaryValue(allocator, diff.baseline));
+    try obj.put(allocator, "line_rate_delta_bp", .{ .integer = diff.line_rate_delta_bp });
     var files = std.json.Array.init(allocator);
-    for (current.files.items) |file| {
-        const before = findCoverageFile(baseline, file.path) orelse continue;
+    for (diff.current.files.items) |file| {
+        const before = coverage_model.findFile(diff.baseline, file.path) orelse continue;
         var item = std.json.ObjectMap.empty;
         try item.put(allocator, "path", .{ .string = file.path });
-        try item.put(allocator, "current_line_rate_bp", .{ .integer = @intCast(rateBp(file.covered, file.total)) });
-        try item.put(allocator, "baseline_line_rate_bp", .{ .integer = @intCast(rateBp(before.covered, before.total)) });
-        try item.put(allocator, "delta_bp", .{ .integer = @as(i64, @intCast(rateBp(file.covered, file.total))) - @as(i64, @intCast(rateBp(before.covered, before.total))) });
+        try item.put(allocator, "current_line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(file.covered, file.total)) });
+        try item.put(allocator, "baseline_line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(before.covered, before.total)) });
+        try item.put(allocator, "delta_bp", .{ .integer = @as(i64, @intCast(coverage_model.rateBp(file.covered, file.total))) - @as(i64, @intCast(coverage_model.rateBp(before.covered, before.total))) });
         try files.append(.{ .object = item });
     }
     try obj.put(allocator, "file_deltas", .{ .array = files });
     return .{ .object = obj };
 }
 
-fn coverageBudgetValue(allocator: std.mem.Allocator, a: *App, set: CoverageSet, changed_files: []const []const u8, min_line_rate_bp: usize, min_changed_bp: usize) !std.json.Value {
+fn coverageBudgetValue(allocator: std.mem.Allocator, a: *App, budget: coverage_usecase.CoverageBudget) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, a, "zig_coverage_budget_check", "Coverage budget check", "high", &.{
         "Changed-file coverage is computed only for changed paths present in supplied coverage evidence.",
     });
-    const overall_bp = rateBp(set.covered, set.total);
-    const changed = changedCoverage(set, changed_files);
-    const changed_bp = rateBp(changed.covered, changed.total);
-    try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(overall_bp) });
-    try obj.put(allocator, "min_line_rate_bp", .{ .integer = @intCast(min_line_rate_bp) });
-    try obj.put(allocator, "changed_line_rate_bp", .{ .integer = @intCast(changed_bp) });
-    try obj.put(allocator, "min_changed_line_rate_bp", .{ .integer = @intCast(min_changed_bp) });
-    try obj.put(allocator, "changed_file_count", .{ .integer = @intCast(changed.count) });
-    try obj.put(allocator, "passed", .{ .bool = overall_bp >= min_line_rate_bp and (min_changed_bp == 0 or changed_bp >= min_changed_bp) });
+    try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(budget.line_rate_bp) });
+    try obj.put(allocator, "min_line_rate_bp", .{ .integer = @intCast(budget.min_line_rate_bp) });
+    try obj.put(allocator, "changed_line_rate_bp", .{ .integer = @intCast(budget.changed_line_rate_bp) });
+    try obj.put(allocator, "min_changed_line_rate_bp", .{ .integer = @intCast(budget.min_changed_line_rate_bp) });
+    try obj.put(allocator, "changed_file_count", .{ .integer = @intCast(budget.changed.count) });
+    try obj.put(allocator, "passed", .{ .bool = budget.passed() });
     return .{ .object = obj };
-}
-
-const ChangedCoverage = struct { total: usize = 0, covered: usize = 0, count: usize = 0 };
-
-fn changedCoverage(set: CoverageSet, changed_files: []const []const u8) ChangedCoverage {
-    var out: ChangedCoverage = .{};
-    for (changed_files) |path| {
-        if (findCoverageFile(set, path)) |file| {
-            out.total += file.total;
-            out.covered += file.covered;
-            out.count += 1;
-        }
-    }
-    return out;
-}
-
-fn findCoverageFile(set: CoverageSet, path: []const u8) ?CoverageFile {
-    for (set.files.items) |file| if (std.mem.eql(u8, file.path, path)) return file;
-    return null;
-}
-
-fn parseBenchEvidence(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !BenchSet {
-    const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
-    if (trimmed.len == 0) return error.InvalidBenchmarkEvidence;
-    if (trimmed[0] == '{' or trimmed[0] == '[') return parseBenchJson(allocator, trimmed, source_kind);
-    return parseBenchText(allocator, trimmed);
-}
-
-fn parseBenchJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !BenchSet {
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
-    defer parsed.deinit();
-    const root = benchRoot(parsed.value);
-    var set = BenchSet{ .source_kind = source_kind };
-    errdefer set.deinit(allocator);
-    if (root != .array) return error.InvalidBenchmarkEvidence;
-    for (root.array.items) |item| {
-        if (item != .object) continue;
-        const name = stringField(item.object, "name") orelse stringField(item.object, "benchmark") orelse continue;
-        const ns = floatField(item.object, "ns_per_iter") orelse floatField(item.object, "time_ns") orelse floatField(item.object, "mean_ns") orelse continue;
-        try set.samples.append(allocator, .{ .name = try allocator.dupe(u8, name), .ns_per_iter = ns });
-    }
-    if (set.samples.items.len == 0) return error.InvalidBenchmarkEvidence;
-    return set;
-}
-
-fn benchRoot(value: std.json.Value) std.json.Value {
-    if (value == .object) {
-        if (value.object.get("benchmarks")) |benchmarks| return benchmarks;
-        if (value.object.get("results")) |results| return benchRoot(results);
-        if (value.object.get("baseline")) |baseline| return benchRoot(baseline);
-    }
-    return value;
-}
-
-fn parseBenchText(allocator: std.mem.Allocator, bytes: []const u8) !BenchSet {
-    var set = BenchSet{ .source_kind = "stdout" };
-    errdefer set.deinit(allocator);
-    var lines = std.mem.splitScalar(u8, bytes, '\n');
-    while (lines.next()) |line_raw| {
-        const line = std.mem.trim(u8, line_raw, " \t\r");
-        if (parseTimingLine(line)) |timing| {
-            try set.samples.append(allocator, .{ .name = try allocator.dupe(u8, timing.name), .ns_per_iter = timing.ns_per_iter });
-        }
-    }
-    if (set.samples.items.len == 0) return error.InvalidBenchmarkEvidence;
-    return set;
-}
-
-const Timing = struct { name: []const u8, ns_per_iter: f64 };
-
-fn parseTimingLine(line: []const u8) ?Timing {
-    var last_number_start: ?usize = null;
-    var i: usize = 0;
-    while (i < line.len) : (i += 1) {
-        if ((line[i] >= '0' and line[i] <= '9') or line[i] == '.') {
-            const start = i;
-            while (i < line.len and ((line[i] >= '0' and line[i] <= '9') or line[i] == '.')) i += 1;
-            last_number_start = start;
-        }
-    }
-    const start = last_number_start orelse return null;
-    var end = start;
-    while (end < line.len and ((line[end] >= '0' and line[end] <= '9') or line[end] == '.')) end += 1;
-    const value = std.fmt.parseFloat(f64, line[start..end]) catch return null;
-    const unit = std.mem.trim(u8, line[end..], " \t:/");
-    const scale: f64 = if (std.mem.startsWith(u8, unit, "ns"))
-        1.0
-    else if (std.mem.startsWith(u8, unit, "us") or std.mem.startsWith(u8, unit, "micro"))
-        1000.0
-    else if (std.mem.startsWith(u8, unit, "ms"))
-        1_000_000.0
-    else if (std.mem.startsWith(u8, unit, "s"))
-        1_000_000_000.0
-    else
-        return null;
-    const name = std.mem.trim(u8, line[0..start], " \t:-");
-    if (name.len == 0) return null;
-    return .{ .name = name, .ns_per_iter = value * scale };
 }
 
 fn benchSamplesValue(allocator: std.mem.Allocator, set: BenchSet) !std.json.Value {
@@ -860,50 +647,33 @@ fn benchSamplesValue(allocator: std.mem.Allocator, set: BenchSet) !std.json.Valu
     return .{ .array = items };
 }
 
-fn benchCompareValue(allocator: std.mem.Allocator, a: *App, current: BenchSet, baseline: BenchSet, threshold_pct: i64) !std.json.Value {
+fn benchCompareValue(allocator: std.mem.Allocator, a: *App, comparison: benchmark_model.BenchComparison) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, a, "zig_bench_compare", "Benchmark baseline comparison", "medium", &.{
         "Benchmark comparisons are sensitive to machine load, CPU governor, thermal state, and benchmark harness variance.",
     });
-    var regressions = std.json.Array.init(allocator);
-    var improvements = std.json.Array.init(allocator);
-    var compared: usize = 0;
-    var worst_regression: f64 = 0;
-    for (current.samples.items) |sample| {
-        const before = findBenchSample(baseline, sample.name) orelse continue;
-        compared += 1;
-        if (before.ns_per_iter <= 0) continue;
-        const pct = ((sample.ns_per_iter - before.ns_per_iter) / before.ns_per_iter) * 100.0;
-        if (pct > @as(f64, @floatFromInt(threshold_pct))) {
-            try regressions.append(try benchDeltaValue(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct));
-            worst_regression = @max(worst_regression, pct);
-        } else if (pct < -@as(f64, @floatFromInt(threshold_pct))) {
-            try improvements.append(try benchDeltaValue(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct));
-        }
+    try obj.put(allocator, "threshold_pct", .{ .integer = comparison.threshold_pct });
+    try obj.put(allocator, "compared_count", .{ .integer = @intCast(comparison.compared_count) });
+    try obj.put(allocator, "regressions", try benchDeltasValue(allocator, comparison.regressions.items));
+    try obj.put(allocator, "regression_count", .{ .integer = @intCast(comparison.regressions.items.len) });
+    try obj.put(allocator, "improvements", try benchDeltasValue(allocator, comparison.improvements.items));
+    try obj.put(allocator, "improvement_count", .{ .integer = @intCast(comparison.improvements.items.len) });
+    try obj.put(allocator, "worst_regression_pct", .{ .float = comparison.worst_regression_pct });
+    try obj.put(allocator, "passed", .{ .bool = comparison.passed() });
+    return .{ .object = obj };
+}
+
+fn benchDeltasValue(allocator: std.mem.Allocator, deltas: []benchmark_model.BenchDelta) !std.json.Value {
+    var items = std.json.Array.init(allocator);
+    for (deltas) |delta| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "name", .{ .string = delta.name });
+        try obj.put(allocator, "baseline_ns_per_iter", .{ .float = delta.baseline_ns_per_iter });
+        try obj.put(allocator, "current_ns_per_iter", .{ .float = delta.current_ns_per_iter });
+        try obj.put(allocator, "delta_pct", .{ .float = delta.delta_pct });
+        try items.append(.{ .object = obj });
     }
-    try obj.put(allocator, "threshold_pct", .{ .integer = threshold_pct });
-    try obj.put(allocator, "compared_count", .{ .integer = @intCast(compared) });
-    try obj.put(allocator, "regressions", .{ .array = regressions });
-    try obj.put(allocator, "regression_count", .{ .integer = @intCast(regressions.items.len) });
-    try obj.put(allocator, "improvements", .{ .array = improvements });
-    try obj.put(allocator, "improvement_count", .{ .integer = @intCast(improvements.items.len) });
-    try obj.put(allocator, "worst_regression_pct", .{ .float = worst_regression });
-    try obj.put(allocator, "passed", .{ .bool = regressions.items.len == 0 });
-    return .{ .object = obj };
-}
-
-fn benchDeltaValue(allocator: std.mem.Allocator, name: []const u8, baseline_ns: f64, current_ns: f64, pct: f64) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "name", .{ .string = name });
-    try obj.put(allocator, "baseline_ns_per_iter", .{ .float = baseline_ns });
-    try obj.put(allocator, "current_ns_per_iter", .{ .float = current_ns });
-    try obj.put(allocator, "delta_pct", .{ .float = pct });
-    return .{ .object = obj };
-}
-
-fn findBenchSample(set: BenchSet, name: []const u8) ?BenchSample {
-    for (set.samples.items) |sample| if (std.mem.eql(u8, sample.name, name)) return sample;
-    return null;
+    return .{ .array = items };
 }
 
 fn benchRunArtifactValue(allocator: std.mem.Allocator, a: *App, argv: []const []const u8, timeout_ms: i64, result: command.RunResult, parsed: BenchSet) !std.json.Value {
@@ -1227,11 +997,6 @@ fn stringField(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     };
 }
 
-fn rateBp(covered: usize, total: usize) usize {
-    if (total == 0) return 0;
-    return @intCast(@divTrunc(covered * 10000, total));
-}
-
 fn unixMs(io: std.Io) i64 {
     return @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
 }
@@ -1307,40 +1072,6 @@ fn hintValue(allocator: std.mem.Allocator, kind: []const u8, text: []const u8) !
     return .{ .object = obj };
 }
 
-const CompareSummary = struct {
-    regression_count: usize,
-    worst_regression_pct: f64,
-};
-
-fn compareSummaryFromJson(allocator: std.mem.Allocator, bytes: []const u8) !CompareSummary {
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
-    defer parsed.deinit();
-    if (parsed.value != .object) return error.InvalidBenchmarkEvidence;
-    const count: usize = if (parsed.value.object.get("regression_count")) |value| @intCast(@max(0, switch (value) {
-        .integer => |i| i,
-        else => 0,
-    })) else if (parsed.value.object.get("regressions")) |regressions| jsonArrayLength(regressions) else 0;
-    const worst = if (parsed.value.object.get("worst_regression_pct")) |value| switch (value) {
-        .integer => |i| @as(f64, @floatFromInt(i)),
-        .float => |f| f,
-        else => 0,
-    } else worstRegressionFromArray(parsed.value.object.get("regressions"));
-    return .{ .regression_count = count, .worst_regression_pct = worst };
-}
-
-fn worstRegressionFromArray(value: ?std.json.Value) f64 {
-    const regressions = value orelse return 0;
-    if (regressions != .array) return 0;
-    var worst: f64 = 0;
-    for (regressions.array.items) |item| {
-        if (item == .object) {
-            const pct = floatField(item.object, "delta_pct") orelse 0;
-            worst = @max(worst, pct);
-        }
-    }
-    return worst;
-}
-
 fn samplyRecordArgv(allocator: std.mem.Allocator, samply_path: []const u8, output_abs: []const u8, command_argv: []const []const u8) ![]const []const u8 {
     var argv = std.ArrayList([]const u8).empty;
     try argv.appendSlice(allocator, &.{ samply_path, "record", "-o", output_abs, "--" });
@@ -1410,65 +1141,65 @@ fn performanceToolError(allocator: std.mem.Allocator, tool_name: []const u8, ope
     }, err);
 }
 
-test "coverage parser normalizes LCOV and merge totals" {
-    const allocator = std.testing.allocator;
-    var left = try parseCoverage(allocator,
-        \\SF:src/a.zig
-        \\DA:1,1
-        \\DA:2,0
-        \\end_of_record
-        \\
-    , "fixture", "auto");
-    defer left.deinit(allocator);
-    var right = try parseCoverage(allocator,
-        \\SF:src/b.zig
-        \\DA:1,3
-        \\end_of_record
-        \\
-    , "fixture", "auto");
-    defer right.deinit(allocator);
-    var merged = try mergeCoverage(allocator, left, right);
-    defer merged.deinit(allocator);
-
-    try std.testing.expectEqual(@as(usize, 3), merged.total);
-    try std.testing.expectEqual(@as(usize, 2), merged.covered);
-    try std.testing.expectEqual(@as(usize, 6666), rateBp(merged.covered, merged.total));
+fn performanceTestApp() App {
+    return .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .config = .{
+            .workspace = ".",
+            .zig_path = "zig",
+            .zls_path = "zls",
+            .zflame_path = "zflame",
+            .diff_folded_path = "diff-folded",
+        },
+        .workspace = .{
+            .allocator = std.testing.allocator,
+            .io = std.testing.io,
+            .root = ".",
+            .cache_root = ".zigar-cache",
+        },
+    };
 }
 
-test "coverage parser accepts zigar coverage JSON" {
-    const allocator = std.testing.allocator;
-    var set = try parseCoverage(allocator,
-        \\{"coverage":{"total_lines":2},"files":[{"path":"src/main.zig","total_lines":2,"covered_lines":1}]}
-    , "fixture", "auto");
-    defer set.deinit(allocator);
-
-    try std.testing.expectEqual(@as(usize, 2), set.total);
-    try std.testing.expectEqual(@as(usize, 1), set.covered);
-    try std.testing.expectEqualStrings("src/main.zig", set.files.items[0].path);
+fn parseTestArgs(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(std.json.Value) {
+    return std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
 }
 
-test "benchmark parser reads simple timing lines" {
-    const allocator = std.testing.allocator;
-    var set = try parseBenchText(allocator,
-        \\parse small: 12.5 ns
-        \\encode big 2 us
-        \\
+test "coverage budget handler preserves public result fields through app use case" {
+    var app = performanceTestApp();
+    const args = try parseTestArgs(std.testing.allocator,
+        \\{"coverage":"SF:src/a.zig\nDA:1,1\nDA:2,0\nend_of_record\n","changed_files":"src/a.zig","min_line_rate_bp":5000,"min_changed_line_rate_bp":6000}
     );
-    defer set.deinit(allocator);
+    defer args.deinit();
 
-    try std.testing.expectEqual(@as(usize, 2), set.samples.items.len);
-    try std.testing.expectEqualStrings("parse small", set.samples.items[0].name);
-    try std.testing.expectEqual(@as(f64, 2000), set.samples.items[1].ns_per_iter);
+    const result = try zigCoverageBudgetCheck(&app, std.testing.allocator, args.value);
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_coverage_budget_check", obj.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 5000), obj.get("line_rate_bp").?.integer);
+    try std.testing.expectEqual(@as(i64, 6000), obj.get("min_changed_line_rate_bp").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("changed_file_count").?.integer);
+    try std.testing.expect(!obj.get("passed").?.bool);
 }
 
-test "benchmark comparison summaries detect regressions" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const summary = try compareSummaryFromJson(arena.allocator(),
-        \\{"regressions":[{"name":"parse","delta_pct":12.5}],"worst_regression_pct":12.5}
+test "benchmark compare handler preserves public regression result shape" {
+    var app = performanceTestApp();
+    const args = try parseTestArgs(std.testing.allocator,
+        \\{"current":"parse: 120 ns\nemit: 90 ns\n","baseline":"parse: 100 ns\nemit: 100 ns\n","threshold_pct":5}
     );
-    try std.testing.expectEqual(@as(usize, 1), summary.regression_count);
-    try std.testing.expectEqual(@as(f64, 12.5), summary.worst_regression_pct);
+    defer args.deinit();
+
+    const result = try zigBenchCompare(&app, std.testing.allocator, args.value);
+    defer json_result.deinitToolResult(std.testing.allocator, result);
+
+    const obj = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("zig_bench_compare", obj.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 2), obj.get("compared_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("regression_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("improvement_count").?.integer);
+    try std.testing.expect(!obj.get("passed").?.bool);
+    try std.testing.expectEqualStrings("parse", obj.get("regressions").?.array.items[0].object.get("name").?.string);
 }
 
 test "profile sample helpers count Firefox profile samples" {

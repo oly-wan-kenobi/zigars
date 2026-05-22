@@ -110,6 +110,10 @@ pub fn build(b: *std.Build) void {
     const stdio_fixtures_step = b.step("stdio-fixtures", "Run stdio MCP fixture integration tests");
     stdio_fixtures_step.dependOn(&stdio_fixtures_cmd.step);
 
+    const integration_step = b.step("integration", "Run default HTTP and stdio MCP integration tests");
+    integration_step.dependOn(smoke_step);
+    integration_step.dependOn(stdio_fixtures_step);
+
     const coverage_cmd = addCoverageCommand(b, tools_exe);
     coverage_cmd.step.dependOn(install_test_bins_step);
     const coverage_step = b.step("coverage", "Run test binaries, require kcov, and enforce line coverage floors");
@@ -142,6 +146,16 @@ pub fn build(b: *std.Build) void {
     const hygiene_step = b.step("artifact-hygiene", "Check generated artifacts are not tracked");
     hygiene_step.dependOn(&hygiene_cmd.step);
 
+    const architecture_guard_cmd = b.addRunArtifact(tools_exe);
+    architecture_guard_cmd.addArg("architecture-guard");
+    const architecture_guard_step = b.step("architecture-guard", "Check Phase 10 architecture dependency guards");
+    architecture_guard_step.dependOn(&architecture_guard_cmd.step);
+
+    const public_contracts_cmd = b.addRunArtifact(tools_exe);
+    public_contracts_cmd.addArg("public-contracts");
+    const public_contracts_step = b.step("public-contracts", "Check public MCP contract invariants");
+    public_contracts_step.dependOn(&public_contracts_cmd.step);
+
     const release_check_step = b.step("release-check", "Run the full local release gate");
     release_check_step.dependOn(fmt_check_step);
     release_check_step.dependOn(docs_check_step);
@@ -151,6 +165,8 @@ pub fn build(b: *std.Build) void {
     release_check_step.dependOn(&release_coverage_cmd.step);
     release_check_step.dependOn(backend_conformance_contract_step);
     release_check_step.dependOn(hygiene_step);
+    release_check_step.dependOn(architecture_guard_step);
+    release_check_step.dependOn(public_contracts_step);
 
     const dist_cmd = b.addRunArtifact(tools_exe);
     dist_cmd.addArgs(&.{ "dist", "--out-dir", "dist", "--version", version });
