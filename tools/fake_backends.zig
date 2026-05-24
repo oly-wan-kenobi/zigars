@@ -2,6 +2,7 @@ const std = @import("std");
 const zigar = @import("zigar");
 
 const Io = std.Io;
+const backend_contracts = zigar.domain.zig.backend_contracts;
 
 pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
@@ -78,7 +79,7 @@ pub fn fakeZflame(io: Io, args: []const []const u8) !void {
         return;
     }
     if (args.len < 2) return fakeBackendUsageError(io, "fake zflame requires <format> <input>\n");
-    if (zigar.backend_contracts.parseZflameFormat(args[0]) == null) {
+    if (backend_contracts.parseZflameFormat(args[0]) == null) {
         return fakeBackendUsageError(io, "fake zflame rejected unsupported format\n");
     }
     var input_count: usize = 0;
@@ -120,7 +121,7 @@ pub fn fakeDiffFolded(io: Io, args: []const []const u8) !void {
 }
 
 fn zwanzigGraphModeName(flag: []const u8) ?[]const u8 {
-    inline for (std.meta.tags(zigar.backend_contracts.ZwanzigGraphMode)) |mode| {
+    inline for (std.meta.tags(backend_contracts.ZwanzigGraphMode)) |mode| {
         if (std.mem.eql(u8, flag, mode.flag())) return mode.name();
     }
     return null;

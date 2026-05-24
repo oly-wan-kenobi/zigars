@@ -1,11 +1,11 @@
 const std = @import("std");
 const mcp = @import("mcp");
 
-const tool_errors = @import("../../tool_errors.zig");
-const tool_metadata = @import("../../tool_metadata.zig");
-const tooling = @import("../../tooling.zig");
+const manifest = @import("../../manifest/mod.zig");
+const tool_errors = @import("errors.zig");
+const tooling = @import("../../manifest/tooling.zig");
 
-pub fn validateToolArgs(allocator: std.mem.Allocator, spec: tool_metadata.ToolMeta, args: ?std.json.Value) mcp.tools.ToolError!?mcp.tools.ToolResult {
+pub fn validateToolArgs(allocator: std.mem.Allocator, spec: manifest.ToolMeta, args: ?std.json.Value) mcp.tools.ToolError!?mcp.tools.ToolResult {
     const value = args orelse {
         for (spec.input_schema.fields) |field| {
             if (field[2]) {
@@ -137,14 +137,14 @@ fn argumentErrorResult(
 }
 
 test "finds schema fields" {
-    const spec = tool_metadata.find("zig_check").?;
+    const spec = manifest.find("zig_check").?;
     const field = findSchemaField(spec.input_schema, "file").?;
     try std.testing.expect(field[2]);
     try std.testing.expectEqualStrings("string", field[1]);
 }
 
 test "accepts empty argument object for no-argument tool" {
-    const spec = tool_metadata.find("zig_version").?;
+    const spec = manifest.find("zig_version").?;
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(std.testing.allocator);
     const result = try validateToolArgs(std.testing.allocator, spec, .{ .object = obj });
@@ -155,7 +155,7 @@ test "rejects enum arguments outside schema hints" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const spec = tool_metadata.find("zigar_context_pack").?;
+    const spec = manifest.find("zigar_context_pack").?;
 
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "mode", .{ .string = "sideways" });
@@ -173,8 +173,8 @@ test "validates enum hints in tool context" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const context_spec = tool_metadata.find("zigar_context_pack").?;
-    const validate_spec = tool_metadata.find("zigar_validate_patch").?;
+    const context_spec = manifest.find("zigar_context_pack").?;
+    const validate_spec = manifest.find("zigar_validate_patch").?;
 
     var context_obj = std.json.ObjectMap.empty;
     try context_obj.put(allocator, "mode", .{ .string = "quick" });
@@ -201,7 +201,7 @@ test "rejects integer arguments below schema minimum" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const spec = tool_metadata.find("zig_std_search").?;
+    const spec = manifest.find("zig_std_search").?;
 
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "query", .{ .string = "ArrayList" });

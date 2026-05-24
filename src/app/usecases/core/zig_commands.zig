@@ -134,6 +134,31 @@ pub const ExplainOutcome = union(enum) {
     }
 };
 
+pub const VersionResult = struct {
+    zig: CommandRun,
+    zls: ?CommandRun = null,
+    zls_status: []const u8,
+
+    pub fn deinit(self: *VersionResult, allocator: std.mem.Allocator) void {
+        self.zig.deinit(allocator);
+        if (self.zls) |*zls_run| zls_run.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+pub const VersionOutcome = union(enum) {
+    ok: VersionResult,
+    err: Failure,
+
+    pub fn deinit(self: *VersionOutcome, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            .ok => |*version_result| version_result.deinit(allocator),
+            .err => |*failure| failure.deinit(allocator),
+        }
+        self.* = undefined;
+    }
+};
+
 const ArgvBuilder = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList([]const u8) = .empty,
@@ -162,6 +187,40 @@ const ArgvBuilder = struct {
         return .{ .items = owned };
     }
 };
+
+pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !VersionOutcome {
+    var zig_builder = ArgvBuilder.init(allocator);
+    defer zig_builder.deinit();
+    try zig_builder.append(context.tool_paths.zig);
+    try zig_builder.append("version");
+    const timeout_ms = timeoutFor(context, request.timeout_ms);
+    const zig_outcome = try runBuiltCommand(allocator, context, "zig version", try zig_builder.toOwned(), timeout_ms);
+    switch (zig_outcome) {
+        .err => |failure| return .{ .err = failure },
+        .ok => |zig_run| {
+            var zls_builder = ArgvBuilder.init(allocator);
+            defer zls_builder.deinit();
+            try zls_builder.append(context.tool_paths.zls);
+            try zls_builder.append("--version");
+            var zls_outcome = try runBuiltCommand(allocator, context, "zls version", try zls_builder.toOwned(), timeout_ms);
+            switch (zls_outcome) {
+                .ok => |zls_run| return .{ .ok = .{
+                    .zig = zig_run,
+                    .zls = zls_run,
+                    .zls_status = context.zls_state.status,
+                } },
+                .err => |*failure| {
+                    failure.deinit(allocator);
+                    return .{ .ok = .{
+                        .zig = zig_run,
+                        .zls = null,
+                        .zls_status = context.zls_state.status,
+                    } };
+                },
+            }
+        },
+    }
+}
 
 pub fn env(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);

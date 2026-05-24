@@ -488,9 +488,9 @@ test "parser-backed source summary marks malformed fixtures partial" {
     try std.testing.expect(malformed.parse.parse_error_count > 0);
     try std.testing.expect(hasImportValue(malformed.imports, "std"));
 
-    const legacy = try parseSourceSummary(arena.allocator(), "legacy-usingnamespace.zig", @embedFile("fixtures/static_analysis_legacy_usingnamespace.fixture"));
-    try std.testing.expectEqual(ParseStatus.syntax_errors, legacy.parse.status);
-    try std.testing.expect(hasImport(legacy.imports, "std", "std"));
+    const sample = try parseSourceSummary(arena.allocator(), "usingnamespace.zig", @embedFile("fixtures/static_analysis_usingnamespace.fixture"));
+    try std.testing.expectEqual(ParseStatus.syntax_errors, sample.parse.status);
+    try std.testing.expect(hasImport(sample.imports, "std", "std"));
 }
 
 test "heuristic summaries preserve advisory source policy" {

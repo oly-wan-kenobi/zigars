@@ -11,6 +11,17 @@ pub const PositionRequest = struct {
     content: ?[]const u8 = null,
     line: i64 = 0,
     character: i64 = 0,
+    include_declaration: bool = true,
+};
+
+pub const FileRequest = struct {
+    method: []const u8,
+    file: ?[]const u8 = null,
+    content: ?[]const u8 = null,
+};
+
+pub const WorkspaceSymbolRequest = struct {
+    query: []const u8,
 };
 
 pub const PositionResponse = struct {
@@ -68,7 +79,10 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     }) catch |err| return .{ .err = .{ .sync_failed = .{ .err = err, .file = file } } };
     defer sync_result.deinit(allocator);
 
-    const payload = try positionPayload(allocator, sync_result.uri, request.line, request.character);
+    const payload = if (std.mem.eql(u8, request.method, "textDocument/references"))
+        try referencesPayload(allocator, sync_result.uri, request.line, request.character, request.include_declaration)
+    else
+        try positionPayload(allocator, sync_result.uri, request.line, request.character);
     defer allocator.free(payload);
     const response = gateway.request(allocator, .{
         .method = request.method,
@@ -77,6 +91,58 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     }) catch |err| return .{ .err = .{ .request_failed = .{ .err = err, .file = file } } };
     return .{ .ok = .{
         .method = request.method,
+        .payload = response.payload,
+        .owns_payload = response.owns_payload,
+    } };
+}
+
+pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: FileRequest) !PositionOutcome {
+    const gateway = context.zls_gateway;
+    if (capabilityForMethod(request.method)) |capability| {
+        const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => .{ .unavailable = capability },
+        } };
+        if (!capability_result.supported) return .{ .err = .{ .unsupported_capability = capability_result.capability } };
+    }
+    const file = request.file orelse return .{ .err = .missing_file };
+    const sync_result = gateway.sync(allocator, .{
+        .file = file,
+        .content = request.content,
+        .provenance = provenance,
+    }) catch |err| return .{ .err = .{ .sync_failed = .{ .err = err, .file = file } } };
+    defer sync_result.deinit(allocator);
+    const payload = try fileOnlyPayload(allocator, sync_result.uri);
+    defer allocator.free(payload);
+    const response = gateway.request(allocator, .{
+        .method = request.method,
+        .uri = sync_result.uri,
+        .payload = payload,
+    }) catch |err| return .{ .err = .{ .request_failed = .{ .err = err, .file = file } } };
+    return .{ .ok = .{
+        .method = request.method,
+        .payload = response.payload,
+        .owns_payload = response.owns_payload,
+    } };
+}
+
+pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: WorkspaceSymbolRequest) !PositionOutcome {
+    const gateway = context.zls_gateway;
+    if (capabilityForMethod("workspace/symbol")) |capability| {
+        const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => .{ .unavailable = capability },
+        } };
+        if (!capability_result.supported) return .{ .err = .{ .unsupported_capability = capability_result.capability } };
+    }
+    const payload = try workspaceSymbolPayload(allocator, request.query);
+    defer allocator.free(payload);
+    const response = gateway.request(allocator, .{
+        .method = "workspace/symbol",
+        .payload = payload,
+    }) catch |err| return .{ .err = .{ .request_failed = .{ .err = err, .file = null } } };
+    return .{ .ok = .{
+        .method = "workspace/symbol",
         .payload = response.payload,
         .owns_payload = response.owns_payload,
     } };
@@ -107,5 +173,39 @@ fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, cha
         .textDocument = .{ .uri = uri },
         .position = .{ .line = line, .character = character },
     }, .{}, &aw.writer) catch return error.OutOfMemory;
+    return try aw.toOwnedSlice();
+}
+
+fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, include_declaration: bool) std.mem.Allocator.Error![]u8 {
+    const Params = struct {
+        textDocument: struct { uri: []const u8 },
+        position: struct { line: i64, character: i64 },
+        context: struct { includeDeclaration: bool },
+    };
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    std.json.Stringify.value(Params{
+        .textDocument = .{ .uri = uri },
+        .position = .{ .line = line, .character = character },
+        .context = .{ .includeDeclaration = include_declaration },
+    }, .{}, &aw.writer) catch return error.OutOfMemory;
+    return try aw.toOwnedSlice();
+}
+
+fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Allocator.Error![]u8 {
+    const Params = struct {
+        textDocument: struct { uri: []const u8 },
+    };
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    std.json.Stringify.value(Params{ .textDocument = .{ .uri = uri } }, .{}, &aw.writer) catch return error.OutOfMemory;
+    return try aw.toOwnedSlice();
+}
+
+fn workspaceSymbolPayload(allocator: std.mem.Allocator, query: []const u8) std.mem.Allocator.Error![]u8 {
+    const Params = struct { query: []const u8 };
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    std.json.Stringify.value(Params{ .query = query }, .{}, &aw.writer) catch return error.OutOfMemory;
     return try aw.toOwnedSlice();
 }

@@ -565,7 +565,7 @@
     "kind": "zigar_patch_session_preview",
     "requires_apply": true,
     "safe_to_apply": true,
-    "files.0.file": "tests/fixtures/static-analysis/legacy-usingnamespace.zig",
+    "files.0.file": "tests/fixtures/static-analysis/usingnamespace.zig",
     "files.0.changed": true
   },
   "patch_session_apply_blocked_paths": {

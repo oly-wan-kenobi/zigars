@@ -5,6 +5,7 @@ const coverage = @import("coverage.zig");
 const dist = @import("dist.zig");
 const http_smoke = @import("http_smoke.zig");
 const http_diagnostics_smoke = @import("http_diagnostics_smoke.zig");
+const hex_arch_inventory = @import("hex_arch_inventory.zig");
 const json_query = @import("json_query.zig");
 const json_util = @import("json_util.zig");
 const public_contracts = @import("public_contracts.zig");
@@ -28,6 +29,7 @@ test {
     _ = dist;
     _ = http_smoke;
     _ = http_diagnostics_smoke;
+    _ = hex_arch_inventory;
     _ = json_query;
     _ = json_util;
     _ = public_contracts;
@@ -102,6 +104,10 @@ pub fn main(init: std.process.Init) !void {
         architecture_guard.run(allocator, io, args[2..]) catch |err| {
             return reportInvalidArguments(io, cmd, "architecture-guard", err);
         };
+    } else if (std.mem.eql(u8, cmd, "hex-architecture-inventory")) {
+        hex_arch_inventory.run(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "hex-architecture-inventory [--strict-root-files]", err);
+        };
     } else {
         try usage(io);
         return failUsage(io, "zigar-tools", "", "unknown command `{s}`", .{cmd});
@@ -124,6 +130,7 @@ fn usage(io: Io) !void {
         \\  artifact-hygiene
         \\  public-contracts
         \\  architecture-guard
+        \\  hex-architecture-inventory [--strict-root-files]
         \\
     , .{});
 }

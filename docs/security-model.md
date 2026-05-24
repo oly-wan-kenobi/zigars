@@ -38,7 +38,7 @@ is the default transport for agent clients.
 
 zigar uses the pinned upstream MCP package for protocol types, JSON-RPC helpers,
 and transport primitives, but the server adapter is first-party code under
-`src/mcp_server.zig`. There is no patched upstream MCP server in the build. That
+`src/adapters/mcp/server.zig`. There is no patched upstream MCP server in the build. That
 keeps the local security boundary auditable: zigar owns request routing,
 workspace/tool validation before handler execution, and post-serialization
 cleanup of owned tool, resource, and prompt results.

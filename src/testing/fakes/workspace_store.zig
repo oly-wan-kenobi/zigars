@@ -11,14 +11,17 @@ pub const FakeWorkspaceStore = struct {
     expected_reads: std.ArrayList(ExpectedRead) = .empty,
     expected_writes: std.ArrayList(ExpectedWrite) = .empty,
     expected_deletes: std.ArrayList(ExpectedDelete) = .empty,
+    expected_exists: std.ArrayList(ExpectedExists) = .empty,
     resolve_records: std.ArrayList(ports.WorkspaceResolveRequest) = .empty,
     read_records: std.ArrayList(ports.WorkspaceReadRequest) = .empty,
     write_records: std.ArrayList(ports.WorkspaceWriteRequest) = .empty,
     delete_records: std.ArrayList(ports.WorkspaceDeleteRequest) = .empty,
+    exists_records: std.ArrayList(ports.WorkspaceExistsRequest) = .empty,
     next_resolve: usize = 0,
     next_read: usize = 0,
     next_write: usize = 0,
     next_delete: usize = 0,
+    next_exists: usize = 0,
 
     const Self = @This();
 
@@ -60,6 +63,15 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    const ExpectedExists = struct {
+        request: ports.WorkspaceExistsRequest,
+        result: ExpectedExistsResult,
+
+        fn deinit(self: ExpectedExists, allocator: Allocator) void {
+            freeExistsRequest(allocator, self.request);
+        }
+    };
+
     const ExpectedReadResult = union(enum) {
         ok: []const u8,
         err: ports.PortError,
@@ -94,6 +106,11 @@ pub const FakeWorkspaceStore = struct {
         err: ports.PortError,
     };
 
+    const ExpectedExistsResult = union(enum) {
+        ok: ports.WorkspaceExistsResult,
+        err: ports.PortError,
+    };
+
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
@@ -111,6 +128,9 @@ pub const FakeWorkspaceStore = struct {
         for (self.expected_deletes.items) |expected| expected.deinit(self.allocator);
         self.expected_deletes.deinit(self.allocator);
 
+        for (self.expected_exists.items) |expected| expected.deinit(self.allocator);
+        self.expected_exists.deinit(self.allocator);
+
         for (self.resolve_records.items) |record| freeResolveRequest(self.allocator, record);
         self.resolve_records.deinit(self.allocator);
 
@@ -122,6 +142,9 @@ pub const FakeWorkspaceStore = struct {
 
         for (self.delete_records.items) |record| freeDeleteRequest(self.allocator, record);
         self.delete_records.deinit(self.allocator);
+
+        for (self.exists_records.items) |record| freeExistsRequest(self.allocator, record);
+        self.exists_records.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -133,6 +156,7 @@ pub const FakeWorkspaceStore = struct {
                 .read = read,
                 .write = write,
                 .delete = delete,
+                .exists = exists,
             },
         };
     }
@@ -215,6 +239,24 @@ pub const FakeWorkspaceStore = struct {
         });
     }
 
+    pub fn expectExists(self: *Self, request: ports.WorkspaceExistsRequest, result: ports.WorkspaceExistsResult) !void {
+        const owned_request = try cloneExistsRequest(self.allocator, request);
+        errdefer freeExistsRequest(self.allocator, owned_request);
+        try self.expected_exists.append(self.allocator, .{
+            .request = owned_request,
+            .result = .{ .ok = result },
+        });
+    }
+
+    pub fn expectExistsError(self: *Self, request: ports.WorkspaceExistsRequest, err: ports.PortError) !void {
+        const owned_request = try cloneExistsRequest(self.allocator, request);
+        errdefer freeExistsRequest(self.allocator, owned_request);
+        try self.expected_exists.append(self.allocator, .{
+            .request = owned_request,
+            .result = .{ .err = err },
+        });
+    }
+
     pub fn resolveCalls(self: *const Self) []const ports.WorkspaceResolveRequest {
         return self.resolve_records.items;
     }
@@ -231,11 +273,16 @@ pub const FakeWorkspaceStore = struct {
         return self.delete_records.items;
     }
 
+    pub fn existsCalls(self: *const Self) []const ports.WorkspaceExistsRequest {
+        return self.exists_records.items;
+    }
+
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_resolve != self.expected_resolves.items.len) return error.MissingExpectedCall;
         if (self.next_read != self.expected_reads.items.len) return error.MissingExpectedCall;
         if (self.next_write != self.expected_writes.items.len) return error.MissingWrite;
         if (self.next_delete != self.expected_deletes.items.len) return error.MissingWrite;
+        if (self.next_exists != self.expected_exists.items.len) return error.MissingExpectedCall;
     }
 
     fn resolve(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
@@ -316,6 +363,24 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    fn exists(ptr: *anyopaque, _: Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const owned_call = try cloneExistsRequest(self.allocator, request);
+        var record_owned = false;
+        errdefer if (!record_owned) freeExistsRequest(self.allocator, owned_call);
+        try self.exists_records.append(self.allocator, owned_call);
+        record_owned = true;
+
+        if (self.next_exists >= self.expected_exists.items.len) return error.UnexpectedCall;
+        const expected = self.expected_exists.items[self.next_exists];
+        if (!existsRequestsEqual(expected.request, request)) return error.StaleArguments;
+        self.next_exists += 1;
+        return switch (expected.result) {
+            .ok => |result| result,
+            .err => |err| err,
+        };
+    }
+
     fn cloneResolveRequest(allocator: Allocator, request: ports.WorkspaceResolveRequest) !ports.WorkspaceResolveRequest {
         const path = try common.dupString(allocator, request.path);
         errdefer allocator.free(path);
@@ -341,6 +406,7 @@ pub const FakeWorkspaceStore = struct {
         return .{
             .path = path,
             .max_bytes = request.max_bytes,
+            .for_output = request.for_output,
             .provenance = provenance,
         };
     }
@@ -389,6 +455,23 @@ pub const FakeWorkspaceStore = struct {
         allocator.free(request.provenance);
     }
 
+    fn cloneExistsRequest(allocator: Allocator, request: ports.WorkspaceExistsRequest) !ports.WorkspaceExistsRequest {
+        const path = try common.dupString(allocator, request.path);
+        errdefer allocator.free(path);
+        const provenance = try common.dupString(allocator, request.provenance);
+        errdefer allocator.free(provenance);
+        return .{
+            .path = path,
+            .for_output = request.for_output,
+            .provenance = provenance,
+        };
+    }
+
+    fn freeExistsRequest(allocator: Allocator, request: ports.WorkspaceExistsRequest) void {
+        allocator.free(request.path);
+        allocator.free(request.provenance);
+    }
+
     fn resolveRequestsEqual(expected: ports.WorkspaceResolveRequest, actual: ports.WorkspaceResolveRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.for_output == actual.for_output and
@@ -398,6 +481,7 @@ pub const FakeWorkspaceStore = struct {
     fn readRequestsEqual(expected: ports.WorkspaceReadRequest, actual: ports.WorkspaceReadRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.max_bytes == actual.max_bytes and
+            expected.for_output == actual.for_output and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
@@ -412,6 +496,12 @@ pub const FakeWorkspaceStore = struct {
     fn deleteRequestsEqual(expected: ports.WorkspaceDeleteRequest, actual: ports.WorkspaceDeleteRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.missing_ok == actual.missing_ok and
+            std.mem.eql(u8, expected.provenance, actual.provenance);
+    }
+
+    fn existsRequestsEqual(expected: ports.WorkspaceExistsRequest, actual: ports.WorkspaceExistsRequest) bool {
+        return std.mem.eql(u8, expected.path, actual.path) and
+            expected.for_output == actual.for_output and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 };

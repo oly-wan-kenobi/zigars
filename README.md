@@ -374,7 +374,7 @@ responses are serialized, so no patched upstream MCP server is part of the
 build.
 
 The generated index in [docs/tool-index.generated.md](docs/tool-index.generated.md)
-is built from `src/tool_catalog.json` plus the typed registry metadata and
+is built from `src/manifest/tool_catalog.json` plus the typed registry metadata and
 checked in CI.
 
 For agent workflows, see [docs/agent-workflows.md](docs/agent-workflows.md).

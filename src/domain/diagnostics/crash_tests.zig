@@ -10,7 +10,7 @@ test "sanitizer classifier covers common runtime variants" {
     try std.testing.expectEqual(crash.Sanitizer.unknown, crash.classifySanitizer("ordinary output"));
 }
 
-test "failure classifier and panic message preserve legacy labels" {
+test "failure classifier and panic message preserve historic labels" {
     try std.testing.expectEqual(crash.FailureKind.use_after_free, crash.classifyFailure("heap-use-after-free"));
     try std.testing.expectEqual(crash.FailureKind.bounds, crash.classifyFailure("index out of bounds"));
     try std.testing.expectEqual(crash.FailureKind.data_race, crash.classifyFailure("data race"));

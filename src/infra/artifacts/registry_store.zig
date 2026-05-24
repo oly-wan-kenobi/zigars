@@ -1,10 +1,11 @@
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
-const artifacts = @import("../../artifacts.zig");
-const workspace_mod = @import("../../workspace.zig");
+const artifacts = @import("registry.zig");
+const workspace_mod = @import("../workspace/workspace.zig");
 
 const artifact_root = ".zigar-cache/artifacts";
+const max_workspace_record_bytes = 16 * 1024 * 1024;
 
 pub const Store = struct {
     workspace: *workspace_mod.Workspace,
@@ -27,6 +28,7 @@ pub const Store = struct {
             .vtable = &.{
                 .put = put,
                 .read = read,
+                .record_workspace = recordWorkspace,
             },
         };
     }
@@ -85,6 +87,65 @@ pub const Store = struct {
         return .{
             .bytes = bytes,
             .owns_bytes = true,
+        };
+    }
+
+    fn recordWorkspace(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceArtifactRecordRequest) ports.PortError!ports.WorkspaceArtifactRef {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const bytes = if (request.bytes) |provided| provided else blk: {
+            const resolved = self.workspace.resolve(request.path) catch |err| return mapPortError(err);
+            defer self.workspace.allocator.free(resolved);
+            const data = std.Io.Dir.cwd().readFileAlloc(self.io, resolved, allocator, .limited(max_workspace_record_bytes)) catch |err| return mapPortError(err);
+            break :blk data;
+        };
+        const owns_read = request.bytes == null;
+        defer if (owns_read) allocator.free(bytes);
+
+        if (request.bytes != null) {
+            self.workspace.writeFile(self.io, request.path, bytes) catch |err| return mapPortError(err);
+        }
+        const artifact_abs = self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err);
+        defer self.workspace.allocator.free(artifact_abs);
+        const abs_owned = allocator.dupe(u8, artifact_abs) catch return error.OutOfMemory;
+        errdefer allocator.free(abs_owned);
+        const path_owned = allocator.dupe(u8, request.path) catch return error.OutOfMemory;
+        errdefer allocator.free(path_owned);
+        const identity = artifacts.identityFromBytes(allocator, path_owned, abs_owned, bytes) catch |err| return mapPortError(err);
+        errdefer allocator.free(identity.sha256);
+
+        const registry_abs = self.workspace.resolveOutput(artifacts.default_registry_path) catch |err| return mapPortError(err);
+        defer self.workspace.allocator.free(registry_abs);
+        var registry = artifacts.loadRegistry(allocator, self.io, registry_abs) catch |err| return mapPortError(err);
+        defer registry.deinit(allocator);
+        artifacts.upsert(&registry, allocator, .{
+            .identity = identity,
+            .provenance = .{
+                .producer = request.producer,
+                .artifact_kind = request.artifact_kind,
+                .command_argv = request.command_argv,
+                .backend_name = request.backend_name,
+                .backend_version = request.backend_version,
+                .target = request.target,
+                .baseline_identity = request.baseline_identity,
+                .notes = request.notes,
+                .toolchain = .{
+                    .zig_path = request.toolchain.zig_path,
+                    .zls_path = request.toolchain.zls_path,
+                    .zflame_path = request.toolchain.zflame_path,
+                    .diff_folded_path = request.toolchain.diff_folded_path,
+                },
+            },
+            .indexed_at_unix_ms = if (request.indexed_at_unix_ms != 0) request.indexed_at_unix_ms else unixMs(self.io),
+        }) catch |err| return mapPortError(err);
+        artifacts.writeRegistry(allocator, self.io, registry_abs, registry) catch |err| return mapPortError(err);
+
+        return .{
+            .path = path_owned,
+            .abs_path = abs_owned,
+            .bytes = bytes.len,
+            .sha256 = identity.sha256,
+            .indexed_at_unix_ms = if (request.indexed_at_unix_ms != 0) request.indexed_at_unix_ms else unixMs(self.io),
+            .owns_memory = true,
         };
     }
 };

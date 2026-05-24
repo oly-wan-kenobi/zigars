@@ -155,7 +155,7 @@ zigar \
 ```
 
 Use a wrapper script when a backend needs environment variables, a version
-manager shim, or a project-local build artifact:
+manager wrapper, or a project-local build artifact:
 
 ```sh
 #!/bin/sh

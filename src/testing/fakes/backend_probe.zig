@@ -83,12 +83,19 @@ pub const FakeBackendProbe = struct {
     fn cloneRequest(allocator: Allocator, request: ports.BackendProbeRequest) !ports.BackendProbeRequest {
         const backend = try common.dupString(allocator, request.backend);
         errdefer allocator.free(backend);
+        const argv = try common.dupStringList(allocator, request.argv);
+        errdefer common.freeStringList(allocator, argv);
+        const cwd = try common.dupOptionalString(allocator, request.cwd);
+        errdefer common.freeOptionalString(allocator, cwd);
         const required_capabilities = try common.dupStringList(allocator, request.required_capabilities);
         errdefer common.freeStringList(allocator, required_capabilities);
         const provenance = try common.dupString(allocator, request.provenance);
         errdefer allocator.free(provenance);
         return .{
             .backend = backend,
+            .argv = argv,
+            .cwd = cwd,
+            .timeout_ms = request.timeout_ms,
             .required_capabilities = required_capabilities,
             .provenance = provenance,
         };
@@ -96,6 +103,8 @@ pub const FakeBackendProbe = struct {
 
     fn freeRequest(allocator: Allocator, request: ports.BackendProbeRequest) void {
         allocator.free(request.backend);
+        common.freeStringList(allocator, request.argv);
+        common.freeOptionalString(allocator, request.cwd);
         common.freeStringList(allocator, request.required_capabilities);
         allocator.free(request.provenance);
     }
@@ -125,6 +134,9 @@ pub const FakeBackendProbe = struct {
 
     fn requestsEqual(expected: ports.BackendProbeRequest, actual: ports.BackendProbeRequest) bool {
         return std.mem.eql(u8, expected.backend, actual.backend) and
+            common.stringListsEqual(expected.argv, actual.argv) and
+            common.optionalStringsEqual(expected.cwd, actual.cwd) and
+            expected.timeout_ms == actual.timeout_ms and
             common.stringListsEqual(expected.required_capabilities, actual.required_capabilities) and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }

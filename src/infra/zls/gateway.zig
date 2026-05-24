@@ -1,15 +1,38 @@
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
-const runtime_mod = @import("../../runtime.zig");
-const zls_session = @import("../../zls/session.zig");
+const zls_session = @import("session.zig");
+const Workspace = @import("../workspace/workspace.zig").Workspace;
 
-const App = runtime_mod.App;
-
-pub const RuntimeGateway = struct {
-    app: *App,
+pub const Gateway = struct {
+    allocator: std.mem.Allocator,
+    workspace: *Workspace,
+    state: *zls_session.State,
+    slots: zls_session.Slots,
+    config: zls_session.Config,
+    request_counter: ?*usize = null,
 
     const Self = @This();
+
+    pub const Options = struct {
+        allocator: std.mem.Allocator,
+        workspace: *Workspace,
+        state: *zls_session.State,
+        slots: zls_session.Slots = .{},
+        config: zls_session.Config,
+        request_counter: ?*usize = null,
+    };
+
+    pub fn init(options: Options) Self {
+        return .{
+            .allocator = options.allocator,
+            .workspace = options.workspace,
+            .state = options.state,
+            .slots = options.slots,
+            .config = options.config,
+            .request_counter = options.request_counter,
+        };
+    }
 
     pub fn port(self: *Self) ports.ZlsGateway {
         return .{
@@ -24,9 +47,9 @@ pub const RuntimeGateway = struct {
 
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
-        if (self.app.lsp_client == null) return error.Unavailable;
-        const response = self.app.zls_initialize_response orelse return error.Unavailable;
-        const parsed = std.json.parseFromSlice(std.json.Value, self.app.allocator, response, .{}) catch return error.Unavailable;
+        if (self.state.client == null) return error.Unavailable;
+        const response = self.state.initialize_response orelse return error.Unavailable;
+        const parsed = std.json.parseFromSlice(std.json.Value, self.allocator, response, .{}) catch return error.Unavailable;
         defer parsed.deinit();
         const result = responseResult(parsed.value) orelse return error.Unavailable;
         const result_obj = switch (result) {
@@ -55,11 +78,11 @@ pub const RuntimeGateway = struct {
 
     fn sync(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
-        zls_session.ensureReady(self.app) catch |err| return mapZlsError(err);
-        const client = self.app.lsp_client orelse return error.Unavailable;
-        const doc_state = self.app.doc_state orelse return error.Unavailable;
-        const resolved = self.app.workspace.resolve(request_value.file) catch |err| return mapZlsError(err);
-        defer self.app.allocator.free(resolved);
+        zls_session.ensureReady(self.state, self.slots, self.config) catch |err| return mapZlsError(err);
+        const client = self.state.client orelse return error.Unavailable;
+        const doc_state = self.state.documents orelse return error.Unavailable;
+        const resolved = self.workspace.resolve(request_value.file) catch |err| return mapZlsError(err);
+        defer self.allocator.free(resolved);
         const uri = if (request_value.content) |content|
             doc_state.syncText(client, resolved, content, allocator) catch |err| return mapZlsError(err)
         else
@@ -73,11 +96,11 @@ pub const RuntimeGateway = struct {
 
     fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
-        const client = self.app.lsp_client orelse return error.Unavailable;
+        const client = self.state.client orelse return error.Unavailable;
         const params_bytes = if (request_value.payload.len == 0) "{}" else request_value.payload;
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, params_bytes, .{}) catch return error.InvalidRequest;
         defer parsed.deinit();
-        self.app.zls_requests += 1;
+        if (self.request_counter) |counter| counter.* += 1;
         const response = client.sendRequest(allocator, request_value.method, parsed.value) catch |err| return mapZlsError(err);
         return .{
             .method = request_value.method,
@@ -115,20 +138,22 @@ fn mapZlsError(err: anyerror) ports.PortError {
     };
 }
 
-test "runtime gateway capability reads initialized ZLS capability state" {
-    const lsp_client_mod = @import("../../lsp/client.zig");
+test "gateway capability reads initialized ZLS capability state" {
+    const lsp_client_mod = @import("client.zig");
     var client = lsp_client_mod.LspClient.init(std.testing.allocator, std.testing.io);
     defer client.deinit();
 
-    var app = App{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .config = .{ .workspace = "." },
-        .workspace = undefined,
-        .lsp_client = &client,
-        .zls_initialize_response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"hoverProvider\":{},\"definitionProvider\":false}}}",
+    var workspace = testWorkspace();
+    var state = zls_session.State{
+        .client = &client,
+        .initialize_response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"hoverProvider\":{},\"definitionProvider\":false}}}",
     };
-    var gateway = RuntimeGateway{ .app = &app };
+    var gateway = Gateway.init(.{
+        .allocator = std.testing.allocator,
+        .workspace = &workspace,
+        .state = &state,
+        .config = testConfig(),
+    });
 
     const hover = try gateway.port().capability(.{ .capability = "hoverProvider" });
     try std.testing.expect(hover.supported);
@@ -142,15 +167,36 @@ test "runtime gateway capability reads initialized ZLS capability state" {
     try std.testing.expect(!missing.supported);
 }
 
-test "runtime gateway capability reports unavailable before a client is connected" {
-    var app = App{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .config = .{ .workspace = "." },
-        .workspace = undefined,
-        .zls_initialize_response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"hoverProvider\":true}}}",
+test "gateway capability reports unavailable before a client is connected" {
+    var workspace = testWorkspace();
+    var state = zls_session.State{
+        .initialize_response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"hoverProvider\":true}}}",
     };
-    var gateway = RuntimeGateway{ .app = &app };
+    var gateway = Gateway.init(.{
+        .allocator = std.testing.allocator,
+        .workspace = &workspace,
+        .state = &state,
+        .config = testConfig(),
+    });
 
     try std.testing.expectError(error.Unavailable, gateway.port().capability(.{ .capability = "hoverProvider" }));
+}
+
+fn testWorkspace() Workspace {
+    return .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .root = "/workspace",
+        .cache_root = "/workspace/.zigar-cache",
+    };
+}
+
+fn testConfig() zls_session.Config {
+    return .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .workspace_root = "/workspace",
+        .zls_path = "zls",
+        .zls_timeout_ms = 30_000,
+    };
 }

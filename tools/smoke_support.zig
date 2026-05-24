@@ -15,7 +15,7 @@ pub fn nowNs(io: Io) i96 {
 pub fn pickPort(io: Io) u16 {
     const ns = nowNs(io);
     const positive: u128 = @intCast(if (ns < 0) -ns else ns);
-    return @intCast(41000 + (positive % 20000));
+    return @intCast(41000 + (positive % 8000));
 }
 
 pub fn absolutePath(allocator: std.mem.Allocator, io: Io, path: []const u8) ![]u8 {

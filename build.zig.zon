@@ -13,7 +13,7 @@
         "build.zig",
         "build.zig.zon",
         "src",
-        "src/tool_catalog.json",
+        "src/manifest/tool_catalog.json",
         "tools",
         "tests",
         "examples",

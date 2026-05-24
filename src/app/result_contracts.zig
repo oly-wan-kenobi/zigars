@@ -218,8 +218,8 @@ pub fn planOutputBudget(request: OutputBudgetPlanRequest) OutputBudgetPlan {
         .omission_policy = "Prefer stable machine fields first, then evidence, then human detail; record every dropped section in omitted_sections.",
         .evidence_source = "static zigar result-shape budget policy",
         .confidence = .medium,
-        .limitations = "Token counts are planning budgets, not tokenizer-exact guarantees for every client.",
-        .resolution = "Use mode=compact for routing, mode=standard for normal agent use, and mode=deep when a verifier needs fuller evidence.",
+        .limitations = "Token counts are planning budgets, not tokenizer-exact guarantees for every MCP client.",
+        .resolution = "Use mode=compact for routing, mode=standard for normal agent use, and mode=deep when a human or verifier needs fuller evidence.",
         .result_shape = modeMetadata(request.mode),
     };
 }

@@ -30,7 +30,7 @@ const release_items = [_]ReleaseItem{
 
 const DistOptions = struct {
     out_dir: []const u8 = "dist",
-    version: []const u8 = zigar.version.string,
+    version: []const u8 = zigar.manifest.version.string,
     packages: std.ArrayList(PackageInput) = .empty,
 
     fn deinit(self: *DistOptions, allocator: Allocator) void {
@@ -39,7 +39,7 @@ const DistOptions = struct {
 };
 
 pub fn printVersion(io: Io) !void {
-    try stdoutPrint(io, "{s}\n", .{zigar.version.string});
+    try stdoutPrint(io, "{s}\n", .{zigar.manifest.version.string});
 }
 
 pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !void {
@@ -66,7 +66,7 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
 
 pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var assets_dir: []const u8 = "dist/assets";
-    var version: []const u8 = zigar.version.string;
+    var version: []const u8 = zigar.manifest.version.string;
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
         if (std.mem.eql(u8, args[i], "--assets-dir")) {

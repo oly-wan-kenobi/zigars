@@ -272,6 +272,7 @@ fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
 fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, tests: []const []const u8, error_message: *?[]const u8) !CoverageStats {
     const kcov_root = try std.fmt.allocPrint(allocator, "{s}/kcov", .{out_dir});
     defer allocator.free(kcov_root);
+    if (dirExists(io, kcov_root)) try Io.Dir.cwd().deleteTree(io, kcov_root);
     try Io.Dir.cwd().createDirPath(io, kcov_root);
 
     var result_dirs: std.ArrayList([]const u8) = .empty;
@@ -455,6 +456,12 @@ fn isScopePath(filename: []const u8, scope: []const u8) bool {
 
 fn isPathSep(byte: u8) bool {
     return byte == '/' or byte == '\\';
+}
+
+fn dirExists(io: Io, path: []const u8) bool {
+    var dir = Io.Dir.cwd().openDir(io, path, .{}) catch return false;
+    dir.close(io);
+    return true;
 }
 
 fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {

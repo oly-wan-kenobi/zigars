@@ -1,0 +1,309 @@
+const std = @import("std");
+
+const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
+const docs_domain = @import("../../../domain/release/docs_index.zig");
+
+pub const default_docs_index_limit: usize = 200;
+pub const default_docs_query_limit: usize = 20;
+pub const default_std_limit: usize = 20;
+pub const default_langref_item_limit: usize = 5;
+pub const default_autodoc_limit: usize = 200;
+pub const default_doc_example_limit: usize = 50;
+pub const default_readme_command_limit: usize = 100;
+
+pub const EvidenceRequest = struct {
+    content: ?[]const u8 = null,
+    path: ?[]const u8 = null,
+    default_path: ?[]const u8 = null,
+    require: bool = true,
+    provenance: []const u8,
+};
+
+pub const EvidenceInput = struct {
+    bytes: []const u8,
+    source_kind: []const u8,
+    path: ?[]const u8 = null,
+    owned: ?[]const u8 = null,
+
+    pub fn deinit(self: EvidenceInput, allocator: std.mem.Allocator) void {
+        if (self.owned) |bytes| allocator.free(bytes);
+    }
+};
+
+pub const Error = ports.PortError || error{
+    MissingEvidence,
+};
+
+const OwnedTextFiles = struct {
+    files: []docs_domain.TextFile,
+    skipped_files: usize = 0,
+    walk_errors: usize = 0,
+
+    fn deinit(self: OwnedTextFiles, allocator: std.mem.Allocator) void {
+        for (self.files) |file| {
+            allocator.free(file.path);
+            if (file.source_path) |source_path| allocator.free(source_path);
+            allocator.free(file.bytes);
+        }
+        allocator.free(self.files);
+    }
+};
+
+pub fn builtinList(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext) Error!docs_domain.BuiltinListResult {
+    const input = try builtinIndexInput(allocator, context);
+    return docs_domain.builtinList(input);
+}
+
+pub fn builtinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.BuiltinDocResult {
+    const input = try builtinIndexInput(allocator, context);
+    return docs_domain.builtinDoc(allocator, query, @max(limit, 1), input) catch return error.OutOfMemory;
+}
+
+pub fn stdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.StdSearchResult {
+    const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_search");
+    defer std_dir.deinit(allocator);
+    var files = try collectStdFiles(allocator, context, std_dir.value);
+    defer files.deinit(allocator);
+    return docs_domain.stdSearch(allocator, std_dir.value, query, files.files, .{
+        .files_scanned = files.files.len,
+        .skipped_files = files.skipped_files,
+        .walk_errors = files.walk_errors,
+    }, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn stdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, name: []const u8, limit: usize) Error!docs_domain.StdItemResult {
+    const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_item");
+    defer std_dir.deinit(allocator);
+    var files = try collectStdFiles(allocator, context, std_dir.value);
+    defer files.deinit(allocator);
+    return docs_domain.stdItem(allocator, std_dir.value, name, files.files, .{
+        .files_scanned = files.files.len,
+        .skipped_files = files.skipped_files,
+        .walk_errors = files.walk_errors,
+    }, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn langrefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.LangrefSearchResult {
+    const lib_dir = try envValue(allocator, context, "lib_dir", "release_docs.langref");
+    defer lib_dir.deinit(allocator);
+    var probe: docs_domain.LangrefProbe = .{};
+    for (docs_domain.langref_candidates) |rel| {
+        probe.candidates_checked += 1;
+        const path = std.fs.path.join(allocator, &.{ lib_dir.value, rel }) catch return error.OutOfMemory;
+        defer allocator.free(path);
+        const read = context.docs_scanner.readAbsolute(allocator, .{
+            .path = path,
+            .max_bytes = docs_domain.langref_probe_read_limit,
+            .provenance = "release_docs.langref_probe",
+        }) catch {
+            probe.unreadable_candidates += 1;
+            continue;
+        };
+        defer read.deinit(allocator);
+        if (docs_domain.looksLikeLangref(rel, read.bytes)) {
+            probe.path = path;
+            const full = context.docs_scanner.readAbsolute(allocator, .{
+                .path = path,
+                .max_bytes = docs_domain.langref_html_read_limit,
+                .provenance = "release_docs.langref_read",
+            }) catch {
+                return docs_domain.langrefBundled(allocator, query, @max(limit, 1), .{
+                    .installed_doc_available = true,
+                    .candidate_count = probe.candidates_checked,
+                    .skipped_candidate_count = probe.skippedCandidates(),
+                    .rejected_candidate_count = probe.rejected_candidates,
+                    .unreadable_candidate_count = probe.unreadable_candidates + 1,
+                    .parse_failure_count = 1,
+                    .fallback_reason = "installed_langref_read_failed",
+                }) catch return error.OutOfMemory;
+            };
+            defer full.deinit(allocator);
+            return docs_domain.langrefInstalled(allocator, path, full.bytes, query, @max(limit, 1), probe) catch return error.OutOfMemory;
+        }
+        probe.rejected_candidates += 1;
+    }
+    return docs_domain.langrefBundled(allocator, query, @max(limit, 1), .{
+        .candidate_count = probe.candidates_checked,
+        .skipped_candidate_count = probe.skippedCandidates(),
+        .rejected_candidate_count = probe.rejected_candidates,
+        .unreadable_candidate_count = probe.unreadable_candidates,
+        .fallback_reason = "installed_langref_not_found",
+    }) catch return error.OutOfMemory;
+}
+
+pub fn docsIndexBuild(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, scope: []const u8, limit: usize) Error!docs_domain.DocsIndexResult {
+    var files = try collectWorkspaceDocsFiles(allocator, context, scope);
+    defer files.deinit(allocator);
+    return docs_domain.docsIndex(allocator, scope, files.files, files.skipped_files + files.walk_errors, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn docsQuery(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, scope: []const u8, autodoc_text: ?[]const u8, limit: usize) Error!docs_domain.DocsQueryResult {
+    var files = try collectWorkspaceDocsFiles(allocator, context, scope);
+    defer files.deinit(allocator);
+    return docs_domain.docsQuery(allocator, query, scope, files.files, autodoc_text, files.skipped_files + files.walk_errors, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn autodocIngest(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.AutodocIngestResult {
+    const input = try readEvidence(allocator, context, request);
+    defer input.deinit(allocator);
+    return docs_domain.autodocIngest(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn docExampleCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.DocExampleCheckResult {
+    const input = try readEvidence(allocator, context, request);
+    defer input.deinit(allocator);
+    return docs_domain.docExampleCheck(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+pub fn snippetCheck(allocator: std.mem.Allocator, content: []const u8) Error!docs_domain.SnippetCheck {
+    return docs_domain.snippetCheck(allocator, "inline", content) catch return error.OutOfMemory;
+}
+
+pub fn readmeCommandCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.ReadmeCommandCheckResult {
+    const input = try readEvidence(allocator, context, request);
+    defer input.deinit(allocator);
+    return docs_domain.readmeCommandCheck(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
+}
+
+fn builtinIndexInput(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext) Error!docs_domain.BuiltinIndexInput {
+    const version = envValue(allocator, context, "version", "release_docs.builtin_version") catch null;
+    errdefer if (version) |value| value.deinit(allocator);
+    const std_dir = envValue(allocator, context, "std_dir", "release_docs.builtin_source") catch null;
+    defer if (std_dir) |value| value.deinit(allocator);
+    var source_path: ?[]u8 = null;
+    var source_bytes: ?[]const u8 = null;
+    if (std_dir) |dir| {
+        source_path = std.fs.path.join(allocator, &.{ dir.value, "zig/BuiltinFn.zig" }) catch return error.OutOfMemory;
+        if (source_path) |path| {
+            defer allocator.free(path);
+            const read = context.docs_scanner.readAbsolute(allocator, .{
+                .path = path,
+                .max_bytes = docs_domain.std_source_read_limit,
+                .provenance = "release_docs.builtin_source",
+            }) catch null;
+            if (read) |value| source_bytes = value.bytes;
+            defer if (read) |value| value.deinit(allocator);
+            const input = docs_domain.buildBuiltinIndexInput(
+                allocator,
+                if (version) |value| value.value else null,
+                path,
+                source_bytes,
+            ) catch return error.OutOfMemory;
+            if (version) |value| value.deinit(allocator);
+            return input;
+        }
+    }
+    defer if (source_path) |path| allocator.free(path);
+    const input = docs_domain.buildBuiltinIndexInput(
+        allocator,
+        if (version) |value| value.value else null,
+        source_path,
+        source_bytes,
+    ) catch return error.OutOfMemory;
+    if (version) |value| value.deinit(allocator);
+    return input;
+}
+
+fn envValue(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, key: []const u8, provenance: []const u8) ports.PortError!ports.ToolchainEnvValue {
+    return context.toolchain_env.get(allocator, .{ .key = key, .provenance = provenance });
+}
+
+fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, std_dir: []const u8) Error!OwnedTextFiles {
+    var scan = try context.docs_scanner.scanAbsoluteZigPaths(allocator, .{
+        .root = std_dir,
+        .max_files = docs_domain.default_path_scan_limit,
+        .provenance = "release_docs.std_scan",
+    });
+    defer scan.deinit(allocator);
+    var files: std.ArrayList(docs_domain.TextFile) = .empty;
+    errdefer {
+        for (files.items) |file| {
+            allocator.free(file.path);
+            if (file.source_path) |source_path| allocator.free(source_path);
+            allocator.free(file.bytes);
+        }
+        files.deinit(allocator);
+    }
+    var skipped: usize = 0;
+    for (scan.paths) |entry| {
+        const source_path = std.fs.path.join(allocator, &.{ std_dir, entry.path }) catch return error.OutOfMemory;
+        errdefer allocator.free(source_path);
+        const read = context.docs_scanner.readAbsolute(allocator, .{
+            .path = source_path,
+            .max_bytes = docs_domain.std_source_read_limit,
+            .provenance = "release_docs.std_read",
+        }) catch {
+            allocator.free(source_path);
+            skipped += 1;
+            continue;
+        };
+        try files.append(allocator, .{
+            .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory,
+            .source_path = source_path,
+            .bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory,
+        });
+    }
+    return .{
+        .files = try files.toOwnedSlice(allocator),
+        .skipped_files = skipped,
+        .walk_errors = scan.walk_errors,
+    };
+}
+
+fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, scope: []const u8) Error!OwnedTextFiles {
+    var scan = try context.docs_scanner.scanWorkspacePaths(allocator, .{
+        .max_files = docs_domain.default_path_scan_limit,
+        .provenance = "release_docs.workspace_docs_scan",
+    });
+    defer scan.deinit(allocator);
+    var files: std.ArrayList(docs_domain.TextFile) = .empty;
+    errdefer {
+        for (files.items) |file| {
+            allocator.free(file.path);
+            allocator.free(file.bytes);
+        }
+        files.deinit(allocator);
+    }
+    var skipped: usize = 0;
+    for (scan.paths) |entry| {
+        if (!docs_domain.isDocsScopePath(scope, entry.path)) continue;
+        const read = context.workspace_store.read(allocator, .{
+            .path = entry.path,
+            .max_bytes = docs_domain.std_source_read_limit,
+            .provenance = "release_docs.workspace_docs_read",
+        }) catch {
+            skipped += 1;
+            continue;
+        };
+        try files.append(allocator, .{
+            .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory,
+            .bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory,
+        });
+    }
+    return .{
+        .files = try files.toOwnedSlice(allocator),
+        .skipped_files = skipped,
+        .walk_errors = scan.walk_errors,
+    };
+}
+
+fn readEvidence(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest) Error!EvidenceInput {
+    if (request.content) |content| return .{ .bytes = content, .source_kind = "inline_content" };
+    const path = request.path orelse request.default_path;
+    if (path) |value| {
+        const read = try context.workspace_store.read(allocator, .{
+            .path = value,
+            .max_bytes = docs_domain.evidence_read_limit,
+            .provenance = request.provenance,
+        });
+        return .{
+            .bytes = read.bytes,
+            .source_kind = "workspace_path",
+            .path = value,
+            .owned = if (read.owns_bytes) read.bytes else null,
+        };
+    }
+    if (request.require) return error.MissingEvidence;
+    return .{ .bytes = "", .source_kind = "empty" };
+}

@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
-const command = @import("../../command.zig");
-const observability_mod = @import("../../observability.zig");
+const command = @import("command.zig");
+const observability_mod = @import("../observability/state.zig");
 
 pub const Options = struct {
     io: std.Io,
@@ -11,6 +11,7 @@ pub const Options = struct {
     command_calls: ?*usize = null,
     tool_errors: ?*usize = null,
     observability: ?*observability_mod.State = null,
+    count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
 };
@@ -22,6 +23,7 @@ pub const Runner = struct {
     command_calls: ?*usize = null,
     tool_errors: ?*usize = null,
     observability: ?*observability_mod.State = null,
+    count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
 
@@ -35,6 +37,7 @@ pub const Runner = struct {
             .command_calls = options.command_calls,
             .tool_errors = options.tool_errors,
             .observability = options.observability,
+            .count_command_calls = options.count_command_calls,
             .non_exited_exit_code = options.non_exited_exit_code,
             .record_observability = options.record_observability,
         };
@@ -56,7 +59,9 @@ pub const Runner = struct {
         const stdout_limit = request.max_stdout_bytes orelse command.output_limit;
         const stderr_limit = request.max_stderr_bytes orelse command.output_limit;
         const title = if (request.provenance.len > 0) request.provenance else "zig command";
-        if (self.command_calls) |counter| counter.* += 1;
+        if (self.count_command_calls) {
+            if (self.command_calls) |counter| counter.* += 1;
+        }
         const started_ns = std.Io.Clock.now(.real, self.io).nanoseconds;
         const result = command.runWithOutputLimit(allocator, self.io, cwd, request.argv, timeout_ms, stdout_limit, stderr_limit) catch |err| {
             self.recordCommand(title, request.argv, elapsedMs(self.io, started_ns), false, @errorName(err));

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const source_summary = @import("source_summary.zig");
+const scanner_fake = @import("../../../testing/fakes/workspace_scanner.zig");
 const workspace_fake = @import("../../../testing/fakes/workspace_store.zig");
 
 test "source text summaries are typed use-case calls over domain analysis" {
@@ -39,6 +40,8 @@ test "source text summary variants preserve advisory wording" {
 test "readParserSummary reads through workspace port and preserves parser evidence" {
     var fake = workspace_fake.FakeWorkspaceStore.init(std.testing.allocator);
     defer fake.deinit();
+    var scanner = scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
     try fake.expectRead(.{
         .path = "src/main.zig",
         .max_bytes = source_summary.default_source_read_limit,
@@ -48,6 +51,7 @@ test "readParserSummary reads through workspace port and preserves parser eviden
     const ctx = app_context.StaticAnalysisContext{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
         .workspace_store = fake.port(),
+        .workspace_scanner = scanner.port(),
     };
 
     const result = try source_summary.readParserSummary(std.testing.allocator, ctx, .{ .file = "src/main.zig" });
@@ -63,9 +67,12 @@ test "readParserSummary reads through workspace port and preserves parser eviden
 test "readParserSummary rejects generated cache paths before workspace read" {
     var fake = workspace_fake.FakeWorkspaceStore.init(std.testing.allocator);
     defer fake.deinit();
+    var scanner = scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
     const ctx = app_context.StaticAnalysisContext{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
         .workspace_store = fake.port(),
+        .workspace_scanner = scanner.port(),
     };
 
     try std.testing.expectError(error.SkippedWorkspacePath, source_summary.readParserSummary(std.testing.allocator, ctx, .{ .file = ".zig-cache/o/generated.zig" }));

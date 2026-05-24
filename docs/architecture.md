@@ -4,47 +4,51 @@ Zigar is intentionally a deterministic workbench, not an advice or code-generati
 server. The implementation is split around boundaries that keep that contract
 auditable:
 
-- `src/main.zig` owns CLI parsing, runtime setup, transport startup, and the
-  package version surfaced from `build.zig.zon` through `src/version.zig`.
-- `src/mcp_server.zig` is zigar's first-party MCP server adapter. zigar imports
+- `src/main.zig` delegates process startup to `src/bootstrap/runtime.zig`; the
+  source root contains only `src/main.zig` and `src/root.zig`. Public imports
+  should go through package owners such as `src/app`, `src/domain`, `src/infra`,
+  `src/manifest`, `src/adapters`, and `src/bootstrap`.
+- `src/adapters/mcp/server.zig` is zigar's first-party MCP server adapter. zigar imports
   protocol types, JSON-RPC helpers, content/resource/prompt types, and transport
   primitives from the pinned upstream `mcp.zig` dependency, but zigar owns
   server-side request routing and the result-lifetime boundary for `tools/call`,
   `resources/read`, and `prompts/get`.
-- `src/server.zig` wires MCP tools, resources, and prompts. Tool registration is
-  driven by the manifest; server code should not grow per-tool switches.
-- `src/tools/*.zig` groups MCP tool handlers by workflow area: discovery,
-  agent workflows, core Zig commands, edit/ZLS operations, docs, static
-  analysis, CI, linting, profiling, and resources. `src/tools/common.zig` is a
-  small compatibility facade over focused shared helper modules.
-- `src/runtime.zig` owns process-local runtime state such as workspace config,
-  ZLS session pointers, counters, backend probes, and heuristic analysis caches.
+- `src/adapters/mcp/registration.zig`, `registry.zig`, and `handlers.zig` wire
+  MCP tools from the typed manifest through bootstrap-supplied runtime ports.
+- `src/adapters/mcp/tools/*.zig` groups MCP projections by workflow area.
+  Application behavior belongs under `src/app/usecases/**`; root-level tool
+  modules and direct root implementation aliases must stay absent.
+- `src/bootstrap/runtime_state.zig` owns process composition state such as workspace config,
+  counters, backend probes, and infra-owned cache/session state handles.
   Runtime job, event, subscription, and client-root rings live in
-  `src/runtime_ux.zig` and are intentionally bounded and process-local.
-- `src/tool_manifest.zig` is the typed tool manifest facade. It derives ids,
+  `src/infra/runtime_ux/state.zig` and are intentionally bounded and process-local.
+- `src/manifest/mod.zig` is the typed tool manifest owner. It derives ids,
   tables, and lookup helpers from focused manifest modules:
-  `src/tool_manifest/types.zig` defines the schema vocabulary,
-  `src/tool_manifest/definitions.zig` lists tool definitions, and
-  `src/tool_manifest/groups.zig` owns group keyword metadata. Together these hold
+  `src/manifest/types.zig` defines the schema vocabulary,
+  `src/manifest/definitions.zig` lists tool definitions, and
+  `src/manifest/groups.zig` owns group keyword metadata. Together these hold
   names, descriptions, argument schemas, grouping, discovery keywords, handler
   references, planning policies, MCP read-only annotations, and risk metadata.
-  `src/tool_metadata.zig` is a compatibility facade for consumers that still
-  use the older name.
-- `src/tool_handlers.zig` resolves manifest handler references to functions by
+- `src/adapters/mcp/handlers.zig` resolves manifest handler references to functions by
   handler module namespace. It does not map individual tools.
-- `src/tool_registry.zig` adapts typed metadata to `mcp.zig` tools and validates
-  JSON arguments before handlers run.
-- `src/catalog.zig` merges static safety/common-intent text with manifest-derived
-  groups, discovery keywords, argument hints, planning support, and risk
-  metadata for public schema/capability responses.
-- `src/json_result.zig` centralizes structured JSON result serialization for MCP
+- `src/adapters/mcp/registry.zig` adapts typed metadata to `mcp.zig` tools and validates
+  JSON arguments before handlers run. `src/adapters/mcp/schema.zig` owns the
+  transport-specific projection from manifest schema metadata to MCP input
+  schemas.
+- `src/manifest/tool_catalog_render.zig` renders the public tool catalog by
+  projecting static manifest metadata, domain-owned backend setup metadata, and
+  domain-owned static-analysis contracts. `src/infra/runtime_ux/catalog.zig`
+  is only the concrete `ToolCatalog` port wrapper.
+- `src/adapters/mcp/result.zig` centralizes structured JSON result serialization for MCP
   tool responses and deep-clones structured content into the request allocator.
-- `src/analysis.zig` contains heuristic source scanners. `src/analysis_contract.zig`
+- `src/app/usecases/static_analysis/source_summary.zig` contains source-text
+  summaries, and `src/app/usecases/static_analysis/workspace_scans.zig`
+  contains port-backed workspace scans. `src/domain/zig/static_analysis_contracts.zig`
   owns the shared confidence vocabulary, limitations, and verification guidance
   for static-analysis tools.
-- `src/state/documents.zig`, `src/lsp/*`, and `src/zls/*` own the ZLS session
-  boundary. `src/lsp/client.zig` owns request/response correlation, pipe
-  lifecycle, shutdown, and reader threads. `src/lsp/diagnostics_cache.zig` owns
+- `src/infra/zls/*` owns the ZLS session boundary.
+  `src/infra/zls/client.zig` owns request/response correlation, pipe
+  lifecycle, shutdown, and reader threads. `src/infra/zls/diagnostics_cache.zig` owns
   diagnostics retention, bounded eviction, snapshot ordering, and cache counters.
   Document-state locks should protect state transitions only; file I/O and LSP
   sends should run outside the mutex. Unsaved document content is retained in
@@ -52,17 +56,23 @@ auditable:
 - `tools/zigar_tools.zig` is the pure-Zig helper executable used by build steps.
   Shared helper concerns live beside it in `tools/*.zig`.
 
+The architecture guard is strict by default: its exception allowlist must remain
+empty. New boundary pressure should be resolved by adding app ports, bootstrap
+composition, or infra-owned state rather than by adding temporary guard
+exceptions.
+
 ## Tool Registry Rules
 
 When adding or changing a tool:
 
-1. Add or update one entry in `src/tool_manifest/definitions.zig`. That entry
+1. Add or update one entry in `src/manifest/definitions.zig`. That entry
    names the schema, group, handler reference, planning policy, read-only
    annotation, and risk flags. Add or update group-level discovery keywords in
-   `src/tool_manifest/groups.zig` only when the tool introduces a new searchable
+   `src/manifest/groups.zig` only when the tool introduces a new searchable
    intent.
-2. Add the handler implementation in the appropriate `src/tools/*.zig` module.
-   Only add a new namespace to `src/tool_handlers.zig` when introducing a new
+2. Add application behavior under `src/app/usecases/**` and expose it through
+   the appropriate `src/adapters/mcp/tools/*.zig` module.
+   Only add a new namespace to `src/adapters/mcp/handlers.zig` when introducing a new
    handler module, not for routine tool additions.
 3. Regenerate docs with `zig build tool-index`.
 4. Add focused tests for argument validation, risk metadata, and any parsing or
@@ -106,7 +116,7 @@ preview workflows from default mutations.
 
 The build imports the pinned upstream `mcp` package directly. There is no local
 patched MCP dependency in the build graph. The first-party adapter in
-`src/mcp_server.zig` keeps zigar's supported MCP surface explicit:
+`src/adapters/mcp/server.zig` keeps zigar's supported MCP surface explicit:
 `initialize`, `ping`, tools, resources, resource subscriptions, prompts,
 completion requests, tasks, logging level, stdio transport, and loopback HTTP
 transport.
@@ -134,8 +144,8 @@ retaining explicit zigar-owned cleanup hooks.
 ## Heuristic Analysis Rules
 
 Heuristic scanners are useful for fast orientation, but they are not semantic
-Zig analysis. Keep them isolated in `src/analysis.zig` or a dedicated analysis
-module, include fixture tests, and prefer parser-backed, ZLS, Zig
+Zig analysis. Keep source-text heuristics isolated in static-analysis app
+use cases, route workspace reads through app ports, include fixture tests, and prefer parser-backed, ZLS, Zig
 compiler-backed, or optional zwanzig-backed tools for actions that would modify
 source. Static-analysis results should include `analysis_kind`,
 `capability_tier`, `confidence`, `confidence_class`, `source_coverage`,

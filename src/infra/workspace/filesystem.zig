@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
-const command = @import("../../command.zig");
-const workspace_mod = @import("../../workspace.zig");
+const command = @import("../process/command.zig");
+const workspace_mod = @import("workspace.zig");
 
 pub const ReadResolution = enum {
     input,
@@ -39,6 +39,9 @@ pub const Store = struct {
                 .read = read,
                 .write = write,
                 .delete = delete,
+                .exists = exists,
+                .ensure_dir = ensureDir,
+                .scan_directory = scanDirectory,
             },
         };
     }
@@ -67,10 +70,11 @@ pub const Store = struct {
 
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
-        const resolved = switch (self.read_resolution) {
-            .input => self.workspace.resolve(request.path) catch |err| return mapPortError(err),
-            .output => self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err),
-        };
+        const use_output = request.for_output orelse (self.read_resolution == .output);
+        const resolved = if (use_output)
+            self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err)
+        else
+            self.workspace.resolve(request.path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(resolved);
         const max_bytes = request.max_bytes orelse self.default_read_limit;
         if (max_bytes == 0) {
@@ -103,6 +107,70 @@ pub const Store = struct {
             else => return mapPortError(err),
         };
         return .{ .deleted = true };
+    }
+
+    fn exists(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const resolved = if (request.for_output)
+            self.workspace.resolveOutput(request.path) catch |err| return existsResolveError(err)
+        else
+            self.workspace.resolve(request.path) catch |err| return existsResolveError(err);
+        defer self.workspace.allocator.free(resolved);
+
+        var dir = std.Io.Dir.openDirAbsolute(self.io, resolved, .{ .iterate = true }) catch {
+            var file = std.Io.Dir.cwd().openFile(self.io, resolved, .{}) catch return .{ .exists = false };
+            file.close(self.io);
+            return .{ .exists = true, .kind = .file };
+        };
+        defer dir.close(self.io);
+
+        var walker = dir.walk(allocator) catch return .{ .exists = true, .kind = .directory, .entry_count = null };
+        defer walker.deinit();
+        var count: usize = 0;
+        while ((walker.next(self.io) catch null)) |entry| {
+            if (std.mem.indexOfScalar(u8, entry.path, std.fs.path.sep) == null) count += 1;
+        }
+        return .{ .exists = true, .kind = .directory, .entry_count = count };
+    }
+
+    fn existsResolveError(err: anyerror) ports.PortError!ports.WorkspaceExistsResult {
+        return switch (mapPortError(err)) {
+            error.OutOfMemory => error.OutOfMemory,
+            else => .{ .exists = false },
+        };
+    }
+
+    fn ensureDir(ptr: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const resolved = self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err);
+        defer self.workspace.allocator.free(resolved);
+        std.Io.Dir.cwd().createDirPath(self.io, resolved) catch |err| return mapPortError(err);
+        return .{};
+    }
+
+    fn scanDirectory(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const resolved = if (request.for_output)
+            self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err)
+        else
+            self.workspace.resolve(request.path) catch |err| return mapPortError(err);
+        defer self.workspace.allocator.free(resolved);
+        var dir = std.Io.Dir.openDirAbsolute(self.io, resolved, .{ .iterate = true }) catch |err| return mapPortError(err);
+        defer dir.close(self.io);
+        var walker = dir.walk(allocator) catch |err| return mapPortError(err);
+        defer walker.deinit();
+        var entries: std.ArrayList(ports.WorkspaceDirectoryEntry) = .empty;
+        errdefer {
+            for (entries.items) |entry| allocator.free(entry.path);
+            entries.deinit(allocator);
+        }
+        while (walker.next(self.io) catch |err| return mapPortError(err)) |entry| {
+            if (request.max_files) |max_files| if (entries.items.len >= max_files) break;
+            if (entry.kind != .file) continue;
+            if (request.suffix.len > 0 and !std.mem.endsWith(u8, entry.path, request.suffix)) continue;
+            try entries.append(allocator, .{ .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory });
+        }
+        return .{ .entries = try entries.toOwnedSlice(allocator), .owns_memory = true };
     }
 };
 

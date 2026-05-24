@@ -4,6 +4,8 @@ pub const capture_semantics = "zigar does not execute or define profiler capture
 
 pub const zflame_argv_shape = "zflame <format> [--title=<text>] [--subtitle=<text>] [--colors=<palette>] [--width=<px>] [--min-width=<px>] [--hash] <workspace-input>";
 pub const zflame_compatibility_baseline = "zflame CLI with explicit format subcommand, --title=, --subtitle=, --colors=, --width=, --min-width=, --hash, and SVG on stdout";
+pub const diff_folded_argv_shape = "diff-folded --output=<path> before.folded after.folded";
+pub const diff_folded_compatibility_baseline = "diff-folded CLI with --output=<path> before.folded after.folded and non-empty folded-stack output";
 
 pub const ZflameFormat = enum {
     perf,
@@ -82,6 +84,13 @@ pub const ZflameRenderSpec = struct {
     options: ZflameRenderOptions = .{},
 };
 
+pub const DiffFoldedSpec = struct {
+    executable: []const u8,
+    output: []const u8,
+    before: []const u8,
+    after: []const u8,
+};
+
 pub const BuiltArgv = struct {
     argv: std.ArrayList([]const u8) = .empty,
     owned_args: std.ArrayList([]const u8) = .empty,
@@ -110,6 +119,15 @@ pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !Bu
     try appendZflameIntOption(allocator, &built, .min_width, spec.options.min_width);
     if (spec.options.hash) try built.argv.append(allocator, "--hash");
     try built.argv.append(allocator, spec.input);
+    return built;
+}
+
+pub fn buildDiffFoldedArgv(allocator: std.mem.Allocator, spec: DiffFoldedSpec) !BuiltArgv {
+    var built: BuiltArgv = .{};
+    errdefer built.deinit(allocator);
+    try built.argv.append(allocator, spec.executable);
+    try built.appendOwned(allocator, try std.fmt.allocPrint(allocator, "--output={s}", .{spec.output}));
+    try built.argv.appendSlice(allocator, &.{ spec.before, spec.after });
     return built;
 }
 
@@ -161,6 +179,19 @@ test "zflame argv covers every advertised input format without guessing" {
         try std.testing.expectEqualStrings("/workspace/input.profile", argv.argv.items[2]);
     }
     try std.testing.expect(parseZflameFormat("guess") == null);
+}
+
+test "diff-folded argv writes explicit output file" {
+    var argv = try buildDiffFoldedArgv(std.testing.allocator, .{
+        .executable = "diff-folded",
+        .output = "/workspace/.zigar-cache/profile/diff-0.folded",
+        .before = "/workspace/before.folded",
+        .after = "/workspace/after.folded",
+    });
+    defer argv.deinit(std.testing.allocator);
+    const expected = [_][]const u8{ "diff-folded", "--output=/workspace/.zigar-cache/profile/diff-0.folded", "/workspace/before.folded", "/workspace/after.folded" };
+    try std.testing.expectEqual(expected.len, argv.argv.items.len);
+    for (expected, argv.argv.items) |expected_arg, actual_arg| try std.testing.expectEqualStrings(expected_arg, actual_arg);
 }
 
 test "svg validation catches empty and non-svg backend output" {

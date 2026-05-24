@@ -17,6 +17,92 @@ fn context(command_runner: ports.CommandRunner, workspace_store: ports.Workspace
     };
 }
 
+test "version use case runs zig and optional zls through command port" {
+    const allocator = std.testing.allocator;
+    var commands = fake_command.FakeCommandRunner.init(allocator);
+    defer commands.deinit();
+    var workspace = fake_workspace.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zig", "version" },
+        .cwd = "/workspace",
+        .timeout_ms = 12_000,
+        .max_stdout_bytes = zig_commands.command_output_limit,
+        .max_stderr_bytes = zig_commands.command_output_limit,
+        .provenance = "zig version",
+    }, .{
+        .exit_code = 0,
+        .stdout = "0.16.0\n",
+        .stderr = "",
+    });
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zls", "--version" },
+        .cwd = "/workspace",
+        .timeout_ms = 12_000,
+        .max_stdout_bytes = zig_commands.command_output_limit,
+        .max_stderr_bytes = zig_commands.command_output_limit,
+        .provenance = "zls version",
+    }, .{
+        .exit_code = 0,
+        .stdout = "0.16.0\n",
+        .stderr = "",
+    });
+
+    var outcome = try zig_commands.version(allocator, context(commands.port(), workspace.port()), .{});
+    defer outcome.deinit(allocator);
+
+    switch (outcome) {
+        .ok => |*version_result| {
+            try std.testing.expectEqualStrings("0.16.0\n", version_result.zig.result.stdout);
+            try std.testing.expect(version_result.zls != null);
+            try std.testing.expectEqualStrings("connected", version_result.zls_status);
+        },
+        .err => return error.TestUnexpectedResult,
+    }
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "version use case treats zls command errors as unavailable" {
+    const allocator = std.testing.allocator;
+    var commands = fake_command.FakeCommandRunner.init(allocator);
+    defer commands.deinit();
+    var workspace = fake_workspace.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zig", "version" },
+        .cwd = "/workspace",
+        .timeout_ms = 12_000,
+        .max_stdout_bytes = zig_commands.command_output_limit,
+        .max_stderr_bytes = zig_commands.command_output_limit,
+        .provenance = "zig version",
+    }, .{
+        .exit_code = 0,
+        .stdout = "0.16.0\n",
+        .stderr = "",
+    });
+    try commands.expectRunError(.{
+        .argv = &.{ "/bin/zls", "--version" },
+        .cwd = "/workspace",
+        .timeout_ms = 12_000,
+        .max_stdout_bytes = zig_commands.command_output_limit,
+        .max_stderr_bytes = zig_commands.command_output_limit,
+        .provenance = "zls version",
+    }, error.FileNotFound);
+
+    var outcome = try zig_commands.version(allocator, context(commands.port(), workspace.port()), .{});
+    defer outcome.deinit(allocator);
+
+    switch (outcome) {
+        .ok => |*version_result| try std.testing.expect(version_result.zls == null),
+        .err => return error.TestUnexpectedResult,
+    }
+    try commands.verify();
+    try workspace.verify();
+}
+
 test "build use case constructs exact argv timeout cwd and output limits" {
     const allocator = std.testing.allocator;
     var commands = fake_command.FakeCommandRunner.init(allocator);

@@ -93,7 +93,7 @@ pub fn build(b: *std.Build) void {
     docs_check_step.dependOn(&docs_check_cmd.step);
 
     const json_check_cmd = b.addRunArtifact(tools_exe);
-    json_check_cmd.addArgs(&.{ "check-json", "src/tool_catalog.json", "tests/fixtures/http-smoke.expect.json" });
+    json_check_cmd.addArgs(&.{ "check-json", "src/manifest/tool_catalog.json", "tests/fixtures/http-smoke.expect.json" });
     const json_check_step = b.step("json-check", "Validate JSON fixtures and catalogs");
     json_check_step.dependOn(&json_check_cmd.step);
 
@@ -151,6 +151,12 @@ pub fn build(b: *std.Build) void {
     const architecture_guard_step = b.step("architecture-guard", "Check Phase 10 architecture dependency guards");
     architecture_guard_step.dependOn(&architecture_guard_cmd.step);
 
+    const hex_architecture_inventory_cmd = b.addRunArtifact(tools_exe);
+    hex_architecture_inventory_cmd.addArg("hex-architecture-inventory");
+    if (b.args) |args| hex_architecture_inventory_cmd.addArgs(args);
+    const hex_architecture_inventory_step = b.step("hex-architecture-inventory", "Inventory hexagonal architecture migration anchors without architecture_guard");
+    hex_architecture_inventory_step.dependOn(&hex_architecture_inventory_cmd.step);
+
     const public_contracts_cmd = b.addRunArtifact(tools_exe);
     public_contracts_cmd.addArg("public-contracts");
     const public_contracts_step = b.step("public-contracts", "Check public MCP contract invariants");
@@ -166,6 +172,7 @@ pub fn build(b: *std.Build) void {
     release_check_step.dependOn(backend_conformance_contract_step);
     release_check_step.dependOn(hygiene_step);
     release_check_step.dependOn(architecture_guard_step);
+    release_check_step.dependOn(hex_architecture_inventory_step);
     release_check_step.dependOn(public_contracts_step);
 
     const dist_cmd = b.addRunArtifact(tools_exe);
