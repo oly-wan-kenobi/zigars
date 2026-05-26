@@ -28,35 +28,13 @@ pub const zls = @import("tools/zls.zig");
 
 test {
     _ = @import("../../testing/mcp/adapter_tests.zig");
-    _ = @import("server/http_transport.zig");
-}
-
-test {
-    _ = args;
-    _ = artifacts;
-    _ = core;
-    _ = dependencies;
-    _ = diagnostics;
-    _ = discovery;
-    _ = environment;
-    _ = errors;
-    _ = handlers;
-    _ = prompts;
-    _ = registration;
-    _ = registry;
-    _ = result;
-    _ = observability;
-    _ = performance;
-    _ = release;
-    _ = profiling;
-    _ = resources;
-    _ = result_shape;
-    _ = runtime_ux;
-    _ = schema;
-    _ = server;
-    _ = project_intelligence;
-    _ = static_analysis;
-    _ = static_source_summary;
-    _ = transactional_editing;
-    _ = zls;
+    _ = @import("../../testing/mcp/adapters/mcp/args_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/errors_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/resource_errors_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/result_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/root_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/schema_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/server/http_transport_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/server/pagination_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/tools/all_tests.zig");
 }
