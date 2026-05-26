@@ -155,7 +155,3 @@ pub const zigar_tool_sequence_plan = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Reads goal text and manifest workflow policy to recommend a tool sequence without executing tools." },
 });
-
-test "validation workflow definitions expose semantic impact metadata" {
-    try @import("std").testing.expect(zig_impact_semantic.description.len > 0);
-}

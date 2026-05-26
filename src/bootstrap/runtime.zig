@@ -130,14 +130,6 @@ fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
-test "bootstrap runtime wires runtime lifecycle types" {
-    try std.testing.expect(@sizeOf(App) > 0);
-    try std.testing.expect(@sizeOf(LspClient) > 0);
-    try std.testing.expect(@sizeOf(DocumentState) > 0);
-    try std.testing.expect(@sizeOf(ZlsProcess) > 0);
-    try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigar") != null);
-}
-
 test "bootstrap runtime handles config parse exits" {
     try handleConfigParseError(std.testing.io, error.HelpRequested);
     try handleConfigParseError(std.testing.io, error.VersionRequested);

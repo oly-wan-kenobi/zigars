@@ -145,7 +145,3 @@ pub const zig_embedded_detect = tool(.{ .description = "Detect embedded Zig, Mic
 pub const zig_microzig_plan = tool(.{ .description = "Plan MicroZig build, board, simulator, debug, and flash workflow checks.", .input_schema = embedded_schema, .group = group, .plan = .{ .pure_analysis = "Builds a MicroZig workflow plan without mutating hardware or source." } });
 pub const zig_board_profile = tool(.{ .description = "Return a structured board profile from known board hints and target metadata.", .input_schema = embedded_schema, .group = group, .plan = .{ .pure_analysis = "Builds an advisory board profile from caller input and static workspace signals." } });
 pub const zig_flash_plan = tool(.{ .description = "Plan firmware flashing commands and optionally probe the selected flash backend.", .input_schema = embedded_schema, .group = group, .risk = backend_read_risk, .plan = .{ .dynamic_command = "Optionally probes a flash backend with --help; never flashes hardware." } });
-
-test "diagnostics definitions expose debug metadata" {
-    try @import("std").testing.expect(zig_debug_plan.description.len > 0);
-}

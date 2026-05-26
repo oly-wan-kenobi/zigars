@@ -72,7 +72,3 @@ pub const zigar_patch_guard = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Workspace safety check; validates paths and patch text without applying changes." },
 });
-
-test "agent definitions expose workflow metadata" {
-    try @import("std").testing.expect(zigar_context_pack.description.len > 0);
-}

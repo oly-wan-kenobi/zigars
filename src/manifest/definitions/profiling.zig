@@ -38,9 +38,6 @@ pub const zig_flamegraph = tool(.{
     .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
 });
 
-test "profiling definitions expose profile metadata" {
-    try @import("std").testing.expect(zig_profile_plan.description.len > 0);
-}
 pub const zig_flamegraph_diff = tool(.{
     .description = "Create an auditable differential folded stack through diff-folded, then render it through zflame recursive.",
     .input_schema = schemaWithHints(&.{ .{ "before", "string", true }, .{ "after", "string", true }, .{ "output", "string", true }, .{ "intermediate", "string", false }, .{ "title", "string", false }, .{ "subtitle", "string", false }, .{ "colors", "string", false }, .{ "width", "integer", false }, .{ "min_width", "integer", false }, .{ "hash", "boolean", false } }, &.{

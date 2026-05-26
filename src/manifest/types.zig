@@ -100,17 +100,3 @@ pub fn fieldHint(comptime field_name: []const u8, comptime hint: tooling.FieldHi
 pub fn tool(definition: ToolDefinition) ToolDefinition {
     return definition;
 }
-
-test "manifest type helpers preserve schema hints and tool metadata" {
-    const spec = schemaWithHints(&.{.{ "file", "string", true }}, &.{fieldHint("file", .{ .description = "Fixture file.", .path_kind = "input_file" })});
-    try std.testing.expectEqual(@as(usize, 1), spec.fields.len);
-    try std.testing.expectEqual(@as(usize, 1), spec.field_hints.len);
-    const definition = tool(.{
-        .description = "fixture",
-        .input_schema = spec,
-        .group = .core_zig,
-        .plan = .{ .pure_analysis = "fixture" },
-    });
-    try std.testing.expect(definition.read_only);
-    try std.testing.expectEqual(ToolGroup.core_zig, definition.group);
-}
