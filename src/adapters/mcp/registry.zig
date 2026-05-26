@@ -54,6 +54,7 @@ fn mcpHandler(
     comptime record_call: anytype,
 ) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             const runtime: RuntimePtr = @ptrCast(@alignCast(user_data orelse return tool_errors.result(allocator, .{
                 .tool = spec.name,
@@ -78,6 +79,7 @@ fn mcpHandler(
     }.call;
 }
 
+/// Returns non-negative elapsed wall time in milliseconds.
 fn elapsedMs(io: std.Io, started_ns: anytype) u64 {
     const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
     if (duration_ns <= 0) return 0;
@@ -90,10 +92,12 @@ test "mcp handler records thrown handler failures" {
         last_error: bool = false,
     };
     const Stub = struct {
+        /// Returns an MCP callback that invokes a typed tool adapter handler.
         fn handler(_: *Runtime, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             return @as(mcp.tools.ToolError, error.ExecutionFailed);
         }
 
+        /// Records whether a test handler invocation failed.
         fn record(runtime: *Runtime, _: []const u8, _: u64, is_error: bool) void {
             runtime.calls += 1;
             runtime.last_error = is_error;

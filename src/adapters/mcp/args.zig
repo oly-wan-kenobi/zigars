@@ -50,6 +50,7 @@ pub fn findSchemaField(input_schema: tooling.SchemaSpec, name: []const u8) ?tool
     return null;
 }
 
+/// Returns whether a JSON value satisfies the schema primitive type name.
 fn schemaTypeMatches(expected: []const u8, value: std.json.Value) bool {
     if (std.mem.eql(u8, expected, "string")) return value == .string;
     if (std.mem.eql(u8, expected, "boolean")) return value == .bool;
@@ -99,6 +100,7 @@ fn validateFieldHint(
     return null;
 }
 
+/// Returns whether `values` contains `needle` by exact byte match.
 fn containsString(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| {
         if (std.mem.eql(u8, value, needle)) return true;

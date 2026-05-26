@@ -253,6 +253,7 @@ pub const Server = struct {
         }
     }
 
+    /// Serves one HTTP request stream and maps its JSON-RPC response onto HTTP status/body output.
     fn serveHttpConnection(self: *Self, io: std.Io, allocator: std.mem.Allocator, stream: std.Io.net.Stream) !void {
         defer stream.close(io);
 
@@ -457,6 +458,7 @@ pub const Server = struct {
         }
     }
 
+    /// Handles the initialize request and sends the JSON-RPC response or error.
     fn handleInitialize(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         self.state = .initializing;
         var response_arena = std.heap.ArenaAllocator.init(allocator);
@@ -564,6 +566,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the shutdown request and sends the JSON-RPC response or error.
     fn handleShutdown(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         self.state = .shutting_down;
         const result: std.json.ObjectMap = .empty;
@@ -571,6 +574,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the ping request and sends the JSON-RPC response or error.
     fn handlePing(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var result: std.json.ObjectMap = .empty;
         defer result.deinit(allocator);
@@ -579,6 +583,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the tools list request and sends the JSON-RPC response or error.
     fn handleToolsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -648,6 +653,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the tools call request and sends the JSON-RPC response or error.
     fn handleToolsCall(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         const tool_name = mcp.tools.getString(request.params, "name") orelse "";
         const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
@@ -686,6 +692,7 @@ pub const Server = struct {
         }
     }
 
+    /// Sends a structured tools/call error response using transient JSON owned by the response arena.
     fn sendToolHandlerErrorResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, tool_name: []const u8, err: anyerror) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -703,6 +710,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Returns the structured JSON payload for a failed tool callback.
     fn toolHandlerErrorValue(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) !std.json.Value {
         return tool_errors.valueFromError(allocator, .{
             .tool = tool_name,
@@ -714,6 +722,7 @@ pub const Server = struct {
         }, err);
     }
 
+    /// Handles the resources list request and sends the JSON-RPC response or error.
     fn handleResourcesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -753,6 +762,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the resources read request and sends the JSON-RPC response or error.
     fn handleResourcesRead(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         const uri = mcp.tools.getString(request.params, "uri") orelse "";
 
@@ -823,6 +833,7 @@ pub const Server = struct {
         }
     }
 
+    /// Returns the structured JSON payload for a failed resource callback.
     fn resourceHandlerErrorValue(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) !std.json.Value {
         return tool_errors.valueFromError(allocator, .{
             .tool = "resources/read",
@@ -835,6 +846,7 @@ pub const Server = struct {
         }, err);
     }
 
+    /// Handles the resource templates list request and sends the JSON-RPC response or error.
     fn handleResourceTemplatesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -871,6 +883,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the prompts list request and sends the JSON-RPC response or error.
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -921,6 +934,7 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Handles the prompts get request and sends the JSON-RPC response or error.
     fn handlePromptsGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         const prompt_name = mcp.tools.getString(request.params, "name") orelse "";
         const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
@@ -990,6 +1004,7 @@ pub const Server = struct {
         }
     }
 
+    /// Returns the structured JSON payload for a failed prompt callback.
     fn promptHandlerErrorValue(allocator: std.mem.Allocator, prompt_name: []const u8, err: anyerror) !std.json.Value {
         return tool_errors.valueFromError(allocator, .{
             .tool = "prompts/get",
@@ -1002,6 +1017,7 @@ pub const Server = struct {
         }, err);
     }
 
+    /// Handles the set log level request and sends the JSON-RPC response or error.
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
         const shape_error = "logging/setLevel requires params.level to be a string";
         const level_value = request.params orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
@@ -1019,11 +1035,13 @@ pub const Server = struct {
         try self.sendResponse(io, allocator, .{ .response = response });
     }
 
+    /// Sends a JSON-RPC invalid-params error, using the allocator only for serialization.
     pub fn sendInvalidParams(self: *Self, io: std.Io, allocator: std.mem.Allocator, id: types.RequestId, message: []const u8) !void {
         const error_response = jsonrpc.createInvalidParams(id, message);
         try self.sendResponse(io, allocator, .{ .error_response = error_response });
     }
 
+    /// Parses log level, returning null when the field is absent.
     fn parseLogLevel(level: []const u8) ?protocol.LogLevel {
         if (std.mem.eql(u8, level, "debug")) return .debug;
         if (std.mem.eql(u8, level, "info")) return .info;
@@ -1036,6 +1054,7 @@ pub const Server = struct {
         return null;
     }
 
+    /// Handles inbound JSON-RPC notifications and updates local server state.
     fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {
         if (std.mem.eql(u8, notification.method, "notifications/initialized")) {
             self.state = .ready;
@@ -1053,6 +1072,7 @@ pub const Server = struct {
         }
     }
 
+    /// Handles successful peer responses by clearing pending request bookkeeping.
     fn handleResponse(self: *Self, response: jsonrpc.Response) void {
         const id = switch (response.id) {
             .integer => |i| i,
@@ -1061,6 +1081,7 @@ pub const Server = struct {
         _ = self.pending_requests.remove(id);
     }
 
+    /// Handles peer error responses by clearing pending request bookkeeping and logging.
     fn handleErrorResponse(self: *Self, io: std.Io, err: jsonrpc.ErrorResponse) void {
         if (err.id) |id| {
             const int_id = switch (id) {
@@ -1072,11 +1093,13 @@ pub const Server = struct {
         self.logError(io, err.@"error".message);
     }
 
+    /// Sends a JSON-RPC notification, using the allocator only for serialization.
     pub fn sendNotification(self: *Self, io: std.Io, allocator: std.mem.Allocator, method: []const u8, params: ?std.json.Value) !void {
         const notification = jsonrpc.createNotification(method, params);
         try self.sendResponse(io, allocator, .{ .notification = notification });
     }
 
+    /// Sends a log notification when it meets the configured level threshold.
     pub fn sendLogMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, level: protocol.LogLevel, message: []const u8) !void {
         if (@intFromEnum(level) < @intFromEnum(self.log_level)) return;
 
@@ -1091,6 +1114,7 @@ pub const Server = struct {
         try self.sendNotification(io, allocator, "notifications/message", .{ .object = params });
     }
 
+    /// Sends a progress notification with transient params owned by a response arena.
     pub fn sendProgress(self: *Self, io: std.Io, allocator: std.mem.Allocator, token: std.json.Value, prog: f64, total: ?f64, message: ?[]const u8) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -1108,14 +1132,17 @@ pub const Server = struct {
         try self.sendNotification(io, allocator, "notifications/progress", .{ .object = params });
     }
 
+    /// Emits the tools changed notification through the active transport.
     pub fn notifyToolsChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/tools/list_changed", null);
     }
 
+    /// Emits the resources changed notification through the active transport.
     pub fn notifyResourcesChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/resources/list_changed", null);
     }
 
+    /// Emits the resource updated notification through the active transport.
     pub fn notifyResourceUpdated(self: *Self, io: std.Io, allocator: std.mem.Allocator, uri: []const u8) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
@@ -1126,10 +1153,12 @@ pub const Server = struct {
         try self.sendNotification(io, allocator, "notifications/resources/updated", .{ .object = params });
     }
 
+    /// Emits the prompts changed notification through the active transport.
     pub fn notifyPromptsChanged(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
         try self.sendNotification(io, allocator, "notifications/prompts/list_changed", null);
     }
 
+    /// Serializes and sends a JSON-RPC message through the active transport, mapping allocation failure to protocol errors.
     pub fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
         if (self.transport) |t| {
             const json = jsonrpc.serializeMessage(allocator, message) catch {
@@ -1144,12 +1173,14 @@ pub const Server = struct {
         }
     }
 
+    /// Writes diagnostic text to stderr when stdio transport owns the error stream.
     fn log(self: *Self, io: std.Io, message: []const u8) void {
         if (self.stdio_transport) |t| {
             t.writeStderr(io, message);
         }
     }
 
+    /// Formats a server log error message without taking ownership of the input text.
     fn logError(self: *Self, io: std.Io, message: []const u8) void {
         if (self.stdio_transport) |t| {
             var buf: [512]u8 = undefined;
@@ -1185,12 +1216,15 @@ test "server rollback and transport error branches" {
     const ErrorReceiveTransport = struct {
         calls: usize = 0,
 
+        /// Returns a transport vtable bound to this fixture.
         fn transport(self: *@This()) transport_mod.Transport {
             return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
         }
 
+        /// Accepts a send call for the test transport without taking ownership of the message.
         fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {}
 
+        /// Fixture receive hook used to force a configured transport failure.
         fn receive(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
             const self: *@This() = @ptrCast(@alignCast(ptr));
             self.calls += 1;
@@ -1198,6 +1232,7 @@ test "server rollback and transport error branches" {
             return error.EndOfStream;
         }
 
+        /// Fixture close hook; no resources are owned by the test transport.
         fn close(_: *anyopaque) void {}
     };
 
@@ -1210,18 +1245,22 @@ test "server rollback and transport error branches" {
     receive_transport.transport().close();
 
     const ErrorSendTransport = struct {
+        /// Returns a transport vtable bound to this fixture.
         fn transport(self: *@This()) transport_mod.Transport {
             return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
         }
 
+        /// Accepts a send call for the test transport without taking ownership of the message.
         fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {
             return error.WriteError;
         }
 
+        /// Fixture receive hook used to force a configured transport failure.
         fn receive(_: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
             return error.EndOfStream;
         }
 
+        /// Fixture close hook; no resources are owned by the test transport.
         fn close(_: *anyopaque) void {}
     };
 

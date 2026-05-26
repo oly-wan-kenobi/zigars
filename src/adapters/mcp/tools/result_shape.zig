@@ -55,6 +55,7 @@ pub fn zigarOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value
     return mcp_result.structured(allocator, value);
 }
 
+/// Parses mode arg, returning null when the field is absent.
 fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.OutputMode {
     // The adapter defaults mode to standard so omitted arguments keep normal output size.
     const raw = argString(args, "mode") orelse result_contracts.OutputMode.standard.name();
@@ -114,6 +115,7 @@ fn outputBudgetPlanValue(allocator: std.mem.Allocator, plan: result_contracts.Ou
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for supported modes.
 fn supportedModesValue(allocator: std.mem.Allocator, modes: []const result_contracts.OutputMode) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -123,6 +125,7 @@ fn supportedModesValue(allocator: std.mem.Allocator, modes: []const result_contr
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for mode metadata.
 fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.ModeMetadata) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -139,6 +142,7 @@ fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.Mo
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for omitted sections.
 fn omittedSectionsValue(allocator: std.mem.Allocator, omitted: []const result_contracts.OmittedSection) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -159,6 +163,7 @@ fn omittedSectionsValue(allocator: std.mem.Allocator, omitted: []const result_co
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for allocation.
 fn allocationValue(allocator: std.mem.Allocator, allocation: result_contracts.BudgetAllocation) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -171,6 +176,7 @@ fn allocationValue(allocator: std.mem.Allocator, allocation: result_contracts.Bu
     return .{ .object = obj };
 }
 
+/// Copies a string slice into an allocator-owned JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -180,6 +186,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !st
     return .{ .array = array };
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     const value = args orelse return null;
     if (value != .object) return null;
@@ -190,6 +197,7 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     };
 }
 
+/// Parses optional integer arg from MCP JSON arguments.
 fn optionalIntegerArg(args: ?std.json.Value, name: []const u8) ?i64 {
     const value = args orelse return null;
     if (value != .object) return null;

@@ -83,6 +83,8 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
         .handler = jsonResourceHandler(Provider, workspaceRootsResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
+    // File-scoped resources are advertised as templates; the dynamic handler
+    // resolves concrete URIs at read time so registrations stay bounded.
     server.setDynamicResourceHandler(dynamicResourceHandler(Provider), context_provider, mcp_result.deinitResourceContent);
     try server.addResourceTemplate(.{
         .uriTemplate = "zigar://file/{path}/symbols",
@@ -117,6 +119,7 @@ fn workspaceResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
 }
 
+/// Returns the ZLS status resource content for MCP reads.
 fn zlsStatusResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
     var value = runtime_ux.zlsStatusResourceValue(allocator, context) catch |err| return resourceValueFailure(allocator, uri, .{
         .resource = "zls_status",
@@ -147,6 +150,7 @@ fn zlsStatusResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
     return value;
 }
 
+/// Returns the tool catalog resource content for MCP reads.
 fn catalogResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     const body = runtime_ux.catalogResourceText(allocator, context) catch |err| return resourceFailure(allocator, uri, .{
         .resource = "tool_catalog",
@@ -159,6 +163,7 @@ fn catalogResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     return .{ .uri = uri, .mimeType = "application/json", .text = body };
 }
 
+/// Returns the workspace import graph resource content for MCP reads.
 fn importGraphResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     const body = runtime_ux.importGraphResourceText(allocator, context) catch |err| return resourceFailure(allocator, uri, .{
         .resource = "workspace_import_graph",
@@ -172,6 +177,7 @@ fn importGraphResource(allocator: std.mem.Allocator, context: app_context.Runtim
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
 }
 
+/// Returns the runtime metrics resource content for MCP reads.
 fn metricsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
     return runtime_ux.metricsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "metrics",
@@ -183,6 +189,7 @@ fn metricsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     }, err);
 }
 
+/// Returns the runtime jobs resource content for MCP reads.
 fn jobsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
     return runtime_ux.jobsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "jobs",
@@ -194,6 +201,7 @@ fn jobsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
     }, err);
 }
 
+/// Returns runtime event history for the events resource URI.
 fn runEventsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
     return runtime_ux.runEventsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "run_events",
@@ -205,6 +213,7 @@ fn runEventsResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
     }, err);
 }
 
+/// Returns the workspace roots resource content for MCP reads.
 fn workspaceRootsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
     return runtime_ux.workspaceRootsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "workspace_roots",
@@ -234,6 +243,7 @@ fn textResourceHandler(
     comptime handler: *const fn (std.mem.Allocator, app_context.RuntimeUxContext, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent,
 ) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
             const context = runtimeContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
             return handler(allocator, context, uri);
@@ -247,6 +257,7 @@ fn jsonResourceHandler(
     comptime handler: *const fn (std.mem.Allocator, app_context.RuntimeUxContext, []const u8) mcp.resources.ResourceError!std.json.Value,
 ) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
             const context = runtimeContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
             const value = handler(allocator, context, uri) catch |err| switch (err) {
@@ -268,6 +279,7 @@ fn jsonResourceHandler(
 /// Builds the server callback for runtime-resolved dynamic resource templates.
 fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
             const context = runtimeContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
             return dynamicResource(allocator, context, uri);
@@ -401,14 +413,17 @@ test {
 
 const test_fakes = @import("../../testing/fakes/root.zig");
 
+/// Test provider that exposes a fixed runtime UX context to resource handlers.
 const ResourceTestProvider = struct {
     context: app_context.RuntimeUxContext,
 
+    /// Returns the fixed runtime UX context exposed by the test provider.
     fn runtimeUxContext(self: *ResourceTestProvider) app_context.RuntimeUxContext {
         return self.context;
     }
 };
 
+/// Creates resource test context from the ports required by the adapter.
 fn resourceTestContext(
     command_runner: *test_fakes.FakeCommandRunner,
     workspace_store: *test_fakes.FakeWorkspaceStore,
@@ -434,6 +449,7 @@ fn resourceTestContext(
     };
 }
 
+/// Seeds the fake runtime session with a completed job for resource tests.
 fn seedResourceJob(session: *test_fakes.FakeRuntimeSession) !void {
     const runtime = session.port();
     try runtime.ensureDefaultRoot("/repo");
@@ -452,10 +468,12 @@ fn seedResourceJob(session: *test_fakes.FakeRuntimeSession) !void {
     _ = try runtime.subscribe("zigar://jobs");
 }
 
+/// Test resource handler that reports a structured JSON failure.
 fn failingJsonResource(_: std.mem.Allocator, _: app_context.RuntimeUxContext, _: []const u8) mcp.resources.ResourceError!std.json.Value {
     return @as(mcp.resources.ResourceError, error.ReadFailed);
 }
 
+/// Test resource handler that propagates allocation failure.
 fn oomJsonResource(_: std.mem.Allocator, _: app_context.RuntimeUxContext, _: []const u8) mcp.resources.ResourceError!std.json.Value {
     return error.OutOfMemory;
 }

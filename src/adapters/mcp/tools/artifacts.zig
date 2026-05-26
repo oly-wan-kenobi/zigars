@@ -165,6 +165,7 @@ fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.Outpu
     };
 }
 
+/// Maps mode error failures to structured MCP errors.
 fn modeError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -181,6 +182,7 @@ fn modeError(
     );
 }
 
+/// Maps workspace path error failures to structured MCP errors.
 fn workspacePathError(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -191,6 +193,7 @@ fn workspacePathError(
     return mcp_errors.workspacePath(allocator, tool_name, path, context.workspace.root, err);
 }
 
+/// Maps artifact error failures to structured MCP errors.
 fn artifactError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -210,6 +213,7 @@ fn artifactError(
     }, err);
 }
 
+/// Attaches artifact metadata to a structured tool result object.
 fn attachMetadata(
     allocator: std.mem.Allocator,
     obj: *std.json.ObjectMap,
@@ -221,6 +225,7 @@ fn attachMetadata(
     try obj.put(allocator, "omitted_sections", .{ .array = omitted });
 }
 
+/// Returns an allocator-owned JSON value for mode metadata.
 fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.ModeMetadata) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -235,6 +240,7 @@ fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.Mo
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for omission.
 fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []const u8, recovery: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -244,17 +250,20 @@ fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []co
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for scan roots.
 fn scanRootsValue(allocator: std.mem.Allocator, root_arg: ?[]const u8) !std.json.Value {
     if (root_arg) |root| return stringArrayValue(allocator, &.{root});
     return stringArrayValue(allocator, artifact_registry.default_scan_roots[0..]);
 }
 
+/// Returns an allocator-owned JSON value for registry.
 fn registryValue(allocator: std.mem.Allocator, registry: artifact_registry.Registry) !std.json.Value {
     var entries = std.json.Array.init(allocator);
     for (registry.entries) |entry| try entries.append(try registryEntryValue(allocator, entry));
     return .{ .array = entries };
 }
 
+/// Returns an allocator-owned JSON value for registry entry.
 fn registryEntryValue(allocator: std.mem.Allocator, entry: artifact_registry.RegistryEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -269,6 +278,7 @@ fn registryEntryValue(allocator: std.mem.Allocator, entry: artifact_registry.Reg
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for provenance.
 fn provenanceValue(allocator: std.mem.Allocator, provenance: artifact_registry.Provenance) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -284,6 +294,7 @@ fn provenanceValue(allocator: std.mem.Allocator, provenance: artifact_registry.P
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for toolchain.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: artifact_registry.Toolchain) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -294,6 +305,7 @@ fn toolchainValue(allocator: std.mem.Allocator, toolchain: artifact_registry.Too
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for scanned artifacts.
 fn scannedArtifactsValue(allocator: std.mem.Allocator, artifacts: []const artifact_registry.ScannedArtifact) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (artifacts) |artifact| {
@@ -309,6 +321,7 @@ fn scannedArtifactsValue(allocator: std.mem.Allocator, artifacts: []const artifa
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for preimage.
 fn preimageValue(allocator: std.mem.Allocator, preimage: artifact_registry.PreimageIdentity) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -318,6 +331,7 @@ fn preimageValue(allocator: std.mem.Allocator, preimage: artifact_registry.Preim
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for prune summary.
 fn pruneSummaryValue(allocator: std.mem.Allocator, summary: artifact_registry.PruneSummary) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -328,6 +342,7 @@ fn pruneSummaryValue(allocator: std.mem.Allocator, summary: artifact_registry.Pr
     return .{ .object = obj };
 }
 
+/// Copies a string slice into an allocator-owned JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -335,6 +350,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !st
     return .{ .array = array };
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     const value = args orelse return null;
     if (value != .object) return null;
@@ -345,6 +361,7 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, key: []const u8, default: bool) bool {
     const value = args orelse return default;
     if (value != .object) return default;
@@ -355,6 +372,7 @@ fn argBool(args: ?std.json.Value, key: []const u8, default: bool) bool {
     };
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, key: []const u8, default: i64) i64 {
     const value = args orelse return default;
     if (value != .object) return default;
@@ -367,6 +385,7 @@ fn argInt(args: ?std.json.Value, key: []const u8, default: i64) i64 {
 
 const fakes = @import("../../../testing/fakes/root.zig");
 
+/// Creates artifact adapter context from the ports required by the adapter.
 fn artifactAdapterContext(workspace: *fakes.FakeWorkspaceStore) app_context.ArtifactContext {
     return .{
         .workspace = .{ .root = "/workspace" },
@@ -374,10 +393,12 @@ fn artifactAdapterContext(workspace: *fakes.FakeWorkspaceStore) app_context.Arti
     };
 }
 
+/// Parses artifact args from MCP JSON arguments.
 fn artifactArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
     return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
 }
 
+/// Formats one registry fixture line with path and byte metadata.
 fn registryLine(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) ![]const u8 {
     const hash = try artifact_registry.sha256Hex(allocator, bytes);
     return std.fmt.allocPrint(allocator,
@@ -386,6 +407,7 @@ fn registryLine(allocator: std.mem.Allocator, path: []const u8, bytes: []const u
     , .{ path, path, bytes.len, hash, artifact_registry.artifactKind(path) });
 }
 
+/// Creates a registry entry fixture for artifact adapter tests.
 fn registryEntryFixture(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !artifact_registry.RegistryEntry {
     return .{
         .path = path,
@@ -403,6 +425,7 @@ fn registryEntryFixture(allocator: std.mem.Allocator, path: []const u8, bytes: [
     };
 }
 
+/// Serializes a registry entry fixture to JSON text.
 fn serializedRegistryEntry(allocator: std.mem.Allocator, entry: artifact_registry.RegistryEntry) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     const value = try registryEntryValue(allocator, entry);
@@ -591,6 +614,7 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
     try workspace.verify();
 }
 
+/// Exercises artifact adapter helper values coverage with test fixture storage.
 fn exerciseArtifactAdapterHelperValues(allocator: std.mem.Allocator) !void {
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
@@ -626,6 +650,7 @@ test "artifact MCP adapter helper values clean up during allocation failures" {
     try exerciseArtifactAdapterFixedBufferFailures();
 }
 
+/// Exercises artifact adapter fixed buffer failures coverage with test fixture storage.
 fn exerciseArtifactAdapterFixedBufferFailures() !void {
     const entry = artifact_registry.RegistryEntry{
         .path = "zig-out/helper.json",

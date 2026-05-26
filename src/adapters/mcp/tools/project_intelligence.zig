@@ -91,6 +91,7 @@ pub fn zigTestSelectSemantic(allocator: std.mem.Allocator, context: app_context.
     return semanticTool(allocator, context, args, "zig_test_select_semantic", true);
 }
 
+/// Invokes the project-intelligence semantic workflow.
 fn semanticTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, select: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const request = pi.SemanticImpactRequest{
         .files = argString(args, "files"),
@@ -138,6 +139,7 @@ pub fn zigTestEvents(allocator: std.mem.Allocator, context: app_context.ProjectI
     return commandEventsTool(allocator, context, args, "zig_test_events", .test_cmd);
 }
 
+/// Invokes the project-intelligence command-events workflow.
 fn commandEventsTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, kind: pi.EventCommandKind) mcp.tools.ToolError!mcp.tools.ToolResult {
     const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, tool_name, err);
     defer freeStringList(allocator, extra_args);
@@ -173,6 +175,7 @@ pub fn zigFailureHistory(allocator: std.mem.Allocator, context: app_context.Proj
     return historyTool(allocator, context, args, "zig_failure_history", .failures);
 }
 
+/// Invokes the project-intelligence history workflow.
 fn historyTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, view: workflows.HistoryView) mcp.tools.ToolError!mcp.tools.ToolResult {
     var outcome = workflows.history(allocator, context.validation(), .{
         .view = view,
@@ -197,6 +200,7 @@ pub fn zigarHandoffPack(allocator: std.mem.Allocator, context: app_context.Proje
     return structured(allocator, "zigar_handoff_pack", "handoff", pi.handoffPackValue(allocator, context, snapshotRequest(args, "zigar_handoff_pack")));
 }
 
+/// Builds the project-intelligence snapshot request from MCP arguments.
 fn snapshotRequest(args: ?std.json.Value, kind: []const u8) pi.SessionSnapshotRequest {
     return .{
         .kind = kind,
@@ -232,6 +236,7 @@ pub fn zigarProjectMemory(allocator: std.mem.Allocator, context: app_context.Pro
     return projectMemoryTool(allocator, context, args, "zigar_project_memory", true);
 }
 
+/// Invokes the project-intelligence memory workflow.
 fn projectMemoryTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, include_builtins: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, tool_name, "project_memory", pi.projectMemoryValue(allocator, context, .{
         .content = argString(args, "content"),
@@ -330,12 +335,14 @@ pub fn contextSetupError(allocator: std.mem.Allocator, tool_name: []const u8, er
     }, err);
 }
 
+/// Wraps a JSON value as a structured MCP tool result.
 fn structured(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, value_or_error: anyerror!std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var value = value_or_error catch |err| return workflowError(allocator, tool_name, phase, err);
     defer deinitTopLevel(allocator, &value);
     return mcp_result.structured(allocator, value);
 }
 
+/// Maps workflow failures to structured MCP tool errors.
 fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.MissingFile) return mcp_errors.missingArgument(allocator, tool_name, "file", "workspace-relative Zig file for this command");
@@ -352,10 +359,12 @@ fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []c
     }, err);
 }
 
+/// Reads an actual argument when it is present with the expected type.
 fn argActual(_: anyerror) []const u8 {
     return "invalid";
 }
 
+/// Maps split args error failures to structured MCP errors.
 fn splitArgsError(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.InvalidArguments => mcp_errors.invalidArgument(allocator, tool_name, "args", "shell-like argument string", "invalid", "Use balanced quotes and escapes, or omit args for no extra Zig arguments."),
@@ -364,6 +373,7 @@ fn splitArgsError(allocator: std.mem.Allocator, tool_name: []const u8, err: anye
     };
 }
 
+/// Converts backend capability data to structured environment output.
 fn capabilityEntries(allocator: std.mem.Allocator) ![]pi.CapabilityEntry {
     var entries = try allocator.alloc(pi.CapabilityEntry, manifest.entries.len);
     for (manifest.entries, 0..) |entry, index| {
@@ -391,22 +401,27 @@ fn capabilityEntries(allocator: std.mem.Allocator) ![]pi.CapabilityEntry {
     return entries;
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return mcp.tools.getBoolean(args, name) orelse default;
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
+/// Clamps requested timeout to the supported command timeout range.
 fn timeoutMs(context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Parses split tool args from MCP JSON arguments.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -463,21 +478,25 @@ fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses finish arg from MCP JSON arguments.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);
     try list.append(allocator, arg);
 }
 
+/// Frees each allocated string in a split argument list.
 fn freeStringList(allocator: std.mem.Allocator, values: []const []const u8) void {
     freeStringItems(allocator, values);
     allocator.free(values);
 }
 
+/// Frees allocated string items without freeing the slice container.
 fn freeStringItems(allocator: std.mem.Allocator, values: []const []const u8) void {
     for (values) |value| allocator.free(value);
 }
 
+/// Frees the top-level JSON container allocated for a structured error payload.
 fn deinitTopLevel(allocator: std.mem.Allocator, value: *std.json.Value) void {
     switch (value.*) {
         .object => |*obj| obj.deinit(allocator),
@@ -581,16 +600,19 @@ test "project intelligence adapter splits tool args and cleans up allocation fai
     try std.testing.checkAllAllocationFailures(std.testing.allocator, splitToolArgsAllocationCase, .{});
 }
 
+/// Exercises split-argument allocation failure handling in tests.
 fn splitToolArgsAllocationCase(allocator: std.mem.Allocator) !void {
     const parsed = try splitToolArgs(allocator, "alpha 'beta gamma' delta\\ epsilon");
     defer freeStringList(allocator, parsed);
     try std.testing.expectEqual(@as(usize, 3), parsed.len);
 }
 
+/// Data fixture for adapter runtime adapter tests.
 const AdapterRuntime = struct {
     write_error: ?ports.PortError = null,
     history_read_error: ?ports.PortError = null,
 
+    /// Builds the fake app context exposed by the adapter runtime fixture.
     fn context(self: *AdapterRuntime) app_context.ProjectIntelligenceContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
@@ -609,6 +631,7 @@ const AdapterRuntime = struct {
         };
     }
 
+    /// Records fake command invocations for adapter runtime tests.
     fn commandRun(_: *anyopaque, allocator: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
         return .{
             .exit_code = 0,
@@ -620,11 +643,13 @@ const AdapterRuntime = struct {
         };
     }
 
+    /// Resolves a workspace path inside the adapter runtime fixture.
     fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
         return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
     }
 
+    /// Reads fixture workspace content for adapter runtime tests.
     fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
         if (self.history_read_error) |err| {
@@ -639,26 +664,31 @@ const AdapterRuntime = struct {
         return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
     }
 
+    /// Records fixture workspace writes for adapter runtime tests.
     fn workspaceWrite(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
         if (self.write_error) |err| return err;
         return .{ .bytes_written = request.bytes.len };
     }
 
+    /// Reports fixture workspace file existence for adapter runtime tests.
     fn workspaceExists(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
         return .{ .exists = std.mem.eql(u8, request.path, "src") or std.mem.eql(u8, request.path, "src/main.zig"), .kind = .file };
     }
 
+    /// Returns fixture Zig source paths for adapter runtime tests.
     fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
         const files = try allocator.alloc(ports.WorkspaceScanFile, 1);
         files[0] = .{ .path = try allocator.dupe(u8, "src/main.zig") };
         return .{ .files = files, .owns_memory = true };
     }
 
+    /// Returns a deterministic timestamp for adapter runtime tests.
     fn now(_: *anyopaque) ports.PortError!ports.Instant {
         return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 1 };
     }
 
+    /// Returns a deterministic id for adapter runtime tests.
     fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
         return std.fmt.allocPrint(allocator, "{s}-1", .{request.prefix});
     }

@@ -182,6 +182,7 @@ fn runJobTool(allocator: std.mem.Allocator, context: app_context.RuntimeUxContex
     return mcp_result.structured(allocator, value);
 }
 
+/// Runs a runtime UX use case and wraps its JSON value in an MCP result.
 fn structuredUsecase(
     allocator: std.mem.Allocator,
     comptime func: fn (std.mem.Allocator, app_context.RuntimeUxContext, []const u8) runtime_ux.RuntimeUxError!std.json.Value,
@@ -195,6 +196,7 @@ fn structuredUsecase(
     return mcp_result.structured(allocator, value);
 }
 
+/// Runs a runtime UX value producer with arena-owned output and propagates runtime failures.
 fn runtimeValue(
     allocator: std.mem.Allocator,
     context: app_context.RuntimeUxContext,
@@ -210,10 +212,12 @@ fn runtimeValue(
     return mcp_result.structured(allocator, value);
 }
 
+/// Calls a runtime UX producer that requires workspace map access.
 fn workspaceMapThunk(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, _: ?[]const u8) runtime_ux.RuntimeUxError!std.json.Value {
     return runtime_ux.workspaceMapResultValue(allocator, context, "zigar_workspace_map", null);
 }
 
+/// Maps resource query error failures to structured MCP errors.
 fn resourceQueryError(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     switch (err) {
         error.InvalidArguments => return mcp_errors.invalidArgument(allocator, "zigar_resource_query", "uri", "registered zigar URI or zigar://file/{path}/{symbols|diagnostics|imports}", uri, "Use resources/list, resources/templates/list, or zigar_workspace_map to discover supported URIs."),
@@ -231,6 +235,7 @@ fn resourceQueryError(allocator: std.mem.Allocator, context: app_context.Runtime
     }
 }
 
+/// Converts runtime UX failures into structured tool errors with caller-owned context.
 fn runtimeError(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, tool_name: []const u8, operation: []const u8, category: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.NotFound and std.mem.indexOf(u8, tool_name, "job") != null) return jobNotFound(allocator, tool_name, actual);
@@ -248,37 +253,45 @@ fn runtimeError(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
     }, err);
 }
 
+/// Returns a structured runtime UX response for an unknown job id.
 fn jobNotFound(allocator: std.mem.Allocator, tool_name: []const u8, job_id: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.invalidArgument(allocator, tool_name, "job_id", "retained zigar job id", job_id, "Use zigar_job_start, zigar_run_stream, zigar_run_events, or zigar://jobs to discover retained job ids.");
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return mcp.tools.getBoolean(args, name) orelse default;
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
+/// Clamps requested timeout to the supported command timeout range.
 fn timeoutMs(context: app_context.RuntimeUxContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Parses cursor, returning null when the field is absent.
 fn parseCursor(cursor: ?[]const u8) u64 {
     const text = cursor orelse return 0;
     return std.fmt.parseUnsigned(u64, text, 10) catch 0;
 }
 
+/// Clamps pagination limits to the server-supported range.
 fn clampLimit(value: i64, min: usize, max: usize) usize {
     if (value < @as(i64, @intCast(min))) return min;
     if (value > @as(i64, @intCast(max))) return max;
     return @intCast(value);
 }
 
+/// Extracts a workspace-relative file path from a resource URI.
 fn filePathFromUri(uri: []const u8) ?[]const u8 {
     const prefix = "zigar://file/";
     if (!std.mem.startsWith(u8, uri, prefix)) return null;
@@ -287,6 +300,7 @@ fn filePathFromUri(uri: []const u8) ?[]const u8 {
     return rest[0..slash];
 }
 
+/// Parses split tool args from MCP JSON arguments.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -343,6 +357,7 @@ fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses finish arg from MCP JSON arguments.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);
@@ -626,6 +641,7 @@ test "runtime UX adapter helper errors and allocation failures are bounded" {
     try commands.verify();
 }
 
+/// Creates a runtime UX adapter test context backed by fake ports.
 fn runtimeAdapterContext(
     command_runner: *fakes.FakeCommandRunner,
     workspace_store: *fakes.FakeWorkspaceStore,
@@ -646,12 +662,14 @@ fn runtimeAdapterContext(
     };
 }
 
+/// Asserts workspace map exists in adapter tests.
 fn expectWorkspaceMapExists(workspace: *fakes.FakeWorkspaceStore) !void {
     try workspace.expectExists(.{ .path = "build.zig", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
     try workspace.expectExists(.{ .path = "build.zig.zon", .provenance = "runtime_ux.workspace_map" }, .{ .exists = false });
     try workspace.expectExists(.{ .path = "src", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .directory });
 }
 
+/// Exercises runtime UX arg splitting coverage with test fixture storage.
 fn exerciseRuntimeUxArgSplitting(backing_allocator: std.mem.Allocator) !void {
     const args = try splitToolArgs(backing_allocator, "alpha beta");
     defer {
@@ -663,15 +681,18 @@ fn exerciseRuntimeUxArgSplitting(backing_allocator: std.mem.Allocator) !void {
     try std.testing.expectEqualStrings("beta", args[1]);
 }
 
+/// Parse-state union for runtime failure.
 const RuntimeFailure = enum {
     ensure_root,
     unsubscribe,
     select_root,
 };
 
+/// Data fixture for failing runtime session adapter tests.
 const FailingRuntimeSession = struct {
     failure: RuntimeFailure,
 
+    /// Returns the fake runtime session port interface.
     fn port(self: *FailingRuntimeSession) ports.RuntimeSession {
         return .{
             .ptr = self,
@@ -697,77 +718,95 @@ const FailingRuntimeSession = struct {
         };
     }
 
+    /// Ensures the fake runtime session has a selected root.
     fn ensureDefaultRoot(ptr: *anyopaque, _: []const u8) ports.PortError!void {
         const self: *FailingRuntimeSession = @ptrCast(@alignCast(ptr));
         if (self.failure == .ensure_root) return error.AccessDenied;
     }
 
+    /// Starts a fake runtime job and records its initial event.
     fn startJob(_: *anyopaque, _: []const u8, _: []const u8, _: i64) ports.PortError!ports.RuntimeJobSnapshot {
         return error.UnexpectedCall;
     }
 
+    /// Finalizes job into allocator-owned output and resets temporary state.
     fn finishJob(_: *anyopaque, _: []const u8, _: ports.RuntimeJobFinish) ports.PortError!ports.RuntimeJobSnapshot {
         return error.UnexpectedCall;
     }
 
+    /// Marks a fake runtime job as failed.
     fn failJob(_: *anyopaque, _: []const u8, _: []const u8, _: i64) ports.PortError!ports.RuntimeJobSnapshot {
         return error.UnexpectedCall;
     }
 
+    /// Marks a fake runtime job as canceled.
     fn cancelJob(_: *anyopaque, _: []const u8, _: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         return error.UnexpectedCall;
     }
 
+    /// Looks up a fake runtime job by id.
     fn jobById(_: *anyopaque, _: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         return error.NotFound;
     }
 
+    /// Returns the number of fake runtime jobs.
     fn jobCount(_: *anyopaque) ports.PortError!usize {
         return 0;
     }
 
+    /// Returns a fake runtime job by index.
     fn jobAt(_: *anyopaque, _: usize) ports.PortError!ports.RuntimeJobSnapshot {
         return error.NotFound;
     }
 
+    /// Returns the number of fake runtime events.
     fn eventCount(_: *anyopaque) ports.PortError!u64 {
         return 0;
     }
 
+    /// Returns a fake runtime event by sequence number.
     fn eventAtSequence(_: *anyopaque, _: u64) ports.PortError!ports.RuntimeEventSnapshot {
         return error.NotFound;
     }
 
+    /// Records a fake resource subscription.
     fn subscribe(_: *anyopaque, _: []const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         return error.UnexpectedCall;
     }
 
+    /// Removes a fake resource subscription.
     fn unsubscribe(ptr: *anyopaque, _: []const u8, _: ?[]const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         const self: *FailingRuntimeSession = @ptrCast(@alignCast(ptr));
         if (self.failure == .unsubscribe) return error.AccessDenied;
         return error.NotFound;
     }
 
+    /// Replaces the fake runtime workspace root list.
     fn syncRoots(_: *anyopaque, _: []const u8, _: []const u8, _: bool) ports.PortError!void {}
 
+    /// Selects a fake runtime workspace root.
     fn selectRoot(ptr: *anyopaque, _: []const u8, _: bool) ports.PortError!ports.RuntimeRootSnapshot {
         const self: *FailingRuntimeSession = @ptrCast(@alignCast(ptr));
         if (self.failure == .select_root) return error.AccessDenied;
         return root();
     }
 
+    /// Returns the number of fake runtime roots.
     fn rootCount(_: *anyopaque) ports.PortError!usize {
         return 1;
     }
 
+    /// Returns the selected fake runtime root index.
     fn selectedRootIndex(_: *anyopaque) ports.PortError!usize {
         return 0;
     }
 
+    /// Returns a fake runtime root by index.
     fn rootAt(_: *anyopaque, _: usize) ports.PortError!ports.RuntimeRootSnapshot {
         return root();
     }
 
+    /// Returns the currently selected fake runtime root.
     fn root() ports.RuntimeRootSnapshot {
         return .{ .id = "root-1", .path = "/repo", .uri = "file:///repo", .name = "repo", .selected = true };
     }

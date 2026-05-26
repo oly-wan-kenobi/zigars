@@ -601,6 +601,7 @@ pub fn zigScipExport(
     return exportIndexResult(allocator, context, args, "zig_scip_export", "scip-like-json", ".zigar-cache/code-index.scip.json");
 }
 
+/// Returns the MCP tool result for semantic index.
 fn semanticIndexResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -628,6 +629,7 @@ fn semanticIndexResult(
     return mcp_result.structured(allocator, value);
 }
 
+/// Returns the MCP tool result for static value.
 fn staticValueResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -642,6 +644,7 @@ fn staticValueResult(
     return staticStructuredValue(allocator, scratch, tool_name, value);
 }
 
+/// Returns an allocator-owned JSON value for static structured.
 fn staticStructuredValue(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -656,6 +659,7 @@ fn staticStructuredValue(
     return mcp_result.structured(allocator, mutable);
 }
 
+/// Returns the MCP tool result for static text.
 fn staticTextResult(allocator: std.mem.Allocator, tool_name: []const u8, body: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -667,6 +671,7 @@ fn staticTextResult(allocator: std.mem.Allocator, tool_name: []const u8, body: [
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns an allocator-owned JSON value for import graph JSON.
 fn importGraphJsonValue(allocator: std.mem.Allocator, graph: workspace_scans.ImportGraphResult) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (graph.files) |file| {
@@ -695,6 +700,7 @@ fn importGraphJsonValue(allocator: std.mem.Allocator, graph: workspace_scans.Imp
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for test discovery JSON.
 fn testDiscoverJsonValue(allocator: std.mem.Allocator, result: workspace_scans.TestDiscoverResult) !std.json.Value {
     var tests = std.json.Array.init(allocator);
     for (result.tests) |test_item| {
@@ -721,6 +727,7 @@ fn testDiscoverJsonValue(allocator: std.mem.Allocator, result: workspace_scans.T
     return .{ .object = obj };
 }
 
+/// Maps static tool error failures to structured MCP errors.
 fn staticToolError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -740,6 +747,7 @@ fn staticToolError(
     }, err);
 }
 
+/// Maps static path error failures to structured MCP errors.
 fn staticPathError(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -753,6 +761,7 @@ fn staticPathError(
     };
 }
 
+/// Maps static error code failures to structured MCP errors.
 fn staticErrorCode(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "missing_command_runner",
@@ -764,6 +773,7 @@ fn staticErrorCode(err: anyerror) []const u8 {
     };
 }
 
+/// Maps static error category failures to structured MCP errors.
 fn staticErrorCategory(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "configuration",
@@ -775,6 +785,7 @@ fn staticErrorCategory(err: anyerror) []const u8 {
     };
 }
 
+/// Maps static error retryable failures to structured MCP errors.
 fn staticErrorRetryable(err: anyerror) bool {
     return switch (err) {
         error.Timeout, error.RequestTimeout => true,
@@ -782,6 +793,7 @@ fn staticErrorRetryable(err: anyerror) bool {
     };
 }
 
+/// Maps static error resolution failures to structured MCP errors.
 fn staticErrorResolution(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "Run this tool through a runtime that supplies the command runner port.",
@@ -792,6 +804,7 @@ fn staticErrorResolution(err: anyerror) []const u8 {
     };
 }
 
+/// Returns the MCP tool result for source refs.
 fn sourceRefsResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -812,6 +825,7 @@ fn sourceRefsResult(
     return structuredSemanticValue(allocator, scratch, tool_name, value);
 }
 
+/// Returns the MCP tool result for export index.
 fn exportIndexResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -836,6 +850,7 @@ fn exportIndexResult(
     return mcp_result.structured(allocator, value);
 }
 
+/// Adds cache export metadata to a structured semantic-index result.
 fn addExportMetadata(allocator: std.mem.Allocator, value: *std.json.Value, tool_name: []const u8) !void {
     switch (value.*) {
         .object => |*obj| {
@@ -855,6 +870,7 @@ fn addExportMetadata(allocator: std.mem.Allocator, value: *std.json.Value, tool_
     }
 }
 
+/// Returns an allocator-owned JSON value for structured semantic.
 fn structuredSemanticValue(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -869,6 +885,7 @@ fn structuredSemanticValue(
     return mcp_result.structured(allocator, mutable);
 }
 
+/// Returns an allocator-owned JSON value for structured lint.
 fn structuredLintValue(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -887,6 +904,7 @@ fn structuredLintValue(
     return mcp_result.structured(allocator, mutable);
 }
 
+/// Returns an allocator-owned JSON value for structured zwanzig.
 fn structuredZwanzigValue(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -906,6 +924,7 @@ fn structuredZwanzigValue(
     return mcp_result.structured(allocator, mutable);
 }
 
+/// Returns an allocator-owned JSON value for structured graph.
 fn structuredGraphValue(
     allocator: std.mem.Allocator,
     scratch: std.mem.Allocator,
@@ -923,6 +942,7 @@ fn structuredGraphValue(
     return mcp_result.structured(allocator, mutable);
 }
 
+/// Returns the MCP tool result for ZLint diagnostics.
 fn zlintDiagnosticsResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -949,6 +969,7 @@ fn zlintDiagnosticsResult(
     return structuredLintValue(allocator, scratch, tool_name, value);
 }
 
+/// Returns the MCP tool result for zwanzig lint.
 fn zwanzigLintResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -976,6 +997,7 @@ fn zwanzigLintResult(
     return structuredZwanzigValue(allocator, scratch, tool_name, value);
 }
 
+/// Maps semantic tool error failures to structured MCP errors.
 fn semanticToolError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -995,6 +1017,7 @@ fn semanticToolError(
     }, err);
 }
 
+/// Maps lint tool error failures to structured MCP errors.
 fn lintToolError(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -1027,6 +1050,7 @@ fn lintToolError(
     };
 }
 
+/// Maps split tool args error failures to structured MCP errors.
 fn splitToolArgsError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -1059,6 +1083,7 @@ fn splitToolArgsError(
     };
 }
 
+/// Maps lint error code failures to structured MCP errors.
 fn lintErrorCode(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "missing_command_runner",
@@ -1071,6 +1096,7 @@ fn lintErrorCode(err: anyerror) []const u8 {
     };
 }
 
+/// Maps lint error category failures to structured MCP errors.
 fn lintErrorCategory(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "configuration",
@@ -1083,6 +1109,7 @@ fn lintErrorCategory(err: anyerror) []const u8 {
     };
 }
 
+/// Maps lint error retryable failures to structured MCP errors.
 fn lintErrorRetryable(err: anyerror) bool {
     return switch (err) {
         error.Timeout, error.RequestTimeout => true,
@@ -1090,6 +1117,7 @@ fn lintErrorRetryable(err: anyerror) bool {
     };
 }
 
+/// Maps lint error resolution failures to structured MCP errors.
 fn lintErrorResolution(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCommandRunner => "Run this tool through a runtime that supplies the command runner port.",
@@ -1101,6 +1129,7 @@ fn lintErrorResolution(err: anyerror) []const u8 {
     };
 }
 
+/// Maps export error failures to structured MCP errors.
 fn exportError(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -1115,6 +1144,7 @@ fn exportError(
     };
 }
 
+/// Validates the findings argument before invoking the use case.
 fn validateFindingsArgument(allocator: std.mem.Allocator, args: ?std.json.Value, field: []const u8) mcp.tools.ToolError!?mcp.tools.ToolResult {
     const text = argString(args, field) orelse return null;
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return null;
@@ -1125,6 +1155,7 @@ fn validateFindingsArgument(allocator: std.mem.Allocator, args: ?std.json.Value,
     return null;
 }
 
+/// Maps semantic error code failures to structured MCP errors.
 fn semanticErrorCode(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCachePort => "missing_cache_port",
@@ -1138,6 +1169,7 @@ fn semanticErrorCode(err: anyerror) []const u8 {
     };
 }
 
+/// Maps semantic error category failures to structured MCP errors.
 fn semanticErrorCategory(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCachePort, error.MissingCommandRunner => "configuration",
@@ -1150,6 +1182,7 @@ fn semanticErrorCategory(err: anyerror) []const u8 {
     };
 }
 
+/// Maps semantic error retryable failures to structured MCP errors.
 fn semanticErrorRetryable(err: anyerror) bool {
     return switch (err) {
         error.Timeout, error.RequestTimeout, error.InvalidCache => true,
@@ -1157,6 +1190,7 @@ fn semanticErrorRetryable(err: anyerror) bool {
     };
 }
 
+/// Maps semantic error resolution failures to structured MCP errors.
 fn semanticErrorResolution(err: anyerror) []const u8 {
     return switch (err) {
         error.MissingCachePort => "Run this tool through a runtime that supplies the semantic-index StaticCache port.",
@@ -1169,6 +1203,7 @@ fn semanticErrorResolution(err: anyerror) []const u8 {
     };
 }
 
+/// Returns an allocator-owned JSON value for semantic cache status.
 fn semanticCacheStatusValue(allocator: std.mem.Allocator, cache: ports.StaticCacheStatus) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "cached", .{ .bool = cache.cached });
@@ -1178,27 +1213,33 @@ fn semanticCacheStatusValue(allocator: std.mem.Allocator, cache: ports.StaticCac
     return .{ .object = obj };
 }
 
+/// Converts a u64 signature to the signed JSON integer range expected by MCP.
 fn signatureInteger(signature: u64) i64 {
     return @intCast(signature & @as(u64, std.math.maxInt(i64)));
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return mcp.tools.getBoolean(args, name) orelse default;
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8) ?usize {
     const value = mcp.tools.getInteger(args, name) orelse return null;
     return @intCast(@max(value, 1));
 }
 
+/// Reads an integer argument when it is present with the expected type.
 fn argInteger(args: ?std.json.Value, name: []const u8) ?i64 {
     return mcp.tools.getInteger(args, name);
 }
 
+/// Reads a `has` argument when it is present with the expected type.
 fn argHas(args: ?std.json.Value, name: []const u8) bool {
     const value = args orelse return false;
     return switch (value) {
@@ -1207,11 +1248,13 @@ fn argHas(args: ?std.json.Value, name: []const u8) bool {
     };
 }
 
+/// Clamps requested timeout to the supported command timeout range.
 fn timeoutMs(context: app_context.StaticAnalysisContext, args: ?std.json.Value) ?u64 {
     const raw = mcp.tools.getInteger(args, "timeout_ms") orelse context.timeouts.command_ms;
     return @intCast(@max(1, @min(raw, 60 * 60 * 1000)));
 }
 
+/// Reads a string field from a JSON object when it has the expected type.
 fn objectString(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     const value = obj.get(name) orelse return null;
     return switch (value) {
@@ -1220,10 +1263,12 @@ fn objectString(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     };
 }
 
+/// Copies text into an allocator-owned JSON string value.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Parses split args from MCP JSON arguments.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -1279,12 +1324,14 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses finish arg from MCP JSON arguments.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);
     try list.append(allocator, arg);
 }
 
+/// Structured evidence contract attached to static-analysis tool responses.
 const Contract = struct {
     tool: []const u8,
     analysis_kind: []const u8,
@@ -1296,42 +1343,56 @@ const Contract = struct {
     verify_with: []const []const u8,
 };
 
+/// Evidence coverage statement for semantic index contract metadata.
 const semantic_index_coverage = "Readable workspace Zig files up to the requested limit; declarations/imports/tests are parser-backed where std.zig.Ast can parse the file, with parse_status, partial_result, and parse_error_count carried from parser-backed evidence when available.";
+/// Evidence coverage statement for semantic reference contract metadata.
 const semantic_refs_coverage = "Readable workspace Zig files up to the requested limit; matching lines are confirmed with optional ZLint --print-ast symbol references when the configured backend supports it, with source-scan fallback.";
+/// Evidence coverage statement for lint fusion contract metadata.
 const lint_fusion_coverage = "Semantic index and optional normalized linter evidence supplied by the caller.";
+/// Evidence coverage statement for caller-provided lint contract metadata.
 const lint_evidence_coverage = "Caller-supplied normalized lint JSON or optional lint backend output, depending on the tool and arguments.";
+/// Evidence coverage statement for ZLint output contract metadata.
 const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigar lint findings.";
+/// Evidence coverage statement for ZLint fix contract metadata.
 const zlint_fix_coverage = "Optional ZLint --fix or --fix-dangerously over a workspace-local path, previewed unless apply=true.";
+/// Evidence coverage statement for zwanzig output contract metadata.
 const zwanzig_output_coverage = "Optional zwanzig backend output for the requested workspace path or graph mode.";
 
+/// Shared semantic index limitations surfaced in structured result metadata.
 const semantic_index_limits = &.{
     "Parser-backed syntax view plus source-scan evidence; it does not resolve comptime execution, aliases, or conditional imports.",
     "Parse errors are reported through parser metadata when available and can make file-level evidence partial.",
     "Workspace walks are bounded by the requested limit and skip generated/cache paths.",
 };
+/// Shared semantic reference limitations surfaced in structured result metadata.
 const semantic_refs_limits = &.{
     "ZLint symbol-reference evidence is used when the configured backend exposes --print-ast; otherwise results fall back to source scans.",
     "Locations are still reported from matching source lines and can include textual matches that require review.",
     "Does not execute comptime code or prove cross-module alias resolution.",
 };
+/// Shared lint intelligence limitations surfaced in structured result metadata.
 const lint_intelligence_limits = &.{
     "Compares normalized lint evidence by stable rule/path/line fingerprints and cannot prove semantic correctness by itself.",
     "Gate and trend outputs are policy decisions over observed findings, not compiler or runtime proof.",
 };
+/// Shared ZLint output limitations surfaced in structured result metadata.
 const zlint_limits = &.{
     "Requires an optional configured ZLint executable; zigar does not bundle or require the backend.",
     "Rule coverage, false positives, and output shape depend on the installed ZLint version and configuration.",
 };
+/// Shared ZLint fix limitations surfaced in structured result metadata.
 const zlint_fix_limits = &.{
     "Requires an optional configured ZLint executable with --fix support; zigar does not implement the edits itself.",
     "Runs only when apply=true and the selected path resolves inside the workspace.",
     "dangerous=true delegates to ZLint --fix-dangerously and should be followed by git diff review and tests.",
 };
+/// Shared zwanzig output limitations surfaced in structured result metadata.
 const zwanzig_limits = &.{
     "Requires an optional configured zwanzig executable; zigar does not bundle or require the backend.",
     "Rule coverage, false positives, and graph support depend on the installed zwanzig version and configuration.",
 };
 
+/// Static contract table mapping tool names to structured evidence metadata.
 const contracts = [_]Contract{
     .{ .tool = "zig_import_graph", .analysis_kind = "heuristic_import_graph", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
     .{ .tool = "zig_import_graph_json", .analysis_kind = "heuristic_import_graph_json", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
@@ -1377,6 +1438,7 @@ const contracts = [_]Contract{
     .{ .tool = "zig_analysis_graphs", .analysis_kind = "optional_zwanzig_analysis_graph", .capability_tier = "zwanzig_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig graph mode"} },
 };
 
+/// Adds structured contract metadata fields to a result object.
 fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
     const contract = contractFor(tool_name) orelse unreachable;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
@@ -1391,11 +1453,13 @@ fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name
     if (contract.verify_with.len > 0) try obj.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
 }
 
+/// Finds the structured evidence contract for a static-analysis tool name.
 fn contractFor(tool_name: []const u8) ?Contract {
     for (contracts) |contract| if (std.mem.eql(u8, contract.tool, tool_name)) return contract;
     return null;
 }
 
+/// Returns an allocator-owned JSON value for evidence basis.
 fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
@@ -1407,6 +1471,7 @@ fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.jso
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for cross check.
 fn crossCheckValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "required_for_release_gate", .{ .bool = false });
@@ -1419,6 +1484,7 @@ fn crossCheckValue(allocator: std.mem.Allocator, contract: Contract) !std.json.V
     return .{ .object = obj };
 }
 
+/// Copies a string slice into an allocator-owned JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
@@ -1952,6 +2018,7 @@ test "static adapter public error branches preserve structured failures" {
     try commands.verify();
 }
 
+/// Creates test static adapter context from the ports required by the adapter.
 fn testStaticAdapterContext(
     commands: *command_runner_fake.FakeCommandRunner,
     store: *workspace_store_fake.FakeWorkspaceStore,
@@ -1969,22 +2036,26 @@ fn testStaticAdapterContext(
     };
 }
 
+/// Creates no runner context with cache from the ports required by the adapter.
 fn no_runnerContextWithCache(context: app_context.StaticAnalysisContext) app_context.StaticAnalysisContext {
     var copy = context;
     copy.semantic_index_cache = null;
     return copy;
 }
 
+/// Parses test args from MCP JSON arguments.
 fn testArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
     return parsed.value;
 }
 
+/// Frees argv strings allocated while splitting command arguments.
 fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
     for (args) |arg| allocator.free(arg);
     allocator.free(args);
 }
 
+/// Asserts result object kind in adapter tests.
 fn expectResultObjectKind(result: mcp.tools.ToolResult, expected_kind: []const u8) !void {
     const structured = result.structuredContent orelse return error.MissingStructuredContent;
     try std.testing.expect(structured == .object);
@@ -1993,6 +2064,7 @@ fn expectResultObjectKind(result: mcp.tools.ToolResult, expected_kind: []const u
     try std.testing.expectEqualStrings(expected_kind, kind.string);
 }
 
+/// Asserts result has metadata in adapter tests.
 fn expectResultHasMetadata(result: mcp.tools.ToolResult) !void {
     const structured = result.structuredContent orelse return error.MissingStructuredContent;
     try std.testing.expect(structured == .object);
@@ -2001,6 +2073,7 @@ fn expectResultHasMetadata(result: mcp.tools.ToolResult) !void {
     try std.testing.expect(structured.object.get("confidence") != null);
 }
 
+/// Asserts build graph reads in adapter tests.
 fn expectBuildGraphReads(store: *workspace_store_fake.FakeWorkspaceStore) !void {
     try store.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" },
         \\const exe = b.addExecutable(.{ .name = "demo", .root_source_file = b.path("src/main.zig") });
@@ -2019,6 +2092,7 @@ fn expectBuildGraphReads(store: *workspace_store_fake.FakeWorkspaceStore) !void 
     );
 }
 
+/// Asserts build options read in adapter tests.
 fn expectBuildOptionsRead(store: *workspace_store_fake.FakeWorkspaceStore) !void {
     try store.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_options" },
         \\const target = b.standardTargetOptions(.{});
@@ -2030,6 +2104,7 @@ fn expectBuildOptionsRead(store: *workspace_store_fake.FakeWorkspaceStore) !void
     );
 }
 
+/// Asserts dependency inspect in adapter tests.
 fn expectDependencyInspect(store: *workspace_store_fake.FakeWorkspaceStore) !void {
     try store.expectRead(.{ .path = "build.zig.zon", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.dependency_inspect" },
         \\.{
