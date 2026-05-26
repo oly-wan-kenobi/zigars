@@ -3,9 +3,14 @@ pub const backend_catalog = @import("backend_catalog.zig");
 pub const trust = @import("trust.zig");
 pub const workflows = @import("workflows.zig");
 
+const backend_catalog_tests = @import("backend_catalog_tests.zig");
+const doctor_tests = @import("doctor_tests.zig");
+
 test {
     _ = adoption;
     _ = backend_catalog;
     _ = trust;
     _ = workflows;
+    _ = backend_catalog_tests;
+    _ = doctor_tests;
 }

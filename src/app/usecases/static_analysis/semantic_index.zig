@@ -717,22 +717,6 @@ fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value:
     try out.append(allocator, '"');
 }
 
-test "zlint ast confirms call references from prefixed output" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const ast =
-        \\Printing AST for main.zig
-        \\{"symbols":[{"name":"helper","references":[{"flags":["call"]}]},{"name":"other","references":[]}]}
-    ;
-    try std.testing.expect(try zlintAstSymbolHasReference(arena.allocator(), ast, "helper", false));
-    try std.testing.expect(try zlintAstSymbolHasReference(arena.allocator(), ast, "helper", true));
-    try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(), ast, "other", false));
-    try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(), ast, "missing", false));
-    try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(),
-        \\{"symbols":[{"name":"helper","references":[{"flags":[1,"read"]}]}]}
-    , "helper", true));
-}
-
 test "semantic helper fallbacks normalize lint evidence and serialize primitives" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

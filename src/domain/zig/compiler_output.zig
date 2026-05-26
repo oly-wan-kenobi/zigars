@@ -51,23 +51,3 @@ pub fn classifyDiagnosticMessage(message: []const u8) []const u8 {
     if (std.mem.indexOf(u8, message, "invalid token") != null) return "syntax_error";
     return "compiler_error";
 }
-
-test "parseCompilerLine extracts located Zig diagnostics" {
-    const parsed = parseCompilerLine("src/main.zig:7:11: error: expected type 'u8', found 'u16'").?;
-
-    try std.testing.expectEqualStrings("error", parsed.severity);
-    try std.testing.expectEqualStrings("src/main.zig", parsed.path.?);
-    try std.testing.expectEqual(@as(i64, 7), parsed.line.?);
-    try std.testing.expectEqual(@as(i64, 11), parsed.column.?);
-    try std.testing.expectEqualStrings("expected type 'u8', found 'u16'", parsed.message);
-    try std.testing.expectEqualStrings("type_mismatch", classifyDiagnosticMessage(parsed.message));
-}
-
-test "parseCompilerLine handles global diagnostics and ignores ordinary lines" {
-    const global = parseCompilerLine("error: unable to load 'missing.zig'").?;
-
-    try std.testing.expectEqualStrings("error", global.severity);
-    try std.testing.expect(global.path == null);
-    try std.testing.expectEqualStrings("missing_file_or_import", classifyDiagnosticMessage(global.message));
-    try std.testing.expect(parseCompilerLine("Build Summary: 1/1 steps succeeded") == null);
-}

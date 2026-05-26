@@ -10,6 +10,7 @@ test {
     _ = drift;
     _ = release_intelligence;
     _ = workflows;
+    _ = @import("ci_evidence_tests.zig");
     _ = @import("docs_index_tests.zig");
     _ = @import("release_intelligence_tests.zig");
 }

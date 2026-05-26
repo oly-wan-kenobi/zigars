@@ -4,6 +4,22 @@ const app_context = @import("../../context.zig");
 const semantic_index = @import("semantic_index.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+test "zlint ast confirms call references from prefixed output" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const ast =
+        \\Printing AST for main.zig
+        \\{"symbols":[{"name":"helper","references":[{"flags":["call"]}]},{"name":"other","references":[]}]}
+    ;
+    try std.testing.expect(try semantic_index.zlintAstSymbolHasReference(arena.allocator(), ast, "helper", false));
+    try std.testing.expect(try semantic_index.zlintAstSymbolHasReference(arena.allocator(), ast, "helper", true));
+    try std.testing.expect(!try semantic_index.zlintAstSymbolHasReference(arena.allocator(), ast, "other", false));
+    try std.testing.expect(!try semantic_index.zlintAstSymbolHasReference(arena.allocator(), ast, "missing", false));
+    try std.testing.expect(!try semantic_index.zlintAstSymbolHasReference(arena.allocator(),
+        \\{"symbols":[{"name":"helper","references":[{"flags":[1,"read"]}]}]}
+    , "helper", true));
+}
+
 fn testContext(
     store_fake: *fakes.FakeWorkspaceStore,
     scanner_fake: *fakes.FakeWorkspaceScanner,

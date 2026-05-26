@@ -2455,15 +2455,6 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     return allocator.dupe(u8, &hex);
 }
 
-test "project intelligence routes next action and patch guards generated paths" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const plan = (try nextActionPlanValue(allocator, "fix compile error", "src/main.zig", "error: bad")).object;
-    try std.testing.expectEqualStrings("zig_compile_error_index", plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
-}
-
 test "project intelligence private helpers cover fallback edge cases" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

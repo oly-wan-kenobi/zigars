@@ -10,4 +10,9 @@ test {
     _ = backend_contracts;
     _ = compiler_output;
     _ = static_analysis_contracts;
+    _ = @import("analysis_tests.zig");
+    _ = @import("backend_catalog_tests.zig");
+    _ = @import("backend_contracts_tests.zig");
+    _ = @import("compiler_output_tests.zig");
+    _ = @import("static_analysis_contracts_tests.zig");
 }

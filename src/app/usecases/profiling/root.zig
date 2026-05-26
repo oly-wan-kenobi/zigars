@@ -10,5 +10,8 @@ test {
     _ = plan;
     _ = render;
     _ = run;
+    _ = @import("flamegraph_diff_tests.zig");
     _ = @import("flamegraph_tests.zig");
+    _ = @import("plan_tests.zig");
+    _ = @import("render_tests.zig");
 }
