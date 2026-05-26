@@ -102,7 +102,7 @@ pub fn build(b: *std.Build) void {
     const fuzz_tests = b.addTest(.{
         .name = "zigar-fuzz-tests",
         .root_module = fuzz_mod,
-        .test_runner = .{ .path = b.path("build_support/fuzz_test_runner.zig"), .mode = .server },
+        .test_runner = .{ .path = b.path("tools/fuzz_test_runner.zig"), .mode = .server },
         .use_llvm = true,
     });
     const run_fuzz_tests = b.addRunArtifact(fuzz_tests);

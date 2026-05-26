@@ -225,6 +225,7 @@ fn isTrackedCoverageFile(path: []const u8) bool {
 }
 
 fn isGeneratedCoveragePath(path: []const u8) bool {
+    if (std.mem.eql(u8, path, "tools/fuzz_test_runner.zig")) return true;
     var parts = std.mem.splitScalar(u8, path, '/');
     while (parts.next()) |part| {
         if (std.mem.eql(u8, part, ".zig-cache") or
@@ -370,6 +371,9 @@ test "coverage path and attribute helpers handle backslashes and prefix collisio
     const normalized = try normalizeCoveragePath(std.testing.allocator, "C:\\repo\\tools\\coverage.zig");
     defer if (normalized) |path| std.testing.allocator.free(path);
     try std.testing.expectEqualStrings("tools/coverage.zig", normalized.?);
+    try std.testing.expect(!isTrackedCoverageFile("tools/fuzz_test_runner.zig"));
+    try std.testing.expect(!isTrackedCoverageFile("zig-out/test.zig"));
+    try std.testing.expect(isTrackedCoverageFile("tools/coverage.zig"));
     try std.testing.expectEqualStrings("src/root.zig", attributeValue("<class otherfilename=\"x\" filename=\"src/root.zig\">", "filename").?);
     try std.testing.expect(attributeValue("<line number=1 hits=\"1\"/>", "number") == null);
 }
