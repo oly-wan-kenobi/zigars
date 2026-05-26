@@ -15,6 +15,8 @@ const HttpSmokeOptions = struct {
     binary: []const u8 = "zig-out/bin/zigar",
     workspace: []const u8 = ".",
     expect: []const u8 = "tests/fixtures/http-smoke.expect.json",
+    server_kcov_path: []const u8 = "kcov",
+    server_kcov_dir: ?[]const u8 = null,
 };
 
 pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void {
@@ -27,8 +29,12 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
             options.workspace = try flagValue(args, &i, io, "http-smoke", "--workspace", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
         } else if (std.mem.eql(u8, args[i], "--expect")) {
             options.expect = try flagValue(args, &i, io, "http-smoke", "--expect", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
+        } else if (std.mem.eql(u8, args[i], "--server-kcov-path")) {
+            options.server_kcov_path = try flagValue(args, &i, io, "http-smoke", "--server-kcov-path", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
+        } else if (std.mem.eql(u8, args[i], "--server-kcov-dir")) {
+            options.server_kcov_dir = try flagValue(args, &i, io, "http-smoke", "--server-kcov-dir", "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
         } else {
-            return unexpectedArgument(io, "http-smoke", args[i], "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>]");
+            return unexpectedArgument(io, "http-smoke", args[i], "http-smoke [--binary <path>] [--workspace <path>] [--expect <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
         }
     }
 
@@ -39,16 +45,73 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     var scenarios: usize = 0;
     var port_buf: [16]u8 = undefined;
     const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
+    var server_argv = try httpServerArgv(allocator, options, port_text);
+    defer server_argv.deinit(allocator);
     var child = try std.process.spawn(io, .{
-        .argv = &.{ options.binary, "--workspace", options.workspace, "--transport", "http", "--host", "127.0.0.1", "--port", port_text, "--zls-path", "/definitely/missing/zls", "--zlint-path", "/definitely/missing/zlint" },
+        .argv = server_argv.items,
         .stdout = .ignore,
-        .stderr = .pipe,
+        .stderr = .ignore,
     });
-    defer child.kill(io);
+    var child_done = false;
+    defer if (!child_done) child.kill(io);
 
     try waitForInitialize(allocator, io, port, &child);
     try assertRequiredTools(allocator, io, port, expected.value);
     scenarios += 1;
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        "405",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        "Content-Length required",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        "Empty JSON-RPC payload",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 4194305\r\nConnection: close\r\n\r\n",
+        "Request body too large",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 8\r\nConnection: close\r\n\r\n{}",
+        "Failed to read request body",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 66\r\nConnection: close\r\n\r\n{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}",
+        "204",
+        &scenarios,
+    );
+    {
+        const malformed = try smoke.rawHttp(allocator, io, port, "not http\r\n\r\n");
+        defer allocator.free(malformed);
+        scenarios += 1;
+    }
+    try smoke.assertHttpRpcContains(allocator, io, port, "{ bad json", "\"code\":-32700", &scenarios);
 
     try assertToolPaths(allocator, io, port, 3, "zigar_schema", "{}", expected.value, "schema_paths", &scenarios);
     try assertToolPaths(allocator, io, port, 4, "zigar_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths", &scenarios);
@@ -133,7 +196,58 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try runtime_ux_smoke.run(allocator, io, port, expected.value, &scenarios);
 
     try smoke.assertMinimumCount(io, "http-smoke scenarios", scenarios, coverage_config.min_http_smoke_scenarios);
+    try shutdownHttpServer(allocator, io, port, &child, &child_done);
     try stdoutWrite(io, "http smoke ok\n");
+}
+
+fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_text: []const u8) !std.ArrayList([]const u8) {
+    var argv: std.ArrayList([]const u8) = .empty;
+    errdefer argv.deinit(allocator);
+    if (options.server_kcov_dir) |dir| {
+        try argv.appendSlice(allocator, &.{
+            options.server_kcov_path,
+            "--clean",
+            "--include-path=" ++ coverage_config.kcov_include_path,
+            "--exclude-path=" ++ coverage_config.kcov_exclude_path,
+            dir,
+        });
+    }
+    try argv.appendSlice(allocator, &.{
+        options.binary,
+        "--workspace",
+        options.workspace,
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        port_text,
+        "--zls-path",
+        "/definitely/missing/zls",
+        "--zlint-path",
+        "/definitely/missing/zlint",
+    });
+    return argv;
+}
+
+fn shutdownHttpServer(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child, child_done: *bool) !void {
+    const response = try smoke.rpc(allocator, io, port,
+        \\{"jsonrpc":"2.0","id":99999,"method":"shutdown"}
+    );
+    defer allocator.free(response);
+    const parsed = try std.json.parseFromSlice(JsonValue, allocator, response, .{});
+    defer parsed.deinit();
+    if (parsed.value.object.get("error") != null) return error.AssertionFailed;
+    const term = try child.wait(io);
+    child_done.* = true;
+    if (!termOk(term)) return error.AssertionFailed;
+}
+
+fn termOk(term: std.process.Child.Term) bool {
+    return switch (term) {
+        .exited => |code| code == 0,
+        else => false,
+    };
 }
 fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child) !void {
     const deadline = smoke.nowNs(io) + 30 * std.time.ns_per_s;
@@ -233,4 +347,8 @@ fn assertToolPaths(
         try smoke.expectJsonEq(io, actual, entry.value_ptr.*, entry.key_ptr.*);
     }
     scenario_count.* += 1;
+}
+
+test "http smoke command exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
 }

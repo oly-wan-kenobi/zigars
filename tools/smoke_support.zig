@@ -83,6 +83,33 @@ pub fn rpc(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8) ![
     return allocator.dupe(u8, response_body);
 }
 
+pub fn rawHttp(allocator: std.mem.Allocator, io: Io, port: u16, request: []const u8) ![]u8 {
+    const address = try Io.net.IpAddress.parse("127.0.0.1", port);
+    var stream = try address.connect(io, .{
+        .mode = .stream,
+        .protocol = .tcp,
+        .timeout = .none,
+    });
+    defer stream.close(io);
+
+    var writer_buffer: [4096]u8 = undefined;
+    var writer = stream.writer(io, &writer_buffer);
+    try writer.interface.writeAll(request);
+    try writer.interface.flush();
+    stream.shutdown(io, .send) catch {};
+
+    var reader_buffer: [4096]u8 = undefined;
+    var reader = stream.reader(io, &reader_buffer);
+    return reader.interface.allocRemaining(allocator, .limited(8 * 1024 * 1024));
+}
+
+pub fn assertRawHttpContains(allocator: std.mem.Allocator, io: Io, port: u16, request: []const u8, needle: []const u8, scenario_count: *usize) !void {
+    const response = try rawHttp(allocator, io, port, request);
+    defer allocator.free(response);
+    if (std.mem.indexOf(u8, response, needle) == null) return error.AssertionFailed;
+    scenario_count.* += 1;
+}
+
 pub fn expectJsonEq(io: Io, actual: JsonValue, expected: JsonValue, path: []const u8) !void {
     switch (expected) {
         .string => |s| if (actual != .string or !std.mem.eql(u8, actual.string, s)) {
@@ -114,9 +141,25 @@ pub fn assertMinimumCount(io: Io, label: []const u8, actual: usize, expected: us
     return error.AssertionFailed;
 }
 
+pub fn assertHttpRpcContains(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8, needle: []const u8, scenario_count: *usize) !void {
+    const response = try rpc(allocator, io, port, body);
+    defer allocator.free(response);
+    if (std.mem.indexOf(u8, response, needle) == null) return error.AssertionFailed;
+    scenario_count.* += 1;
+}
+
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
+}
+
+test "findTool locates JSON tool entries by name" {
+    var obj: std.json.ObjectMap = .empty;
+    defer obj.deinit(std.testing.allocator);
+    try obj.put(std.testing.allocator, "name", .{ .string = "zig_check" });
+    var tools = [_]JsonValue{.{ .object = obj }};
+    try std.testing.expect(findTool(&tools, "zig_check") != null);
+    try std.testing.expect(findTool(&tools, "zig_missing") == null);
 }

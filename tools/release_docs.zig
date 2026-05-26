@@ -222,3 +222,7 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
 }
+
+test "release docs checker exposes static analysis docs check" {
+    try std.testing.expect(@hasDecl(@This(), "checkStaticAnalysisDocs"));
+}

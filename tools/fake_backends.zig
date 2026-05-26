@@ -143,3 +143,7 @@ fn fakeBackendUsageError(io: Io, message: []const u8) !void {
 fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
+
+test "fake backend graph mode rejects unknown flags" {
+    try std.testing.expect(zwanzigGraphModeName("--not-a-graph-mode") == null);
+}

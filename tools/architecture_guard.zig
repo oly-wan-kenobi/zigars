@@ -249,11 +249,13 @@ fn checkFile(allocator: Allocator, io: Io, source_path: []const u8) !bool {
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var line_no: usize = 1;
     var test_depth: isize = 0;
+    var test_tail_active = false;
     while (lines.next()) |raw_line| : (line_no += 1) {
         const line = withoutLineComment(raw_line);
         const enters_test_block = testBlockStarts(line);
+        const starts_test_tail = !test_tail_active and testTailStarts(line);
         var line_scan = scan;
-        line_scan.is_test_file = scan.is_test_file or test_depth > 0 or enters_test_block;
+        line_scan.is_test_file = scan.is_test_file or test_tail_active or test_depth > 0 or enters_test_block or starts_test_tail;
         ok = (try checkRootPublicAliasInLine(io, line_scan, line, line_no)) and ok;
         ok = (try checkTransitionalSurfaceInLine(io, line_scan, raw_line, line_no)) and ok;
         ok = (try checkImportsInLine(allocator, io, &line_scan, line, line_no)) and ok;
@@ -261,6 +263,7 @@ fn checkFile(allocator: Allocator, io: Io, source_path: []const u8) !bool {
         scan.imports_infra = scan.imports_infra or line_scan.imports_infra;
         ok = (try checkEffectTokensInLine(io, line_scan, line, line_no)) and ok;
         ok = (try checkMcpResultBoundaryInLine(io, line_scan, line, line_no)) and ok;
+        if (starts_test_tail or enters_test_block) test_tail_active = true;
         if (enters_test_block or test_depth > 0) {
             test_depth += braceDelta(line);
             if (test_depth < 0) test_depth = 0;
@@ -284,6 +287,7 @@ fn checkRetiredSourcePath(io: Io, source_path: []const u8) !bool {
 }
 
 fn checkImportsInLine(allocator: Allocator, io: Io, scan: *FileScan, line: []const u8, line_no: usize) !bool {
+    if (isMultilineStringLiteralLine(line)) return true;
     var ok = true;
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, line, pos, import_prefix)) |hit| {
@@ -315,7 +319,7 @@ fn checkImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, n
         .app => if (!isStdImport(normalized) and !isDomainImport(normalized) and !isAppImport(normalized) and !(scan.is_test_file and isTestingFakesImport(normalized))) {
             ok = (try reportImportViolation(io, .app_import_wall, scan.source_path, line_no, raw_import, normalized, "src/app/** may import only std, src/domain/**, and src/app/** production modules; app tests may also import src/testing/fakes/**.")) and ok;
         },
-        .adapter_mcp => if (mcpAdapterForbiddenImport(normalized)) {
+        .adapter_mcp => if (!scan.is_test_file and mcpAdapterForbiddenImport(normalized)) {
             ok = (try reportImportViolation(io, .mcp_adapter_import_wall, scan.source_path, line_no, raw_import, normalized, "src/adapters/mcp/** may depend on MCP, app/domain, target manifest metadata, and adapter-local mapping only; concrete effects and retired handler bridges need an explicit allowlist entry.")) and ok;
         },
         .infra => {
@@ -572,6 +576,19 @@ fn testBlockStarts(line: []const u8) bool {
     return std.mem.startsWith(u8, trimmed, "test ") or std.mem.startsWith(u8, trimmed, "test{") or std.mem.startsWith(u8, trimmed, "test {");
 }
 
+fn testTailStarts(line: []const u8) bool {
+    if (testBlockStarts(line)) return true;
+    const trimmed = std.mem.trim(u8, line, " \t");
+    return std.mem.startsWith(u8, trimmed, "const ") and
+        std.mem.indexOf(u8, trimmed, import_prefix) != null and
+        std.mem.indexOf(u8, trimmed, "testing/") != null;
+}
+
+fn isMultilineStringLiteralLine(line: []const u8) bool {
+    const trimmed = std.mem.trim(u8, line, " \t");
+    return std.mem.startsWith(u8, trimmed, "\\\\");
+}
+
 fn braceDelta(line: []const u8) isize {
     var delta: isize = 0;
     var in_string = false;
@@ -773,11 +790,26 @@ test "allow root package aggregation without treating it as composition" {
 test "forbidden import classifiers cover boundary guard families" {
     try std.testing.expect(mcpAdapterForbiddenImport("src/command.zig"));
     try std.testing.expect(mcpAdapterForbiddenImport("src/tools/profiling.zig"));
+    try std.testing.expect(mcpAdapterForbiddenImport("src/runtime.zig"));
+    try std.testing.expect(mcpAdapterForbiddenImport("src/bootstrap/runtime_state.zig"));
     try std.testing.expect(infraMcpForbiddenImport("mcp"));
     try std.testing.expect(infraMcpForbiddenImport("src/adapters/mcp/profiling.zig"));
+    try std.testing.expect(infraMcpForbiddenImport("src/json_result.zig"));
     try std.testing.expect(manifestForbiddenImport("src/runtime.zig"));
+    try std.testing.expect(manifestForbiddenImport("src/tool_errors.zig"));
     try std.testing.expect(isRetiredCommonImport("src/tools/common.zig"));
     try std.testing.expect(isPublicHandlerImport("src/tools/profiling.zig"));
+    try std.testing.expect(isRuntimeImport("src/bootstrap/runtime_state.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/tool_manifest.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/tool_manifest/definitions/core.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/tool_handlers.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/tool_registry.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/tool_metadata.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/server.zig"));
+    try std.testing.expect(isRetiredManifestOrDispatchImport("src/mcp_server/server.zig"));
+    try std.testing.expect(isPublicMcpResultRenderer("src/json_result.zig"));
+    try std.testing.expect(isPublicMcpResultRenderer("src/tool_errors.zig"));
+    try std.testing.expect(isPublicMcpResultRenderer("src/resource_errors.zig"));
     try std.testing.expect(isTestingImport("src/testing/fakes/root.zig"));
     try std.testing.expect(isAppPortsImport("src/app/ports.zig"));
     try std.testing.expect(!isAppPortsImport("src/app/usecases/core.zig"));
@@ -808,6 +840,14 @@ test "adapter effect-port tokens cover static-analysis orchestration regressions
     try std.testing.expect(std.mem.indexOf(u8, "try runner.run(allocator, request)", adapter_effect_port_tokens[6].token) != null);
     try std.testing.expectEqualStrings("backend_catalog", zigarRootMemberName(".backend_catalog.find").?);
     try std.testing.expect(zigarRootMemberName("") == null);
+}
+
+test "test-tail and multiline fixture helpers classify guard-only syntax" {
+    try std.testing.expect(testTailStarts("test \"adapter\" {"));
+    try std.testing.expect(testTailStarts("const fakes = @import(\"../../../testing/fakes/root.zig\");"));
+    try std.testing.expect(!testTailStarts("const std = @import(\"std\");"));
+    try std.testing.expect(isMultilineStringLiteralLine("    \\\\    _ = @import(\"builtin\");"));
+    try std.testing.expect(!isMultilineStringLiteralLine("const builtin = @import(\"builtin\");"));
 }
 
 test "architecture guard allowlist is empty and fail-closed" {

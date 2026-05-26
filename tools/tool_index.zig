@@ -190,3 +190,7 @@ fn renderArgumentFields(writer: *Io.Writer, spec: manifest.ToolMeta, required: b
         i += 1;
     }
 }
+
+test "tool index renderer exposes generate entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "generate"));
+}

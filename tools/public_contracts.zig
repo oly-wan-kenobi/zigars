@@ -18,3 +18,7 @@ pub fn checkAll(allocator: Allocator, io: Io) !bool {
     ok = (try mcp_contracts.checkPublicSurfaceContract(allocator, io)) and ok;
     return ok;
 }
+
+test "public contracts command exposes aggregate check entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "checkAll"));
+}

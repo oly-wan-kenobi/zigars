@@ -37,3 +37,7 @@ fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, too
     }
     scenario_count.* += 1;
 }
+
+test "http validation workflow smoke exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
+}

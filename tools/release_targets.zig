@@ -53,4 +53,5 @@ test "release targets stay unique and ordered for publishing" {
         }
     }
     try std.testing.expectEqualStrings("zigar.exe", all[4].exe_name);
+    try std.testing.expect(indexByPackageName("missing-target") == null);
 }

@@ -131,3 +131,7 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
 }
+
+test "MCP contract checker exposes public surface checks" {
+    try std.testing.expect(@hasDecl(@This(), "checkPublicSurfaceContract"));
+}

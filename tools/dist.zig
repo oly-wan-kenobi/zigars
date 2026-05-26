@@ -113,13 +113,6 @@ fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
         }
         seen[index] = true;
     }
-
-    for (release_targets.all, 0..) |target, i| {
-        if (!seen[i]) {
-            if (io) |output| try stderrPrint(output, "dist package missing release target: {s}\n", .{target.package_name});
-            return error.InvalidArguments;
-        }
-    }
 }
 
 fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions {
@@ -477,6 +470,13 @@ test "dist package validation requires the configured release set" {
     var wrong_exe = packages;
     wrong_exe[4].exe_name = "zigar";
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &wrong_exe));
+
+    var missing_with_io = packages[0 .. packages.len - 1].*;
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &missing_with_io));
+
+    var unknown_with_io = packages;
+    unknown_with_io[0].name = "zigar-unknown";
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &unknown_with_io));
 }
 
 test "countNonEmptyLines ignores trailing blank lines" {

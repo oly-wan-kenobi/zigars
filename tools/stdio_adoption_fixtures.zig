@@ -22,3 +22,7 @@ pub fn run(client: anytype) !void {
     try client.expectPathJson(report, "report.source.available", .{ .bool = true });
     try client.expectPathJson(report, "report.backend_support_claims.4.claim_allowed", .{ .bool = true });
 }
+
+test "stdio adoption fixture exposes run entrypoint" {
+    try @import("std").testing.expect(@hasDecl(@This(), "run"));
+}

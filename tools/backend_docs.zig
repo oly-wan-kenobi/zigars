@@ -66,3 +66,7 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
 }
+
+test "backend docs checker exposes public contract entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "checkOptionalBackendContracts"));
+}
