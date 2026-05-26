@@ -69,6 +69,7 @@ pub fn jsonContentFromError(allocator: std.mem.Allocator, spec: Spec, err: anyer
     return jsonContent(allocator, spec.uri, result_value);
 }
 
+/// Frees the top-level JSON container allocated for a structured error payload.
 fn deinitTopLevel(allocator: std.mem.Allocator, result_value: *std.json.Value) void {
     switch (result_value.*) {
         .object => |*obj| obj.deinit(allocator),

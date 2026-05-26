@@ -5,6 +5,7 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
+/// Format a Zig file.
 pub const zig_format = tool(.{
     .description = "Format a Zig file. Returns preview by default; writes only with apply=true.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "apply", "boolean", false }, .{ "content", "string", false } }),
@@ -13,6 +14,7 @@ pub const zig_format = tool(.{
     .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
+/// Run `zig fmt --check` on a workspace file or directory.
 pub const zig_format_check = tool(.{
     .description = "Run `zig fmt --check` on a workspace file or directory.",
     .input_schema = schema(&.{ .{ "path", "string", true }, .{ "timeout_ms", "integer", false } }),
@@ -21,6 +23,7 @@ pub const zig_format_check = tool(.{
     .risk = .{ .executes_backend = true },
     .plan = .{ .exact_command = .{ .required_path = &.{ "fmt", "--check" } } },
 });
+/// Preview a replacement-content patch with hashes and unified diff; writes only with apply=true.
 pub const zig_patch_preview = tool(.{
     .description = "Preview a replacement-content patch with hashes and unified diff; writes only with apply=true.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", true }, .{ "apply", "boolean", false } }),
@@ -29,6 +32,7 @@ pub const zig_patch_preview = tool(.{
     .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
+/// Request a ZLS workspace edit for a symbol rename.
 pub const zig_rename = tool(.{
     .description = "Request a ZLS workspace edit for a symbol rename. Returns preview by default; writes only with apply=true.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true }, .{ "new_name", "string", true }, .{ "apply", "boolean", false } }),
@@ -37,6 +41,7 @@ pub const zig_rename = tool(.{
     .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
+/// Get ZLS code actions for a range.
 pub const zig_code_actions = tool(.{
     .description = "Get ZLS code actions for a range.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true } }),
@@ -45,6 +50,7 @@ pub const zig_code_actions = tool(.{
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .zls_request = .{ .method = "textDocument/codeAction", .requires_document_sync = true, .required_capability = "codeActionProvider" } },
 });
+/// Preview or apply one ZLS code action by index.
 pub const zig_code_action_apply = tool(.{
     .description = "Preview or apply one ZLS code action by index. Writes only with apply=true.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true }, .{ "action_index", "integer", true }, .{ "apply", "boolean", false } }),

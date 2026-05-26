@@ -110,6 +110,7 @@ test "parse defaults clean partial allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, parseDefaultsWithAllocator, .{});
 }
 
+/// Parses defaults with allocator input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseDefaultsWithAllocator(allocator: std.mem.Allocator) !void {
     var cfg = try parse(allocator, std.testing.io, &.{"zigar"});
     defer cfg.deinit(allocator);

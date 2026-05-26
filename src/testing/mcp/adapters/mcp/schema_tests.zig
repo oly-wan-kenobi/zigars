@@ -29,6 +29,7 @@ test "input schema includes enum hints" {
     try std.testing.expectEqualStrings("quick", mode.get("enum").?.array.items[0].string);
 }
 
+/// Releases allocated JSON schema values built for tests.
 fn deinitInputSchema(s: *mcp.types.InputSchema) void {
     if (s.required) |required| std.testing.allocator.free(required);
     if (s.properties) |*properties| {

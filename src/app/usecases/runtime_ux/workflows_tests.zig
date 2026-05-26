@@ -5,6 +5,7 @@ const ports = @import("../../ports.zig");
 const workflows = @import("workflows.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(
     command_runner: *fakes.FakeCommandRunner,
     workspace_store: *fakes.FakeWorkspaceStore,
@@ -25,6 +26,7 @@ fn testContext(
     };
 }
 
+/// Implements expect workspace map exists workflow logic using caller-owned inputs.
 fn expectWorkspaceMapExists(workspace: *fakes.FakeWorkspaceStore) !void {
     try workspace.expectExists(.{ .path = "build.zig", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
     try workspace.expectExists(.{ .path = "build.zig.zon", .provenance = "runtime_ux.workspace_map" }, .{ .exists = false });

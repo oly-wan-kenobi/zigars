@@ -18,15 +18,18 @@ pub const Catalog = struct {
         };
     }
 
+    /// Returns the number of entries exposed by this fixture.
     fn count(_: *anyopaque) usize {
         return manifest.entries.len;
     }
 
+    /// Returns the fixture entry at the requested index, or null when out of range.
     fn entryAt(_: *anyopaque, index: usize) ?ports.ToolManifestEntry {
         if (index >= manifest.entries.len) return null;
         return mapEntry(manifest.entries[index]);
     }
 
+    /// Finds find data in the provided collection without taking ownership.
     fn find(_: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const entry = manifest.findEntry(name) orelse return null;
         return mapEntry(entry);
@@ -56,6 +59,7 @@ fn mapEntry(entry: manifest.ToolEntry) ports.ToolManifestEntry {
     };
 }
 
+/// Maps map plan data without taking ownership; allocation failures from nested values are propagated when needed.
 fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
     return switch (plan) {
         .exact_command => |command| .{ .exact_command = mapCommandPlan(command) },
@@ -73,6 +77,7 @@ fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
     };
 }
 
+/// Maps map command plan data without taking ownership; allocation failures from nested values are propagated when needed.
 fn mapCommandPlan(plan: manifest.CommandPlan) ports.CommandPlan {
     return switch (plan) {
         .argv => |argv| .{ .argv = argv },

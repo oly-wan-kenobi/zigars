@@ -171,6 +171,7 @@ pub fn zigCodeActionBatch(allocator: std.mem.Allocator, context: app_context.Con
     return structuredScratch(allocator, scratch, editing_workflows.codeActionBatchUnavailableValue(scratch) catch |err| return transactionalError(allocator, "zig_code_action_batch", "run_workflow", err));
 }
 
+/// Handles patch-session preview/apply requests that share replacement parsing.
 fn patchSessionReplacementTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, apply: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const raw_edits = argString(args, "edits") orelse return mcp_errors.missingArgument(allocator, tool_name, "edits", "JSON array of {file, content} replacements");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -194,6 +195,7 @@ fn patchSessionReplacementTool(allocator: std.mem.Allocator, context: app_contex
     return structuredScratch(allocator, scratch, try patchSessionReplacementValue(scratch, result));
 }
 
+/// Returns an allocator-owned JSON value for patch session create.
 fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateResult) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (result.files) |file| {
@@ -216,6 +218,7 @@ fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateR
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for patch session replacement.
 fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.ReplacementResult) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try replacementFileValue(allocator, file));
@@ -236,6 +239,7 @@ fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.Re
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for patch session revert.
 fn patchSessionRevertValue(allocator: std.mem.Allocator, result: editing.RevertResult) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try revertFileValue(allocator, file));
@@ -252,6 +256,7 @@ fn patchSessionRevertValue(allocator: std.mem.Allocator, result: editing.RevertR
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for session file state.
 fn sessionFileStateValue(allocator: std.mem.Allocator, state: editing.SessionFileState) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, state.file));
@@ -260,6 +265,7 @@ fn sessionFileStateValue(allocator: std.mem.Allocator, state: editing.SessionFil
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for replacement file.
 fn replacementFileValue(allocator: std.mem.Allocator, file: editing.ReplacementFile) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file.file));
@@ -272,6 +278,7 @@ fn replacementFileValue(allocator: std.mem.Allocator, file: editing.ReplacementF
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for revert file.
 fn revertFileValue(allocator: std.mem.Allocator, file: editing.RevertFile) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file.file));
@@ -285,6 +292,7 @@ fn revertFileValue(allocator: std.mem.Allocator, file: editing.RevertFile) !std.
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for session record.
 fn sessionRecordValue(allocator: std.mem.Allocator, record: editing.SessionRecord) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (record.files) |file| {
@@ -305,6 +313,7 @@ fn sessionRecordValue(allocator: std.mem.Allocator, record: editing.SessionRecor
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for identity.
 fn identityValue(allocator: std.mem.Allocator, identity: editing.Identity) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exists", .{ .bool = identity.exists });
@@ -313,6 +322,7 @@ fn identityValue(allocator: std.mem.Allocator, identity: editing.Identity) !std.
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for expected preimages.
 fn expectedPreimagesValue(allocator: std.mem.Allocator, expected: []const editing.ExpectedPreimage) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (expected) |item| {
@@ -326,6 +336,7 @@ fn expectedPreimagesValue(allocator: std.mem.Allocator, expected: []const editin
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for policy.
 fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "classification", try ownedString(allocator, policy.classification));
@@ -338,6 +349,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.js
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for apply blocked.
 fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing.ExpectedPreimage) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
@@ -351,6 +363,7 @@ fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files
     return .{ .object = obj };
 }
 
+/// Parses expected preimages, returning null when the field is absent.
 fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]const editing.ExpectedPreimage {
     const text = raw orelse return &.{};
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
@@ -380,6 +393,7 @@ fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]con
     return out.toOwnedSlice(allocator);
 }
 
+/// Collects replacements into the caller-provided output list.
 fn collectReplacements(allocator: std.mem.Allocator, replacements: *std.ArrayList(editing.Replacement), value: std.json.Value) !void {
     switch (value) {
         .array => |array| for (array.items) |item| try appendReplacement(allocator, replacements, item),
@@ -396,6 +410,7 @@ fn collectReplacements(allocator: std.mem.Allocator, replacements: *std.ArrayLis
     }
 }
 
+/// Appends replacement to the caller-provided output list.
 fn appendReplacement(allocator: std.mem.Allocator, replacements: *std.ArrayList(editing.Replacement), value: std.json.Value) !void {
     const obj = switch (value) {
         .object => |o| o,
@@ -407,6 +422,7 @@ fn appendReplacement(allocator: std.mem.Allocator, replacements: *std.ArrayList(
     });
 }
 
+/// Copies validation-related fields from session arguments into a new JSON object.
 fn validationArgsFromSessionArgs(allocator: std.mem.Allocator, args: ?std.json.Value) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     inline for (.{ "mode", "changed_files", "diff", "goal", "output" }) |field| {
@@ -425,6 +441,7 @@ fn validationArgsFromSessionArgs(allocator: std.mem.Allocator, args: ?std.json.V
     return .{ .object = obj };
 }
 
+/// Appends edit paths to the caller-provided output list.
 fn appendEditPaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), raw_edits: []const u8) !void {
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, raw_edits, .{}) catch return;
     defer parsed.deinit();
@@ -434,12 +451,14 @@ fn appendEditPaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u
     for (replacements.items) |replacement| try appendUniqueString(allocator, paths, replacement.file);
 }
 
+/// Appends path tokens to the caller-provided output list.
 fn appendPathTokens(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), maybe_text: ?[]const u8) !void {
     const text = maybe_text orelse return;
     var it = std.mem.tokenizeAny(u8, text, " \t\r\n,");
     while (it.next()) |path| try appendUniqueString(allocator, paths, path);
 }
 
+/// Appends patch paths to the caller-provided output list.
 fn appendPatchPaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), maybe_patch: ?[]const u8) !void {
     const patch = maybe_patch orelse return;
     var lines = std.mem.splitScalar(u8, patch, '\n');
@@ -449,11 +468,13 @@ fn appendPatchPaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const 
     }
 }
 
+/// Appends unique string to the caller-provided output list.
 fn appendUniqueString(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8), value: []const u8) !void {
     for (values.items) |existing| if (std.mem.eql(u8, existing, value)) return;
     try values.append(allocator, try allocator.dupe(u8, value));
 }
 
+/// Derives a stable session id from the request goal and edit inputs.
 fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
     var seed = std.ArrayList(u8).empty;
     defer seed.deinit(allocator);
@@ -466,11 +487,13 @@ fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8
     return std.fmt.allocPrint(allocator, "session-{s}", .{hex[0..16]});
 }
 
+/// Returns a structured MCP result while matching callbacks that pass scratch arenas.
 fn structuredScratch(allocator: std.mem.Allocator, scratch: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     _ = scratch;
     return mcp_result.structured(allocator, value);
 }
 
+/// Maps transactional error failures to structured MCP errors.
 fn transactionalError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.InvalidArguments) return mcp_errors.invalidArgument(allocator, tool_name, null, "valid transactional editing arguments", "invalid", "Inspect the tool inputSchema and retry with supported arguments.");
@@ -485,6 +508,7 @@ fn transactionalError(allocator: std.mem.Allocator, tool_name: []const u8, phase
     }, err);
 }
 
+/// Returns the MCP tool result for backend unavailable.
 fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, configured_path: []const u8, status: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -500,6 +524,7 @@ fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const 
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns a structured not-found response for an unknown patch session id.
 fn sessionNotFound(allocator: std.mem.Allocator, session_id: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -511,21 +536,25 @@ fn sessionNotFound(allocator: std.mem.Allocator, session_id: []const u8) mcp.too
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns an allocator-owned JSON value for optional string.
 fn optionalStringValue(allocator: std.mem.Allocator, value: ?[]const u8) !std.json.Value {
     if (value) |text| return ownedString(allocator, text);
     return .null;
 }
 
+/// Copies text into an allocator-owned JSON string value.
 fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, text) };
 }
 
+/// Copies a string slice into an allocator-owned JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(try ownedString(allocator, value));
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for joined strings.
 fn joinedStringsValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var out = std.ArrayList(u8).empty;
     for (values, 0..) |value, index| {
@@ -535,6 +564,7 @@ fn joinedStringsValue(allocator: std.mem.Allocator, values: []const []const u8) 
     return .{ .string = try out.toOwnedSlice(allocator) };
 }
 
+/// Returns an allocator-owned JSON value for next tool.
 fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "tool", try ownedString(allocator, tool));
@@ -542,6 +572,7 @@ fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for path failure name.
 fn pathFailureNameValue(allocator: std.mem.Allocator, path: []const u8, error_name: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, path));
@@ -550,6 +581,7 @@ fn pathFailureNameValue(allocator: std.mem.Allocator, path: []const u8, error_na
     return .{ .object = obj };
 }
 
+/// Reads a string field from a JSON object when it has the expected type.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -557,6 +589,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads a boolean field from a JSON object when it has the expected type.
 fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     return switch (obj.get(field) orelse .null) {
         .bool => |b| b,
@@ -564,6 +597,7 @@ fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     };
 }
 
+/// Reads an integer field from a JSON object when it has the expected type.
 fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |i| i,
@@ -571,6 +605,7 @@ fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     };
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     const obj = switch (args orelse return null) {
         .object => |o| o,
@@ -579,10 +614,12 @@ fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return stringField(obj, name);
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return argBoolOptional(args, name) orelse default;
 }
 
+/// Reads a bool optional argument when it is present with the expected type.
 fn argBoolOptional(args: ?std.json.Value, name: []const u8) ?bool {
     const obj = switch (args orelse return null) {
         .object => |o| o,
@@ -591,10 +628,12 @@ fn argBoolOptional(args: ?std.json.Value, name: []const u8) ?bool {
     return boolField(obj, name);
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return argIntOptional(args, name) orelse default;
 }
 
+/// Reads an optional int argument when it is present with the expected type.
 fn argIntOptional(args: ?std.json.Value, name: []const u8) ?i64 {
     const obj = switch (args orelse return null) {
         .object => |o| o,
@@ -603,10 +642,12 @@ fn argIntOptional(args: ?std.json.Value, name: []const u8) ?i64 {
     return integerField(obj, name);
 }
 
+/// Clamps requested timeout to the supported command timeout range.
 fn timeoutMs(context: app_context.Context, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Returns the SHA-256 digest as lowercase hexadecimal text.
 fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -728,6 +769,7 @@ test "transactional editing adapter helper parsers and errors are explicit" {
     try std.testing.expect(argIntOptional(.{ .string = "not-object" }, "timeout_ms") == null);
 }
 
+/// Creates transactional test context from the ports required by the adapter.
 fn transactionalTestContext(
     command_runner: *fakes.FakeCommandRunner,
     workspace_store: *fakes.FakeWorkspaceStore,

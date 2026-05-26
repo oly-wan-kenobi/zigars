@@ -4,6 +4,7 @@ const workspace_mod = @import("workspace.zig");
 
 const Store = filesystem.Store;
 
+/// Scans a directory using an explicit test allocator.
 fn scanDirectoryWithAllocator(allocator: std.mem.Allocator) !void {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();

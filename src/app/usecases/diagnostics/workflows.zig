@@ -7,7 +7,9 @@ const crash_evidence = @import("crash_evidence.zig");
 const diagnostic_crash = @import("../../../domain/diagnostics/crash.zig");
 const diagnostic_stack = @import("../../../domain/diagnostics/stacktrace.zig");
 
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.DiagnosticsContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 const CommandRunResult = support.CommandRunResult;
 const artifacts = support.artifacts;
@@ -18,7 +20,9 @@ const argvValue = support.argvValue;
 const backendErrorResult = support.backendErrorResult;
 const backendUnavailableResult = support.backendUnavailableResult;
 const checkBackend = support.checkBackend;
+/// Aliases the shared command-error serializer for structured payloads.
 const commandErrorValue = support.commandErrorValue;
+/// Aliases the shared command-result serializer for structured payloads.
 const commandResultValue = support.commandResultValue;
 const lineNumberLocal = support.lineNumberLocal;
 const missingArgumentResult = support.missingArgumentResult;
@@ -33,10 +37,12 @@ const toolTimeout = support.toolTimeout;
 const unixMs = support.unixMs;
 const workspacePathErrorResult = support.workspacePathErrorResult;
 
+/// Schema version written into this module's structured payloads.
 const schema_version = 1;
 const max_evidence_bytes = 16 * 1024 * 1024;
 const max_binary_bytes = 64 * 1024 * 1024;
 
+/// Carries evidence input data across use case and port boundaries.
 const EvidenceInput = struct {
     bytes: []const u8,
     source_kind: []const u8,
@@ -44,11 +50,13 @@ const EvidenceInput = struct {
     owned: ?[]u8 = null,
     owned_allocator: ?std.mem.Allocator = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: EvidenceInput, allocator: std.mem.Allocator) void {
         if (self.owned) |owned| (self.owned_allocator orelse allocator).free(owned);
     }
 };
 
+/// Carries binary info data across use case and port boundaries.
 const BinaryInfo = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -58,6 +66,7 @@ const BinaryInfo = struct {
     stripped_hint: []const u8,
 };
 
+/// Executes the zig debug plan workflow and returns an allocator-owned structured result.
 pub fn zigDebugPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -87,12 +96,14 @@ pub fn zigDebugPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig lldb backtrace workflow and returns an allocator-owned structured result.
 pub fn zigLldbBacktrace(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "backtrace", "LLDB backtrace capture is not supported by zigar on Windows.");
     const binary = argString(args, "binary") orelse return missingArgumentResult(allocator, "zig_lldb_backtrace", "binary", "workspace executable path");
     return lldbCapture(a, allocator, args, "zig_lldb_backtrace", binary, argString(args, "core"), "bt all", "LLDB backtrace preview");
 }
 
+/// Executes the zig core inspect workflow and returns an allocator-owned structured result.
 pub fn zigCoreInspect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "core_inspect", "Core dump inspection is not supported by zigar on Windows.");
     const core = argString(args, "core") orelse return missingArgumentResult(allocator, "zig_core_inspect", "core", "workspace core dump path");
@@ -100,6 +111,7 @@ pub fn zigCoreInspect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     return lldbCapture(a, allocator, args, "zig_core_inspect", binary, core, "thread backtrace all", "LLDB core inspection preview");
 }
 
+/// Executes the zig debug frame summary workflow and returns an allocator-owned structured result.
 pub fn zigDebugFrameSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_debug_frame_summary", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_debug_frame_summary", args, "text", err);
     defer input.deinit(allocator);
@@ -122,6 +134,7 @@ pub fn zigDebugFrameSummary(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig sanitizer fusion workflow and returns an allocator-owned structured result.
 pub fn zigSanitizerFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_sanitizer_fusion", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_sanitizer_fusion", args, "text", err);
     defer input.deinit(allocator);
@@ -148,6 +161,7 @@ pub fn zigSanitizerFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig panic trace analyze workflow and returns an allocator-owned structured result.
 pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_panic_trace_analyze", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_panic_trace_analyze", args, "text", err);
     defer input.deinit(allocator);
@@ -172,6 +186,7 @@ pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig crash repro plan workflow and returns an allocator-owned structured result.
 pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_crash_repro_plan", "text", "path", "content", false) catch |err| return evidenceInputError(a, allocator, "zig_crash_repro_plan", args, "text", err);
     defer input.deinit(allocator);
@@ -196,6 +211,7 @@ pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     return structured(allocator, .{ .object = obj });
 }
 
+/// Invokes zig heaptrack run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigHeaptrackRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_heaptrack_run", "command", "non-empty command string");
     const heaptrack_path = argString(args, "heaptrack_path") orelse "heaptrack";
@@ -224,12 +240,14 @@ pub fn zigHeaptrackRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     });
 }
 
+/// Executes the zig heaptrack summary workflow and returns an allocator-owned structured result.
 pub fn zigHeaptrackSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_heaptrack_summary", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_heaptrack_summary", args, "text", err);
     defer input.deinit(allocator);
     return memorySummary(a, allocator, args, "zig_heaptrack_summary", input, "heaptrack");
 }
 
+/// Executes the zig valgrind memcheck workflow and returns an allocator-owned structured result.
 pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_valgrind_memcheck", "command", "non-empty command string");
     const valgrind_path = argString(args, "valgrind_path") orelse "valgrind";
@@ -256,6 +274,7 @@ pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     });
 }
 
+/// Executes the zig callgrind report workflow and returns an allocator-owned structured result.
 pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     if (argString(args, "content") != null or argString(args, "path") != null or argString(args, "text") != null) {
         var input = readEvidenceInput(a, allocator, args, "zig_callgrind_report", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_callgrind_report", args, "text", err);
@@ -290,6 +309,7 @@ pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json
     });
 }
 
+/// Executes the zig fuzz plan workflow and returns an allocator-owned structured result.
 pub fn zigFuzzPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -309,6 +329,7 @@ pub fn zigFuzzPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     return structured(allocator, .{ .object = obj });
 }
 
+/// Invokes zig afl run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_afl_run", "command", "fuzz target command string");
     const afl_path = argString(args, "afl_path") orelse "afl-fuzz";
@@ -340,6 +361,7 @@ pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !
     });
 }
 
+/// Invokes zig libfuzzer run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigLibfuzzerRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_libfuzzer_run", "command", "libFuzzer command string");
     const output = argString(args, "output") orelse ".zigar-cache/fuzz/libfuzzer-run.json";
@@ -351,6 +373,7 @@ pub fn zigLibfuzzerRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     return applyGatedUserCommand(a, allocator, scratch, args, "zig_libfuzzer_run", argv, output, "libfuzzer_run", "libFuzzer run evidence");
 }
 
+/// Executes the zig fuzz crash minimize workflow and returns an allocator-owned structured result.
 pub fn zigFuzzCrashMinimize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var input = readEvidenceInput(a, allocator, args, "zig_fuzz_crash_minimize", "text", "path", "content", false) catch |err| return evidenceInputError(a, allocator, "zig_fuzz_crash_minimize", args, "text", err);
     defer input.deinit(allocator);
@@ -368,6 +391,7 @@ pub fn zigFuzzCrashMinimize(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig fuzz corpus summary workflow and returns an allocator-owned structured result.
 pub fn zigFuzzCorpusSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_fuzz_corpus_summary", "path", "workspace corpus directory");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -377,6 +401,7 @@ pub fn zigFuzzCorpusSummary(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, value);
 }
 
+/// Executes the zig binary size workflow and returns an allocator-owned structured result.
 pub fn zigBinarySize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_binary_size", "path", "workspace binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -390,6 +415,7 @@ pub fn zigBinarySize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig binary size diff workflow and returns an allocator-owned structured result.
 pub fn zigBinarySizeDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const after_path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_binary_size_diff", "path", "workspace current binary path");
     const before_path = argString(args, "baseline") orelse return missingArgumentResult(allocator, "zig_binary_size_diff", "baseline", "workspace baseline binary path");
@@ -408,6 +434,7 @@ pub fn zigBinarySizeDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig objdump summary workflow and returns an allocator-owned structured result.
 pub fn zigObjdumpSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return binaryBackendTool(a, allocator, args, .{
         .tool_name = "zig_objdump_summary",
@@ -420,6 +447,7 @@ pub fn zigObjdumpSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     });
 }
 
+/// Executes the zig dwarfdump check workflow and returns an allocator-owned structured result.
 pub fn zigDwarfdumpCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return binaryBackendTool(a, allocator, args, .{
         .tool_name = "zig_dwarfdump_check",
@@ -432,6 +460,7 @@ pub fn zigDwarfdumpCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     });
 }
 
+/// Executes the zig symbolize workflow and returns an allocator-owned structured result.
 pub fn zigSymbolize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const addresses = argString(args, "addresses") orelse return missingArgumentResult(allocator, "zig_symbolize", "addresses", "one or more addresses");
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_symbolize", "path", "workspace binary path");
@@ -448,6 +477,7 @@ pub fn zigSymbolize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     return binaryApplyGatedCommand(a, allocator, scratch, args, "zig_symbolize", "llvm-symbolizer", "symbolize", symbolizer, argv, path, "Address symbolization preview");
 }
 
+/// Executes the zig qemu test workflow and returns an allocator-owned structured result.
 pub fn zigQemuTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const target = argString(args, "target") orelse "native";
     const qemu_path = argString(args, "qemu_path") orelse qemuDefaultForTarget(target);
@@ -475,14 +505,17 @@ pub fn zigQemuTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     });
 }
 
+/// Executes the zig cross smoke workflow and returns an allocator-owned structured result.
 pub fn zigCrossSmoke(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return crossPlan(a, allocator, args, "zig_cross_smoke", "Cross-target smoke matrix");
 }
 
+/// Executes the zig target runtime plan workflow and returns an allocator-owned structured result.
 pub fn zigTargetRuntimePlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return crossPlan(a, allocator, args, "zig_target_runtime_plan", "Target runtime plan");
 }
 
+/// Executes the zig embedded detect workflow and returns an allocator-owned structured result.
 pub fn zigEmbeddedDetect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -497,6 +530,7 @@ pub fn zigEmbeddedDetect(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     return structured(allocator, value);
 }
 
+/// Executes the zig microzig plan workflow and returns an allocator-owned structured result.
 pub fn zigMicrozigPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -516,6 +550,7 @@ pub fn zigMicrozigPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig board profile workflow and returns an allocator-owned structured result.
 pub fn zigBoardProfile(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -533,6 +568,7 @@ pub fn zigBoardProfile(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig flash plan workflow and returns an allocator-owned structured result.
 pub fn zigFlashPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -556,6 +592,7 @@ pub fn zigFlashPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     return structured(allocator, .{ .object = obj });
 }
 
+/// Carries backend command spec data across use case and port boundaries.
 const BackendCommandSpec = struct {
     tool_name: []const u8,
     backend_name: []const u8,
@@ -570,6 +607,7 @@ const BackendCommandSpec = struct {
     target: []const u8 = "",
 };
 
+/// Implements lldb capture workflow logic using caller-owned inputs.
 fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, binary: []const u8, core: ?[]const u8, command_expr: []const u8, basis: []const u8) !Result {
     const lldb_path = argString(args, "lldb_path") orelse "lldb";
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -606,6 +644,7 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements apply gated backend command workflow logic using caller-owned inputs.
 fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, spec: BackendCommandSpec) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, spec.tool_name, spec.backend_name, spec.configured_path, spec.argv, spec.basis, if (spec.target.len > 0) spec.target else argString(args, "target"), spec.output);
     const probe = checkBackend(a, scratch, spec.backend_name, spec.probe_argv, @min(toolTimeout(a, args), 5000));
@@ -630,6 +669,7 @@ fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratc
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Implements apply gated user command workflow logic using caller-owned inputs.
 fn applyGatedUserCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, argv: []const []const u8, output: []const u8, artifact_kind: []const u8, notes: []const u8) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, "project_command", "", argv, "Project command preview", argString(args, "target"), output);
     const run = runCommand(result_allocator, a, argv, toolTimeout(a, args)) catch |err| {
@@ -653,6 +693,7 @@ fn applyGatedUserCommand(a: *App, result_allocator: std.mem.Allocator, scratch: 
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Carries binary backend spec data across use case and port boundaries.
 const BinaryBackendSpec = struct {
     tool_name: []const u8,
     backend_name: []const u8,
@@ -663,6 +704,7 @@ const BinaryBackendSpec = struct {
     basis: []const u8,
 };
 
+/// Implements binary backend tool workflow logic using caller-owned inputs.
 fn binaryBackendTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, spec: BinaryBackendSpec) !Result {
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, spec.tool_name, "path", "workspace binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -679,6 +721,7 @@ fn binaryBackendTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     return binaryApplyGatedCommand(a, allocator, scratch, args, spec.tool_name, spec.backend_name, spec.operation, backend_path, argv, path, spec.basis);
 }
 
+/// Implements binary apply gated command workflow logic using caller-owned inputs.
 fn binaryApplyGatedCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, backend_name: []const u8, operation: []const u8, configured_path: []const u8, argv: []const []const u8, path: []const u8, basis: []const u8) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, backend_name, configured_path, argv, basis, argString(args, "target"), null);
     const probe = checkBackend(a, scratch, backend_name, &.{ configured_path, "--version" }, @min(toolTimeout(a, args), 5000));
@@ -701,6 +744,7 @@ fn binaryApplyGatedCommand(a: *App, result_allocator: std.mem.Allocator, scratch
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Implements preview result workflow logic using caller-owned inputs.
 fn previewResult(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, tool_name: []const u8, backend: []const u8, configured_path: []const u8, argv: []const []const u8, basis: []const u8, target: ?[]const u8, output: ?[]const u8) !Result {
     var obj = try baseValue(scratch, a, tool_name, basis, "medium", &.{
         "The backend or project command is not executed until apply=true.",
@@ -718,6 +762,7 @@ fn previewResult(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Implements memory summary workflow logic using caller-owned inputs.
 fn memorySummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, input: EvidenceInput, backend: []const u8) !Result {
     _ = args;
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -733,6 +778,7 @@ fn memorySummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, t
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements callgrind summary workflow logic using caller-owned inputs.
 fn callgrindSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, input: EvidenceInput) !Result {
     _ = args;
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -747,6 +793,7 @@ fn callgrindSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements cross plan workflow logic using caller-owned inputs.
 fn crossPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, basis: []const u8) !Result {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -764,6 +811,7 @@ fn crossPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_
     return structured(allocator, .{ .object = obj });
 }
 
+/// Reads evidence input data from the provided context without taking ownership of inputs.
 fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, primary: []const u8, path_field: ?[]const u8, content_field: ?[]const u8, required: bool) !EvidenceInput {
     _ = allocator;
     _ = tool_name;
@@ -781,23 +829,27 @@ fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     return error.MissingArgument;
 }
 
+/// Implements evidence input error workflow logic using caller-owned inputs.
 fn evidenceInputError(a: *App, allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, field: []const u8, err: anyerror) !Result {
     if (err == error.MissingArgument) return missingArgumentResult(allocator, tool_name, field, "inline evidence content or workspace evidence path");
     const path = argString(args, field) orelse argString(args, "path") orelse field;
     return workspacePathErrorResult(a, allocator, tool_name, path, err);
 }
 
+/// Reports whether inline evidence matches the caller-provided data.
 fn looksInlineEvidence(value: []const u8) bool {
     const trimmed = std.mem.trim(u8, value, " \t\r\n");
     return trimmed.len == 0 or trimmed[0] == '{' or trimmed[0] == '[' or std.mem.indexOfScalar(u8, trimmed, '\n') != null or std.mem.indexOf(u8, trimmed, "==") != null or std.mem.indexOf(u8, trimmed, "panic") != null;
 }
 
+/// Serializes frame array fields into an allocator-owned JSON value; allocation failures propagate.
 fn frameArrayValue(allocator: std.mem.Allocator, frames: []const diagnostic_stack.Frame) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (frames) |frame| try array.append(try frameValue(allocator, frame));
     return .{ .array = array };
 }
 
+/// Serializes frame fields into an allocator-owned JSON value; allocation failures propagate.
 fn frameValue(allocator: std.mem.Allocator, frame: diagnostic_stack.Frame) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "index", .{ .integer = @intCast(frame.index) });
@@ -807,11 +859,13 @@ fn frameValue(allocator: std.mem.Allocator, frame: diagnostic_stack.Frame) !std.
     return .{ .object = obj };
 }
 
+/// Serializes top frame fields into an allocator-owned JSON value; allocation failures propagate.
 fn topFrameValue(allocator: std.mem.Allocator, frames: diagnostic_stack.ParsedFrames) !std.json.Value {
     const top = frames.top() orelse return .null;
     return frameValue(allocator, top);
 }
 
+/// Serializes memory findings fields into an allocator-owned JSON value; allocation failures propagate.
 fn memoryFindingsValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "failure_kind", .{ .string = diagnostic_crash.classifyFailure(text).name() });
@@ -822,6 +876,7 @@ fn memoryFindingsValue(allocator: std.mem.Allocator, text: []const u8) !std.json
     return .{ .object = obj };
 }
 
+/// Parses metric before input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseMetricBefore(text: []const u8, number_context: []const u8, line_context: []const u8) ?i64 {
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
@@ -832,6 +887,7 @@ fn parseMetricBefore(text: []const u8, number_context: []const u8, line_context:
     return null;
 }
 
+/// Implements strip valgrind prefix workflow logic using caller-owned inputs.
 fn stripValgrindPrefix(line: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, line, " \t");
     if (!std.mem.startsWith(u8, trimmed, "==")) return line;
@@ -839,6 +895,7 @@ fn stripValgrindPrefix(line: []const u8) []const u8 {
     return trimmed[end + 2 ..];
 }
 
+/// Implements first integer workflow logic using caller-owned inputs.
 fn firstInteger(line: []const u8) ?i64 {
     var i: usize = 0;
     while (i < line.len) : (i += 1) {
@@ -857,6 +914,7 @@ fn firstInteger(line: []const u8) ?i64 {
     return null;
 }
 
+/// Serializes callgrind events fields into an allocator-owned JSON value; allocation failures propagate.
 fn callgrindEventsValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var events = std.json.Array.init(allocator);
     var lines = std.mem.splitScalar(u8, text, '\n');
@@ -870,6 +928,7 @@ fn callgrindEventsValue(allocator: std.mem.Allocator, text: []const u8) !std.jso
     return .{ .array = events };
 }
 
+/// Serializes callgrind hotspots fields into an allocator-owned JSON value; allocation failures propagate.
 fn callgrindHotspotsValue(allocator: std.mem.Allocator, text: []const u8, limit: usize) !std.json.Value {
     var items = std.json.Array.init(allocator);
     var current_fn: []const u8 = "";
@@ -891,6 +950,7 @@ fn callgrindHotspotsValue(allocator: std.mem.Allocator, text: []const u8, limit:
     return .{ .array = items };
 }
 
+/// Serializes corpus summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn corpusSummaryValue(allocator: std.mem.Allocator, a: *App, path: []const u8, limit: usize) !std.json.Value {
     const scan = try a.workspace.scanDirectory(allocator, path, null);
     defer scan.deinit(allocator);
@@ -923,6 +983,7 @@ fn corpusSummaryValue(allocator: std.mem.Allocator, a: *App, path: []const u8, l
     return .{ .object = obj };
 }
 
+/// Implements binary info workflow logic using caller-owned inputs.
 fn binaryInfo(a: *App, allocator: std.mem.Allocator, path: []const u8) !BinaryInfo {
     const abs = try a.workspace.resolve(path);
     defer a.workspace.allocator.free(abs);
@@ -938,6 +999,7 @@ fn binaryInfo(a: *App, allocator: std.mem.Allocator, path: []const u8) !BinaryIn
     };
 }
 
+/// Implements sniff binary format workflow logic using caller-owned inputs.
 fn sniffBinaryFormat(bytes: []const u8) []const u8 {
     if (bytes.len >= 4 and std.mem.eql(u8, bytes[0..4], "\x7fELF")) return "elf";
     if (bytes.len >= 4 and (std.mem.eql(u8, bytes[0..4], "\xcf\xfa\xed\xfe") or std.mem.eql(u8, bytes[0..4], "\xca\xfe\xba\xbe"))) return "macho";
@@ -946,6 +1008,7 @@ fn sniffBinaryFormat(bytes: []const u8) []const u8 {
     return "unknown";
 }
 
+/// Implements put binary info workflow logic using caller-owned inputs.
 fn putBinaryInfo(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, info: BinaryInfo) !void {
     try obj.put(allocator, "binary_identity", try binaryInfoValue(allocator, info));
     try obj.put(allocator, "binary_identity_id", try identityFromText(allocator, info.sha256, "binary"));
@@ -954,6 +1017,7 @@ fn putBinaryInfo(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, info: B
     try obj.put(allocator, "stripped_hint", .{ .string = info.stripped_hint });
 }
 
+/// Serializes binary info fields into an allocator-owned JSON value; allocation failures propagate.
 fn binaryInfoValue(allocator: std.mem.Allocator, info: BinaryInfo) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", .{ .string = info.path });
@@ -965,6 +1029,7 @@ fn binaryInfoValue(allocator: std.mem.Allocator, info: BinaryInfo) !std.json.Val
     return .{ .object = obj };
 }
 
+/// Serializes section summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn sectionSummaryValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var sections = std.json.Array.init(allocator);
     var lines = std.mem.splitScalar(u8, text, '\n');
@@ -979,6 +1044,7 @@ fn sectionSummaryValue(allocator: std.mem.Allocator, text: []const u8) !std.json
     return .{ .array = sections };
 }
 
+/// Serializes symbol summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn symbolSummaryValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exported_symbol_count", .{ .integer = @intCast(countNeedle(text, " g ")) });
@@ -987,6 +1053,7 @@ fn symbolSummaryValue(allocator: std.mem.Allocator, text: []const u8) !std.json.
     return .{ .object = obj };
 }
 
+/// Serializes target plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn targetPlanValue(allocator: std.mem.Allocator, target: []const u8, command_text: ?[]const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "target", .{ .string = try allocator.dupe(u8, target) });
@@ -998,6 +1065,7 @@ fn targetPlanValue(allocator: std.mem.Allocator, target: []const u8, command_tex
     return .{ .object = obj };
 }
 
+/// Invokes runtime class with caller-owned inputs; command and allocation failures propagate.
 fn runtimeClass(target: []const u8) []const u8 {
     if (std.mem.indexOf(u8, target, "wasm") != null) return "wasm";
     if (std.mem.indexOf(u8, target, "freestanding") != null or std.mem.indexOf(u8, target, "none") != null) return "bare_metal";
@@ -1006,6 +1074,7 @@ fn runtimeClass(target: []const u8) []const u8 {
     return "unknown";
 }
 
+/// Implements qemu default for target workflow logic using caller-owned inputs.
 fn qemuDefaultForTarget(target: []const u8) []const u8 {
     if (std.mem.indexOf(u8, target, "aarch64") != null) return "qemu-aarch64";
     if (std.mem.indexOf(u8, target, "arm") != null) return "qemu-arm";
@@ -1015,6 +1084,7 @@ fn qemuDefaultForTarget(target: []const u8) []const u8 {
     return "qemu-system";
 }
 
+/// Serializes embedded detect fields into an allocator-owned JSON value; allocation failures propagate.
 fn embeddedDetectValue(allocator: std.mem.Allocator, a: *App, limit: usize) !std.json.Value {
     var signals = std.json.Array.init(allocator);
     const scan = try a.workspace.scanDirectory(allocator, ".", null);
@@ -1043,10 +1113,12 @@ fn embeddedDetectValue(allocator: std.mem.Allocator, a: *App, limit: usize) !std
     return .{ .object = obj };
 }
 
+/// Reports whether embedded path matches the caller-provided data.
 fn looksEmbeddedPath(path: []const u8) bool {
     return containsAny(path, &.{ "microzig", "board", "boards", "linker", ".ld", "memory", "firmware", "flash", "openocd" });
 }
 
+/// Implements embedded signal workflow logic using caller-owned inputs.
 fn embeddedSignal(path: []const u8, bytes: []const u8) []const u8 {
     if (containsAny(bytes, &.{ "microzig", "MicroZig" })) return "microzig";
     if (containsAny(path, &.{ ".ld", "linker" })) return "linker_script";
@@ -1055,6 +1127,7 @@ fn embeddedSignal(path: []const u8, bytes: []const u8) []const u8 {
     return "embedded_path";
 }
 
+/// Implements first embedded signal index workflow logic using caller-owned inputs.
 fn firstEmbeddedSignalIndex(bytes: []const u8) usize {
     var best: ?usize = null;
     const needles = [_][]const u8{ "microzig", "MicroZig", "flash", "linker", "rp2040", "stm32", "nrf52", "cortex_m" };
@@ -1064,6 +1137,7 @@ fn firstEmbeddedSignalIndex(bytes: []const u8) usize {
     return best orelse 0;
 }
 
+/// Implements board target workflow logic using caller-owned inputs.
 fn boardTarget(board: []const u8) []const u8 {
     if (containsAny(board, &.{ "rp2040", "pico" })) return "thumb-freestanding-eabi";
     if (containsAny(board, &.{ "stm32", "nrf", "cortex" })) return "thumb-freestanding-eabi";
@@ -1071,10 +1145,12 @@ fn boardTarget(board: []const u8) []const u8 {
     return "project_defined";
 }
 
+/// Reports whether cortex board matches the caller-provided data.
 fn isCortexBoard(board: []const u8) bool {
     return containsAny(board, &.{ "rp2040", "pico", "stm32", "nrf", "cortex" });
 }
 
+/// Implements flash command workflow logic using caller-owned inputs.
 fn flashCommand(allocator: std.mem.Allocator, flash_tool: []const u8, board: ?[]const u8, image: ?[]const u8) ![]const u8 {
     if (std.mem.indexOf(u8, flash_tool, "probe-rs") != null) {
         return std.fmt.allocPrint(allocator, "{s} download --chip {s} {s}", .{ flash_tool, board orelse "<chip>", image orelse "<firmware>" });
@@ -1085,6 +1161,7 @@ fn flashCommand(allocator: std.mem.Allocator, flash_tool: []const u8, board: ?[]
     return std.fmt.allocPrint(allocator, "{s} <flash args for {s}> {s}", .{ flash_tool, board orelse "<board>", image orelse "<firmware>" });
 }
 
+/// Serializes base fields into an allocator-owned JSON value; allocation failures propagate.
 fn baseValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, evidence_basis: []const u8, confidence: []const u8, limitations: []const []const u8) !std.json.ObjectMap {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = kind });
@@ -1104,6 +1181,7 @@ fn baseValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, evidence_b
     return obj;
 }
 
+/// Serializes backend status fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendStatusValue(allocator: std.mem.Allocator, backend: []const u8, ok: bool, status: []const u8, resolution: []const u8, configured_path: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "backend", .{ .string = backend });
@@ -1114,6 +1192,7 @@ fn backendStatusValue(allocator: std.mem.Allocator, backend: []const u8, ok: boo
     return .{ .object = obj };
 }
 
+/// Serializes platform fields into an allocator-owned JSON value; allocation failures propagate.
 fn platformValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "os", .{ .string = a.context.platform.os });
@@ -1121,6 +1200,7 @@ fn platformValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes toolchain fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "zig_path", .{ .string = a.config.zig_path });
@@ -1130,6 +1210,7 @@ fn toolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Implements toolchain provenance workflow logic using caller-owned inputs.
 fn toolchainProvenance(a: *App) artifacts.Toolchain {
     return .{
         .zig_path = a.config.zig_path,
@@ -1139,6 +1220,7 @@ fn toolchainProvenance(a: *App) artifacts.Toolchain {
     };
 }
 
+/// Implements unsupported backend result workflow logic using caller-owned inputs.
 fn unsupportedBackendResult(a: *App, allocator: std.mem.Allocator, backend: []const u8, operation: []const u8, resolution: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -1152,6 +1234,7 @@ fn unsupportedBackendResult(a: *App, allocator: std.mem.Allocator, backend: []co
     return structured(allocator, .{ .object = obj });
 }
 
+/// Writes evidence artifact fields to the provided JSON stream and propagates writer failures.
 fn writeEvidenceArtifact(a: *App, allocator: std.mem.Allocator, path: []const u8, value: std.json.Value, producer: []const u8, artifact_kind: []const u8, argv: []const []const u8, backend: []const u8, target: []const u8, notes: []const u8) !void {
     const bytes = try serializeAlloc(allocator, value);
     try a.workspace.putFile(path, bytes);
@@ -1173,6 +1256,7 @@ fn writeEvidenceArtifact(a: *App, allocator: std.mem.Allocator, path: []const u8
     }, bytes);
 }
 
+/// Serializes artifact identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn artifactIdentityValue(allocator: std.mem.Allocator, a: *App, path: []const u8, bytes: []const u8) !std.json.Value {
     const resolved_abs = try a.workspace.resolveOutput(path);
     defer a.workspace.allocator.free(resolved_abs);
@@ -1185,6 +1269,7 @@ fn artifactIdentityValue(allocator: std.mem.Allocator, a: *App, path: []const u8
     return .{ .object = obj };
 }
 
+/// Builds preimage identity metadata for the requested workspace path.
 fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
     const bytes = a.workspace.readFileAlloc(a.io, path, max_evidence_bytes) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
@@ -1195,6 +1280,7 @@ fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const 
     return preimageValue(allocator, true, bytes.len, hash);
 }
 
+/// Serializes preimage fields into an allocator-owned JSON value; allocation failures propagate.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exists", .{ .bool = exists });
@@ -1203,11 +1289,13 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     return .{ .object = obj };
 }
 
+/// Implements identity from text workflow logic using caller-owned inputs.
 fn identityFromText(allocator: std.mem.Allocator, text: []const u8, prefix: []const u8) !std.json.Value {
     const hash = try artifacts.sha256Hex(allocator, text);
     return .{ .string = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ prefix, hash[0..@min(16, hash.len)] }) };
 }
 
+/// Implements concat argv workflow logic using caller-owned inputs.
 fn concatArgv(allocator: std.mem.Allocator, prefix: []const []const u8, rest: []const []const u8) ![]const []const u8 {
     var list = std.ArrayList([]const u8).empty;
     try list.appendSlice(allocator, prefix);
@@ -1215,21 +1303,25 @@ fn concatArgv(allocator: std.mem.Allocator, prefix: []const []const u8, rest: []
     return list.items;
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
 }
 
+/// Extracts string or null data from JSON input without taking ownership of borrowed values.
 fn stringOrNull(value: ?[]const u8) std.json.Value {
     return if (value) |text| .{ .string = text } else .null;
 }
 
+/// Implements pct delta workflow logic using caller-owned inputs.
 fn pctDelta(before: usize, after: usize) f64 {
     if (before == 0) return 0;
     return ((@as(f64, @floatFromInt(after)) - @as(f64, @floatFromInt(before))) / @as(f64, @floatFromInt(before))) * 100.0;
 }
 
+/// Implements count needle workflow logic using caller-owned inputs.
 fn countNeedle(text: []const u8, needle: []const u8) usize {
     var count: usize = 0;
     var rest = text;
@@ -1240,11 +1332,13 @@ fn countNeedle(text: []const u8, needle: []const u8) usize {
     return count;
 }
 
+/// Reports whether any matches the caller-provided data.
 fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
     for (needles) |needle| if (std.mem.indexOf(u8, haystack, needle) != null) return true;
     return false;
 }
 
+/// Releases argv allocations; callers must not reuse freed items.
 fn freeArgv(allocator: std.mem.Allocator, argv: []const []const u8) void {
     for (argv) |arg| allocator.free(arg);
     allocator.free(argv);
@@ -1839,6 +1933,7 @@ test "diagnostics private helpers cover classifier and serializer edge cases" {
     try std.testing.expect(std.mem.startsWith(u8, identity.string, "diag:"));
 }
 
+/// Builds a test app fixture with the ports needed by this workflow.
 fn diagnosticsTestApp(
     allocator: std.mem.Allocator,
     workspace_store: test_ports.WorkspaceStore,
@@ -1873,30 +1968,36 @@ fn diagnosticsTestApp(
     }, allocator);
 }
 
+/// Parses test args input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseTestArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
     return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
 }
 
+/// Implements expect kind workflow logic using caller-owned inputs.
 fn expectKind(result: Result, expected: []const u8) !void {
     try expectStringField(result, "kind", expected);
 }
 
+/// Implements expect string field workflow logic using caller-owned inputs.
 fn expectStringField(result: Result, field: []const u8, expected: []const u8) !void {
     try std.testing.expect(result.value == .object);
     try std.testing.expectEqualStrings(expected, result.value.object.get(field).?.string);
 }
 
+/// Implements expect nested string workflow logic using caller-owned inputs.
 fn expectNestedString(result: Result, object_field: []const u8, field: []const u8, expected: []const u8) !void {
     try std.testing.expect(result.value == .object);
     try std.testing.expectEqualStrings(expected, result.value.object.get(object_field).?.object.get(field).?.string);
 }
 
+/// Implements expect backend error workflow logic using caller-owned inputs.
 fn expectBackendError(result: Result, backend: []const u8, error_kind: []const u8) !void {
     try expectKind(result, "backend_error");
     try expectStringField(result, "backend", backend);
     try expectStringField(result, "error_kind", error_kind);
 }
 
+/// Implements unavailable probe workflow logic using caller-owned inputs.
 fn unavailableProbe(backend: []const u8, argv: []const []const u8) test_ports.BackendProbeRequest {
     return .{
         .backend = backend,
@@ -1923,10 +2024,12 @@ const RecordingWorkspaceStore = struct {
         bytes: []u8,
     };
 
+    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator) RecordingWorkspaceStore {
         return .{ .allocator = allocator };
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *RecordingWorkspaceStore) void {
         for (self.files.items) |file| {
             self.allocator.free(file.path);
@@ -1943,6 +2046,7 @@ const RecordingWorkspaceStore = struct {
         self.* = undefined;
     }
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *RecordingWorkspaceStore) test_ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -1955,6 +2059,7 @@ const RecordingWorkspaceStore = struct {
         };
     }
 
+    /// Implements put fixture workflow logic using caller-owned inputs.
     fn putFixture(self: *RecordingWorkspaceStore, path: []const u8, bytes: []const u8) !void {
         try self.files.append(self.allocator, .{
             .path = try self.allocator.dupe(u8, path),
@@ -1962,15 +2067,18 @@ const RecordingWorkspaceStore = struct {
         });
     }
 
+    /// Implements put scan entries workflow logic using caller-owned inputs.
     fn putScanEntries(self: *RecordingWorkspaceStore, entries: []const []const u8) !void {
         for (entries) |entry| try self.scan_entries.append(self.allocator, try self.allocator.dupe(u8, entry));
     }
 
+    /// Resolves resolve from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
     fn resolve(_: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceResolveRequest) test_ports.PortError!test_ports.WorkspaceResolveResult {
         const path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path});
         return .{ .path = path, .owns_path = true };
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceReadRequest) test_ports.PortError!test_ports.WorkspaceReadResult {
         const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
         for (self.files.items) |file| {
@@ -1982,6 +2090,7 @@ const RecordingWorkspaceStore = struct {
         return error.FileNotFound;
     }
 
+    /// Writes write fields to the provided JSON stream and propagates writer failures.
     fn write(ptr: *anyopaque, request: test_ports.WorkspaceWriteRequest) test_ports.PortError!test_ports.WorkspaceWriteResult {
         const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
         try self.write_records.append(self.allocator, .{
@@ -1991,6 +2100,7 @@ const RecordingWorkspaceStore = struct {
         return .{ .bytes_written = request.bytes.len, .replaced_existing = true };
     }
 
+    /// Scans fixture workspace entries and returns matching paths.
     fn scanDirectory(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceDirectoryScanRequest) test_ports.PortError!test_ports.WorkspaceDirectoryScanResult {
         _ = request;
         const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
@@ -2010,10 +2120,12 @@ const RecordingArtifactStore = struct {
         bytes_len: usize,
     };
 
+    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator) RecordingArtifactStore {
         return .{ .allocator = allocator };
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *RecordingArtifactStore) void {
         for (self.records.items) |record| {
             self.allocator.free(record.path);
@@ -2023,6 +2135,7 @@ const RecordingArtifactStore = struct {
         self.* = undefined;
     }
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *RecordingArtifactStore) test_ports.ArtifactStore {
         return .{
             .ptr = self,
@@ -2034,14 +2147,17 @@ const RecordingArtifactStore = struct {
         };
     }
 
+    /// Stores workspace fixture bytes for the requested path.
     fn put(_: *anyopaque, _: std.mem.Allocator, _: test_ports.ArtifactWriteRequest) test_ports.PortError!test_ports.ArtifactRef {
         return error.UnexpectedCall;
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(_: *anyopaque, _: std.mem.Allocator, _: test_ports.ArtifactReadRequest) test_ports.PortError!test_ports.ArtifactReadResult {
         return error.UnexpectedCall;
     }
 
+    /// Implements record workspace workflow logic using caller-owned inputs.
     fn recordWorkspace(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceArtifactRecordRequest) test_ports.PortError!test_ports.WorkspaceArtifactRef {
         const self: *RecordingArtifactStore = @ptrCast(@alignCast(ptr));
         try self.records.append(self.allocator, .{

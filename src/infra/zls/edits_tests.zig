@@ -5,12 +5,14 @@ const lspPositionToByteOffset = edits.lspPositionToByteOffset;
 const applyTextEdits = edits.applyTextEdits;
 const unifiedDiff = edits.unifiedDiff;
 
+/// Records an expected apply text edits error call, cloning request data and failing on allocation errors.
 fn expectApplyTextEditsError(source: []const u8, edits_json: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, edits_json, .{});
     defer parsed.deinit();
     try std.testing.expectError(error.InvalidTextEdit, applyTextEdits(std.testing.allocator, source, parsed.value));
 }
 
+/// Records an expected apply text edits call, cloning request data and failing on allocation errors.
 fn expectApplyTextEdits(source: []const u8, edits_json: []const u8, expected: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, edits_json, .{});
     defer parsed.deinit();

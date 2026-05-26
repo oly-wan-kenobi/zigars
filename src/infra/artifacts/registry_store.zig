@@ -39,6 +39,7 @@ pub const Store = struct {
         };
     }
 
+    /// Writes an artifact through this port implementation.
     fn put(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ArtifactWriteRequest) ports.PortError!ports.ArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const rel_path = artifactPath(allocator, request.namespace, request.name) catch |err| return mapPortError(err);
@@ -90,6 +91,7 @@ pub const Store = struct {
         };
     }
 
+    /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ArtifactReadRequest) ports.PortError!ports.ArtifactReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (!safeArtifactId(request.id)) return error.InvalidRequest;
@@ -103,6 +105,7 @@ pub const Store = struct {
         };
     }
 
+    /// Records a workspace artifact through this port implementation.
     fn recordWorkspace(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceArtifactRecordRequest) ports.PortError!ports.WorkspaceArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = if (request.bytes) |provided| provided else blk: {
@@ -170,11 +173,13 @@ pub const Store = struct {
     }
 };
 
+/// Builds the on-disk path for an artifact payload.
 fn artifactPath(allocator: std.mem.Allocator, namespace: []const u8, name: []const u8) ![]u8 {
     if (!safeRelativeComponent(namespace) or !safeRelativeComponent(name)) return error.InvalidArguments;
     return std.fs.path.join(allocator, &.{ artifact_root, namespace, name });
 }
 
+/// Validates that an artifact identifier is safe for storage paths.
 fn safeArtifactId(id: []const u8) bool {
     if (id.len == 0) return false;
     if (std.fs.path.isAbsolute(id)) return false;
@@ -192,6 +197,7 @@ fn safeArtifactId(id: []const u8) bool {
     return part_index >= 2;
 }
 
+/// Validates one artifact identifier segment.
 fn safeArtifactIdPart(index: usize, part: []const u8) bool {
     if (part.len == 0) return false;
     if (std.mem.eql(u8, part, ".") or std.mem.eql(u8, part, "..")) return false;
@@ -203,6 +209,7 @@ fn safeArtifactIdPart(index: usize, part: []const u8) bool {
     };
 }
 
+/// Rejects path components that could escape the artifact root.
 fn safeRelativeComponent(value: []const u8) bool {
     if (value.len == 0) return false;
     if (std.fs.path.isAbsolute(value)) return false;
@@ -215,11 +222,13 @@ fn safeRelativeComponent(value: []const u8) bool {
     return safePathPart(value[start..]);
 }
 
+/// Validates a path segment before writing artifact metadata.
 fn safePathPart(value: []const u8) bool {
     if (value.len == 0) return true;
     return !std.mem.eql(u8, value, ".") and !std.mem.eql(u8, value, "..");
 }
 
+/// Converts a timestamp to Unix milliseconds for metadata.
 fn unixMs(io: std.Io) i64 {
     return @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
 }

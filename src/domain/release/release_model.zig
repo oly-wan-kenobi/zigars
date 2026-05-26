@@ -213,6 +213,7 @@ fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.ArrayList(
     });
 }
 
+/// Returns whether a release plan includes missing-evidence findings.
 fn hasMissingEvidence(checks: []const EvidenceCheck) bool {
     for (checks) |check| {
         if (!check.observed) return true;
@@ -220,6 +221,7 @@ fn hasMissingEvidence(checks: []const EvidenceCheck) bool {
     return false;
 }
 
+/// Builds allocator-owned release notes markdown from release evidence.
 fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, sections: []const ReleaseNoteSection) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
@@ -231,6 +233,7 @@ fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, secti
     return try out.toOwnedSlice();
 }
 
+/// Returns whether any needle appears in haystack with ASCII-insensitive matching.
 fn containsAnyIgnoreCase(haystacks: []const []const u8, needles: []const []const u8) bool {
     for (haystacks) |haystack| {
         for (needles) |needle| {
@@ -240,6 +243,7 @@ fn containsAnyIgnoreCase(haystacks: []const []const u8, needles: []const []const
     return false;
 }
 
+/// Returns the byte index of an ASCII-insensitive match when present.
 fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
     if (needle.len == 0) return 0;
     if (needle.len > haystack.len) return null;
@@ -265,6 +269,7 @@ test "release short string truncation cleans partial allocations" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, truncateWithAllocator, .{});
 }
 
+/// Returns an owned trimmed string capped to a byte limit.
 fn truncateWithAllocator(allocator: std.mem.Allocator) !void {
     const value = try shortString(allocator, "abcdef", 3);
     defer allocator.free(value);

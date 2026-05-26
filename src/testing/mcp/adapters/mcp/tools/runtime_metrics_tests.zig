@@ -6,6 +6,7 @@ const mcp_result = @import("../../../../../adapters/mcp/result.zig");
 const runtime_metrics = @import("../../../../../adapters/mcp/tools/runtime_metrics.zig");
 
 test "metrics v2 adapter exposes observed latency and backend history" {
+    // Fixture context shared by related test cases.
     const TestContext = struct {
         var tool_stats = [_]ports.ObservabilityToolStats{
             .{ .name = "zig_version", .calls = 1, .total_latency_ms = 3, .max_latency_ms = 3, .last_latency_ms = 3 },
@@ -91,6 +92,7 @@ test "metrics v2 adapter exposes observed latency and backend history" {
 }
 
 test "timeline adapter returns current snapshot without recorded transitions" {
+    // Fixture context shared by related test cases.
     const TestContext = struct {
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{};

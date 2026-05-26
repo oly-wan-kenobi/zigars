@@ -130,6 +130,7 @@ pub fn findSample(set: BenchSet, name: []const u8) ?BenchSample {
     return null;
 }
 
+/// Parses JSON evidence into owned model data; invalid shape and allocation failures are returned.
 fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !BenchSet {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
     defer parsed.deinit();
@@ -149,6 +150,7 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     return set;
 }
 
+/// Selects the benchmark array root from known JSON evidence shapes.
 fn benchRoot(value: std.json.Value) std.json.Value {
     if (value == .object) {
         if (value.object.get("benchmarks")) |benchmarks| return benchmarks;
@@ -158,8 +160,10 @@ fn benchRoot(value: std.json.Value) std.json.Value {
     return value;
 }
 
+/// Borrowed benchmark timing parsed from one text output line.
 const Timing = struct { name: []const u8, ns_per_iter: f64 };
 
+/// Parses a text benchmark timing line into borrowed name and numeric timing fields.
 fn parseTimingLine(line: []const u8) ?Timing {
     var last_number_start: ?usize = null;
     var i: usize = 0;
@@ -190,6 +194,7 @@ fn parseTimingLine(line: []const u8) ?Timing {
     return .{ .name = name, .ns_per_iter = value * scale };
 }
 
+/// Builds an owned benchmark delta, duplicating the benchmark name.
 fn delta(allocator: std.mem.Allocator, name: []const u8, baseline_ns: f64, current_ns: f64, pct: f64) !BenchDelta {
     return .{
         .name = try allocator.dupe(u8, name),
@@ -199,10 +204,12 @@ fn delta(allocator: std.mem.Allocator, name: []const u8, baseline_ns: f64, curre
     };
 }
 
+/// Frees owned benchmark delta names inside a delta slice.
 fn freeDeltas(allocator: std.mem.Allocator, deltas: []BenchDelta) void {
     for (deltas) |item| allocator.free(item.name);
 }
 
+/// Returns the array length for JSON arrays and zero for other shapes.
 fn jsonArrayLength(value: std.json.Value) usize {
     return switch (value) {
         .array => |array| array.items.len,
@@ -210,6 +217,7 @@ fn jsonArrayLength(value: std.json.Value) usize {
     };
 }
 
+/// Extracts the worst regression percentage from a JSON delta array.
 fn worstRegressionFromArray(value: ?std.json.Value) f64 {
     const regressions = value orelse return 0;
     if (regressions != .array) return 0;
@@ -223,6 +231,7 @@ fn worstRegressionFromArray(value: ?std.json.Value) f64 {
     return worst;
 }
 
+/// Reads a numeric field from a JSON object as f64 when possible.
 fn floatField(obj: std.json.ObjectMap, name: []const u8) ?f64 {
     const value = obj.get(name) orelse return null;
     return switch (value) {
@@ -233,6 +242,7 @@ fn floatField(obj: std.json.ObjectMap, name: []const u8) ?f64 {
     };
 }
 
+/// Reads a string field from a JSON object without taking ownership.
 fn stringField(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     const value = obj.get(name) orelse return null;
     return switch (value) {

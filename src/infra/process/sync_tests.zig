@@ -3,11 +3,13 @@ const sync = @import("sync.zig");
 
 const Mutex = sync.Mutex;
 
+/// Shared counters used to prove the mutex protects concurrent increments.
 const StressState = struct {
     mutex: Mutex = .{},
     counter: usize = 0,
 };
 
+/// Increments the shared counter enough times to exercise mutex protection.
 fn stressWorker(state: *StressState) void {
     var i: usize = 0;
     while (i < 2000) : (i += 1) {

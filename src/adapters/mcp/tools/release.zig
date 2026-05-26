@@ -12,6 +12,7 @@ const docs_domain = @import("../../../domain/release/docs_index.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Schema version emitted in structured release and drift contract payloads.
 const schema_version = 1;
 
 /// Handles MCP `zig_ci_annotations` requests by delegating to app logic and shaping owned results/errors.
@@ -312,6 +313,7 @@ pub fn zigReadmeCommandCheck(allocator: std.mem.Allocator, context: app_context.
     return mcp_result.structured(allocator, value);
 }
 
+/// Invokes a release workflow and maps the result to MCP output.
 fn invokeWorkflow(
     allocator: std.mem.Allocator,
     context: app_context.ReleaseWorkflowContext,
@@ -324,6 +326,7 @@ fn invokeWorkflow(
     return finishWorkflowResult(allocator, result);
 }
 
+/// Invokes a CI evidence workflow and maps the result to MCP output.
 fn invokeCi(
     allocator: std.mem.Allocator,
     context: app_context.ReleaseWorkflowContext,
@@ -336,6 +339,7 @@ fn invokeCi(
     return finishWorkflowResult(allocator, result);
 }
 
+/// Invokes a release drift workflow and maps the result to MCP output.
 fn invokeDrift(
     allocator: std.mem.Allocator,
     context: app_context.ReleaseWorkflowContext,
@@ -348,6 +352,7 @@ fn invokeDrift(
     return finishWorkflowResult(allocator, result);
 }
 
+/// Returns the MCP tool result for finish workflow.
 fn finishWorkflowResult(allocator: std.mem.Allocator, result: workflows.Result) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (result.is_error) {
         defer mcp_result.deinitOwnedValue(allocator, result.value);
@@ -356,6 +361,7 @@ fn finishWorkflowResult(allocator: std.mem.Allocator, result: workflows.Result) 
     return mcp_result.structuredOwned(allocator, result.value);
 }
 
+/// Maps workflow usecase error failures to structured MCP errors.
 fn workflowUsecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
@@ -368,6 +374,7 @@ fn workflowUsecaseError(allocator: std.mem.Allocator, tool_name: []const u8, ope
     }, err);
 }
 
+/// Routes documentation query arguments to the requested docs workflow.
 fn docsQueryTool(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value, tool_name: []const u8, query: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -377,6 +384,7 @@ fn docsQueryTool(allocator: std.mem.Allocator, context: app_context.ReleaseDocsC
     return mcp_result.structured(allocator, value);
 }
 
+/// Returns an allocator-owned JSON value for source.
 fn sourceValue(allocator: std.mem.Allocator, source: docs_domain.Source) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = source.id });
@@ -400,6 +408,7 @@ fn sourceValue(allocator: std.mem.Allocator, source: docs_domain.Source) !std.js
     return .{ .object = obj };
 }
 
+/// Adds contract fields to an allocator-owned JSON object.
 fn putContractFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, source: docs_domain.Source, contract: docs_domain.Contract) !void {
     try obj.put(allocator, "source", try sourceValue(allocator, source));
     try obj.put(allocator, "completeness_level", .{ .string = source.completeness.text() });
@@ -410,6 +419,7 @@ fn putContractFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, sou
     try obj.put(allocator, "ranking", .{ .string = contract.ranking });
 }
 
+/// Returns an allocator-owned JSON value for builtin list.
 fn builtinListValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinListResult) !std.json.Value {
     var items = std.json.Array.init(allocator);
     for (docs_domain.builtins) |item| try items.append(try builtinItemValue(allocator, item, null));
@@ -424,6 +434,7 @@ fn builtinListValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinLis
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for builtin doc.
 fn builtinDocValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocResult) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try builtinItemValue(allocator, match.item, match.rank));
@@ -440,6 +451,7 @@ fn builtinDocValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocR
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for builtin item.
 fn builtinItemValue(allocator: std.mem.Allocator, item: docs_domain.BuiltinDoc, rank: ?usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     if (rank) |value_rank| try obj.put(allocator, "rank", .{ .integer = @intCast(value_rank) });
@@ -449,6 +461,7 @@ fn builtinItemValue(allocator: std.mem.Allocator, item: docs_domain.BuiltinDoc, 
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for builtin index metadata.
 fn builtinIndexMetadataValue(allocator: std.mem.Allocator, input: docs_domain.BuiltinIndexInput) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "index_strategy", .{ .string = "curated_builtin_index" });
@@ -471,6 +484,7 @@ fn builtinIndexMetadataValue(allocator: std.mem.Allocator, input: docs_domain.Bu
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for std search.
 fn stdSearchValue(allocator: std.mem.Allocator, result: docs_domain.StdSearchResult) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try stdSourceMatchValue(allocator, match));
@@ -492,6 +506,7 @@ fn stdSearchValue(allocator: std.mem.Allocator, result: docs_domain.StdSearchRes
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for std source match.
 fn stdSourceMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdSourceMatch) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "rank", .{ .integer = @intCast(match.rank) });
@@ -509,6 +524,7 @@ fn stdSourceMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdSourc
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for std item.
 fn stdItemValue(allocator: std.mem.Allocator, result: docs_domain.StdItemResult) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try stdItemMatchValue(allocator, match));
@@ -533,6 +549,7 @@ fn stdItemValue(allocator: std.mem.Allocator, result: docs_domain.StdItemResult)
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for std item match.
 fn stdItemMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdItemMatch) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "rank", .{ .integer = @intCast(match.rank) });
@@ -551,6 +568,7 @@ fn stdItemMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdItemMat
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for std index metadata.
 fn stdIndexMetadataValue(allocator: std.mem.Allocator, std_dir: []const u8, metadata: docs_domain.StdIndexMetadata) !std.json.Value {
     var roots = std.json.Array.init(allocator);
     try roots.append(.{ .string = std_dir });
@@ -569,6 +587,7 @@ fn stdIndexMetadataValue(allocator: std.mem.Allocator, std_dir: []const u8, meta
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for langref.
 fn langrefValue(allocator: std.mem.Allocator, result: docs_domain.LangrefSearchResult) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try langrefMatchValue(allocator, match));
@@ -586,6 +605,7 @@ fn langrefValue(allocator: std.mem.Allocator, result: docs_domain.LangrefSearchR
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for langref match.
 fn langrefMatchValue(allocator: std.mem.Allocator, match: docs_domain.LangrefMatch) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "rank", .{ .integer = @intCast(match.rank) });
@@ -599,6 +619,7 @@ fn langrefMatchValue(allocator: std.mem.Allocator, match: docs_domain.LangrefMat
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for langref index metadata.
 fn langrefIndexMetadataValue(allocator: std.mem.Allocator, metadata: docs_domain.LangrefIndexMetadata) !std.json.Value {
     var roots = std.json.Array.init(allocator);
     if (metadata.source_path) |path| try roots.append(.{ .string = path });
@@ -621,6 +642,7 @@ fn langrefIndexMetadataValue(allocator: std.mem.Allocator, metadata: docs_domain
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for docs index build.
 fn docsIndexBuildValue(allocator: std.mem.Allocator, result: docs_domain.DocsIndexResult) !std.json.Value {
     var entries = std.json.Array.init(allocator);
     for (result.entries) |entry| try entries.append(try docsEntryValue(allocator, entry));
@@ -643,6 +665,7 @@ fn docsIndexBuildValue(allocator: std.mem.Allocator, result: docs_domain.DocsInd
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for docs entry.
 fn docsEntryValue(allocator: std.mem.Allocator, entry: docs_domain.DocsEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", .{ .string = entry.path });
@@ -652,6 +675,7 @@ fn docsEntryValue(allocator: std.mem.Allocator, entry: docs_domain.DocsEntry) !s
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for docs query.
 fn docsQueryValue(allocator: std.mem.Allocator, kind: []const u8, result: docs_domain.DocsQueryResult) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try docsMatchValue(allocator, match));
@@ -669,6 +693,7 @@ fn docsQueryValue(allocator: std.mem.Allocator, kind: []const u8, result: docs_d
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for docs match.
 fn docsMatchValue(allocator: std.mem.Allocator, match: docs_domain.DocsMatch) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", .{ .string = match.path });
@@ -679,6 +704,7 @@ fn docsMatchValue(allocator: std.mem.Allocator, match: docs_domain.DocsMatch) !s
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for autodoc ingest.
 fn autodocIngestValue(allocator: std.mem.Allocator, result: docs_domain.AutodocIngestResult) !std.json.Value {
     var entries = std.json.Array.init(allocator);
     for (result.entries) |entry| try entries.append(try autodocEntryValue(allocator, entry));
@@ -693,6 +719,7 @@ fn autodocIngestValue(allocator: std.mem.Allocator, result: docs_domain.AutodocI
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for autodoc entry.
 fn autodocEntryValue(allocator: std.mem.Allocator, entry: docs_domain.AutodocEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     if (std.mem.eql(u8, entry.source_family, "autodoc_json")) {
@@ -708,6 +735,7 @@ fn autodocEntryValue(allocator: std.mem.Allocator, entry: docs_domain.AutodocEnt
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for doc example check.
 fn docExampleCheckValue(allocator: std.mem.Allocator, result: docs_domain.DocExampleCheckResult) !std.json.Value {
     var snippets = std.json.Array.init(allocator);
     for (result.snippets) |snippet| try snippets.append(try snippetCheckValue(allocator, snippet));
@@ -724,6 +752,7 @@ fn docExampleCheckValue(allocator: std.mem.Allocator, result: docs_domain.DocExa
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for snippet check.
 fn snippetCheckValue(allocator: std.mem.Allocator, result: docs_domain.SnippetCheck) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "label", .{ .string = result.label });
@@ -735,6 +764,7 @@ fn snippetCheckValue(allocator: std.mem.Allocator, result: docs_domain.SnippetCh
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for readme command check.
 fn readmeCommandCheckValue(allocator: std.mem.Allocator, result: docs_domain.ReadmeCommandCheckResult) !std.json.Value {
     var commands = std.json.Array.init(allocator);
     for (result.commands) |command| try commands.append(try readmeCommandValue(allocator, command));
@@ -748,6 +778,7 @@ fn readmeCommandCheckValue(allocator: std.mem.Allocator, result: docs_domain.Rea
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for readme command.
 fn readmeCommandValue(allocator: std.mem.Allocator, command: docs_domain.ReadmeCommand) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "line", .{ .integer = @intCast(command.line) });
@@ -758,6 +789,7 @@ fn readmeCommandValue(allocator: std.mem.Allocator, command: docs_domain.ReadmeC
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for raw reference.
 fn rawReferenceValue(allocator: std.mem.Allocator, reference: docs_domain.RawReference) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source_kind", .{ .string = reference.source_kind });
@@ -767,6 +799,7 @@ fn rawReferenceValue(allocator: std.mem.Allocator, reference: docs_domain.RawRef
     return .{ .object = obj };
 }
 
+/// Serializes builtin index results for text-only docs responses.
 fn builtinListText(allocator: std.mem.Allocator, result: docs_domain.BuiltinListResult) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     try appendSourceText(allocator, &out, docs_domain.curatedBuiltinsSource());
@@ -777,6 +810,7 @@ fn builtinListText(allocator: std.mem.Allocator, result: docs_domain.BuiltinList
     return out.toOwnedSlice(allocator);
 }
 
+/// Serializes builtin documentation results for text-only docs responses.
 fn builtinDocText(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocResult) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     try appendSourceText(allocator, &out, docs_domain.curatedBuiltinsSource());
@@ -795,6 +829,7 @@ fn builtinDocText(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocRe
     return out.toOwnedSlice(allocator);
 }
 
+/// Appends builtin index metadata text to the caller-provided output list.
 fn appendBuiltinIndexMetadataText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), input: docs_domain.BuiltinIndexInput) !void {
     try out.print(allocator, "Index strategy: curated_builtin_index\nCurated entries: {d}\n", .{docs_domain.builtins.len});
     const drift = input.drift orelse docs_domain.BuiltinDriftInfo{ .status = if (input.toolchain_version == null) "toolchain_version_unavailable" else "toolchain_version_recorded_builtin_set_not_extracted", .confidence = "version_only" };
@@ -807,6 +842,7 @@ fn appendBuiltinIndexMetadataText(allocator: std.mem.Allocator, out: *std.ArrayL
     try out.print(allocator, "Drift check: {s}\nDrift confidence: {s}\nActive builtins: {d}\nCurated missing: {d}\nActive extras: {d}\n\n", .{ drift.status, drift.confidence, drift.active_count, drift.curated_missing_count, drift.active_extra_count });
 }
 
+/// Returns an allocator-owned JSON value for std search text from.
 fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     const obj = value.object;
     var out: std.ArrayList(u8) = .empty;
@@ -827,6 +863,7 @@ fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) !
     return out.toOwnedSlice(allocator);
 }
 
+/// Returns an allocator-owned JSON value for std item text from.
 fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     const obj = value.object;
     var out: std.ArrayList(u8) = .empty;
@@ -844,6 +881,7 @@ fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
     return out.toOwnedSlice(allocator);
 }
 
+/// Returns an allocator-owned JSON value for langref text from.
 fn langrefTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     const obj = value.object;
     const source_obj = obj.get("source").?.object;
@@ -873,6 +911,7 @@ fn langrefTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
     return out.toOwnedSlice(allocator);
 }
 
+/// Appends source text to the caller-provided output list.
 fn appendSourceText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: docs_domain.Source) !void {
     try out.print(allocator,
         \\Docs source: {s}
@@ -890,6 +929,7 @@ fn appendSourceText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), sourc
     try out.append(allocator, '\n');
 }
 
+/// Appends contract text to the caller-provided output list.
 fn appendContractText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), contract: docs_domain.Contract) !void {
     if (contract.query) |query| {
         try out.print(allocator, "Query: `{s}`\n", .{query});
@@ -910,6 +950,7 @@ fn appendContractText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), con
     try out.print(allocator, "Ranking: {s}\n\n", .{contract.ranking});
 }
 
+/// Appends source object text to the caller-provided output list.
 fn appendSourceObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source_obj: std.json.ObjectMap) !void {
     try out.print(allocator,
         \\Docs source: {s}
@@ -930,6 +971,7 @@ fn appendSourceObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8),
     try out.append(allocator, '\n');
 }
 
+/// Appends contract object text to the caller-provided output list.
 fn appendContractObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), obj: std.json.ObjectMap) !void {
     const query = obj.get("query").?;
     if (query == .string) {
@@ -953,6 +995,7 @@ fn appendContractObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8
     try out.print(allocator, "Ranking: {s}\n\n", .{obj.get("ranking").?.string});
 }
 
+/// Adds base fields to allocator-owned JSON objects.
 fn putBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, kind: []const u8, evidence_basis: []const u8, confidence: []const u8, limitations: []const []const u8) !void {
     try obj.put(allocator, "kind", .{ .string = kind });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
@@ -961,12 +1004,14 @@ fn putBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, kind: []const
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, limitations));
 }
 
+/// Copies a string slice into an allocator-owned JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
 }
 
+/// Wraps plain text output with a `kind` discriminator for structured tools.
 fn structuredText(allocator: std.mem.Allocator, kind: []const u8, body: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = kind });
@@ -975,6 +1020,7 @@ fn structuredText(allocator: std.mem.Allocator, kind: []const u8, body: []const 
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Builds a release evidence request from MCP arguments.
 fn evidenceRequest(args: ?std.json.Value, provenance: []const u8, require: bool, default_path: ?[]const u8) docs_usecases.EvidenceRequest {
     return .{
         .content = argString(args, "content"),
@@ -985,18 +1031,22 @@ fn evidenceRequest(args: ?std.json.Value, provenance: []const u8, require: bool,
     };
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
+/// Applies runtime UX default and maximum bounds to a requested result limit.
 fn normalizedLimit(args: ?std.json.Value, name: []const u8, default: usize) usize {
     return @intCast(@max(1, argInt(args, name, @intCast(default))));
 }
 
+/// Maps docs error failures to structured MCP errors.
 fn docsError(
     allocator: std.mem.Allocator,
     tool: []const u8,
@@ -1019,6 +1069,7 @@ fn docsError(
     }, err);
 }
 
+/// Maps docs tool error failures to structured MCP errors.
 fn docsToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
@@ -1031,6 +1082,7 @@ fn docsToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
     }, err);
 }
 
+/// Maps docs backend error failures to structured MCP errors.
 fn docsBackendError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror, query: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
@@ -1044,6 +1096,7 @@ fn docsBackendError(allocator: std.mem.Allocator, tool_name: []const u8, operati
     }, err);
 }
 
+/// Maps evidence input error failures to structured MCP errors.
 fn evidenceInputError(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.MissingEvidence => mcp_errors.missingArgument(allocator, tool_name, "content", "inline content or workspace path"),
@@ -1254,22 +1307,26 @@ test "release docs text projections cover text-only and null metadata branches" 
     try std.testing.expect(std.mem.indexOf(u8, object_text.items, "No result reason: not found") != null);
 }
 
+/// Asserts structured kind in adapter tests.
 fn expectStructuredKind(result: mcp.tools.ToolResult, kind: []const u8) !void {
     try std.testing.expect(result.structuredContent != null);
     try std.testing.expectEqualStrings(kind, result.structuredContent.?.object.get("kind").?.string);
 }
 
+/// Asserts no builtin env in adapter tests.
 fn expectNoBuiltinEnv(toolchain: anytype) !void {
     try toolchain.expectGetError(.{ .key = "version", .provenance = "release_docs.builtin_version" }, error.FileNotFound);
     try toolchain.expectGetError(.{ .key = "std_dir", .provenance = "release_docs.builtin_source" }, error.FileNotFound);
 }
 
+/// Asserts std scan in adapter tests.
 fn expectStdScan(toolchain: anytype, scanner: anytype, provenance: []const u8, source: []const u8) !void {
     try toolchain.expectGet(.{ .key = "std_dir", .provenance = provenance }, "/zig/lib/std");
     try scanner.expectAbsoluteScan(.{ .root = "/zig/lib/std", .max_files = docs_domain.default_path_scan_limit, .provenance = "release_docs.std_scan" }, &.{"mem.zig"});
     try scanner.expectRead(.{ .path = "/zig/lib/std/mem.zig", .max_bytes = docs_domain.std_source_read_limit, .provenance = "release_docs.std_read" }, source);
 }
 
+/// Asserts langref in adapter tests.
 fn expectLangref(toolchain: anytype, scanner: anytype, probe: []const u8, html: []const u8) !void {
     try toolchain.expectGet(.{ .key = "lib_dir", .provenance = "release_docs.langref" }, "/zig/lib");
     try scanner.expectRead(.{ .path = "/zig/lib/doc/langref.html", .max_bytes = docs_domain.langref_probe_read_limit, .provenance = "release_docs.langref_probe" }, probe);

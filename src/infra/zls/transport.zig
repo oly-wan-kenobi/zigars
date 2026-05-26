@@ -12,6 +12,7 @@ pub const LspTransport = struct {
         buf_start: usize = 0,
         buf_end: usize = 0,
 
+        /// Creates a reader that borrows the file handle and preserves buffered bytes between messages.
         pub fn init(file: std.Io.File, io: std.Io) Reader {
             return .{ .file = file, .io = io };
         }

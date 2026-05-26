@@ -5,16 +5,19 @@ const server_mod = @import("../../adapters/mcp/server.zig");
 
 const Server = server_mod.Server;
 
+/// Scripted transport that feeds task requests and records outgoing responses.
 const ScriptTransport = struct {
     messages: []const []const u8,
     index: usize = 0,
     sent: std.ArrayList([]const u8) = .empty,
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     fn deinit(self: *ScriptTransport, allocator: std.mem.Allocator) void {
         for (self.sent.items) |message| allocator.free(message);
         self.sent.deinit(allocator);
     }
 
+    /// Returns the transport vtable used by this test double.
     fn transport(self: *ScriptTransport) mcp.transport.Transport {
         return .{
             .ptr = self,
@@ -26,6 +29,7 @@ const ScriptTransport = struct {
         };
     }
 
+    /// Sends a JSON-RPC message through the transport vtable.
     fn sendVtable(ptr: *anyopaque, _: std.Io, allocator: std.mem.Allocator, message: []const u8) mcp.transport.Transport.SendError!void {
         const self: *ScriptTransport = @ptrCast(@alignCast(ptr));
         const owned = allocator.dupe(u8, message) catch return error.OutOfMemory;
@@ -35,6 +39,7 @@ const ScriptTransport = struct {
         };
     }
 
+    /// Receives a JSON-RPC message through the transport vtable.
     fn receiveVtable(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
         const self: *ScriptTransport = @ptrCast(@alignCast(ptr));
         if (self.index >= self.messages.len) return error.EndOfStream;
@@ -43,6 +48,7 @@ const ScriptTransport = struct {
         return message;
     }
 
+    /// Closes the transport through the transport vtable.
     fn closeVtable(_: *anyopaque) void {}
 };
 
@@ -54,6 +60,7 @@ test "task script transport frees messages when recording send fails" {
     transport.transport().close();
 }
 
+/// Joins captured transport sends into a single owned buffer.
 fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     for (transport.sent.items) |message| {
@@ -63,22 +70,27 @@ fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]cons
     return out.toOwnedSlice(allocator);
 }
 
+/// Borrowed job slice wrapper used by the task-state fixture.
 const FixtureSlice = struct {
     value: []const u8,
 
+    /// Returns the borrowed fixture job slice.
     pub fn slice(self: FixtureSlice) []const u8 {
         return self.value;
     }
 };
 
+/// Borrowed task status text exposed through the job view.
 const FixtureStatus = struct {
     value: []const u8,
 
+    /// Returns borrowed catalog text for this entry.
     pub fn text(self: FixtureStatus) []const u8 {
         return self.value;
     }
 };
 
+/// Static task job fixture returned by ID and index lookups.
 const FixtureJob = struct {
     id: FixtureSlice,
     label: FixtureSlice,
@@ -92,11 +104,13 @@ const FixtureJob = struct {
     updated_sequence: u64,
 };
 
+/// Task state facade used to exercise task list, get, and cancel handlers.
 const FixtureTaskState = struct {
     jobs: [3]FixtureJob,
     job_count: usize,
     canceled_reason: ?[]const u8 = null,
 
+    /// Returns a runtime job snapshot by identifier.
     pub fn jobById(self: *FixtureTaskState, id: []const u8) ?*FixtureJob {
         for (self.jobs[0..self.job_count]) |*job| {
             if (std.mem.eql(u8, job.id.value, id)) return job;
@@ -104,6 +118,7 @@ const FixtureTaskState = struct {
         return null;
     }
 
+    /// Cancels a runtime job and records its event.
     pub fn cancelJob(self: *FixtureTaskState, id: []const u8, reason: []const u8) ?*FixtureJob {
         const job = self.jobById(id) orelse return null;
         self.canceled_reason = reason;
@@ -113,6 +128,7 @@ const FixtureTaskState = struct {
     }
 };
 
+/// Builds a task-state facade backed by static fixture jobs.
 fn fixtureTaskState() FixtureTaskState {
     return .{
         .jobs = .{

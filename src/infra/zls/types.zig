@@ -107,6 +107,7 @@ pub const HoverContents = union(enum) {
     }
 };
 
+/// Marked-up hover payload returned by ZLS.
 pub const MarkupContent = struct {
     kind: []const u8 = "markdown",
     value: []const u8,
@@ -164,12 +165,14 @@ pub const SignatureHelp = struct {
     activeParameter: ?u32 = null,
 };
 
+/// Signature help entry with borrowed label and optional documentation.
 pub const SignatureInformation = struct {
     label: []const u8,
     documentation: ?std.json.Value = null,
     parameters: ?[]const ParameterInformation = null,
 };
 
+/// Function parameter label and optional documentation from signature help.
 pub const ParameterInformation = struct {
     label: std.json.Value, // string or [number, number]
     documentation: ?std.json.Value = null,
@@ -183,6 +186,7 @@ pub const CodeAction = struct {
     command: ?Command = null,
 };
 
+/// Code action command payload with optional JSON arguments.
 pub const Command = struct {
     title: []const u8,
     command: []const u8,

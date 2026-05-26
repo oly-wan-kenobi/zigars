@@ -11,6 +11,7 @@ const core_usecase = @import("../../../app/usecases/core/zig_commands.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Protocol metadata value used when command output is shortened instead of rejected.
 const output_limit_mode = "truncate_on_limit";
 
 /// Handles MCP `zig_version` requests by delegating to app logic and shaping owned results/errors.
@@ -266,6 +267,7 @@ pub fn zigTranslateC(
     return commandOutcomeResult(allocator, context, "zig_translate_c", outcome);
 }
 
+/// Returns the MCP tool result for version.
 fn versionResult(allocator: std.mem.Allocator, result: core_usecase.VersionResult) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -285,6 +287,7 @@ fn versionResult(allocator: std.mem.Allocator, result: core_usecase.VersionResul
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns the MCP tool result for version failure.
 fn versionFailureResult(allocator: std.mem.Allocator, failure: core_usecase.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (failure) {
         .command_run => |command_failure| backendErrorResult(allocator, "zig", "version", command_failure.err, "confirm --zig-path points to an executable Zig 0.16.0 binary"),
@@ -293,6 +296,7 @@ fn versionFailureResult(allocator: std.mem.Allocator, failure: core_usecase.Fail
     };
 }
 
+/// Returns the MCP tool result for command outcome.
 fn commandOutcomeResult(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -310,6 +314,7 @@ fn commandOutcomeResult(
     };
 }
 
+/// Returns the MCP tool result for explain failure.
 fn explainFailureResult(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -325,6 +330,7 @@ fn explainFailureResult(
     };
 }
 
+/// Returns the MCP tool result for command failure.
 fn commandFailureResult(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -343,6 +349,7 @@ fn commandFailureResult(
     };
 }
 
+/// Returns the MCP tool result for app argument error.
 fn appArgumentErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, app_error: app_errors.AppError) mcp.tools.ToolError!mcp.tools.ToolResult {
     const field = app_error.field orelse "argument";
     const expected = app_error.expected orelse "valid argument";
@@ -359,6 +366,7 @@ fn appArgumentErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, a
     );
 }
 
+/// Returns an allocator-owned JSON value for command result.
 fn commandResultValue(allocator: std.mem.Allocator, run: core_usecase.CommandRun) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -391,6 +399,7 @@ fn commandResultValue(allocator: std.mem.Allocator, run: core_usecase.CommandRun
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for command error.
 fn commandErrorValue(allocator: std.mem.Allocator, failure: core_usecase.CommandRunFailure) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -415,6 +424,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, failure: core_usecase.Command
     return .{ .object = obj };
 }
 
+/// Returns the MCP tool result for backend error.
 fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -431,6 +441,7 @@ fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, op
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns an allocator-owned JSON value for compiler insights.
 fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
@@ -464,6 +475,7 @@ fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stder
 
 const CompilerLine = compiler_output.CompilerLine;
 
+/// Collects compiler lines into the caller-provided output list.
 fn collectCompilerLines(
     allocator: std.mem.Allocator,
     findings: *std.json.Array,
@@ -490,6 +502,7 @@ fn collectCompilerLines(
     }
 }
 
+/// Returns an allocator-owned JSON value for compiler line.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -514,6 +527,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.js
     return .{ .object = obj };
 }
 
+/// Suggests the next command to run from the primary compiler diagnostic.
 fn compilerNextCommand(allocator: std.mem.Allocator, primary: CompilerLine, argv: []const []const u8) !std.json.Value {
     const zig = if (argv.len > 0) argv[0] else "zig";
     const path = primary.path orelse return .{ .string = try commandString(allocator, argv) };
@@ -526,6 +540,7 @@ fn compilerNextCommand(allocator: std.mem.Allocator, primary: CompilerLine, argv
     return .{ .string = try commandString(allocator, argv) };
 }
 
+/// Builds follow-up action hints for compiler diagnostic summaries.
 fn compilerNextActions(allocator: std.mem.Allocator, primary: CompilerLine, note_count: i64) !std.json.Value {
     var actions = std.json.Array.init(allocator);
     if (primary.path) |path| {
@@ -551,6 +566,7 @@ fn compilerNextActions(allocator: std.mem.Allocator, primary: CompilerLine, note
     return .{ .array = actions };
 }
 
+/// Returns an allocator-owned JSON value for failure summary.
 fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -578,6 +594,7 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for command error summary.
 fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: ports.PortError, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -593,6 +610,7 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: ports.PortError, 
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for likely failure scope.
 fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
     const primary_obj = switch (primary) {
         .object => |o| o,
@@ -607,6 +625,7 @@ fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value
     return .{ .string = try std.fmt.allocPrint(allocator, "path:{s}", .{path}) };
 }
 
+/// Returns an allocator-owned JSON value for command term.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -622,6 +641,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
+/// Returns a fallback marker when command output cannot be copied into JSON.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !struct {
     text: []const u8,
     invalid_utf8: bool,
@@ -663,6 +683,7 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !struct {
     };
 }
 
+/// Adds captured stdout/stderr metadata to a command result object.
 fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: anytype) !void {
     try obj.put(allocator, name, .{ .string = safe.text });
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });
@@ -670,6 +691,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
+/// Reads a value argument when it is present with the expected type.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -677,10 +699,12 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
     return .{ .array = array };
 }
 
+/// Copies text into an allocator-owned JSON string value.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Joins command argv into a display string for structured command output.
 fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
@@ -692,6 +716,7 @@ fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     return out.toOwnedSlice(allocator);
 }
 
+/// Reads a contains argument when it is present with the expected type.
 fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     for (argv) |arg| {
         if (std.mem.eql(u8, arg, needle)) return true;
@@ -699,6 +724,7 @@ fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Parses split args from MCP JSON arguments.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -754,17 +780,20 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses finish arg from MCP JSON arguments.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);
     try list.append(allocator, arg);
 }
 
+/// Frees argv strings allocated while splitting command arguments.
 fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
     for (args) |arg| allocator.free(arg);
     allocator.free(args);
 }
 
+/// Maps split tool args error failures to structured MCP errors.
 fn splitToolArgsError(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.InvalidArguments => mcp_errors.invalidArgument(
@@ -791,22 +820,27 @@ fn splitToolArgsError(allocator: std.mem.Allocator, tool_name: []const u8, field
     };
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads an integer argument when it is present with the expected type.
 fn argInteger(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
+/// Clamps requested tool timeout to the supported command timeout range.
 fn toolTimeout(context: app_context.CoreCommandContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInteger(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Returns true when a port command outcome completed without failure.
 fn commandOk(result: ports.CommandResult) bool {
     return !result.effectiveTerm().failed() and !result.timed_out;
 }
 
+/// Maps port error kind failures to structured MCP errors.
 fn portErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
@@ -817,6 +851,7 @@ fn portErrorKind(err: anyerror) []const u8 {
     };
 }
 
+/// Maps backend error kind failures to structured MCP errors.
 fn backendErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -828,10 +863,12 @@ fn backendErrorKind(err: anyerror) []const u8 {
     };
 }
 
+/// Maps is output limit error failures to structured MCP errors.
 fn isOutputLimitError(err: anyerror) bool {
     return err == error.StreamTooLong or err == error.OutputLimitExceeded;
 }
 
+/// Maps is timeout error failures to structured MCP errors.
 fn isTimeoutError(err: anyerror) bool {
     return err == error.Timeout or err == error.RequestTimeout;
 }

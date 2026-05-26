@@ -19,6 +19,7 @@ pub const FakeToolchainEnv = struct {
         request: ports.ToolchainEnvRequest,
         result: ExpectedResult,
 
+        /// Frees the cloned env request and stored result.
         fn deinit(self: ExpectedGet, allocator: Allocator) void {
             freeRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -30,6 +31,7 @@ pub const FakeToolchainEnv = struct {
         ok: []const u8,
         err: ports.PortError,
 
+        /// Releases the owned env value for successful outcomes.
         fn deinit(self: ExpectedResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |value| allocator.free(value),
@@ -91,6 +93,7 @@ pub const FakeToolchainEnv = struct {
         if (self.next_get != self.expected_gets.items.len) return error.MissingExpectedCall;
     }
 
+    /// Reads the requested environment value through this port implementation.
     fn get(ptr: *anyopaque, allocator: Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
@@ -113,6 +116,7 @@ pub const FakeToolchainEnv = struct {
         };
     }
 
+    /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.ToolchainEnvRequest) !ports.ToolchainEnvRequest {
         return .{
             .key = try common.dupString(allocator, request.key),
@@ -120,11 +124,13 @@ pub const FakeToolchainEnv = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned request.
     fn freeRequest(allocator: Allocator, request: ports.ToolchainEnvRequest) void {
         allocator.free(request.key);
         allocator.free(request.provenance);
     }
 
+    /// Compares requests by the fields that affect behavior.
     fn requestsEqual(expected: ports.ToolchainEnvRequest, actual: ports.ToolchainEnvRequest) bool {
         return std.mem.eql(u8, expected.key, actual.key) and
             std.mem.eql(u8, expected.provenance, actual.provenance);

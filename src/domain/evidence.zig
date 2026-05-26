@@ -13,6 +13,7 @@ pub const Source = enum {
     profile,
 };
 
+/// Confidence enum used by this domain model.
 pub const Confidence = enum {
     low,
     medium,
@@ -64,6 +65,7 @@ pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize
     return .{ .object = obj };
 }
 
+/// Builds a JSON evidence object; allocation failures are returned.
 pub fn evidenceValue(
     allocator: std.mem.Allocator,
     source: Source,
@@ -82,6 +84,7 @@ pub fn evidenceValue(
     return .{ .object = obj };
 }
 
+/// Builds a JSON finding object with optional location evidence; allocation failures are returned.
 pub fn findingValue(
     allocator: std.mem.Allocator,
     source: Source,
@@ -107,6 +110,7 @@ pub fn findingValue(
     return .{ .object = obj };
 }
 
+/// Builds a severity-count summary from finding JSON objects; allocation failures are returned.
 pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
     var errors: usize = 0;
     var warnings: usize = 0;
@@ -158,6 +162,7 @@ pub fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !
     return .{ .string = try std.fmt.allocPrint(allocator, "{s}:{s}:{s}:{d}:{s}", .{ source, rule, file, line, message }) };
 }
 
+/// Reads a string field from a JSON object without taking ownership.
 pub fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -165,6 +170,7 @@ pub fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads an integer field from a JSON object when it has integer shape.
 pub fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |i| i,

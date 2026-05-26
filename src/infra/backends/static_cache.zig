@@ -43,11 +43,13 @@ pub const Cache = struct {
         };
     }
 
+    /// Returns the cached status snapshot for this implementation.
     fn status(ptr: *anyopaque) ports.PortError!ports.StaticCacheStatus {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.currentStatus();
     }
 
+    /// Loads a cached value for this implementation.
     fn load(ptr: *anyopaque, _: Allocator) ports.PortError!ports.StaticCacheLoadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return .{
@@ -56,6 +58,7 @@ pub const Cache = struct {
         };
     }
 
+    /// Stores a cached value for this implementation.
     fn store(ptr: *anyopaque, _: Allocator, request: ports.StaticCacheStoreRequest) ports.PortError!ports.StaticCacheStatus {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = self.allocator.dupe(u8, request.bytes) catch return error.OutOfMemory;
@@ -66,17 +69,20 @@ pub const Cache = struct {
         return self.currentStatus();
     }
 
+    /// Records a cache hit for this implementation.
     fn recordHit(ptr: *anyopaque) ports.PortError!ports.StaticCacheStatus {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.state.hits += 1;
         return self.currentStatus();
     }
 
+    /// Returns the current cache status snapshot.
     fn currentStatus(self: *Self) ports.StaticCacheStatus {
         return cacheStatus(self.state.*);
     }
 };
 
+/// Public snapshot of cache hit, miss, and storage counters.
 fn cacheStatus(cache: anytype) ports.StaticCacheStatus {
     return .{
         .cached = cache.index_json != null,

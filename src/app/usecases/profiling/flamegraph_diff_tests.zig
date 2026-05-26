@@ -93,6 +93,7 @@ test "flamegraph diff run reports late input parent and render failures" {
     }
 }
 
+/// Implements test profiling context workflow logic using caller-owned inputs.
 fn testProfilingContext(
     commands: *fake_command.FakeCommandRunner,
     workspace: *fake_workspace.FakeWorkspaceStore,

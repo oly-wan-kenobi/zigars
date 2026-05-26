@@ -22,10 +22,13 @@ pub const Reader = struct {
         };
     }
 
+    /// Returns an allocator-owned snapshot of recorded metrics.
     fn snapshot(ptr: *anyopaque, allocator: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const state = self.state.*;
 
+        // Copy fixed metric slots and ring buffers into caller-owned slices so
+        // the port result is stable after the state changes.
         const tool_stats = allocator.alloc(ports.ObservabilityToolStats, state.tool_stat_count) catch return error.OutOfMemory;
         errdefer allocator.free(tool_stats);
         for (state.tool_stats[0..state.tool_stat_count], 0..) |stat, index| {
@@ -104,16 +107,19 @@ pub const Reader = struct {
     }
 };
 
+/// Returns the number of retained entries in a bounded ring buffer.
 fn boundedLen(count: u64, capacity: usize) usize {
     return @intCast(@min(count, capacity));
 }
 
+/// Finds the first sequence number retained in a ring buffer.
 fn firstSequence(count: u64, capacity: usize) u64 {
     if (count == 0) return 1;
     if (count <= capacity) return 1;
     return count - capacity + 1;
 }
 
+/// Maps a sequence number to its ring-buffer index.
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % capacity);
 }

@@ -39,12 +39,14 @@ pub const State = struct {
             .ptr = backing,
             .vtable = &.{
                 .job_count = struct {
+                    /// Bridges the typed helper into the callback signature expected by the MCP adapter.
                     fn call(ptr: *anyopaque) usize {
                         const state: BackingPtr = @ptrCast(@alignCast(ptr));
                         return state.job_count;
                     }
                 }.call,
                 .job_at = struct {
+                    /// Bridges the typed helper into the callback signature expected by the MCP adapter.
                     fn call(ptr: *anyopaque, index: usize) ?JobView {
                         const state: BackingPtr = @ptrCast(@alignCast(ptr));
                         if (index >= state.job_count) return null;
@@ -52,6 +54,7 @@ pub const State = struct {
                     }
                 }.call,
                 .job_by_id = struct {
+                    /// Bridges the typed helper into the callback signature expected by the MCP adapter.
                     fn call(ptr: *anyopaque, id: []const u8) ?JobView {
                         const state: BackingPtr = @ptrCast(@alignCast(ptr));
                         const job = state.jobById(id) orelse return null;
@@ -59,6 +62,7 @@ pub const State = struct {
                     }
                 }.call,
                 .cancel_job = struct {
+                    /// Bridges the typed helper into the callback signature expected by the MCP adapter.
                     fn call(ptr: *anyopaque, id: []const u8, reason: []const u8) ?JobView {
                         const state: BackingPtr = @ptrCast(@alignCast(ptr));
                         const job = state.cancelJob(id, reason) orelse return null;
@@ -166,6 +170,7 @@ pub fn handleCancel(server: anytype, io: std.Io, allocator: std.mem.Allocator, r
     try sendTask(server, io, allocator, request.id, job);
 }
 
+/// Sends a task view as a JSON-RPC result with response-arena-owned fields.
 fn sendTask(server: anytype, io: std.Io, allocator: std.mem.Allocator, id: mcp.types.RequestId, job: JobView) !void {
     var response_arena = std.heap.ArenaAllocator.init(allocator);
     defer response_arena.deinit();
@@ -173,6 +178,7 @@ fn sendTask(server: anytype, io: std.Io, allocator: std.mem.Allocator, id: mcp.t
     try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(id, try taskValue(a, job)) });
 }
 
+/// Reads `task_id` from JSON-RPC task params when present and string-typed.
 fn taskIdFromParams(params: ?std.json.Value) ?[]const u8 {
     const obj = switch (params orelse .null) {
         .object => |o| o,
@@ -197,6 +203,7 @@ fn taskValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Normalizes internal task status strings for MCP progress responses.
 fn taskStatusText(status: []const u8) []const u8 {
     if (std.mem.eql(u8, status, "queued") or std.mem.eql(u8, status, "running")) return "working";
     return status;

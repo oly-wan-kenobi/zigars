@@ -18,6 +18,7 @@ pub const Slots = struct {
     client: ?*?LspClient = null,
     documents: ?*?DocumentState = null,
 
+    /// Marks a ZLS capability as required by the session.
     fn require(self: Slots) !RequiredSlots {
         return .{
             .process = self.process orelse return error.NotConnected,
@@ -27,6 +28,7 @@ pub const Slots = struct {
     }
 };
 
+/// Tracks which capabilities must be present before a session is ready.
 const RequiredSlots = struct {
     process: *?ZlsProcess,
     client: *?LspClient,
@@ -150,6 +152,7 @@ pub fn ensureReady(state: *State, slots: Slots, config: Config) !void {
     try restart(state, slots, config);
 }
 
+/// Records the observed ZLS capability status.
 fn recordStatus(state: *const State, config: Config) void {
     if (config.observability) |target| {
         target.recordZlsStatus(state.status, state.last_failure, state.restart_attempts);

@@ -6,9 +6,12 @@ const app_context = @import("../../context.zig");
 const app_errors = @import("../../errors.zig");
 const ports = @import("../../ports.zig");
 
+/// Command output limit applied when collecting workflow evidence.
 pub const command_output_limit: usize = 1024 * 1024;
+/// Command output limit mode applied when collecting workflow evidence.
 pub const command_output_limit_mode = "truncate_on_limit";
 
+/// Carries owned argv data across use case and port boundaries.
 pub const OwnedArgv = struct {
     items: []const []const u8,
 
@@ -20,15 +23,18 @@ pub const OwnedArgv = struct {
     }
 };
 
+/// Carries simple request data across use case and port boundaries.
 pub const SimpleRequest = struct {
     timeout_ms: ?i64 = null,
 };
 
+/// Carries extra args request data across use case and port boundaries.
 pub const ExtraArgsRequest = struct {
     extra_args: []const []const u8 = &.{},
     timeout_ms: ?i64 = null,
 };
 
+/// Carries test request data across use case and port boundaries.
 pub const TestRequest = struct {
     file: ?[]const u8 = null,
     filter: ?[]const u8 = null,
@@ -36,12 +42,14 @@ pub const TestRequest = struct {
     timeout_ms: ?i64 = null,
 };
 
+/// Carries file command request data across use case and port boundaries.
 pub const FileCommandRequest = struct {
     file: []const u8,
     extra_args: []const []const u8 = &.{},
     timeout_ms: ?i64 = null,
 };
 
+/// Carries explain request data across use case and port boundaries.
 pub const ExplainRequest = struct {
     command: ?[]const u8 = null,
     file: ?[]const u8 = null,
@@ -49,6 +57,7 @@ pub const ExplainRequest = struct {
     timeout_ms: ?i64 = null,
 };
 
+/// Carries command run data across use case and port boundaries.
 pub const CommandRun = struct {
     title: []const u8,
     argv: OwnedArgv,
@@ -58,6 +67,7 @@ pub const CommandRun = struct {
     stderr_limit: usize = command_output_limit,
     result: ports.CommandResult,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandRun, allocator: std.mem.Allocator) void {
         self.argv.deinit(allocator);
         self.result.deinit(allocator);
@@ -65,6 +75,7 @@ pub const CommandRun = struct {
     }
 };
 
+/// Carries command run failure data across use case and port boundaries.
 pub const CommandRunFailure = struct {
     title: []const u8,
     argv: OwnedArgv,
@@ -74,23 +85,27 @@ pub const CommandRunFailure = struct {
     stderr_limit: usize = command_output_limit,
     err: ports.PortError,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandRunFailure, allocator: std.mem.Allocator) void {
         self.argv.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Carries workspace failure data across use case and port boundaries.
 pub const WorkspaceFailure = struct {
     error_info: app_errors.AppError,
     err: ports.PortError,
     path: []const u8,
 };
 
+/// Represents failure alternatives carried across the workflow boundary.
 pub const Failure = union(enum) {
     argument: app_errors.AppError,
     workspace_path: WorkspaceFailure,
     command_run: CommandRunFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Failure, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .command_run => |*failure| failure.deinit(allocator),
@@ -100,10 +115,12 @@ pub const Failure = union(enum) {
     }
 };
 
+/// Represents command outcome alternatives carried across the workflow boundary.
 pub const CommandOutcome = union(enum) {
     ok: CommandRun,
     err: Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*run_result| run_result.deinit(allocator),
@@ -113,10 +130,12 @@ pub const CommandOutcome = union(enum) {
     }
 };
 
+/// Carries explain run data across use case and port boundaries.
 pub const ExplainRun = struct {
     mode: []const u8,
     command: CommandRun,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *ExplainRun, allocator: std.mem.Allocator) void {
         allocator.free(self.mode);
         self.command.deinit(allocator);
@@ -124,10 +143,12 @@ pub const ExplainRun = struct {
     }
 };
 
+/// Represents explain outcome alternatives carried across the workflow boundary.
 pub const ExplainOutcome = union(enum) {
     ok: ExplainRun,
     err: Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *ExplainOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*run_result| run_result.deinit(allocator),
@@ -137,11 +158,13 @@ pub const ExplainOutcome = union(enum) {
     }
 };
 
+/// Carries version result data across use case and port boundaries.
 pub const VersionResult = struct {
     zig: CommandRun,
     zls: ?CommandRun = null,
     zls_status: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *VersionResult, allocator: std.mem.Allocator) void {
         self.zig.deinit(allocator);
         if (self.zls) |*zls_run| zls_run.deinit(allocator);
@@ -149,10 +172,12 @@ pub const VersionResult = struct {
     }
 };
 
+/// Represents version outcome alternatives carried across the workflow boundary.
 pub const VersionOutcome = union(enum) {
     ok: VersionResult,
     err: Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *VersionOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*version_result| version_result.deinit(allocator),
@@ -162,28 +187,34 @@ pub const VersionOutcome = union(enum) {
     }
 };
 
+/// Carries argv builder data across use case and port boundaries.
 const ArgvBuilder = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList([]const u8) = .empty,
 
+    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator) ArgvBuilder {
         return .{ .allocator = allocator };
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *ArgvBuilder) void {
         for (self.items.items) |arg| self.allocator.free(arg);
         self.items.deinit(self.allocator);
         self.* = undefined;
     }
 
+    /// Appends append data into caller-provided storage, propagating allocation failures.
     fn append(self: *ArgvBuilder, arg: []const u8) !void {
         try self.items.append(self.allocator, try self.allocator.dupe(u8, arg));
     }
 
+    /// Appends many data into caller-provided storage, propagating allocation failures.
     fn appendMany(self: *ArgvBuilder, args: []const []const u8) !void {
         for (args) |arg| try self.append(arg);
     }
 
+    /// Implements to owned workflow logic using caller-owned inputs.
     fn toOwned(self: *ArgvBuilder) !OwnedArgv {
         const owned = try self.items.toOwnedSlice(self.allocator);
         self.items = .empty;
@@ -191,6 +222,7 @@ const ArgvBuilder = struct {
     }
 };
 
+/// Implements version workflow logic using caller-owned inputs.
 pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !VersionOutcome {
     var zig_builder = ArgvBuilder.init(allocator);
     defer zig_builder.deinit();
@@ -225,6 +257,7 @@ pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandCon
     }
 }
 
+/// Implements env workflow logic using caller-owned inputs.
 pub fn env(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -233,6 +266,7 @@ pub fn env(allocator: std.mem.Allocator, context: app_context.CoreCommandContext
     return runBuiltCommand(allocator, context, "zig env", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
+/// Implements targets workflow logic using caller-owned inputs.
 pub fn targets(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -241,6 +275,7 @@ pub fn targets(allocator: std.mem.Allocator, context: app_context.CoreCommandCon
     return runBuiltCommand(allocator, context, "zig targets", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
+/// Constructs build data from caller-owned inputs, propagating allocation failures.
 pub fn build(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: ExtraArgsRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -250,6 +285,7 @@ pub fn build(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
     return runBuiltCommand(allocator, context, "zig build", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
+/// Implements test command workflow logic using caller-owned inputs.
 pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: TestRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -276,6 +312,7 @@ pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreComman
     return runBuiltCommand(allocator, context, "zig test", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
+/// Implements check workflow logic using caller-owned inputs.
 pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
     const resolved = try resolveWorkspacePath(allocator, context, "zig_check", request.file, "zig_check source file");
     switch (resolved) {
@@ -292,6 +329,7 @@ pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
     }
 }
 
+/// Implements translate c workflow logic using caller-owned inputs.
 pub fn translateC(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
     const resolved = try resolveWorkspacePath(allocator, context, "zig_translate_c", request.file, "zig_translate_c source file");
     switch (resolved) {
@@ -309,12 +347,15 @@ pub fn translateC(allocator: std.mem.Allocator, context: app_context.CoreCommand
     }
 }
 
+/// Implements explain command workflow logic using caller-owned inputs.
 pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: ExplainRequest, title: []const u8) !ExplainOutcome {
     const mode = request.command orelse if (request.file != null) "check" else "build-test";
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
     try builder.append(context.tool_paths.zig);
 
+    // Build the argv exactly as the caller should rerun it, resolving
+    // workspace-relative files only for modes that require a source path.
     if (std.mem.eql(u8, mode, "check")) {
         const file = request.file orelse return .{ .err = .{ .argument = app_errors.missingArgument("file", "workspace-relative Zig source path") } };
         const resolved = try resolveWorkspacePath(allocator, context, title, file, "core explain source file");
@@ -381,6 +422,7 @@ pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCom
     };
 }
 
+/// Invokes run built command with caller-owned inputs; command and allocation failures propagate.
 fn runBuiltCommand(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -414,11 +456,13 @@ fn runBuiltCommand(
     } };
 }
 
+/// Represents resolve outcome alternatives carried across the workflow boundary.
 const ResolveOutcome = union(enum) {
     ok: ports.WorkspaceResolveResult,
     err: WorkspaceFailure,
 };
 
+/// Resolves resolve workspace path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolveWorkspacePath(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -443,10 +487,12 @@ fn resolveWorkspacePath(
     return .{ .ok = resolved };
 }
 
+/// Converts timing input into the duration unit used by result payloads.
 pub fn timeoutFor(context: app_context.CoreCommandContext, requested: ?i64) i64 {
     return normalizeTimeout(requested orelse context.timeouts.command_ms);
 }
 
+/// Normalizes timeout data into the representation consumed by this workflow.
 pub fn normalizeTimeout(timeout_ms: i64) i64 {
     return @max(1, @min(timeout_ms, 60 * 60 * 1000));
 }

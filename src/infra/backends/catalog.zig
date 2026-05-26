@@ -28,6 +28,7 @@ pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_path
     return .{ .object = obj };
 }
 
+/// Serializes one backend definition for the catalog response.
 fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -48,6 +49,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
     return .{ .object = obj };
 }
 
+/// Returns the configured executable path for a backend.
 fn pathFor(name: []const u8, paths: Paths) ?[]const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
@@ -58,6 +60,7 @@ fn pathFor(name: []const u8, paths: Paths) ?[]const u8 {
     return null;
 }
 
+/// Serializes a string slice as a JSON array.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -67,6 +70,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     return .{ .array = array };
 }
 
+/// Builds the argv JSON value used by a backend probe.
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;

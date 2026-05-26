@@ -165,10 +165,12 @@ pub fn looksLikeSvg(bytes: []const u8) bool {
     return std.mem.startsWith(u8, trimmed, "<?xml") and std.mem.indexOf(u8, trimmed, "<svg") != null;
 }
 
+/// Appends a zflame string option when the optional value is present.
 fn appendZflameStringOption(allocator: std.mem.Allocator, built: *BuiltArgv, option: ZflameOption, value: ?[]const u8) !void {
     if (value) |text| try built.appendOwned(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ option.flagPrefix(), text }));
 }
 
+/// Appends a zflame integer option when the optional value is present.
 fn appendZflameIntOption(allocator: std.mem.Allocator, built: *BuiltArgv, option: ZflameOption, value: ?i64) !void {
     if (value) |number| try built.appendOwned(allocator, try std.fmt.allocPrint(allocator, "{s}{d}", .{ option.flagPrefix(), number }));
 }

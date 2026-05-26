@@ -3,6 +3,7 @@ const std = @import("std");
 const contracts = @import("../../domain/zig/static_analysis_contracts.zig");
 const tool_manifest = @import("../../manifest/mod.zig");
 
+/// Reports whether a manifest product group belongs to static analysis.
 fn isStaticAnalysisProductGroup(group: tool_manifest.ToolGroup) bool {
     return group == .static_analysis or group == .zwanzig;
 }
@@ -37,6 +38,7 @@ test "static analysis contracts do not overstate evidence maturity" {
     for (contracts.contracts) |contract| try expectContractEvidenceBounded(contract);
 }
 
+/// Records an expected contract evidence bounded call, cloning request data and failing on allocation errors.
 fn expectContractEvidenceBounded(contract: contracts.Contract) !void {
     switch (contract.tier) {
         .advisory_orientation => {
@@ -93,6 +95,7 @@ test "release-gating static analysis claims require executable-backed evidence" 
     }
 }
 
+/// Checks whether a release gate tier is part of the accepted set.
 fn releaseGateTierAllowed(tier: contracts.CapabilityTier) bool {
     return switch (tier) {
         .compiler_backed, .zlint_backed, .zwanzig_backed => true,
@@ -115,10 +118,12 @@ test "static analysis contract checks cover unsupported helper branches" {
     try std.testing.expect(!anyContains(&.{"parser"}, "ZLS"));
 }
 
+/// Checks whether a string slice equals the requested value.
 fn contains(haystack: []const u8, needle: []const u8) bool {
     return std.mem.indexOf(u8, haystack, needle) != null;
 }
 
+/// Checks whether any string in a slice contains the requested fragment.
 fn anyContains(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| {
         if (contains(value, needle)) return true;

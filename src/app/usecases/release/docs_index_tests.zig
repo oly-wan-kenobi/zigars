@@ -5,6 +5,7 @@ const docs_index = @import("docs_index.zig");
 const docs_domain = @import("../../../domain/release/docs_index.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(
     workspace: *fakes.FakeWorkspaceStore,
     toolchain: *fakes.FakeToolchainEnv,

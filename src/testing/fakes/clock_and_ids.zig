@@ -22,6 +22,7 @@ pub const FakeClockAndIds = struct {
         request: ports.IdRequest,
         id: []const u8,
 
+        /// Frees the cloned ID prefix and queued ID result.
         fn deinit(self: ExpectedId, allocator: Allocator) void {
             allocator.free(self.request.prefix);
             allocator.free(self.id);
@@ -91,6 +92,7 @@ pub const FakeClockAndIds = struct {
         if (self.next_id != self.expected_ids.items.len) return error.MissingExpectedCall;
     }
 
+    /// Returns the current test or system timestamp.
     fn now(ptr: *anyopaque) ports.PortError!ports.Instant {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.now_call_count += 1;
@@ -100,6 +102,7 @@ pub const FakeClockAndIds = struct {
         return instant;
     }
 
+    /// Allocates the next deterministic identifier.
     fn nextId(ptr: *anyopaque, allocator: Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_request = try cloneIdRequest(self.allocator, request);
@@ -115,14 +118,17 @@ pub const FakeClockAndIds = struct {
         return try common.dupString(allocator, expected.id);
     }
 
+    /// Clones id request into allocator-owned storage.
     fn cloneIdRequest(allocator: Allocator, request: ports.IdRequest) !ports.IdRequest {
         return .{ .prefix = try common.dupString(allocator, request.prefix) };
     }
 
+    /// Releases an allocator-owned ID request prefix.
     fn allocatorFreeIdRequest(allocator: Allocator, request: ports.IdRequest) void {
         allocator.free(request.prefix);
     }
 
+    /// Compares id requests by the fields that affect behavior.
     fn idRequestsEqual(expected: ports.IdRequest, actual: ports.IdRequest) bool {
         return std.mem.eql(u8, expected.prefix, actual.prefix);
     }

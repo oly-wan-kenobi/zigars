@@ -4,18 +4,22 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.ReleaseWorkflowContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 const argString = support.argString;
 const invalidArgumentResult = support.invalidArgumentResult;
 const structured = support.structured;
 const toolErrorFromError = support.toolErrorFromError;
 
+/// Defines the allowed mode variants accepted by this workflow.
 const Mode = enum {
     compact,
     standard,
     deep,
 
+    /// Returns the stable wire name for this enum variant.
     fn name(self: Mode) []const u8 {
         return @tagName(self);
     }
@@ -37,6 +41,7 @@ const overclaim_tokens = [_][]const u8{
     "semantic proof",
 };
 
+/// Executes the zigar docs drift check workflow and returns an allocator-owned structured result.
 pub fn zigarDocsDriftCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const mode = parseModeArg(allocator, "zigar_docs_drift_check", args) catch |err| return modeError(allocator, "zigar_docs_drift_check", args, err);
     var checks = std.json.Array.init(allocator);
@@ -67,6 +72,7 @@ pub fn zigarDocsDriftCheck(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     return result;
 }
 
+/// Executes the zigar release claim check workflow and returns an allocator-owned structured result.
 pub fn zigarReleaseClaimCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const mode = parseModeArg(allocator, "zigar_release_claim_check", args) catch |err| return modeError(allocator, "zigar_release_claim_check", args, err);
     var checks = std.json.Array.init(allocator);
@@ -98,6 +104,7 @@ pub fn zigarReleaseClaimCheck(a: *App, allocator: std.mem.Allocator, args: ?std.
     return result;
 }
 
+/// Executes the zigar tool index check workflow and returns an allocator-owned structured result.
 pub fn zigarToolIndexCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const mode = parseModeArg(allocator, "zigar_tool_index_check", args) catch |err| return modeError(allocator, "zigar_tool_index_check", args, err);
     const path = "docs/tool-index.generated.md";
@@ -151,6 +158,7 @@ pub fn zigarToolIndexCheck(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     return result;
 }
 
+/// Carries drift result data across use case and port boundaries.
 const DriftResult = struct {
     kind: []const u8,
     mode: Mode,
@@ -161,6 +169,7 @@ const DriftResult = struct {
     resolution: []const u8,
 };
 
+/// Serializes drift result fields into an allocator-owned JSON value; allocation failures propagate.
 fn driftResultValue(allocator: std.mem.Allocator, input: DriftResult) !std.json.Value {
     var omitted = std.json.Array.init(allocator);
     var omitted_owned = true;
@@ -184,6 +193,7 @@ fn driftResultValue(allocator: std.mem.Allocator, input: DriftResult) !std.json.
     return .{ .object = obj };
 }
 
+/// Serializes doc needle check fields into an allocator-owned JSON value; allocation failures propagate.
 fn docNeedleCheckValue(a: *App, allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !std.json.Value {
     var missing = std.json.Array.init(allocator);
     var missing_owned = true;
@@ -213,6 +223,7 @@ fn docNeedleCheckValue(a: *App, allocator: std.mem.Allocator, path: []const u8, 
     return .{ .object = obj };
 }
 
+/// Implements doc needles workflow logic using caller-owned inputs.
 fn docNeedles(path: []const u8) []const []const u8 {
     if (std.mem.eql(u8, path, "README.md")) return &.{
         "Public feature claims use evidence labels",
@@ -233,6 +244,7 @@ fn docNeedles(path: []const u8) []const []const u8 {
     return &.{};
 }
 
+/// Serializes claim check fields into an allocator-owned JSON value; allocation failures propagate.
 fn claimCheckValue(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !std.json.Value {
     var found = std.json.Array.init(allocator);
     var found_owned = true;
@@ -252,6 +264,7 @@ fn claimCheckValue(allocator: std.mem.Allocator, path: []const u8, bytes: []cons
     return .{ .object = obj };
 }
 
+/// Serializes file check error fields into an allocator-owned JSON value; allocation failures propagate.
 fn fileCheckErrorValue(allocator: std.mem.Allocator, path: []const u8, err: anyerror) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -264,6 +277,7 @@ fn fileCheckErrorValue(allocator: std.mem.Allocator, path: []const u8, err: anye
     return .{ .object = obj };
 }
 
+/// Implements all checks ok workflow logic using caller-owned inputs.
 fn allChecksOk(checks: std.json.Array) bool {
     for (checks.items) |item| {
         if (!item.object.get("ok").?.bool) return false;
@@ -271,11 +285,13 @@ fn allChecksOk(checks: std.json.Array) bool {
     return true;
 }
 
+/// Reads workspace file data from the provided context without taking ownership of inputs.
 fn readWorkspaceFile(a: *App, allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     _ = allocator;
     return a.workspace.readFileAlloc(a.io, path, 8 * 1024 * 1024);
 }
 
+/// Parses mode arg input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseModeArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value) !Mode {
     _ = allocator;
     _ = tool_name;
@@ -286,6 +302,7 @@ fn parseModeArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.
     return error.InvalidMode;
 }
 
+/// Implements mode error workflow logic using caller-owned inputs.
 fn modeError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, err: anyerror) !Result {
     return switch (err) {
         error.InvalidMode => invalidArgumentResult(allocator, tool_name, "mode", supportedModesText(), argString(args, "mode") orelse "", "Choose compact, standard, or deep."),
@@ -293,12 +310,14 @@ fn modeError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.jso
     };
 }
 
+/// Implements attach metadata workflow logic using caller-owned inputs.
 fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mode: Mode, omitted: std.json.Array) !void {
     try obj.put(allocator, "mode", .{ .string = mode.name() });
     try obj.put(allocator, "result_shape", try resultShapeValue(allocator, mode));
     try obj.put(allocator, "omitted_sections", .{ .array = omitted });
 }
 
+/// Serializes result shape fields into an allocator-owned JSON value; allocation failures propagate.
 fn resultShapeValue(allocator: std.mem.Allocator, mode: Mode) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -309,6 +328,7 @@ fn resultShapeValue(allocator: std.mem.Allocator, mode: Mode) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes omission fields into an allocator-owned JSON value; allocation failures propagate.
 fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []const u8, restore_with: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -320,6 +340,7 @@ fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []co
     return .{ .object = obj };
 }
 
+/// Implements supported modes text workflow logic using caller-owned inputs.
 fn supportedModesText() []const u8 {
     return "compact, standard, or deep";
 }
@@ -334,9 +355,11 @@ test "claim check flags public overclaim tokens" {
     try std.testing.expectEqual(@as(i64, 2), value.object.get("overclaim_count").?.integer);
 }
 
+/// Carries test manifest data across use case and port boundaries.
 const TestManifest = struct {
     entries: []const ports.ToolManifestEntry,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *TestManifest) ports.ToolManifestCatalog {
         return .{
             .ptr = self,
@@ -344,17 +367,20 @@ const TestManifest = struct {
         };
     }
 
+    /// Returns the number of entries exposed by this fixture.
     fn count(ptr: *anyopaque) usize {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         return self.entries.len;
     }
 
+    /// Returns the fixture entry at the requested index, or null when out of range.
     fn entryAt(ptr: *anyopaque, index: usize) ?ports.ToolManifestEntry {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         if (index >= self.entries.len) return null;
         return self.entries[index];
     }
 
+    /// Finds find data in the provided collection without taking ownership.
     fn find(ptr: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         for (self.entries) |entry| {
@@ -364,12 +390,14 @@ const TestManifest = struct {
     }
 };
 
+/// Carries drift harness data across use case and port boundaries.
 const DriftHarness = struct {
     command_runner: fakes.FakeCommandRunner,
     workspace: fakes.FakeWorkspaceStore,
     scanner: fakes.FakeWorkspaceScanner,
     manifest: TestManifest,
 
+    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator, entries: []const ports.ToolManifestEntry) DriftHarness {
         return .{
             .command_runner = fakes.FakeCommandRunner.init(allocator),
@@ -379,12 +407,14 @@ const DriftHarness = struct {
         };
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *DriftHarness) void {
         self.command_runner.deinit();
         self.workspace.deinit();
         self.scanner.deinit();
     }
 
+    /// Builds a test app fixture with the ports needed by this workflow.
     fn app(self: *DriftHarness, allocator: std.mem.Allocator) App {
         return App.init(.{
             .workspace = .{ .root = "/work", .cache_root = "/work/.zigar-cache", .transport = "stdio" },
@@ -397,6 +427,7 @@ const DriftHarness = struct {
         }, allocator);
     }
 
+    /// Implements verify workflow logic using caller-owned inputs.
     fn verify(self: *DriftHarness) !void {
         try self.command_runner.verify();
         try self.workspace.verify();
@@ -404,16 +435,19 @@ const DriftHarness = struct {
     }
 };
 
+/// Reads the args with mode argument from JSON input without taking ownership of borrowed strings.
 fn argsWithMode(allocator: std.mem.Allocator, mode: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "mode", .{ .string = mode });
     return .{ .object = obj };
 }
 
+/// Implements expect drift read workflow logic using caller-owned inputs.
 fn expectDriftRead(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
     try store.expectRead(.{ .path = path, .max_bytes = 8 * 1024 * 1024, .provenance = "arch110-workflow-read" }, bytes);
 }
 
+/// Implements expect drift read error workflow logic using caller-owned inputs.
 fn expectDriftReadError(store: *fakes.FakeWorkspaceStore, path: []const u8, err: ports.PortError) !void {
     try store.expectReadError(.{ .path = path, .max_bytes = 8 * 1024 * 1024, .provenance = "arch110-workflow-read" }, err);
 }

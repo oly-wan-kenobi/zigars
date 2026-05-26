@@ -5,16 +5,23 @@ const app_context = @import("../../context.zig");
 const app_errors = @import("../../errors.zig");
 const ports = @import("../../ports.zig");
 
+/// Schema version written into this module's structured payloads.
 pub const schema_version: i64 = 1;
+/// Default history path used when the caller omits an explicit value.
 pub const history_path_default = ".zigar-cache/validation/history.jsonl";
+/// Shared history max bytes result type used by this workflow module.
 pub const history_max_bytes: usize = 8 * 1024 * 1024;
+/// Command output limit applied when collecting workflow evidence.
 pub const command_output_limit: usize = 1024 * 1024;
+/// Command output limit mode applied when collecting workflow evidence.
 const command_output_limit_mode = "truncate_on_limit";
 
+/// Defines the allowed phase kind variants accepted by this workflow.
 pub const PhaseKind = enum {
     tool_only,
     command,
 
+    /// Returns the stable wire name for this enum variant.
     pub fn name(self: PhaseKind) []const u8 {
         return switch (self) {
             .tool_only => "tool_only",
@@ -23,9 +30,11 @@ pub const PhaseKind = enum {
     }
 };
 
+/// Carries owned string list data across use case and port boundaries.
 pub const OwnedStringList = struct {
     items: []const []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *OwnedStringList, allocator: std.mem.Allocator) void {
         for (self.items) |item| allocator.free(item);
         allocator.free(self.items);
@@ -33,9 +42,11 @@ pub const OwnedStringList = struct {
     }
 };
 
+/// Carries owned argv data across use case and port boundaries.
 pub const OwnedArgv = struct {
     items: []const []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *OwnedArgv, allocator: std.mem.Allocator) void {
         for (self.items) |item| allocator.free(item);
         allocator.free(self.items);
@@ -43,6 +54,7 @@ pub const OwnedArgv = struct {
     }
 };
 
+/// Carries phase data across use case and port boundaries.
 pub const Phase = struct {
     id: []const u8,
     kind: PhaseKind,
@@ -52,6 +64,7 @@ pub const Phase = struct {
     required: bool,
     risk: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Phase, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         if (self.tool) |tool| allocator.free(tool);
@@ -62,10 +75,12 @@ pub const Phase = struct {
     }
 };
 
+/// Carries skipped phase data across use case and port boundaries.
 pub const SkippedPhase = struct {
     name: []const u8,
     reason: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *SkippedPhase, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         allocator.free(self.reason);
@@ -73,6 +88,7 @@ pub const SkippedPhase = struct {
     }
 };
 
+/// Carries risk data across use case and port boundaries.
 pub const Risk = struct {
     changed_file_count: usize,
     touches_zig_source: bool,
@@ -81,6 +97,7 @@ pub const Risk = struct {
     level: []const u8,
 };
 
+/// Carries plan request data across use case and port boundaries.
 pub const PlanRequest = struct {
     mode: []const u8 = "standard",
     goal: ?[]const u8 = null,
@@ -88,6 +105,7 @@ pub const PlanRequest = struct {
     include_semantic: bool = true,
 };
 
+/// Carries plan result data across use case and port boundaries.
 pub const PlanResult = struct {
     schema_version: i64 = 1,
     plan_id: []const u8,
@@ -99,6 +117,7 @@ pub const PlanResult = struct {
     skipped_phases: []SkippedPhase,
     unknowns: OwnedStringList,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *PlanResult, allocator: std.mem.Allocator) void {
         allocator.free(self.plan_id);
         allocator.free(self.mode);
@@ -113,6 +132,7 @@ pub const PlanResult = struct {
     }
 };
 
+/// Carries run request data across use case and port boundaries.
 pub const RunRequest = struct {
     plan: PlanRequest,
     output: []const u8 = history_path_default,
@@ -121,11 +141,13 @@ pub const RunRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Represents command outcome alternatives carried across the workflow boundary.
 pub const CommandOutcome = union(enum) {
     result: CommandResult,
     port_error: ports.PortError,
 };
 
+/// Carries command result data across use case and port boundaries.
 pub const CommandResult = struct {
     exit_code: i32,
     term: ports.CommandTerm,
@@ -136,6 +158,7 @@ pub const CommandResult = struct {
     stdout_truncated: bool,
     stderr_truncated: bool,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
         allocator.free(self.stderr);
@@ -143,6 +166,7 @@ pub const CommandResult = struct {
     }
 };
 
+/// Carries phase run data across use case and port boundaries.
 pub const PhaseRun = struct {
     name: []const u8,
     ok: bool,
@@ -151,6 +175,7 @@ pub const PhaseRun = struct {
     timeout_ms: i64,
     outcome: CommandOutcome,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *PhaseRun, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         self.argv.deinit(allocator);
@@ -163,17 +188,20 @@ pub const PhaseRun = struct {
     }
 };
 
+/// Carries preimage data across use case and port boundaries.
 pub const Preimage = struct {
     exists: bool,
     bytes: usize,
     sha256: ?[]const u8 = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Preimage, allocator: std.mem.Allocator) void {
         if (self.sha256) |hash| allocator.free(hash);
         self.* = undefined;
     }
 };
 
+/// Carries history record data across use case and port boundaries.
 pub const HistoryRecord = struct {
     recorded_unix_ms: i64,
     ok: bool,
@@ -183,6 +211,7 @@ pub const HistoryRecord = struct {
     failures: []FailureRecord,
     slow_phases: []SlowPhase,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryRecord, allocator: std.mem.Allocator) void {
         allocator.free(self.plan_id);
         for (self.failures) |*failure| failure.deinit(allocator);
@@ -193,10 +222,12 @@ pub const HistoryRecord = struct {
     }
 };
 
+/// Carries failure record data across use case and port boundaries.
 pub const FailureRecord = struct {
     phase: []const u8,
     fingerprint: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *FailureRecord, allocator: std.mem.Allocator) void {
         allocator.free(self.phase);
         allocator.free(self.fingerprint);
@@ -204,16 +235,19 @@ pub const FailureRecord = struct {
     }
 };
 
+/// Carries slow phase data across use case and port boundaries.
 pub const SlowPhase = struct {
     phase: []const u8,
     duration_ms: i64,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *SlowPhase, allocator: std.mem.Allocator) void {
         allocator.free(self.phase);
         self.* = undefined;
     }
 };
 
+/// Carries run report data across use case and port boundaries.
 pub const RunReport = struct {
     schema_version: i64 = 1,
     ok: bool,
@@ -226,6 +260,7 @@ pub const RunReport = struct {
     requires_apply_for_history: bool,
     preimage_identity: Preimage,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RunReport, allocator: std.mem.Allocator) void {
         self.plan.deinit(allocator);
         for (self.phases) |*phase| phase.deinit(allocator);
@@ -239,20 +274,24 @@ pub const RunReport = struct {
     }
 };
 
+/// Carries workspace failure data across use case and port boundaries.
 pub const WorkspaceFailure = struct {
     error_info: app_errors.AppError,
     err: ports.PortError,
     path: []const u8,
 };
 
+/// Represents run failure alternatives carried across the workflow boundary.
 pub const RunFailure = union(enum) {
     history_write_failed: WorkspaceFailure,
 };
 
+/// Represents run outcome alternatives carried across the workflow boundary.
 pub const RunOutcome = union(enum) {
     ok: RunReport,
     err: RunFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RunOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*report| report.deinit(allocator),
@@ -262,12 +301,14 @@ pub const RunOutcome = union(enum) {
     }
 };
 
+/// Defines the allowed history view variants accepted by this workflow.
 pub const HistoryView = enum {
     runs,
     flakes,
     failures,
 };
 
+/// Carries history request data across use case and port boundaries.
 pub const HistoryRequest = struct {
     view: HistoryView,
     history_text: ?[]const u8 = null,
@@ -275,11 +316,13 @@ pub const HistoryRequest = struct {
     limit: usize = 50,
 };
 
+/// Carries history run data across use case and port boundaries.
 pub const HistoryRun = struct {
     raw_json: []const u8,
     ok: bool,
     failures: []HistoryFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryRun, allocator: std.mem.Allocator) void {
         allocator.free(self.raw_json);
         for (self.failures) |*failure| failure.deinit(allocator);
@@ -288,10 +331,12 @@ pub const HistoryRun = struct {
     }
 };
 
+/// Carries history failure data across use case and port boundaries.
 pub const HistoryFailure = struct {
     fingerprint: []const u8,
     sample_json: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryFailure, allocator: std.mem.Allocator) void {
         allocator.free(self.fingerprint);
         allocator.free(self.sample_json);
@@ -299,11 +344,13 @@ pub const HistoryFailure = struct {
     }
 };
 
+/// Carries failure group data across use case and port boundaries.
 pub const FailureGroup = struct {
     fingerprint: []const u8,
     count: usize,
     sample_json: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *FailureGroup, allocator: std.mem.Allocator) void {
         allocator.free(self.fingerprint);
         allocator.free(self.sample_json);
@@ -311,6 +358,7 @@ pub const FailureGroup = struct {
     }
 };
 
+/// Carries history result data across use case and port boundaries.
 pub const HistoryResult = struct {
     schema_version: i64 = 1,
     view: HistoryView,
@@ -320,6 +368,7 @@ pub const HistoryResult = struct {
     last_good_index: ?usize = null,
     failure_groups: []FailureGroup,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryResult, allocator: std.mem.Allocator) void {
         for (self.runs) |*run_item| run_item.deinit(allocator);
         allocator.free(self.runs);
@@ -329,16 +378,19 @@ pub const HistoryResult = struct {
     }
 };
 
+/// Carries history failure result data across use case and port boundaries.
 pub const HistoryFailureResult = struct {
     error_info: app_errors.AppError,
     err: ports.PortError,
     path: []const u8,
 };
 
+/// Represents history outcome alternatives carried across the workflow boundary.
 pub const HistoryOutcome = union(enum) {
     ok: HistoryResult,
     err: HistoryFailureResult,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*result| result.deinit(allocator),
@@ -348,6 +400,7 @@ pub const HistoryOutcome = union(enum) {
     }
 };
 
+/// Builds a validation plan from changed paths, requested mode, and available workspace evidence.
 pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: PlanRequest) !PlanResult {
     var facts = std.ArrayList([]const u8).empty;
     errdefer {
@@ -370,6 +423,7 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
         unknowns.deinit(allocator);
     }
 
+    // Classify changed paths once, then derive required and skipped phases from those facts.
     var saw_zig = false;
     var saw_build = false;
     var saw_docs = false;
@@ -380,6 +434,7 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
         try appendOwnedString(allocator, &facts, path);
     }
 
+    // Phase selection is intentionally conservative: source and build changes add hard gates.
     if (request.include_semantic) try appendPhase(allocator, &phases, .{
         .id = "semantic_impact",
         .kind = .tool_only,
@@ -450,6 +505,7 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
     });
     if (request.changed_paths.len == 0) try appendOwnedString(allocator, &unknowns, "No changed_files or diff were supplied; plan uses workspace-level fallback checks.");
 
+    // Convert working lists into owned slices only after all phase decisions have succeeded.
     const facts_items = try facts.toOwnedSlice(allocator);
     errdefer {
         freeStringItems(allocator, facts_items);
@@ -494,10 +550,13 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
     };
 }
 
+/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: RunRequest) !RunOutcome {
     var planned = try plan(allocator, context, request.plan);
     errdefer planned.deinit(allocator);
 
+    // Accumulate owned phase results separately from skipped tool-only phases so
+    // failures can still produce a complete history record.
     var phases = std.ArrayList(PhaseRun).empty;
     errdefer {
         for (phases.items) |*item| item.deinit(allocator);
@@ -603,6 +662,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
     } };
 }
 
+/// Implements history workflow logic using caller-owned inputs.
 pub fn history(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: HistoryRequest) !HistoryOutcome {
     const limit = @max(@as(usize, 1), request.limit);
     var text: ?[]const u8 = request.history_text;
@@ -665,6 +725,7 @@ pub fn history(allocator: std.mem.Allocator, context: app_context.ValidationCont
     } };
 }
 
+/// Carries phase spec data across use case and port boundaries.
 const PhaseSpec = struct {
     id: []const u8,
     kind: PhaseKind,
@@ -675,6 +736,7 @@ const PhaseSpec = struct {
     risk: []const u8,
 };
 
+/// Appends phase data into caller-provided storage, propagating allocation failures.
 fn appendPhase(allocator: std.mem.Allocator, phases: *std.ArrayList(Phase), spec: PhaseSpec) !void {
     const id = try allocator.dupe(u8, spec.id);
     errdefer allocator.free(id);
@@ -699,6 +761,7 @@ fn appendPhase(allocator: std.mem.Allocator, phases: *std.ArrayList(Phase), spec
     try phases.append(allocator, phase_item);
 }
 
+/// Appends skipped data into caller-provided storage, propagating allocation failures.
 fn appendSkipped(allocator: std.mem.Allocator, skipped: *std.ArrayList(SkippedPhase), name: []const u8, reason: []const u8) !void {
     const owned_name = try allocator.dupe(u8, name);
     errdefer allocator.free(owned_name);
@@ -711,12 +774,14 @@ fn appendSkipped(allocator: std.mem.Allocator, skipped: *std.ArrayList(SkippedPh
     try skipped.append(allocator, item);
 }
 
+/// Appends owned string data into caller-provided storage, propagating allocation failures.
 fn appendOwnedString(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8), value: []const u8) !void {
     const owned = try allocator.dupe(u8, value);
     errdefer allocator.free(owned);
     try values.append(allocator, owned);
 }
 
+/// Invokes run phase with caller-owned inputs; command and allocation failures propagate.
 fn runPhase(allocator: std.mem.Allocator, context: app_context.ValidationContext, name: []const u8, argv: []const []const u8, timeout_ms: u64) !PhaseRun {
     var owned_argv = try cloneArgv(allocator, argv);
     errdefer owned_argv.deinit(allocator);
@@ -766,6 +831,7 @@ fn runPhase(allocator: std.mem.Allocator, context: app_context.ValidationContext
     };
 }
 
+/// Constructs history record data from caller-owned inputs, propagating allocation failures.
 fn buildHistoryRecord(
     allocator: std.mem.Allocator,
     recorded_unix_ms: i64,
@@ -824,6 +890,7 @@ fn buildHistoryRecord(
     };
 }
 
+/// Builds preimage identity metadata for the requested workspace path.
 fn preimageForPath(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) !Preimage {
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -838,6 +905,7 @@ fn preimageForPath(allocator: std.mem.Allocator, context: app_context.Validation
     };
 }
 
+/// Implements existing history bytes workflow logic using caller-owned inputs.
 fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) ?[]const u8 {
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -848,6 +916,7 @@ fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.Valid
     return read_result.bytes;
 }
 
+/// Reports whether the requested workspace path exists.
 fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) bool {
     const result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -858,6 +927,7 @@ fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.Valida
     return true;
 }
 
+/// Parses history runs input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize) ![]HistoryRun {
     var out = std.ArrayList(HistoryRun).empty;
     errdefer {
@@ -898,6 +968,7 @@ fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize
     return out.toOwnedSlice(allocator);
 }
 
+/// Serializes history run from fields into an allocator-owned JSON value; allocation failures propagate.
 fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryRun {
     const raw_json = try serializeJsonValueAlloc(allocator, value);
     errdefer allocator.free(raw_json);
@@ -942,6 +1013,7 @@ fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !His
     };
 }
 
+/// Constructs failure groups data from caller-owned inputs, propagating allocation failures.
 fn buildFailureGroups(allocator: std.mem.Allocator, runs: []const HistoryRun) ![]FailureGroup {
     var groups = std.ArrayList(FailureGroup).empty;
     errdefer {
@@ -973,6 +1045,7 @@ fn buildFailureGroups(allocator: std.mem.Allocator, runs: []const HistoryRun) ![
     return groups.toOwnedSlice(allocator);
 }
 
+/// Invokes history line for run with caller-owned inputs; command and allocation failures propagate.
 fn historyLineForRun(allocator: std.mem.Allocator, record: HistoryRecord, phases: []const PhaseRun, skipped: []const SkippedPhase) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -983,6 +1056,8 @@ fn historyLineForRun(allocator: std.mem.Allocator, record: HistoryRecord, phases
     try jsonFieldString(allocator, &out, "plan_id", record.plan_id, false);
     try jsonFieldInt(allocator, &out, "phase_count", @intCast(record.phase_count), false);
     try jsonFieldInt(allocator, &out, "skipped_count", @intCast(record.skipped_count), false);
+    // Embed expanded command details only for phases referenced by the compact
+    // history record so the JSONL line stays bounded but actionable.
     try out.appendSlice(allocator, ",\"failures\":[");
     for (record.failures, 0..) |failure, index| {
         if (index > 0) try out.append(allocator, ',');
@@ -1033,10 +1108,13 @@ fn historyLineForRun(allocator: std.mem.Allocator, record: HistoryRecord, phases
     return out.toOwnedSlice(allocator);
 }
 
+/// Writes command object fields to the provided JSON stream and propagates writer failures.
 fn writeCommandObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), phase_item: *const PhaseRun) !void {
     try out.append(allocator, '{');
     switch (phase_item.outcome) {
         .result => |result| {
+            // Keep the command object self-contained: execution metadata,
+            // bounded streams, and rerun hints live under one JSON node.
             try jsonFieldString(allocator, out, "kind", "command", true);
             try jsonFieldString(allocator, out, "title", phase_item.name, false);
             try jsonFieldBool(allocator, out, "ok", phase_item.ok, false);
@@ -1108,6 +1186,7 @@ fn writeCommandObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), pha
     try out.append(allocator, '}');
 }
 
+/// Writes events object fields to the provided JSON stream and propagates writer failures.
 fn writeEventsObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), phase_item: *const PhaseRun) !void {
     try out.append(allocator, '{');
     try jsonFieldString(allocator, out, "kind", "validation_phase", true);
@@ -1155,6 +1234,7 @@ fn writeEventsObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), phas
     try out.append(allocator, '}');
 }
 
+/// Writes command term fields to the provided JSON stream and propagates writer failures.
 fn writeCommandTerm(allocator: std.mem.Allocator, out: *std.ArrayList(u8), term: ports.CommandTerm) !void {
     try out.append(allocator, '{');
     try jsonFieldString(allocator, out, "kind", term.name(), true);
@@ -1162,6 +1242,7 @@ fn writeCommandTerm(allocator: std.mem.Allocator, out: *std.ArrayList(u8), term:
     try out.append(allocator, '}');
 }
 
+/// Writes command string fields to the provided JSON stream and propagates writer failures.
 fn writeCommandString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), argv: []const []const u8) !void {
     var command = std.ArrayList(u8).empty;
     defer command.deinit(allocator);
@@ -1172,6 +1253,7 @@ fn writeCommandString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), arg
     try serializeJsonString(allocator, out, command.items);
 }
 
+/// Extracts json field string array data from JSON input without taking ownership of borrowed values.
 fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, values: []const []const u8, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1184,6 +1266,7 @@ fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), k
     try out.append(allocator, ']');
 }
 
+/// Extracts json stream fields data from JSON input without taking ownership of borrowed values.
 fn jsonStreamFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name: []const u8, bytes: []const u8, first: bool) !void {
     var safe = try safeTextAlloc(allocator, bytes);
     defer safe.deinit(allocator);
@@ -1199,6 +1282,7 @@ fn jsonStreamFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name:
     try out.print(allocator, "{d}", .{safe.byte_count});
 }
 
+/// Writes stream key fields to the provided JSON stream and propagates writer failures.
 fn writeStreamKey(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name: []const u8, suffix: []const u8) !void {
     try out.append(allocator, '"');
     try out.appendSlice(allocator, name);
@@ -1207,18 +1291,21 @@ fn writeStreamKey(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name: [
     try out.appendSlice(allocator, "\":");
 }
 
+/// Carries safe text data across use case and port boundaries.
 const SafeText = struct {
     text: []const u8,
     invalid_utf8: bool,
     encoding: []const u8,
     byte_count: usize,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *SafeText, allocator: std.mem.Allocator) void {
         allocator.free(self.text);
         self.* = undefined;
     }
 };
 
+/// Copies bounded text into allocator-owned storage for result payloads.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
@@ -1254,6 +1341,7 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     };
 }
 
+/// Carries event counts data across use case and port boundaries.
 const EventCounts = struct {
     event_count: i64 = 0,
     compiler_error_count: i64 = 0,
@@ -1261,6 +1349,7 @@ const EventCounts = struct {
     test_failure_count: i64 = 0,
 };
 
+/// Writes line events array fields to the provided JSON stream and propagates writer failures.
 fn writeLineEventsArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), stderr: []const u8, stdout: []const u8, counts: *EventCounts) !void {
     try out.append(allocator, '[');
     var first = true;
@@ -1269,6 +1358,7 @@ fn writeLineEventsArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), s
     try out.append(allocator, ']');
 }
 
+/// Writes line events fields to the provided JSON stream and propagates writer failures.
 fn writeLineEvents(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, stream: []const u8, first: *bool, counts: *EventCounts) !void {
     var lines = std.mem.splitScalar(u8, text, '\n');
     var line_no: usize = 1;
@@ -1292,6 +1382,7 @@ fn writeLineEvents(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: 
     }
 }
 
+/// Writes compiler summary fields to the provided JSON stream and propagates writer failures.
 fn writeCompilerSummary(allocator: std.mem.Allocator, out: *std.ArrayList(u8), counts: EventCounts) !void {
     try out.append(allocator, '{');
     try jsonFieldInt(allocator, out, "finding_count", counts.compiler_error_count + counts.compiler_warning_count, true);
@@ -1305,6 +1396,7 @@ fn writeCompilerSummary(allocator: std.mem.Allocator, out: *std.ArrayList(u8), c
     try out.append(allocator, '}');
 }
 
+/// Writes test summary fields to the provided JSON stream and propagates writer failures.
 fn writeTestSummary(allocator: std.mem.Allocator, out: *std.ArrayList(u8), counts: EventCounts) !void {
     try out.append(allocator, '{');
     try jsonFieldInt(allocator, out, "failure_count", counts.test_failure_count, true);
@@ -1312,6 +1404,7 @@ fn writeTestSummary(allocator: std.mem.Allocator, out: *std.ArrayList(u8), count
     try out.append(allocator, '}');
 }
 
+/// Classifies a command output line for validation event summaries.
 fn classifyEventLine(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, ": error: ") != null or std.mem.startsWith(u8, line, "error: ")) return "compiler_error";
     if (std.mem.indexOf(u8, line, ": warning: ") != null or std.mem.startsWith(u8, line, "warning: ")) return "compiler_warning";
@@ -1321,6 +1414,7 @@ fn classifyEventLine(line: []const u8) []const u8 {
     return "output";
 }
 
+/// Classifies command failures into stable result categories.
 fn commandErrorKind(err: ports.PortError) []const u8 {
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
@@ -1331,14 +1425,17 @@ fn commandErrorKind(err: ports.PortError) []const u8 {
     };
 }
 
+/// Reports whether output limit error matches the caller-provided data.
 fn isOutputLimitError(err: ports.PortError) bool {
     return err == error.StreamTooLong or err == error.OutputLimitExceeded;
 }
 
+/// Reports whether timeout error matches the caller-provided data.
 fn isTimeoutError(err: ports.PortError) bool {
     return err == error.Timeout or err == error.RequestTimeout;
 }
 
+/// Extracts json field string data from JSON input without taking ownership of borrowed values.
 fn jsonFieldString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: []const u8, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1346,6 +1443,7 @@ fn jsonFieldString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: [
     try serializeJsonString(allocator, out, value);
 }
 
+/// Extracts json field bool data from JSON input without taking ownership of borrowed values.
 fn jsonFieldBool(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: bool, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1353,6 +1451,7 @@ fn jsonFieldBool(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []c
     try out.appendSlice(allocator, if (value) "true" else "false");
 }
 
+/// Extracts json field int data from JSON input without taking ownership of borrowed values.
 fn jsonFieldInt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: i64, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1360,6 +1459,7 @@ fn jsonFieldInt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []co
     try out.print(allocator, "{d}", .{value});
 }
 
+/// Serializes serialize json value alloc data into an allocator-owned JSON value; allocation failures propagate.
 fn serializeJsonValueAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -1367,6 +1467,7 @@ fn serializeJsonValueAlloc(allocator: std.mem.Allocator, value: std.json.Value) 
     return out.toOwnedSlice(allocator);
 }
 
+/// Serializes serialize json fields into an allocator-owned JSON value; allocation failures propagate.
 fn serializeJsonValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -1399,6 +1500,7 @@ fn serializeJsonValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
     }
 }
 
+/// Serializes json string data into allocator-owned JSON text.
 fn serializeJsonString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
@@ -1422,6 +1524,7 @@ fn serializeJsonString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), va
     try out.append(allocator, '"');
 }
 
+/// Converts timing input into the duration unit used by result payloads.
 fn phaseDurationMs(phase_item: PhaseRun) i64 {
     return switch (phase_item.outcome) {
         .result => |result| @intCast(result.duration_ms),
@@ -1429,6 +1532,7 @@ fn phaseDurationMs(phase_item: PhaseRun) i64 {
     };
 }
 
+/// Implements phase by name workflow logic using caller-owned inputs.
 fn phaseByName(phases: []const PhaseRun, name: []const u8) ?*const PhaseRun {
     for (phases) |*phase_item| {
         if (std.mem.eql(u8, phase_item.name, name)) return phase_item;
@@ -1436,6 +1540,7 @@ fn phaseByName(phases: []const PhaseRun, name: []const u8) ?*const PhaseRun {
     return null;
 }
 
+/// Implements last good index workflow logic using caller-owned inputs.
 fn lastGoodIndex(runs: []const HistoryRun) ?usize {
     var out: ?usize = null;
     for (runs, 0..) |run_item, index| {
@@ -1444,17 +1549,20 @@ fn lastGoodIndex(runs: []const HistoryRun) ?usize {
     return out;
 }
 
+/// Normalizes numeric input into the bounded value used by this workflow.
 fn normalizedTimeout(timeout_ms: i64) u64 {
     if (timeout_ms <= 0) return 1;
     return @intCast(timeout_ms);
 }
 
+/// Normalizes numeric input into the bounded value used by this workflow.
 fn saturatingI64(value: u64) i64 {
     const max_i64: u64 = @intCast(std.math.maxInt(i64));
     if (value > max_i64) return std.math.maxInt(i64);
     return @intCast(value);
 }
 
+/// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
     const items = try allocator.alloc([]const u8, argv.len);
     var filled: usize = 0;
@@ -1469,35 +1577,42 @@ fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv 
     return .{ .items = items };
 }
 
+/// Releases string list allocations; callers must not reuse freed items.
 fn freeStringList(allocator: std.mem.Allocator, items: []const []const u8) void {
     for (items) |item| allocator.free(item);
     allocator.free(items);
 }
 
+/// Releases failure records allocations; callers must not reuse freed items.
 fn deinitFailureRecords(allocator: std.mem.Allocator, items: []FailureRecord) void {
     for (items) |*item| item.deinit(allocator);
     allocator.free(items);
 }
 
+/// Releases slow phases allocations; callers must not reuse freed items.
 fn deinitSlowPhases(allocator: std.mem.Allocator, items: []SlowPhase) void {
     for (items) |*item| item.deinit(allocator);
     allocator.free(items);
 }
 
+/// Releases history runs allocations; callers must not reuse freed items.
 fn deinitHistoryRuns(allocator: std.mem.Allocator, items: []HistoryRun) void {
     for (items) |*item| item.deinit(allocator);
     allocator.free(items);
 }
 
+/// Releases failure groups allocations; callers must not reuse freed items.
 fn deinitFailureGroups(allocator: std.mem.Allocator, items: []FailureGroup) void {
     for (items) |*item| item.deinit(allocator);
     allocator.free(items);
 }
 
+/// Releases string items allocations; callers must not reuse freed items.
 fn freeStringItems(allocator: std.mem.Allocator, items: []const []const u8) void {
     for (items) |item| allocator.free(item);
 }
 
+/// Extracts bool field data from JSON input without taking ownership of borrowed values.
 fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     return switch (obj.get(field) orelse .null) {
         .bool => |b| b,
@@ -1505,6 +1620,7 @@ fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     };
 }
 
+/// Extracts string field data from JSON input without taking ownership of borrowed values.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -1512,6 +1628,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Implements plan id workflow logic using caller-owned inputs.
 fn planId(allocator: std.mem.Allocator, files: []const []const u8, mode: []const u8) ![]const u8 {
     var hasher = std.hash.Wyhash.init(4);
     hasher.update(mode);
@@ -1519,6 +1636,7 @@ fn planId(allocator: std.mem.Allocator, files: []const []const u8, mode: []const
     return std.fmt.allocPrint(allocator, "validation-{x}", .{hasher.final()});
 }
 
+/// Computes a lowercase SHA-256 hex digest in allocator-owned storage.
 fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});

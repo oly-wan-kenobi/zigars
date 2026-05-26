@@ -29,6 +29,7 @@ pub fn registerPrompts(server: anytype, context_provider: anytype) !void {
 /// Builds a prompt callback that returns one allocator-owned user message.
 fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
             _ = @as(Provider, @ptrCast(@alignCast(user_data orelse return error.GenerationFailed)));
             const text = if (std.mem.eql(u8, name, "zigar_profile_workflow"))

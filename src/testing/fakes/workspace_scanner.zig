@@ -19,6 +19,7 @@ pub const FakeWorkspaceScanner = struct {
         request: ports.WorkspaceScanRequest,
         result: ExpectedScanResult,
 
+        /// Frees the cloned scan request and stored scan outcome.
         fn deinit(self: ExpectedScan, allocator: Allocator) void {
             freeRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -30,6 +31,7 @@ pub const FakeWorkspaceScanner = struct {
         ok: []ports.WorkspaceScanFile,
         err: ports.PortError,
 
+        /// Releases owned file paths for successful scan outcomes.
         fn deinit(self: ExpectedScanResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |files| {
@@ -107,6 +109,7 @@ pub const FakeWorkspaceScanner = struct {
         if (self.next_scan != self.expected_scans.items.len) return error.MissingExpectedCall;
     }
 
+    /// Scans Zig source files through this port implementation.
     fn scanZigFiles(
         ptr: *anyopaque,
         allocator: Allocator,
@@ -137,6 +140,7 @@ pub const FakeWorkspaceScanner = struct {
         return .{ .files = copied, .owns_memory = true };
     }
 
+    /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.WorkspaceScanRequest) !ports.WorkspaceScanRequest {
         const path_prefix = try common.dupString(allocator, request.path_prefix);
         var path_prefix_owned = true;
@@ -150,11 +154,13 @@ pub const FakeWorkspaceScanner = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned request.
     fn freeRequest(allocator: Allocator, request: ports.WorkspaceScanRequest) void {
         allocator.free(request.path_prefix);
         allocator.free(request.provenance);
     }
 
+    /// Compares requests by the fields that affect behavior.
     fn requestsEqual(expected: ports.WorkspaceScanRequest, actual: ports.WorkspaceScanRequest) bool {
         return std.mem.eql(u8, expected.path_prefix, actual.path_prefix) and
             expected.max_files == actual.max_files and
@@ -181,6 +187,7 @@ test "workspace scanner fake expectations clean partial allocations on failure" 
     try std.testing.checkAllAllocationFailures(std.testing.allocator, expectWorkspaceScannerWithAllocator, .{});
 }
 
+/// Records an expected workspace scanner with allocator call, cloning request data and failing on allocation errors.
 fn expectWorkspaceScannerWithAllocator(allocator: Allocator) !void {
     var fake = FakeWorkspaceScanner.init(allocator);
     defer fake.deinit();

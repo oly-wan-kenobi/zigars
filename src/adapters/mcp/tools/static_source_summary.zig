@@ -11,6 +11,7 @@ const ports = @import("../../../app/ports.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Combines read source error failures returned by this adapter boundary.
 pub const ReadSourceError = source_summary_usecase.SourceError || error{
     MissingFile,
 };
@@ -277,6 +278,7 @@ pub fn astTestsValue(
     return .{ .object = obj };
 }
 
+/// Adds parser provenance and limitation metadata to a summary result object.
 fn putParseMetadata(
     allocator: std.mem.Allocator,
     obj: *std.json.ObjectMap,
@@ -288,6 +290,7 @@ fn putParseMetadata(
     try obj.put(allocator, "parse_error_count", .{ .integer = parse.parse_error_count });
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     const value = args orelse return null;
     if (value != .object) return null;
@@ -298,10 +301,12 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     };
 }
 
+/// Copies text into an allocator-owned JSON string value.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Maps read source arg error failures to structured MCP errors.
 fn readSourceArgError(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -324,6 +329,7 @@ fn readSourceArgError(
     };
 }
 
+/// Maps analysis tool error failures to structured MCP errors.
 fn analysisToolError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -340,6 +346,7 @@ fn analysisToolError(
     }, err);
 }
 
+/// Maps workspace file error failures to structured MCP errors.
 fn workspaceFileError(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -358,6 +365,7 @@ fn workspaceFileError(
     }, err);
 }
 
+/// Returns the MCP tool result for static text.
 fn staticTextResult(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -494,6 +502,7 @@ test "static source summary value builders clean up partial allocations" {
     try exerciseAstValueBuilderFixedBufferFailures();
 }
 
+/// Exercises static summary value builders coverage with test fixture storage.
 fn exerciseStaticSummaryValueBuilders(backing_allocator: std.mem.Allocator) !void {
     var arena = std.heap.ArenaAllocator.init(backing_allocator);
     defer arena.deinit();
@@ -526,6 +535,7 @@ fn exerciseStaticSummaryValueBuilders(backing_allocator: std.mem.Allocator) !voi
     _ = try astTestsValue(allocator, "src/main.zig", summary);
 }
 
+/// Exercises ast value builder fixed buffer failures coverage with test fixture storage.
 fn exerciseAstValueBuilderFixedBufferFailures() !void {
     var imports = [_]zig_analysis.Import{
         .{ .file = "src/main.zig", .line = 1, .import = "std", .alias = "std", .declaration = "const std = @import(\"std\");" },
@@ -558,6 +568,7 @@ fn exerciseAstValueBuilderFixedBufferFailures() !void {
     }
 }
 
+/// Creates static summary context from the ports required by the adapter.
 fn staticSummaryContext(workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.StaticAnalysisContext {
     return .{
         .workspace = .{
@@ -570,6 +581,7 @@ fn staticSummaryContext(workspace_store: ports.WorkspaceStore, workspace_scanner
     };
 }
 
+/// Asserts structured kind in adapter tests.
 fn expectStructuredKind(result: mcp.tools.ToolResult, expected: []const u8) !void {
     try std.testing.expect(result.structuredContent != null);
     try std.testing.expectEqualStrings(expected, result.structuredContent.?.object.get("kind").?.string);

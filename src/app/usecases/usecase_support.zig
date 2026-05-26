@@ -317,6 +317,7 @@ pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     };
 }
 
+/// Serializes arg fields into an allocator-owned JSON value; allocation failures propagate.
 fn argValue(args: ?std.json.Value, name: []const u8) ?std.json.Value {
     const root = args orelse return null;
     if (root != .object) return null;
@@ -437,6 +438,7 @@ pub fn toolErrorFromError(allocator: std.mem.Allocator, spec: ToolErrorSpec, err
     return structuredError(allocator, .{ .object = obj });
 }
 
+/// Serializes argument fields into an allocator-owned JSON value; allocation failures propagate.
 fn argumentValue(allocator: std.mem.Allocator, tool_name: []const u8, code: []const u8, field: []const u8, expected: []const u8, actual: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "argument_error" });
@@ -454,6 +456,7 @@ fn argumentValue(allocator: std.mem.Allocator, tool_name: []const u8, code: []co
     return .{ .object = obj };
 }
 
+/// Serializes invalid argument fields into an allocator-owned JSON value; allocation failures propagate.
 fn invalidArgumentValue(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, expected: []const u8, actual: []const u8, resolution: []const u8) !std.json.Value {
     var value = try argumentValue(allocator, tool_name, "invalid_argument", field, expected, actual);
     try value.object.put(allocator, "resolution", .{ .string = resolution });
@@ -493,6 +496,7 @@ pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8,
     return .{ .object = obj };
 }
 
+/// Implements kind for error workflow logic using caller-owned inputs.
 fn kindForError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -648,6 +652,7 @@ pub fn commandRunErrorResult(allocator: std.mem.Allocator, spec: anytype) !Resul
     return structured(allocator, value);
 }
 
+/// Serializes command term fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = term.name() });
@@ -655,6 +660,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
+/// Serializes empty diagnostics fields into an allocator-owned JSON value; allocation failures propagate.
 fn emptyDiagnosticsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "error_count", .{ .integer = 0 });
@@ -718,6 +724,7 @@ pub fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, s
     return .{ .object = obj };
 }
 
+/// Collects compiler lines data into caller-provided output storage without taking ownership of inputs.
 fn collectCompilerLines(
     allocator: std.mem.Allocator,
     findings: *std.json.Array,
@@ -744,6 +751,7 @@ fn collectCompilerLines(
     }
 }
 
+/// Serializes compiler line fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "severity", try ownedString(allocator, parsed.severity));
@@ -867,6 +875,7 @@ pub fn stringListContains(list: []const []const u8, value: []const u8) bool {
     return false;
 }
 
+/// Appends path tokens data into caller-provided storage, propagating allocation failures.
 fn appendPathTokens(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), text_value: ?[]const u8) !void {
     const text_input = text_value orelse return;
     var tokens = std.mem.tokenizeAny(u8, text_input, ", \t\r\n");
@@ -876,6 +885,7 @@ fn appendPathTokens(allocator: std.mem.Allocator, list: *std.ArrayList([]const u
     }
 }
 
+/// Appends unique string data into caller-provided storage, propagating allocation failures.
 fn appendUniqueString(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), value: []const u8) !void {
     for (list.items) |item| if (std.mem.eql(u8, item, value)) return;
     try list.append(allocator, try allocator.dupe(u8, value));
@@ -1080,6 +1090,7 @@ pub const artifacts = struct {
         return .{ .object = obj };
     }
 
+    /// Serializes provenance fields into an allocator-owned JSON value; allocation failures propagate.
     fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "producer", .{ .string = provenance.producer });
@@ -1094,6 +1105,7 @@ pub const artifacts = struct {
         return .{ .object = obj };
     }
 
+    /// Serializes toolchain fields into an allocator-owned JSON value; allocation failures propagate.
     fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "zig_path", .{ .string = toolchain.zig_path });
@@ -1163,6 +1175,7 @@ pub fn unixMs(app: anytype) i64 {
     return 0;
 }
 
+/// Implements relative from abs workflow logic using caller-owned inputs.
 fn relativeFromAbs(root: []const u8, abs_path: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, root, abs_path)) return ".";
     if (!std.mem.startsWith(u8, abs_path, root)) return null;
@@ -1174,21 +1187,25 @@ const fakes = @import("../../testing/fakes/root.zig");
 
 test "workflow support workspace facade delegates through workspace store port" {
     const Stub = struct {
+        /// Resolves resolve from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
         fn resolve(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
             if (request.for_output) return .{ .path = "/workspace/out/report.json" };
             return .{ .path = "/workspace/src/main.zig" };
         }
 
+        /// Reads read data from the provided context without taking ownership of inputs.
         fn read(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             if (!std.mem.eql(u8, "src/main.zig", request.path)) return error.StaleArguments;
             return .{ .bytes = "pub fn main() void {}" };
         }
 
+        /// Writes write fields to the provided JSON stream and propagates writer failures.
         fn write(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             if (!request.create_parent_dirs or !request.replace_existing) return error.StaleArguments;
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Implements ensure dir workflow logic using caller-owned inputs.
         fn ensureDir(_: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
             if (!std.mem.eql(u8, "out", request.path)) return error.StaleArguments;
             return .{};
@@ -1221,6 +1238,7 @@ test "workflow support workspace facade delegates through workspace store port" 
 
 test "workflow support command and changed path helpers use command runner port" {
     const Stub = struct {
+        /// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
         fn run(_: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
             if (!std.mem.eql(u8, "/workspace", request.cwd orelse "")) return error.StaleArguments;
             if (!std.mem.eql(u8, "arch110-workflow-command", request.provenance)) return error.StaleArguments;

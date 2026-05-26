@@ -19,6 +19,7 @@ pub const FakeBackendProbe = struct {
         request: ports.BackendProbeRequest,
         availability: ports.BackendAvailability,
 
+        /// Frees the cloned probe request and availability payload.
         fn deinit(self: ExpectedCheck, allocator: Allocator) void {
             freeRequest(allocator, self.request);
             self.availability.deinit(allocator);
@@ -73,6 +74,7 @@ pub const FakeBackendProbe = struct {
         if (self.next_check != self.expected_checks.items.len) return error.MissingExpectedCall;
     }
 
+    /// Records and matches a backend probe request before cloning the expected response.
     fn check(ptr: *anyopaque, allocator: Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
@@ -88,6 +90,7 @@ pub const FakeBackendProbe = struct {
         return try cloneAvailability(allocator, expected.availability);
     }
 
+    /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.BackendProbeRequest) !ports.BackendProbeRequest {
         const backend = try common.dupString(allocator, request.backend);
         errdefer allocator.free(backend);
@@ -109,6 +112,7 @@ pub const FakeBackendProbe = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned request.
     fn freeRequest(allocator: Allocator, request: ports.BackendProbeRequest) void {
         allocator.free(request.backend);
         common.freeStringList(allocator, request.argv);
@@ -117,6 +121,7 @@ pub const FakeBackendProbe = struct {
         allocator.free(request.provenance);
     }
 
+    /// Clones availability into allocator-owned storage.
     fn cloneAvailability(allocator: Allocator, availability: ports.BackendAvailability) !ports.BackendAvailability {
         const backend = try common.dupString(allocator, availability.backend);
         errdefer allocator.free(backend);
@@ -140,6 +145,7 @@ pub const FakeBackendProbe = struct {
         };
     }
 
+    /// Compares requests by the fields that affect behavior.
     fn requestsEqual(expected: ports.BackendProbeRequest, actual: ports.BackendProbeRequest) bool {
         return std.mem.eql(u8, expected.backend, actual.backend) and
             common.stringListsEqual(expected.argv, actual.argv) and
@@ -229,6 +235,7 @@ test "backend probe expected checks clean partial allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, expectBackendCheckWithAllocator, .{});
 }
 
+/// Records an expected backend check with allocator call, cloning request data and failing on allocation errors.
 fn expectBackendCheckWithAllocator(allocator: Allocator) !void {
     var fake = FakeBackendProbe.init(allocator);
     defer fake.deinit();

@@ -347,6 +347,7 @@ test "environment adapter covers trust wrappers and raw usecase errors" {
     try workspace.verify();
 }
 
+/// Creates test environment context from the ports required by the adapter.
 fn testEnvironmentContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.EnvironmentContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
@@ -365,6 +366,7 @@ fn testEnvironmentContext(command_runner: ports.CommandRunner, workspace_store: 
     };
 }
 
+/// Creates test trust context from the ports required by the adapter.
 fn testTrustContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, tool_manifest: ports.ToolManifestCatalog) app_context.TrustContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },

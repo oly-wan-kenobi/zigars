@@ -58,6 +58,7 @@ test "workspace skip policy remains cache and artifact oriented" {
     try std.testing.expect(!analysis.skipWorkspacePath("src/main.zig"));
 }
 
+/// Returns whether declaration evidence contains a named declaration.
 fn hasDeclaration(items: []const analysis.Declaration, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
@@ -65,6 +66,7 @@ fn hasDeclaration(items: []const analysis.Declaration, name: []const u8) bool {
     return false;
 }
 
+/// Returns whether import evidence contains the expected import and alias.
 fn hasImport(items: []const analysis.Import, import_name: []const u8, alias: []const u8) bool {
     for (items) |item| {
         if (std.mem.eql(u8, item.import, import_name)) {
@@ -74,6 +76,7 @@ fn hasImport(items: []const analysis.Import, import_name: []const u8, alias: []c
     return false;
 }
 
+/// Returns whether import evidence contains the expected import path.
 fn hasImportValue(items: []const analysis.Import, value: []const u8) bool {
     for (items) |item| {
         if (std.mem.eql(u8, item.import, value)) return true;
@@ -81,6 +84,7 @@ fn hasImportValue(items: []const analysis.Import, value: []const u8) bool {
     return false;
 }
 
+/// Returns whether test evidence contains a named test declaration.
 fn hasTest(items: []const analysis.TestDecl, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;

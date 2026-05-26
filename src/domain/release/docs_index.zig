@@ -11,13 +11,19 @@ pub const evidence_read_limit: usize = 8 * 1024 * 1024;
 /// Default upper bound for path walks that feed docs indexing.
 pub const default_path_scan_limit: usize = 10_000;
 
+/// Ranking contract text for builtin list results.
 const builtin_list_ranking = "curated builtin declaration order";
+/// Ranking contract text for builtin doc results.
 const builtin_doc_ranking = "case-insensitive builtin-name substring match in curated order; limit is applied after matching";
+/// Ranking contract text for std search results.
 const std_search_ranking = "case-insensitive declaration/source hit sorted by relative path then line; limit is applied after sorting";
+/// Ranking contract text for std item results.
 const std_item_ranking = "exact declaration-name match, preferring the path implied by a qualified std name, then relative path and line; limit is applied after sorting";
 /// Limitation text shared by stdlib source-scan results.
 pub const std_scan_limitations = "Source scan only: no semantic import resolution, no rendered autodoc, and declaration docs are adjacent triple-slash comments only.";
+/// Ranking contract text for bundled results.
 const bundled_ranking = "bundled curated sections with title or anchor matches before summary/body matches; limit is applied after ranking";
+/// Ranking contract text for installed results.
 const installed_ranking = "installed HTML heading order for matching language-reference sections; limit is applied after document-order ranking";
 
 /// Completeness class for a documentation source.
@@ -253,6 +259,7 @@ pub fn buildBuiltinIndexInput(
 
 const max_drift_name_sample = 16;
 
+/// Fills builtin drift counts and samples from active toolchain source text.
 fn fillBuiltinDrift(allocator: std.mem.Allocator, source: []const u8, drift: *BuiltinDriftInfo) !void {
     const active_names = try parseActiveBuiltinNames(allocator, source);
     defer allocator.free(active_names);
@@ -285,6 +292,7 @@ fn fillBuiltinDrift(allocator: std.mem.Allocator, source: []const u8, drift: *Bu
     drift.status = if (drift.curated_missing_count == 0) "curated_subset_matches_active_builtin_source" else "curated_entries_missing_from_active_builtin_source";
 }
 
+/// Parses active builtin names from toolchain source into an owned name slice.
 fn parseActiveBuiltinNames(allocator: std.mem.Allocator, source: []const u8) ![]const []const u8 {
     const list_start = std.mem.indexOf(u8, source, "pub const list") orelse return allocator.alloc([]const u8, 0);
     const list_end = std.mem.indexOfPos(u8, source, list_start, "});") orelse source.len;
@@ -302,6 +310,7 @@ fn parseActiveBuiltinNames(allocator: std.mem.Allocator, source: []const u8) ![]
     return names.toOwnedSlice(allocator);
 }
 
+/// Returns whether a string has the shape of a Zig builtin name.
 fn looksLikeBuiltinName(name: []const u8) bool {
     if (name.len < 2 or name[0] != '@') return false;
     for (name[1..]) |c| {
@@ -310,11 +319,13 @@ fn looksLikeBuiltinName(name: []const u8) bool {
     return true;
 }
 
+/// Returns whether a builtin name exists in the curated bundled index.
 fn curatedBuiltinName(name: []const u8) bool {
     for (builtins) |item| if (std.mem.eql(u8, item.name, name)) return true;
     return false;
 }
 
+/// Returns whether a name appears in a string slice set.
 fn nameIn(names: []const []const u8, needle: []const u8) bool {
     for (names) |name| if (std.mem.eql(u8, name, needle)) return true;
     return false;
@@ -481,6 +492,8 @@ pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const 
     errdefer if (path_hint) |value| allocator.free(value);
     const has_item_name = item_name.len > 0;
 
+    // Preserve immediately preceding doc comments while scanning declarations;
+    // non-comment lines clear the pending documentation context.
     var collected: std.ArrayList(StdItemMatch) = .empty;
     errdefer {
         for (collected.items) |item| item.deinit(allocator);
@@ -545,6 +558,7 @@ pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const 
     };
 }
 
+/// Appends an owned stdlib source-scan match; frees partially owned fields on failure.
 fn appendStdSourceMatch(
     allocator: std.mem.Allocator,
     collected: *std.ArrayList(StdSourceMatch),
@@ -599,6 +613,7 @@ fn appendStdSourceMatch(
     committed = true;
 }
 
+/// Appends an owned stdlib item match; frees partially owned fields on failure.
 fn appendStdItemMatch(
     allocator: std.mem.Allocator,
     collected: *std.ArrayList(StdItemMatch),
@@ -655,12 +670,14 @@ fn appendStdItemMatch(
     committed = true;
 }
 
+/// Orders std source matches by relative path and line.
 fn stdSourceMatchLessThan(_: void, lhs: StdSourceMatch, rhs: StdSourceMatch) bool {
     const path_order = std.mem.order(u8, lhs.path, rhs.path);
     if (path_order != .eq) return path_order == .lt;
     return lhs.line < rhs.line;
 }
 
+/// Orders std item matches by path preference, relative path, and line.
 fn stdItemMatchLessThan(_: void, lhs: StdItemMatch, rhs: StdItemMatch) bool {
     if (lhs.preferred_path != rhs.preferred_path) return lhs.preferred_path;
     const path_order = std.mem.order(u8, lhs.path, rhs.path);
@@ -906,8 +923,10 @@ pub fn langrefInstalled(allocator: std.mem.Allocator, path: []const u8, html: []
     };
 }
 
+/// Ranking pass used when matching bundled language-reference sections.
 const MatchPass = enum { title, body };
 
+/// Appends bundled langref matches for one ranking pass; allocation failures are returned.
 fn appendBundledMatches(allocator: std.mem.Allocator, matches: *std.ArrayList(LangrefMatch), lower_query: []const u8, limit: usize, pass: MatchPass) !usize {
     var count: usize = 0;
     for (sections) |section| {
@@ -926,6 +945,7 @@ fn appendBundledMatches(allocator: std.mem.Allocator, matches: *std.ArrayList(La
     return count;
 }
 
+/// Returns whether a bundled langref section matches the current title/body pass.
 fn sectionMatches(section: Section, lower_query: []const u8, pass: MatchPass) bool {
     const title_hit = containsLowered(section.title, lower_query) or containsLowered(section.anchor, lower_query);
     return switch (pass) {
@@ -934,6 +954,7 @@ fn sectionMatches(section: Section, lower_query: []const u8, pass: MatchPass) bo
     };
 }
 
+/// Performs an ASCII-insensitive containment check against lowercase query text.
 fn containsLowered(haystack: []const u8, lower_query: []const u8) bool {
     if (lower_query.len == 0) return true;
     if (lower_query.len > haystack.len) return false;
@@ -946,6 +967,7 @@ fn containsLowered(haystack: []const u8, lower_query: []const u8) bool {
     return false;
 }
 
+/// Borrowed HTML heading span and title slices found during langref parsing.
 const HtmlHeading = struct {
     start: usize,
     end: usize,
@@ -953,6 +975,7 @@ const HtmlHeading = struct {
     title_html: []const u8,
 };
 
+/// Finds the next HTML heading and returns borrowed source slices.
 fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
     var pos = start_pos;
     while (std.mem.indexOfPos(u8, html, pos, "<h")) |start| {
@@ -976,6 +999,7 @@ fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
     return null;
 }
 
+/// Extracts an anchor id from a heading tag or linked heading content.
 fn headingAnchor(open_tag: []const u8, title_html: []const u8) ?[]const u8 {
     return attrValue(open_tag, "id") orelse
         attrValue(open_tag, "name") orelse
@@ -984,6 +1008,7 @@ fn headingAnchor(open_tag: []const u8, title_html: []const u8) ?[]const u8 {
         anchorHrefFragment(title_html);
 }
 
+/// Extracts a quoted HTML attribute value from borrowed tag text.
 fn attrValue(text: []const u8, name: []const u8) ?[]const u8 {
     const start = std.mem.indexOf(u8, text, name) orelse return null;
     var pos = start + name.len;
@@ -998,12 +1023,14 @@ fn attrValue(text: []const u8, name: []const u8) ?[]const u8 {
     return text[value_start..value_end];
 }
 
+/// Extracts the fragment part from an anchor href.
 fn anchorHrefFragment(text: []const u8) ?[]const u8 {
     const href = attrValue(text, "href") orelse return null;
     if (href.len < 2 or href[0] != '#') return null;
     return href[1..];
 }
 
+/// Strips HTML tags into allocator-owned text; allocation failures are returned.
 fn stripHtmlAlloc(allocator: std.mem.Allocator, html: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -1033,8 +1060,10 @@ fn stripHtmlAlloc(allocator: std.mem.Allocator, html: []const u8) ![]u8 {
     return out.toOwnedSlice(allocator);
 }
 
+/// Decoded HTML entity byte and consumed source length.
 const Entity = struct { char: u8, len: usize };
 
+/// Decodes a supported HTML entity prefix into one ASCII character.
 fn consumeEntity(text: []const u8) ?Entity {
     const entities = [_]struct { name: []const u8, char: u8 }{
         .{ .name = "&lt;", .char = '<' },
@@ -1049,6 +1078,7 @@ fn consumeEntity(text: []const u8) ?Entity {
     return null;
 }
 
+/// Returns a bounded text window around the first lowercase query hit.
 fn snippetForQuery(text: []const u8, lower_text: []const u8, lower_query: []const u8) []const u8 {
     const hit = std.mem.indexOf(u8, lower_text, lower_query) orelse return text[0..@min(text.len, 240)];
     var start = hit;
@@ -1060,6 +1090,7 @@ fn snippetForQuery(text: []const u8, lower_text: []const u8, lower_query: []cons
     return text[start..end];
 }
 
+/// Returns a trimmed summary slice capped to the display limit.
 fn boundedSummary(text: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
     return trimmed[0..@min(trimmed.len, 360)];
@@ -1197,6 +1228,7 @@ pub fn isDocsScopePath(scope: []const u8, path: []const u8) bool {
     return is_md or (is_zig and std.mem.startsWith(u8, path, "src/"));
 }
 
+/// Builds an owned docs entry summary for a workspace documentation file.
 fn docsEntrySummary(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !DocsEntry {
     return .{
         .path = try allocator.dupe(u8, path),
@@ -1216,6 +1248,7 @@ pub fn docsMatch(allocator: std.mem.Allocator, path: []const u8, bytes: []const 
     };
 }
 
+/// Returns the first markdown heading text as a borrowed slice.
 fn firstMarkdownHeading(bytes: []const u8) ?[]const u8 {
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     while (lines.next()) |line| {
@@ -1292,6 +1325,7 @@ pub fn autodocIngest(allocator: std.mem.Allocator, source_kind: []const u8, path
     };
 }
 
+/// Collects autodoc entries from JSON into caller-owned storage; allocation failures are returned.
 fn collectJsonDocEntries(allocator: std.mem.Allocator, value: std.json.Value, entries: *std.ArrayList(AutodocEntry), limit: usize) !void {
     if (entries.items.len >= limit) return;
     switch (value) {
@@ -1312,6 +1346,7 @@ fn collectJsonDocEntries(allocator: std.mem.Allocator, value: std.json.Value, en
     }
 }
 
+/// Appends autodoc entries found in text headings; allocation failures are returned.
 fn appendTextDocEntries(allocator: std.mem.Allocator, entries: *std.ArrayList(AutodocEntry), text: []const u8, limit: usize) !void {
     var lines = std.mem.splitScalar(u8, text, '\n');
     var line_no: usize = 1;
@@ -1392,6 +1427,7 @@ pub fn docExampleCheck(allocator: std.mem.Allocator, source_kind: []const u8, pa
     };
 }
 
+/// Collects fenced Zig snippets into owned check records; allocation failures are returned.
 fn collectFencedZigSnippets(allocator: std.mem.Allocator, text: []const u8, snippets: *std.ArrayList(SnippetCheck), limit: usize) !void {
     var lines = std.mem.splitScalar(u8, text, '\n');
     var in_zig = false;
@@ -1487,6 +1523,7 @@ pub fn readmeCommandCheck(allocator: std.mem.Allocator, source_kind: []const u8,
     };
 }
 
+/// Reads a string field from a JSON object without taking ownership.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |value| value,
@@ -1494,18 +1531,21 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Extracts text from a Zig doc-comment line and ignores quadruple-slash comments.
 fn docCommentText(trimmed_line: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, trimmed_line, "///")) return null;
     if (std.mem.startsWith(u8, trimmed_line, "////")) return null;
     return std.mem.trim(u8, trimmed_line[3..], " \t\r\n");
 }
 
+/// Returns the final dotted name segment after trimming whitespace.
 fn lastNameSegment(name: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, name, " \t\r\n");
     if (std.mem.lastIndexOfScalar(u8, trimmed, '.')) |dot| return std.mem.trim(u8, trimmed[dot + 1 ..], " \t\r\n");
     return trimmed;
 }
 
+/// Converts a qualified std name into an owned relative stdlib path hint when possible.
 fn qualifiedStdPathHint(allocator: std.mem.Allocator, name: []const u8) !?[]const u8 {
     const trimmed = std.mem.trim(u8, name, " \t\r\n");
     if (!std.mem.startsWith(u8, trimmed, "std.")) return null;
@@ -1521,17 +1561,21 @@ fn qualifiedStdPathHint(allocator: std.mem.Allocator, name: []const u8) !?[]cons
     return try out.toOwnedSlice(allocator);
 }
 
+/// Returns whether a stdlib path equals or ends with a path hint.
 fn pathMatchesHint(path: []const u8, hint: []const u8) bool {
     return std.mem.eql(u8, path, hint) or std.mem.endsWith(u8, path, hint);
 }
 
+/// Borrowed declaration name and kind parsed from a source line.
 const ParsedDecl = struct { name: []const u8, kind: []const u8 };
 
+/// Returns the declaration kind for a matching declaration line.
 fn declarationKind(line: []const u8, name: []const u8) ?[]const u8 {
     const decl = parseDeclaration(line) orelse return null;
     return if (std.mem.eql(u8, decl.name, name)) decl.kind else null;
 }
 
+/// Parses a declaration line into borrowed declaration name and kind slices.
 fn parseDeclaration(line: []const u8) ?ParsedDecl {
     var rest = std.mem.trim(u8, line, " \t");
     if (std.mem.startsWith(u8, rest, "pub ")) rest = rest[4..];
@@ -1553,10 +1597,12 @@ fn parseDeclaration(line: []const u8) ?ParsedDecl {
     return null;
 }
 
+/// Returns whether a byte is accepted in a Zig identifier name.
 fn isIdentChar(c: u8) bool {
     return std.ascii.isAlphanumeric(c) or c == '_';
 }
 
+/// Builds an owned dotted documentation name from path and declaration name.
 fn qualifiedNameForDecl(allocator: std.mem.Allocator, path: []const u8, decl_name: []const u8) ![]const u8 {
     const stem = if (std.mem.endsWith(u8, path, ".zig")) path[0 .. path.len - 4] else path;
     var module: std.ArrayList(u8) = .empty;
@@ -1569,6 +1615,7 @@ fn qualifiedNameForDecl(allocator: std.mem.Allocator, path: []const u8, decl_nam
     return std.fmt.allocPrint(allocator, "{s}.{s}", .{ module.items, decl_name });
 }
 
+/// Collects adjacent preceding doc comments into owned text.
 fn docCommentsBefore(allocator: std.mem.Allocator, text: []const u8, index: usize) ![]const u8 {
     const start = lineStart(text, index);
     var first = start;
@@ -1592,6 +1639,7 @@ fn docCommentsBefore(allocator: std.mem.Allocator, text: []const u8, index: usiz
     return out.toOwnedSlice(allocator);
 }
 
+/// Counts newline-separated doc comment lines in an extracted comment block.
 fn countDocCommentLines(comments: []const u8) usize {
     if (comments.len == 0) return 0;
     var count: usize = 1;
@@ -1601,6 +1649,7 @@ fn countDocCommentLines(comments: []const u8) usize {
     return count;
 }
 
+/// Returns the byte index where the containing line begins.
 fn lineStart(text: []const u8, index: usize) usize {
     var start = @min(index, text.len);
     while (start > 0 and text[start - 1] != '\n') start -= 1;
@@ -1625,6 +1674,7 @@ pub fn lineAt(text: []const u8, index: usize) []const u8 {
     return std.mem.trim(u8, text[start..end], " \t\r\n");
 }
 
+/// Returns an owned trimmed string, truncating with an ellipsis when needed.
 fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![]const u8 {
     const trimmed = std.mem.trim(u8, input, " \t\r\n");
     if (trimmed.len <= limit) return allocator.dupe(u8, trimmed);
@@ -1634,6 +1684,7 @@ fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![
     return out.toOwnedSlice(allocator);
 }
 
+/// Returns an allocator-owned ASCII-lowercase copy of input text.
 fn asciiLowerAlloc(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     const out = try allocator.alloc(u8, input.len);
     for (input, 0..) |c, i| out[i] = std.ascii.toLower(c);

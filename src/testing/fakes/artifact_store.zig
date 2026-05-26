@@ -25,6 +25,7 @@ pub const FakeArtifactStore = struct {
         request: ports.ArtifactWriteRequest,
         ref: ports.ArtifactRef,
 
+        /// Frees the cloned write request and returned artifact reference.
         fn deinit(self: ExpectedPut, allocator: Allocator) void {
             freeWriteRequest(allocator, self.request);
             self.ref.deinit(allocator);
@@ -36,6 +37,7 @@ pub const FakeArtifactStore = struct {
         request: ports.ArtifactReadRequest,
         bytes: []const u8,
 
+        /// Frees the cloned read request and owned payload bytes.
         fn deinit(self: ExpectedRead, allocator: Allocator) void {
             freeReadRequest(allocator, self.request);
             allocator.free(self.bytes);
@@ -47,6 +49,7 @@ pub const FakeArtifactStore = struct {
         request: ports.WorkspaceArtifactRecordRequest,
         ref: ports.WorkspaceArtifactRef,
 
+        /// Frees the cloned record request and returned workspace reference.
         fn deinit(self: ExpectedRecord, allocator: Allocator) void {
             freeRecordRequest(allocator, self.request);
             self.ref.deinit(allocator);
@@ -165,6 +168,7 @@ pub const FakeArtifactStore = struct {
         if (self.next_record != self.expected_records.items.len) return error.MissingExpectedCall;
     }
 
+    /// Writes an artifact through this port implementation.
     fn put(ptr: *anyopaque, allocator: Allocator, request: ports.ArtifactWriteRequest) ports.PortError!ports.ArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneWriteRequest(self.allocator, request);
@@ -180,6 +184,7 @@ pub const FakeArtifactStore = struct {
         return try cloneRef(allocator, expected.ref);
     }
 
+    /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: Allocator, request: ports.ArtifactReadRequest) ports.PortError!ports.ArtifactReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneReadRequest(self.allocator, request);
@@ -197,6 +202,7 @@ pub const FakeArtifactStore = struct {
         return .{ .bytes = bytes, .owns_bytes = true };
     }
 
+    /// Records a workspace artifact through this port implementation.
     fn recordWorkspace(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceArtifactRecordRequest) ports.PortError!ports.WorkspaceArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRecordRequest(self.allocator, request);
@@ -212,6 +218,7 @@ pub const FakeArtifactStore = struct {
         return try cloneWorkspaceRef(allocator, expected.ref);
     }
 
+    /// Clones write request into allocator-owned storage.
     fn cloneWriteRequest(allocator: Allocator, request: ports.ArtifactWriteRequest) !ports.ArtifactWriteRequest {
         const namespace = try common.dupString(allocator, request.namespace);
         var namespace_owned = true;
@@ -242,6 +249,7 @@ pub const FakeArtifactStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned write request.
     fn freeWriteRequest(allocator: Allocator, request: ports.ArtifactWriteRequest) void {
         allocator.free(request.namespace);
         allocator.free(request.name);
@@ -250,15 +258,20 @@ pub const FakeArtifactStore = struct {
         allocator.free(request.provenance);
     }
 
+    /// Clones read request into allocator-owned storage.
     fn cloneReadRequest(allocator: Allocator, request: ports.ArtifactReadRequest) !ports.ArtifactReadRequest {
         return .{ .id = try common.dupString(allocator, request.id) };
     }
 
+    /// Releases allocator-owned fields held by the cloned read request.
     fn freeReadRequest(allocator: Allocator, request: ports.ArtifactReadRequest) void {
         allocator.free(request.id);
     }
 
+    /// Clones record request into allocator-owned storage.
     fn cloneRecordRequest(allocator: Allocator, request: ports.WorkspaceArtifactRecordRequest) !ports.WorkspaceArtifactRecordRequest {
+        // Clone every nested string before transferring ownership; each
+        // ownership flag prevents leaks if a later field allocation fails.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -341,6 +354,7 @@ pub const FakeArtifactStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned record request.
     fn freeRecordRequest(allocator: Allocator, request: ports.WorkspaceArtifactRecordRequest) void {
         allocator.free(request.path);
         common.freeOptionalString(allocator, request.bytes);
@@ -359,6 +373,7 @@ pub const FakeArtifactStore = struct {
         allocator.free(request.provenance);
     }
 
+    /// Clones ref into allocator-owned storage.
     fn cloneRef(allocator: Allocator, ref: ports.ArtifactRef) !ports.ArtifactRef {
         const id = try common.dupString(allocator, ref.id);
         var id_owned = true;
@@ -381,6 +396,7 @@ pub const FakeArtifactStore = struct {
         };
     }
 
+    /// Clones workspace ref into allocator-owned storage.
     fn cloneWorkspaceRef(allocator: Allocator, ref: ports.WorkspaceArtifactRef) !ports.WorkspaceArtifactRef {
         const path = try common.dupString(allocator, ref.path);
         var path_owned = true;
@@ -404,6 +420,7 @@ pub const FakeArtifactStore = struct {
         };
     }
 
+    /// Compares write requests by the fields that affect behavior.
     fn writeRequestsEqual(expected: ports.ArtifactWriteRequest, actual: ports.ArtifactWriteRequest) bool {
         return std.mem.eql(u8, expected.namespace, actual.namespace) and
             std.mem.eql(u8, expected.name, actual.name) and
@@ -412,10 +429,12 @@ pub const FakeArtifactStore = struct {
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares read requests by the fields that affect behavior.
     fn readRequestsEqual(expected: ports.ArtifactReadRequest, actual: ports.ArtifactReadRequest) bool {
         return std.mem.eql(u8, expected.id, actual.id);
     }
 
+    /// Compares record requests by the fields that affect behavior.
     fn recordRequestsEqual(expected: ports.WorkspaceArtifactRecordRequest, actual: ports.WorkspaceArtifactRecordRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             common.optionalStringsEqual(expected.bytes, actual.bytes) and

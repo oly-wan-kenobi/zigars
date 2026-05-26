@@ -1,11 +1,16 @@
 const std = @import("std");
 const domain_catalog = @import("../../../domain/zig/backend_catalog.zig");
 
+/// Shared supported zig version result type used by this workflow module.
 pub const supported_zig_version = domain_catalog.supported_zig_version;
+/// Shared backend result type used by this workflow module.
 pub const Backend = domain_catalog.Backend;
+/// Shared paths result type used by this workflow module.
 pub const Paths = domain_catalog.Paths;
+/// Shared backends result type used by this workflow module.
 pub const backends = domain_catalog.backends;
 
+/// Serializes value data into an allocator-owned JSON value; allocation failures propagate.
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_setup_catalog" });
@@ -17,6 +22,7 @@ pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_path
     return .{ .object = obj };
 }
 
+/// Serializes backend fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     const configured_path = pathFor(backend.name, paths);
@@ -34,6 +40,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
     return .{ .object = obj };
 }
 
+/// Implements path for workflow logic using caller-owned inputs.
 fn pathFor(name: []const u8, paths: Paths) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
@@ -43,12 +50,14 @@ fn pathFor(name: []const u8, paths: Paths) []const u8 {
     return paths.diff_folded_path;
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |item| try array.append(.{ .string = item });
     return .{ .array = array };
 }
 
+/// Serializes probe argv fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (probe_argv, 0..) |item, index| {

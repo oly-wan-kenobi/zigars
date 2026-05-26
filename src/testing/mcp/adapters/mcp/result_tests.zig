@@ -197,30 +197,35 @@ test "owned JSON helper rollbacks handle allocation failure" {
     }
 }
 
+/// Inserts an owned JSON value into an object.
 fn putOwnedValue(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
     const owned_key = try allocator.dupe(u8, key);
     errdefer allocator.free(owned_key);
     try obj.put(allocator, owned_key, value);
 }
 
+/// Inserts an allocator-owned string into a JSON object.
 fn putOwnedString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     errdefer allocator.free(owned_value);
     try putOwnedValue(allocator, obj, key, .{ .string = owned_value });
 }
 
+/// Inserts a number encoded as an owned JSON string.
 fn putOwnedNumberString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     errdefer allocator.free(owned_value);
     try putOwnedValue(allocator, obj, key, .{ .number_string = owned_value });
 }
 
+/// Appends an allocator-owned string to a JSON array.
 fn appendOwnedString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     errdefer allocator.free(owned_value);
     try array.append(.{ .string = owned_value });
 }
 
+/// Appends a number encoded as an owned JSON string.
 fn appendOwnedNumberString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     errdefer allocator.free(owned_value);

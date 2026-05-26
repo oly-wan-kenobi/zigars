@@ -64,10 +64,12 @@ pub fn zigToolPlan(allocator: std.mem.Allocator, context: app_context.Context, a
     return structured(allocator, value);
 }
 
+/// Wraps a JSON value as a structured MCP tool result.
 fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_result.structured(allocator, value);
 }
 
+/// Serializes a JSON value for tools that return text-only MCP content.
 fn jsonTextOnly(allocator: std.mem.Allocator, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     // Ownership of `bytes` transfers into the text content block on success.
     var bytes_owned = true;
@@ -104,6 +106,7 @@ fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.jso
     };
 }
 
+/// Returns the structured missing-argument error for environment planning tools.
 fn missingPlanningArgument(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.result(allocator, .{
         .kind = "tool_error",
@@ -121,6 +124,7 @@ fn missingPlanningArgument(allocator: std.mem.Allocator, tool_name: []const u8, 
     });
 }
 
+/// Maps port tool error failures to structured MCP errors.
 fn portToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -132,6 +136,7 @@ fn portToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
     }, err);
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     const obj = switch (args orelse return null) {
         .object => |o| o,
@@ -143,6 +148,7 @@ fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     const obj = switch (args orelse return default) {
         .object => |o| o,
@@ -154,6 +160,7 @@ fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     };
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     const obj = switch (args orelse return default) {
         .object => |o| o,
@@ -207,6 +214,7 @@ test "discovery adapter planning errors map to structured MCP errors" {
     try expectToolErrorCode(denied, "discovery_failed");
 }
 
+/// Maps expect tool error code failures to structured MCP errors.
 fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
     try std.testing.expect(result.is_error);
     try std.testing.expectEqualStrings(expected, result.structuredContent.?.object.get("code").?.string);

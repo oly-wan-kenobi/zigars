@@ -7,6 +7,7 @@ const LspClient = client_mod.LspClient;
 const LspTransport = @import("transport.zig").LspTransport;
 const testPipe = support.testPipe;
 
+/// Builds a bounded in-memory I/O fixture for tests.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();

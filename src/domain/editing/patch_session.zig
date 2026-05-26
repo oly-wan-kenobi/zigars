@@ -38,6 +38,7 @@ pub const ExpectedPreimage = struct {
     identity: Identity,
 };
 
+/// Builds a file identity from existence state and bytes; allocates the digest when present.
 pub fn identityFromBytes(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) !Identity {
     if (!exists) return .{ .exists = false, .bytes = 0, .sha256 = null };
     return .{
@@ -55,6 +56,7 @@ pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     return allocator.dupe(u8, &hex);
 }
 
+/// Returns whether a file identity matches the expected preimage set.
 pub fn expectedMatches(expected: []const ExpectedPreimage, file: []const u8, actual: Identity) bool {
     for (expected) |item| {
         if (std.mem.eql(u8, item.file, file)) return item.identity.matches(actual);

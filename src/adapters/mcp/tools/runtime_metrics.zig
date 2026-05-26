@@ -134,6 +134,7 @@ fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilityS
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for command durations.
 fn commandDurationsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -146,6 +147,7 @@ fn commandDurationsValue(allocator: std.mem.Allocator, snapshot: ports.Observabi
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for analysis cache.
 fn analysisCacheValue(allocator: std.mem.Allocator, cache: read_model.AnalysisCacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -156,6 +158,7 @@ fn analysisCacheValue(allocator: std.mem.Allocator, cache: read_model.AnalysisCa
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for artifact metrics.
 fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: read_model.ArtifactMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -168,6 +171,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: read_model.Artifa
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for tool stats.
 fn toolStatsValue(allocator: std.mem.Allocator, stats: []const ports.ObservabilityToolStats) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -187,6 +191,7 @@ fn toolStatsValue(allocator: std.mem.Allocator, stats: []const ports.Observabili
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for backend events.
 fn backendEventsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -203,6 +208,7 @@ fn backendEventsValue(allocator: std.mem.Allocator, snapshot: ports.Observabilit
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for command events.
 fn commandEventsValue(allocator: std.mem.Allocator, events: []const ports.ObservabilityCommandEvent) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -220,6 +226,7 @@ fn commandEventsValue(allocator: std.mem.Allocator, events: []const ports.Observ
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for ZLS events.
 fn zlsEventsValue(
     allocator: std.mem.Allocator,
     snapshot: ports.ObservabilitySnapshot,
@@ -252,6 +259,7 @@ fn zlsEventsValue(
     return .{ .array = array };
 }
 
+/// Returns an allocator-owned JSON value for backend cache.
 fn backendCacheValue(allocator: std.mem.Allocator, cache: read_model.BackendProbeCacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -263,6 +271,7 @@ fn backendCacheValue(allocator: std.mem.Allocator, cache: read_model.BackendProb
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for probe snapshot.
 fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?read_model.ProbeSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -280,6 +289,7 @@ fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?read_model.ProbeSnap
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for limitations.
 fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -290,10 +300,12 @@ fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = array };
 }
 
+/// Converts an optional string to an allocator-owned JSON string or null.
 fn optionalString(value: ?[]const u8) std.json.Value {
     return if (value) |text| .{ .string = text } else .null;
 }
 
+/// Computes a per-thousand rate, returning zero for an empty denominator.
 fn ratePerThousand(numerator: u64, denominator: u64) u64 {
     if (denominator == 0) return 0;
     return numerator * 1000 / denominator;
@@ -314,6 +326,7 @@ test "runtime metrics value builders release partial objects on allocation failu
             .{ .sequence = 3, .title = "zig build", .argv0 = "zig", .duration_ms = 15, .ok = false, .error_name = "BuildFailed" },
         };
 
+        /// Test stub that returns a runtime metrics snapshot.
         fn snapshot() ports.ObservabilitySnapshot {
             return .{
                 .tool_stats = tool_stats[0..],
@@ -329,6 +342,7 @@ test "runtime metrics value builders release partial objects on allocation failu
             };
         }
 
+        /// Test stub that returns a runtime metrics report.
         fn report() read_model.MetricsReport {
             return .{
                 .base = .{

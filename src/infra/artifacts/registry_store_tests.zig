@@ -5,6 +5,7 @@ const workspace_mod = @import("../workspace/workspace.zig");
 
 const Store = registry_store.Store;
 
+/// Replays an artifact store operation until the failing allocator stops injecting errors.
 fn exerciseAllocationFailures(comptime operation: fn (std.mem.Allocator) anyerror!void) !void {
     var saw_out_of_memory = false;
     for (0..64) |fail_index| {
@@ -18,6 +19,7 @@ fn exerciseAllocationFailures(comptime operation: fn (std.mem.Allocator) anyerro
     try std.testing.expect(saw_out_of_memory);
 }
 
+/// Writes an artifact using the supplied test allocator.
 fn putArtifactWithAllocator(operation_allocator: std.mem.Allocator) !void {
     const setup_allocator = std.testing.allocator;
     const io = std.testing.io;
@@ -44,6 +46,7 @@ fn putArtifactWithAllocator(operation_allocator: std.mem.Allocator) !void {
     defer ref.deinit(operation_allocator);
 }
 
+/// Records a workspace artifact using the supplied test allocator.
 fn recordWorkspaceWithAllocator(operation_allocator: std.mem.Allocator) !void {
     const setup_allocator = std.testing.allocator;
     const io = std.testing.io;

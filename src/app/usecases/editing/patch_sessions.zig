@@ -6,31 +6,42 @@ const path_policy = @import("../../../domain/editing/path_policy.zig");
 const session_domain = @import("../../../domain/editing/patch_session.zig");
 const validation_usecase = @import("../validation/workflows.zig");
 
+/// Schema version written into this module's structured payloads.
 pub const schema_version: i64 = 1;
+/// Default history path used when the caller omits an explicit value.
 pub const history_path_default = ".zigar-cache/patch-sessions/history.jsonl";
+/// Maximum session file bytes accepted by this workflow module.
 pub const max_session_file_bytes: usize = 10 * 1024 * 1024;
+/// Shared history max bytes result type used by this workflow module.
 pub const history_max_bytes: usize = 8 * 1024 * 1024;
 
+/// Path-policy type used to classify editable workspace paths.
 pub const PathPolicy = path_policy.PathPolicy;
+/// Preimage identity type used to verify replacement sessions.
 pub const Identity = session_domain.Identity;
+/// Preimage identity type used to verify replacement sessions.
 pub const ExpectedPreimage = session_domain.ExpectedPreimage;
 
+/// Carries replacement data across use case and port boundaries.
 pub const Replacement = struct {
     file: []const u8,
     content: []const u8,
 };
 
+/// Carries create request data across use case and port boundaries.
 pub const CreateRequest = struct {
     session_id: []const u8,
     goal: ?[]const u8 = null,
     paths: []const []const u8,
 };
 
+/// Carries session file state data across use case and port boundaries.
 pub const SessionFileState = struct {
     file: []const u8,
     preimage_identity: Identity,
     policy: PathPolicy,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *SessionFileState, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         self.preimage_identity.deinit(allocator);
@@ -38,20 +49,24 @@ pub const SessionFileState = struct {
     }
 };
 
+/// Carries file failure data across use case and port boundaries.
 pub const FileFailure = struct {
     file: []const u8,
     error_name: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *FileFailure, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         self.* = undefined;
     }
 };
 
+/// Represents create file alternatives carried across the workflow boundary.
 pub const CreateFile = union(enum) {
     ok: SessionFileState,
     err: FileFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CreateFile, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*state| state.deinit(allocator),
@@ -61,6 +76,7 @@ pub const CreateFile = union(enum) {
     }
 };
 
+/// Carries create result data across use case and port boundaries.
 pub const CreateResult = struct {
     session_id: []const u8,
     goal: ?[]const u8,
@@ -68,6 +84,7 @@ pub const CreateResult = struct {
     files: []CreateFile,
     expected_preimages: []ExpectedPreimage,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CreateResult, allocator: std.mem.Allocator) void {
         allocator.free(self.session_id);
         if (self.goal) |goal| allocator.free(goal);
@@ -78,10 +95,12 @@ pub const CreateResult = struct {
     }
 };
 
+/// Defines the allowed replacement operation variants accepted by this workflow.
 pub const ReplacementOperation = enum {
     preview,
     apply,
 
+    /// Implements kind workflow logic using caller-owned inputs.
     pub fn kind(self: ReplacementOperation) []const u8 {
         return switch (self) {
             .preview => "zigar_patch_session_preview",
@@ -90,6 +109,7 @@ pub const ReplacementOperation = enum {
     }
 };
 
+/// Carries replacement request data across use case and port boundaries.
 pub const ReplacementRequest = struct {
     operation: ReplacementOperation,
     session_id: []const u8,
@@ -99,6 +119,7 @@ pub const ReplacementRequest = struct {
     apply: bool,
 };
 
+/// Carries replacement file data across use case and port boundaries.
 pub const ReplacementFile = struct {
     file: []const u8,
     changed: bool,
@@ -108,6 +129,7 @@ pub const ReplacementFile = struct {
     expected_preimage_matched: bool,
     diff: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *ReplacementFile, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         self.preimage_identity.deinit(allocator);
@@ -117,12 +139,14 @@ pub const ReplacementFile = struct {
     }
 };
 
+/// Carries history file record data across use case and port boundaries.
 pub const HistoryFileRecord = struct {
     file: []const u8,
     preimage_identity: Identity,
     updated_identity: Identity,
     preimage_content_path: ?[]const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *HistoryFileRecord, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         self.preimage_identity.deinit(allocator);
@@ -131,6 +155,7 @@ pub const HistoryFileRecord = struct {
         self.* = undefined;
     }
 
+    /// Clones this value with caller-provided storage; allocation failures are propagated and partial copies are cleaned up.
     pub fn clone(self: HistoryFileRecord, allocator: std.mem.Allocator) !HistoryFileRecord {
         const file = try allocator.dupe(u8, self.file);
         errdefer allocator.free(file);
@@ -149,12 +174,14 @@ pub const HistoryFileRecord = struct {
     }
 };
 
+/// Carries session record data across use case and port boundaries.
 pub const SessionRecord = struct {
     session_id: []const u8,
     goal: ?[]const u8,
     recorded_unix_ms: i64,
     files: []HistoryFileRecord,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *SessionRecord, allocator: std.mem.Allocator) void {
         allocator.free(self.session_id);
         if (self.goal) |goal| allocator.free(goal);
@@ -164,6 +191,7 @@ pub const SessionRecord = struct {
     }
 };
 
+/// Carries replacement result data across use case and port boundaries.
 pub const ReplacementResult = struct {
     operation: ReplacementOperation,
     session_id: []const u8,
@@ -177,6 +205,7 @@ pub const ReplacementResult = struct {
     expected_preimages: []ExpectedPreimage,
     history_path: []const u8 = history_path_default,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *ReplacementResult, allocator: std.mem.Allocator) void {
         allocator.free(self.session_id);
         if (self.goal) |goal| allocator.free(goal);
@@ -187,6 +216,7 @@ pub const ReplacementResult = struct {
     }
 };
 
+/// Carries revert request data across use case and port boundaries.
 pub const RevertRequest = struct {
     session_id: []const u8,
     apply: bool = false,
@@ -194,6 +224,7 @@ pub const RevertRequest = struct {
     history_path: []const u8 = history_path_default,
 };
 
+/// Carries revert file data across use case and port boundaries.
 pub const RevertFile = struct {
     file: []const u8,
     safe_to_revert: bool,
@@ -204,6 +235,7 @@ pub const RevertFile = struct {
     would_delete: bool,
     diff: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RevertFile, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         self.current_identity.deinit(allocator);
@@ -214,6 +246,7 @@ pub const RevertFile = struct {
     }
 };
 
+/// Carries revert result data across use case and port boundaries.
 pub const RevertResult = struct {
     session_id: []const u8,
     applied: bool,
@@ -222,6 +255,7 @@ pub const RevertResult = struct {
     files: []RevertFile,
     record: SessionRecord,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RevertResult, allocator: std.mem.Allocator) void {
         allocator.free(self.session_id);
         for (self.files) |*file| file.deinit(allocator);
@@ -231,14 +265,17 @@ pub const RevertResult = struct {
     }
 };
 
+/// Represents revert failure alternatives carried across the workflow boundary.
 pub const RevertFailure = union(enum) {
     not_found,
 };
 
+/// Represents revert outcome alternatives carried across the workflow boundary.
 pub const RevertOutcome = union(enum) {
     ok: RevertResult,
     err: RevertFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RevertOutcome, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*result| result.deinit(allocator),
@@ -248,10 +285,12 @@ pub const RevertOutcome = union(enum) {
     }
 };
 
+/// Implements classify path workflow logic using caller-owned inputs.
 pub fn classifyPath(path: []const u8) PathPolicy {
     return path_policy.classify(path);
 }
 
+/// Implements create workflow logic using caller-owned inputs.
 pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext, request: CreateRequest) !CreateResult {
     var files = std.ArrayList(CreateFile).empty;
     errdefer {
@@ -307,6 +346,7 @@ pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext,
     };
 }
 
+/// Previews or applies a replacement session while preserving preimage evidence.
 pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.EditingContext, request: ReplacementRequest) !ReplacementResult {
     var files = std.ArrayList(ReplacementFile).empty;
     errdefer {
@@ -324,6 +364,7 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         history_files.deinit(allocator);
     }
 
+    // First pass builds preview metadata and preimage identities without mutating the workspace.
     var safe = true;
     var changed_count: usize = 0;
     for (request.replacements, 0..) |replacement, index| {
@@ -363,6 +404,7 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         history_file_owned = true;
     }
 
+    // Unsafe apply requests return the preview and intentionally skip history writes.
     if (request.apply and !safe) {
         for (history_files.items) |*file| file.deinit(allocator);
         history_files.deinit(allocator);
@@ -370,6 +412,7 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         return replacementResultFromParts(allocator, request, false, false, false, changed_count, true, &files, &expected);
     }
 
+    // Apply only after every replacement has passed policy and expected-preimage checks.
     if (request.apply) {
         for (request.replacements, 0..) |replacement, index| {
             var snapshot = try readSnapshot(allocator, context, replacement.file);
@@ -394,12 +437,14 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         try appendSessionHistory(allocator, context, history_path_default, record);
     }
 
+    // History file records are transient once the response has been assembled.
     for (history_files.items) |*file| file.deinit(allocator);
     history_files.deinit(allocator);
     history_files = .empty;
     return replacementResultFromParts(allocator, request, request.apply, !request.apply, safe, changed_count, false, &files, &expected);
 }
 
+/// Implements revert workflow logic using caller-owned inputs.
 pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !RevertOutcome {
     var record = loadSessionRecord(allocator, context, request) catch |err| switch (err) {
         error.SessionNotFound => return .{ .err = .not_found },
@@ -439,6 +484,7 @@ pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext,
     } };
 }
 
+/// Implements validate workflow logic using caller-owned inputs.
 pub fn validate(
     allocator: std.mem.Allocator,
     context: app_context.ValidationContext,
@@ -447,6 +493,7 @@ pub fn validate(
     return validation_usecase.run(allocator, context, request);
 }
 
+/// Implements replacement result from parts workflow logic using caller-owned inputs.
 fn replacementResultFromParts(
     allocator: std.mem.Allocator,
     request: ReplacementRequest,
@@ -482,6 +529,7 @@ fn replacementResultFromParts(
     };
 }
 
+/// Implements create file ok workflow logic using caller-owned inputs.
 fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identity, policy: PathPolicy) !CreateFile {
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
@@ -494,6 +542,7 @@ fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identi
     } };
 }
 
+/// Implements create file error workflow logic using caller-owned inputs.
 fn createFileError(allocator: std.mem.Allocator, file: []const u8, error_name: []const u8) !CreateFile {
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
@@ -503,6 +552,7 @@ fn createFileError(allocator: std.mem.Allocator, file: []const u8, error_name: [
     } };
 }
 
+/// Implements replacement file from parts workflow logic using caller-owned inputs.
 fn replacementFileFromParts(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -530,6 +580,7 @@ fn replacementFileFromParts(
     };
 }
 
+/// Implements history file for replacement workflow logic using caller-owned inputs.
 fn historyFileForReplacement(
     allocator: std.mem.Allocator,
     session_id: []const u8,
@@ -555,18 +606,21 @@ fn historyFileForReplacement(
     };
 }
 
+/// Carries file snapshot data across use case and port boundaries.
 const FileSnapshot = struct {
     file: []const u8,
     bytes: []const u8,
     exists: bool,
     read_result: ?ports.WorkspaceReadResult = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *FileSnapshot, allocator: std.mem.Allocator) void {
         if (self.read_result) |result| result.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Reads snapshot data from the provided context without taking ownership of inputs.
 fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !FileSnapshot {
     const result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -589,6 +643,7 @@ fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContex
     };
 }
 
+/// Builds preimage identity metadata for the requested workspace path.
 fn expectedPreimageFromIdentity(allocator: std.mem.Allocator, file: []const u8, identity: Identity) !ExpectedPreimage {
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
@@ -600,23 +655,27 @@ fn expectedPreimageFromIdentity(allocator: std.mem.Allocator, file: []const u8, 
     };
 }
 
+/// Releases expected preimage allocations; callers must not reuse freed items.
 fn deinitExpectedPreimage(allocator: std.mem.Allocator, expected: ExpectedPreimage) void {
     allocator.free(expected.file);
     var identity = expected.identity;
     identity.deinit(allocator);
 }
 
+/// Releases expected preimages allocations; callers must not reuse freed items.
 fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const ExpectedPreimage) void {
     freeExpectedPreimageItems(allocator, expected);
     allocator.free(expected);
 }
 
+/// Releases expected preimage items allocations; callers must not reuse freed items.
 fn freeExpectedPreimageItems(allocator: std.mem.Allocator, expected: []const ExpectedPreimage) void {
     for (expected) |item| {
         deinitExpectedPreimage(allocator, item);
     }
 }
 
+/// Implements session record workflow logic using caller-owned inputs.
 fn sessionRecord(
     allocator: std.mem.Allocator,
     context: app_context.EditingContext,
@@ -647,6 +706,7 @@ fn sessionRecord(
     };
 }
 
+/// Appends session history data into caller-provided storage, propagating allocation failures.
 fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8, record: SessionRecord) !void {
     const line = try recordJsonLine(allocator, record);
     defer allocator.free(line);
@@ -673,6 +733,7 @@ fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.Editi
     });
 }
 
+/// Reads session record data from the provided context without taking ownership of inputs.
 fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !SessionRecord {
     var history_read: ?ports.WorkspaceReadResult = null;
     const text = request.history orelse blk: {
@@ -688,6 +749,7 @@ fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingC
     return parseSessionRecord(allocator, text, request.session_id);
 }
 
+/// Parses session record input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id: []const u8) !SessionRecord {
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
     if (trimmed.len == 0) return error.SessionNotFound;
@@ -712,6 +774,7 @@ fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id
     return error.SessionNotFound;
 }
 
+/// Decodes a session history record only when its session id matches the requested session.
 fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, session_id: []const u8) !?SessionRecord {
     const obj = switch (value) {
         .object => |object| object,
@@ -751,6 +814,7 @@ fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, s
     };
 }
 
+/// Serializes history file from fields into an allocator-owned JSON value; allocation failures propagate.
 fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryFileRecord {
     const obj = switch (value) {
         .object => |object| object,
@@ -772,6 +836,7 @@ fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Hi
     };
 }
 
+/// Serializes identity from fields into an allocator-owned JSON value; allocation failures propagate.
 fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Identity {
     const obj = switch (value) {
         .object => |object| object,
@@ -785,6 +850,7 @@ fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Ident
     };
 }
 
+/// Implements revert file preview workflow logic using caller-owned inputs.
 fn revertFilePreview(allocator: std.mem.Allocator, context: app_context.EditingContext, record_file: HistoryFileRecord) !RevertFile {
     var snapshot = try readSnapshot(allocator, context, record_file.file);
     defer snapshot.deinit(allocator);
@@ -818,6 +884,7 @@ fn revertFilePreview(allocator: std.mem.Allocator, context: app_context.EditingC
     };
 }
 
+/// Implements apply revert file workflow logic using caller-owned inputs.
 fn applyRevertFile(allocator: std.mem.Allocator, context: app_context.EditingContext, record_file: HistoryFileRecord) !void {
     if (!record_file.preimage_identity.exists) {
         _ = try context.workspace_store.delete(.{
@@ -841,6 +908,7 @@ fn applyRevertFile(allocator: std.mem.Allocator, context: app_context.EditingCon
     });
 }
 
+/// Implements record json line workflow logic using caller-owned inputs.
 fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
@@ -876,6 +944,7 @@ fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const 
     return try out.toOwnedSlice();
 }
 
+/// Writes identity json fields to the provided JSON stream and propagates writer failures.
 fn writeIdentityJson(out: *std.Io.Writer.Allocating, identity: Identity) !void {
     try out.writer.print("{{\"exists\":{},\"bytes\":{d},\"sha256\":", .{ identity.exists, identity.bytes });
     if (identity.sha256) |hash| {
@@ -886,10 +955,12 @@ fn writeIdentityJson(out: *std.Io.Writer.Allocating, identity: Identity) !void {
     try out.writer.writeAll("}");
 }
 
+/// Writes json string fields to the provided JSON stream and propagates writer failures.
 fn writeJsonString(out: *std.Io.Writer.Allocating, text: []const u8) !void {
     try std.json.Stringify.value(text, .{}, &out.writer);
 }
 
+/// Extracts string field data from JSON input without taking ownership of borrowed values.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -897,6 +968,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Extracts bool field data from JSON input without taking ownership of borrowed values.
 fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     return switch (obj.get(field) orelse .null) {
         .bool => |b| b,
@@ -904,6 +976,7 @@ fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     };
 }
 
+/// Extracts integer field data from JSON input without taking ownership of borrowed values.
 fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |value| value,

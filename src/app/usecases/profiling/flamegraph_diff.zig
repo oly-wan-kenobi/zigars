@@ -7,8 +7,10 @@ const ports = @import("../../ports.zig");
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
 const flamegraph = @import("flamegraph.zig");
 
+/// Command output limit applied when collecting workflow evidence.
 pub const command_output_limit: usize = 1024 * 1024;
 
+/// Carries request data across use case and port boundaries.
 pub const Request = struct {
     before: []const u8,
     after: []const u8,
@@ -17,8 +19,10 @@ pub const Request = struct {
     options: flamegraph_model.ZflameRenderOptions = .{},
 };
 
+/// Shared owned argv type used by this workflow module.
 pub const OwnedArgv = flamegraph.OwnedArgv;
 
+/// Carries diff folded artifact data across use case and port boundaries.
 pub const DiffFoldedArtifact = struct {
     backend: []const u8 = "diff-folded",
     backend_executable_path: []const u8,
@@ -27,6 +31,7 @@ pub const DiffFoldedArtifact = struct {
     sha256: []const u8,
     argv: OwnedArgv,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *DiffFoldedArtifact, allocator: std.mem.Allocator) void {
         allocator.free(self.sha256);
         self.argv.deinit(allocator);
@@ -34,6 +39,7 @@ pub const DiffFoldedArtifact = struct {
     }
 };
 
+/// Carries resolved request data across use case and port boundaries.
 pub const ResolvedRequest = struct {
     before: []const u8,
     before_abs: []const u8,
@@ -45,6 +51,7 @@ pub const ResolvedRequest = struct {
     intermediate_abs: []const u8,
     options: flamegraph_model.ZflameRenderOptions,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *ResolvedRequest, allocator: std.mem.Allocator) void {
         allocator.free(self.before_abs);
         allocator.free(self.after_abs);
@@ -55,11 +62,13 @@ pub const ResolvedRequest = struct {
     }
 };
 
+/// Carries artifact data across use case and port boundaries.
 pub const Artifact = struct {
     request: ResolvedRequest,
     render: flamegraph.Artifact,
     diff: DiffFoldedArtifact,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Artifact, allocator: std.mem.Allocator) void {
         self.render.deinit(allocator);
         self.diff.deinit(allocator);
@@ -68,12 +77,14 @@ pub const Artifact = struct {
     }
 };
 
+/// Carries path failure data across use case and port boundaries.
 pub const PathFailure = struct {
     err: ports.PortError,
     path: []const u8,
     for_output: bool = false,
 };
 
+/// Carries workspace failure data across use case and port boundaries.
 pub const WorkspaceFailure = struct {
     error_info: app_errors.AppError,
     err: ports.PortError,
@@ -81,6 +92,7 @@ pub const WorkspaceFailure = struct {
     abs_path: []const u8,
 };
 
+/// Carries backend run failure data across use case and port boundaries.
 pub const BackendRunFailure = struct {
     error_info: app_errors.AppError,
     err: ports.PortError,
@@ -88,12 +100,14 @@ pub const BackendRunFailure = struct {
     cwd: []const u8,
     timeout_ms: i64,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *BackendRunFailure, allocator: std.mem.Allocator) void {
         self.argv.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Carries command failure data across use case and port boundaries.
 pub const CommandFailure = struct {
     error_info: app_errors.AppError,
     argv: OwnedArgv,
@@ -106,6 +120,7 @@ pub const CommandFailure = struct {
     stdout_truncated: bool,
     stderr_truncated: bool,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandFailure, allocator: std.mem.Allocator) void {
         self.argv.deinit(allocator);
         allocator.free(self.stdout);
@@ -114,21 +129,25 @@ pub const CommandFailure = struct {
     }
 };
 
+/// Carries malformed output failure data across use case and port boundaries.
 pub const MalformedOutputFailure = struct {
     error_info: app_errors.AppError,
     output: []const u8,
 };
 
+/// Carries render failure data across use case and port boundaries.
 pub const RenderFailure = struct {
     request: flamegraph.Request,
     failure: flamegraph.Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RenderFailure, allocator: std.mem.Allocator) void {
         self.failure.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Represents failure alternatives carried across the workflow boundary.
 pub const Failure = union(enum) {
     workspace_path_failed: PathFailure,
     workspace_input_read_failed: WorkspaceFailure,
@@ -139,6 +158,7 @@ pub const Failure = union(enum) {
     backend_output_malformed: MalformedOutputFailure,
     render_failed: RenderFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Failure, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .backend_run_failed => |*failure| failure.deinit(allocator),
@@ -150,12 +170,14 @@ pub const Failure = union(enum) {
     }
 };
 
+/// Represents result alternatives carried across the workflow boundary.
 pub const Result = union(enum) {
     ok: Artifact,
     err: struct {
         request: ?ResolvedRequest = null,
         failure: Failure,
 
+        /// Releases allocations owned by this value; callers must not use owned slices after this returns.
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             self.failure.deinit(allocator);
             if (self.request) |*request| request.deinit(allocator);
@@ -163,6 +185,7 @@ pub const Result = union(enum) {
         }
     },
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Result, allocator: std.mem.Allocator) void {
         // Exactly one union arm owns heap data at a time.
         switch (self.*) {
@@ -173,6 +196,7 @@ pub const Result = union(enum) {
     }
 };
 
+/// Produces a folded-stack diff, renders it as an SVG flamegraph, and returns both artifacts.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     var resolved = switch (try resolveRequest(allocator, context, request)) {
         .ok => |value| value,
@@ -181,6 +205,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     var resolved_owned = true;
     defer if (resolved_owned) resolved.deinit(allocator);
 
+    // Resolve all workspace paths first so every failure can include the normalized request.
     if (try ensureInputReadable(allocator, context, resolved.before, resolved.before_abs)) |failure| {
         resolved_owned = false;
         return .{ .err = .{ .request = resolved, .failure = failure } };
@@ -194,6 +219,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
         return .{ .err = .{ .request = resolved, .failure = failure } };
     }
 
+    // diff-folded writes the intermediate folded file; the next step validates and renders it.
     var diff_argv = try flamegraph_model.buildDiffFoldedArgv(allocator, .{
         .executable = context.tool_paths.diff_folded,
         .output = resolved.intermediate_abs,
@@ -269,6 +295,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
         } } } };
     }
 
+    // Re-read the intermediate artifact through workspace ports before passing it to zflame.
     const folded = context.workspace_store.read(allocator, .{
         .path = resolved.intermediate,
         .max_bytes = command_output_limit,
@@ -313,6 +340,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     var diff_artifact_owned = true;
     defer if (diff_artifact_owned) diff_artifact.deinit(allocator);
 
+    // The nested flamegraph run owns render validation; this function wraps any render failure.
     var render = try flamegraph.run(allocator, context, .{
         .tool_name = "zig_flamegraph_diff",
         .operation = "render_differential_flamegraph",
@@ -354,11 +382,13 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     }
 }
 
+/// Represents resolve request result alternatives carried across the workflow boundary.
 const ResolveRequestResult = union(enum) {
     ok: ResolvedRequest,
     err: PathFailure,
 };
 
+/// Resolves resolve request from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolveRequest(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !ResolveRequestResult {
     const before_abs = resolvePath(allocator, context, request.before, false) catch |err| return .{ .err = .{ .err = err, .path = request.before } };
     errdefer allocator.free(before_abs);
@@ -404,6 +434,7 @@ fn resolveRequest(allocator: std.mem.Allocator, context: app_context.ProfilingCo
     } };
 }
 
+/// Implements generated intermediate path workflow logic using caller-owned inputs.
 fn generatedIntermediatePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext) ![]const u8 {
     const clock = context.clock_and_ids orelse return error.InvalidRequest;
     const base = try clock.nextId(allocator, .{ .prefix = ".zigar-cache/profile/diff-" });
@@ -411,6 +442,7 @@ fn generatedIntermediatePath(allocator: std.mem.Allocator, context: app_context.
     return std.fmt.allocPrint(allocator, "{s}.folded", .{base});
 }
 
+/// Resolves resolve path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext, path: []const u8, for_output: bool) ports.PortError![]const u8 {
     const resolved = try context.workspace_store.resolve(allocator, .{
         .path = path,
@@ -421,6 +453,7 @@ fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingConte
     return allocator.dupe(u8, resolved.path) catch return error.OutOfMemory;
 }
 
+/// Implements ensure input readable workflow logic using caller-owned inputs.
 fn ensureInputReadable(allocator: std.mem.Allocator, context: app_context.ProfilingContext, input: []const u8, input_abs: []const u8) !?Failure {
     const input_probe = context.workspace_store.read(allocator, .{
         .path = input,
@@ -442,6 +475,7 @@ fn ensureInputReadable(allocator: std.mem.Allocator, context: app_context.Profil
     return null;
 }
 
+/// Implements ensure output parent workflow logic using caller-owned inputs.
 fn ensureOutputParent(context: app_context.ProfilingContext, output: []const u8, output_abs: []const u8) !?Failure {
     const parent = std.fs.path.dirname(output) orelse return null;
     _ = context.workspace_store.ensureDir(.{
@@ -462,11 +496,13 @@ fn ensureOutputParent(context: app_context.ProfilingContext, output: []const u8,
     return null;
 }
 
+/// Normalizes numeric input into the bounded value used by this workflow.
 fn normalizedTimeout(timeout_ms: i64) u64 {
     if (timeout_ms <= 0) return 0;
     return @intCast(timeout_ms);
 }
 
+/// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
     const items = try allocator.alloc([]const u8, argv.len);
     var filled: usize = 0;
@@ -481,6 +517,7 @@ fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv 
     return .{ .items = items };
 }
 
+/// Computes a lowercase SHA-256 hex digest in allocator-owned storage.
 fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -491,6 +528,7 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
 const fake_command = @import("../../../testing/fakes/command_runner.zig");
 const fake_workspace = @import("../../../testing/fakes/workspace_store.zig");
 
+/// Implements test profiling context workflow logic using caller-owned inputs.
 fn testProfilingContext(
     commands: *fake_command.FakeCommandRunner,
     workspace: *fake_workspace.FakeWorkspaceStore,
@@ -506,9 +544,11 @@ fn testProfilingContext(
     };
 }
 
+/// Carries test clock data across use case and port boundaries.
 const TestClock = struct {
     id: []const u8 = "case",
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *TestClock) ports.ClockAndIds {
         return .{ .ptr = self, .vtable = &.{
             .now = now,
@@ -516,10 +556,12 @@ const TestClock = struct {
         } };
     }
 
+    /// Returns the fixture clock timestamp.
     fn now(_: *anyopaque) ports.PortError!ports.Instant {
         return .{ .unix_ms = 1, .monotonic_ms = 1 };
     }
 
+    /// Allocates the next deterministic fixture identifier.
     fn nextId(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
         const self: *TestClock = @ptrCast(@alignCast(ptr));
         return std.fmt.allocPrint(allocator, "{s}{s}", .{ request.prefix, self.id }) catch return error.OutOfMemory;

@@ -28,6 +28,7 @@ pub const RuntimeClockAndIds = struct {
         };
     }
 
+    /// Returns the current test or system timestamp.
     fn now(ptr: *anyopaque) ports.PortError!ports.Instant {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return .{
@@ -36,6 +37,7 @@ pub const RuntimeClockAndIds = struct {
         };
     }
 
+    /// Allocates the next deterministic identifier.
     fn nextId(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const id = self.counter.fetchAdd(1, .monotonic);

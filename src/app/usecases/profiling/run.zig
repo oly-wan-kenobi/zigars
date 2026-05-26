@@ -4,17 +4,21 @@ const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
+/// Command output limit applied when collecting workflow evidence.
 pub const command_output_limit: usize = 1024 * 1024;
 
+/// Carries request data across use case and port boundaries.
 pub const Request = struct {
     argv: []const []const u8,
     timeout_ms: i64,
     title: []const u8 = "explicit user profiler command (argv split without shell)",
 };
 
+/// Carries owned argv data across use case and port boundaries.
 pub const OwnedArgv = struct {
     items: [][]const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *OwnedArgv, allocator: std.mem.Allocator) void {
         for (self.items) |arg| allocator.free(arg);
         allocator.free(self.items);
@@ -22,22 +26,26 @@ pub const OwnedArgv = struct {
     }
 };
 
+/// Carries command run failure data across use case and port boundaries.
 pub const CommandRunFailure = struct {
     err: ports.PortError,
     argv: OwnedArgv,
     cwd: []const u8,
     timeout_ms: i64,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CommandRunFailure, allocator: std.mem.Allocator) void {
         self.argv.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Represents result alternatives carried across the workflow boundary.
 pub const Result = union(enum) {
     ok: ports.CommandResult,
     err: CommandRunFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Result, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |command_result| command_result.deinit(allocator),
@@ -47,6 +55,7 @@ pub const Result = union(enum) {
     }
 };
 
+/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     var command_result = context.command_runner.run(allocator, .{
         .argv = request.argv,
@@ -69,11 +78,13 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     return .{ .ok = command_result };
 }
 
+/// Normalizes numeric input into the bounded value used by this workflow.
 fn normalizedTimeout(timeout_ms: i64) u64 {
     if (timeout_ms <= 0) return 0;
     return @intCast(timeout_ms);
 }
 
+/// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
     const items = try allocator.alloc([]const u8, argv.len);
     var items_owned = true;

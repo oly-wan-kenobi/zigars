@@ -75,6 +75,7 @@ pub fn findFile(set: CoverageSet, path: []const u8) ?CoverageFile {
     return null;
 }
 
+/// Parses LCOV text into an owned coverage set; allocation failures are returned.
 fn parseLcov(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !CoverageSet {
     var set = CoverageSet{ .source_kind = source_kind };
     var set_owned = true;
@@ -111,6 +112,7 @@ fn parseLcov(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     return set;
 }
 
+/// Parses JSON evidence into owned model data; invalid shape and allocation failures are returned.
 fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !CoverageSet {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
     defer parsed.deinit();
@@ -136,6 +138,7 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     return set;
 }
 
+/// Selects the coverage array root from known JSON evidence shapes.
 fn coverageRoot(value: std.json.Value) std.json.Value {
     if (value == .object) {
         if (value.object.get("coverage")) |coverage| return coverage;
@@ -144,6 +147,7 @@ fn coverageRoot(value: std.json.Value) std.json.Value {
     return value;
 }
 
+/// Appends coverage file entries from a JSON files array; allocation failures are returned.
 fn parseFilesArray(allocator: std.mem.Allocator, set: *CoverageSet, value: std.json.Value) !void {
     if (value != .array) return error.InvalidCoverageEvidence;
     for (value.array.items) |item| {
@@ -155,6 +159,7 @@ fn parseFilesArray(allocator: std.mem.Allocator, set: *CoverageSet, value: std.j
     }
 }
 
+/// Appends an owned coverage file entry, merging duplicate paths in place.
 fn appendFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8, total: usize, covered: usize) !void {
     if (path.len == 0) return;
     for (set.files.items) |*existing| {
@@ -175,6 +180,7 @@ fn appendFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8,
     set.covered += @min(covered, total);
 }
 
+/// Reads an integer field from a JSON object when it has integer shape.
 fn intField(obj: std.json.ObjectMap, name: []const u8) ?i64 {
     const value = obj.get(name) orelse return null;
     return switch (value) {
@@ -185,6 +191,7 @@ fn intField(obj: std.json.ObjectMap, name: []const u8) ?i64 {
     };
 }
 
+/// Reads a string field from a JSON object without taking ownership.
 fn stringField(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     const value = obj.get(name) orelse return null;
     return switch (value) {

@@ -80,6 +80,7 @@ fn invoke(
     return mcp_result.structuredOwned(allocator, result.value);
 }
 
+/// Maps usecase error failures to structured MCP errors.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
@@ -97,6 +98,7 @@ const manifest_catalog = @import("../../../bootstrap/manifest_catalog.zig");
 
 test "dependency adapter maps structured and thrown usecase failures" {
     const Stub = struct {
+        /// Test stub that returns a structured tool failure.
         fn structuredFailure(_: *workflows.App, allocator: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
             var obj = std.json.ObjectMap.empty;
             const key = try allocator.dupe(u8, "kind");
@@ -111,10 +113,12 @@ test "dependency adapter maps structured and thrown usecase failures" {
             return .{ .value = .{ .object = obj }, .is_error = true };
         }
 
+        /// Test stub that throws a tool failure error.
         fn thrownFailure(_: *workflows.App, _: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
             return error.AccessDenied;
         }
 
+        /// Test stub that simulates allocation failure.
         fn oomFailure(_: *workflows.App, _: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
             return error.OutOfMemory;
         }

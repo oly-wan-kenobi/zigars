@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Parsed LSP text edit with byte offsets into the original source.
 const TextEdit = struct {
     start: usize,
     end: usize,
     new_text: []const u8,
 };
 
+/// Decoded UTF-8 scalar and the number of source bytes it consumed.
 const DecodedUtf8 = struct {
     scalar: u32,
     len: usize,
@@ -24,6 +26,7 @@ pub fn hashHex(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{x:0>16}", .{std.hash.Wyhash.hash(0, bytes)});
 }
 
+/// Indexes source lines by byte range for LSP position conversion.
 fn collectLines(allocator: std.mem.Allocator, text_value: []const u8) ![][]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
     var lines_owned = true;
@@ -148,6 +151,7 @@ pub fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_va
     return updated;
 }
 
+/// Converts an LSP UTF-16 position to a source byte offset.
 fn positionOffset(source: []const u8, position: std.json.Value) !usize {
     const obj = switch (position) {
         .object => |o| o,
@@ -201,10 +205,12 @@ pub fn lspPositionToByteOffset(source: []const u8, line: usize, utf16_character:
     return found_offset orelse error.InvalidTextEdit;
 }
 
+/// Counts UTF-16 code units in a UTF-8 slice.
 fn utf16CodeUnitCount(scalar: u32) usize {
     return if (scalar > 0xffff) 2 else 1;
 }
 
+/// Decodes one UTF-8 scalar starting at a byte offset.
 fn decodeUtf8At(source: []const u8, offset: usize) !DecodedUtf8 {
     const first = source[offset];
     if (first < 0x80) return .{ .scalar = first, .len = 1 };
@@ -250,6 +256,7 @@ fn decodeUtf8At(source: []const u8, offset: usize) !DecodedUtf8 {
     return error.InvalidTextEdit;
 }
 
+/// Reports whether a byte is a UTF-8 continuation byte.
 fn isContinuation(byte: u8) bool {
     return (byte & 0xc0) == 0x80;
 }

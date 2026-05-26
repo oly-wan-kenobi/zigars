@@ -46,6 +46,7 @@ pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.
     return structuredWithErrorFlag(allocator, value, true);
 }
 
+/// Maps structured with error flag failures to structured MCP errors.
 fn structuredWithErrorFlag(allocator: std.mem.Allocator, value: std.json.Value, is_error: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
     errdefer allocator.free(bytes);
@@ -143,12 +144,14 @@ pub fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.t
     }
 }
 
+/// Frees cloned protocol resource content and any cloned JSON payload it owns.
 fn deinitProtocolResourceContent(allocator: std.mem.Allocator, content: mcp.types.ResourceContent) void {
     if (content.text) |text| allocator.free(text);
     if (content.blob) |blob| allocator.free(blob);
     if (content._meta) |meta| deinitOwnedValue(allocator, meta);
 }
 
+/// Frees recursively cloned JSON values created for MCP result payloads.
 fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     switch (value) {
         .string => |s| allocator.free(s),
@@ -165,11 +168,13 @@ fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     }
 }
 
+/// Frees a cloned JSON array and each recursively cloned element.
 fn deinitClonedArray(allocator: std.mem.Allocator, array: *std.json.Array) void {
     for (array.items) |item| deinitClonedValue(allocator, item);
     array.deinit();
 }
 
+/// Frees a cloned JSON object and each recursively cloned field value.
 fn deinitClonedObject(allocator: std.mem.Allocator, object: *std.json.ObjectMap) void {
     var it = object.iterator();
     while (it.next()) |entry| {

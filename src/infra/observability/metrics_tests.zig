@@ -4,6 +4,7 @@ const metrics = @import("metrics.zig");
 
 const Reader = metrics.Reader;
 
+/// Builds an allocator-owned metrics snapshot for tests.
 fn snapshotWithAllocator(allocator: std.mem.Allocator) !void {
     var state = observability.State{};
     state.recordToolCall("zig_build", 4, false);

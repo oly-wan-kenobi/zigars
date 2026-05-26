@@ -40,16 +40,19 @@ pub const Session = struct {
         };
     }
 
+    /// Ensures runtime state has a default workspace root.
     fn ensureDefaultRoot(ptr: *anyopaque, workspace_root: []const u8) ports.PortError!void {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.state.ensureDefaultRoot(workspace_root);
     }
 
+    /// Starts a runtime job and records its initial event.
     fn startJob(ptr: *anyopaque, label: []const u8, command_text: []const u8, timeout_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return jobSnapshot(self.state.startJob(label, command_text, timeout_ms));
     }
 
+    /// Marks a runtime job complete and records its event.
     fn finishJob(ptr: *anyopaque, job_id: []const u8, finish: ports.RuntimeJobFinish) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const job = self.state.jobById(job_id) orelse return error.NotFound;
@@ -57,6 +60,7 @@ pub const Session = struct {
         return jobSnapshot(job);
     }
 
+    /// Marks a runtime job failed and records its event.
     fn failJob(ptr: *anyopaque, job_id: []const u8, err_name: []const u8, duration_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const job = self.state.jobById(job_id) orelse return error.NotFound;
@@ -64,33 +68,39 @@ pub const Session = struct {
         return jobSnapshot(job);
     }
 
+    /// Cancels a runtime job and records its event.
     fn cancelJob(ptr: *anyopaque, job_id: []const u8, reason: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const job = self.state.cancelJob(job_id, reason) orelse return error.NotFound;
         return jobSnapshot(job);
     }
 
+    /// Returns a runtime job snapshot by identifier.
     fn jobById(ptr: *anyopaque, job_id: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return jobSnapshot(self.state.jobById(job_id) orelse return error.NotFound);
     }
 
+    /// Returns the number of tracked runtime jobs.
     fn jobCount(ptr: *anyopaque) ports.PortError!usize {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.state.job_count;
     }
 
+    /// Returns a runtime job snapshot by index.
     fn jobAt(ptr: *anyopaque, index: usize) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (index >= self.state.job_count) return error.NotFound;
         return jobSnapshot(&self.state.jobs[index]);
     }
 
+    /// Returns the number of recorded runtime events.
     fn eventCount(ptr: *anyopaque) ports.PortError!u64 {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.state.event_count;
     }
 
+    /// Returns a runtime event by sequence number.
     fn eventAtSequence(ptr: *anyopaque, sequence: u64) ports.PortError!ports.RuntimeEventSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (sequence == 0) return error.NotFound;
@@ -99,36 +109,43 @@ pub const Session = struct {
         return eventSnapshot(&self.state.events[runtime_ux.ringIndex(sequence, runtime_ux.max_events)]);
     }
 
+    /// Registers a runtime event subscription.
     fn subscribe(ptr: *anyopaque, uri: []const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return subscriptionSnapshot(self.state.subscribe(uri));
     }
 
+    /// Removes a runtime event subscription.
     fn unsubscribe(ptr: *anyopaque, id: []const u8, uri: ?[]const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return subscriptionSnapshot(self.state.unsubscribe(id, uri) orelse return error.NotFound);
     }
 
+    /// Synchronizes workspace roots with runtime state.
     fn syncRoots(ptr: *anyopaque, workspace_root: []const u8, roots_text: []const u8, apply: bool) ports.PortError!void {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.state.syncRoots(workspace_root, roots_text, apply);
     }
 
+    /// Selects the active runtime root.
     fn selectRoot(ptr: *anyopaque, root_id: []const u8, apply: bool) ports.PortError!ports.RuntimeRootSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return rootSnapshot(self.state.selectRoot(root_id, apply) orelse return error.NotFound);
     }
 
+    /// Returns the number of tracked runtime roots.
     fn rootCount(ptr: *anyopaque) ports.PortError!usize {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.state.root_count;
     }
 
+    /// Returns the selected runtime root index.
     fn selectedRootIndex(ptr: *anyopaque) ports.PortError!usize {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.state.selected_root;
     }
 
+    /// Returns a runtime root snapshot by index.
     fn rootAt(ptr: *anyopaque, index: usize) ports.PortError!ports.RuntimeRootSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (index >= self.state.root_count) return error.NotFound;
@@ -136,6 +153,7 @@ pub const Session = struct {
     }
 };
 
+/// Builds a caller-owned snapshot of a runtime job.
 fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
     return .{
         .id = job.id.slice(),
@@ -158,6 +176,7 @@ fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
     };
 }
 
+/// Builds a caller-owned snapshot of a runtime event.
 fn eventSnapshot(event: *const runtime_ux.EventRecord) ports.RuntimeEventSnapshot {
     return .{
         .sequence = event.sequence,
@@ -170,6 +189,7 @@ fn eventSnapshot(event: *const runtime_ux.EventRecord) ports.RuntimeEventSnapsho
     };
 }
 
+/// Builds a caller-owned snapshot of a subscription.
 fn subscriptionSnapshot(sub: *const runtime_ux.Subscription) ports.RuntimeSubscriptionSnapshot {
     return .{
         .id = sub.id.slice(),
@@ -179,6 +199,7 @@ fn subscriptionSnapshot(sub: *const runtime_ux.Subscription) ports.RuntimeSubscr
     };
 }
 
+/// Builds an allocator-owned snapshot of a runtime root.
 fn rootSnapshot(root: *const runtime_ux.WorkspaceRoot) ports.RuntimeRootSnapshot {
     return .{
         .id = root.id.slice(),
@@ -189,6 +210,7 @@ fn rootSnapshot(root: *const runtime_ux.WorkspaceRoot) ports.RuntimeRootSnapshot
     };
 }
 
+/// Maps internal runtime job status to the public status enum.
 fn statusFromRuntime(status: runtime_ux.JobStatus) ports.RuntimeJobStatus {
     return switch (status) {
         .queued => .queued,
@@ -199,6 +221,7 @@ fn statusFromRuntime(status: runtime_ux.JobStatus) ports.RuntimeJobStatus {
     };
 }
 
+/// Maps public runtime job status to the internal enum.
 fn statusToRuntime(status: ports.RuntimeJobStatus) runtime_ux.JobStatus {
     return switch (status) {
         .queued => .queued,

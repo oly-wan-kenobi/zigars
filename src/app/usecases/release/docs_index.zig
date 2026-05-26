@@ -5,14 +5,22 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const docs_domain = @import("../../../domain/release/docs_index.zig");
 
+/// Default docs index limit used when the caller omits an explicit value.
 pub const default_docs_index_limit: usize = 200;
+/// Default docs query limit used when the caller omits an explicit value.
 pub const default_docs_query_limit: usize = 20;
+/// Default std limit used when the caller omits an explicit value.
 pub const default_std_limit: usize = 20;
+/// Default langref item limit used when the caller omits an explicit value.
 pub const default_langref_item_limit: usize = 5;
+/// Default autodoc limit used when the caller omits an explicit value.
 pub const default_autodoc_limit: usize = 200;
+/// Default doc example limit used when the caller omits an explicit value.
 pub const default_doc_example_limit: usize = 50;
+/// Default readme command limit used when the caller omits an explicit value.
 pub const default_readme_command_limit: usize = 100;
 
+/// Carries evidence request data across use case and port boundaries.
 pub const EvidenceRequest = struct {
     content: ?[]const u8 = null,
     path: ?[]const u8 = null,
@@ -21,26 +29,31 @@ pub const EvidenceRequest = struct {
     provenance: []const u8,
 };
 
+/// Carries evidence input data across use case and port boundaries.
 pub const EvidenceInput = struct {
     bytes: []const u8,
     source_kind: []const u8,
     path: ?[]const u8 = null,
     owned: ?[]const u8 = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: EvidenceInput, allocator: std.mem.Allocator) void {
         if (self.owned) |bytes| allocator.free(bytes);
     }
 };
 
+/// Error set returned by error workflow failures.
 pub const Error = ports.PortError || error{
     MissingEvidence,
 };
 
+/// Carries owned text files data across use case and port boundaries.
 const OwnedTextFiles = struct {
     files: []docs_domain.TextFile,
     skipped_files: usize = 0,
     walk_errors: usize = 0,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: OwnedTextFiles, allocator: std.mem.Allocator) void {
         for (self.files) |file| {
             allocator.free(file.path);
@@ -51,16 +64,19 @@ const OwnedTextFiles = struct {
     }
 };
 
+/// Implements builtin list workflow logic using caller-owned inputs.
 pub fn builtinList(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext) Error!docs_domain.BuiltinListResult {
     const input = try builtinIndexInput(allocator, context);
     return docs_domain.builtinList(input);
 }
 
+/// Implements builtin doc workflow logic using caller-owned inputs.
 pub fn builtinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.BuiltinDocResult {
     const input = try builtinIndexInput(allocator, context);
     return docs_domain.builtinDoc(allocator, query, @max(limit, 1), input) catch return error.OutOfMemory;
 }
 
+/// Implements std search workflow logic using caller-owned inputs.
 pub fn stdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.StdSearchResult {
     const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_search");
     defer std_dir.deinit(allocator);
@@ -73,6 +89,7 @@ pub fn stdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsC
     }, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements std item workflow logic using caller-owned inputs.
 pub fn stdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, name: []const u8, limit: usize) Error!docs_domain.StdItemResult {
     const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_item");
     defer std_dir.deinit(allocator);
@@ -85,6 +102,7 @@ pub fn stdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsCon
     }, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements langref search workflow logic using caller-owned inputs.
 pub fn langrefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.LangrefSearchResult {
     const lib_dir = try envValue(allocator, context, "lib_dir", "release_docs.langref");
     defer lib_dir.deinit(allocator);
@@ -133,40 +151,47 @@ pub fn langrefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseD
     }) catch return error.OutOfMemory;
 }
 
+/// Implements docs index build workflow logic using caller-owned inputs.
 pub fn docsIndexBuild(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, scope: []const u8, limit: usize) Error!docs_domain.DocsIndexResult {
     var files = try collectWorkspaceDocsFiles(allocator, context, scope);
     defer files.deinit(allocator);
     return docs_domain.docsIndex(allocator, scope, files.files, files.skipped_files + files.walk_errors, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements docs query workflow logic using caller-owned inputs.
 pub fn docsQuery(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, scope: []const u8, autodoc_text: ?[]const u8, limit: usize) Error!docs_domain.DocsQueryResult {
     var files = try collectWorkspaceDocsFiles(allocator, context, scope);
     defer files.deinit(allocator);
     return docs_domain.docsQuery(allocator, query, scope, files.files, autodoc_text, files.skipped_files + files.walk_errors, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements autodoc ingest workflow logic using caller-owned inputs.
 pub fn autodocIngest(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.AutodocIngestResult {
     const input = try readEvidence(allocator, context, request);
     defer input.deinit(allocator);
     return docs_domain.autodocIngest(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements doc example check workflow logic using caller-owned inputs.
 pub fn docExampleCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.DocExampleCheckResult {
     const input = try readEvidence(allocator, context, request);
     defer input.deinit(allocator);
     return docs_domain.docExampleCheck(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements snippet check workflow logic using caller-owned inputs.
 pub fn snippetCheck(allocator: std.mem.Allocator, content: []const u8) Error!docs_domain.SnippetCheck {
     return docs_domain.snippetCheck(allocator, "inline", content) catch return error.OutOfMemory;
 }
 
+/// Implements readme command check workflow logic using caller-owned inputs.
 pub fn readmeCommandCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest, limit: usize) Error!docs_domain.ReadmeCommandCheckResult {
     const input = try readEvidence(allocator, context, request);
     defer input.deinit(allocator);
     return docs_domain.readmeCommandCheck(allocator, input.source_kind, input.path, input.bytes, @max(limit, 1)) catch return error.OutOfMemory;
 }
 
+/// Implements builtin index input workflow logic using caller-owned inputs.
 fn builtinIndexInput(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext) Error!docs_domain.BuiltinIndexInput {
     const version = envValue(allocator, context, "version", "release_docs.builtin_version") catch null;
     errdefer if (version) |value| value.deinit(allocator);
@@ -206,10 +231,12 @@ fn builtinIndexInput(allocator: std.mem.Allocator, context: app_context.ReleaseD
     return input;
 }
 
+/// Serializes env fields into an allocator-owned JSON value; allocation failures propagate.
 fn envValue(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, key: []const u8, provenance: []const u8) ports.PortError!ports.ToolchainEnvValue {
     return context.toolchain_env.get(allocator, .{ .key = key, .provenance = provenance });
 }
 
+/// Collects std files data into caller-provided output storage without taking ownership of inputs.
 fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, std_dir: []const u8) Error!OwnedTextFiles {
     var scan = try context.docs_scanner.scanAbsoluteZigPaths(allocator, .{
         .root = std_dir,
@@ -263,6 +290,7 @@ fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDoc
     };
 }
 
+/// Collects workspace docs files data into caller-provided output storage without taking ownership of inputs.
 fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, scope: []const u8) Error!OwnedTextFiles {
     var scan = try context.docs_scanner.scanWorkspacePaths(allocator, .{
         .max_files = docs_domain.default_path_scan_limit,
@@ -311,6 +339,7 @@ fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.
     };
 }
 
+/// Reads evidence data from the provided context without taking ownership of inputs.
 fn readEvidence(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest) Error!EvidenceInput {
     if (request.content) |content| return .{ .bytes = content, .source_kind = "inline_content" };
     const path = request.path orelse request.default_path;

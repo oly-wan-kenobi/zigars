@@ -238,6 +238,7 @@ test "zig_tool_plan exposes broad planning support for ZLS tools" {
     try std.testing.expect(root.get("requires_document_sync").?.bool);
 }
 
+/// Checks whether a JSON array contains the requested string value.
 fn jsonArrayContainsString(array: std.json.Array, needle: []const u8) bool {
     for (array.items) |item| {
         switch (item) {

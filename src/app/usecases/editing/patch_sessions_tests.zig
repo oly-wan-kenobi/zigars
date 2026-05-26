@@ -7,10 +7,12 @@ const patch_sessions = @import("patch_sessions.zig");
 const session_domain = @import("../../../domain/editing/patch_session.zig");
 const validation = @import("../validation/workflows.zig");
 
+/// Carries editing ports data across use case and port boundaries.
 const EditingPorts = struct {
     workspace: *fakes.FakeWorkspaceStore,
     clock: *fakes.FakeClockAndIds,
 
+    /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: EditingPorts) app_context.EditingContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
@@ -20,11 +22,13 @@ const EditingPorts = struct {
     }
 };
 
+/// Carries validation ports data across use case and port boundaries.
 const ValidationPorts = struct {
     command: *fakes.FakeCommandRunner,
     workspace: *fakes.FakeWorkspaceStore,
     clock: *fakes.FakeClockAndIds,
 
+    /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: ValidationPorts) app_context.ValidationContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },

@@ -7,6 +7,7 @@ pub const output_limit: usize = 1024 * 1024;
 /// Stable label describing output-limit behavior in result contracts.
 pub const output_limit_mode = "truncate_on_limit";
 
+/// Owned process output captured after applying byte limits and termination policy.
 const OwnedOutput = struct {
     bytes: []u8,
     truncated: bool,
@@ -136,6 +137,7 @@ pub fn runWithOutputLimit(
     };
 }
 
+/// Converts elapsed nanoseconds to saturated milliseconds.
 fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     const finished_ns = std.Io.Clock.now(.real, io).nanoseconds;
     const duration_ns = finished_ns - started_ns;
@@ -143,6 +145,7 @@ fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
 
+/// Converts the command argument list into argv for child process spawn.
 fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv: []const []const u8) ![]const []const u8 {
     // Windows command launching differs enough that shebang rewriting is skipped.
     if (argv.len == 0 or builtin.os.tag == .windows) return argv;
@@ -172,12 +175,14 @@ fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv:
     return spawn_argv;
 }
 
+/// Reads the executable path referenced by a shebang line.
 fn executablePathForRead(allocator: std.mem.Allocator, cwd: []const u8, executable: []const u8) ![]const u8 {
     if (std.fs.path.isAbsolute(executable)) return allocator.dupe(u8, executable);
     if (std.mem.indexOfScalar(u8, executable, std.fs.path.sep) == null) return error.SkipShebangDetection;
     return std.fs.path.join(allocator, &.{ cwd, executable });
 }
 
+/// Parses shebang from caller-owned input and reports malformed data without taking ownership.
 fn parseShebang(bytes: []const u8) ?[]const u8 {
     if (bytes.len < 3 or bytes[0] != '#' or bytes[1] != '!') return null;
     const end = std.mem.indexOfScalar(u8, bytes, '\n') orelse bytes.len;
@@ -186,6 +191,7 @@ fn parseShebang(bytes: []const u8) ?[]const u8 {
     return line;
 }
 
+/// Transfers captured bytes into owned output after enforcing the byte limit.
 fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.Allocator, index: usize, limit: usize) !OwnedOutput {
     const bytes = try multi_reader.toOwnedSlice(index);
     var bytes_owned = true;
@@ -280,6 +286,7 @@ pub fn splitArgs(allocator: std.mem.Allocator, text: ?[]const u8) ![]const []con
     return list.toOwnedSlice(allocator);
 }
 
+/// Completes the current argument token while parsing a shell command line.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     var arg_owned = true;

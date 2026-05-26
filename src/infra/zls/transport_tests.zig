@@ -3,11 +3,13 @@ const transport = @import("transport.zig");
 
 const LspTransport = transport.LspTransport;
 
+/// Builds a bounded in-memory I/O fixture for tests.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();
 }
 
+/// Creates paired file handles for scripted transport tests.
 fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
@@ -21,6 +23,7 @@ fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
     }
 }
 
+/// Reads all available bytes from a test pipe.
 fn readPipeAll(file: std.Io.File, io: std.Io, buf: []u8) ![]const u8 {
     var total: usize = 0;
     while (total < buf.len) {

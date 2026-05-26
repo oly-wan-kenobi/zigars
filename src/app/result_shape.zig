@@ -175,6 +175,7 @@ pub fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mo
     try obj.put(allocator, "omitted_sections", .{ .array = omitted_sections });
 }
 
+/// Serializes supported modes fields into an allocator-owned JSON value; allocation failures propagate.
 fn supportedModesValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -187,6 +188,7 @@ fn supportedModesValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = array };
 }
 
+/// Serializes allocation fields into an allocator-owned JSON value; allocation failures propagate.
 fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effective_budget: i64) !std.json.Value {
     const machine_pct: i64 = switch (mode) {
         .compact => 55,
@@ -215,6 +217,7 @@ fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effectiv
     return .{ .object = obj };
 }
 
+/// Implements stable machine fields workflow logic using caller-owned inputs.
 fn stableMachineFields(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "kind", "ok", "mode", "result_shape", "omitted_sections", "resolution" },
@@ -223,6 +226,7 @@ fn stableMachineFields(mode: ResultShapeMode) []const []const u8 {
     };
 }
 
+/// Implements included sections workflow logic using caller-owned inputs.
 fn includedSections(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "machine_fields", "short_summary", "omission_metadata" },
@@ -231,6 +235,7 @@ fn includedSections(mode: ResultShapeMode) []const []const u8 {
     };
 }
 
+/// Implements omitted by default workflow logic using caller-owned inputs.
 fn omittedByDefault(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "raw_backend_output", "large_collections", "source_snippets", "debug_trace" },
@@ -239,6 +244,7 @@ fn omittedByDefault(mode: ResultShapeMode) []const []const u8 {
     };
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;

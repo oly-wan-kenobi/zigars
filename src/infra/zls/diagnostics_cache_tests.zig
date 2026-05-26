@@ -3,15 +3,18 @@ const diagnostics_cache = @import("diagnostics_cache.zig");
 
 const DiagnosticsCache = diagnostics_cache.DiagnosticsCache;
 
+/// Builds a bounded in-memory I/O fixture for tests.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();
 }
 
+/// Parses object from caller-owned input and reports malformed data without taking ownership.
 fn parseObject(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(std.json.Value) {
     return std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
 }
 
+/// Builds an allocator-owned diagnostics snapshot for tests.
 fn snapshotDiagnosticsWithAllocator(allocator: std.mem.Allocator) !void {
     const first =
         \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}

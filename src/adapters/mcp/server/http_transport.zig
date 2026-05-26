@@ -54,16 +54,19 @@ pub const HttpRequestTransport = struct {
         };
     }
 
+    /// Adapts HttpRequestTransport.send to the transport vtable and copies the outgoing message.
     fn sendVtable(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, message: []const u8) transport_mod.Transport.SendError!void {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.send(io, allocator, message);
     }
 
+    /// Adapts HttpRequestTransport.receive to the transport vtable; HTTP requests are send-only here.
     fn receiveVtable(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
         const self: *Self = @ptrCast(@alignCast(ptr));
         return self.receive(io, allocator);
     }
 
+    /// Adapts HttpRequestTransport.close to the transport vtable without owning extra resources.
     fn closeVtable(ptr: *anyopaque) void {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.close();

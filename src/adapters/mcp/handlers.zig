@@ -10,6 +10,7 @@ const mcp_result = @import("result.zig");
 const patch_sessions = @import("../../app/usecases/editing/patch_sessions.zig");
 const registry = @import("registry.zig");
 
+/// Local namespace for tool adapter modules selected by manifest handler ids.
 const mcp_tools = struct {
     pub const artifacts = @import("tools/artifacts.zig");
     pub const core = @import("tools/core.zig");
@@ -30,6 +31,7 @@ const mcp_tools = struct {
     pub const zls = @import("tools/zls.zig");
 };
 
+/// Returns the MCP handler callback for a manifest tool id and runtime bridge.
 pub fn handlerFor(
     comptime id: manifest.ToolId,
     comptime RuntimePtr: type,
@@ -39,6 +41,7 @@ pub fn handlerFor(
     return handler(@tagName(id), handler_refs.handlerFor(id), RuntimePtr, RuntimePorts, RuntimePortOptions);
 }
 
+/// Returns an MCP callback that invokes a typed tool adapter handler.
 fn handler(
     comptime tool_name: []const u8,
     comptime ref: handler_refs.HandlerRef,
@@ -74,6 +77,7 @@ fn handler(
     };
 }
 
+/// Adapts two- or three-parameter tool helpers to the MCP callback signature.
 fn adapterHandler(
     comptime module: type,
     comptime tool_name: []const u8,
@@ -87,6 +91,7 @@ fn adapterHandler(
     const info = @typeInfo(@TypeOf(adapter_fn)).@"fn";
     if (info.params.len == 2) {
         return struct {
+            /// Bridges the typed helper into the callback signature expected by the MCP adapter.
             fn call(_: RuntimePtr, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
                 return adapter_fn(allocator, args);
             }
@@ -96,6 +101,7 @@ fn adapterHandler(
     // Three-parameter adapters receive a typed app context synthesized from runtime ports.
     const ContextType = info.params[1].type.?;
     return struct {
+        /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(app: RuntimePtr, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             var runtime_ports = RuntimePorts.init(app, options);
             runtime_ports.refreshDerivedPorts();
@@ -107,6 +113,7 @@ fn adapterHandler(
     }.call;
 }
 
+/// Projects runtime ports into the context type required by a tool handler.
 fn buildContext(comptime ContextType: type, runtime_ports: anytype) app_context.ContextError!ContextType {
     if (ContextType == app_context.Context) return runtime_ports.context();
     if (ContextType == app_context.AdoptionContext) return runtime_ports.adoptionContext();
@@ -126,6 +133,7 @@ fn buildContext(comptime ContextType: type, runtime_ports: anytype) app_context.
     @compileError("unsupported MCP adapter context type");
 }
 
+/// Maps runtime context construction failures to structured MCP tool errors.
 fn contextError(
     comptime ContextType: type,
     allocator: std.mem.Allocator,
@@ -143,6 +151,7 @@ fn contextError(
     }, err);
 }
 
+/// Returns the operation label used when a context projection fails.
 fn contextOperation(comptime ContextType: type) []const u8 {
     if (ContextType == app_context.Context) return "app_context";
     if (ContextType == app_context.AdoptionContext) return "adoption_context";
@@ -162,6 +171,7 @@ fn contextOperation(comptime ContextType: type) []const u8 {
     @compileError("unsupported MCP adapter context type");
 }
 
+/// Returns the structured error code used when a context projection fails.
 fn contextCode(comptime ContextType: type) []const u8 {
     if (ContextType == app_context.Context) return "app_context_unavailable";
     if (ContextType == app_context.AdoptionContext) return "adoption_context_unavailable";
@@ -181,6 +191,7 @@ fn contextCode(comptime ContextType: type) []const u8 {
     @compileError("unsupported MCP adapter context type");
 }
 
+/// Returns the user-facing recovery hint for missing runtime context ports.
 fn contextResolution(comptime ContextType: type) []const u8 {
     if (ContextType == app_context.Context) return "The discovery use case requires the runtime app context projection and typed ports from the runtime bridge.";
     if (ContextType == app_context.ArtifactContext) return "The artifact registry use case requires workspace ports from the runtime bridge.";
@@ -191,6 +202,7 @@ fn contextResolution(comptime ContextType: type) []const u8 {
     return "The migrated MCP handler requires typed app ports from the runtime bridge.";
 }
 
+/// Selects runtime port options required by core command handlers.
 fn coreOptions(comptime RuntimePortOptions: type, comptime name: []const u8) RuntimePortOptions {
     const records_command = !std.mem.eql(u8, name, "zigVersion");
     return .{
@@ -200,6 +212,7 @@ fn coreOptions(comptime RuntimePortOptions: type, comptime name: []const u8) Run
     };
 }
 
+/// Enables runtime UX state ports for handlers that read jobs, events, or roots.
 fn runtimeUxOptions(comptime RuntimePortOptions: type, comptime name: []const u8) RuntimePortOptions {
     return .{
         .workspace_read_resolution = .input,
@@ -246,18 +259,22 @@ test "adapter handler maps missing runtime context to structured tool error" {
     const RuntimePorts = struct {
         fail_context: bool,
 
+        /// Initializes test runtime ports around caller-owned fake runtime state.
         pub fn init(runtime: *Runtime, _: Options) @This() {
             return .{ .fail_context = runtime.fail_context };
         }
 
+        /// Test stub hook for runtime port refresh; this fixture has no derived ports.
         pub fn refreshDerivedPorts(_: *@This()) void {}
 
+        /// Creates artifact context from the ports required by the adapter.
         pub fn artifactContext(self: *@This()) app_context.ContextError!app_context.ArtifactContext {
             if (self.fail_context) return error.MissingPort;
             return .{ .workspace = .{}, .workspace_store = undefined };
         }
     };
     const Adapter = struct {
+        /// Test handler that requires an artifact context projection.
         pub fn needsArtifact(_: std.mem.Allocator, _: app_context.ArtifactContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             return .{ .content = &.{} };
         }
@@ -278,6 +295,7 @@ test "adapter handler maps missing runtime context to structured tool error" {
     try std.testing.expectEqualStrings("MissingPort", obj.get("error").?.string);
 }
 
+/// Manifest lookup table for migrated release, profiling, and dependency handlers.
 const migrated_phase6 = struct {
     pub const zigCiIngest = mcp_tools.release.zigCiIngest;
     pub const zigCiReproPlan = mcp_tools.release.zigCiReproPlan;
@@ -312,6 +330,7 @@ const migrated_phase6 = struct {
     pub const zigGithubDependencySubmitPlan = mcp_tools.dependencies.zigGithubDependencySubmitPlan;
 };
 
+/// Manifest lookup table for migrated static-analysis handlers.
 const migrated_static_analysis = struct {
     pub const zigImportGraph = mcp_tools.static_analysis.zigImportGraph;
     pub const zigImportGraphJson = mcp_tools.static_analysis.zigImportGraphJson;

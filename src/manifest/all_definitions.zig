@@ -14,6 +14,7 @@ const environment_profiles = @import("definitions/environment_profiles.zig");
 const runtime_ux = @import("definitions/runtime_ux.zig");
 const validation_workflows = @import("definitions/validation_workflows.zig");
 const transactional_editing = @import("definitions/transactional_editing.zig");
+/// Definitions struct used by this domain model.
 pub const definitions = struct {
     pub const zigar_capabilities = discovery.zigar_capabilities;
     pub const zigar_tool_index = discovery.zigar_tool_index;

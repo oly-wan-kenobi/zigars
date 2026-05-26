@@ -14,6 +14,7 @@ const run_usecase = @import("../../../app/usecases/profiling/run.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Protocol metadata value used when profiler output is shortened instead of rejected.
 const output_limit_mode = "truncate_on_limit";
 
 /// Handles MCP `zig_profile_plan` requests by delegating to app logic and shaping owned results/errors.
@@ -102,11 +103,13 @@ pub fn zigFlamegraphDiff(
     };
 }
 
+/// Parse-state union for flamegraph parse result.
 const FlamegraphParseResult = union(enum) {
     ok: render_usecase.Request,
     err: mcp.tools.ToolResult,
 };
 
+/// Parses a flamegraph request from MCP JSON arguments.
 fn flamegraphRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!FlamegraphParseResult {
     const format_raw = argString(args, "format") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph", "format", flamegraph_model.supportedZflameFormatsText()) };
     const format = flamegraph_model.parseZflameFormat(format_raw) orelse return .{ .err = try invalidZflameFormat(allocator, "zig_flamegraph", format_raw) };
@@ -124,11 +127,13 @@ fn flamegraphRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value
     } };
 }
 
+/// Parse-state union for diff parse result.
 const DiffParseResult = union(enum) {
     ok: flamegraph_diff_usecase.Request,
     err: mcp.tools.ToolResult,
 };
 
+/// Parses a flamegraph diff request from MCP JSON arguments.
 fn diffRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!DiffParseResult {
     const before = argString(args, "before") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph_diff", "before", "workspace-relative folded stack path") };
     const after = argString(args, "after") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph_diff", "after", "workspace-relative folded stack path") };
@@ -146,11 +151,13 @@ fn diffRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.
     } };
 }
 
+/// Parse-state union for options result.
 const OptionsResult = union(enum) {
     ok: flamegraph_model.ZflameRenderOptions,
     err: mcp.tools.ToolResult,
 };
 
+/// Parses zflame render options from MCP JSON arguments.
 fn zflameOptionsFromArgs(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value) mcp.tools.ToolError!OptionsResult {
     const width = switch (try positiveIntArg(allocator, tool_name, args, "width")) {
         .ok => |value| value,
@@ -170,17 +177,20 @@ fn zflameOptionsFromArgs(allocator: std.mem.Allocator, tool_name: []const u8, ar
     } };
 }
 
+/// Parse-state union for optional int result.
 const OptionalIntResult = union(enum) {
     ok: ?i64,
     err: mcp.tools.ToolResult,
 };
 
+/// Parses positive int arg from MCP JSON arguments.
 fn positiveIntArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, name: []const u8) mcp.tools.ToolError!OptionalIntResult {
     const value = mcp.tools.getInteger(args, name) orelse return .{ .ok = null };
     if (value > 0) return .{ .ok = value };
     return .{ .err = try mcp_errors.invalidArgument(allocator, tool_name, name, "positive integer", "zero or negative", "Use positive pixel values for zflame sizing options.") };
 }
 
+/// Reports unsupported zflame output format values as a structured tool error.
 fn invalidZflameFormat(allocator: std.mem.Allocator, tool_name: []const u8, actual: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.invalidArgument(
         allocator,
@@ -192,6 +202,7 @@ fn invalidZflameFormat(allocator: std.mem.Allocator, tool_name: []const u8, actu
     );
 }
 
+/// Returns the MCP tool result for render failure.
 fn renderFailureResult(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,
@@ -204,6 +215,7 @@ fn renderFailureResult(
     };
 }
 
+/// Maps usecase error failures to structured MCP errors.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
@@ -216,6 +228,7 @@ fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: 
     }, err);
 }
 
+/// Returns the MCP tool result for diff failure.
 fn diffFailureResult(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,
@@ -257,6 +270,7 @@ fn diffFailureResult(
     };
 }
 
+/// Returns the MCP tool result for flamegraph failure.
 fn flamegraphFailureResult(allocator: std.mem.Allocator, request: flamegraph_usecase.Request, failure: flamegraph_usecase.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (failure) {
         .workspace_input_read_failed => |details| workspaceToolError(allocator, request.tool_name, request.operation, "read_workspace_input", "workspace_input_read_failed", details.path, details.abs_path, details.err, "Pass an existing readable profiler input file inside the configured workspace."),
@@ -294,6 +308,7 @@ fn flamegraphFailureResult(allocator: std.mem.Allocator, request: flamegraph_use
     };
 }
 
+/// Returns an allocator-owned JSON value for flamegraph result.
 fn flamegraphResultValue(
     allocator: std.mem.Allocator,
     probe: app_context.CachedBackendProbe,
@@ -308,6 +323,7 @@ fn flamegraphResultValue(
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for flamegraph diff result.
 fn flamegraphDiffResultValue(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,
@@ -342,6 +358,7 @@ fn flamegraphDiffResultValue(
     return .{ .object = obj };
 }
 
+/// Adds shared flamegraph metadata fields to a result object.
 fn putFlamegraphBase(
     allocator: std.mem.Allocator,
     obj: *std.json.ObjectMap,
@@ -368,6 +385,7 @@ fn putFlamegraphBase(
     try obj.put(allocator, "capture_semantics", .{ .string = flamegraph_model.capture_semantics });
 }
 
+/// Returns an allocator-owned JSON value for intermediate folded.
 fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.ProfilingContext, artifact: flamegraph_diff_usecase.Artifact) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -392,6 +410,7 @@ fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.Pr
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for backend metadata.
 fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe, name: []const u8, executable_path: []const u8, compatibility_status: []const u8, compatibility_baseline: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -407,6 +426,7 @@ fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedB
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for cached probe.
 fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -419,6 +439,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBacke
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for unknown version.
 fn unknownVersionValue(allocator: std.mem.Allocator, name: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -430,6 +451,7 @@ fn unknownVersionValue(allocator: std.mem.Allocator, name: []const u8) !std.json
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for render warnings.
 fn renderWarningsValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var warnings = std.json.Array.init(allocator);
     var warnings_owned = true;
@@ -442,6 +464,7 @@ fn renderWarningsValue(allocator: std.mem.Allocator, probe: app_context.CachedBa
     return .{ .array = warnings };
 }
 
+/// Data fixture for command failure spec adapter tests.
 const CommandFailureSpec = struct {
     tool: []const u8,
     operation: []const u8,
@@ -459,6 +482,7 @@ const CommandFailureSpec = struct {
     resolution: []const u8,
 };
 
+/// Returns the MCP tool result for command failure.
 fn commandFailureResult(allocator: std.mem.Allocator, spec: CommandFailureSpec) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_text = commandText(allocator, spec.argv) catch return error.OutOfMemory;
     defer allocator.free(command_text);
@@ -496,6 +520,7 @@ fn commandFailureResult(allocator: std.mem.Allocator, spec: CommandFailureSpec) 
     });
 }
 
+/// Maps workspace tool error failures to structured MCP errors.
 fn workspaceToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, phase: []const u8, code: []const u8, path: []const u8, abs_path: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -513,6 +538,7 @@ fn workspaceToolError(allocator: std.mem.Allocator, tool_name: []const u8, opera
     }, err);
 }
 
+/// Returns the MCP tool result for backend error.
 fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -529,6 +555,7 @@ fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, op
     return result;
 }
 
+/// Returns the MCP tool result for command run error.
 fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operation: []const u8, phase: []const u8, code: []const u8, failure: run_usecase.CommandRunFailure) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_text = commandText(allocator, failure.argv.items) catch return error.OutOfMemory;
     defer allocator.free(command_text);
@@ -548,6 +575,7 @@ fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operati
     }, failure.err);
 }
 
+/// Returns an allocator-owned JSON value for command result.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -577,6 +605,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for command term.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -587,6 +616,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for empty diagnostics.
 fn emptyDiagnosticsValue(allocator: std.mem.Allocator) std.json.Value {
     var obj = std.json.ObjectMap.empty;
     obj.put(allocator, "finding_count", .{ .integer = 0 }) catch unreachable;
@@ -601,6 +631,7 @@ fn emptyDiagnosticsValue(allocator: std.mem.Allocator) std.json.Value {
     return .{ .object = obj };
 }
 
+/// Returns an allocator-owned JSON value for simple failure summary.
 fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -620,6 +651,7 @@ fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []con
     return .{ .object = obj };
 }
 
+/// Data fixture for safe text adapter tests.
 const SafeText = struct {
     text: []const u8,
     invalid_utf8: bool,
@@ -627,6 +659,7 @@ const SafeText = struct {
     byte_count: usize,
 };
 
+/// Returns a fallback marker when command output cannot be copied into JSON.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) return .{
         .text = try allocator.dupe(u8, bytes),
@@ -662,6 +695,7 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     };
 }
 
+/// Adds captured stdout/stderr metadata to a command result object.
 fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: SafeText) !void {
     try obj.put(allocator, name, .{ .string = safe.text });
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });
@@ -669,6 +703,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
+/// Reads a value argument when it is present with the expected type.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -678,10 +713,12 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
     return .{ .array = array };
 }
 
+/// Joins command argv into display text for profiling results.
 fn commandText(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
     return std.mem.join(allocator, " ", argv);
 }
 
+/// Parses split args from MCP JSON arguments.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -735,6 +772,7 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses finish arg from MCP JSON arguments.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     var arg_owned = true;
@@ -743,32 +781,39 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
     arg_owned = false;
 }
 
+/// Frees argv strings allocated while splitting command arguments.
 fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
     for (args) |arg| allocator.free(arg);
     allocator.free(args);
 }
 
+/// Maps split args error failures to structured MCP errors.
 fn splitArgsError(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.invalidArgument(allocator, tool_name, field, "shell-style argument string", actual, "Quote arguments the same way you would in a shell command, or omit the field when no extra arguments are needed.");
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return mcp.tools.getBoolean(args, name) orelse default;
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
+/// Clamps requested tool timeout to the supported command timeout range.
 fn toolTimeout(context: app_context.ProfilingContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Maps kind for command error failures to structured MCP errors.
 fn kindForCommandError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -779,6 +824,7 @@ fn kindForCommandError(err: anyerror) []const u8 {
     };
 }
 
+/// Reports the platform string used by profiling tests.
 fn detectedPlatform() []const u8 {
     return switch (builtin.os.tag) {
         .linux => "linux",
@@ -1392,8 +1438,10 @@ test "profiling diff adapter reports workspace and backend failures" {
     }
 }
 
+/// Minimal SVG fixture reused by profiling artifact tests.
 const profiling_svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture</title></svg>\n";
 
+/// Creates test profiling context from the ports required by the adapter.
 fn testProfilingContext(commands: *fakes.FakeCommandRunner, workspace: *fakes.FakeWorkspaceStore) app_context.ProfilingContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
@@ -1408,11 +1456,13 @@ fn testProfilingContext(commands: *fakes.FakeCommandRunner, workspace: *fakes.Fa
     };
 }
 
+/// Parses profiling test args from MCP JSON arguments.
 fn profilingTestArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
     return parsed.value;
 }
 
+/// Asserts diff resolves in adapter tests.
 fn expectDiffResolves(
     workspace: *fakes.FakeWorkspaceStore,
     before: []const u8,
@@ -1430,6 +1480,7 @@ fn expectDiffResolves(
     try workspace.expectResolve(.{ .path = intermediate, .for_output = true, .provenance = "profiling output path resolution" }, intermediate_abs);
 }
 
+/// Asserts profiling kind in adapter tests.
 fn expectProfilingKind(result: mcp.tools.ToolResult, expected: []const u8) !void {
     const structured = result.structuredContent orelse return error.MissingStructuredContent;
     try std.testing.expect(structured == .object);
@@ -1438,6 +1489,7 @@ fn expectProfilingKind(result: mcp.tools.ToolResult, expected: []const u8) !void
     try std.testing.expectEqualStrings(expected, kind.string);
 }
 
+/// Maps expect tool error code failures to structured MCP errors.
 fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
     try std.testing.expect(result.is_error);
     const structured = result.structuredContent orelse return error.MissingStructuredContent;

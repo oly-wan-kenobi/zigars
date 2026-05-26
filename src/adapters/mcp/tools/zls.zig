@@ -156,6 +156,7 @@ pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_contex
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Validates document sync arguments and forwards them to the ZLS workflow.
 fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, tool_name, "content", "string");
@@ -167,6 +168,7 @@ fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args
     return mcp_result.structured(allocator, value);
 }
 
+/// Validates file/position arguments and invokes a positional ZLS request.
 fn positionTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
     var outcome = code_intel.position(allocator, zls_ctx, .{
@@ -184,6 +186,7 @@ fn positionTool(allocator: std.mem.Allocator, context: app_context.Context, args
     };
 }
 
+/// Validates the file argument and invokes a file-scoped ZLS request.
 fn fileOnlyTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
     var outcome = code_intel.fileOnly(allocator, zls_ctx, .{
@@ -198,6 +201,7 @@ fn fileOnlyTool(allocator: std.mem.Allocator, context: app_context.Context, args
     };
 }
 
+/// Returns the MCP tool result for ZLS failure.
 fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: ?[]const u8, failure: code_intel.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (failure) {
         .unavailable => zlsUnavailable(allocator, context),
@@ -208,6 +212,7 @@ fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, 
     };
 }
 
+/// Maps ZLS gateway failures to user-facing MCP tool errors.
 fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.Unavailable) return zlsUnavailable(allocator, context);
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath or err == error.DocumentTooLarge or err == error.OpenDocumentLimitExceeded or err == error.RetainedContentLimitExceeded) {
@@ -223,6 +228,7 @@ fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool
     }, err);
 }
 
+/// Wraps a raw LSP JSON response in the structured MCP result envelope.
 fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return mcp_errors.fromError(allocator, .{
         .tool = method,
@@ -254,6 +260,7 @@ fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response:
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns a structured result for a ZLS capability the server does not expose.
 fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capability: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -268,6 +275,7 @@ fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capab
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns a structured result describing the configured ZLS backend status.
 fn zlsUnavailable(allocator: std.mem.Allocator, context: app_context.Context) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -285,6 +293,7 @@ fn zlsUnavailable(allocator: std.mem.Allocator, context: app_context.Context) mc
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Wraps plain text output with a `kind` discriminator for structured tools.
 fn structuredText(allocator: std.mem.Allocator, kind: []const u8, text: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -293,6 +302,7 @@ fn structuredText(allocator: std.mem.Allocator, kind: []const u8, text: []const 
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Maps workflow failures to structured MCP tool errors.
 fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, path: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath) return mcp_errors.workspacePath(allocator, tool_name, path, "", err);
@@ -306,6 +316,7 @@ fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
     }, err);
 }
 
+/// Maps format workflow failures to structured MCP tool errors.
 fn formatError(allocator: std.mem.Allocator, file: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath) return mcp_errors.workspacePath(allocator, "zig_format", file, "", err);
@@ -320,6 +331,7 @@ fn formatError(allocator: std.mem.Allocator, file: []const u8, err: anyerror) mc
     }, err);
 }
 
+/// Maps runtime context construction failures to structured MCP tool errors.
 fn contextError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -331,10 +343,12 @@ fn contextError(allocator: std.mem.Allocator, tool_name: []const u8, operation: 
     }, err);
 }
 
+/// Clamps requested tool timeout to the supported command timeout range.
 fn toolTimeout(context: app_context.Context, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
+/// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     const obj = switch (args orelse return null) {
         .object => |o| o,
@@ -346,6 +360,7 @@ fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     const obj = switch (args orelse return default) {
         .object => |o| o,
@@ -357,6 +372,7 @@ fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     };
 }
 
+/// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     const obj = switch (args orelse return default) {
         .object => |o| o,
@@ -368,6 +384,7 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     };
 }
 
+/// Creates zls adapter test context from the ports required by the adapter.
 fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
@@ -378,6 +395,7 @@ fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
     };
 }
 
+/// Asserts capability in adapter tests.
 fn expectCapability(gateway: anytype, capability: []const u8, supported: bool) !void {
     try gateway.expectCapability(.{ .capability = capability }, .{
         .capability = capability,

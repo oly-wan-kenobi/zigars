@@ -36,6 +36,8 @@ pub const HandlerRef = struct {
 
 /// Resolves a manifest ToolId to the adapter function that implements it.
 pub fn handlerFor(id: manifest.ToolId) HandlerRef {
+    // This table is the manifest-to-adapter boundary: every tool id maps to the
+    // concrete adapter module and exported handler name used by registration.
     return switch (id) {
         .zigar_adoption_pack => .{ .module = .adoption, .name = "zigarAdoptionPack" },
         .zigar_client_config_generate => .{ .module = .adoption, .name = "zigarClientConfigGenerate" },

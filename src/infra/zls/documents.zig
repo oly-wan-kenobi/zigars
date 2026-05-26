@@ -173,6 +173,7 @@ pub const DocumentState = struct {
         return self.syncTextInternal(lsp_client, file_path, content, ret_allocator, false);
     }
 
+    /// Applies document text changes while preserving cache ownership.
     fn syncTextInternal(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator, retain_content: bool) ![]const u8 {
         if (content.len > self.max_document_bytes) return error.DocumentTooLarge;
 
@@ -195,6 +196,8 @@ pub const DocumentState = struct {
         };
         const retained_len: usize = if (retain_content) content.len else 0;
         const notification: Notification = blk: {
+            // Reserve the new document state before notifying ZLS; the saved
+            // previous state lets the error path restore local ownership.
             self.mutex.lock();
             defer self.mutex.unlock();
             break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
@@ -229,6 +232,8 @@ pub const DocumentState = struct {
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
         if (!notification.did_open) {
+            // After the local mutation succeeds, transport errors roll the
+            // cache back and leave previously owned content in place.
             const Change = struct { text: []const u8 };
             const Params = struct {
                 textDocument: lsp_types.VersionedTextDocumentIdentifier,
@@ -348,6 +353,8 @@ pub const DocumentState = struct {
         }
 
         self.mutex.lock();
+        // Snapshot document state under lock, then perform LSP sends after
+        // unlocking so reopen work cannot block other cache operations.
         var it = self.open_docs.iterator();
         while (it.next()) |entry| {
             const uri = self.allocator.dupe(u8, entry.key_ptr.*) catch {
@@ -414,6 +421,7 @@ pub const DocumentState = struct {
         return reopen_summary;
     }
 
+    /// Loads an uncached document from disk into allocator-owned memory.
     fn readDiskDocument(self: *DocumentState, path: []const u8) ![]u8 {
         const io = self.io orelse return error.FileReadError;
         return std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(self.max_document_bytes)) catch |err| {
@@ -425,6 +433,7 @@ pub const DocumentState = struct {
         };
     }
 
+    /// Removes a reserved document slot during rollback or cleanup.
     fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -435,6 +444,7 @@ pub const DocumentState = struct {
         }
     }
 
+    /// Restores a document entry after a failed sync update.
     fn restoreDoc(self: *DocumentState, file_uri: []const u8, info: DocInfo) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -459,10 +469,12 @@ pub const DocumentState = struct {
     }
 };
 
+/// Calculates the byte length of cached document content.
 fn contentLen(info: DocumentState.DocInfo) usize {
     return if (info.content) |content| content.len else 0;
 }
 
+/// Computes retained cache bytes after replacing one document body.
 fn retainedBytesAfterReplace(retained: usize, old_len: usize, new_len: usize) ?usize {
     if (old_len > retained) return null;
     return std.math.add(usize, retained - old_len, new_len) catch null;

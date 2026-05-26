@@ -69,6 +69,7 @@ test "tool group keyword metadata covers each group once" {
 const manifest = @import("mod.zig");
 const tooling = @import("tooling.zig");
 
+/// Finds a schema field by name and returns null when absent.
 fn fieldByName(spec: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField {
     for (spec.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return field;
@@ -76,6 +77,7 @@ fn fieldByName(spec: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField 
     return null;
 }
 
+/// Returns whether a tool plan runs commands chosen from runtime arguments.
 fn runsFromRuntimeArguments(entry: manifest.ToolEntry) bool {
     return switch (entry.plan) {
         .exact_command, .dynamic_command, .workspace_artifact => true,
@@ -83,6 +85,7 @@ fn runsFromRuntimeArguments(entry: manifest.ToolEntry) bool {
     };
 }
 
+/// Asserts a manifest schema field has the expected type text.
 fn expectFieldType(tool_name: []const u8, field: tooling.SchemaField, expected: []const u8) !void {
     _ = tool_name;
     try std.testing.expectEqualStrings(expected, field[1]);

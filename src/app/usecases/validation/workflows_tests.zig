@@ -5,11 +5,13 @@ const ports = @import("../../ports.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 const validation = @import("workflows.zig");
 
+/// Carries test ports data across use case and port boundaries.
 const TestPorts = struct {
     command: *fakes.FakeCommandRunner,
     workspace: ports.WorkspaceStore,
     clock: *fakes.FakeClockAndIds,
 
+    /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: TestPorts) app_context.ValidationContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
@@ -494,10 +496,12 @@ const RecordingWorkspace = struct {
     last_write_bytes: []const u8 = "",
     buffer: [4096]u8 = undefined,
 
+    /// Initializes the fixture with caller-provided state.
     fn init() RecordingWorkspace {
         return .{};
     }
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *RecordingWorkspace) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -508,6 +512,7 @@ const RecordingWorkspace = struct {
         };
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *RecordingWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
@@ -515,6 +520,7 @@ const RecordingWorkspace = struct {
         return error.FileNotFound;
     }
 
+    /// Writes write fields to the provided JSON stream and propagates writer failures.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *RecordingWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -530,6 +536,7 @@ const FailingWriteWorkspace = struct {
     read_count: usize = 0,
     write_count: usize = 0,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *FailingWriteWorkspace) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -540,12 +547,14 @@ const FailingWriteWorkspace = struct {
         };
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *FailingWriteWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return error.FileNotFound;
     }
 
+    /// Writes write fields to the provided JSON stream and propagates writer failures.
     fn write(ptr: *anyopaque, _: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *FailingWriteWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -560,6 +569,7 @@ const AppendHistoryWorkspace = struct {
     last_write_bytes: []const u8 = "",
     buffer: [8192]u8 = undefined,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *AppendHistoryWorkspace) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -570,12 +580,14 @@ const AppendHistoryWorkspace = struct {
         };
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *AppendHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return .{ .bytes = self.existing };
     }
 
+    /// Writes write fields to the provided JSON stream and propagates writer failures.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *AppendHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -590,6 +602,7 @@ const StaticHistoryWorkspace = struct {
     bytes: []const u8,
     read_count: usize = 0,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *StaticHistoryWorkspace) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -600,12 +613,14 @@ const StaticHistoryWorkspace = struct {
         };
     }
 
+    /// Reads read data from the provided context without taking ownership of inputs.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *StaticHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return .{ .bytes = self.bytes };
     }
 
+    /// Writes write fields to the provided JSON stream and propagates writer failures.
     fn write(_: *anyopaque, _: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         return error.UnexpectedCall;
     }

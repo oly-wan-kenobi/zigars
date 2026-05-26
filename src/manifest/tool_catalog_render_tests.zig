@@ -89,6 +89,7 @@ test "catalog lookup helpers return null for unknown tools" {
 
 const aggregate = @import("aggregate.zig");
 
+/// Finds a tool by name and returns null when no registry entry matches.
 fn find(name: []const u8) ?aggregate.ToolMeta {
     for (aggregate.entries) |entry| {
         if (std.mem.eql(u8, entry.name, name)) return entry.meta;
@@ -96,14 +97,17 @@ fn find(name: []const u8) ?aggregate.ToolMeta {
     return null;
 }
 
+/// Returns the manifest group assigned to a tool id.
 fn groupFor(id: aggregate.ToolId) @import("types.zig").ToolGroup {
     return aggregate.entries[@intFromEnum(id)].group;
 }
 
+/// Returns the serialized manifest group name.
 fn groupName(group: @import("types.zig").ToolGroup) []const u8 {
     return @tagName(group);
 }
 
+/// Returns the manifest catalog group name containing a tool.
 fn catalogGroupForTool(groups: std.json.Array, tool_name: []const u8) ?[]const u8 {
     for (groups.items) |group_value| {
         const group = group_value.object;

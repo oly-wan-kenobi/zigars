@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Carries safe text data across use case and port boundaries.
 pub const SafeText = struct {
     text: []const u8,
     invalid_utf8: bool,
@@ -7,6 +8,7 @@ pub const SafeText = struct {
     byte_count: usize,
 };
 
+/// Copies bounded text into allocator-owned storage for result payloads.
 pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
@@ -46,6 +48,7 @@ pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText 
     };
 }
 
+/// Implements put stream fields workflow logic using caller-owned inputs.
 pub fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: SafeText) !void {
     try obj.put(allocator, name, .{ .string = safe.text });
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });
@@ -53,6 +56,7 @@ pub fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, n
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
+/// Appends replacement data into caller-provided storage, propagating allocation failures.
 fn appendReplacement(allocator: std.mem.Allocator, out: *std.ArrayList(u8)) !void {
     try out.appendSlice(allocator, &std.unicode.replacement_character_utf8);
 }

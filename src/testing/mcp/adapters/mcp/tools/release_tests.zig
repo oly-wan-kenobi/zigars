@@ -228,22 +228,26 @@ test "release docs adapters exercise public wrappers through ports" {
     try scanner.verify();
 }
 
+/// Records an expected structured kind call, cloning request data and failing on allocation errors.
 fn expectStructuredKind(result: anytype, kind: []const u8) !void {
     try std.testing.expect(result.structuredContent != null);
     try std.testing.expectEqualStrings(kind, result.structuredContent.?.object.get("kind").?.string);
 }
 
+/// Records an expected no builtin env call, cloning request data and failing on allocation errors.
 fn expectNoBuiltinEnv(toolchain: anytype) !void {
     try toolchain.expectGetError(.{ .key = "version", .provenance = "release_docs.builtin_version" }, error.FileNotFound);
     try toolchain.expectGetError(.{ .key = "std_dir", .provenance = "release_docs.builtin_source" }, error.FileNotFound);
 }
 
+/// Records an expected std scan call, cloning request data and failing on allocation errors.
 fn expectStdScan(toolchain: anytype, scanner: anytype, provenance: []const u8, source: []const u8) !void {
     try toolchain.expectGet(.{ .key = "std_dir", .provenance = provenance }, "/zig/lib/std");
     try scanner.expectAbsoluteScan(.{ .root = "/zig/lib/std", .max_files = docs_domain.default_path_scan_limit, .provenance = "release_docs.std_scan" }, &.{"mem.zig"});
     try scanner.expectRead(.{ .path = "/zig/lib/std/mem.zig", .max_bytes = docs_domain.std_source_read_limit, .provenance = "release_docs.std_read" }, source);
 }
 
+/// Records an expected langref call, cloning request data and failing on allocation errors.
 fn expectLangref(toolchain: anytype, scanner: anytype, probe: []const u8, html: []const u8) !void {
     try toolchain.expectGet(.{ .key = "lib_dir", .provenance = "release_docs.langref" }, "/zig/lib");
     try scanner.expectRead(.{ .path = "/zig/lib/doc/langref.html", .max_bytes = docs_domain.langref_probe_read_limit, .provenance = "release_docs.langref_probe" }, probe);

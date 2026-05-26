@@ -30,6 +30,7 @@ pub const Scanner = struct {
         };
     }
 
+    /// Scans Zig source files through this port implementation.
     fn scanZigFiles(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,
