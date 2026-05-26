@@ -2,16 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 pub const min_total_tests: i64 = 500;
-pub const min_http_smoke_scenarios: usize = 150;
-pub const min_stdio_fixture_tool_calls: usize = 60;
+pub const min_http_smoke_scenarios: usize = 154;
+pub const min_stdio_fixture_tool_calls: usize = 76;
 pub const kcov_include_path = "src,tools";
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist";
-// The hexagonal migration moved integration-heavy MCP adapter/use-case code under
-// src; HTTP and stdio smoke cover those paths, while kcov currently wraps only
-// unit-test binaries. Keep the kcov gate at the measured migration baseline.
-pub const min_line_coverage_basis_points: u32 = 5800;
-pub const min_src_line_coverage_basis_points: u32 = 5800;
-pub const min_tools_line_coverage_basis_points: u32 = 9000;
+pub const min_line_coverage_basis_points: u32 = 10000;
+pub const min_src_line_coverage_basis_points: u32 = 10000;
+pub const min_tools_line_coverage_basis_points: u32 = 10000;
 
 pub const TestBinary = struct {
     name: []const u8,
@@ -43,10 +40,16 @@ pub const test_binaries = [_]TestBinary{
         .windows_path = "zig-out/test-bin/zigar-tools-tests.exe",
         .min_tests = 26,
     },
+    .{
+        .name = "zigar-fuzz-tests",
+        .unix_path = "zig-out/test-bin/zigar-fuzz-tests",
+        .windows_path = "zig-out/test-bin/zigar-fuzz-tests.exe",
+        .min_tests = 2,
+    },
 };
 
 test "test binaries have stable paths" {
-    try std.testing.expectEqual(@as(usize, 3), test_binaries.len);
+    try std.testing.expectEqual(@as(usize, 4), test_binaries.len);
     try std.testing.expectEqualStrings("zigar-lib-tests", test_binaries[0].name);
     try std.testing.expect(std.mem.endsWith(u8, test_binaries[0].path(), if (builtin.os.tag == .windows) ".exe" else "zigar-lib-tests"));
     for (test_binaries) |binary| {
@@ -64,11 +67,15 @@ test "coverage test floor is positive" {
     try std.testing.expect(min_tools_line_coverage_basis_points > 0);
 }
 
-test "Phase 11 floors retain migration headroom" {
+test "coverage floors require strict complete coverage" {
     try std.testing.expectEqual(@as(i64, 500), min_total_tests);
     try std.testing.expectEqual(@as(i64, 480), test_binaries[0].min_tests);
     try std.testing.expectEqual(@as(i64, 1), test_binaries[1].min_tests);
     try std.testing.expectEqual(@as(i64, 26), test_binaries[2].min_tests);
-    try std.testing.expectEqual(@as(usize, 150), min_http_smoke_scenarios);
-    try std.testing.expectEqual(@as(usize, 60), min_stdio_fixture_tool_calls);
+    try std.testing.expectEqual(@as(i64, 2), test_binaries[3].min_tests);
+    try std.testing.expectEqual(@as(usize, 154), min_http_smoke_scenarios);
+    try std.testing.expectEqual(@as(usize, 76), min_stdio_fixture_tool_calls);
+    try std.testing.expectEqual(@as(u32, 10000), min_line_coverage_basis_points);
+    try std.testing.expectEqual(@as(u32, 10000), min_src_line_coverage_basis_points);
+    try std.testing.expectEqual(@as(u32, 10000), min_tools_line_coverage_basis_points);
 }

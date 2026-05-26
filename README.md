@@ -133,15 +133,18 @@ zig build smoke
 zig build stdio-fixtures
 zig build backend-conformance-contract
 zig build coverage
+zig build test --fuzz=10K
 zig build dist release-asset-smoke
 ```
 
 `zig build coverage` requires `kcov` on `PATH` and writes
 `coverage/summary.json` with the installed library, executable, and tooling test
-binary results, per-suite floors, Cobertura-derived line coverage, and the
-configured coverage floors. The default local release gate fails when kcov cannot
-measure project source coverage or total, `src/`, or `tools/` coverage drops
-below the configured floors in `tools/coverage_config.zig`.
+binary results, per-suite floors, Cobertura-derived line coverage, per-file
+uncovered lines, tracked files missing from Cobertura, and the configured
+coverage floors. The default local release gate fails when kcov cannot measure
+project source coverage, any tracked `src/` or `tools/` Zig file is missing from
+the report, or total, `src/`, or `tools/` coverage drops below the configured
+floors in `tools/coverage_config.zig`.
 
 `zig build dist` creates ReleaseSafe archives and `zigar-checksums.txt` under
 `dist/assets`. `zig build release-asset-smoke` verifies checksums, archive

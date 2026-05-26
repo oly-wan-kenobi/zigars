@@ -61,6 +61,7 @@ Optional runtime backends:
 zig fmt build.zig build.zig.zon src tools
 zig build docs-check json-check
 zig build test
+zig build test --fuzz=10K
 zig build -Doptimize=ReleaseSafe
 zig build smoke stdio-fixtures coverage
 ```

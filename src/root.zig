@@ -15,8 +15,10 @@ test {
     _ = @import("testing/mcp/core_adapter_tests.zig");
     _ = @import("infra/observability/state_tests.zig");
     _ = @import("testing/mcp/server_tests.zig");
+    _ = @import("testing/mcp/server_task_tests.zig");
     _ = @import("testing/mcp/tool_call_memory_tests.zig");
     _ = @import("testing/mcp/handler_invariants.zig");
+    _ = @import("testing/coverage_imports.zig");
     _ = @import("testing/manifest/static_analysis_contracts.zig");
     _ = @import("testing/infra/backend_probe_tests.zig");
     _ = @import("infra/zls/documents_tests.zig");

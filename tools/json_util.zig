@@ -23,6 +23,6 @@ test "writeString escapes JSON control characters" {
     var out: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer out.deinit();
 
-    try writeString(&out.writer, "a\"b\\c\n\t\x1b");
-    try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\n\\t\\u001b\"", out.written());
+    try writeString(&out.writer, "a\"b\\c\n\r\t\x1b");
+    try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\n\\r\\t\\u001b\"", out.written());
 }
