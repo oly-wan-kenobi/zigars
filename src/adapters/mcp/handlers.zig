@@ -1,3 +1,4 @@
+//! Binds manifest tool metadata to concrete adapter functions and runtime context projections.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -92,6 +93,7 @@ fn adapterHandler(
         }.call;
     }
 
+    // Three-parameter adapters receive a typed app context synthesized from runtime ports.
     const ContextType = info.params[1].type.?;
     return struct {
         fn call(app: RuntimePtr, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -130,6 +132,7 @@ fn contextError(
     tool_name: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Context bootstrap failures are normalized into structured MCP errors for clients.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = contextOperation(ContextType),

@@ -1,3 +1,4 @@
+//! MCP resource registration and serialization over runtime workflow/read-model ports.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -7,6 +8,7 @@ const ports = @import("../../app/ports.zig");
 const mcp_resource_errors = @import("resource_errors.zig");
 const mcp_result = @import("result.zig");
 
+/// Registers static resource URIs and dynamic file resource templates.
 pub fn registerResources(server: anytype, context_provider: anytype) !void {
     const Provider = @TypeOf(context_provider);
     try server.addResourceWithDeinit(.{
@@ -102,6 +104,7 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
     });
 }
 
+/// Builds the text workspace resource from runtime UX context.
 fn workspaceResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     const body = runtime_ux.workspaceResourceText(allocator, context) catch |err| return resourceFailure(allocator, uri, .{
         .resource = "workspace",
@@ -213,6 +216,7 @@ fn workspaceRootsResource(allocator: std.mem.Allocator, context: app_context.Run
     }, err);
 }
 
+/// Resolves zigar://file/{path}/{symbols|diagnostics|imports} URIs.
 fn dynamicResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     if (!std.mem.startsWith(u8, uri, "zigar://file/")) return error.NotFound;
     const value = runtime_ux.dynamicResourceValue(allocator, context, uri) catch |err| switch (err) {
@@ -224,6 +228,7 @@ fn dynamicResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     return jsonContent(allocator, uri, value);
 }
 
+/// Adapts a text resource builder into the server callback ABI.
 fn textResourceHandler(
     comptime Provider: type,
     comptime handler: *const fn (std.mem.Allocator, app_context.RuntimeUxContext, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent,
@@ -236,6 +241,7 @@ fn textResourceHandler(
     }.call;
 }
 
+/// Adapts a JSON builder into a resource callback with serialization and errors.
 fn jsonResourceHandler(
     comptime Provider: type,
     comptime handler: *const fn (std.mem.Allocator, app_context.RuntimeUxContext, []const u8) mcp.resources.ResourceError!std.json.Value,
@@ -259,6 +265,7 @@ fn jsonResourceHandler(
     }.call;
 }
 
+/// Builds the server callback for runtime-resolved dynamic resource templates.
 fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.Io, std.mem.Allocator, []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return struct {
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
@@ -268,6 +275,7 @@ fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.I
     }.call;
 }
 
+/// Projects opaque server user_data into a RuntimeUxContext.
 fn runtimeContext(comptime Provider: type, allocator: std.mem.Allocator, user_data: ?*anyopaque, uri: []const u8) !app_context.RuntimeUxContext {
     _ = allocator;
     _ = uri;
@@ -276,6 +284,7 @@ fn runtimeContext(comptime Provider: type, allocator: std.mem.Allocator, user_da
     return provider.runtimeUxContext();
 }
 
+/// Serializes JSON as owned application/json resource text.
 fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
@@ -290,6 +299,7 @@ fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, value: std.json.Va
     return .{ .uri = uri, .mimeType = "application/json", .text = aw.toOwnedSlice() catch return error.OutOfMemory };
 }
 
+/// Extracts result.capabilities from a parsed ZLS initialize response.
 fn serverCapabilities(value: std.json.Value) std.json.Value {
     const result = switch (value) {
         .object => |obj| obj.get("result") orelse return .null,
@@ -301,6 +311,7 @@ fn serverCapabilities(value: std.json.Value) std.json.Value {
     };
 }
 
+/// Internal resource error template before attaching URI and Zig error details.
 const ResourceFailureSpec = struct {
     resource: []const u8,
     operation: []const u8,
@@ -312,6 +323,7 @@ const ResourceFailureSpec = struct {
     details: []const mcp_resource_errors.Detail = &.{},
 };
 
+/// Builds serialized resource error content from an internal failure spec.
 fn resourceFailure(allocator: std.mem.Allocator, uri: []const u8, spec: ResourceFailureSpec, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return mcp_resource_errors.jsonContentFromError(allocator, .{
         .uri = uri,
@@ -326,6 +338,7 @@ fn resourceFailure(allocator: std.mem.Allocator, uri: []const u8, spec: Resource
     }, err);
 }
 
+/// Builds a JSON error value for handlers that still need resource serialization.
 fn resourceValueFailure(allocator: std.mem.Allocator, uri: []const u8, spec: ResourceFailureSpec, err: anyerror) mcp.resources.ResourceError!std.json.Value {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_resource_errors.valueFromError(allocator, .{
@@ -341,6 +354,7 @@ fn resourceValueFailure(allocator: std.mem.Allocator, uri: []const u8, spec: Res
     }, err) catch return error.OutOfMemory;
 }
 
+/// Normalizes missing runtime context failures for registered resource handlers.
 fn contextFailure(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     return resourceFailure(allocator, uri, .{
         .resource = "registered_resource",
@@ -352,6 +366,7 @@ fn contextFailure(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) 
     }, err);
 }
 
+/// Creates a reusable failure spec for dynamic file-resource reads.
 fn dynamicResourceFailure(phase: []const u8, code: []const u8, category: []const u8, resolution: []const u8) ResourceFailureSpec {
     return .{
         .resource = "dynamic_file_resource",
@@ -363,6 +378,7 @@ fn dynamicResourceFailure(phase: []const u8, code: []const u8, category: []const
     };
 }
 
+/// Contract-token anchor for resource URI coverage tests.
 const _resource_contract_tokens = [_][]const u8{
     "zigar://workspace",
     "zigar://zls/status",

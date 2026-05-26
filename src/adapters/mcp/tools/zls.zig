@@ -1,3 +1,5 @@
+//! MCP adapters for ZLS/editor workflows, including formatting, document sync,
+//! LSP position requests, and static-source fallbacks.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -11,6 +13,7 @@ const static_source_adapter = @import("static_source_summary.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Formats a workspace Zig file and optionally applies the rewritten contents.
 pub fn zigFormat(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_format", "file", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -20,6 +23,7 @@ pub fn zigFormat(allocator: std.mem.Allocator, context: app_context.Context, arg
     return mcp_result.structured(allocator, value);
 }
 
+/// Checks formatting for a workspace path without modifying files.
 pub fn zigFormatCheck(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zig_format_check", "path", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -29,6 +33,7 @@ pub fn zigFormatCheck(allocator: std.mem.Allocator, context: app_context.Context
     return mcp_result.structured(allocator, value);
 }
 
+/// Previews or applies caller-supplied replacement content through editing policy.
 pub fn zigPatchPreview(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_patch_preview", "file", "string");
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, "zig_patch_preview", "content", "string");
@@ -39,10 +44,12 @@ pub fn zigPatchPreview(allocator: std.mem.Allocator, context: app_context.Contex
     return mcp_result.structured(allocator, value);
 }
 
+/// Opens/syncs a document snapshot for downstream ZLS requests.
 pub fn zigDocumentOpen(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return documentSync(allocator, context, args, "zig_document_open");
 }
 
+/// Reports document closure as an idempotent no-op for stateless gateway clients.
 pub fn zigDocumentClose(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_document_close", "file", "string");
     var obj = std.json.ObjectMap.empty;
@@ -53,6 +60,7 @@ pub fn zigDocumentClose(allocator: std.mem.Allocator, _: app_context.Context, ar
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Returns the current document-sync status known to the ZLS workflow layer.
 pub fn zigDocumentStatus(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_document_status", "file", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -62,31 +70,38 @@ pub fn zigDocumentStatus(allocator: std.mem.Allocator, context: app_context.Cont
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_hover` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigHover(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_hover", "textDocument/hover");
 }
 
+/// Handles MCP `zig_definition` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDefinition(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_definition", "textDocument/definition");
 }
 
+/// Handles MCP `zig_references` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigReferences(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_references", "textDocument/references");
 }
 
+/// Handles MCP `zig_completion` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCompletion(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_completion", "textDocument/completion");
 }
 
+/// Handles MCP `zig_signature_help` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSignatureHelp(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_signature_help", "textDocument/signatureHelp");
 }
 
+/// Handles MCP `zig_document_symbols` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDocumentSymbols(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const result = fileOnlyTool(allocator, context, args, "zig_document_symbols", "textDocument/documentSymbol");
     return result catch static_source_adapter.zigDeclSummary(allocator, context.staticAnalysis() catch |err| return contextError(allocator, "zig_document_symbols", "static_analysis_context", err), args);
 }
 
+/// Handles MCP `zig_workspace_symbols` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigWorkspaceSymbols(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_workspace_symbols", "query", "string");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_workspace_symbols", "zls_context", err);
@@ -98,29 +113,35 @@ pub fn zigWorkspaceSymbols(allocator: std.mem.Allocator, context: app_context.Co
     };
 }
 
+/// Handles MCP `zig_code_actions` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActions(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return positionTool(allocator, context, args, "zig_code_actions", "textDocument/codeAction");
 }
 
+/// Handles MCP `zig_code_action_apply` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zigCodeActions(allocator, context, args);
 }
 
+/// Handles MCP `zig_rename` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigRename(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (argString(args, "new_name") == null) return mcp_errors.missingArgument(allocator, "zig_rename", "new_name", "string");
     return positionTool(allocator, context, args, "zig_rename", "textDocument/rename");
 }
 
+/// Handles MCP `zig_diagnostics` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDiagnostics(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     _ = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_diagnostics", "file", "string");
     const zls_result = fileOnlyTool(allocator, context, args, "zig_diagnostics", "textDocument/diagnostic");
     return zls_result catch core_adapter.zigCheck(allocator, context.coreCommands() catch |err| return contextError(allocator, "zig_diagnostics", "core_context", err), args);
 }
 
+/// Handles MCP `zig_diagnostics_all` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDiagnosticsAll(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return zigDiagnostics(allocator, context, args);
 }
 
+/// Handles MCP `zig_diagnostics_workspace` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (!context.zls_state.running) return structuredText(allocator, "zig_diagnostics_workspace", "ZLS session is unavailable; no workspace diagnostics cache exists.");
     var obj = std.json.ObjectMap.empty;

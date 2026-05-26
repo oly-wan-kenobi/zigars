@@ -1,3 +1,5 @@
+//! Observability MCP adapters that project in-process counters and bounded rings
+//! into stable JSON read models.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -6,6 +8,7 @@ const ports = @import("../../../app/ports.zig");
 const read_model = @import("../../../app/usecases/observability/workflows.zig");
 const mcp_result = @import("../result.zig");
 
+/// Returns the full metrics v2 object assembled from runtime counters.
 pub fn zigarMetricsV2(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
@@ -18,6 +21,7 @@ pub fn zigarMetricsV2(
     return mcp_result.structured(allocator, metricsV2Value(scratch, report) catch return error.OutOfMemory);
 }
 
+/// Returns backend probe history recorded by the current server process.
 pub fn zigarBackendHealthHistory(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
@@ -30,6 +34,7 @@ pub fn zigarBackendHealthHistory(
     return mcp_result.structured(allocator, backendHistoryValue(scratch, report) catch return error.OutOfMemory);
 }
 
+/// Returns ZLS lifecycle events recorded by the current server process.
 pub fn zigarZlsTimeline(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
@@ -42,6 +47,7 @@ pub fn zigarZlsTimeline(
     return mcp_result.structured(allocator, zlsTimelineValue(scratch, report) catch return error.OutOfMemory);
 }
 
+/// Returns observed MCP tool latency and error counters.
 pub fn zigarToolLatency(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
@@ -54,6 +60,7 @@ pub fn zigarToolLatency(
     return mcp_result.structured(allocator, toolLatencyValue(scratch, report.observed) catch return error.OutOfMemory);
 }
 
+/// Builds the top-level zigar_metrics_v2 JSON object.
 fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
     const base = report.base;
     const observed = report.observed;
@@ -83,6 +90,7 @@ fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport
     return .{ .object = obj };
 }
 
+/// Builds backend health history with current probe-cache context.
 fn backendHistoryValue(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -95,6 +103,7 @@ fn backendHistoryValue(allocator: std.mem.Allocator, report: read_model.MetricsR
     return .{ .object = obj };
 }
 
+/// Builds a monotonic ZLS event timeline and current status snapshot.
 fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
     const base = report.base;
     const observed = report.observed;
@@ -111,6 +120,7 @@ fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsRepo
     return .{ .object = obj };
 }
 
+/// Builds tool latency counters in milliseconds.
 fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);

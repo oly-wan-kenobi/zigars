@@ -1,3 +1,5 @@
+//! Artifact-registry MCP adapters for listing, reading, and preview-pruning
+//! workspace artifacts with result-shape metadata.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -7,6 +9,7 @@ const artifact_registry = @import("../../../app/usecases/artifacts/registry.zig"
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Lists registered and scanned artifacts; reads registry metadata and workspace files.
 pub fn zigarArtifactIndex(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -56,6 +59,7 @@ pub fn zigarArtifactIndex(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Reads bounded artifact text and identity fields from a workspace-local path.
 pub fn zigarArtifactRead(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -95,6 +99,7 @@ pub fn zigarArtifactRead(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Previews or applies stale artifact-registry pruning; never deletes artifact files.
 pub fn zigarArtifactPrune(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -151,6 +156,7 @@ pub fn zigarArtifactPrune(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Parses compact/standard/deep mode, defaulting to the standard result shape.
 fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.OutputMode {
     const raw = argString(args, "mode") orelse result_contracts.OutputMode.standard.name();
     return switch (result_contracts.parseOutputMode(raw)) {

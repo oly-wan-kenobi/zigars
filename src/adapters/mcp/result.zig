@@ -1,3 +1,5 @@
+//! Shared ownership and serialization helpers for MCP tool, resource, and
+//! prompt results returned by adapter handlers.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -34,10 +36,12 @@ pub fn deinitPromptMessages(allocator: std.mem.Allocator, messages: []const mcp.
     if (messages.len > 0) allocator.free(messages);
 }
 
+/// Serializes `value` into text content and clones it into structuredContent.
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structuredWithErrorFlag(allocator, value, false);
 }
 
+/// Same shape as `structured`, but marks the ToolResult as an MCP tool error.
 pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structuredWithErrorFlag(allocator, value, true);
 }
@@ -59,6 +63,7 @@ fn structuredWithErrorFlag(allocator: std.mem.Allocator, value: std.json.Value, 
     };
 }
 
+/// Consumes an allocator-owned JSON tree after cloning/serializing it.
 pub fn structuredOwned(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     // Use only with JSON trees whose object keys and owned string payloads were
     // allocated by this allocator, or with values produced by cloneValue.
@@ -66,6 +71,7 @@ pub fn structuredOwned(allocator: std.mem.Allocator, value: std.json.Value) mcp.
     return structured(allocator, value);
 }
 
+/// Deep-clones a JSON value, including object keys and string payloads.
 pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
     return switch (value) {
         .null => .null,
@@ -100,10 +106,12 @@ pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json
     };
 }
 
+/// Frees a JSON tree previously cloned or built with allocator-owned keys/strings.
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     deinitClonedValue(allocator, value);
 }
 
+/// Frees payloads inside a content block that follows zigar-owned allocation rules.
 pub fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
     switch (content_item) {
         .text => |text| {
@@ -171,6 +179,7 @@ fn deinitClonedObject(allocator: std.mem.Allocator, object: *std.json.ObjectMap)
     object.deinit(allocator);
 }
 
+/// Allocates compact JSON text for an in-memory Value.
 pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var bytes_list: std.ArrayList(u8) = .empty;
     errdefer bytes_list.deinit(allocator);
@@ -178,6 +187,7 @@ pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8
     return bytes_list.toOwnedSlice(allocator);
 }
 
+/// Appends compact JSON text without taking ownership of `value`.
 pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -210,6 +220,7 @@ pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
     }
 }
 
+/// Appends a JSON string literal with required control-character escaping.
 pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');

@@ -1,11 +1,14 @@
+//! Cursor/limit parsing and response cursor projection for list-style MCP endpoints.
 const std = @import("std");
 
+/// Parsed pagination params with cursor start, clamped limit, and opt-in flag.
 pub const Pagination = struct {
     start: usize = 0,
     limit: usize = std.math.maxInt(usize),
     requested: bool = false,
 };
 
+/// Parses optional params.cursor and params.limit values from JSON-RPC params.
 pub fn fromParams(params: ?std.json.Value) Pagination {
     var page: Pagination = .{};
     const obj = switch (params orelse .null) {
@@ -33,11 +36,13 @@ pub fn fromParams(params: ?std.json.Value) Pagination {
     return page;
 }
 
+/// Returns whether a zero-based item index belongs to the requested page.
 pub fn shouldIncludeIndex(page: Pagination, index: usize) bool {
     if (index < page.start) return false;
     return index - page.start < page.limit;
 }
 
+/// Adds nextCursor only when pagination was requested and more items remain.
 pub fn maybePutNextCursor(allocator: std.mem.Allocator, result: *std.json.ObjectMap, page: Pagination, total: usize) !void {
     if (!page.requested) return;
     const next = page.start + @min(page.limit, total -| page.start);

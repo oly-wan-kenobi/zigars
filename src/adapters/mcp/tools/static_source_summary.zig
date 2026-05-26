@@ -1,3 +1,5 @@
+//! Static-source-summary MCP adapters for AST declarations, imports, tests,
+//! allocation sites, error sets, and public API snapshots.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -13,6 +15,7 @@ pub const ReadSourceError = source_summary_usecase.SourceError || error{
     MissingFile,
 };
 
+/// Handles MCP `zig_decl_summary` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDeclSummary(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -25,6 +28,7 @@ pub fn zigDeclSummary(
     return staticTextResult(allocator, "zig_decl_summary", output);
 }
 
+/// Handles MCP `zig_decl_summary_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDeclSummaryJson(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -39,6 +43,7 @@ pub fn zigDeclSummaryJson(
     return mcp_result.structured(allocator, declSummaryValue(arena.allocator(), source.file, declarations) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zig_ast_imports` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAstImports(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -53,6 +58,7 @@ pub fn zigAstImports(
     return mcp_result.structured(allocator, astImportsValue(arena.allocator(), source.file, summary) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zig_ast_decl_summary` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAstDeclSummary(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -67,6 +73,7 @@ pub fn zigAstDeclSummary(
     return mcp_result.structured(allocator, astDeclSummaryValue(arena.allocator(), source.file, summary) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zig_allocations` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAllocations(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -79,6 +86,7 @@ pub fn zigAllocations(
     return staticTextResult(allocator, "zig_allocations", output);
 }
 
+/// Handles MCP `zig_error_sets` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigErrorSets(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -91,6 +99,7 @@ pub fn zigErrorSets(
     return staticTextResult(allocator, "zig_error_sets", output);
 }
 
+/// Handles MCP `zig_public_api` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPublicApi(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -103,6 +112,7 @@ pub fn zigPublicApi(
     return staticTextResult(allocator, "zig_public_api", output);
 }
 
+/// Handles MCP `zig_dead_decl_candidates` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDeadDeclCandidates(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -115,6 +125,7 @@ pub fn zigDeadDeclCandidates(
     return staticTextResult(allocator, "zig_dead_decl_candidates", output);
 }
 
+/// Handles MCP `zig_ast_tests` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAstTests(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -129,6 +140,7 @@ pub fn zigAstTests(
     return mcp_result.structured(allocator, astTestsValue(arena.allocator(), source.file, summary) catch return error.OutOfMemory);
 }
 
+/// Reads source text from MCP arguments using the workspace port and caller-owned allocator.
 pub fn readSourceFromArgs(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -138,6 +150,7 @@ pub fn readSourceFromArgs(
     return source_summary_usecase.readSource(allocator, context, .{ .file = file });
 }
 
+/// Serializes `static_text_value` data into the stable JSON object returned by adapter tests and tools.
 pub fn staticTextValue(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -151,6 +164,7 @@ pub fn staticTextValue(
     return .{ .object = obj };
 }
 
+/// Serializes `decl_summary_value` data into the stable JSON object returned by adapter tests and tools.
 pub fn declSummaryValue(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -174,6 +188,7 @@ pub fn declSummaryValue(
     return .{ .object = obj };
 }
 
+/// Serializes `ast_imports_value` data into the stable JSON object returned by adapter tests and tools.
 pub fn astImportsValue(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -202,6 +217,7 @@ pub fn astImportsValue(
     return .{ .object = obj };
 }
 
+/// Serializes `ast_decl_summary_value` data into the stable JSON object returned by adapter tests and tools.
 pub fn astDeclSummaryValue(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -232,6 +248,7 @@ pub fn astDeclSummaryValue(
     return .{ .object = obj };
 }
 
+/// Serializes `ast_tests_value` data into the stable JSON object returned by adapter tests and tools.
 pub fn astTestsValue(
     allocator: std.mem.Allocator,
     file: []const u8,

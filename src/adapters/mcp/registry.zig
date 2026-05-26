@@ -1,3 +1,4 @@
+//! Shared MCP tool-registration plumbing: schema projection, arg validation, and error mapping.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -8,12 +9,15 @@ const schema_projection = @import("schema.zig");
 const tool_errors = @import("errors.zig");
 const manifest = @import("../../manifest/mod.zig");
 
+/// Runtime-bound tool callback signature used by registered MCP handlers.
 pub fn ToolHandler(comptime RuntimePtr: type) type {
     return *const fn (RuntimePtr, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult;
 }
 
+/// Re-exported argument validator used by registry tests and handlers.
 pub const validateToolArgs = mcp_args.validateToolArgs;
 
+/// Registers one manifest tool with schema, annotations, validation, and metrics.
 pub fn addTool(
     server: *mcp_server.Server,
     allocator: std.mem.Allocator,
@@ -24,6 +28,7 @@ pub fn addTool(
 ) !void {
     const RuntimePtr = @TypeOf(runtime);
     const schema_value = try schema_projection.buildInputSchema(allocator, spec.input_schema);
+    // The registered callback owns the ToolResult memory contract via deinit_result.
     try server.addTool(.{
         .name = spec.name,
         .description = spec.description,
@@ -41,6 +46,7 @@ pub fn addTool(
     });
 }
 
+/// Wraps adapter handlers with runtime lookup, arg validation, and call recording.
 fn mcpHandler(
     comptime RuntimePtr: type,
     comptime spec: manifest.ToolMeta,

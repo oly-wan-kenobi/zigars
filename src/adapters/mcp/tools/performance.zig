@@ -1,3 +1,4 @@
+//! Performance MCP adapters for benchmark, coverage, and regression workflows.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -6,98 +7,122 @@ const workflows = @import("../../../app/usecases/performance/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zig_coverage_run` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageRun(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_run", workflows.zigCoverageRun);
 }
 
+/// Handles MCP `zig_coverage_map` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageMap(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_map", workflows.zigCoverageMap);
 }
 
+/// Handles MCP `zig_coverage_merge` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageMerge(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_merge", workflows.zigCoverageMerge);
 }
 
+/// Handles MCP `zig_coverage_diff` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageDiff(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_diff", workflows.zigCoverageDiff);
 }
 
+/// Handles MCP `zig_coverage_baseline` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageBaseline(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_baseline", workflows.zigCoverageBaseline);
 }
 
+/// Handles MCP `zig_coverage_budget_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageBudgetCheck(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_budget_check", workflows.zigCoverageBudgetCheck);
 }
 
+/// Handles MCP `zig_bench_discover` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBenchDiscover(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_bench_discover", workflows.zigBenchDiscover);
 }
 
+/// Handles MCP `zig_bench_run` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBenchRun(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_bench_run", workflows.zigBenchRun);
 }
 
+/// Handles MCP `zig_bench_baseline` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBenchBaseline(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_bench_baseline", workflows.zigBenchBaseline);
 }
 
+/// Handles MCP `zig_benchmark_history` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBenchmarkHistory(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_benchmark_history", workflows.zigBenchmarkHistory);
 }
 
+/// Handles MCP `zig_bench_compare` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBenchCompare(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_bench_compare", workflows.zigBenchCompare);
 }
 
+/// Handles MCP `zig_perf_budget_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPerfBudgetCheck(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_perf_budget_check", workflows.zigPerfBudgetCheck);
 }
 
+/// Handles MCP `zig_profile_regression` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProfileRegression(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_profile_regression", workflows.zigProfileRegression);
 }
 
+/// Handles MCP `zig_samply_record` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSamplyRecord(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_samply_record", workflows.zigSamplyRecord);
 }
 
+/// Handles MCP `zig_samply_summary` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSamplySummary(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_samply_summary", workflows.zigSamplySummary);
 }
 
+/// Handles MCP `zig_samply_import` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSamplyImport(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_samply_import", workflows.zigSamplyImport);
 }
 
+/// Handles MCP `zig_samply_artifact` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSamplyArtifact(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_samply_artifact", workflows.zigSamplyArtifact);
 }
 
+/// Handles MCP `zig_profile_open` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProfileOpen(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_profile_open", workflows.zigProfileOpen);
 }
 
+/// Handles MCP `zig_tracy_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTracyPlan(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_tracy_plan", workflows.zigTracyPlan);
 }
 
+/// Handles MCP `zig_tracy_probe` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTracyProbe(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_tracy_probe", workflows.zigTracyProbe);
 }
 
+/// Handles MCP `zig_tracy_capture` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTracyCapture(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_tracy_capture", workflows.zigTracyCapture);
 }
 
+/// Handles MCP `zig_tracy_artifacts` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTracyArtifacts(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_tracy_artifacts", workflows.zigTracyArtifacts);
 }
 
+/// Handles MCP `zig_tracy_hints` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTracyHints(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_tracy_hints", workflows.zigTracyHints);
 }
 
+/// Handles MCP `zig_perf_evidence_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPerfEvidencePack(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_perf_evidence_pack", workflows.zigPerfEvidencePack);
 }

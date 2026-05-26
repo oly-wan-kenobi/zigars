@@ -1,9 +1,11 @@
+//! MCP tasks capability bridge over runtime job state, cancellation, and progress views.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const jsonrpc = mcp.jsonrpc;
 const pagination = @import("pagination.zig");
 
+/// Borrowed view of a runtime job exposed through MCP task endpoints.
 pub const JobView = struct {
     id: []const u8,
     label: []const u8,
@@ -17,10 +19,12 @@ pub const JobView = struct {
     updated_sequence: u64,
 };
 
+/// Runtime-owned task state bridge used by server task handlers.
 pub const State = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
 
+    /// Backing state remains runtime-owned; the adapter only calls through this vtable.
     pub const VTable = struct {
         job_count: *const fn (*anyopaque) usize,
         job_at: *const fn (*anyopaque, usize) ?JobView,
@@ -28,6 +32,7 @@ pub const State = struct {
         cancel_job: *const fn (*anyopaque, []const u8, []const u8) ?JobView,
     };
 
+    /// Wraps a runtime task store without taking ownership of it.
     pub fn init(backing: anytype) State {
         const BackingPtr = @TypeOf(backing);
         return .{
@@ -64,23 +69,28 @@ pub const State = struct {
         };
     }
 
+    /// Returns the number of retained jobs.
     pub fn jobCount(self: State) usize {
         return self.vtable.job_count(self.ptr);
     }
 
+    /// Returns a borrowed job view by list index.
     pub fn jobAt(self: State, index: usize) ?JobView {
         return self.vtable.job_at(self.ptr, index);
     }
 
+    /// Returns a borrowed job view by task/job id.
     pub fn jobById(self: State, id: []const u8) ?JobView {
         return self.vtable.job_by_id(self.ptr, id);
     }
 
+    /// Requests runtime cancellation and returns the updated job when found.
     pub fn cancelJob(self: State, id: []const u8, reason: []const u8) ?JobView {
         return self.vtable.cancel_job(self.ptr, id, reason);
     }
 };
 
+/// Projects a concrete runtime job into the protocol-facing borrowed view.
 fn jobView(job: anytype) JobView {
     return .{
         .id = job.id.slice(),
@@ -96,6 +106,7 @@ fn jobView(job: anytype) JobView {
     };
 }
 
+/// Handles tasks/get for a single retained runtime job.
 pub fn handleGet(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
     const task_id = taskIdFromParams(request.params) orelse return server.sendInvalidParams(io, allocator, request.id, "tasks/get requires params.taskId");
@@ -103,6 +114,7 @@ pub fn handleGet(server: anytype, io: std.Io, allocator: std.mem.Allocator, requ
     try sendTask(server, io, allocator, request.id, job);
 }
 
+/// Handles tasks/result with task metadata and retained stdout/stderr tails.
 pub fn handleResult(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
     const task_id = taskIdFromParams(request.params) orelse return server.sendInvalidParams(io, allocator, request.id, "tasks/result requires params.taskId");
@@ -123,6 +135,7 @@ pub fn handleResult(server: anytype, io: std.Io, allocator: std.mem.Allocator, r
     try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(request.id, .{ .object = result }) });
 }
 
+/// Handles tasks/list with optional cursor pagination.
 pub fn handleList(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
     var response_arena = std.heap.ArenaAllocator.init(allocator);
@@ -145,6 +158,7 @@ pub fn handleList(server: anytype, io: std.Io, allocator: std.mem.Allocator, req
     try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(request.id, .{ .object = result }) });
 }
 
+/// Handles tasks/cancel and forwards the side effect to runtime job state.
 pub fn handleCancel(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
     const task_id = taskIdFromParams(request.params) orelse return server.sendInvalidParams(io, allocator, request.id, "tasks/cancel requires params.taskId");
@@ -170,6 +184,7 @@ fn taskIdFromParams(params: ?std.json.Value) ?[]const u8 {
     };
 }
 
+/// Builds the MCP task JSON object for status polling.
 fn taskValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
     var obj: std.json.ObjectMap = .empty;
     try obj.put(allocator, "taskId", .{ .string = job.id });

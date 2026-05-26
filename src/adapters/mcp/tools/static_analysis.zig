@@ -1,3 +1,5 @@
+//! Static-analysis MCP adapters that parse args, invoke app use cases, and
+//! project graph/lint/semantic evidence into protocol-stable JSON.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -11,6 +13,7 @@ const workspace_scans = @import("../../../app/usecases/static_analysis/workspace
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zig_import_graph` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigImportGraph(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -23,6 +26,7 @@ pub fn zigImportGraph(
     return staticTextResult(allocator, "zig_import_graph", output);
 }
 
+/// Handles MCP `zig_import_graph_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigImportGraphJson(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -35,6 +39,7 @@ pub fn zigImportGraphJson(
     return staticStructuredValue(allocator, arena.allocator(), "zig_import_graph_json", try importGraphJsonValue(arena.allocator(), graph));
 }
 
+/// Handles MCP `zig_build_graph` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuildGraph(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -43,6 +48,7 @@ pub fn zigBuildGraph(
     return staticValueResult(allocator, context, "zig_build_graph", project_values.buildWorkspaceValue(allocator, context));
 }
 
+/// Handles MCP `zig_build_targets` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuildTargets(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -51,6 +57,7 @@ pub fn zigBuildTargets(
     return staticValueResult(allocator, context, "zig_build_targets", project_values.buildTargetsValue(allocator, context));
 }
 
+/// Handles MCP `zig_build_options` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuildOptions(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -59,6 +66,7 @@ pub fn zigBuildOptions(
     return staticValueResult(allocator, context, "zig_build_options", project_values.buildOptionsValue(allocator, context));
 }
 
+/// Handles MCP `zig_file_owner` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigFileOwner(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -72,6 +80,7 @@ pub fn zigFileOwner(
     return staticStructuredValue(allocator, scratch, "zig_file_owner", value);
 }
 
+/// Handles MCP `zig_import_resolve` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigImportResolve(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -86,6 +95,7 @@ pub fn zigImportResolve(
     return staticStructuredValue(allocator, scratch, "zig_import_resolve", value);
 }
 
+/// Handles MCP `zig_test_discover` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTestDiscover(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -98,6 +108,7 @@ pub fn zigTestDiscover(
     return staticStructuredValue(allocator, arena.allocator(), "zig_test_discover", try testDiscoverJsonValue(arena.allocator(), tests));
 }
 
+/// Handles MCP `zig_changed_files_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigChangedFilesPlan(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -106,6 +117,7 @@ pub fn zigChangedFilesPlan(
     return staticValueResult(allocator, context, "zig_changed_files_plan", project_values.changedFilesPlanValue(allocator, context, timeoutMs(context, args)));
 }
 
+/// Handles MCP `zig_dependency_inspect` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyInspect(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -118,6 +130,7 @@ pub fn zigDependencyInspect(
     return staticStructuredValue(allocator, scratch, "zig_dependency_inspect", value);
 }
 
+/// Handles MCP `zig_target_matrix_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTargetMatrixPlan(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -130,6 +143,7 @@ pub fn zigTargetMatrixPlan(
     return staticStructuredValue(allocator, scratch, "zig_target_matrix_plan", value);
 }
 
+/// Handles MCP `zig_test_failure_triage` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTestFailureTriage(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -152,6 +166,7 @@ pub fn zigTestFailureTriage(
     return staticStructuredValue(allocator, scratch, "zig_test_failure_triage", value);
 }
 
+/// Handles MCP `zig_workspace_symbol_cache` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigWorkspaceSymbolCache(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -160,6 +175,7 @@ pub fn zigWorkspaceSymbolCache(
     return staticValueResult(allocator, context, "zig_workspace_symbol_cache", project_values.workspaceSymbolCacheValue(allocator, context, argString(args, "query"), argInt(args, "limit") orelse 500));
 }
 
+/// Handles MCP `zig_package_cache_doctor` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPackageCacheDoctor(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -168,6 +184,7 @@ pub fn zigPackageCacheDoctor(
     return staticValueResult(allocator, context, "zig_package_cache_doctor", project_values.packageCacheDoctorValue(allocator, context, timeoutMs(context, args)));
 }
 
+/// Handles MCP `zig_test_map` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTestMap(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -176,6 +193,7 @@ pub fn zigTestMap(
     return staticValueResult(allocator, context, "zig_test_map", project_values.testMapValue(allocator, context, argInt(args, "limit") orelse 500));
 }
 
+/// Handles MCP `zig_test_select` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTestSelect(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -184,6 +202,7 @@ pub fn zigTestSelect(
     return staticValueResult(allocator, context, "zig_test_select", project_values.testSelectValue(allocator, context, argString(args, "files"), argString(args, "symbols"), argInt(args, "limit") orelse 500));
 }
 
+/// Handles MCP `zig_public_api_diff` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPublicApiDiff(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -202,6 +221,7 @@ pub fn zigPublicApiDiff(
     return staticStructuredValue(allocator, scratch, "zig_public_api_diff", value);
 }
 
+/// Handles MCP `zig_zlint` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZlint(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -210,6 +230,7 @@ pub fn zigZlint(
     return zlintDiagnosticsResult(allocator, context, args, "zig_zlint", false);
 }
 
+/// Handles MCP `zig_zlint_sarif` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZlintSarif(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -218,6 +239,7 @@ pub fn zigZlintSarif(
     return zlintDiagnosticsResult(allocator, context, args, "zig_zlint_sarif", true);
 }
 
+/// Handles MCP `zig_zlint_rules` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZlintRules(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -232,6 +254,7 @@ pub fn zigZlintRules(
     return structuredLintValue(allocator, scratch, "zig_zlint_rules", value);
 }
 
+/// Handles MCP `zig_zlint_fix` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZlintFix(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -256,6 +279,7 @@ pub fn zigZlintFix(
     return structuredLintValue(allocator, scratch, "zig_zlint_fix", value);
 }
 
+/// Handles MCP `zig_lint_compare` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintCompare(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -270,6 +294,7 @@ pub fn zigLintCompare(
     return structuredLintValue(allocator, scratch, "zig_lint_compare", value);
 }
 
+/// Handles MCP `zig_lint_profile` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintProfile(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -282,6 +307,7 @@ pub fn zigLintProfile(
     return structuredLintValue(allocator, scratch, "zig_lint_profile", value);
 }
 
+/// Handles MCP `zig_lint_gate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintGate(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -300,6 +326,7 @@ pub fn zigLintGate(
     return structuredLintValue(allocator, scratch, "zig_lint_gate", value);
 }
 
+/// Handles MCP `zig_lint_fix_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintFixPlan(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -314,6 +341,7 @@ pub fn zigLintFixPlan(
     return structuredLintValue(allocator, scratch, "zig_lint_fix_plan", value);
 }
 
+/// Handles MCP `zig_lint_baseline` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintBaseline(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -330,6 +358,7 @@ pub fn zigLintBaseline(
     return structuredLintValue(allocator, scratch, "zig_lint_baseline", value);
 }
 
+/// Handles MCP `zig_lint_suppressions` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintSuppressions(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -344,6 +373,7 @@ pub fn zigLintSuppressions(
     return structuredLintValue(allocator, scratch, "zig_lint_suppressions", value);
 }
 
+/// Handles MCP `zig_lint_trend` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintTrend(
     allocator: std.mem.Allocator,
     _: app_context.StaticAnalysisContext,
@@ -360,6 +390,7 @@ pub fn zigLintTrend(
     return structuredLintValue(allocator, scratch, "zig_lint_trend", value);
 }
 
+/// Handles MCP `zig_lint` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLint(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -368,6 +399,7 @@ pub fn zigLint(
     return zwanzigLintResult(allocator, context, args, .json, "zig_lint");
 }
 
+/// Handles MCP `zig_lint_sarif` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintSarif(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -376,6 +408,7 @@ pub fn zigLintSarif(
     return zwanzigLintResult(allocator, context, args, .sarif, "zig_lint_sarif");
 }
 
+/// Handles MCP `zig_lint_rules` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLintRules(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -388,6 +421,7 @@ pub fn zigLintRules(
     return structuredZwanzigValue(allocator, scratch, "zig_lint_rules", value);
 }
 
+/// Handles MCP `zig_analysis_graphs` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAnalysisGraphs(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -423,6 +457,7 @@ pub fn zigAnalysisGraphs(
     };
 }
 
+/// Handles MCP `zig_semantic_index_build` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticIndexBuild(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -431,6 +466,7 @@ pub fn zigSemanticIndexBuild(
     return semanticIndexResult(allocator, context, args, "zig_semantic_index_build", argBool(args, "refresh", false));
 }
 
+/// Handles MCP `zig_semantic_index_refresh` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticIndexRefresh(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -439,6 +475,7 @@ pub fn zigSemanticIndexRefresh(
     return semanticIndexResult(allocator, context, args, "zig_semantic_index_refresh", true);
 }
 
+/// Handles MCP `zig_semantic_index_status` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticIndexStatus(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -461,6 +498,7 @@ pub fn zigSemanticIndexStatus(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Handles MCP `zig_semantic_query` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticQuery(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -481,6 +519,7 @@ pub fn zigSemanticQuery(
     return structuredSemanticValue(allocator, scratch, "zig_semantic_query", value);
 }
 
+/// Handles MCP `zig_semantic_decl` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticDecl(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -500,6 +539,7 @@ pub fn zigSemanticDecl(
     return structuredSemanticValue(allocator, scratch, "zig_semantic_decl", value);
 }
 
+/// Handles MCP `zig_semantic_refs` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticRefs(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -509,6 +549,7 @@ pub fn zigSemanticRefs(
     return sourceRefsResult(allocator, context, args, "zig_semantic_refs", symbol, false);
 }
 
+/// Handles MCP `zig_semantic_callers` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemanticCallers(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -518,6 +559,7 @@ pub fn zigSemanticCallers(
     return sourceRefsResult(allocator, context, args, "zig_semantic_callers", symbol, true);
 }
 
+/// Handles MCP `zig_static_fusion` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStaticFusion(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -541,6 +583,7 @@ pub fn zigStaticFusion(
     return structuredSemanticValue(allocator, scratch, "zig_static_fusion", value);
 }
 
+/// Handles MCP `zig_code_index_export` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeIndexExport(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -549,6 +592,7 @@ pub fn zigCodeIndexExport(
     return exportIndexResult(allocator, context, args, "zig_code_index_export", "zigar.code_index", ".zigar-cache/code-index.json");
 }
 
+/// Handles MCP `zig_scip_export` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigScipExport(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,

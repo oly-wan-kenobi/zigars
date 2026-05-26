@@ -1,9 +1,11 @@
+//! Prompt registration and projection for deterministic runtime-UX workflows.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const runtime_ux = @import("../../app/usecases/runtime_ux/workflows.zig");
 const mcp_result = @import("result.zig");
 
+/// Registers all deterministic zigar workflow prompts with owned message cleanup.
 pub fn registerPrompts(server: anytype, context_provider: anytype) !void {
     const Provider = @TypeOf(context_provider);
     try server.addPromptWithDeinit(.{
@@ -24,6 +26,7 @@ pub fn registerPrompts(server: anytype, context_provider: anytype) !void {
     }
 }
 
+/// Builds a prompt callback that returns one allocator-owned user message.
 fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     return struct {
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
@@ -42,6 +45,7 @@ fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (
     }.call;
 }
 
+/// Allows prompt arguments to override the workflow token used in the text.
 fn workflowName(default_name: []const u8, args: ?std.json.Value) []const u8 {
     return switch (args orelse .null) {
         .object => |obj| switch (obj.get("workflow") orelse .null) {
@@ -52,6 +56,7 @@ fn workflowName(default_name: []const u8, args: ?std.json.Value) []const u8 {
     };
 }
 
+/// Contract-token anchor for prompt registration coverage.
 const _prompt_contract_tokens = [_][]const u8{
     "zigar_profile_workflow",
     "zigar_compile_error_workflow",
