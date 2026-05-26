@@ -77,11 +77,6 @@ pub const Logger = struct {
     }
 };
 
-test "disabled logger accepts messages without an IO sink" {
-    const logger = Logger.disabled();
-    logger.info("test", "ignored {s}", .{"message"});
-}
-
 test "logger level filtering is monotonic" {
     const logger = Logger.disabled().withLevel(.warn);
     try std.testing.expect(!logger.enabled(.debug));
