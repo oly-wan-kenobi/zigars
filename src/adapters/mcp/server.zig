@@ -19,10 +19,14 @@ const resource_subscriptions = @import("server/resource_subscriptions.zig");
 const tasks_ext = @import("server/tasks.zig");
 const tool_errors = @import("errors.zig");
 
+/// Deinitializer for tool results whose payload storage is owned by request allocators.
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
+/// Deinitializer for resource contents whose optional fields may allocate per request.
 pub const ResourceContentDeinit = *const fn (allocator: std.mem.Allocator, content: mcp.resources.ResourceContent) void;
+/// Deinitializer for prompt message slices produced by prompt handlers.
 pub const PromptMessagesDeinit = *const fn (allocator: std.mem.Allocator, messages: []const mcp.prompts.PromptMessage) void;
 
+/// Registered MCP tool metadata plus zigar callback and cleanup contract.
 pub const Tool = struct {
     name: []const u8,
     description: ?[]const u8 = null,
@@ -37,6 +41,7 @@ pub const Tool = struct {
     user_data: ?*anyopaque = null,
 };
 
+/// Callback for template-backed resource URIs that are resolved at read time.
 pub const DynamicResourceHandler = *const fn (user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent;
 
 /// Configuration for an MCP Server
@@ -82,10 +87,12 @@ pub const Server = struct {
     next_request_id: i64 = 1,
     pending_requests: std.AutoHashMap(i64, PendingRequest),
     log_level: protocol.LogLevel = .info,
+    /// Maximum accepted JSON-RPC POST body size for the built-in HTTP transport.
     pub const max_http_body_size: usize = 4 * 1024 * 1024;
 
     const Self = @This();
 
+    /// Outbound request bookkeeping for responses from the peer.
     pub const PendingRequest = struct {
         method: []const u8,
         timestamp: i64,
@@ -204,6 +211,7 @@ pub const Server = struct {
         host: []const u8 = "localhost",
     };
 
+    /// Transport choices supported by the standalone server loop.
     pub const RunOptions = union(enum) {
         stdio: void,
         http: HttpRunConfig,
@@ -226,6 +234,7 @@ pub const Server = struct {
         }
     }
 
+    /// Accepts sequential HTTP connections and routes each POST as one JSON-RPC message.
     fn runHttp(self: *Self, io: std.Io, allocator: std.mem.Allocator, config: HttpRunConfig) !void {
         const bind_host = if (std.mem.eql(u8, config.host, "localhost")) "127.0.0.1" else config.host;
 
@@ -271,6 +280,7 @@ pub const Server = struct {
         try self.handleHttpJsonRpcRequest(io, allocator, &request);
     }
 
+    /// Reads a bounded JSON-RPC request body and returns the captured response payload.
     fn handleHttpJsonRpcRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: *http.Server.Request) !void {
         const content_length = request.head.content_length orelse {
             try request.respond("Content-Length required", .{

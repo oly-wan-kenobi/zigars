@@ -1,3 +1,4 @@
+//! ZLS workflow helpers for document sync and workspace lifecycle operations.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

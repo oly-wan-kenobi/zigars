@@ -1,29 +1,34 @@
 const std = @import("std");
 
+/// Normalized coverage totals for one source file.
 pub const CoverageFile = struct {
     path: []const u8,
     total: usize,
     covered: usize,
 };
 
+/// Owned coverage report parsed from LCOV or JSON evidence.
 pub const CoverageSet = struct {
     files: std.ArrayList(CoverageFile) = .empty,
     total: usize = 0,
     covered: usize = 0,
     source_kind: []const u8 = "content",
 
+    /// Frees owned file paths and backing storage.
     pub fn deinit(self: *CoverageSet, allocator: std.mem.Allocator) void {
         for (self.files.items) |file| allocator.free(file.path);
         self.files.deinit(allocator);
     }
 };
 
+/// Aggregate coverage for changed files that exist in a report.
 pub const ChangedCoverage = struct {
     total: usize = 0,
     covered: usize = 0,
     count: usize = 0,
 };
 
+/// Parses coverage evidence, using format hints and content sniffing.
 pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8, format: []const u8) !CoverageSet {
     const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
     if (trimmed.len == 0) return error.InvalidCoverageEvidence;
@@ -34,6 +39,7 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     return parseLcov(allocator, trimmed, source_kind);
 }
 
+/// Merges two reports, coalescing files by exact path.
 pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet) !CoverageSet {
     var merged = CoverageSet{ .source_kind = "merged" };
     var merged_owned = true;
@@ -44,11 +50,13 @@ pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet
     return merged;
 }
 
+/// Converts covered/total counts to basis points.
 pub fn rateBp(covered: usize, total: usize) usize {
     if (total == 0) return 0;
     return @intCast(@divTrunc(covered * 10000, total));
 }
 
+/// Totals coverage for the supplied changed-file paths only.
 pub fn changedCoverage(set: CoverageSet, changed_files: []const []const u8) ChangedCoverage {
     var out: ChangedCoverage = .{};
     for (changed_files) |path| {
@@ -61,6 +69,7 @@ pub fn changedCoverage(set: CoverageSet, changed_files: []const []const u8) Chan
     return out;
 }
 
+/// Finds a normalized file entry by exact path without allocating.
 pub fn findFile(set: CoverageSet, path: []const u8) ?CoverageFile {
     for (set.files.items) |file| if (std.mem.eql(u8, file.path, path)) return file;
     return null;

@@ -1,8 +1,10 @@
+//! Implements completions/complete by deriving argument suggestions from registered prompts/resources.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const jsonrpc = mcp.jsonrpc;
 
+/// Handles completions/complete and returns up to 100 prefix-matched values.
 pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     var response_arena = std.heap.ArenaAllocator.init(allocator);
     defer response_arena.deinit();
@@ -65,13 +67,18 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
     try server.sendResponse(io, allocator, .{ .response = response });
 }
 
+/// Appends a suggestion when it matches the prefix and result cap.
 fn appendValue(values: *std.json.Array, prefix: []const u8, value: []const u8) !void {
     if (prefix.len > 0 and !std.mem.startsWith(u8, value, prefix)) return;
     if (values.items.len >= 100) return;
     try values.append(.{ .string = value });
 }
 
+/// Command argument suggestions for runtime job tools.
 const commands = [_][]const u8{ "build", "build-test", "test", "check", "fmt-check" };
+/// Client argument suggestions for guide/prompt tools.
 const clients = [_][]const u8{ "codex", "claude", "gemini", "generic" };
+/// Dynamic resource URI templates surfaced to completion clients.
 const resource_templates = [_][]const u8{ "zigar://jobs", "zigar://run/events", "zigar://workspace/roots", "zigar://file/{path}/symbols", "zigar://file/{path}/diagnostics", "zigar://file/{path}/imports" };
+/// Workflow prompt suggestions exposed through workflow arguments.
 const workflows = [_][]const u8{ "zigar_compile_error_workflow", "zigar_test_workflow", "zigar_refactor_workflow", "zigar_api_change_workflow", "zigar_release_workflow", "zigar_perf_workflow" };

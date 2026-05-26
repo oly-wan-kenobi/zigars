@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Static-analysis capability source advertised to clients.
 pub const CapabilityTier = enum {
     advisory_orientation,
     parser_backed,
@@ -9,18 +10,21 @@ pub const CapabilityTier = enum {
     zwanzig_backed,
 };
 
+/// Confidence label attached to analysis contract evidence.
 pub const Confidence = enum {
     low,
     medium,
     high,
 };
 
+/// How the result should be used in review or release workflows.
 pub const Classification = enum {
     orientation_only,
     advisory,
     release_gating_candidate,
 };
 
+/// Evidence contract for one static-analysis tool.
 pub const Contract = struct {
     tool: []const u8,
     analysis_kind: []const u8,
@@ -122,6 +126,7 @@ const zlint_fix_limits = &.{
     "dangerous=true delegates to ZLint --fix-dangerously and should be followed by git diff review and tests.",
 };
 
+/// Static-analysis contracts rendered into tool results and catalog metadata.
 pub const contracts = [_]Contract{
     .{ .tool = "zig_import_graph", .analysis_kind = "heuristic_import_scan", .tier = .advisory_orientation, .confidence = .medium, .classification = .orientation_only, .source_coverage = workspace_text_coverage, .limitations = workspace_scan_limits, .verify_with = &.{ "zig_ast_imports", "zig build test", "ZLS references" } },
     .{ .tool = "zig_import_graph_json", .analysis_kind = "heuristic_import_scan", .tier = .advisory_orientation, .confidence = .medium, .classification = .orientation_only, .source_coverage = workspace_text_coverage, .limitations = workspace_scan_limits, .verify_with = &.{ "zig_ast_imports", "zig build test", "ZLS references" } },
@@ -178,6 +183,7 @@ pub const contracts = [_]Contract{
     .{ .tool = "zig_analysis_graphs", .analysis_kind = "optional_zwanzig_analysis_graph", .tier = .zwanzig_backed, .confidence = .high, .classification = .advisory, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig graph mode"} },
 };
 
+/// Looks up the evidence contract for a tool by exact name.
 pub fn forTool(tool_name: []const u8) ?Contract {
     for (contracts) |contract| {
         if (std.mem.eql(u8, contract.tool, tool_name)) return contract;
@@ -185,6 +191,7 @@ pub fn forTool(tool_name: []const u8) ?Contract {
     return null;
 }
 
+/// Adds standardized analysis metadata to a JSON object.
 pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) error{OutOfMemory}!void {
     const contract = forTool(tool_name) orelse unreachable;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
@@ -199,14 +206,17 @@ pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_
     if (contract.verify_with.len > 0) try obj.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
 }
 
+/// Returns the serialized capability-tier token.
 pub fn capabilityTierName(tier: CapabilityTier) []const u8 {
     return @tagName(tier);
 }
 
+/// Returns the serialized confidence token.
 pub fn confidenceName(confidence: Confidence) []const u8 {
     return @tagName(confidence);
 }
 
+/// Returns the serialized classification token.
 pub fn classificationName(classification: Classification) []const u8 {
     return @tagName(classification);
 }

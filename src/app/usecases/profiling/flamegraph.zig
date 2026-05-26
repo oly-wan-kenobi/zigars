@@ -1,3 +1,4 @@
+//! Profiling adapter that executes zflame and maps command/workspace failures to typed results.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

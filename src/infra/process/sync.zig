@@ -10,10 +10,12 @@ pub const Mutex = struct {
     io_mutex: std.Io.Mutex = .init,
     spin_mutex: std.atomic.Mutex = .unlocked,
 
+    /// Creates a lock backed by std.Io synchronization.
     pub fn init(io: std.Io) Mutex {
         return .{ .io = io };
     }
 
+    /// Acquires the lock, using the Io mutex when present.
     pub fn lock(self: *Mutex) void {
         if (self.io) |io| {
             self.io_mutex.lockUncancelable(io);
@@ -24,6 +26,7 @@ pub const Mutex = struct {
         }
     }
 
+    /// Releases the lock and wakes waiters.
     pub fn unlock(self: *Mutex) void {
         if (self.io) |io| {
             self.io_mutex.unlock(io);

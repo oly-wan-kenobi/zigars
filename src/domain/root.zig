@@ -1,3 +1,4 @@
+//! Domain-level facades and shared value helpers used by higher layers.
 pub const profiling = @import("profiling/root.zig");
 pub const editing = @import("editing/root.zig");
 pub const zig = @import("zig/root.zig");

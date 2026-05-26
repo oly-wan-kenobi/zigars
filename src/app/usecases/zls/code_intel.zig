@@ -1,3 +1,4 @@
+//! ZLS code-intel adapter for position and workspace symbol protocol requests.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

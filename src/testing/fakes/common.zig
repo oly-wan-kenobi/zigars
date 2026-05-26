@@ -1,3 +1,5 @@
+//! Shared allocation helpers for fake ports used in tests.
+
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
@@ -14,6 +16,7 @@ pub fn freeOptionalString(allocator: Allocator, value: ?[]const u8) void {
     if (value) |slice| allocator.free(slice);
 }
 
+/// Deep-copies a list of strings so fakes can safely own request snapshots.
 pub fn dupStringList(allocator: Allocator, values: []const []const u8) Allocator.Error![]const []const u8 {
     const copied = try allocator.alloc([]const u8, values.len);
     errdefer allocator.free(copied);
@@ -41,6 +44,7 @@ pub fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
     return std.mem.eql(u8, left.?, right.?);
 }
 
+/// Compares lists by content, not pointer identity, for stale-argument checks.
 pub fn stringListsEqual(left: []const []const u8, right: []const []const u8) bool {
     if (left.len != right.len) return false;
     for (left, right) |left_value, right_value| {

@@ -1,3 +1,6 @@
+//! In-memory runtime-session fake for MCP/runtime tests.
+//! It models jobs, events, subscriptions, and workspace roots in one fixture.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -173,11 +176,13 @@ pub const FakeRuntimeSession = struct {
         var count: usize = 0;
         while (tokens.next()) |token| {
             count += 1;
+            // Accept both plain paths and file:// URIs to mirror client payloads.
             const path = if (std.mem.startsWith(u8, token, "file://")) token["file://".len..] else token;
             const id = try self.allocPrint("root-{d}", .{count});
             try self.roots.append(std.testing.allocator, try self.rootSnapshot(id, path, count == 1));
         }
         if (self.roots.items.len == 0) try self.roots.append(std.testing.allocator, try self.rootSnapshot("root-1", workspace_root, true));
+        // Sync always resets selection to the first root to keep deterministic state.
         self.selected_root = 0;
     }
 

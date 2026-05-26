@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// ToolchainEnv fake with ordered key/provenance expectations.
 pub const FakeToolchainEnv = struct {
     allocator: Allocator,
     expected_gets: std.ArrayList(ExpectedGet) = .empty,
@@ -13,6 +14,7 @@ pub const FakeToolchainEnv = struct {
 
     const Self = @This();
 
+    /// Expected env lookup and either an owned value or port error.
     const ExpectedGet = struct {
         request: ports.ToolchainEnvRequest,
         result: ExpectedResult,
@@ -23,6 +25,7 @@ pub const FakeToolchainEnv = struct {
         }
     };
 
+    /// Stored result for one expected env lookup.
     const ExpectedResult = union(enum) {
         ok: []const u8,
         err: ports.PortError,
@@ -35,10 +38,12 @@ pub const FakeToolchainEnv = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_gets.items) |expected| expected.deinit(self.allocator);
         self.expected_gets.deinit(self.allocator);
@@ -47,6 +52,7 @@ pub const FakeToolchainEnv = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the ToolchainEnv vtable.
     pub fn port(self: *Self) ports.ToolchainEnv {
         return .{
             .ptr = self,
@@ -56,6 +62,7 @@ pub const FakeToolchainEnv = struct {
         };
     }
 
+    /// Adds an ordered successful env lookup expectation.
     pub fn expectGet(self: *Self, request: ports.ToolchainEnvRequest, value: []const u8) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
@@ -67,6 +74,7 @@ pub const FakeToolchainEnv = struct {
         request_owned = false;
     }
 
+    /// Adds an ordered failing env lookup expectation.
     pub fn expectGetError(self: *Self, request: ports.ToolchainEnvRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
@@ -78,6 +86,7 @@ pub const FakeToolchainEnv = struct {
         request_owned = false;
     }
 
+    /// Fails if any ordered expectation was not consumed.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_get != self.expected_gets.items.len) return error.MissingExpectedCall;
     }

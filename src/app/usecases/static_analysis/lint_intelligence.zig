@@ -1,3 +1,4 @@
+//! Lint intelligence adapter that runs linters and reconciles normalized findings.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

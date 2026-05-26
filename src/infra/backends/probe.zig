@@ -2,6 +2,7 @@ const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 
+/// BackendProbe port that executes configured probe commands through CommandRunner.
 pub const Runner = struct {
     command_runner: ports.CommandRunner,
     default_cwd: []const u8,
@@ -9,6 +10,7 @@ pub const Runner = struct {
 
     const Self = @This();
 
+    /// Stores borrowed command runner and default process settings.
     pub fn init(command_runner: ports.CommandRunner, default_cwd: []const u8, default_timeout_ms: i64) Self {
         return .{
             .command_runner = command_runner,
@@ -17,6 +19,7 @@ pub const Runner = struct {
         };
     }
 
+    /// Exposes this runner through the BackendProbe vtable.
     pub fn port(self: *Self) ports.BackendProbe {
         return .{
             .ptr = self,
@@ -56,6 +59,7 @@ pub const Runner = struct {
     }
 };
 
+/// Builds an owned unavailable result so callers can deinit uniformly.
 fn unavailable(allocator: std.mem.Allocator, backend: []const u8, reason: []const u8, basis: []const u8) ports.PortError!ports.BackendAvailability {
     const owned_backend = try allocator.dupe(u8, backend);
     var backend_owned = true;

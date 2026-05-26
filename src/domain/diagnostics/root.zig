@@ -1,3 +1,4 @@
+//! Diagnostics-domain helpers for crash and stacktrace processing.
 pub const stacktrace = @import("stacktrace.zig");
 pub const crash = @import("crash.zig");
 

@@ -1,3 +1,4 @@
+//! Release-domain helpers for docs evidence, release notes, and review packs.
 pub const docs_index = @import("docs_index.zig");
 pub const release_model = @import("release_model.zig");
 

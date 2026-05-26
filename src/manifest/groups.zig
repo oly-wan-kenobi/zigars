@@ -2,6 +2,7 @@ const types = @import("types.zig");
 
 const GroupSpec = types.GroupSpec;
 
+/// Search keywords attached to each tool group for catalog discovery.
 pub const group_specs = [_]GroupSpec{
     .{ .group = .discovery, .keywords = &.{ "capabilities", "tool index", "schema", "doctor", "health", "workspace", "backend setup", "backend catalog", "optional backends", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt" } },
     .{ .group = .agent_workflows, .keywords = &.{ "agent", "agent client", "mcp client", "codex", "claude", "gemini", "hermes", "context pack", "next action", "validate patch", "patch session", "transactional editing", "validation plan", "validation run", "build events", "test events", "validation history", "flake history", "failure history", "handoff", "project memory", "capability match", "tool sequence", "failure fusion", "impact analysis", "project profile", "patch guard", "done check", "readiness" } },

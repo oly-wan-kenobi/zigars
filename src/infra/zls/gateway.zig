@@ -4,6 +4,7 @@ const ports = @import("../../app/ports.zig");
 const zls_session = @import("session.zig");
 const Workspace = @import("../workspace/workspace.zig").Workspace;
 
+/// ZlsGateway port facade that ensures ZLS readiness and scopes files to a workspace.
 pub const Gateway = struct {
     allocator: std.mem.Allocator,
     workspace: *Workspace,
@@ -14,6 +15,7 @@ pub const Gateway = struct {
 
     const Self = @This();
 
+    /// Construction settings for a gateway; slot pointers are borrowed.
     pub const Options = struct {
         allocator: std.mem.Allocator,
         workspace: *Workspace,
@@ -23,6 +25,7 @@ pub const Gateway = struct {
         request_counter: ?*usize = null,
     };
 
+    /// Stores borrowed workspace/session pointers and request counter.
     pub fn init(options: Options) Self {
         return .{
             .allocator = options.allocator,
@@ -34,6 +37,7 @@ pub const Gateway = struct {
         };
     }
 
+    /// Exposes this gateway through the ZlsGateway vtable.
     pub fn port(self: *Self) ports.ZlsGateway {
         return .{
             .ptr = self,

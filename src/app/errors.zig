@@ -1,19 +1,25 @@
+//! Typed app error contract shared by all usecases to produce stable,
+//! machine-readable failures without exposing transport-specific details.
+/// Stable error category used by app error serializers and callers.
 pub const Category = enum {
     argument,
     workspace_path,
     backend,
     tool,
 
+    /// Returns the wire-facing category name.
     pub fn name(self: Category) []const u8 {
         return @tagName(self);
     }
 };
 
+/// Additional borrowed key/value metadata attached to an AppError.
 pub const Detail = struct {
     key: []const u8,
     value: []const u8,
 };
 
+/// Borrowed, transport-neutral app error payload.
 pub const AppError = struct {
     category: Category,
     operation: []const u8,
@@ -37,6 +43,7 @@ pub const AppError = struct {
     }
 };
 
+/// Lightweight result union used by app contracts before transport encoding.
 pub fn Result(comptime T: type) type {
     return union(enum) {
         ok: T,
@@ -44,6 +51,7 @@ pub fn Result(comptime T: type) type {
 
         const Self = @This();
 
+        /// True when the result contains an ok payload.
         pub fn isOk(self: Self) bool {
             return switch (self) {
                 .ok => true,
@@ -51,12 +59,14 @@ pub fn Result(comptime T: type) type {
             };
         }
 
+        /// True when the result contains an AppError.
         pub fn isErr(self: Self) bool {
             return !self.isOk();
         }
     };
 }
 
+/// Builds a borrowed invalid-argument error for request validation failures.
 pub fn invalidArgument(field: []const u8, expected: []const u8, actual: []const u8, resolution: []const u8) AppError {
     return .{
         .category = .argument,
@@ -70,6 +80,7 @@ pub fn invalidArgument(field: []const u8, expected: []const u8, actual: []const 
     };
 }
 
+/// Builds a borrowed missing-argument error for required request fields.
 pub fn missingArgument(field: []const u8, expected: []const u8) AppError {
     return .{
         .category = .argument,
@@ -83,6 +94,7 @@ pub fn missingArgument(field: []const u8, expected: []const u8) AppError {
     };
 }
 
+/// Builds a borrowed workspace-boundary rejection error.
 pub fn workspacePathRejected(path: []const u8, workspace: []const u8, code: []const u8, cause: []const u8, resolution: []const u8) AppError {
     return .{
         .category = .workspace_path,
@@ -96,6 +108,7 @@ pub fn workspacePathRejected(path: []const u8, workspace: []const u8, code: []co
     };
 }
 
+/// Builds a retryable borrowed backend-unavailable error.
 pub fn backendUnavailable(backend: []const u8, cause: []const u8, resolution: []const u8) AppError {
     return .{
         .category = .backend,
@@ -109,6 +122,7 @@ pub fn backendUnavailable(backend: []const u8, cause: []const u8, resolution: []
     };
 }
 
+/// Builds a borrowed tool failure error for non-argument failures.
 pub fn toolFailure(operation: []const u8, phase: []const u8, code: []const u8, cause: []const u8, resolution: []const u8) AppError {
     return .{
         .category = .tool,

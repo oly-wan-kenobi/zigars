@@ -1,13 +1,16 @@
+//! Structured error payloads for MCP resource operations and dynamic URI handling.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const tool_errors = @import("errors.zig");
 
+/// Additional JSON fields copied into a resource error object.
 pub const Detail = struct {
     key: []const u8,
     value: std.json.Value,
 };
 
+/// Stable resource error envelope fields, scoped by URI and resource name.
 pub const Spec = struct {
     kind: []const u8 = "resource_error",
     uri: []const u8,
@@ -21,6 +24,7 @@ pub const Spec = struct {
     details: []const Detail = &.{},
 };
 
+/// Produces a JSON error object owned by `allocator` for embedding in responses.
 pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -38,6 +42,7 @@ pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Extends `value` with normalized error name and error_kind fields.
 pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !std.json.Value {
     var result_value = try value(allocator, spec);
     try result_value.object.put(allocator, "error", .{ .string = @errorName(err) });
@@ -45,6 +50,7 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
     return result_value;
 }
 
+/// Serializes a JSON value into owned application/json resource text.
 pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -55,6 +61,7 @@ pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: 
     return .{ .uri = uri, .mimeType = "application/json", .text = text };
 }
 
+/// Builds and serializes a resource error unless the original failure was OOM.
 pub fn jsonContentFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     var result_value = valueFromError(allocator, spec, err) catch return error.OutOfMemory;

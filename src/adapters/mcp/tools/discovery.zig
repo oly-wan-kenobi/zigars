@@ -1,3 +1,5 @@
+//! MCP discovery-tool adapter that projects discovery use-case outputs into
+//! stable tool contracts and centralized structured error envelopes.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -6,47 +8,57 @@ const discovery = @import("../../../app/usecases/discovery/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zigar_capabilities` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarCapabilities(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zigar_schema` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarSchema(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zigar_backend_catalog` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendCatalog(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.backendCatalogValue(allocator, context, argBool(args, "include_configured_paths", true)) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zigar_doctor` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarDoctor(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const probe_backends = argBool(args, "probe_backends", false);
     const probe_timeout_ms = @max(1, @min(argInt(args, "timeout_ms", 1_000), 10_000));
     return structured(allocator, discovery.doctorValue(allocator, context, probe_backends, probe_timeout_ms) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `workspace_info` requests by delegating to app logic and shaping owned results/errors.
 pub fn workspaceInfo(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.workspaceInfoValue(allocator, context) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zigar_metrics` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarMetrics(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.metricsValue(allocator, context) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zigar_http_status` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarHttpStatus(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.httpStatusValue(allocator, context) catch return error.OutOfMemory);
 }
 
+/// Handles MCP `zig_toolchain_resolve` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigToolchainResolve(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const timeout_ms = @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
     const value = discovery.toolchainResolveValue(allocator, context, argBool(args, "probe_managers", false), timeout_ms) catch |err| return portToolError(allocator, "zig_toolchain_resolve", "resolve_toolchain", err);
     return structured(allocator, value);
 }
 
+/// Handles MCP `zig_command_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCommandPlan(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = discovery.commandPlanValue(allocator, context, planRequest(context, args)) catch |err| return planError(allocator, "zig_command_plan", args, err);
     return structured(allocator, value);
 }
 
+/// Handles MCP `zig_tool_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigToolPlan(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = discovery.toolPlanValue(allocator, context, planRequest(context, args)) catch |err| return planError(allocator, "zig_tool_plan", args, err);
     return structured(allocator, value);
@@ -57,6 +69,7 @@ fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.Too
 }
 
 fn jsonTextOnly(allocator: std.mem.Allocator, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Ownership of `bytes` transfers into the text content block on success.
     var bytes_owned = true;
     defer if (bytes_owned) allocator.free(bytes);
     const content = allocator.alloc(mcp.types.ContentBlock, 1) catch return error.OutOfMemory;
@@ -65,6 +78,8 @@ fn jsonTextOnly(allocator: std.mem.Allocator, bytes: []u8) mcp.tools.ToolError!m
     return .{ .content = content };
 }
 
+/// Parse permissive JSON args and clamp timeout at the adapter boundary so
+/// downstream planning code receives normalized request values.
 fn planRequest(context: app_context.Context, args: ?std.json.Value) discovery.PlanRequest {
     return .{
         .tool = argString(args, "tool"),
@@ -75,6 +90,7 @@ fn planRequest(context: app_context.Context, args: ?std.json.Value) discovery.Pl
     };
 }
 
+/// Map discovery/use-case failures to protocol-stable MCP error codes.
 fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.MissingTool => mcp_errors.missingArgument(allocator, tool_name, "tool", "registered tool name"),
@@ -161,6 +177,8 @@ test "discovery adapter planning errors map to structured MCP errors" {
     try args.put(allocator, "args", .{ .string = "\"unterminated" });
     const args_value: std.json.Value = .{ .object = args };
 
+    // Each assertion locks the external code mapping for a distinct failure
+    // class so clients can branch without parsing human-readable text.
     const missing_tool = try planError(allocator, "zig_command_plan", null, error.MissingTool);
     try expectToolErrorCode(missing_tool, "missing_required_argument");
 

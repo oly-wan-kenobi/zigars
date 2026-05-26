@@ -1,3 +1,4 @@
+//! Argument validation for MCP tool invocations against manifest-declared schemas.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -5,6 +6,7 @@ const manifest = @import("../../manifest/mod.zig");
 const tool_errors = @import("errors.zig");
 const tooling = @import("../../manifest/tooling.zig");
 
+/// Validates JSON args against a manifest schema and returns a ToolResult on failure.
 pub fn validateToolArgs(allocator: std.mem.Allocator, spec: manifest.ToolMeta, args: ?std.json.Value) mcp.tools.ToolError!?mcp.tools.ToolResult {
     const value = args orelse {
         for (spec.input_schema.fields) |field| {
@@ -40,6 +42,7 @@ pub fn validateToolArgs(allocator: std.mem.Allocator, spec: manifest.ToolMeta, a
     return null;
 }
 
+/// Finds the manifest schema tuple for a JSON argument name.
 pub fn findSchemaField(input_schema: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField {
     for (input_schema.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return field;
@@ -54,6 +57,7 @@ fn schemaTypeMatches(expected: []const u8, value: std.json.Value) bool {
     return true;
 }
 
+/// Applies enum and integer-bound validation from manifest field hints.
 fn validateFieldHint(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -102,6 +106,7 @@ fn containsString(values: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Builds an owned human-readable enum expectation for argument errors.
 fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
@@ -116,6 +121,7 @@ fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) 
     return bytes;
 }
 
+/// Maps runtime JSON tags to schema type labels used in manifest argument specs.
 fn jsonTypeName(value: std.json.Value) []const u8 {
     return switch (value) {
         .null => "null",
@@ -128,6 +134,7 @@ fn jsonTypeName(value: std.json.Value) []const u8 {
     };
 }
 
+/// Delegates argument failures to the shared MCP error envelope.
 fn argumentErrorResult(
     allocator: std.mem.Allocator,
     tool_name: []const u8,

@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Canonical evidence sources used in JSON findings payloads.
 pub const Source = enum {
     heuristic,
     parser,
@@ -18,18 +19,22 @@ pub const Confidence = enum {
     high,
 };
 
+/// Returns the serialized token used in evidence objects.
 pub fn sourceName(source: Source) []const u8 {
     return @tagName(source);
 }
 
+/// Returns the serialized confidence token used in evidence objects.
 pub fn confidenceName(confidence: Confidence) []const u8 {
     return @tagName(confidence);
 }
 
+/// Duplicates bytes into allocator-owned JSON string storage.
 pub fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Builds an owned JSON string array from borrowed string slices.
 pub fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -39,6 +44,7 @@ pub fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8
     return .{ .array = array };
 }
 
+/// Encodes source enums as JSON string arrays without extra allocations.
 pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -46,6 +52,7 @@ pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !
     return .{ .array = array };
 }
 
+/// Normalizes location coordinates to 1-based minima for external tools.
 pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -104,6 +111,7 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
     var errors: usize = 0;
     var warnings: usize = 0;
     var infos: usize = 0;
+    // Tolerate partial/malformed entries so mixed-source evidence still summarizes.
     for (findings.items) |finding| {
         const obj = switch (finding) {
             .object => |o| o,
@@ -132,6 +140,7 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
     return .{ .object = obj };
 }
 
+/// Creates a deterministic fingerprint key for cross-tool finding de-duplication.
 pub fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
     const obj = switch (finding) {
         .object => |o| o,

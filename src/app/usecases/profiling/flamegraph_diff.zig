@@ -1,3 +1,4 @@
+//! Diff-folded to flamegraph pipeline with explicit ownership and error-category mapping.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -163,6 +164,7 @@ pub const Result = union(enum) {
     },
 
     pub fn deinit(self: *Result, allocator: std.mem.Allocator) void {
+        // Exactly one union arm owns heap data at a time.
         switch (self.*) {
             .ok => |*artifact| artifact.deinit(allocator),
             .err => |*failure| failure.deinit(allocator),

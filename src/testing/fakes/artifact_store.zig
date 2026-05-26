@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// ArtifactStore fake with ordered expectations and owned call snapshots.
 pub const FakeArtifactStore = struct {
     allocator: Allocator,
     expected_puts: std.ArrayList(ExpectedPut) = .empty,
@@ -19,6 +20,7 @@ pub const FakeArtifactStore = struct {
 
     const Self = @This();
 
+    /// Expected artifact write plus the owned reference to return.
     const ExpectedPut = struct {
         request: ports.ArtifactWriteRequest,
         ref: ports.ArtifactRef,
@@ -29,6 +31,7 @@ pub const FakeArtifactStore = struct {
         }
     };
 
+    /// Expected artifact read plus the owned byte payload to return.
     const ExpectedRead = struct {
         request: ports.ArtifactReadRequest,
         bytes: []const u8,
@@ -39,6 +42,7 @@ pub const FakeArtifactStore = struct {
         }
     };
 
+    /// Expected workspace artifact record plus the owned reference to return.
     const ExpectedRecord = struct {
         request: ports.WorkspaceArtifactRecordRequest,
         ref: ports.WorkspaceArtifactRef,
@@ -49,10 +53,12 @@ pub const FakeArtifactStore = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_puts.items) |expected| expected.deinit(self.allocator);
         self.expected_puts.deinit(self.allocator);
@@ -74,6 +80,7 @@ pub const FakeArtifactStore = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the ArtifactStore vtable.
     pub fn port(self: *Self) ports.ArtifactStore {
         return .{
             .ptr = self,
@@ -85,6 +92,7 @@ pub const FakeArtifactStore = struct {
         };
     }
 
+    /// Adds an ordered write expectation and clones all borrowed request data.
     pub fn expectPut(self: *Self, request: ports.ArtifactWriteRequest, ref: ports.ArtifactRef) !void {
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
@@ -101,6 +109,7 @@ pub const FakeArtifactStore = struct {
         ref_owned = false;
     }
 
+    /// Adds an ordered read expectation and clones the returned bytes.
     pub fn expectRead(self: *Self, request: ports.ArtifactReadRequest, bytes: []const u8) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
@@ -117,6 +126,7 @@ pub const FakeArtifactStore = struct {
         bytes_owned = false;
     }
 
+    /// Adds an ordered workspace-record expectation and clones returned metadata.
     pub fn expectRecordWorkspace(self: *Self, request: ports.WorkspaceArtifactRecordRequest, ref: ports.WorkspaceArtifactRef) !void {
         const owned_request = try cloneRecordRequest(self.allocator, request);
         var request_owned = true;
@@ -133,18 +143,22 @@ pub const FakeArtifactStore = struct {
         ref_owned = false;
     }
 
+    /// Returns immutable snapshots of attempted write calls.
     pub fn putCalls(self: *const Self) []const ports.ArtifactWriteRequest {
         return self.put_records.items;
     }
 
+    /// Returns immutable snapshots of attempted read calls.
     pub fn readCalls(self: *const Self) []const ports.ArtifactReadRequest {
         return self.read_records.items;
     }
 
+    /// Returns immutable snapshots of attempted workspace-record calls.
     pub fn recordWorkspaceCalls(self: *const Self) []const ports.WorkspaceArtifactRecordRequest {
         return self.record_workspace_records.items;
     }
 
+    /// Fails if any ordered expectation was not consumed.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_put != self.expected_puts.items.len) return error.MissingWrite;
         if (self.next_read != self.expected_reads.items.len) return error.MissingExpectedCall;

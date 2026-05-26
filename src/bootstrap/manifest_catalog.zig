@@ -1,9 +1,12 @@
+//! Bridges compile-time manifest definitions into the app port shape consumed by adapters and use cases.
 const std = @import("std");
 
 const manifest = @import("../manifest/mod.zig");
 const ports = @import("../app/ports.zig");
 
+/// Read-only app port adapter over compile-time manifest entries.
 pub const Catalog = struct {
+    /// Exposes manifest metadata through an app-defined vtable to keep bootstrap->app dependency one-way.
     pub fn port(self: *Catalog) ports.ToolManifestCatalog {
         return .{
             .ptr = self,
@@ -30,6 +33,7 @@ pub const Catalog = struct {
     }
 };
 
+/// Narrows manifest internals to the stable tool-manifest contract used outside bootstrap.
 fn mapEntry(entry: manifest.ToolEntry) ports.ToolManifestEntry {
     return .{
         .name = entry.name,

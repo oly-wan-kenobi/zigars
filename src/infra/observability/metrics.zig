@@ -3,15 +3,18 @@ const std = @import("std");
 const ports = @import("../../app/ports.zig");
 const observability = @import("state.zig");
 
+/// ObservabilityReader port that snapshots bounded in-memory metrics.
 pub const Reader = struct {
     state: *observability.State,
 
     const Self = @This();
 
+    /// Stores a borrowed pointer to process-local observability state.
     pub fn init(state: *observability.State) Self {
         return .{ .state = state };
     }
 
+    /// Exposes this reader through the ObservabilityReader vtable.
     pub fn port(self: *Self) ports.ObservabilityReader {
         return .{
             .ptr = self,

@@ -1,3 +1,5 @@
+//! Runtime-UX MCP adapters for long-running jobs, event pagination, resources,
+//! workspace-root selection, and client prompt guidance.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -7,19 +9,23 @@ const runtime_ux = @import("../../../app/usecases/runtime_ux/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Starts a named runtime job and returns its handle without streaming events.
 pub fn zigarJobStart(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return runJobTool(allocator, context, args, "zigar_job_start", false);
 }
 
+/// Starts a named runtime job and includes initial event-stream state.
 pub fn zigarRunStream(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return runJobTool(allocator, context, args, "zigar_run_stream", true);
 }
 
+/// Reads a job status by the job_id returned from start/stream tools.
 pub fn zigarJobStatus(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const job_id = argString(args, "job_id") orelse return mcp_errors.missingArgument(allocator, "zigar_job_status", "job_id", "job id returned by zigar_job_start or zigar_run_stream");
     return structuredUsecase(allocator, runtime_ux.jobStatusValue, context, job_id, "zigar_job_status");
 }
 
+/// Reads paginated job output/result details using cursor and limit args.
 pub fn zigarJobResult(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const job_id = argString(args, "job_id") orelse return mcp_errors.missingArgument(allocator, "zigar_job_result", "job_id", "job id returned by zigar_job_start or zigar_run_stream");
     const request = runtime_ux.JobResultRequest{
@@ -31,6 +37,7 @@ pub fn zigarJobResult(allocator: std.mem.Allocator, context: app_context.Runtime
     return runtimeValue(allocator, context, "zigar_job_result", "read_job_result", "runtime_state", request, runtime_ux.jobResultValue);
 }
 
+/// Requests cancellation of a running job; side effects are delegated to runtime state.
 pub fn zigarJobCancel(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const job_id = argString(args, "job_id") orelse return mcp_errors.missingArgument(allocator, "zigar_job_cancel", "job_id", "job id returned by zigar_job_start or zigar_run_stream");
     const reason = argString(args, "reason") orelse "client requested cancellation";
@@ -40,6 +47,7 @@ pub fn zigarJobCancel(allocator: std.mem.Allocator, context: app_context.Runtime
     return mcp_result.structured(allocator, value);
 }
 
+/// Reads cancellation state, optionally scoped to a job id.
 pub fn zigarCancelStatus(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -48,6 +56,7 @@ pub fn zigarCancelStatus(allocator: std.mem.Allocator, context: app_context.Runt
     return mcp_result.structured(allocator, value);
 }
 
+/// Lists runtime events with optional job filtering and cursor pagination.
 pub fn zigarRunEvents(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const request = runtime_ux.EventsRequest{
         .job_id = argString(args, "job_id"),
@@ -57,6 +66,7 @@ pub fn zigarRunEvents(allocator: std.mem.Allocator, context: app_context.Runtime
     return runtimeValue(allocator, context, "zigar_run_events", "read_run_events", "runtime_state", request, runtime_ux.runEventsValue);
 }
 
+/// Reads a zigar resource URI through the runtime resource projection.
 pub fn zigarResourceQuery(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const uri = argString(args, "uri") orelse return mcp_errors.missingArgument(allocator, "zigar_resource_query", "uri", "zigar resource URI");
     const request = runtime_ux.ResourceQueryRequest{
@@ -71,6 +81,7 @@ pub fn zigarResourceQuery(allocator: std.mem.Allocator, context: app_context.Run
     return mcp_result.structured(allocator, value);
 }
 
+/// Registers interest in a resource URI and returns subscription metadata.
 pub fn zigarResourceSubscribe(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const uri = argString(args, "uri") orelse return mcp_errors.missingArgument(allocator, "zigar_resource_subscribe", "uri", "zigar resource URI");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -79,6 +90,7 @@ pub fn zigarResourceSubscribe(allocator: std.mem.Allocator, context: app_context
     return mcp_result.structured(allocator, value);
 }
 
+/// Removes a resource subscription by id or URI.
 pub fn zigarResourceUnsubscribe(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const subscription_id = argString(args, "subscription_id");
     const uri = argString(args, "uri");
@@ -92,6 +104,7 @@ pub fn zigarResourceUnsubscribe(allocator: std.mem.Allocator, context: app_conte
     return mcp_result.structured(allocator, value);
 }
 
+/// Previews or applies workspace root synchronization.
 pub fn zigarRootsSync(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const roots = argString(args, "roots") orelse context.workspace.root;
     const apply = argBool(args, "apply", false);
@@ -101,10 +114,12 @@ pub fn zigarRootsSync(allocator: std.mem.Allocator, context: app_context.Runtime
     return mcp_result.structured(allocator, value);
 }
 
+/// Returns known workspace roots and current selection state.
 pub fn zigarWorkspaceMap(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return runtimeValue(allocator, context, "zigar_workspace_map", "map_workspace", "runtime_state", @as(?[]const u8, null), workspaceMapThunk);
 }
 
+/// Previews or applies selection of a known workspace root.
 pub fn zigarWorkspaceSelect(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const workspace_id = argString(args, "workspace_id") orelse return mcp_errors.missingArgument(allocator, "zigar_workspace_select", "workspace_id", "root id or path from zigar_workspace_map");
     const apply = argBool(args, "apply", false);
@@ -117,6 +132,7 @@ pub fn zigarWorkspaceSelect(allocator: std.mem.Allocator, context: app_context.R
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zigar_agent_guide_v2` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarAgentGuideV2(allocator: std.mem.Allocator, _: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -124,6 +140,7 @@ pub fn zigarAgentGuideV2(allocator: std.mem.Allocator, _: app_context.RuntimeUxC
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zigar_client_guide` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarClientGuide(allocator: std.mem.Allocator, _: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -131,6 +148,7 @@ pub fn zigarClientGuide(allocator: std.mem.Allocator, _: app_context.RuntimeUxCo
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zigar_prompt_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPromptPack(allocator: std.mem.Allocator, _: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -138,6 +156,7 @@ pub fn zigarPromptPack(allocator: std.mem.Allocator, _: app_context.RuntimeUxCon
     return mcp_result.structured(allocator, value);
 }
 
+/// Starts a job after parsing shell-like extra args at the adapter boundary.
 fn runJobTool(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value, tool_name: []const u8, include_events: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const command_name = argString(args, "command") orelse return mcp_errors.missingArgument(allocator, tool_name, "command", "one of build, build-test, test, check, fmt-check");
     var arena = std.heap.ArenaAllocator.init(allocator);

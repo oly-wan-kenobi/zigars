@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Log severity threshold used by the lightweight process logger.
 pub const Level = enum(u8) {
     debug = 0,
     info = 1,
@@ -18,7 +19,9 @@ pub const Level = enum(u8) {
     }
 };
 
+/// Small stderr/discard logger used where observability state is unavailable.
 pub const Logger = struct {
+    /// Output target for formatted log lines.
     pub const Sink = enum {
         stderr,
         discard,
@@ -28,36 +31,44 @@ pub const Logger = struct {
     min_level: Level = .info,
     sink: Sink = .discard,
 
+    /// Creates a logger that writes to stderr using the supplied I/O handle.
     pub fn stderr(io: std.Io) Logger {
         return .{ .io = io, .sink = .stderr };
     }
 
+    /// Creates a logger that drops every message.
     pub fn disabled() Logger {
         return .{};
     }
 
+    /// Returns a copy with a different minimum level.
     pub fn withLevel(self: Logger, min_level: Level) Logger {
         var copy = self;
         copy.min_level = min_level;
         return copy;
     }
 
+    /// Logs a debug message if enabled.
     pub fn debug(self: Logger, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         self.log(.debug, component, fmt, args);
     }
 
+    /// Logs an info message if enabled.
     pub fn info(self: Logger, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         self.log(.info, component, fmt, args);
     }
 
+    /// Logs a warning message if enabled.
     pub fn warn(self: Logger, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         self.log(.warn, component, fmt, args);
     }
 
+    /// Logs an error message if enabled.
     pub fn err(self: Logger, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         self.log(.err, component, fmt, args);
     }
 
+    /// Formats and writes one log line, swallowing logging I/O failures.
     pub fn log(self: Logger, level: Level, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         if (!self.enabled(level)) return;
         if (self.sink != .stderr) return;

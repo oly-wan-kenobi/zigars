@@ -1,3 +1,4 @@
+//! CLI-facing workflow handlers for performance evidence capture and analysis tools.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

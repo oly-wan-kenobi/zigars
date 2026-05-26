@@ -1,3 +1,5 @@
+//! Transactional-editing MCP adapters for patch sessions, previews, commits,
+//! rollback, and edit history.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -9,6 +11,7 @@ const validation_adapter = @import("project_intelligence.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zigar_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionCreate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -28,14 +31,17 @@ pub fn zigarPatchSessionCreate(allocator: std.mem.Allocator, context: app_contex
     return structuredScratch(allocator, scratch, try patchSessionCreateValue(scratch, result));
 }
 
+/// Handles MCP `zigar_patch_session_preview` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionPreview(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return patchSessionReplacementTool(allocator, context, args, "zigar_patch_session_preview", false);
 }
 
+/// Handles MCP `zigar_patch_session_apply` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return patchSessionReplacementTool(allocator, context, args, "zigar_patch_session_apply", argBool(args, "apply", false));
 }
 
+/// Handles MCP `zigar_patch_session_validate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionValidate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -59,6 +65,7 @@ pub fn zigarPatchSessionValidate(allocator: std.mem.Allocator, context: app_cont
     return structuredScratch(allocator, scratch, .{ .object = obj });
 }
 
+/// Handles MCP `zigar_patch_session_revert` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionRevert(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const session_id = argString(args, "session_id") orelse return mcp_errors.missingArgument(allocator, "zigar_patch_session_revert", "session_id", "recorded patch session id");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -77,6 +84,7 @@ pub fn zigarPatchSessionRevert(allocator: std.mem.Allocator, context: app_contex
     };
 }
 
+/// Handles MCP `zig_generated_file_trace` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigGeneratedFileTrace(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zig_generated_file_trace", "path", "workspace-relative path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -85,6 +93,7 @@ pub fn zigGeneratedFileTrace(allocator: std.mem.Allocator, context: app_context.
     return structuredScratch(allocator, scratch, editing_workflows.generatedFileTraceValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_generated_file_trace", "build_app_context", err), path) catch |err| return transactionalError(allocator, "zig_generated_file_trace", "run_workflow", err));
 }
 
+/// Handles MCP `zigar_edit_policy_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -96,6 +105,7 @@ pub fn zigarEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context
     return structuredScratch(allocator, scratch, try editing_workflows.editPolicyCheckValue(scratch, paths.items));
 }
 
+/// Handles MCP `zigar_generated_route` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarGeneratedRoute(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zigar_generated_route", "path", "workspace-relative generated or vendored path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -104,6 +114,7 @@ pub fn zigarGeneratedRoute(allocator: std.mem.Allocator, context: app_context.Co
     return structuredScratch(allocator, scratch, editing_workflows.generatedRouteValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zigar_generated_route", "build_app_context", err), path, argString(args, "goal")) catch |err| return transactionalError(allocator, "zigar_generated_route", "run_workflow", err));
 }
 
+/// Handles MCP `zig_organize_imports` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigOrganizeImports(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_organize_imports", "file", "workspace-relative Zig file");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -112,6 +123,7 @@ pub fn zigOrganizeImports(allocator: std.mem.Allocator, context: app_context.Con
     return structuredScratch(allocator, scratch, editing_workflows.organizeImportsValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_organize_imports", "build_app_context", err), file, argBool(args, "apply", false)) catch |err| return transactionalError(allocator, "zig_organize_imports", "run_workflow", err));
 }
 
+/// Handles MCP `zig_update_imports` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigUpdateImports(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const old_import = argString(args, "old_import") orelse return mcp_errors.missingArgument(allocator, "zig_update_imports", "old_import", "existing @import string");
     const new_import = argString(args, "new_import") orelse return mcp_errors.missingArgument(allocator, "zig_update_imports", "new_import", "replacement @import string");
@@ -126,6 +138,7 @@ pub fn zigUpdateImports(allocator: std.mem.Allocator, context: app_context.Conte
     return structuredScratch(allocator, scratch, editing_workflows.updateImportsValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_update_imports", "build_app_context", err), files.items, old_import, new_import, argBool(args, "apply", false)) catch |err| return transactionalError(allocator, "zig_update_imports", "run_workflow", err));
 }
 
+/// Handles MCP `zig_move_decl` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigMoveDecl(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const source_file = argString(args, "source_file") orelse return mcp_errors.missingArgument(allocator, "zig_move_decl", "source_file", "workspace-relative source file");
     const target_file = argString(args, "target_file") orelse return mcp_errors.missingArgument(allocator, "zig_move_decl", "target_file", "workspace-relative target file");
@@ -136,6 +149,7 @@ pub fn zigMoveDecl(allocator: std.mem.Allocator, context: app_context.Context, a
     return structuredScratch(allocator, scratch, editing_workflows.moveDeclValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_move_decl", "build_app_context", err), source_file, target_file, name, argBool(args, "apply", false)) catch |err| return transactionalError(allocator, "zig_move_decl", "run_workflow", err));
 }
 
+/// Handles MCP `zig_extract_decl` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigExtractDecl(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_extract_decl", "file", "workspace-relative source file");
     const target_file = argString(args, "target_file") orelse return mcp_errors.missingArgument(allocator, "zig_extract_decl", "target_file", "workspace-relative target file");
@@ -148,6 +162,7 @@ pub fn zigExtractDecl(allocator: std.mem.Allocator, context: app_context.Context
     return structuredScratch(allocator, scratch, editing_workflows.extractDeclValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_extract_decl", "build_app_context", err), file, target_file, @intCast(start_line), @intCast(end_line), argBool(args, "apply", false)) catch |err| return transactionalError(allocator, "zig_extract_decl", "run_workflow", err));
 }
 
+/// Handles MCP `zig_code_action_batch` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActionBatch(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (!context.zls_state.running) return backendUnavailableResult(allocator, "zls", "zig_code_action_batch", context.tool_paths.zls, context.zls_state.status, "Start or repair ZLS, then retry code action batching.");
     var arena = std.heap.ArenaAllocator.init(allocator);

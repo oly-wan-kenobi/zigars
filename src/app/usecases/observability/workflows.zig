@@ -1,3 +1,5 @@
+//! Observability aggregation usecases. Reads process-local counters, runtime
+//! snapshots, and artifact summaries without mutating workspace state.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -1,3 +1,5 @@
+//! Adapter for result-shape contract tools; converts typed app-layer contract
+//! structs into JSON objects with stable field names for MCP clients.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -5,6 +7,7 @@ const result_contracts = @import("../../../app/result_contracts.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zigar_result_shape` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
@@ -26,6 +29,7 @@ pub fn zigarResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zigar_output_budget_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
@@ -52,6 +56,7 @@ pub fn zigarOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value
 }
 
 fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.OutputMode {
+    // The adapter defaults mode to standard so omitted arguments keep normal output size.
     const raw = argString(args, "mode") orelse result_contracts.OutputMode.standard.name();
     return switch (result_contracts.parseOutputMode(raw)) {
         .ok => |mode| mode,
@@ -59,6 +64,7 @@ fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.Outpu
     };
 }
 
+/// Build the exact top-level JSON contract shape consumed by clients.
 fn resultShapeContractValue(allocator: std.mem.Allocator, contract: result_contracts.ResultShapeContract) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -82,6 +88,7 @@ fn resultShapeContractValue(allocator: std.mem.Allocator, contract: result_contr
     return .{ .object = obj };
 }
 
+/// Serialize budget planning outputs without exposing app-layer internals.
 fn outputBudgetPlanValue(allocator: std.mem.Allocator, plan: result_contracts.OutputBudgetPlan) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -137,6 +144,8 @@ fn omittedSectionsValue(allocator: std.mem.Allocator, omitted: []const result_co
     var array_owned = true;
     defer if (array_owned) array.deinit();
     for (omitted) |item| {
+        // Item objects are moved into `array`; ownership follows the final
+        // returned JSON value.
         var obj = std.json.ObjectMap.empty;
         var obj_owned = true;
         defer if (obj_owned) obj.deinit(allocator);
@@ -202,6 +211,8 @@ test "result shape adapter renders selected mode contract" {
 
     try std.testing.expect(!result.is_error);
     const obj = result.structuredContent.?.object;
+    // Deep mode and supported_modes cardinality are routing invariants for
+    // clients that switch between compact/standard/deep contracts.
     try std.testing.expectEqualStrings("zigar_result_shape", obj.get("kind").?.string);
     try std.testing.expectEqualStrings("deep", obj.get("selected_mode").?.string);
     try std.testing.expectEqual(@as(usize, 3), obj.get("supported_modes").?.array.items.len);

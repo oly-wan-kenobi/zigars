@@ -1,3 +1,5 @@
+//! Registry of app usecase modules. Each submodule owns request/result shaping
+//! while delegating external effects through app ports.
 pub const core = @import("core/root.zig");
 pub const artifacts = @import("artifacts/root.zig");
 pub const profiling = @import("profiling/root.zig");

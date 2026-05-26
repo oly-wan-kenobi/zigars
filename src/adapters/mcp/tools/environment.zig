@@ -1,3 +1,5 @@
+//! Environment, adoption, and trust MCP adapters that preserve app workflow
+//! JSON result shapes and normalize use-case failures.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -9,126 +11,157 @@ const ports = @import("../../../app/ports.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zigar_setup_elicit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarSetupElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_setup_elicit", environment.zigarSetupElicit);
 }
 
+/// Handles MCP `zigar_profile_elicit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_elicit", environment.zigarProfileElicit);
 }
 
+/// Handles MCP `zigar_backend_elicit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_backend_elicit", environment.zigarBackendElicit);
 }
 
+/// Handles MCP `zigar_project_profile_v2` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProjectProfileV2(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_project_profile_v2", environment.zigarProjectProfileV2);
 }
 
+/// Handles MCP `zigar_profile_validate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileValidate(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_validate", environment.zigarProfileValidate);
 }
 
+/// Handles MCP `zigar_profile_read` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileRead(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_read", environment.zigarProfileRead);
 }
 
+/// Handles MCP `zigar_profile_bootstrap` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileBootstrap(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_bootstrap", environment.zigarProfileBootstrap);
 }
 
+/// Handles MCP `zigar_profile_import` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileImport(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_import", environment.zigarProfileImport);
 }
 
+/// Handles MCP `zigar_profile_diff` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarProfileDiff(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_profile_diff", environment.zigarProfileDiff);
 }
 
+/// Handles MCP `zigar_env_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarEnvPack(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_env_pack", environment.zigarEnvPack);
 }
 
+/// Handles MCP `zigar_env_export` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarEnvExport(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_env_export", environment.zigarEnvExport);
 }
 
+/// Handles MCP `zigar_zvm_probe` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarZvmProbe(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_zvm_probe", environment.zigarZvmProbe);
 }
 
+/// Handles MCP `zigar_zvm_install_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarZvmInstallPlan(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_zvm_install_plan", environment.zigarZvmInstallPlan);
 }
 
+/// Handles MCP `zigar_zvm_switch_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarZvmSwitchPlan(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_zvm_switch_plan", environment.zigarZvmSwitchPlan);
 }
 
+/// Handles MCP `zig_zls_match_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZlsMatchCheck(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zig_zls_match_check", environment.zigZlsMatchCheck);
 }
 
+/// Handles MCP `zig_toolchain_pin` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigToolchainPin(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zig_toolchain_pin", environment.zigToolchainPin);
 }
 
+/// Handles MCP `zig_toolchain_pin_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigToolchainPinCheck(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zig_toolchain_pin_check", environment.zigToolchainPinCheck);
 }
 
+/// Handles MCP `zigar_backend_install_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendInstallPlan(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_backend_install_plan", environment.zigarBackendInstallPlan);
 }
 
+/// Handles MCP `zigar_backend_verify` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendVerify(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_backend_verify", environment.zigarBackendVerify);
 }
 
+/// Handles MCP `zigar_dev_env_generate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarDevEnvGenerate(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_dev_env_generate", environment.zigarDevEnvGenerate);
 }
 
+/// Handles MCP `zigar_backend_conformance` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendConformance(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_backend_conformance", environment.zigarBackendConformance);
 }
 
+/// Handles MCP `zigar_backend_evidence_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarBackendEvidencePack(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigar_backend_evidence_pack", environment.zigarBackendEvidencePack);
 }
 
+/// Handles MCP `zigar_adoption_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarAdoptionPack(allocator: std.mem.Allocator, context: app_context.AdoptionContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeAdoption(allocator, context, args, "zigar_adoption_pack", adoption.zigarAdoptionPack);
 }
 
+/// Handles MCP `zigar_client_config_generate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarClientConfigGenerate(allocator: std.mem.Allocator, context: app_context.AdoptionContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeAdoption(allocator, context, args, "zigar_client_config_generate", adoption.zigarClientConfigGenerate);
 }
 
+/// Handles MCP `zigar_smoke_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarSmokePlan(allocator: std.mem.Allocator, context: app_context.AdoptionContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeAdoption(allocator, context, args, "zigar_smoke_plan", adoption.zigarSmokePlan);
 }
 
+/// Handles MCP `zigar_conformance_report` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarConformanceReport(allocator: std.mem.Allocator, context: app_context.AdoptionContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeAdoption(allocator, context, args, "zigar_conformance_report", adoption.zigarConformanceReport);
 }
 
+/// Handles MCP `zigar_trust_report` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarTrustReport(allocator: std.mem.Allocator, context: app_context.TrustContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeTrust(allocator, context, args, "zigar_trust_report", trust.zigarTrustReport);
 }
 
+/// Handles MCP `zigar_command_provenance` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarCommandProvenance(allocator: std.mem.Allocator, context: app_context.TrustContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeTrust(allocator, context, args, "zigar_command_provenance", trust.zigarCommandProvenance);
 }
 
+/// Handles MCP `zigar_risk_audit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarRiskAudit(allocator: std.mem.Allocator, context: app_context.TrustContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeTrust(allocator, context, args, "zigar_risk_audit", trust.zigarRiskAudit);
 }
 
+/// Handles MCP `zigar_clean_tree_gate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarCleanTreeGate(allocator: std.mem.Allocator, context: app_context.TrustContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeTrust(allocator, context, args, "zigar_clean_tree_gate", trust.zigarCleanTreeGate);
 }
 
+/// Invokes an environment-profile workflow with adapter-owned error shaping.
 fn invokeEnvironment(
     allocator: std.mem.Allocator,
     context: app_context.EnvironmentContext,
@@ -140,6 +173,7 @@ fn invokeEnvironment(
     return finish(allocator, tool_name, "environment_workflow", func(&app, allocator, args));
 }
 
+/// Invokes adoption workflows that generate client/setup guidance payloads.
 fn invokeAdoption(
     allocator: std.mem.Allocator,
     context: app_context.AdoptionContext,
@@ -151,6 +185,7 @@ fn invokeAdoption(
     return finish(allocator, tool_name, "adoption_workflow", func(&app, allocator, args));
 }
 
+/// Invokes trust workflows that may inspect command provenance or tree state.
 fn invokeTrust(
     allocator: std.mem.Allocator,
     context: app_context.TrustContext,
@@ -162,6 +197,7 @@ fn invokeTrust(
     return finish(allocator, tool_name, "trust_workflow", func(&app, allocator, args));
 }
 
+/// Converts workflow Result values into MCP ToolResult ownership contracts.
 fn finish(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, maybe_result: anyerror!environment.Result) mcp.tools.ToolError!mcp.tools.ToolResult {
     const result = maybe_result catch |err| return usecaseError(allocator, tool_name, operation, err);
     if (result.is_error) {
@@ -171,6 +207,7 @@ fn finish(allocator: std.mem.Allocator, tool_name: []const u8, operation: []cons
     return mcp_result.structuredOwned(allocator, result.value);
 }
 
+/// Normalizes non-OOM workflow failures into stable MCP error metadata.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{

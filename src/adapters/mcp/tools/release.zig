@@ -1,3 +1,4 @@
+//! Release and documentation MCP adapters over release workflow use cases.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -13,74 +14,92 @@ const mcp_result = @import("../result.zig");
 
 const schema_version = 1;
 
+/// Handles MCP `zig_ci_annotations` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCiAnnotations(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeCi(allocator, context, args, "zig_ci_annotations", ci_evidence.zigCiAnnotations);
 }
 
+/// Handles MCP `zig_junit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigJunit(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeCi(allocator, context, args, "zig_junit", ci_evidence.zigJunit);
 }
 
+/// Handles MCP `zig_matrix_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigMatrixCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeCi(allocator, context, args, "zig_matrix_check", ci_evidence.zigMatrixCheck);
 }
 
+/// Handles MCP `zig_ci_ingest` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCiIngest(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_ci_ingest", workflows.zigCiIngest);
 }
 
+/// Handles MCP `zig_ci_repro_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCiReproPlan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_ci_repro_plan", workflows.zigCiReproPlan);
 }
 
+/// Handles MCP `zig_ci_failure_map` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCiFailureMap(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_ci_failure_map", workflows.zigCiFailureMap);
 }
 
+/// Handles MCP `zig_release_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigReleasePlan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_release_plan", workflows.zigReleasePlan);
 }
 
+/// Handles MCP `zig_semver_suggest` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSemverSuggest(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_semver_suggest", workflows.zigSemverSuggest);
 }
 
+/// Handles MCP `zig_release_notes_draft` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigReleaseNotesDraft(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_release_notes_draft", workflows.zigReleaseNotesDraft);
 }
 
+/// Handles MCP `zig_release_evidence_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigReleaseEvidencePack(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_release_evidence_pack", workflows.zigReleaseEvidencePack);
 }
 
+/// Handles MCP `zig_api_baseline_init` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigApiBaselineInit(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_api_baseline_init", workflows.zigApiBaselineInit);
 }
 
+/// Handles MCP `zig_api_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigApiCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_api_check", workflows.zigApiCheck);
 }
 
+/// Handles MCP `zig_api_diff_baseline` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigApiDiffBaseline(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_api_diff_baseline", workflows.zigApiDiffBaseline);
 }
 
+/// Handles MCP `zig_api_docs_diff` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigApiDocsDiff(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeWorkflow(allocator, context, args, "zig_api_docs_diff", workflows.zigApiDocsDiff);
 }
 
+/// Handles MCP `zigar_docs_drift_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarDocsDriftCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeDrift(allocator, context, args, "zigar_docs_drift_check", release_drift.zigarDocsDriftCheck);
 }
 
+/// Handles MCP `zigar_release_claim_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarReleaseClaimCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeDrift(allocator, context, args, "zigar_release_claim_check", release_drift.zigarReleaseClaimCheck);
 }
 
+/// Handles MCP `zigar_tool_index_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarToolIndexCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeDrift(allocator, context, args, "zigar_tool_index_check", release_drift.zigarToolIndexCheck);
 }
 
+/// Handles MCP `zig_builtin_list` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinList(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -90,6 +109,7 @@ pub fn zigBuiltinList(allocator: std.mem.Allocator, context: app_context.Release
     return structuredText(allocator, "zig_builtin_list", output);
 }
 
+/// Handles MCP `zig_builtin_list_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinListJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -99,6 +119,7 @@ pub fn zigBuiltinListJson(allocator: std.mem.Allocator, context: app_context.Rel
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_builtin_doc` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_builtin_doc", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -109,6 +130,7 @@ pub fn zigBuiltinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseD
     return structuredText(allocator, "zig_builtin_doc", output);
 }
 
+/// Handles MCP `zig_builtin_doc_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinDocJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_builtin_doc_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -119,6 +141,7 @@ pub fn zigBuiltinDocJson(allocator: std.mem.Allocator, context: app_context.Rele
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_std_search` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_std_search", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -130,6 +153,7 @@ pub fn zigStdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDo
     return structuredText(allocator, "zig_std_search", output);
 }
 
+/// Handles MCP `zig_std_search_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_std_search_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -140,6 +164,7 @@ pub fn zigStdSearchJson(allocator: std.mem.Allocator, context: app_context.Relea
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_std_item` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_item", "name", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -151,6 +176,7 @@ pub fn zigStdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocs
     return structuredText(allocator, "zig_std_item", output);
 }
 
+/// Handles MCP `zig_std_item_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdItemJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_item_json", "name", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -161,6 +187,7 @@ pub fn zigStdItemJson(allocator: std.mem.Allocator, context: app_context.Release
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_lang_ref_search` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangRefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_lang_ref_search", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -172,6 +199,7 @@ pub fn zigLangRefSearch(allocator: std.mem.Allocator, context: app_context.Relea
     return structuredText(allocator, "zig_lang_ref_search", output);
 }
 
+/// Handles MCP `zig_lang_ref_search_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangRefSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_lang_ref_search_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -182,6 +210,7 @@ pub fn zigLangRefSearchJson(allocator: std.mem.Allocator, context: app_context.R
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_docs_index_build` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDocsIndexBuild(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -191,16 +220,19 @@ pub fn zigDocsIndexBuild(allocator: std.mem.Allocator, context: app_context.Rele
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_docs_query` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDocsQuery(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_docs_query", "query", "search query");
     return docsQueryTool(allocator, context, args, "zig_docs_query", query);
 }
 
+/// Handles MCP `zig_project_docs_query` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProjectDocsQuery(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_project_docs_query", "query", "project docs query");
     return docsQueryTool(allocator, context, args, "zig_project_docs_query", query);
 }
 
+/// Handles MCP `zig_std_signature` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSignature(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_signature", "name", "stdlib item name");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -218,6 +250,7 @@ pub fn zigStdSignature(allocator: std.mem.Allocator, context: app_context.Releas
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Handles MCP `zig_langref_item` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangrefItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_langref_item", "query", "language reference item query");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -234,6 +267,7 @@ pub fn zigLangrefItem(allocator: std.mem.Allocator, context: app_context.Release
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Handles MCP `zig_autodoc_ingest` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigAutodocIngest(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -243,6 +277,7 @@ pub fn zigAutodocIngest(allocator: std.mem.Allocator, context: app_context.Relea
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_doc_example_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDocExampleCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -252,6 +287,7 @@ pub fn zigDocExampleCheck(allocator: std.mem.Allocator, context: app_context.Rel
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_snippet_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSnippetCheck(allocator: std.mem.Allocator, _: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, "zig_snippet_check", "content", "Zig source snippet");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -266,6 +302,7 @@ pub fn zigSnippetCheck(allocator: std.mem.Allocator, _: app_context.ReleaseDocsC
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Handles MCP `zig_readme_command_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigReadmeCommandCheck(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();

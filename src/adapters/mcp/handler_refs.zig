@@ -1,5 +1,7 @@
+//! Compile-time mapping from manifest tool IDs to adapter modules and exported handler names.
 const manifest = @import("../../manifest/mod.zig");
 
+/// Adapter module buckets used by compile-time dispatch in handlers.zig.
 pub const HandlerModule = enum {
     discovery,
     agent,
@@ -26,11 +28,13 @@ pub const HandlerModule = enum {
     adoption,
 };
 
+/// Pair of adapter module and exported function name for a manifest tool id.
 pub const HandlerRef = struct {
     module: HandlerModule,
     name: []const u8,
 };
 
+/// Resolves a manifest ToolId to the adapter function that implements it.
 pub fn handlerFor(id: manifest.ToolId) HandlerRef {
     return switch (id) {
         .zigar_adoption_pack => .{ .module = .adoption, .name = "zigarAdoptionPack" },

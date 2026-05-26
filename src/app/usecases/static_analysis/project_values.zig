@@ -1,3 +1,4 @@
+//! Project-level static-analysis value builders for dependencies, build health, and metadata.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

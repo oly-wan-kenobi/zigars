@@ -1,20 +1,27 @@
+//! Typed, non-JSON result contracts used internally before transport encoding.
 const std = @import("std");
 
 const errors = @import("errors.zig");
 
+/// Version for the typed result-shape contract.
 pub const schema_version: u32 = 1;
+/// Lower bound applied to requested token budgets.
 pub const min_token_budget: i64 = 500;
+/// Upper bound applied to requested token budgets.
 pub const max_token_budget: i64 = 50_000;
 
+/// Response shape profile selected before transport encoding.
 pub const OutputMode = enum {
     compact,
     standard,
     deep,
 
+    /// Stable mode name used in result payloads.
     pub fn name(self: OutputMode) []const u8 {
         return @tagName(self);
     }
 
+    /// Human-facing description for mode metadata.
     pub fn description(self: OutputMode) []const u8 {
         return switch (self) {
             .compact => "Small response with stable machine fields, a short summary, and explicit omissions.",
@@ -23,6 +30,7 @@ pub const OutputMode = enum {
         };
     }
 
+    /// Default planning budget for this mode.
     pub fn defaultBudget(self: OutputMode) i64 {
         return switch (self) {
             .compact => 1_200,
@@ -32,22 +40,26 @@ pub const OutputMode = enum {
     }
 };
 
+/// Coarse confidence marker for generated contract metadata.
 pub const Confidence = enum {
     low,
     medium,
     high,
 
+    /// Stable confidence name used in result payloads.
     pub fn name(self: Confidence) []const u8 {
         return @tagName(self);
     }
 };
 
+/// Description of an intentionally omitted response section.
 pub const OmittedSection = struct {
     section: []const u8,
     reason: []const u8,
     recovery: []const u8,
 };
 
+/// Static metadata describing one output mode.
 pub const ModeMetadata = struct {
     schema_version: u32,
     mode: OutputMode,
@@ -59,10 +71,12 @@ pub const ModeMetadata = struct {
     omission_contract: []const u8,
 };
 
+/// Request for the result shape contract.
 pub const ResultShapeRequest = struct {
     mode: OutputMode = .standard,
 };
 
+/// Borrowed typed result-shape contract; no allocator-owned fields.
 pub const ResultShapeContract = struct {
     kind: []const u8 = "zigar_result_shape",
     schema_version: u32,
@@ -87,12 +101,14 @@ pub const ResultShapeContract = struct {
     }
 };
 
+/// Request for token budget planning.
 pub const OutputBudgetPlanRequest = struct {
     mode: OutputMode = .standard,
     requested_token_budget: ?i64 = null,
     tool_name: ?[]const u8 = null,
 };
 
+/// Token budget allocation across response sections.
 pub const BudgetAllocation = struct {
     machine_fields_tokens: i64,
     evidence_tokens: i64,
@@ -100,6 +116,7 @@ pub const BudgetAllocation = struct {
     priority_order: []const []const u8,
 };
 
+/// Borrowed token budget plan; no allocator-owned fields.
 pub const OutputBudgetPlan = struct {
     kind: []const u8 = "zigar_output_budget_plan",
     schema_version: u32,
@@ -152,6 +169,7 @@ const compact_priority = [_][]const u8{ "machine_fields", "omitted_sections", "s
 const standard_priority = [_][]const u8{ "machine_fields", "evidence", "limitations", "summary", "omitted_sections" };
 const deep_priority = [_][]const u8{ "machine_fields", "expanded_evidence", "diagnostics", "limitations", "omitted_sections" };
 
+/// Parses an output mode or returns a typed invalid-argument error.
 pub fn parseOutputMode(raw: []const u8) errors.Result(OutputMode) {
     inline for (std.meta.fields(OutputMode)) |field| {
         if (std.mem.eql(u8, raw, field.name)) return .{ .ok = @field(OutputMode, field.name) };
@@ -164,10 +182,12 @@ pub fn parseOutputMode(raw: []const u8) errors.Result(OutputMode) {
     ) };
 }
 
+/// Returns a static human-readable list of supported modes.
 pub fn supportedModesText() []const u8 {
     return "compact, standard, or deep";
 }
 
+/// Returns borrowed static metadata for one output mode.
 pub fn modeMetadata(mode: OutputMode) ModeMetadata {
     return .{
         .schema_version = schema_version,
@@ -181,6 +201,7 @@ pub fn modeMetadata(mode: OutputMode) ModeMetadata {
     };
 }
 
+/// Builds the typed result-shape contract without allocating.
 pub fn describeResultShape(request: ResultShapeRequest) ResultShapeContract {
     const metadata = modeMetadata(request.mode);
     return .{
@@ -199,6 +220,7 @@ pub fn describeResultShape(request: ResultShapeRequest) ResultShapeContract {
     };
 }
 
+/// Builds a typed token budget plan without allocating.
 pub fn planOutputBudget(request: OutputBudgetPlanRequest) OutputBudgetPlan {
     const default_budget = request.mode.defaultBudget();
     const requested = request.requested_token_budget orelse default_budget;
@@ -224,6 +246,7 @@ pub fn planOutputBudget(request: OutputBudgetPlanRequest) OutputBudgetPlan {
     };
 }
 
+/// Clamps a requested budget to the supported range.
 pub fn clampTokenBudget(value: i64) i64 {
     return @max(min_token_budget, @min(value, max_token_budget));
 }

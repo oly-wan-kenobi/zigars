@@ -5,12 +5,14 @@ const workspace_mod = @import("workspace.zig");
 const zig_analysis = @import("../../domain/zig/analysis.zig");
 const filesystem = @import("filesystem.zig");
 
+/// WorkspaceScanner port that walks workspace directories and returns Zig files.
 pub const Scanner = struct {
     workspace: *workspace_mod.Workspace,
     io: std.Io,
 
     const Self = @This();
 
+    /// Stores borrowed workspace pointer and I/O handle for later scans.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io) Self {
         return .{
             .workspace = workspace,
@@ -18,6 +20,7 @@ pub const Scanner = struct {
         };
     }
 
+    /// Exposes this scanner through the WorkspaceScanner vtable.
     pub fn port(self: *Self) ports.WorkspaceScanner {
         return .{
             .ptr = self,

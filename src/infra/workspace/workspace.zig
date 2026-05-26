@@ -1,17 +1,20 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// Errors raised when workspace-relative paths cannot be made safe.
 pub const WorkspaceError = error{
     PathOutsideWorkspace,
     EmptyPath,
 };
 
+/// Owns canonical workspace roots and resolves all file access through them.
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     root: []const u8,
     cache_root: []const u8,
 
+    /// Canonicalizes the workspace and cache roots; caller must call deinit.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, root_input: []const u8, cache_input: ?[]const u8) !Workspace {
         var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd_len = try std.process.currentPath(io, &cwd_buf);
@@ -37,25 +40,30 @@ pub const Workspace = struct {
         };
     }
 
+    /// Releases root strings owned by the workspace.
     pub fn deinit(self: *Workspace) void {
         self.allocator.free(self.root);
         self.allocator.free(self.cache_root);
     }
 
+    /// Resolves an existing input path and rejects paths outside the workspace.
     pub fn resolve(self: Workspace, path: []const u8) ![]const u8 {
         return resolveInsideRoot(self.allocator, self.io, self.root, path);
     }
 
+    /// Resolves an output path whose parent may not exist yet.
     pub fn resolveOutput(self: Workspace, path: []const u8) ![]const u8 {
         return resolveOutputInsideRoot(self.allocator, self.io, self.root, path);
     }
 
+    /// Reads a workspace-relative file with a caller-supplied byte limit.
     pub fn readFileAlloc(self: Workspace, io: std.Io, path: []const u8, max_bytes: usize) ![]u8 {
         const resolved = try self.resolve(path);
         defer self.allocator.free(resolved);
         return std.Io.Dir.cwd().readFileAlloc(io, resolved, self.allocator, .limited(max_bytes));
     }
 
+    /// Atomically writes a workspace-relative output file, creating parents as needed.
     pub fn writeFile(self: Workspace, io: std.Io, path: []const u8, bytes: []const u8) !void {
         const resolved = try self.resolveOutput(path);
         defer self.allocator.free(resolved);
@@ -71,6 +79,7 @@ pub const Workspace = struct {
         try atomic.replace(io);
     }
 
+    /// Returns a workspace-relative view when `abs_path` is below the root.
     pub fn relative(self: Workspace, abs_path: []const u8) []const u8 {
         if (std.mem.eql(u8, abs_path, self.root)) return ".";
         if (std.mem.startsWith(u8, abs_path, self.root) and abs_path.len > self.root.len and abs_path[self.root.len] == std.fs.path.sep) {
@@ -172,6 +181,7 @@ fn realPathFileAbsoluteOwned(allocator: std.mem.Allocator, io: std.Io, absolute_
     return try allocator.dupe(u8, sentinel_path[0..sentinel_path.len]);
 }
 
+/// True when `path` is exactly `root` or a descendant separated by a path separator.
 pub fn isInside(root: []const u8, path: []const u8) bool {
     if (std.mem.eql(u8, root, path)) return true;
     if (!std.mem.startsWith(u8, path, root)) return false;

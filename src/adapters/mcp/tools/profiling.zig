@@ -1,3 +1,4 @@
+//! Profiling MCP adapters for plan/run/flamegraph workflows and artifact paths.
 const std = @import("std");
 const builtin = @import("builtin");
 const mcp = @import("mcp");
@@ -15,6 +16,7 @@ const mcp_result = @import("../result.zig");
 
 const output_limit_mode = "truncate_on_limit";
 
+/// Handles MCP `zig_profile_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProfilePlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -27,6 +29,7 @@ pub fn zigProfilePlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.t
     return mcp_result.structured(allocator, value);
 }
 
+/// Handles MCP `zig_profile_run` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProfileRun(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,
@@ -53,6 +56,7 @@ pub fn zigProfileRun(
     };
 }
 
+/// Handles MCP `zig_flamegraph` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigFlamegraph(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,
@@ -75,6 +79,7 @@ pub fn zigFlamegraph(
     };
 }
 
+/// Handles MCP `zig_flamegraph_diff` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigFlamegraphDiff(
     allocator: std.mem.Allocator,
     context: app_context.ProfilingContext,

@@ -1,3 +1,5 @@
+//! App-layer public surface that re-exports context, ports, error contracts,
+//! and usecases for composition by transports and adapters.
 pub const context = @import("context.zig");
 pub const errors = @import("errors.zig");
 pub const ports = @import("ports.zig");

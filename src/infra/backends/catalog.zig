@@ -1,11 +1,16 @@
 const std = @import("std");
 const definitions = @import("definitions.zig");
 
+/// Zig compiler version this backend catalog is validated against.
 pub const supported_zig_version = definitions.supported_zig_version;
+/// Backend metadata row type re-exported for callers.
 pub const Backend = definitions.Backend;
+/// Optional configured executable paths for catalog rendering.
 pub const Paths = definitions.Paths;
+/// Static backend catalog used by setup and doctor workflows.
 pub const backends = definitions.backends;
 
+/// Builds the public backend setup catalog JSON.
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;

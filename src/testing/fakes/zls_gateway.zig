@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// ZlsGateway fake with ordered capability, sync, and request expectations.
 pub const FakeZlsGateway = struct {
     allocator: Allocator,
     expected_capabilities: std.ArrayList(ExpectedCapability) = .empty,
@@ -19,6 +20,7 @@ pub const FakeZlsGateway = struct {
 
     const Self = @This();
 
+    /// Expected capability lookup and result/error.
     const ExpectedCapability = struct {
         request: ports.ZlsCapabilityRequest,
         outcome: CapabilityOutcome,
@@ -32,11 +34,13 @@ pub const FakeZlsGateway = struct {
         }
     };
 
+    /// Capability expectation outcome.
     const CapabilityOutcome = union(enum) {
         result: ports.ZlsCapabilityResult,
         err: ports.PortError,
     };
 
+    /// Expected document sync and result/error.
     const ExpectedSync = struct {
         request: ports.ZlsSyncRequest,
         outcome: SyncOutcome,
@@ -50,11 +54,13 @@ pub const FakeZlsGateway = struct {
         }
     };
 
+    /// Sync expectation outcome.
     const SyncOutcome = union(enum) {
         result: ports.ZlsSyncResult,
         err: ports.PortError,
     };
 
+    /// Expected raw ZLS request and response/error.
     const ExpectedRequest = struct {
         request: ports.ZlsRequest,
         outcome: RequestOutcome,
@@ -68,15 +74,18 @@ pub const FakeZlsGateway = struct {
         }
     };
 
+    /// Raw request expectation outcome.
     const RequestOutcome = union(enum) {
         response: ports.ZlsResponse,
         err: ports.PortError,
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_capabilities.items) |expected| expected.deinit(self.allocator);
         self.expected_capabilities.deinit(self.allocator);
@@ -98,6 +107,7 @@ pub const FakeZlsGateway = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the ZlsGateway vtable.
     pub fn port(self: *Self) ports.ZlsGateway {
         return .{
             .ptr = self,
@@ -109,6 +119,7 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Adds an ordered successful capability expectation.
     pub fn expectCapability(self: *Self, request_value: ports.ZlsCapabilityRequest, result: ports.ZlsCapabilityResult) !void {
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
         var request_owned = true;

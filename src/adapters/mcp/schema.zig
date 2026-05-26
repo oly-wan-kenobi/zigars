@@ -1,8 +1,10 @@
+//! Input-schema projection from manifest hints into MCP-compatible JSON schema values.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const tooling = @import("../../manifest/tooling.zig");
 
+/// Converts manifest schema fields into MCP inputSchema properties/required arrays.
 pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) !mcp.types.InputSchema {
     var properties = std.json.ObjectMap.empty;
     var required = std.ArrayList([]const u8).empty;
@@ -33,6 +35,7 @@ pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) 
     };
 }
 
+/// Adds zigar-specific JSON schema hints such as defaults, enums, and path kind.
 fn applyFieldHint(
     allocator: std.mem.Allocator,
     property: *std.json.ObjectMap,

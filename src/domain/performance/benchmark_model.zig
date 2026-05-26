@@ -1,20 +1,24 @@
 const std = @import("std");
 
+/// One normalized benchmark timing sample in nanoseconds per iteration.
 pub const BenchSample = struct {
     name: []const u8,
     ns_per_iter: f64,
 };
 
+/// Owned benchmark sample collection parsed from text or JSON evidence.
 pub const BenchSet = struct {
     samples: std.ArrayList(BenchSample) = .empty,
     source_kind: []const u8 = "content",
 
+    /// Frees owned sample names and backing storage.
     pub fn deinit(self: *BenchSet, allocator: std.mem.Allocator) void {
         for (self.samples.items) |sample| allocator.free(sample.name);
         self.samples.deinit(allocator);
     }
 };
 
+/// One matched benchmark delta with an owned sample name.
 pub const BenchDelta = struct {
     name: []const u8,
     baseline_ns_per_iter: f64,
@@ -22,6 +26,7 @@ pub const BenchDelta = struct {
     delta_pct: f64,
 };
 
+/// Owned comparison result split into regressions and improvements.
 pub const BenchComparison = struct {
     threshold_pct: i64,
     compared_count: usize,
@@ -29,6 +34,7 @@ pub const BenchComparison = struct {
     improvements: std.ArrayList(BenchDelta) = .empty,
     worst_regression_pct: f64 = 0,
 
+    /// Frees owned delta names and backing lists.
     pub fn deinit(self: *BenchComparison, allocator: std.mem.Allocator) void {
         freeDeltas(allocator, self.regressions.items);
         self.regressions.deinit(allocator);
@@ -36,16 +42,19 @@ pub const BenchComparison = struct {
         self.improvements.deinit(allocator);
     }
 
+    /// Reports whether no regression exceeded the configured threshold.
     pub fn passed(self: BenchComparison) bool {
         return self.regressions.items.len == 0;
     }
 };
 
+/// Compact comparison summary accepted from prior JSON artifacts.
 pub const CompareSummary = struct {
     regression_count: usize,
     worst_regression_pct: f64,
 };
 
+/// Parses benchmark evidence, auto-detecting JSON versus timing text.
 pub fn parseEvidence(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !BenchSet {
     const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
     if (trimmed.len == 0) return error.InvalidBenchmarkEvidence;
@@ -53,6 +62,7 @@ pub fn parseEvidence(allocator: std.mem.Allocator, bytes: []const u8, source_kin
     return parseText(allocator, trimmed);
 }
 
+/// Parses stdout-style timing lines into an owned benchmark set.
 pub fn parseText(allocator: std.mem.Allocator, bytes: []const u8) !BenchSet {
     var set = BenchSet{ .source_kind = "stdout" };
     errdefer set.deinit(allocator);
@@ -69,6 +79,7 @@ pub fn parseText(allocator: std.mem.Allocator, bytes: []const u8) !BenchSet {
     return set;
 }
 
+/// Compares current samples against matching baseline names.
 pub fn compare(allocator: std.mem.Allocator, current: BenchSet, baseline: BenchSet, threshold_pct: i64) !BenchComparison {
     var out = BenchComparison{ .threshold_pct = threshold_pct, .compared_count = 0 };
     errdefer out.deinit(allocator);
@@ -91,6 +102,7 @@ pub fn compare(allocator: std.mem.Allocator, current: BenchSet, baseline: BenchS
     return out;
 }
 
+/// Reads a compact regression summary from JSON report evidence.
 pub fn compareSummaryFromJson(allocator: std.mem.Allocator, bytes: []const u8) !CompareSummary {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
     defer parsed.deinit();
@@ -107,10 +119,12 @@ pub fn compareSummaryFromJson(allocator: std.mem.Allocator, bytes: []const u8) !
     return .{ .regression_count = count, .worst_regression_pct = worst };
 }
 
+/// Evaluates a summary against an allowed worst-regression budget.
 pub fn budgetPassed(summary: CompareSummary, max_regression_pct: f64) bool {
     return summary.regression_count == 0 or summary.worst_regression_pct <= max_regression_pct;
 }
 
+/// Finds a sample by exact name without allocating.
 pub fn findSample(set: BenchSet, name: []const u8) ?BenchSample {
     for (set.samples.items) |sample| if (std.mem.eql(u8, sample.name, name)) return sample;
     return null;

@@ -1,3 +1,4 @@
+//! Release workflow adapter for collecting and projecting CI evidence into structured values.
 const std = @import("std");
 const app_context = @import("../../context.zig");
 const support = @import("../usecase_support.zig");

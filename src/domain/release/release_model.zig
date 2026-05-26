@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Caller-provided evidence check and command used to verify it.
 pub const EvidenceCheckInput = struct {
     name: []const u8,
     text: ?[]const u8,
     verify_with: []const u8,
 };
 
+/// One release-readiness check with an owned optional summary.
 pub const EvidenceCheck = struct {
     name: []const u8,
     observed: bool,
@@ -13,16 +15,19 @@ pub const EvidenceCheck = struct {
     verify_with: []const u8,
     summary: ?[]u8,
 
+    /// Frees the owned summary and invalidates the check.
     pub fn deinit(self: *EvidenceCheck, allocator: std.mem.Allocator) void {
         if (self.summary) |summary| allocator.free(summary);
         self.* = undefined;
     }
 };
 
+/// Owned release plan summarizing evidence checks and block status.
 pub const ReleasePlan = struct {
     checks: std.ArrayList(EvidenceCheck) = .empty,
     release_blocked: bool = true,
 
+    /// Frees nested checks and backing storage.
     pub fn deinit(self: *ReleasePlan, allocator: std.mem.Allocator) void {
         for (self.checks.items) |*check| check.deinit(allocator);
         self.checks.deinit(allocator);
@@ -30,11 +35,13 @@ pub const ReleasePlan = struct {
     }
 };
 
+/// Suggested semantic-version bump class.
 pub const SemverBump = enum {
     major,
     minor,
     patch,
 
+    /// Returns the serialized bump token.
     pub fn text(self: SemverBump) []const u8 {
         return switch (self) {
             .major => "major",
@@ -44,32 +51,38 @@ pub const SemverBump = enum {
     }
 };
 
+/// Semver recommendation plus human-readable rationale.
 pub const SemverSuggestion = struct {
     bump: SemverBump,
     reason: []const u8,
 };
 
+/// Named release-note source text supplied by callers.
 pub const ReleaseNoteInput = struct {
     title: []const u8,
     text: ?[]const u8,
 };
 
+/// Release-note section with allocator-owned body text.
 pub const ReleaseNoteSection = struct {
     title: []const u8,
     body: []u8,
 
+    /// Frees the owned section body.
     pub fn deinit(self: *ReleaseNoteSection, allocator: std.mem.Allocator) void {
         allocator.free(self.body);
         self.* = undefined;
     }
 };
 
+/// Owned release-note draft with rendered markdown.
 pub const ReleaseNotesDraft = struct {
     version: ?[]const u8,
     sections: std.ArrayList(ReleaseNoteSection) = .empty,
     markdown: []u8,
     requires_review: bool = true,
 
+    /// Frees section bodies, backing storage, and rendered markdown.
     pub fn deinit(self: *ReleaseNotesDraft, allocator: std.mem.Allocator) void {
         for (self.sections.items) |*section| section.deinit(allocator);
         self.sections.deinit(allocator);
@@ -78,26 +91,31 @@ pub const ReleaseNotesDraft = struct {
     }
 };
 
+/// Caller-provided evidence pointer for release review packs.
 pub const EvidencePointerInput = struct {
     name: []const u8,
     text: ?[]const u8,
 };
 
+/// Evidence pointer with an owned optional summary.
 pub const EvidencePointer = struct {
     name: []const u8,
     provided: bool,
     summary: ?[]u8,
 
+    /// Frees the owned summary and invalidates the pointer.
     pub fn deinit(self: *EvidencePointer, allocator: std.mem.Allocator) void {
         if (self.summary) |summary| allocator.free(summary);
         self.* = undefined;
     }
 };
 
+/// Owned set of evidence pointers for release review.
 pub const EvidencePack = struct {
     evidence: std.ArrayList(EvidencePointer) = .empty,
     ready_for_release_review: bool = false,
 
+    /// Frees nested pointers and backing storage.
     pub fn deinit(self: *EvidencePack, allocator: std.mem.Allocator) void {
         for (self.evidence.items) |*pointer| pointer.deinit(allocator);
         self.evidence.deinit(allocator);
@@ -105,6 +123,7 @@ pub const EvidencePack = struct {
     }
 };
 
+/// Builds a release plan and blocks it when any required evidence is missing.
 pub fn buildReleasePlan(allocator: std.mem.Allocator, inputs: []const EvidenceCheckInput) !ReleasePlan {
     var plan = ReleasePlan{};
     errdefer plan.deinit(allocator);
@@ -113,6 +132,7 @@ pub fn buildReleasePlan(allocator: std.mem.Allocator, inputs: []const EvidenceCh
     return plan;
 }
 
+/// Suggests a semver bump from explicit breaking/additive wording.
 pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes: []const u8) SemverSuggestion {
     const bump: SemverBump = if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "breaking_change_risk\":true", "breaking change", "removed", "incompatible" }))
         .major
@@ -131,6 +151,7 @@ pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes:
     };
 }
 
+/// Builds an owned markdown release-note draft from non-empty sections.
 pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inputs: []const ReleaseNoteInput) !ReleaseNotesDraft {
     var sections: std.ArrayList(ReleaseNoteSection) = .empty;
     errdefer {
@@ -158,6 +179,7 @@ pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inp
     };
 }
 
+/// Builds an owned evidence pack and marks it reviewable when non-empty.
 pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidencePointerInput) !EvidencePack {
     var pack = EvidencePack{};
     errdefer pack.deinit(allocator);
@@ -166,6 +188,7 @@ pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidenceP
     return pack;
 }
 
+/// Appends one evidence check, truncating supplied text for display.
 fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(EvidenceCheck), input: EvidenceCheckInput) !void {
     const observed = input.text != null and input.text.?.len > 0;
     const summary = if (input.text) |text| try shortString(allocator, text, 240) else null;
@@ -179,6 +202,7 @@ fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(Evid
     });
 }
 
+/// Appends one evidence pointer, preserving whether text was provided.
 fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.ArrayList(EvidencePointer), input: EvidencePointerInput) !void {
     const summary = if (input.text) |text| try shortString(allocator, text, 400) else null;
     errdefer if (summary) |text| allocator.free(text);
@@ -226,6 +250,7 @@ fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
     return null;
 }
 
+/// Returns an owned trimmed string, truncating with an ellipsis past limit bytes.
 fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![]u8 {
     const trimmed = std.mem.trim(u8, input, " \t\r\n");
     if (trimmed.len <= limit) return allocator.dupe(u8, trimmed);

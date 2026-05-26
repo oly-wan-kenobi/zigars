@@ -1,3 +1,5 @@
+//! Shared test harness for invoking MCP tools with minimal app bootstrap.
+
 const std = @import("std");
 const mcp = @import("mcp");
 const zigar = @import("../root.zig");
@@ -10,6 +12,7 @@ const workspace_mod = zigar.infra.workspace.workspace;
 
 pub const App = zigar.bootstrap.runtime_state.App;
 
+/// Creates a deterministic app fixture for command-planning tool tests.
 pub fn appForCommandPlanning(allocator: std.mem.Allocator) !App {
     return .{
         .allocator = allocator,
@@ -39,6 +42,7 @@ pub fn zigCompileErrorIndex(app: *App, allocator: std.mem.Allocator, args: ?std.
 
 pub fn zigarFailureFusion(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
+    // This tool maps runtime setup faults into user-facing MCP tool errors.
     const context = runtime_ports.projectIntelligenceContext() catch |err| return mcp_project_intelligence.contextSetupError(allocator, "zigar_failure_fusion", err);
     return mcp_project_intelligence.zigarFailureFusion(allocator, context, args);
 }

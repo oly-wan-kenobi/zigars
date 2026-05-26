@@ -1,3 +1,4 @@
+//! Zig toolchain-facing domain APIs (analysis, contracts, and output parsing).
 pub const analysis = @import("analysis.zig");
 pub const backend_catalog = @import("backend_catalog.zig");
 pub const backend_contracts = @import("backend_contracts.zig");

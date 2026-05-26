@@ -3,15 +3,18 @@ const std = @import("std");
 const ports = @import("../../app/ports.zig");
 const runtime_ux = @import("state.zig");
 
+/// RuntimeSession port facade over bounded in-memory runtime UX state.
 pub const Session = struct {
     state: *runtime_ux.State,
 
     const Self = @This();
 
+    /// Stores a borrowed pointer to runtime UX state.
     pub fn init(state: *runtime_ux.State) Self {
         return .{ .state = state };
     }
 
+    /// Exposes this session through the RuntimeSession vtable.
     pub fn port(self: *Self) ports.RuntimeSession {
         return .{
             .ptr = self,

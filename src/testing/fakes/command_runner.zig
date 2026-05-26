@@ -1,3 +1,5 @@
+//! Fake command runner that enforces exact request matching and call ordering.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -109,6 +111,8 @@ pub const FakeCommandRunner = struct {
 
     fn run(ptr: *anyopaque, allocator: Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        // Keep an immutable snapshot of every attempted call, even when it fails,
+        // so tests can assert observability behavior for rejected invocations.
         const owned_call = try cloneRequest(self.allocator, request);
         var record_owned = false;
         errdefer if (!record_owned) freeRequest(self.allocator, owned_call);
@@ -118,6 +122,7 @@ pub const FakeCommandRunner = struct {
         if (self.next_run >= self.expected_runs.items.len) return error.UnexpectedCall;
         const expected = self.expected_runs.items[self.next_run];
         if (!common.stringListsEqual(expected.request.argv, request.argv)) return error.StaleArguments;
+        // Remaining request fields must also match after the argv fast path.
         if (!requestsEqual(expected.request, request)) return error.StaleArguments;
         self.next_run += 1;
 

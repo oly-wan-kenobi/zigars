@@ -1,3 +1,5 @@
+//! Adapter layer for core Zig command tools. This layer is responsible for
+//! argument projection, timeout normalization, and MCP result/error shaping.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -11,6 +13,7 @@ const mcp_result = @import("../result.zig");
 
 const output_limit_mode = "truncate_on_limit";
 
+/// Handles MCP `zig_version` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigVersion(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -27,6 +30,7 @@ pub fn zigVersion(
     };
 }
 
+/// Handles MCP `zig_env` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigEnv(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -37,6 +41,7 @@ pub fn zigEnv(
     return commandOutcomeResult(allocator, context, "zig_env", outcome);
 }
 
+/// Handles MCP `zig_targets` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTargets(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -47,6 +52,7 @@ pub fn zigTargets(
     return commandOutcomeResult(allocator, context, "zig_targets", outcome);
 }
 
+/// Handles MCP `zig_build` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuild(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -63,6 +69,7 @@ pub fn zigBuild(
     return commandOutcomeResult(allocator, context, "zig_build", outcome);
 }
 
+/// Handles MCP `zig_test` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTest(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -81,6 +88,7 @@ pub fn zigTest(
     return commandOutcomeResult(allocator, context, "zig_test", outcome);
 }
 
+/// Handles MCP `zig_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCheck(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -95,12 +103,15 @@ pub fn zigCheck(
     return commandOutcomeResult(allocator, context, "zig_check", outcome);
 }
 
+/// Handles MCP `zig_compile_error_index` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCompileErrorIndex(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (argString(args, "text")) |raw_text| {
+        // Explicit text input bypasses command execution and indexes the
+        // caller-provided compiler output directly.
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
         const value = compilerErrorIndexValue(arena.allocator(), raw_text, "", &.{context.tool_paths.zig}) catch return error.OutOfMemory;
@@ -133,6 +144,8 @@ pub fn zigCompileErrorIndex(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Group findings by source path so consumers can render file-local error
+/// summaries without reparsing the full finding list.
 pub fn compilerErrorIndexValue(allocator: std.mem.Allocator, stderr: []const u8, stdout: []const u8, argv: []const []const u8) !std.json.Value {
     const insights = try compilerInsightsValue(allocator, stdout, stderr, argv);
     const insights_obj = switch (insights) {
@@ -169,6 +182,7 @@ pub fn compilerErrorIndexValue(allocator: std.mem.Allocator, stderr: []const u8,
             }
         }
         if (found_index) |index| {
+            // Rebuild the object map entry after mutating nested findings.
             var file_obj = files.items[index].object;
             var file_findings = file_obj.get("findings").?.array;
             try file_findings.append(finding);
@@ -195,6 +209,7 @@ pub fn compilerErrorIndexValue(allocator: std.mem.Allocator, stderr: []const u8,
     return .{ .object = obj };
 }
 
+/// Handles MCP `zig_explain_errors` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigExplainErrors(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -232,6 +247,7 @@ pub fn zigExplainErrors(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
+/// Handles MCP `zig_translate_c` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigTranslateC(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,

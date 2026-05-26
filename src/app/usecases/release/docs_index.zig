@@ -1,3 +1,4 @@
+//! Documentation indexing/search use-case over workspace docs, std docs, and autodoc artifacts.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

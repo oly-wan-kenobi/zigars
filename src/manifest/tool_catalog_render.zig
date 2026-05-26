@@ -15,6 +15,7 @@ const CommandPlan = types.CommandPlan;
 const ToolMeta = aggregate.ToolMeta;
 const ToolEntry = aggregate.ToolEntry;
 
+/// Parses the embedded catalog and enriches it with generated registry metadata.
 pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     var catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
     var catalog_owned = true;
@@ -35,6 +36,7 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     return catalog;
 }
 
+/// Returns the enriched tool catalog as allocator-owned JSON text.
 pub fn text(allocator: std.mem.Allocator) ![]u8 {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -42,6 +44,7 @@ pub fn text(allocator: std.mem.Allocator) ![]u8 {
     return serializeAlloc(allocator, catalog.value);
 }
 
+/// Builds the catalog map of tool argument schemas and risk metadata.
 pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -54,6 +57,7 @@ pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Builds the catalog map of tool planning contracts.
 pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -65,6 +69,7 @@ pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Builds the catalog map of static-analysis evidence contracts.
 pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -88,6 +93,7 @@ pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Valu
     return .{ .object = obj };
 }
 
+/// Builds backend setup metadata, optionally including configured paths.
 pub fn backendSetupValue(allocator: std.mem.Allocator, paths: backend_catalog.Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;

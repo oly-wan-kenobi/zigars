@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// ClockAndIds fake that returns deterministic instants and IDs in order.
 pub const FakeClockAndIds = struct {
     allocator: Allocator,
     instants: std.ArrayList(ports.Instant) = .empty,
@@ -16,6 +17,7 @@ pub const FakeClockAndIds = struct {
 
     const Self = @This();
 
+    /// Expected ID request and owned string returned by nextId.
     const ExpectedId = struct {
         request: ports.IdRequest,
         id: []const u8,
@@ -26,10 +28,12 @@ pub const FakeClockAndIds = struct {
         }
     };
 
+    /// Creates an empty fake that owns expected IDs with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expected IDs and recorded request snapshots.
     pub fn deinit(self: *Self) void {
         self.instants.deinit(self.allocator);
         for (self.expected_ids.items) |expected| expected.deinit(self.allocator);
@@ -39,6 +43,7 @@ pub const FakeClockAndIds = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the ClockAndIds vtable.
     pub fn port(self: *Self) ports.ClockAndIds {
         return .{
             .ptr = self,
@@ -49,10 +54,12 @@ pub const FakeClockAndIds = struct {
         };
     }
 
+    /// Queues the next instant returned by `now`.
     pub fn pushInstant(self: *Self, instant: ports.Instant) !void {
         try self.instants.append(self.allocator, instant);
     }
 
+    /// Queues the next ID response and clones the expected prefix.
     pub fn expectId(self: *Self, request: ports.IdRequest, id: []const u8) !void {
         const prefix = try common.dupString(self.allocator, request.prefix);
         var prefix_owned = true;
@@ -68,14 +75,17 @@ pub const FakeClockAndIds = struct {
         id_owned = false;
     }
 
+    /// Returns the number of attempted `now` calls.
     pub fn nowCalls(self: *const Self) usize {
         return self.now_call_count;
     }
 
+    /// Returns immutable snapshots of attempted ID calls.
     pub fn idCalls(self: *const Self) []const ports.IdRequest {
         return self.id_records.items;
     }
 
+    /// Fails if any queued instant or ID expectation was not consumed.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_instant != self.instants.items.len) return error.MissingExpectedCall;
         if (self.next_id != self.expected_ids.items.len) return error.MissingExpectedCall;

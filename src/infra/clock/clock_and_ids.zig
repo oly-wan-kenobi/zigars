@@ -2,12 +2,14 @@ const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 
+/// ClockAndIds port backed by the process clock and an atomic counter.
 pub const RuntimeClockAndIds = struct {
     io: std.Io,
     counter: *std.atomic.Value(u64),
 
     const Self = @This();
 
+    /// Stores a borrowed counter used to generate deterministic monotonic IDs.
     pub fn init(io: std.Io, counter: *std.atomic.Value(u64)) Self {
         return .{
             .io = io,
@@ -15,6 +17,7 @@ pub const RuntimeClockAndIds = struct {
         };
     }
 
+    /// Exposes this clock through the ClockAndIds vtable.
     pub fn port(self: *Self) ports.ClockAndIds {
         return .{
             .ptr = self,

@@ -1,3 +1,4 @@
+//! Workspace scanning use-cases for import graph and targeted source extraction.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

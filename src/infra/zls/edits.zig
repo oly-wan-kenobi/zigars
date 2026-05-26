@@ -11,6 +11,7 @@ const DecodedUtf8 = struct {
     len: usize,
 };
 
+/// Returns the number of edits in a JSON array, or zero for non-arrays.
 pub fn textEditCount(value: std.json.Value) usize {
     return switch (value) {
         .array => |a| a.items.len,
@@ -18,6 +19,7 @@ pub fn textEditCount(value: std.json.Value) usize {
     };
 }
 
+/// Returns an allocator-owned Wyhash digest formatted as fixed-width hex.
 pub fn hashHex(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{x:0>16}", .{std.hash.Wyhash.hash(0, bytes)});
 }
@@ -33,6 +35,7 @@ fn collectLines(allocator: std.mem.Allocator, text_value: []const u8) ![][]const
     return owned;
 }
 
+/// Builds a compact unified diff focused on the changed line range.
 pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []const u8, after: []const u8) ![]u8 {
     if (std.mem.eql(u8, before, after)) return allocator.dupe(u8, "");
 
@@ -94,6 +97,7 @@ pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []con
     return diff;
 }
 
+/// Applies non-overlapping LSP TextEdit objects using UTF-16 positions.
 pub fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_value: std.json.Value) ![]u8 {
     const edits_json = switch (edits_value) {
         .array => |a| a,

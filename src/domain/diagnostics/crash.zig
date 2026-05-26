@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Sanitizer family detected from crash or test output.
 pub const Sanitizer = enum {
     asan,
     ubsan,
@@ -7,11 +8,13 @@ pub const Sanitizer = enum {
     msan,
     unknown,
 
+    /// Returns the serialized sanitizer token.
     pub fn name(self: Sanitizer) []const u8 {
         return @tagName(self);
     }
 };
 
+/// Broad failure class used for crash triage.
 pub const FailureKind = enum {
     use_after_free,
     bounds,
@@ -21,11 +24,13 @@ pub const FailureKind = enum {
     segfault,
     unknown,
 
+    /// Returns the serialized failure-kind token.
     pub fn name(self: FailureKind) []const u8 {
         return @tagName(self);
     }
 };
 
+/// Classifies sanitizer output by recognizable tool markers.
 pub fn classifySanitizer(text: []const u8) Sanitizer {
     if (containsAny(text, &.{ "AddressSanitizer", "heap-use-after-free", "stack-buffer-overflow" })) return .asan;
     if (containsAny(text, &.{ "UndefinedBehaviorSanitizer", "runtime error:" })) return .ubsan;
@@ -34,6 +39,7 @@ pub fn classifySanitizer(text: []const u8) Sanitizer {
     return .unknown;
 }
 
+/// Classifies a crash transcript into the highest-priority known failure kind.
 pub fn classifyFailure(text: []const u8) FailureKind {
     if (containsAny(text, &.{ "heap-use-after-free", "use after free" })) return .use_after_free;
     if (containsAny(text, &.{ "stack-buffer-overflow", "heap-buffer-overflow", "index out of bounds" })) return .bounds;
@@ -44,6 +50,7 @@ pub fn classifyFailure(text: []const u8) FailureKind {
     return .unknown;
 }
 
+/// Extracts a panic message line from Zig-style crash text when present.
 pub fn panicMessage(text: []const u8) ?[]const u8 {
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |raw| {
@@ -54,6 +61,7 @@ pub fn panicMessage(text: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Returns whether any marker appears in the supplied text.
 pub fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
     for (needles) |needle| if (std.mem.indexOf(u8, haystack, needle) != null) return true;
     return false;

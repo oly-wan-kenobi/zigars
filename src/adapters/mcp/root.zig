@@ -1,3 +1,4 @@
+//! MCP adapter surface for registration, request handling, and schema/result projection.
 pub const args = @import("args.zig");
 pub const artifacts = @import("tools/artifacts.zig");
 pub const core = @import("tools/core.zig");

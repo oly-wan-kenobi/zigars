@@ -4,12 +4,14 @@ const ports = @import("../../app/ports.zig");
 const workspace_mod = @import("../workspace/workspace.zig");
 const filesystem = @import("../workspace/filesystem.zig");
 
+/// DocsScanner port for bounded release documentation reads and path scans.
 pub const Scanner = struct {
     workspace: *workspace_mod.Workspace,
     io: std.Io,
 
     const Self = @This();
 
+    /// Stores borrowed workspace and I/O references used by scan operations.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io) Self {
         return .{
             .workspace = workspace,
@@ -17,6 +19,7 @@ pub const Scanner = struct {
         };
     }
 
+    /// Exposes this scanner through the DocsScanner vtable.
     pub fn port(self: *Self) ports.DocsScanner {
         return .{
             .ptr = self,
@@ -59,6 +62,7 @@ pub const Scanner = struct {
     }
 };
 
+/// Selects which path extensions a docs scan includes.
 const PathMode = enum { zig_only, text_candidates };
 
 fn scanPaths(

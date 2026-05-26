@@ -1,13 +1,16 @@
+//! Structured MCP tool-error shaping with stable machine-readable metadata fields.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const mcp_result = @import("result.zig");
 
+/// Additional JSON fields copied into a structured error object.
 pub const Detail = struct {
     key: []const u8,
     value: std.json.Value,
 };
 
+/// Stable MCP error envelope fields shared across adapter failures.
 pub const Spec = struct {
     kind: []const u8 = "tool_error",
     tool: []const u8,
@@ -21,18 +24,21 @@ pub const Spec = struct {
     details: []const Detail = &.{},
 };
 
+/// Builds a ToolResult flagged as an error; returned JSON is allocator-owned by caller.
 pub fn result(allocator: std.mem.Allocator, spec: Spec) mcp.tools.ToolError!mcp.tools.ToolResult {
     var err_value = value(allocator, spec) catch return error.OutOfMemory;
     defer deinitTopLevel(allocator, &err_value);
     return mcp_result.structuredError(allocator, err_value);
 }
 
+/// Builds a structured ToolResult and adds normalized Zig error metadata.
 pub fn fromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     var err_value = valueFromError(allocator, spec, err) catch return error.OutOfMemory;
     defer deinitTopLevel(allocator, &err_value);
     return mcp_result.structuredError(allocator, err_value);
 }
 
+/// Builds the JSON error object; strings borrow from `spec`.
 pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_in_result = false;
@@ -52,6 +58,7 @@ pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Extends `value` with error name and normalized error_kind fields.
 pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !std.json.Value {
     var result_value = try value(allocator, spec);
     try result_value.object.put(allocator, "error", .{ .string = @errorName(err) });
@@ -59,6 +66,7 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
     return result_value;
 }
 
+/// Builds a structured argument-validation failure.
 pub fn argument(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -83,10 +91,12 @@ pub fn argument(
     });
 }
 
+/// Convenience wrapper for required fields absent from JSON args.
 pub fn missingArgument(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, expected: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return argument(allocator, tool_name, "missing_required_argument", field, expected, "missing");
 }
 
+/// Convenience wrapper for present fields with invalid values.
 pub fn invalidArgument(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -118,6 +128,7 @@ fn deinitTopLevel(allocator: std.mem.Allocator, result_value: *std.json.Value) v
     }
 }
 
+/// Maps workspace path-policy failures into a stable MCP error envelope.
 pub fn workspacePath(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -142,6 +153,7 @@ pub fn workspacePath(
     });
 }
 
+/// Coarsens Zig errors into protocol-stable categories for clients.
 pub fn kindForError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",

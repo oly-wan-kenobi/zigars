@@ -1,8 +1,10 @@
+//! JSON conversion helpers that project MCP result/resource payloads into response objects.
 const std = @import("std");
 const mcp = @import("mcp");
 
 const types = mcp.types;
 
+/// Appends one MCP content block as a borrowed JSON object for tools/call output.
 pub fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.json.Array, content_item: types.ContentBlock) !void {
     var item_obj: std.json.ObjectMap = .empty;
     var item_obj_in_array = false;
@@ -48,6 +50,7 @@ pub fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.
     item_obj_in_array = true;
 }
 
+/// Frees response containers while leaving borrowed structuredContent untouched.
 pub fn deinitToolCallResponseObject(allocator: std.mem.Allocator, result: *std.json.ObjectMap) void {
     var it = result.iterator();
     while (it.next()) |entry| {
@@ -57,6 +60,7 @@ pub fn deinitToolCallResponseObject(allocator: std.mem.Allocator, result: *std.j
     result.deinit(allocator);
 }
 
+/// Frees only JSON arrays/objects allocated for response projection.
 pub fn deinitBorrowedJsonContainers(allocator: std.mem.Allocator, value: std.json.Value) void {
     switch (value) {
         .array => |array| {

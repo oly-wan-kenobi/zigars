@@ -4,28 +4,33 @@ const ports = @import("../../app/ports.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// Shared in-memory analysis-cache state owned by runtime composition.
 pub const State = struct {
     signature: u64 = 0,
     index_json: ?[]u8 = null,
     hits: usize = 0,
     refreshes: usize = 0,
 
+    /// Releases any cached JSON bytes and resets counters.
     pub fn deinit(self: *State, allocator: Allocator) void {
         if (self.index_json) |bytes| allocator.free(bytes);
         self.* = .{};
     }
 };
 
+/// StaticCache port facade over shared in-memory cache state.
 pub const Cache = struct {
     allocator: Allocator,
     state: *State,
 
     const Self = @This();
 
+    /// Stores the allocator that owns cached bytes.
     pub fn init(allocator: Allocator, state: *State) Self {
         return .{ .allocator = allocator, .state = state };
     }
 
+    /// Exposes this cache through the StaticCache vtable.
     pub fn port(self: *Self) ports.StaticCache {
         return .{
             .ptr = self,

@@ -3,6 +3,8 @@ const std = @import("std");
 const ports = @import("../../app/ports.zig");
 const command = @import("../process/command.zig");
 
+/// ToolchainEnv port backed by `zig env`.
+/// Returned values are caller-owned when the port reports `owns_value`.
 pub const Env = struct {
     io: std.Io,
     cwd: []const u8,
@@ -11,6 +13,7 @@ pub const Env = struct {
 
     const Self = @This();
 
+    /// Stores borrowed paths and timeout defaults used for each env lookup.
     pub fn init(io: std.Io, cwd: []const u8, zig_path: []const u8, timeout_ms: i64) Self {
         return .{
             .io = io,
@@ -20,6 +23,7 @@ pub const Env = struct {
         };
     }
 
+    /// Exposes this adapter through the ToolchainEnv vtable.
     pub fn port(self: *Self) ports.ToolchainEnv {
         return .{
             .ptr = self,

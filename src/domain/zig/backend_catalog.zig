@@ -1,7 +1,9 @@
 const backend_contracts = @import("backend_contracts.zig");
 
+/// Zig release line this backend catalog is validated against.
 pub const supported_zig_version = "0.16.0";
 
+/// Backend installation and probe metadata exposed in setup catalogs.
 pub const Backend = struct {
     name: []const u8,
     optional: bool,
@@ -15,6 +17,7 @@ pub const Backend = struct {
     verify: []const []const u8,
 };
 
+/// Configured executable paths used when rendering backend setup metadata.
 pub const Paths = struct {
     zig_path: []const u8 = "zig",
     zls_path: []const u8 = "zls",
@@ -24,6 +27,7 @@ pub const Paths = struct {
     diff_folded_path: []const u8 = "diff-folded",
 };
 
+/// Supported required and optional backends known to zigar.
 pub const backends = [_]Backend{
     .{
         .name = "zig",

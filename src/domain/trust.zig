@@ -2,6 +2,7 @@ const std = @import("std");
 
 const zig_analysis = @import("zig/analysis.zig");
 
+/// Captures behavior that affects tool safety or side-effect scope.
 pub const ToolRisk = struct {
     writes_source: bool = false,
     writes_artifacts: bool = false,
@@ -13,6 +14,7 @@ pub const ToolRisk = struct {
     executes_backend: bool = false,
 };
 
+/// Maps risk flags to an external policy severity bucket.
 pub fn riskLevel(risk: ToolRisk) []const u8 {
     if (risk.writes_source or risk.executes_user_command) return "high";
     if (risk.executes_project_code or risk.writes_artifacts) return "medium";
@@ -20,12 +22,14 @@ pub fn riskLevel(risk: ToolRisk) []const u8 {
     return "none";
 }
 
+/// Extracts the path segment from a porcelain status line, including rename targets.
 pub fn statusLinePath(line: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, if (line.len > 3) line[3..] else "", " \t");
     if (std.mem.indexOf(u8, trimmed, " -> ")) |arrow| return trimmed[arrow + " -> ".len ..];
     return trimmed;
 }
 
+/// Returns the first quoted segment when parsing diagnostic lines.
 pub fn quotedValue(line: []const u8) ?[]const u8 {
     const first = std.mem.indexOfScalar(u8, line, '"') orelse return null;
     const rest = line[first + 1 ..];
@@ -44,6 +48,7 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
     var untracked: usize = 0;
     var generated_or_vendored: usize = 0;
 
+    // Preserve each changed path as evidence so policy decisions are auditable.
     var lines = std.mem.splitScalar(u8, stdout, '\n');
     while (lines.next()) |line| {
         if (line.len < 4) continue;

@@ -4,6 +4,7 @@ const ports = @import("../../app/ports.zig");
 const command = @import("command.zig");
 const observability_mod = @import("../observability/state.zig");
 
+/// Runtime options for adapting subprocess execution to the CommandRunner port.
 pub const Options = struct {
     io: std.Io,
     default_cwd: []const u8,
@@ -16,6 +17,8 @@ pub const Options = struct {
     record_observability: bool = false,
 };
 
+/// CommandRunner port implementation backed by real child processes.
+/// Returned stdout/stderr buffers are owned by the caller via the port result.
 pub const Runner = struct {
     io: std.Io,
     default_cwd: []const u8,
@@ -29,6 +32,7 @@ pub const Runner = struct {
 
     const Self = @This();
 
+    /// Captures defaults and counter pointers; the caller keeps all referenced storage alive.
     pub fn init(options: Options) Self {
         return .{
             .io = options.io,
@@ -43,6 +47,7 @@ pub const Runner = struct {
         };
     }
 
+    /// Exposes this runner through the app port vtable.
     pub fn port(self: *Self) ports.CommandRunner {
         return .{
             .ptr = self,
@@ -92,6 +97,7 @@ pub const Runner = struct {
     }
 };
 
+/// Normalizes process/filesystem failures into the app port error surface.
 pub fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

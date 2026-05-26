@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// BackendProbe fake with ordered expectations and owned call snapshots.
 pub const FakeBackendProbe = struct {
     allocator: Allocator,
     expected_checks: std.ArrayList(ExpectedCheck) = .empty,
@@ -13,6 +14,7 @@ pub const FakeBackendProbe = struct {
 
     const Self = @This();
 
+    /// Expected backend probe request and owned availability response.
     const ExpectedCheck = struct {
         request: ports.BackendProbeRequest,
         availability: ports.BackendAvailability,
@@ -23,10 +25,12 @@ pub const FakeBackendProbe = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_checks.items) |expected| expected.deinit(self.allocator);
         self.expected_checks.deinit(self.allocator);
@@ -36,6 +40,7 @@ pub const FakeBackendProbe = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the BackendProbe vtable.
     pub fn port(self: *Self) ports.BackendProbe {
         return .{
             .ptr = self,
@@ -45,6 +50,7 @@ pub const FakeBackendProbe = struct {
         };
     }
 
+    /// Adds an ordered probe expectation and clones request/response data.
     pub fn expectCheck(self: *Self, request: ports.BackendProbeRequest, availability: ports.BackendAvailability) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         errdefer freeRequest(self.allocator, owned_request);
@@ -57,10 +63,12 @@ pub const FakeBackendProbe = struct {
         });
     }
 
+    /// Returns immutable snapshots of attempted probe calls.
     pub fn calls(self: *const Self) []const ports.BackendProbeRequest {
         return self.call_records.items;
     }
 
+    /// Fails if any ordered expectation was not consumed.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_check != self.expected_checks.items.len) return error.MissingExpectedCall;
     }

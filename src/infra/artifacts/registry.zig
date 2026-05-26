@@ -1,8 +1,11 @@
 const std = @import("std");
 
+/// Default workspace-relative JSONL registry location.
 pub const default_registry_path = ".zigar-cache/artifacts/registry.jsonl";
+/// Upper bound for reading a single artifact payload through the registry API.
 pub const default_read_limit: usize = 64 * 1024;
 
+/// Tool paths recorded with artifact provenance.
 pub const Toolchain = struct {
     zig_path: []const u8,
     zls_path: []const u8 = "",
@@ -10,6 +13,7 @@ pub const Toolchain = struct {
     diff_folded_path: []const u8 = "",
 };
 
+/// Borrowed provenance metadata attached to an artifact registry entry.
 pub const Provenance = struct {
     producer: []const u8,
     artifact_kind: []const u8,
@@ -22,6 +26,7 @@ pub const Provenance = struct {
     toolchain: Toolchain,
 };
 
+/// Borrowed identity for a concrete artifact file.
 pub const FileIdentity = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -29,6 +34,7 @@ pub const FileIdentity = struct {
     sha256: []const u8,
 };
 
+/// Borrowed registry row ready for JSONL serialization.
 pub const RegistryEntry = struct {
     identity: FileIdentity,
     provenance: Provenance,
@@ -37,6 +43,7 @@ pub const RegistryEntry = struct {
     raw_reference: []const u8 = "workspace_file",
 };
 
+/// Heap-owned registry row loaded from disk.
 pub const OwnedEntry = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -57,6 +64,7 @@ pub const OwnedEntry = struct {
     parser_confidence: []const u8,
     raw_reference: []const u8,
 
+    /// Frees every owned string in the loaded registry entry.
     pub fn deinit(self: *OwnedEntry, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
         allocator.free(self.abs_path);
@@ -77,14 +85,17 @@ pub const OwnedEntry = struct {
     }
 };
 
+/// In-memory artifact registry loaded from JSONL.
 pub const Registry = struct {
     entries: std.ArrayList(OwnedEntry) = .empty,
 
+    /// Frees all loaded entries and the backing list.
     pub fn deinit(self: *Registry, allocator: std.mem.Allocator) void {
         for (self.entries.items) |*entry| entry.deinit(allocator);
         self.entries.deinit(allocator);
     }
 
+    /// Finds the first entry with a matching registry path.
     pub fn findByPath(self: Registry, path: []const u8) ?OwnedEntry {
         for (self.entries.items) |entry| {
             if (std.mem.eql(u8, entry.path, path)) return entry;
@@ -92,6 +103,7 @@ pub const Registry = struct {
         return null;
     }
 
+    /// Finds the first entry with a matching SHA-256 hex digest.
     pub fn findBySha256(self: Registry, sha256: []const u8) ?OwnedEntry {
         for (self.entries.items) |entry| {
             if (std.mem.eql(u8, entry.sha256, sha256)) return entry;
@@ -100,6 +112,7 @@ pub const Registry = struct {
     }
 };
 
+/// Returns an allocator-owned lowercase SHA-256 hex digest.
 pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -107,6 +120,7 @@ pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     return allocator.dupe(u8, &hex);
 }
 
+/// Builds a borrowed file identity and allocates only the checksum string.
 pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_path: []const u8, bytes: []const u8) !FileIdentity {
     return .{
         .path = path,
@@ -116,6 +130,7 @@ pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_pat
     };
 }
 
+/// Converts a borrowed entry into a JSON object; nested JSON allocations use `allocator`.
 pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -132,6 +147,7 @@ pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.
     return .{ .object = obj };
 }
 
+/// Converts an owned entry into the public registry JSON shape.
 pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.json.Value {
     return entryValue(allocator, .{
         .identity = .{
@@ -161,6 +177,7 @@ pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.jso
     });
 }
 
+/// Converts borrowed provenance metadata into a JSON object.
 pub fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -178,6 +195,7 @@ pub fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !st
     return .{ .object = obj };
 }
 
+/// Converts all registry entries into an array-valued JSON object.
 pub fn registryValue(allocator: std.mem.Allocator, registry: Registry) !std.json.Value {
     var entries = std.json.Array.init(allocator);
     var entries_owned = true;
@@ -187,6 +205,7 @@ pub fn registryValue(allocator: std.mem.Allocator, registry: Registry) !std.json
     return .{ .array = entries };
 }
 
+/// Loads newline-delimited registry entries; missing files produce an empty registry.
 pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !Registry {
     var registry: Registry = .{};
     var registry_owned = true;
@@ -211,6 +230,7 @@ pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path:
     return registry;
 }
 
+/// Inserts or replaces by path, taking an owned clone of the borrowed entry.
 pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: RegistryEntry) !void {
     var owned = try cloneEntry(allocator, entry);
     var owned_entry = true;
@@ -227,6 +247,7 @@ pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: Registry
     owned_entry = false;
 }
 
+/// Writes the registry atomically as JSONL, creating parent directories first.
 pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8, registry: Registry) !void {
     const parent = std.fs.path.dirname(registry_abs_path) orelse ".";
     try std.Io.Dir.cwd().createDirPath(io, parent);
@@ -251,6 +272,7 @@ pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path
     try atomic.replace(io);
 }
 
+/// Returns a JSON identity for the registry file before an update.
 pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !std.json.Value {
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, registry_abs_path, allocator, .limited(16 * 1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
@@ -262,6 +284,7 @@ pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_p
     return preimageValue(allocator, true, bytes.len, hash);
 }
 
+/// Drops registry rows whose files are missing or whose size/hash changed.
 pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry) !PruneSummary {
     var kept: std.ArrayList(OwnedEntry) = .empty;
     var kept_owned = true;
@@ -301,6 +324,7 @@ pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry)
     return summary;
 }
 
+/// Counts registry rows retained and removed by a prune pass.
 pub const PruneSummary = struct {
     kept: usize = 0,
     missing: usize = 0,
@@ -308,6 +332,7 @@ pub const PruneSummary = struct {
     pruned: usize = 0,
 };
 
+/// Converts a prune summary into the public JSON shape.
 pub fn pruneSummaryValue(allocator: std.mem.Allocator, summary: PruneSummary) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -320,6 +345,7 @@ pub fn pruneSummaryValue(allocator: std.mem.Allocator, summary: PruneSummary) !s
     return .{ .object = obj };
 }
 
+/// Deinitializes top-level JSON containers produced by this module.
 pub fn deinitValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     var mutable = value;
     switch (mutable) {

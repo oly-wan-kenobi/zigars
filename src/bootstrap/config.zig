@@ -1,10 +1,13 @@
 const std = @import("std");
 
+/// Startup transport selected for the MCP server process.
 pub const Transport = enum {
     stdio,
     http,
 };
 
+/// Parsed process configuration.
+/// String fields are allocator-owned and must be released with deinit.
 pub const Config = struct {
     workspace: []const u8,
     zig_path: []const u8 = "zig",
@@ -20,6 +23,7 @@ pub const Config = struct {
     timeout_ms: i64 = 30_000,
     zls_timeout_ms: i64 = 30_000,
 
+    /// Frees every owned string captured by parse or ownedDefaults.
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
         allocator.free(self.workspace);
         allocator.free(self.zig_path);
@@ -34,6 +38,7 @@ pub const Config = struct {
     }
 };
 
+/// User-facing startup errors that map to process exits rather than tool results.
 pub const ParseError = error{
     HelpRequested,
     VersionRequested,
@@ -45,6 +50,8 @@ pub const ParseError = error{
     UnsafeHttpHost,
 };
 
+/// Parses argv-style startup flags into an owned Config.
+/// The returned config owns duplicated strings and must be deinitialized by the caller.
 pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const u8) !Config {
     var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
     const cwd_len = try std.process.currentPath(io, &cwd_buf);
@@ -111,6 +118,7 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
     return result;
 }
 
+/// Returns true only for hosts that keep the HTTP transport bound to loopback.
 pub fn isLoopbackHttpHost(host: []const u8) bool {
     return std.mem.eql(u8, host, "127.0.0.1") or
         std.mem.eql(u8, host, "::1") or
@@ -118,6 +126,7 @@ pub fn isLoopbackHttpHost(host: []const u8) bool {
         std.ascii.eqlIgnoreCase(host, "localhost");
 }
 
+/// Duplicates the default config strings so parse can clean up through Config.deinit.
 fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
     const workspace = try allocator.dupe(u8, cwd);
     errdefer allocator.free(workspace);
@@ -148,18 +157,21 @@ fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
     };
 }
 
+/// Replaces an owned string field with the next argv value, freeing the old value.
 fn replaceOwned(allocator: std.mem.Allocator, field: *[]const u8, args: []const []const u8, index: *usize) !void {
     const value = try dupeNext(allocator, args, index);
     allocator.free(field.*);
     field.* = value;
 }
 
+/// Duplicates the argv value after index and advances index to that value.
 fn dupeNext(allocator: std.mem.Allocator, args: []const []const u8, index: *usize) ![]const u8 {
     index.* += 1;
     if (index.* >= args.len) return ParseError.MissingValue;
     return allocator.dupe(u8, args[index.*]);
 }
 
+/// Static CLI help text; stdout remains reserved for MCP JSON-RPC.
 pub fn usage() []const u8 {
     return
     \\zigar - deterministic Zig development MCP server

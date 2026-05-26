@@ -1,3 +1,4 @@
+//! Coverage evidence use-case adapters for parse/merge/diff and quality budget checks.
 const std = @import("std");
 
 const coverage_model = @import("../../../domain/performance/coverage_model.zig");
@@ -31,6 +32,7 @@ pub const CoverageDiff = struct {
     line_rate_delta_bp: i64,
 
     pub fn deinit(self: *CoverageDiff, allocator: std.mem.Allocator) void {
+        // Both snapshots are owned by this result and must be released together.
         self.current.deinit(allocator);
         self.baseline.deinit(allocator);
         self.* = undefined;

@@ -1,12 +1,16 @@
+//! Persists artifact bytes and keeps the on-disk artifact registry in sync.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 const artifacts = @import("registry.zig");
 const workspace_mod = @import("../workspace/workspace.zig");
 
+/// Workspace-relative directory where artifact payloads are written.
 const artifact_root = ".zigar-cache/artifacts";
+/// Upper bound for hashing workspace artifacts when bytes are not provided.
 const max_workspace_record_bytes = 16 * 1024 * 1024;
 
+/// ArtifactStore port backed by workspace files plus the JSONL registry.
 pub const Store = struct {
     workspace: *workspace_mod.Workspace,
     io: std.Io,
@@ -14,6 +18,7 @@ pub const Store = struct {
 
     const Self = @This();
 
+    /// Stores borrowed workspace pointer and toolchain metadata for future writes.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io, toolchain: artifacts.Toolchain) Self {
         return .{
             .workspace = workspace,
@@ -22,6 +27,7 @@ pub const Store = struct {
         };
     }
 
+    /// Exposes this store through the ArtifactStore vtable.
     pub fn port(self: *Self) ports.ArtifactStore {
         return .{
             .ptr = self,
@@ -38,6 +44,7 @@ pub const Store = struct {
         const rel_path = artifactPath(allocator, request.namespace, request.name) catch |err| return mapPortError(err);
         defer allocator.free(rel_path);
 
+        // Write payload first so registry entries never point at absent artifact files.
         self.workspace.writeFile(self.io, rel_path, request.bytes) catch |err| return mapPortError(err);
         const artifact_abs = self.workspace.resolveOutput(rel_path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(artifact_abs);
@@ -101,6 +108,7 @@ pub const Store = struct {
         const bytes = if (request.bytes) |provided| provided else blk: {
             const resolved = self.workspace.resolve(request.path) catch |err| return mapPortError(err);
             defer self.workspace.allocator.free(resolved);
+            // Bound reads to avoid unbounded memory spikes when hashing large workspace files.
             const data = std.Io.Dir.cwd().readFileAlloc(self.io, resolved, allocator, .limited(max_workspace_record_bytes)) catch |err| return mapPortError(err);
             break :blk data;
         };
@@ -188,6 +196,7 @@ fn safeArtifactIdPart(index: usize, part: []const u8) bool {
     if (part.len == 0) return false;
     if (std.mem.eql(u8, part, ".") or std.mem.eql(u8, part, "..")) return false;
     return switch (index) {
+        // Enforce canonical artifact root; callers may only vary namespace/name segments.
         0 => std.mem.eql(u8, part, ".zigar-cache"),
         1 => std.mem.eql(u8, part, "artifacts"),
         else => true,
@@ -215,6 +224,7 @@ fn unixMs(io: std.Io) i64 {
     return @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
 }
 
+/// Maps filesystem, registry, and validation failures to ArtifactStore port errors.
 pub fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

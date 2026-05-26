@@ -1,3 +1,5 @@
+//! Dependency and supply-chain MCP adapters over release workflow use cases.
+//! Results preserve workflow-owned JSON shapes and normalize thrown errors.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -6,50 +8,62 @@ const workflows = @import("../../../app/usecases/release/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Handles MCP `zig_dependency_update_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyUpdatePlan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_update_plan", workflows.zigDependencyUpdatePlan);
 }
 
+/// Handles MCP `zig_dependency_fetch_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyFetchCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_fetch_check", workflows.zigDependencyFetchCheck);
 }
 
+/// Handles MCP `zig_dependency_lock_audit` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyLockAudit(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_lock_audit", workflows.zigDependencyLockAudit);
 }
 
+/// Handles MCP `zig_dependency_impact` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyImpact(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_impact", workflows.zigDependencyImpact);
 }
 
+/// Handles MCP `zig_sbom` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSbom(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_sbom", workflows.zigSbom);
 }
 
+/// Handles MCP `zig_zat_scan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigZatScan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_zat_scan", workflows.zigZatScan);
 }
 
+/// Handles MCP `zig_osv_scan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigOsvScan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_osv_scan", workflows.zigOsvScan);
 }
 
+/// Handles MCP `zig_dependency_security_report` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencySecurityReport(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_security_report", workflows.zigDependencySecurityReport);
 }
 
+/// Handles MCP `zig_dependency_provenance` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyProvenance(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_provenance", workflows.zigDependencyProvenance);
 }
 
+/// Handles MCP `zig_dependency_license_summary` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDependencyLicenseSummary(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_dependency_license_summary", workflows.zigDependencyLicenseSummary);
 }
 
+/// Handles MCP `zig_github_dependency_submit_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigGithubDependencySubmitPlan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_github_dependency_submit_plan", workflows.zigGithubDependencySubmitPlan);
 }
 
+/// Runs a release/dependency workflow and maps structured failures to MCP errors.
 fn invoke(
     allocator: std.mem.Allocator,
     context: app_context.ReleaseWorkflowContext,

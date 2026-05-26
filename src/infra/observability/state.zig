@@ -1,10 +1,15 @@
 const std = @import("std");
 
+/// Fixed tool-stat capacity retained for process-local metrics.
 pub const max_tool_stats = 64;
+/// Fixed command history ring capacity.
 pub const max_command_events = 64;
+/// Fixed backend probe history ring capacity.
 pub const max_backend_events = 64;
+/// Fixed ZLS status history ring capacity.
 pub const max_zls_events = 64;
 
+/// Aggregated counters for one MCP tool name.
 pub const ToolStats = struct {
     name: []const u8 = "",
     calls: u64 = 0,
@@ -15,6 +20,7 @@ pub const ToolStats = struct {
     last_error: bool = false,
 };
 
+/// Bounded history event for one backend probe.
 pub const BackendEvent = struct {
     sequence: u64 = 0,
     name: []const u8 = "",
@@ -23,6 +29,7 @@ pub const BackendEvent = struct {
     resolution: []const u8 = "",
 };
 
+/// Bounded history event for one ZLS status transition.
 pub const ZlsEvent = struct {
     sequence: u64 = 0,
     status: []const u8 = "",
@@ -30,6 +37,7 @@ pub const ZlsEvent = struct {
     restart_attempts: u64 = 0,
 };
 
+/// Bounded history event for one subprocess invocation.
 pub const CommandEvent = struct {
     sequence: u64 = 0,
     title: []const u8 = "",
@@ -39,6 +47,7 @@ pub const CommandEvent = struct {
     error_name: ?[]const u8 = null,
 };
 
+/// Process-local observability state with bounded rings and saturating totals.
 pub const State = struct {
     tool_stats: [max_tool_stats]ToolStats = [_]ToolStats{.{}} ** max_tool_stats,
     command_events: [max_command_events]CommandEvent = [_]CommandEvent{.{}} ** max_command_events,
@@ -52,6 +61,7 @@ pub const State = struct {
     total_tool_errors: u64 = 0,
     total_command_duration_ms: u64 = 0,
 
+    /// Records per-tool latency and error counters, dropping new names after capacity.
     pub fn recordToolCall(self: *State, name: []const u8, latency_ms: u64, is_error: bool) void {
         self.total_tool_calls += 1;
         if (is_error) self.total_tool_errors += 1;
@@ -65,6 +75,7 @@ pub const State = struct {
         slot.max_latency_ms = @max(slot.max_latency_ms, latency_ms);
     }
 
+    /// Appends a backend probe result to the bounded ring.
     pub fn recordBackendProbe(self: *State, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) void {
         const sequence = self.backend_event_count + 1;
         const index = ringIndex(sequence, max_backend_events);
@@ -78,6 +89,7 @@ pub const State = struct {
         self.backend_event_count = sequence;
     }
 
+    /// Appends a command event and accumulates non-negative duration.
     pub fn recordCommand(self: *State, title: []const u8, argv: []const []const u8, duration_ms: i64, ok: bool, error_name: ?[]const u8) void {
         const sequence = self.command_event_count + 1;
         const index = ringIndex(sequence, max_command_events);
@@ -94,6 +106,7 @@ pub const State = struct {
         self.command_event_count = sequence;
     }
 
+    /// Records ZLS status transitions, suppressing consecutive duplicates.
     pub fn recordZlsStatus(self: *State, status: []const u8, failure: ?[]const u8, restart_attempts: u64) void {
         if (self.zls_event_count > 0) {
             const previous = self.zls_events[ringIndex(self.zls_event_count, max_zls_events)];
@@ -125,6 +138,7 @@ pub const State = struct {
     }
 };
 
+/// Renders all current observability state as the metrics v2 JSON object.
 pub fn metricsV2Value(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -152,6 +166,7 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: State, base: BaseMetr
     return .{ .object = obj };
 }
 
+/// Snapshot of non-observability counters supplied by runtime composition.
 pub const BaseMetrics = struct {
     workspace: []const u8,
     command_calls: usize,
@@ -165,6 +180,7 @@ pub const BaseMetrics = struct {
     artifacts: ArtifactMetrics,
 };
 
+/// Snapshot of static-analysis cache state.
 pub const AnalysisCacheSnapshot = struct {
     present: bool = false,
     hits: usize = 0,
@@ -172,6 +188,7 @@ pub const AnalysisCacheSnapshot = struct {
     bytes: usize = 0,
 };
 
+/// Snapshot of artifact registry scan state.
 pub const ArtifactMetrics = struct {
     registry_available: bool = false,
     registry_entries: usize = 0,
@@ -180,6 +197,7 @@ pub const ArtifactMetrics = struct {
     status: []const u8 = "not_scanned",
 };
 
+/// Current backend probe cache keyed by supported backend name.
 pub const BackendProbeCacheSnapshot = struct {
     zig: ?ProbeSnapshot = null,
     zls: ?ProbeSnapshot = null,
@@ -188,12 +206,14 @@ pub const BackendProbeCacheSnapshot = struct {
     diff_folded: ?ProbeSnapshot = null,
 };
 
+/// Latest known state for one backend probe.
 pub const ProbeSnapshot = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
 };
 
+/// Renders bounded backend probe history plus current probe cache.
 pub fn backendHistoryValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -206,6 +226,7 @@ pub fn backendHistoryValue(allocator: std.mem.Allocator, state: State, base: Bas
     return .{ .object = obj };
 }
 
+/// Renders bounded ZLS status transitions, or the current snapshot when empty.
 pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -220,6 +241,7 @@ pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: State, base: BaseMe
     return .{ .object = obj };
 }
 
+/// Renders per-tool latency/error counters.
 pub fn toolLatencyValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -233,6 +255,7 @@ pub fn toolLatencyValue(allocator: std.mem.Allocator, state: State) !std.json.Va
     return .{ .object = obj };
 }
 
+/// Renders bounded subprocess duration history.
 pub fn commandDurationsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);

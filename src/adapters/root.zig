@@ -1,3 +1,4 @@
+//! Adapter entry points that bridge app/domain services to transport-facing surfaces.
 pub const mcp = @import("mcp/root.zig");
 
 test {

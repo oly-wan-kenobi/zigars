@@ -1,9 +1,11 @@
+//! Projects bootstrap-owned runtime state into the app-facing context contract.
 const std = @import("std");
 const builtin = @import("builtin");
 
 const app_context = @import("../app/context.zig");
 const runtime_mod = @import("runtime_state.zig");
 
+/// Runtime field category used to audit bootstrap/app ownership boundaries.
 pub const RuntimeFieldConcern = enum {
     bootstrap,
     app_context,
@@ -12,12 +14,14 @@ pub const RuntimeFieldConcern = enum {
     cache_state,
 };
 
+/// Inventory tracks runtime ownership boundaries during migration from direct runtime access to typed ports.
 pub const RuntimeFieldRecord = struct {
     name: []const u8,
     concern: RuntimeFieldConcern,
     migration_note: []const u8,
 };
 
+/// Static inventory of runtime fields and their migration ownership notes.
 pub const runtime_field_inventory = [_]RuntimeFieldRecord{
     .{ .name = "allocator", .concern = .bootstrap, .migration_note = "owned by process bootstrap; app use cases receive allocator parameters explicitly" },
     .{ .name = "io", .concern = .bootstrap, .migration_note = "owned by startup and concrete infra adapters, not app use cases" },
@@ -37,6 +41,7 @@ pub const runtime_field_inventory = [_]RuntimeFieldRecord{
     .{ .name = "temp_counter", .concern = .infra_state, .migration_note = "temporary id state; app code should use ClockAndIds" },
 };
 
+/// Looks up the ownership concern for a runtime field name.
 pub fn runtimeFieldConcern(name: []const u8) ?RuntimeFieldConcern {
     for (runtime_field_inventory) |record| {
         if (std.mem.eql(u8, record.name, name)) return record.concern;
@@ -44,6 +49,7 @@ pub fn runtimeFieldConcern(name: []const u8) ?RuntimeFieldConcern {
     return null;
 }
 
+/// fromRuntime snapshots process/runtime state into app context values and read-only counters.
 pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet) app_context.Context {
     return .{
         .workspace = .{
@@ -126,6 +132,7 @@ pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet
     };
 }
 
+/// Probe snapshots prevent app consumers from observing mutable backend probe internals directly.
 fn probeSnapshot(probe: anytype) app_context.CachedBackendProbe {
     if (probe) |value| return .{
         .probed = true,

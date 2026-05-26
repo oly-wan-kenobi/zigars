@@ -5,7 +5,9 @@ const json_rpc = @import("json_rpc.zig");
 const logging = @import("../observability/logging.zig");
 const Mutex = @import("../process/sync.zig").Mutex;
 
+/// Public diagnostics cache type owned by LSP clients.
 pub const DiagnosticsCache = diagnostics_cache.DiagnosticsCache;
+/// Snapshot type for diagnostics cache memory and eviction counters.
 pub const DiagnosticsStatus = DiagnosticsCache.Status;
 
 /// Pending request waiting for a response from ZLS.
@@ -21,7 +23,9 @@ const PendingRequest = struct {
 /// - Main thread calls sendRequest() which blocks until reader thread delivers the response.
 /// - Reader thread runs readerLoop() reading ZLS stdout and dispatching responses/notifications.
 pub const LspClient = struct {
+    /// Default retained diagnostic notification budget.
     pub const default_max_diagnostics_bytes: usize = DiagnosticsCache.default_max_bytes;
+    /// Default short timeout for graceful shutdown requests.
     pub const default_shutdown_timeout_ms: i64 = 500;
 
     zls_stdin: ?std.Io.File,
@@ -44,10 +48,12 @@ pub const LspClient = struct {
     zls_stderr: ?std.Io.File = null,
     logger: logging.Logger = .disabled(),
 
+    /// Initializes a disconnected client with the default request timeout.
     pub fn init(allocator: std.mem.Allocator, io: std.Io) LspClient {
         return initWithTimeout(allocator, io, 30_000);
     }
 
+    /// Initializes a disconnected client and clamps timeout to at least one millisecond.
     pub fn initWithTimeout(allocator: std.mem.Allocator, io: std.Io, request_timeout_ms: i64) LspClient {
         return .{
             .zls_stdin = null,
@@ -65,6 +71,7 @@ pub const LspClient = struct {
         };
     }
 
+    /// Replaces the logger used by background reader and stderr threads.
     pub fn setLogger(self: *LspClient, logger: logging.Logger) void {
         self.logger = logger;
     }
@@ -93,6 +100,7 @@ pub const LspClient = struct {
         return self.sendRawRequest(allocator, id, msg);
     }
 
+    /// Reports whether the client has live pipes and has not observed reader failure.
     pub fn isRunning(self: *LspClient) bool {
         return self.running.load(.acquire) and self.zls_stdin != null and self.zls_stdout != null;
     }
@@ -245,18 +253,22 @@ pub const LspClient = struct {
         }
     }
 
+    /// Returns an owned cached publishDiagnostics message for a URI, when present.
     pub fn getDiagnostics(self: *LspClient, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
         return self.diagnostics.get(allocator, uri);
     }
 
+    /// Returns owned cached diagnostics messages in receipt order.
     pub fn diagnosticsSnapshot(self: *LspClient, allocator: std.mem.Allocator) ![]const []const u8 {
         return self.diagnostics.snapshot(allocator);
     }
 
+    /// Returns diagnostics cache memory and eviction counters.
     pub fn diagnosticsStatus(self: *LspClient) DiagnosticsStatus {
         return self.diagnostics.status();
     }
 
+    /// Returns an owned copy of the last reader/shutdown error label.
     pub fn lastError(self: *LspClient, allocator: std.mem.Allocator) !?[]const u8 {
         self.last_error_mutex.lock();
         defer self.last_error_mutex.unlock();
@@ -320,6 +332,7 @@ pub const LspClient = struct {
         try LspTransport.writeMessage(stdin, self.io, msg);
     }
 
+    /// Gracefully shuts down when possible, closes pipes, and joins reader threads.
     pub fn disconnect(self: *LspClient) void {
         self.closing.store(true, .release);
         self.shutdownWithTimeout(self.shutdown_timeout_ms) catch |err| {
@@ -352,6 +365,7 @@ pub const LspClient = struct {
         self.closing.store(false, .release);
     }
 
+    /// Sends LSP shutdown followed by exit using the request timeout.
     pub fn shutdown(self: *LspClient) !void {
         return self.shutdownWithTimeout(self.request_timeout_ms);
     }
@@ -380,6 +394,7 @@ pub const LspClient = struct {
         self.logger.warn("lsp", "failed to send exit notification: {}", .{err});
     }
 
+    /// Disconnects and frees pending responses, diagnostics, and last-error text.
     pub fn deinit(self: *LspClient) void {
         self.disconnect();
         // Free any remaining pending requests

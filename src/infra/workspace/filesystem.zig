@@ -1,14 +1,17 @@
+//! Adapts workspace-relative file operations to the WorkspaceStore port.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 const command = @import("../process/command.zig");
 const workspace_mod = @import("workspace.zig");
 
+/// Selects whether reads resolve against existing input paths or output paths.
 pub const ReadResolution = enum {
     input,
     output,
 };
 
+/// WorkspaceStore port backed by real filesystem calls under a Workspace root.
 pub const Store = struct {
     workspace: *workspace_mod.Workspace,
     io: std.Io,
@@ -17,6 +20,7 @@ pub const Store = struct {
 
     const Self = @This();
 
+    /// Stores borrowed workspace pointer and default read options.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io, options: Options) Self {
         return .{
             .workspace = workspace,
@@ -26,11 +30,13 @@ pub const Store = struct {
         };
     }
 
+    /// Configuration for filesystem-backed workspace reads.
     pub const Options = struct {
         default_read_limit: usize = command.output_limit,
         read_resolution: ReadResolution = .input,
     };
 
+    /// Exposes this store through the WorkspaceStore vtable.
     pub fn port(self: *Self) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -46,14 +52,17 @@ pub const Store = struct {
         };
     }
 
+    /// Resolves an input path; returned memory belongs to the workspace allocator.
     pub fn resolveInputPath(self: *Self, path: []const u8) ![]const u8 {
         return self.workspace.resolve(path);
     }
 
+    /// Resolves an output path; returned memory belongs to the workspace allocator.
     pub fn resolveOutputPath(self: *Self, path: []const u8) ![]const u8 {
         return self.workspace.resolveOutput(path);
     }
 
+    /// Frees a path returned by resolveInputPath or resolveOutputPath.
     pub fn freeResolvedPath(self: *Self, path: []const u8) void {
         self.workspace.allocator.free(path);
     }
@@ -78,6 +87,7 @@ pub const Store = struct {
         defer self.workspace.allocator.free(resolved);
         const max_bytes = request.max_bytes orelse self.default_read_limit;
         if (max_bytes == 0) {
+            // Probe openability without allocating file contents.
             var file = std.Io.Dir.cwd().openFile(self.io, resolved, .{}) catch |err| return mapPortError(err);
             file.close(self.io);
             return .{ .bytes = "" };
@@ -128,12 +138,14 @@ pub const Store = struct {
         defer walker.deinit();
         var count: usize = 0;
         while ((walker.next(self.io) catch null)) |entry| {
+            // Only direct-child paths contribute to entry_count; nested entries are ignored.
             if (std.mem.indexOfScalar(u8, entry.path, std.fs.path.sep) == null) count += 1;
         }
         return .{ .exists = true, .kind = .directory, .entry_count = count };
     }
 
     fn existsResolveError(err: anyerror) ports.PortError!ports.WorkspaceExistsResult {
+        // For existence probes, path/safety resolution failures map to "missing".
         return switch (mapPortError(err)) {
             error.OutOfMemory => error.OutOfMemory,
             else => .{ .exists = false },
@@ -181,6 +193,7 @@ pub const Store = struct {
     }
 };
 
+/// Maps filesystem and workspace safety failures to WorkspaceStore port errors.
 pub fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

@@ -11,7 +11,9 @@ const SnapshotEntry = struct {
     sequence: u64,
 };
 
+/// Thread-safe bounded cache of raw publishDiagnostics notifications by URI.
 pub const DiagnosticsCache = struct {
+    /// Default retained byte budget for diagnostics JSON.
     pub const default_max_bytes: usize = 16 * 1024 * 1024;
 
     allocator: std.mem.Allocator,
@@ -25,6 +27,7 @@ pub const DiagnosticsCache = struct {
     evicted_bytes: usize = 0,
     dropped_oversized: usize = 0,
 
+    /// Snapshot of cache size and eviction/drop counters.
     pub const Status = struct {
         files: usize,
         retained_bytes: usize,
@@ -34,6 +37,7 @@ pub const DiagnosticsCache = struct {
         dropped_oversized: usize,
     };
 
+    /// Creates an empty cache and clamps the byte budget to at least one.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, max_bytes: usize) DiagnosticsCache {
         return .{
             .allocator = allocator,
@@ -43,6 +47,7 @@ pub const DiagnosticsCache = struct {
         };
     }
 
+    /// Frees all retained notification payloads and map keys.
     pub fn deinit(self: *DiagnosticsCache) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -57,6 +62,7 @@ pub const DiagnosticsCache = struct {
         self.retained_bytes = 0;
     }
 
+    /// Updates the retained byte budget and evicts oldest entries until it fits.
     pub fn setMaxBytes(self: *DiagnosticsCache, max_bytes: usize) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -65,6 +71,7 @@ pub const DiagnosticsCache = struct {
         self.evictUntilFitsLocked(0);
     }
 
+    /// Stores a publishDiagnostics notification, replacing existing data for the URI.
     pub fn storeNotification(self: *DiagnosticsCache, obj: std.json.ObjectMap, data: []const u8) !void {
         const params = switch (obj.get("params") orelse return) {
             .object => |o| o,
@@ -102,6 +109,7 @@ pub const DiagnosticsCache = struct {
         self.retained_bytes += value.len;
     }
 
+    /// Returns an owned cached payload for `uri`.
     pub fn get(self: *DiagnosticsCache, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -110,6 +118,7 @@ pub const DiagnosticsCache = struct {
         return try allocator.dupe(u8, stored.value);
     }
 
+    /// Returns owned cached payloads sorted by insertion sequence.
     pub fn snapshot(self: *DiagnosticsCache, allocator: std.mem.Allocator) ![]const []const u8 {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -144,6 +153,7 @@ pub const DiagnosticsCache = struct {
         return result;
     }
 
+    /// Returns cache counters without transferring ownership.
     pub fn status(self: *DiagnosticsCache) Status {
         self.mutex.lock();
         defer self.mutex.unlock();
