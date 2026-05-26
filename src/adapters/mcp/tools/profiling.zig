@@ -18,12 +18,12 @@ const output_limit_mode = "truncate_on_limit";
 pub fn zigProfilePlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const value = plan_usecase.profilePlanValue(arena.allocator(), .{
+    const value = try plan_usecase.profilePlanValue(arena.allocator(), .{
         .binary = argString(args, "binary") orelse "zig-out/bin/<app>",
         .detected_platform = detectedPlatform(),
         .platform = argString(args, "platform"),
         .output_prefix = argString(args, "output_prefix") orelse ".zigar-cache/profile/profile",
-    }) catch return error.OutOfMemory;
+    });
     return mcp_result.structured(allocator, value);
 }
 
@@ -296,8 +296,10 @@ fn flamegraphResultValue(
     artifact: flamegraph_usecase.Artifact,
 ) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try putFlamegraphBase(allocator, &obj, probe, request, artifact);
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -317,7 +319,8 @@ fn flamegraphDiffResultValue(
         .options = artifact.request.options,
     };
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try putFlamegraphBase(allocator, &obj, context.probe_cache.zflame, render_request, artifact.render);
     try obj.put(allocator, "kind", .{ .string = "zig_flamegraph_diff" });
     try obj.put(allocator, "diff_backend", .{ .string = artifact.diff.backend });
@@ -330,6 +333,7 @@ fn flamegraphDiffResultValue(
     try obj.put(allocator, "intermediate_bytes", .{ .integer = @intCast(artifact.diff.bytes) });
     try obj.put(allocator, "intermediate_sha256", .{ .string = artifact.diff.sha256 });
     try obj.put(allocator, "intermediate_folded", try intermediateFoldedValue(allocator, context, artifact));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -361,7 +365,8 @@ fn putFlamegraphBase(
 
 fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.ProfilingContext, artifact: flamegraph_diff_usecase.Artifact) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = artifact.request.intermediate });
     try obj.put(allocator, "abs_path", .{ .string = artifact.request.intermediate_abs });
     try obj.put(allocator, "input_format", .{ .string = flamegraph_model.ZflameFormat.recursive.name() });
@@ -378,12 +383,14 @@ fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.Pr
     try obj.put(allocator, "argv", try argvValue(allocator, artifact.diff.argv.items));
     try obj.put(allocator, "warnings", try renderWarningsValue(allocator, context.probe_cache.diff_folded));
     try obj.put(allocator, "compatibility_status", .{ .string = artifact.diff.compatibility_status });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe, name: []const u8, executable_path: []const u8, compatibility_status: []const u8, compatibility_baseline: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "name", .{ .string = name });
     try obj.put(allocator, "executable_path", .{ .string = executable_path });
     try obj.put(allocator, "probe", try cachedProbeValue(allocator, probe));
@@ -391,35 +398,42 @@ fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedB
     try obj.put(allocator, "compatibility_status", .{ .string = compatibility_status });
     try obj.put(allocator, "compatibility_baseline", .{ .string = compatibility_baseline });
     try obj.put(allocator, "probe_status", .{ .string = if (probe.probed) if (probe.ok orelse false) "probe_ok" else "probe_failed" else "unknown" });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "probed", .{ .bool = probe.probed });
     try obj.put(allocator, "ok", if (probe.ok) |ok| .{ .bool = ok } else .null);
     try obj.put(allocator, "status", .{ .string = probe.status });
     try obj.put(allocator, "resolution", .{ .string = probe.resolution });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn unknownVersionValue(allocator: std.mem.Allocator, name: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "status", .{ .string = "unknown" });
     try obj.put(allocator, "value", .null);
     try obj.put(allocator, "source", .{ .string = try std.fmt.allocPrint(allocator, "{s} probe uses --help and does not define a stable version field for artifact metadata", .{name}) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn renderWarningsValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var warnings = std.json.Array.init(allocator);
-    errdefer warnings.deinit();
+    var warnings_owned = true;
+    defer if (warnings_owned) warnings.deinit();
     try warnings.append(.{ .string = flamegraph_model.capture_semantics });
     if (!probe.probed) {
         try warnings.append(.{ .string = "backend probe and version are unknown for this artifact; run zigar_doctor with probe_backends=true to cache probe status" });
     }
+    warnings_owned = false;
     return .{ .array = warnings };
 }
 
@@ -496,7 +510,8 @@ fn workspaceToolError(allocator: std.mem.Allocator, tool_name: []const u8, opera
 
 fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "backend", .{ .string = backend_name });
@@ -504,7 +519,9 @@ fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, op
     try obj.put(allocator, "error", .{ .string = @errorName(err) });
     try obj.put(allocator, "error_kind", .{ .string = kindForCommandError(err) });
     try obj.put(allocator, "resolution", .{ .string = resolution });
-    return mcp_result.structured(allocator, .{ .object = obj });
+    const result = try mcp_result.structured(allocator, .{ .object = obj });
+    obj_owned = false;
+    return result;
 }
 
 fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operation: []const u8, phase: []const u8, code: []const u8, failure: run_usecase.CommandRunFailure) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -528,7 +545,8 @@ fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operati
 
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     const term = result.effectiveTerm();
     const stdout = try safeTextAlloc(allocator, result.stdout);
     const stderr = try safeTextAlloc(allocator, result.stderr);
@@ -550,14 +568,17 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     try obj.put(allocator, "output_limit_exceeded", .{ .bool = result.stdout_truncated or result.stderr_truncated });
     try obj.put(allocator, "diagnostics", emptyDiagnosticsValue(allocator));
     try obj.put(allocator, "failure_summary", try simpleFailureSummaryValue(allocator, !term.failed() and !result.timed_out, argv));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = term.name() });
     if (term.exitCode()) |code| try obj.put(allocator, "code", .{ .integer = code });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -577,7 +598,8 @@ fn emptyDiagnosticsValue(allocator: std.mem.Allocator) std.json.Value {
 
 fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = ok });
     try obj.put(allocator, "primary", .null);
     try obj.put(allocator, "error_class", .{ .string = if (ok) "none" else "execution" });
@@ -589,6 +611,7 @@ fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []con
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (ok) "none" else "tool_or_backend_configuration" });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -607,7 +630,8 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
         .byte_count = bytes.len,
     };
     var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     var index: usize = 0;
     while (index < bytes.len) {
         const len = std.unicode.utf8ByteSequenceLength(bytes[index]) catch {
@@ -623,8 +647,10 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
             index += 1;
         }
     }
+    const text = try out.toOwnedSlice(allocator);
+    out_owned = false;
     return .{
-        .text = try out.toOwnedSlice(allocator),
+        .text = text,
         .invalid_utf8 = true,
         .encoding = "utf-8-lossy",
         .byte_count = bytes.len,
@@ -640,8 +666,10 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
 
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (argv) |arg| try array.append(.{ .string = arg });
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -704,8 +732,10 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
 
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
-    errdefer allocator.free(arg);
+    var arg_owned = true;
+    defer if (arg_owned) allocator.free(arg);
     try list.append(allocator, arg);
+    arg_owned = false;
 }
 
 fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
@@ -755,6 +785,8 @@ fn detectedPlatform() []const u8 {
     };
 }
 
+const fakes = @import("../../../testing/fakes/root.zig");
+
 test "profiling adapter splits shell-style command arguments" {
     const allocator = std.testing.allocator;
     const args = try splitArgs(allocator, "zig build \"arg with spaces\" 'single quoted' escaped\\ space \"\"");
@@ -790,4 +822,622 @@ test "profiling adapter normalizes lossy command output and command errors" {
     try std.testing.expectEqualStrings("executable_not_found", kindForCommandError(error.FileNotFound));
     try std.testing.expectEqualStrings("permission", kindForCommandError(error.AccessDenied));
     try std.testing.expectEqualStrings("execution", kindForCommandError(error.Unexpected));
+
+    const truncated = [_]u8{ 0xe2, 0x82 };
+    const lossy = try safeTextAlloc(allocator, truncated[0..]);
+    defer allocator.free(lossy.text);
+    try std.testing.expect(lossy.invalid_utf8);
+    try std.testing.expectEqual(@as(usize, std.unicode.replacement_character_utf8.len * 2), lossy.text.len);
+    try std.testing.expect(std.mem.startsWith(u8, lossy.text, &std.unicode.replacement_character_utf8));
+}
+
+test "profiling adapters execute profile commands and render flamegraph artifacts" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+    defer workspace.deinit();
+    const context = testProfilingContext(&commands, &workspace);
+
+    const plan = try zigProfilePlan(allocator, try profilingTestArgs(allocator, "{\"binary\":\"zig-out/bin/demo\",\"platform\":\"linux\",\"output_prefix\":\"profiles/demo\"}"));
+    defer mcp_result.deinitToolResult(allocator, plan);
+    try expectProfilingKind(plan, "zig_profile_plan");
+
+    const default_plan = try zigProfilePlan(allocator, null);
+    defer mcp_result.deinitToolResult(allocator, default_plan);
+    try expectProfilingKind(default_plan, "zig_profile_plan");
+
+    try commands.expectRun(.{
+        .argv = &.{ "zig", "build", "test" },
+        .cwd = "/workspace",
+        .timeout_ms = 222,
+        .max_stdout_bytes = run_usecase.command_output_limit,
+        .max_stderr_bytes = run_usecase.command_output_limit,
+        .provenance = "explicit user profiler command (argv split without shell)",
+    }, .{ .stdout = "ok\n", .stderr = &[_]u8{0xff}, .duration_ms = 8, .stderr_truncated = true });
+    const run_ok = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig build test\",\"timeout_ms\":222}"));
+    defer mcp_result.deinitToolResult(allocator, run_ok);
+    try expectProfilingKind(run_ok, "command");
+    try std.testing.expect(run_ok.structuredContent.?.object.get("stderr_invalid_utf8").?.bool);
+
+    try commands.expectRun(.{
+        .argv = &.{ "zig", "run", "fail" },
+        .cwd = "/workspace",
+        .timeout_ms = 1,
+        .max_stdout_bytes = run_usecase.command_output_limit,
+        .max_stderr_bytes = run_usecase.command_output_limit,
+        .provenance = "explicit user profiler command (argv split without shell)",
+    }, .{ .exit_code = 2, .stdout = "failed\n", .stderr = "bad\n", .duration_ms = 3 });
+    const run_failed_exit = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig run fail\",\"timeout_ms\":0}"));
+    defer mcp_result.deinitToolResult(allocator, run_failed_exit);
+    try expectProfilingKind(run_failed_exit, "command");
+    try std.testing.expect(!run_failed_exit.structuredContent.?.object.get("ok").?.bool);
+    try std.testing.expect(run_failed_exit.structuredContent.?.object.get("failure_summary").?.object.get("suggested_tools").?.array.items.len > 0);
+
+    try commands.expectRunError(.{
+        .argv = &.{"missing-profiler"},
+        .cwd = "/workspace",
+        .timeout_ms = 5000,
+        .max_stdout_bytes = run_usecase.command_output_limit,
+        .max_stderr_bytes = run_usecase.command_output_limit,
+        .provenance = "explicit user profiler command (argv split without shell)",
+    }, error.FileNotFound);
+    const run_err = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"missing-profiler\"}"));
+    defer mcp_result.deinitToolResult(allocator, run_err);
+    try std.testing.expect(run_err.is_error);
+
+    try workspace.expectResolve(.{ .path = "stacks.folded", .provenance = "profiling input path resolution" }, "/workspace/stacks.folded");
+    try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+    try workspace.expectRead(.{ .path = "stacks.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zflame", "recursive", "--title=fixture", "--subtitle=unit", "--colors=hot", "--width=1200", "--min-width=5", "--hash", "/workspace/stacks.folded" },
+        .cwd = "/workspace",
+        .timeout_ms = 5000,
+        .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+        .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+        .provenance = "zig_flamegraph zflame render",
+    }, .{ .stdout = profiling_svg, .duration_ms = 12 });
+    try workspace.expectWrite(.{
+        .path = "profile.svg",
+        .bytes = profiling_svg,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "zig_flamegraph SVG artifact",
+    }, .{ .bytes_written = profiling_svg.len });
+    const flame = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator,
+        \\{"format":"recursive","input":"stacks.folded","output":"profile.svg","title":"fixture","subtitle":"unit","colors":"hot","width":1200,"min_width":5,"hash":true}
+    ));
+    defer mcp_result.deinitToolResult(allocator, flame);
+    try expectProfilingKind(flame, "zig_flamegraph");
+
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "profiling adapters validate malformed tool arguments" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+    defer workspace.deinit();
+    const context = testProfilingContext(&commands, &workspace);
+
+    const missing_command = try zigProfileRun(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, missing_command);
+    try expectToolErrorCode(missing_command, "missing_required_argument");
+
+    const empty_command = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"   \\t\"}"));
+    defer mcp_result.deinitToolResult(allocator, empty_command);
+    try expectToolErrorCode(empty_command, "invalid_argument");
+
+    const bad_quote = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig 'unterminated\"}"));
+    defer mcp_result.deinitToolResult(allocator, bad_quote);
+    try expectToolErrorCode(bad_quote, "invalid_argument");
+
+    const missing_format = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{}"));
+    defer mcp_result.deinitToolResult(allocator, missing_format);
+    try expectToolErrorCode(missing_format, "missing_required_argument");
+
+    const invalid_flamegraph_min_width = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"a.folded\",\"output\":\"a.svg\",\"min_width\":0}"));
+    defer mcp_result.deinitToolResult(allocator, invalid_flamegraph_min_width);
+    try expectToolErrorCode(invalid_flamegraph_min_width, "invalid_argument");
+
+    const missing_diff_output = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"a.folded\",\"after\":\"b.folded\"}"));
+    defer mcp_result.deinitToolResult(allocator, missing_diff_output);
+    try expectToolErrorCode(missing_diff_output, "missing_required_argument");
+
+    const invalid_diff_min_width = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"a.folded\",\"after\":\"b.folded\",\"output\":\"diff.svg\",\"min_width\":-1}"));
+    defer mcp_result.deinitToolResult(allocator, invalid_diff_min_width);
+    try expectToolErrorCode(invalid_diff_min_width, "invalid_argument");
+
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "profiling flamegraph adapter reports workspace backend and artifact failures" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const invalid_utf8 = [_]u8{0xff};
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolveError(.{ .path = "../escape.folded", .provenance = "profiling input path resolution" }, error.PathOutsideWorkspace);
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"../escape.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "path_outside_workspace");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolve(.{ .path = "missing.folded", .provenance = "profiling input path resolution" }, "/workspace/missing.folded");
+        try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+        try workspace.expectReadError(.{ .path = "missing.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, error.FileNotFound);
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"missing.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "workspace_input_read_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolve(.{ .path = "stacks.folded", .provenance = "profiling input path resolution" }, "/workspace/stacks.folded");
+        try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+        try workspace.expectRead(.{ .path = "stacks.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+        try commands.expectRunError(.{
+            .argv = &.{ "/bin/zflame", "recursive", "/workspace/stacks.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+            .provenance = "zig_flamegraph zflame render",
+        }, error.AccessDenied);
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectProfilingKind(result, "backend_error");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolve(.{ .path = "stacks.folded", .provenance = "profiling input path resolution" }, "/workspace/stacks.folded");
+        try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+        try workspace.expectRead(.{ .path = "stacks.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/zflame", "recursive", "/workspace/stacks.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+            .provenance = "zig_flamegraph zflame render",
+        }, .{ .exit_code = 9, .stdout = "partial\n", .stderr = invalid_utf8[0..], .stderr_truncated = true });
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "zflame_command_failed");
+        try std.testing.expect(result.structuredContent.?.object.get("stderr_invalid_utf8").?.bool);
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolve(.{ .path = "stacks.folded", .provenance = "profiling input path resolution" }, "/workspace/stacks.folded");
+        try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+        try workspace.expectRead(.{ .path = "stacks.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/zflame", "recursive", "/workspace/stacks.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+            .provenance = "zig_flamegraph zflame render",
+        }, .{ .stdout = "not svg" });
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "backend_output_malformed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        var context = testProfilingContext(&commands, &workspace);
+        context.probe_cache.zflame = .{};
+
+        try workspace.expectResolve(.{ .path = "stacks.folded", .provenance = "profiling input path resolution" }, "/workspace/stacks.folded");
+        try workspace.expectResolve(.{ .path = "profile.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/profile.svg");
+        try workspace.expectRead(.{ .path = "stacks.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/zflame", "recursive", "/workspace/stacks.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+            .provenance = "zig_flamegraph zflame render",
+        }, .{ .stdout = profiling_svg });
+        try workspace.expectWriteError(.{
+            .path = "profile.svg",
+            .bytes = profiling_svg,
+            .create_parent_dirs = true,
+            .replace_existing = true,
+            .provenance = "zig_flamegraph SVG artifact",
+        }, error.PermissionDenied);
+        const result = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "workspace_artifact_write_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+}
+
+test "profiling adapter renders differential flamegraphs and validates arguments" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+    defer workspace.deinit();
+    const context = testProfilingContext(&commands, &workspace);
+
+    const missing = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"recursive\"}"));
+    defer mcp_result.deinitToolResult(allocator, missing);
+    try std.testing.expect(missing.is_error);
+
+    const invalid_format = try zigFlamegraph(allocator, context, try profilingTestArgs(allocator, "{\"format\":\"guess\",\"input\":\"a\",\"output\":\"b\"}"));
+    defer mcp_result.deinitToolResult(allocator, invalid_format);
+    try std.testing.expect(invalid_format.is_error);
+
+    const invalid_width = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"width\":0}"));
+    defer mcp_result.deinitToolResult(allocator, invalid_width);
+    try std.testing.expect(invalid_width.is_error);
+
+    try workspace.expectResolve(.{ .path = "before.folded", .provenance = "profiling input path resolution" }, "/workspace/before.folded");
+    try workspace.expectResolve(.{ .path = "after.folded", .provenance = "profiling input path resolution" }, "/workspace/after.folded");
+    try workspace.expectResolve(.{ .path = "diff.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/diff.svg");
+    try workspace.expectResolve(.{ .path = "diff.folded", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/diff.folded");
+    try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+    try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+        .cwd = "/workspace",
+        .timeout_ms = 5000,
+        .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+        .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+        .provenance = "zig_flamegraph_diff diff-folded render",
+    }, .{ .stdout = "diff ok\n" });
+    try workspace.expectRead(.{ .path = "diff.folded", .max_bytes = flamegraph_diff_usecase.command_output_limit, .provenance = "zig_flamegraph_diff intermediate folded diff" }, "main;before 1\nmain;after 2\n");
+    try workspace.expectRead(.{ .path = "diff.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zflame", "recursive", "--title=delta", "/workspace/diff.folded" },
+        .cwd = "/workspace",
+        .timeout_ms = 5000,
+        .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+        .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+        .provenance = "zig_flamegraph zflame render",
+    }, .{ .stdout = profiling_svg });
+    try workspace.expectWrite(.{
+        .path = "diff.svg",
+        .bytes = profiling_svg,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "zig_flamegraph SVG artifact",
+    }, .{ .bytes_written = profiling_svg.len });
+
+    const diff = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator,
+        \\{"before":"before.folded","after":"after.folded","output":"diff.svg","intermediate":"diff.folded","title":"delta"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, diff);
+    try expectProfilingKind(diff, "zig_flamegraph_diff");
+    try std.testing.expect(diff.structuredContent.?.object.get("intermediate_folded") != null);
+
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "profiling diff adapter reports workspace and backend failures" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolve(.{ .path = "before.folded", .provenance = "profiling input path resolution" }, "/workspace/before.folded");
+        try workspace.expectResolve(.{ .path = "after.folded", .provenance = "profiling input path resolution" }, "/workspace/after.folded");
+        try workspace.expectResolve(.{ .path = "diff.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/diff.svg");
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "profiling_usecase_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try workspace.expectResolveError(.{ .path = "../before.folded", .provenance = "profiling input path resolution" }, error.PathOutsideWorkspace);
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"../before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "path_outside_workspace");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectReadError(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, error.FileNotFound);
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "workspace_input_read_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", ".zigar-cache/profile/diff.folded", "/workspace/.zigar-cache/profile/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\".zigar-cache/profile/diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "workspace_artifact_write_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try commands.expectRunError(.{
+            .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+            .provenance = "zig_flamegraph_diff diff-folded render",
+        }, error.FileNotFound);
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectProfilingKind(result, "backend_error");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+            .provenance = "zig_flamegraph_diff diff-folded render",
+        }, .{ .term = .signal, .stdout = "partial\n", .stderr = "boom\n", .stdout_truncated = true });
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "diff_folded_command_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+            .provenance = "zig_flamegraph_diff diff-folded render",
+        }, .{ .stdout = "ok\n" });
+        try workspace.expectReadError(.{ .path = "diff.folded", .max_bytes = flamegraph_diff_usecase.command_output_limit, .provenance = "zig_flamegraph_diff intermediate folded diff" }, error.AccessDenied);
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "workspace_artifact_read_failed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+            .provenance = "zig_flamegraph_diff diff-folded render",
+        }, .{ .stdout = "ok\n" });
+        try workspace.expectRead(.{ .path = "diff.folded", .max_bytes = flamegraph_diff_usecase.command_output_limit, .provenance = "zig_flamegraph_diff intermediate folded diff" }, "  \n\t");
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectToolErrorCode(result, "backend_output_malformed");
+        try commands.verify();
+        try workspace.verify();
+    }
+
+    {
+        var commands = fakes.FakeCommandRunner.init(backing_allocator);
+        defer commands.deinit();
+        var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+        defer workspace.deinit();
+        const context = testProfilingContext(&commands, &workspace);
+
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", "diff.folded", "/workspace/diff.folded");
+        try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/diff-folded", "--output=/workspace/diff.folded", "/workspace/before.folded", "/workspace/after.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_diff_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_diff_usecase.command_output_limit,
+            .provenance = "zig_flamegraph_diff diff-folded render",
+        }, .{ .stdout = "ok\n" });
+        try workspace.expectRead(.{ .path = "diff.folded", .max_bytes = flamegraph_diff_usecase.command_output_limit, .provenance = "zig_flamegraph_diff intermediate folded diff" }, "main;before 1\nmain;after 2\n");
+        try workspace.expectRead(.{ .path = "diff.folded", .max_bytes = 0, .provenance = "zig_flamegraph input readability" }, "");
+        try commands.expectRunError(.{
+            .argv = &.{ "/bin/zflame", "recursive", "/workspace/diff.folded" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .max_stdout_bytes = flamegraph_usecase.command_output_limit,
+            .max_stderr_bytes = flamegraph_usecase.command_output_limit,
+            .provenance = "zig_flamegraph zflame render",
+        }, error.AccessDenied);
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\"diff.folded\"}"));
+        defer mcp_result.deinitToolResult(allocator, result);
+        try expectProfilingKind(result, "backend_error");
+        try commands.verify();
+        try workspace.verify();
+    }
+}
+
+const profiling_svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture</title></svg>\n";
+
+fn testProfilingContext(commands: *fakes.FakeCommandRunner, workspace: *fakes.FakeWorkspaceStore) app_context.ProfilingContext {
+    return .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
+        .timeouts = .{ .command_ms = 5000 },
+        .command_runner = commands.port(),
+        .workspace_store = workspace.port(),
+        .probe_cache = .{
+            .zflame = .{ .probed = true, .ok = true, .status = "ok", .resolution = "ready" },
+            .diff_folded = .{ .probed = true, .ok = false, .status = "missing", .resolution = "install diff-folded" },
+        },
+    };
+}
+
+fn profilingTestArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+    return parsed.value;
+}
+
+fn expectDiffResolves(
+    workspace: *fakes.FakeWorkspaceStore,
+    before: []const u8,
+    before_abs: []const u8,
+    after: []const u8,
+    after_abs: []const u8,
+    output: []const u8,
+    output_abs: []const u8,
+    intermediate: []const u8,
+    intermediate_abs: []const u8,
+) !void {
+    try workspace.expectResolve(.{ .path = before, .provenance = "profiling input path resolution" }, before_abs);
+    try workspace.expectResolve(.{ .path = after, .provenance = "profiling input path resolution" }, after_abs);
+    try workspace.expectResolve(.{ .path = output, .for_output = true, .provenance = "profiling output path resolution" }, output_abs);
+    try workspace.expectResolve(.{ .path = intermediate, .for_output = true, .provenance = "profiling output path resolution" }, intermediate_abs);
+}
+
+fn expectProfilingKind(result: mcp.tools.ToolResult, expected: []const u8) !void {
+    const structured = result.structuredContent orelse return error.MissingStructuredContent;
+    try std.testing.expect(structured == .object);
+    const kind = structured.object.get("kind") orelse return error.MissingKind;
+    try std.testing.expect(kind == .string);
+    try std.testing.expectEqualStrings(expected, kind.string);
+}
+
+fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
+    try std.testing.expect(result.is_error);
+    const structured = result.structuredContent orelse return error.MissingStructuredContent;
+    try std.testing.expect(structured == .object);
+    const code = structured.object.get("code") orelse return error.MissingCode;
+    try std.testing.expect(code == .string);
+    try std.testing.expectEqualStrings(expected, code.string);
 }

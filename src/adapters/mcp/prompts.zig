@@ -33,8 +33,10 @@ fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (
             else
                 runtime_ux.workflowPromptText(workflowName(name, args));
             const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
-            errdefer allocator.free(messages);
+            var messages_owned = true;
+            defer if (messages_owned) allocator.free(messages);
             messages[0] = mcp.prompts.userMessage(allocator.dupe(u8, text) catch return error.OutOfMemory);
+            messages_owned = false;
             return messages;
         }
     }.call;

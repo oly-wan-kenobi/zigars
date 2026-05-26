@@ -104,13 +104,16 @@ fn containsString(values: []const []const u8, needle: []const u8) bool {
 
 fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     try out.appendSlice(allocator, "one of: ");
     for (values, 0..) |value, index| {
         if (index > 0) try out.appendSlice(allocator, ", ");
         try out.appendSlice(allocator, value);
     }
-    return out.toOwnedSlice(allocator);
+    const bytes = try out.toOwnedSlice(allocator);
+    out_owned = false;
+    return bytes;
 }
 
 fn jsonTypeName(value: std.json.Value) []const u8 {
@@ -149,6 +152,29 @@ test "accepts empty argument object for no-argument tool" {
     defer obj.deinit(std.testing.allocator);
     const result = try validateToolArgs(std.testing.allocator, spec, .{ .object = obj });
     try std.testing.expect(result == null);
+}
+
+test "accepts absent params for tools without required arguments" {
+    const spec = manifest.find("zig_version").?;
+    try std.testing.expect((try validateToolArgs(std.testing.allocator, spec, null)) == null);
+}
+
+test "rejects missing required argument when params are absent" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const spec = manifest.find("zig_check").?;
+
+    const result = (try validateToolArgs(arena.allocator(), spec, null)).?;
+    const err = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("missing_required_argument", err.get("code").?.string);
+    try std.testing.expectEqualStrings("file", err.get("field").?.string);
+}
+
+test "schema type matching accepts primitive types and unknown schema names" {
+    try std.testing.expect(schemaTypeMatches("string", .{ .string = "text" }));
+    try std.testing.expect(schemaTypeMatches("boolean", .{ .bool = true }));
+    try std.testing.expect(schemaTypeMatches("integer", .{ .integer = 1 }));
+    try std.testing.expect(schemaTypeMatches("custom", .null));
 }
 
 test "rejects enum arguments outside schema hints" {
@@ -214,4 +240,28 @@ test "rejects integer arguments below schema minimum" {
     try std.testing.expectEqualStrings("limit", err.get("field").?.string);
     try std.testing.expectEqualStrings("integer >= 1", err.get("expected").?.string);
     try std.testing.expectEqualStrings("0", err.get("actual").?.string);
+}
+
+test "rejects integer arguments above schema maximum" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const base = manifest.find("zig_check").?;
+    const spec = manifest.ToolMeta{
+        .id = base.id,
+        .name = "bounded_tool",
+        .description = "bounded fixture",
+        .input_schema = tooling.schemaWithHints(&.{.{ "count", "integer", true }}, &.{
+            .{ .field_name = "count", .hint = .{ .description = "Bounded count.", .minimum = 1, .maximum = 3 } },
+        }),
+        .read_only = true,
+    };
+
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "count", .{ .integer = 4 });
+    const result = (try validateToolArgs(allocator, spec, .{ .object = obj })).?;
+    const err = result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("above_maximum", err.get("code").?.string);
+    try std.testing.expectEqualStrings("integer <= 3", err.get("expected").?.string);
+    try std.testing.expectEqualStrings("4", err.get("actual").?.string);
 }

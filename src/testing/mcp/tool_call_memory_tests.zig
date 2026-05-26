@@ -27,8 +27,10 @@ const CaptureTransport = struct {
 
     fn send(self: *CaptureTransport, _: std.Io, allocator: std.mem.Allocator, message: []const u8) mcp.transport.Transport.SendError!void {
         const owned = allocator.dupe(u8, message) catch return error.OutOfMemory;
-        errdefer allocator.free(owned);
+        var response_owned = true;
+        defer if (response_owned) allocator.free(owned);
         self.responses.append(allocator, owned) catch return error.OutOfMemory;
+        response_owned = false;
     }
 
     fn receive(self: *CaptureTransport, _: std.Io, _: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
@@ -54,6 +56,17 @@ const CaptureTransport = struct {
         self.close();
     }
 };
+
+test "capture transport close and json number helpers cover adapter variants" {
+    const messages = [_][]const u8{};
+    var transport = CaptureTransport{ .messages = &messages };
+    defer transport.deinit(std.testing.allocator);
+
+    const tx = transport.transport();
+    tx.vtable.close(tx.ptr);
+    try expectJsonNumber(.{ .integer = 42 }, 42);
+    try expectJsonNumber(.{ .number_string = "2.5" }, 2.5);
+}
 
 test "mcp tools/call releases repeated successful structured results" {
     const allocator = std.testing.allocator;
@@ -208,9 +221,11 @@ fn ownedResourceHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator,
 
 fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
-    errdefer allocator.free(messages);
+    var messages_owned = true;
+    defer if (messages_owned) allocator.free(messages);
     const text = allocator.dupe(u8, "owned prompt text") catch return error.OutOfMemory;
     messages[0] = mcp.prompts.userMessage(text);
+    messages_owned = false;
     return messages;
 }
 
@@ -270,14 +285,15 @@ fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
 
 fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer json_result.deinitOwnedValue(allocator, .{ .object = obj });
+    var obj_owned = true;
+    defer if (obj_owned) json_result.deinitOwnedValue(allocator, .{ .object = obj });
 
     try putOwnedString(allocator, &obj, "kind", kind);
     try putOwnedNumberString(allocator, &obj, "ratio", "1.25");
 
     var details = std.json.Array.init(allocator);
     var details_owned = true;
-    errdefer if (details_owned) json_result.deinitOwnedValue(allocator, .{ .array = details });
+    defer if (details_owned) json_result.deinitOwnedValue(allocator, .{ .array = details });
     try appendOwnedString(allocator, &details, "alpha");
     try appendOwnedNumberString(allocator, &details, "99.5");
     try putOwnedValue(allocator, &obj, "details", .{ .array = details });
@@ -285,40 +301,51 @@ fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.jso
 
     var nested = std.json.ObjectMap.empty;
     var nested_owned = true;
-    errdefer if (nested_owned) json_result.deinitOwnedValue(allocator, .{ .object = nested });
+    defer if (nested_owned) json_result.deinitOwnedValue(allocator, .{ .object = nested });
     try putOwnedString(allocator, &nested, "message", "owned nested string");
     try putOwnedValue(allocator, &obj, "nested", .{ .object = nested });
     nested_owned = false;
 
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn putOwnedValue(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
     const owned_key = try allocator.dupe(u8, key);
-    errdefer allocator.free(owned_key);
+    var key_owned = true;
+    defer if (key_owned) allocator.free(owned_key);
     try obj.put(allocator, owned_key, value);
+    key_owned = false;
 }
 
 fn putOwnedString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
-    errdefer allocator.free(owned_value);
+    var value_owned = true;
+    defer if (value_owned) allocator.free(owned_value);
     try putOwnedValue(allocator, obj, key, .{ .string = owned_value });
+    value_owned = false;
 }
 
 fn putOwnedNumberString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
-    errdefer allocator.free(owned_value);
+    var value_owned = true;
+    defer if (value_owned) allocator.free(owned_value);
     try putOwnedValue(allocator, obj, key, .{ .number_string = owned_value });
+    value_owned = false;
 }
 
 fn appendOwnedString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
-    errdefer allocator.free(owned_value);
+    var value_owned = true;
+    defer if (value_owned) allocator.free(owned_value);
     try array.append(.{ .string = owned_value });
+    value_owned = false;
 }
 
 fn appendOwnedNumberString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
-    errdefer allocator.free(owned_value);
+    var value_owned = true;
+    defer if (value_owned) allocator.free(owned_value);
     try array.append(.{ .number_string = owned_value });
+    value_owned = false;
 }

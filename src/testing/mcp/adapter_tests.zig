@@ -248,6 +248,13 @@ fn jsonArrayContainsString(array: std.json.Array, needle: []const u8) bool {
     return false;
 }
 
+test "json array string helper reports absent values" {
+    var array = std.json.Array.init(std.testing.allocator);
+    defer array.deinit();
+    try array.append(.{ .string = "present" });
+    try std.testing.expect(!jsonArrayContainsString(array, "missing"));
+}
+
 test "explain command setup errors use the calling tool name" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

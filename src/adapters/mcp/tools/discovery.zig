@@ -57,9 +57,11 @@ fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.Too
 }
 
 fn jsonTextOnly(allocator: std.mem.Allocator, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    errdefer allocator.free(bytes);
+    var bytes_owned = true;
+    defer if (bytes_owned) allocator.free(bytes);
     const content = allocator.alloc(mcp.types.ContentBlock, 1) catch return error.OutOfMemory;
     content[0] = .{ .text = .{ .text = bytes } };
+    bytes_owned = false;
     return .{ .content = content };
 }
 
@@ -145,4 +147,74 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
         .integer => |i| i,
         else => default,
     };
+}
+
+const fake_tool_catalog = @import("../../../testing/fakes/tool_catalog.zig");
+
+test "discovery adapter wrappers expose text and structured status results" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var catalog = fake_tool_catalog.FakeToolCatalog.init("{\"tools\":[\"zigar_schema\"]}");
+    const context: app_context.Context = .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache", .transport = "stdio", .host = "127.0.0.1", .port = 8088 },
+        .zls_state = .{ .status = "connected", .running = true },
+        .ports = .{ .tool_catalog = catalog.port() },
+    };
+
+    const capabilities = try zigarCapabilities(allocator, context, null);
+    try std.testing.expect(std.mem.indexOf(u8, capabilities.content[0].text.text, "zigar_schema") != null);
+    try std.testing.expectEqual(@as(usize, 1), catalog.calls);
+
+    const metrics = try zigarMetrics(allocator, context, null);
+    try std.testing.expectEqualStrings("connected", metrics.structuredContent.?.object.get("zls_status").?.string);
+
+    const http = try zigarHttpStatus(allocator, context, null);
+    try std.testing.expectEqual(@as(i64, 8088), http.structuredContent.?.object.get("port").?.integer);
+}
+
+test "discovery adapter planning errors map to structured MCP errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var args = std.json.ObjectMap.empty;
+    try args.put(allocator, "tool", .{ .string = "missing_tool" });
+    try args.put(allocator, "file", .{ .string = "../escape.zig" });
+    try args.put(allocator, "path", .{ .string = "" });
+    try args.put(allocator, "args", .{ .string = "\"unterminated" });
+    const args_value: std.json.Value = .{ .object = args };
+
+    const missing_tool = try planError(allocator, "zig_command_plan", null, error.MissingTool);
+    try expectToolErrorCode(missing_tool, "missing_required_argument");
+
+    const unknown_tool = try planError(allocator, "zig_command_plan", args_value, error.UnknownTool);
+    try expectToolErrorCode(unknown_tool, "invalid_argument");
+
+    const missing_file = try planError(allocator, "zig_command_plan", args_value, error.MissingFile);
+    try expectToolErrorCode(missing_file, "missing_required_argument");
+
+    const missing_path = try planError(allocator, "zig_tool_plan", args_value, error.MissingPath);
+    try expectToolErrorCode(missing_path, "missing_required_argument");
+
+    const invalid_extra = try planError(allocator, "zig_command_plan", args_value, error.InvalidExtraArgs);
+    try expectToolErrorCode(invalid_extra, "invalid_argument");
+
+    const outside = try planError(allocator, "zig_command_plan", args_value, error.PathOutsideWorkspace);
+    try expectToolErrorCode(outside, "path_outside_workspace");
+
+    const empty = try planError(allocator, "zig_tool_plan", args_value, error.EmptyPath);
+    try expectToolErrorCode(empty, "empty_path");
+
+    const missing_port = try planError(allocator, "zig_tool_plan", args_value, error.MissingPort);
+    try expectToolErrorCode(missing_port, "discovery_failed");
+
+    const denied = try planError(allocator, "zig_tool_plan", args_value, error.AccessDenied);
+    try expectToolErrorCode(denied, "discovery_failed");
+}
+
+fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
+    try std.testing.expect(result.is_error);
+    try std.testing.expectEqualStrings(expected, result.structuredContent.?.object.get("code").?.string);
 }

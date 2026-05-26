@@ -5,6 +5,7 @@ const app_context = @import("../../app/context.zig");
 const handler_refs = @import("handler_refs.zig");
 const manifest = @import("../../manifest/mod.zig");
 const mcp_errors = @import("errors.zig");
+const mcp_result = @import("result.zig");
 const patch_sessions = @import("../../app/usecases/editing/patch_sessions.zig");
 const registry = @import("registry.zig");
 
@@ -201,6 +202,77 @@ fn runtimeUxOptions(comptime RuntimePortOptions: type, comptime name: []const u8
         .workspace_read_resolution = .input,
         .record_command_observability = std.mem.eql(u8, name, "zigarJobStart") or std.mem.eql(u8, name, "zigarRunStream"),
     };
+}
+
+test "context metadata covers every migrated handler context" {
+    const Case = struct {
+        context_type: type,
+        operation: []const u8,
+        code: []const u8,
+    };
+    const cases = [_]Case{
+        .{ .context_type = app_context.Context, .operation = "app_context", .code = "app_context_unavailable" },
+        .{ .context_type = app_context.AdoptionContext, .operation = "adoption_context", .code = "adoption_context_unavailable" },
+        .{ .context_type = app_context.ArtifactContext, .operation = "artifact_context", .code = "artifact_context_unavailable" },
+        .{ .context_type = app_context.CoreCommandContext, .operation = "core_command_context", .code = "core_command_context_unavailable" },
+        .{ .context_type = app_context.DiagnosticsContext, .operation = "diagnostics_context", .code = "diagnostics_context_unavailable" },
+        .{ .context_type = app_context.EnvironmentContext, .operation = "environment_context", .code = "environment_context_unavailable" },
+        .{ .context_type = app_context.PerformanceContext, .operation = "performance_context", .code = "performance_context_unavailable" },
+        .{ .context_type = app_context.ProfilingContext, .operation = "profiling_context", .code = "profiling_context_unavailable" },
+        .{ .context_type = app_context.ProjectIntelligenceContext, .operation = "project_intelligence_context", .code = "project_intelligence_context_unavailable" },
+        .{ .context_type = app_context.ObservabilityContext, .operation = "observability_context", .code = "observability_context_unavailable" },
+        .{ .context_type = app_context.ReleaseDocsContext, .operation = "release_docs_context", .code = "release_context_unavailable" },
+        .{ .context_type = app_context.ReleaseWorkflowContext, .operation = "release_workflow_context", .code = "release_context_unavailable" },
+        .{ .context_type = app_context.RuntimeUxContext, .operation = "runtime_ux_context", .code = "runtime_ux_context_unavailable" },
+        .{ .context_type = app_context.StaticAnalysisContext, .operation = "static_analysis_context", .code = "static_analysis_context_unavailable" },
+        .{ .context_type = app_context.TrustContext, .operation = "trust_context", .code = "trust_context_unavailable" },
+    };
+
+    inline for (cases) |case| {
+        try std.testing.expectEqualStrings(case.operation, contextOperation(case.context_type));
+        try std.testing.expectEqualStrings(case.code, contextCode(case.context_type));
+        try std.testing.expect(contextResolution(case.context_type).len > 0);
+    }
+}
+
+test "adapter handler maps missing runtime context to structured tool error" {
+    const Options = struct {};
+    const Runtime = struct {
+        fail_context: bool = false,
+    };
+    const RuntimePorts = struct {
+        fail_context: bool,
+
+        pub fn init(runtime: *Runtime, _: Options) @This() {
+            return .{ .fail_context = runtime.fail_context };
+        }
+
+        pub fn refreshDerivedPorts(_: *@This()) void {}
+
+        pub fn artifactContext(self: *@This()) app_context.ContextError!app_context.ArtifactContext {
+            if (self.fail_context) return error.MissingPort;
+            return .{ .workspace = .{}, .workspace_store = undefined };
+        }
+    };
+    const Adapter = struct {
+        pub fn needsArtifact(_: std.mem.Allocator, _: app_context.ArtifactContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+            return .{ .content = &.{} };
+        }
+    };
+
+    const call = adapterHandler(Adapter, "fixture_artifact", "needsArtifact", *Runtime, RuntimePorts, Options, .{});
+    var ok_runtime = Runtime{};
+    const ok_result = try call(&ok_runtime, std.testing.allocator, null);
+    mcp_result.deinitToolResult(std.testing.allocator, ok_result);
+
+    var failing_runtime = Runtime{ .fail_context = true };
+    const error_result = try call(&failing_runtime, std.testing.allocator, null);
+    defer mcp_result.deinitToolResult(std.testing.allocator, error_result);
+    try std.testing.expect(error_result.is_error);
+    const obj = error_result.structuredContent.?.object;
+    try std.testing.expectEqualStrings("fixture_artifact", obj.get("tool").?.string);
+    try std.testing.expectEqualStrings("artifact_context_unavailable", obj.get("code").?.string);
+    try std.testing.expectEqualStrings("MissingPort", obj.get("error").?.string);
 }
 
 const migrated_phase6 = struct {

@@ -3,6 +3,7 @@ const mcp = @import("mcp");
 
 const app_context = @import("../../../app/context.zig");
 const manifest = @import("../../../manifest/mod.zig");
+const ports = @import("../../../app/ports.zig");
 const project_intelligence = @import("../../../app/usecases/validation/project_intelligence.zig");
 const workflows = @import("../../../app/usecases/validation/workflows.zig");
 const mcp_errors = @import("../errors.zig");
@@ -375,7 +376,7 @@ fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
-        freeStringList(allocator, list.items);
+        freeStringItems(allocator, list.items);
         list.deinit(allocator);
         current.deinit(allocator);
     }
@@ -434,8 +435,12 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
 }
 
 fn freeStringList(allocator: std.mem.Allocator, values: []const []const u8) void {
-    for (values) |value| allocator.free(value);
+    freeStringItems(allocator, values);
     allocator.free(values);
+}
+
+fn freeStringItems(allocator: std.mem.Allocator, values: []const []const u8) void {
+    for (values) |value| allocator.free(value);
 }
 
 fn deinitTopLevel(allocator: std.mem.Allocator, value: *std.json.Value) void {
@@ -455,3 +460,182 @@ test "project intelligence adapter parses validation run requests" {
     defer parsed.deinit(allocator);
     try std.testing.expectEqualStrings("src/main.zig", parsed.request.plan.changed_paths[0]);
 }
+
+test "project intelligence adapter maps validation workflow failures" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var runtime = AdapterRuntime{ .write_error = error.AccessDenied };
+    const context = runtime.context();
+
+    var run_args = std.json.ObjectMap.empty;
+    try run_args.put(allocator, "mode", .{ .string = "quick" });
+    try run_args.put(allocator, "changed_files", .{ .string = "src/main.zig" });
+    try run_args.put(allocator, "timeout_ms", .{ .integer = 1000 });
+    try run_args.put(allocator, "apply", .{ .bool = true });
+    var run_result = try zigarValidationRun(allocator, context, .{ .object = run_args });
+    defer mcp_result.deinitToolResult(allocator, run_result);
+    try std.testing.expect(run_result.is_error);
+    try std.testing.expectEqualStrings("AccessDenied", run_result.structuredContent.?.object.get("error").?.string);
+
+    var history_runtime = AdapterRuntime{ .history_read_error = error.PermissionDenied };
+    var history_args = std.json.ObjectMap.empty;
+    try history_args.put(allocator, "path", .{ .string = "history.jsonl" });
+    var history_result = try zigarValidationHistory(allocator, history_runtime.context(), .{ .object = history_args });
+    defer mcp_result.deinitToolResult(allocator, history_result);
+    try std.testing.expect(history_result.is_error);
+    try std.testing.expectEqualStrings("PermissionDenied", history_result.structuredContent.?.object.get("error").?.string);
+
+    var helper_runtime = AdapterRuntime{};
+    const helper_context = helper_runtime.context();
+    const resolved = try helper_context.workspace_store.resolve(allocator, .{ .path = "src/main.zig" });
+    defer resolved.deinit(allocator);
+    try std.testing.expectEqualStrings("/repo/src/main.zig", resolved.path);
+    try std.testing.expectError(error.PathOutsideWorkspace, helper_context.workspace_store.resolve(allocator, .{ .path = "../secret" }));
+    const wrote = try helper_context.workspace_store.write(.{ .path = "out.jsonl", .bytes = "{}", .provenance = "test" });
+    try std.testing.expectEqual(@as(usize, 2), wrote.bytes_written);
+    const exists = try helper_context.workspace_store.exists(allocator, .{ .path = "src/main.zig" });
+    try std.testing.expect(exists.exists);
+    var scan = try helper_context.workspace_scanner.scanZigFiles(allocator, .{ .provenance = "test" });
+    defer scan.deinit(allocator);
+    try std.testing.expectEqualStrings("src/main.zig", scan.files[0].path);
+    const id = try helper_context.clock_and_ids.nextId(allocator, .{ .prefix = "run" });
+    defer allocator.free(id);
+    try std.testing.expectEqualStrings("run-1", id);
+}
+
+test "project intelligence adapter maps context workflow and split errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expectError(error.OutOfMemory, contextSetupError(allocator, "zigar_context_pack", error.OutOfMemory));
+    const context_error = try contextSetupError(allocator, "zigar_context_pack", error.MissingPort);
+    defer mcp_result.deinitToolResult(allocator, context_error);
+    try std.testing.expect(context_error.is_error);
+
+    var invalid_command = try workflowError(allocator, "zigar_failure_fusion", "run", error.InvalidCommand);
+    defer mcp_result.deinitToolResult(allocator, invalid_command);
+    try std.testing.expect(invalid_command.is_error);
+    try std.testing.expectEqualStrings("command", invalid_command.structuredContent.?.object.get("field").?.string);
+
+    var generic = try workflowError(allocator, "zigar_validation_history", "read_history", error.AccessDenied);
+    defer mcp_result.deinitToolResult(allocator, generic);
+    try std.testing.expect(generic.is_error);
+    try std.testing.expectEqualStrings("AccessDenied", generic.structuredContent.?.object.get("error").?.string);
+
+    const split_invalid = try splitArgsError(allocator, "zigar_failure_fusion", error.InvalidArguments);
+    defer mcp_result.deinitToolResult(allocator, split_invalid);
+    try std.testing.expect(split_invalid.is_error);
+    try std.testing.expectError(error.OutOfMemory, splitArgsError(allocator, "zigar_failure_fusion", error.OutOfMemory));
+
+    const split_generic = try splitArgsError(allocator, "zigar_failure_fusion", error.AccessDenied);
+    defer mcp_result.deinitToolResult(allocator, split_generic);
+    try std.testing.expect(split_generic.is_error);
+}
+
+test "project intelligence adapter splits tool args and cleans up allocation failures" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try splitToolArgs(allocator, "  --flag 'quoted value' \"double value\" escaped\\ space\tplain\n");
+    defer freeStringList(allocator, parsed);
+    try std.testing.expectEqual(@as(usize, 5), parsed.len);
+    try std.testing.expectEqualStrings("--flag", parsed[0]);
+    try std.testing.expectEqualStrings("quoted value", parsed[1]);
+    try std.testing.expectEqualStrings("double value", parsed[2]);
+    try std.testing.expectEqualStrings("escaped space", parsed[3]);
+    try std.testing.expectEqualStrings("plain", parsed[4]);
+
+    const empty = try splitToolArgs(allocator, null);
+    defer freeStringList(allocator, empty);
+    try std.testing.expectEqual(@as(usize, 0), empty.len);
+    try std.testing.expectError(error.InvalidArguments, splitToolArgs(allocator, "'unterminated"));
+    try std.testing.expectError(error.InvalidArguments, splitToolArgs(allocator, "dangling\\"));
+
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, splitToolArgsAllocationCase, .{});
+}
+
+fn splitToolArgsAllocationCase(allocator: std.mem.Allocator) !void {
+    const parsed = try splitToolArgs(allocator, "alpha 'beta gamma' delta\\ epsilon");
+    defer freeStringList(allocator, parsed);
+    try std.testing.expectEqual(@as(usize, 3), parsed.len);
+}
+
+const AdapterRuntime = struct {
+    write_error: ?ports.PortError = null,
+    history_read_error: ?ports.PortError = null,
+
+    fn context(self: *AdapterRuntime) app_context.ProjectIntelligenceContext {
+        return .{
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .tool_paths = .{ .zig = "zig" },
+            .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+            .zls_state = .{ .status = "connected", .running = true },
+            .command_runner = .{ .ptr = self, .vtable = &.{ .run = commandRun } },
+            .workspace_store = .{ .ptr = self, .vtable = &.{
+                .resolve = workspaceResolve,
+                .read = workspaceRead,
+                .write = workspaceWrite,
+                .exists = workspaceExists,
+            } },
+            .workspace_scanner = .{ .ptr = self, .vtable = &.{ .scan_zig_files = scanZigFiles } },
+            .clock_and_ids = .{ .ptr = self, .vtable = &.{ .now = now, .nextId = nextId } },
+        };
+    }
+
+    fn commandRun(_: *anyopaque, allocator: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        return .{
+            .exit_code = 0,
+            .stdout = try allocator.dupe(u8, "ok\n"),
+            .stderr = try allocator.dupe(u8, ""),
+            .duration_ms = 1,
+            .owns_stdout = true,
+            .owns_stderr = true,
+        };
+    }
+
+    fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
+        return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
+    }
+
+    fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
+        if (self.history_read_error) |err| {
+            if (std.mem.eql(u8, request.provenance, "zigar_validation_history read")) return err;
+        }
+        const bytes = if (std.mem.eql(u8, request.path, "src/main.zig"))
+            "pub fn main() void {}\n"
+        else if (std.mem.eql(u8, request.path, workflows.history_path_default) or std.mem.eql(u8, request.path, "history.jsonl"))
+            "{\"ok\":true}\n"
+        else
+            return error.FileNotFound;
+        return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
+    }
+
+    fn workspaceWrite(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
+        if (self.write_error) |err| return err;
+        return .{ .bytes_written = request.bytes.len };
+    }
+
+    fn workspaceExists(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        return .{ .exists = std.mem.eql(u8, request.path, "src") or std.mem.eql(u8, request.path, "src/main.zig"), .kind = .file };
+    }
+
+    fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
+        const files = try allocator.alloc(ports.WorkspaceScanFile, 1);
+        files[0] = .{ .path = try allocator.dupe(u8, "src/main.zig") };
+        return .{ .files = files, .owns_memory = true };
+    }
+
+    fn now(_: *anyopaque) ports.PortError!ports.Instant {
+        return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 1 };
+    }
+
+    fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
+        return std.fmt.allocPrint(allocator, "{s}-1", .{request.prefix});
+    }
+};

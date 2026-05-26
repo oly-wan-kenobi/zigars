@@ -2,6 +2,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const app_context = @import("../../../app/context.zig");
+const ports = @import("../../../app/ports.zig");
 const editing_workflows = @import("../../../app/usecases/editing/workflows.zig");
 const code_intel = @import("../../../app/usecases/zls/code_intel.zig");
 const zls_workflows = @import("../../../app/usecases/zls/workflows.zig");
@@ -344,4 +345,162 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
         .integer => |i| i,
         else => default,
     };
+}
+
+fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .tool_paths = .{ .zig = "zig", .zls = "zls-test" },
+        .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
+        .zls_state = .{ .status = "connected", .running = true },
+        .ports = .{ .zls_gateway = gateway },
+    };
+}
+
+fn expectCapability(gateway: anytype, capability: []const u8, supported: bool) !void {
+    try gateway.expectCapability(.{ .capability = capability }, .{
+        .capability = capability,
+        .supported = supported,
+        .basis = "unit",
+    });
+}
+
+test "zls MCP adapter exercises document workspace and position wrappers" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    const allocator = std.testing.allocator;
+    var gateway = fakes.FakeZlsGateway.init(allocator);
+    defer gateway.deinit();
+    const context = zlsAdapterTestContext(gateway.port());
+
+    try gateway.expectSync(.{
+        .file = "src/main.zig",
+        .content = "pub fn main() void {}",
+        .provenance = "zig_document_open",
+    }, .{ .uri = "file:///repo/src/main.zig", .basis = "content" });
+    const open_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void {}\"}", .{});
+    defer open_args.deinit();
+    const opened = try zigDocumentOpen(allocator, context, open_args.value);
+    defer mcp_result.deinitToolResult(allocator, opened);
+    try std.testing.expect(opened.structuredContent.?.object.get("open").?.bool);
+
+    try expectCapability(&gateway, "documentSymbolProvider", true);
+    try gateway.expectSync(.{
+        .file = "src/main.zig",
+        .content = null,
+        .provenance = code_intel.provenance,
+    }, .{ .uri = "file:///repo/src/main.zig", .basis = "workspace" });
+    try gateway.expectRequest(.{
+        .method = "textDocument/documentSymbol",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"}}",
+    }, .{ .method = "textDocument/documentSymbol", .payload = "{\"result\":[{\"name\":\"main\"}]}" });
+    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    defer file_args.deinit();
+    const symbols = try zigDocumentSymbols(allocator, context, file_args.value);
+    defer mcp_result.deinitToolResult(allocator, symbols);
+    try std.testing.expect(symbols.structuredContent.?.object.get("ok").?.bool);
+
+    try expectCapability(&gateway, "workspaceSymbolProvider", true);
+    try gateway.expectRequest(.{
+        .method = "workspace/symbol",
+        .payload = "{\"query\":\"main\"}",
+    }, .{ .method = "workspace/symbol", .payload = "{\"result\":[]}" });
+    const workspace_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"query\":\"main\"}", .{});
+    defer workspace_args.deinit();
+    const workspace_symbols = try zigWorkspaceSymbols(allocator, context, workspace_args.value);
+    defer mcp_result.deinitToolResult(allocator, workspace_symbols);
+    try std.testing.expect(workspace_symbols.structuredContent.?.object.get("ok").?.bool);
+
+    try expectCapability(&gateway, "hoverProvider", true);
+    try gateway.expectSync(.{
+        .file = "src/main.zig",
+        .content = null,
+        .provenance = code_intel.provenance,
+    }, .{ .uri = "file:///repo/src/main.zig", .basis = "workspace" });
+    try gateway.expectRequest(.{
+        .method = "textDocument/hover",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"position\":{\"line\":1,\"character\":2}}",
+    }, .{ .method = "textDocument/hover", .payload = "{\"result\":{\"contents\":\"ok\"}}" });
+    const hover_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"line\":1,\"character\":2}", .{});
+    defer hover_args.deinit();
+    const hover = try zigHover(allocator, context, hover_args.value);
+    defer mcp_result.deinitToolResult(allocator, hover);
+    try std.testing.expect(hover.structuredContent.?.object.get("ok").?.bool);
+
+    try expectCapability(&gateway, "hoverProvider", true);
+    const missing_file = try zigHover(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, missing_file);
+    try std.testing.expect(missing_file.is_error);
+
+    try expectCapability(&gateway, "codeActionProvider", false);
+    const code_actions = try zigCodeActionApply(allocator, context, hover_args.value);
+    defer mcp_result.deinitToolResult(allocator, code_actions);
+    try std.testing.expect(!code_actions.structuredContent.?.object.get("ok").?.bool);
+
+    try gateway.verify();
+}
+
+test "zls MCP adapter maps failures malformed payloads and diagnostics summaries" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    const allocator = std.testing.allocator;
+    var gateway = fakes.FakeZlsGateway.init(allocator);
+    defer gateway.deinit();
+    const context = zlsAdapterTestContext(gateway.port());
+
+    try expectCapability(&gateway, "hoverProvider", true);
+    try gateway.expectSync(.{
+        .file = "src/main.zig",
+        .content = null,
+        .provenance = code_intel.provenance,
+    }, .{ .uri = "file:///repo/src/main.zig", .basis = "workspace" });
+    try gateway.expectRequestError(.{
+        .method = "textDocument/hover",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"position\":{\"line\":0,\"character\":0}}",
+    }, error.Timeout);
+    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    defer file_args.deinit();
+    const timed_out = try zigHover(allocator, context, file_args.value);
+    defer mcp_result.deinitToolResult(allocator, timed_out);
+    try std.testing.expect(timed_out.is_error);
+
+    try expectCapability(&gateway, "documentSymbolProvider", true);
+    try gateway.expectSyncError(.{
+        .file = "../escape.zig",
+        .content = null,
+        .provenance = code_intel.provenance,
+    }, error.PathOutsideWorkspace);
+    const escape_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"../escape.zig\"}", .{});
+    defer escape_args.deinit();
+    const escaped = try zigDocumentSymbols(allocator, context, escape_args.value);
+    defer mcp_result.deinitToolResult(allocator, escaped);
+    try std.testing.expect(escaped.is_error);
+
+    const diagnostics = try zigDiagnosticsWorkspace(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, diagnostics);
+    try std.testing.expectEqual(@as(i64, 0), diagnostics.structuredContent.?.object.get("total").?.integer);
+
+    const malformed = try lspStructuredTool(allocator, "textDocument/hover", "{not json");
+    defer mcp_result.deinitToolResult(allocator, malformed);
+    try std.testing.expect(malformed.is_error);
+    const scalar = try lspStructuredTool(allocator, "textDocument/hover", "42");
+    defer mcp_result.deinitToolResult(allocator, scalar);
+    try std.testing.expect(!scalar.structuredContent.?.object.get("ok").?.bool);
+    const error_payload = try lspStructuredTool(allocator, "textDocument/hover", "{\"error\":{\"code\":-1}}");
+    defer mcp_result.deinitToolResult(allocator, error_payload);
+    try std.testing.expect(!error_payload.structuredContent.?.object.get("ok").?.bool);
+
+    try std.testing.expectError(error.OutOfMemory, workflowError(allocator, "tool", "op", "file.zig", error.OutOfMemory));
+    const workflow_path = try workflowError(allocator, "tool", "op", "../escape.zig", error.PathOutsideWorkspace);
+    defer mcp_result.deinitToolResult(allocator, workflow_path);
+    try std.testing.expect(workflow_path.is_error);
+    const workflow_generic = try workflowError(allocator, "tool", "op", "file.zig", error.FileNotFound);
+    defer mcp_result.deinitToolResult(allocator, workflow_generic);
+    try std.testing.expect(workflow_generic.is_error);
+    const context_failure = try contextError(allocator, "tool", "context", error.MissingPort);
+    defer mcp_result.deinitToolResult(allocator, context_failure);
+    try std.testing.expect(context_failure.is_error);
+
+    try gateway.verify();
 }

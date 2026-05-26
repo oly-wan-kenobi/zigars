@@ -6,17 +6,18 @@ const tooling = @import("../../manifest/tooling.zig");
 pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) !mcp.types.InputSchema {
     var properties = std.json.ObjectMap.empty;
     var required = std.ArrayList([]const u8).empty;
-    errdefer {
-        properties.deinit(allocator);
-        required.deinit(allocator);
-    }
+    var schema_owned = true;
+    defer if (schema_owned) required.deinit(allocator);
+    defer if (schema_owned) properties.deinit(allocator);
 
     for (spec.fields) |field| {
         var property = std.json.ObjectMap.empty;
-        errdefer property.deinit(allocator);
+        var property_owned = true;
+        defer if (property_owned) property.deinit(allocator);
         try property.put(allocator, "type", .{ .string = field[1] });
         try applyFieldHint(allocator, &property, spec, field);
         try properties.put(allocator, field[0], .{ .object = property });
+        property_owned = false;
         if (field[2]) try required.append(allocator, field[0]);
     }
 
@@ -25,6 +26,7 @@ pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) 
     else
         null;
 
+    schema_owned = false;
     return .{
         .properties = .{ .object = properties },
         .required = required_slice,
@@ -47,9 +49,11 @@ fn applyFieldHint(
     if (hint.maximum) |value| try property.put(allocator, "maximum", .{ .integer = value });
     if (hint.enum_values.len > 0) {
         var values = std.json.Array.init(allocator);
-        errdefer values.deinit();
+        var values_owned = true;
+        defer if (values_owned) values.deinit();
         for (hint.enum_values) |value| try values.append(.{ .string = value });
         try property.put(allocator, "enum", .{ .array = values });
+        values_owned = false;
     }
 }
 
@@ -72,4 +76,24 @@ test "input schema includes discovery hints" {
     try std.testing.expectEqualStrings("input_file", file.get("x-zigar-path-kind").?.string);
     const apply = s.properties.?.object.get("apply").?.object;
     try std.testing.expect(!apply.get("default").?.bool);
+}
+
+test "input schema includes enum hints" {
+    var s = try buildInputSchema(std.testing.allocator, tooling.schemaWithHints(&.{
+        .{ "mode", "string", false },
+    }, &.{
+        .{ .field_name = "mode", .hint = .{ .description = "Mode.", .enum_values = &.{ "quick", "full" } } },
+    }));
+    defer if (s.required) |required| std.testing.allocator.free(required);
+    defer if (s.properties) |*properties| {
+        var it = properties.object.iterator();
+        while (it.next()) |entry| {
+            if (entry.value_ptr.object.get("enum")) |*value| value.array.deinit();
+            entry.value_ptr.object.deinit(std.testing.allocator);
+        }
+        properties.object.deinit(std.testing.allocator);
+    };
+    const mode = s.properties.?.object.get("mode").?.object;
+    try std.testing.expectEqual(@as(usize, 2), mode.get("enum").?.array.items.len);
+    try std.testing.expectEqualStrings("quick", mode.get("enum").?.array.items[0].string);
 }

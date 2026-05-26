@@ -127,7 +127,6 @@ pub fn zigCompileErrorIndex(
     defer arena.deinit();
     const scratch = arena.allocator();
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(scratch);
     try obj.put(scratch, "ok", .{ .bool = commandOk(run.result) });
     try obj.put(scratch, "command", try commandResultValue(scratch, run.*));
     try obj.put(scratch, "index", try compilerErrorIndexValue(scratch, run.result.stderr, run.result.stdout, run.argv.items));
@@ -222,7 +221,6 @@ pub fn zigExplainErrors(
     const scratch = arena.allocator();
     const command_value = commandResultValue(scratch, run.*) catch return error.OutOfMemory;
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(scratch);
     try obj.put(scratch, "mode", .{ .string = explain.mode });
     try obj.put(scratch, "ok", .{ .bool = commandOk(run.result) });
     if (command_value == .object) {
@@ -258,7 +256,6 @@ fn versionResult(allocator: std.mem.Allocator, result: core_usecase.VersionResul
     const scratch = arena.allocator();
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(scratch);
     try obj.put(scratch, "zig", .{ .string = std.mem.trim(u8, result.zig.result.stdout, " \t\r\n") });
     try obj.put(scratch, "zig_ok", .{ .bool = commandOk(result.zig.result) });
     if (result.zls) |zls_run| {
@@ -821,4 +818,197 @@ fn isOutputLimitError(err: anyerror) bool {
 
 fn isTimeoutError(err: anyerror) bool {
     return err == error.Timeout or err == error.RequestTimeout;
+}
+
+test "core adapter private helpers cover compiler diagnostics and argument parsing edges" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const warning_index = try compilerErrorIndexValue(allocator, "warning: unable to load 'missing.zig'\n", "", &.{"zig"});
+    try std.testing.expectEqualStrings("zig_compile_error_index", warning_index.object.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 1), warning_index.object.get("summary").?.object.get("warning_count").?.integer);
+
+    const global_line = try compilerLineValue(allocator, .{
+        .severity = "warning",
+        .path = null,
+        .line = null,
+        .column = null,
+        .message = "unable to load missing.zig",
+        .raw = "warning: unable to load missing.zig",
+    });
+    try std.testing.expect(global_line.object.get("path").? == .null);
+    try std.testing.expect(global_line.object.get("line").? == .null);
+    try std.testing.expect(global_line.object.get("column").? == .null);
+
+    const ast_command = try compilerNextCommand(allocator, .{
+        .severity = "error",
+        .path = "src/main.zig",
+        .line = 1,
+        .column = 1,
+        .message = "bad",
+        .raw = "src/main.zig:1:1: error: bad",
+    }, &.{"zig"});
+    try std.testing.expectEqualStrings("zig ast-check src/main.zig", ast_command.string);
+    const rerun_command = try compilerNextCommand(allocator, .{
+        .severity = "error",
+        .path = "README.md",
+        .message = "bad",
+        .raw = "README.md: error: bad",
+    }, &.{ "zig", "build" });
+    try std.testing.expectEqualStrings("zig build", rerun_command.string);
+
+    const global_actions = try compilerNextActions(allocator, .{
+        .severity = "error",
+        .path = null,
+        .message = "unable to load missing.zig",
+        .raw = "error: unable to load missing.zig",
+    }, 0);
+    try std.testing.expect(std.mem.startsWith(u8, global_actions.array.items[0].string, "Address the primary error"));
+    try std.testing.expectEqual(@as(usize, 3), global_actions.array.items.len);
+
+    const plain_summary = try failureSummaryValue(allocator, .null, false, &.{"zig"});
+    try std.testing.expect(plain_summary.object.get("primary").? == .null);
+    const path_scope = try likelyFailureScopeValue(allocator, .{ .object = blk: {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "path", .{ .string = "README.md" });
+        break :blk obj;
+    } });
+    try std.testing.expectEqualStrings("path:README.md", path_scope.string);
+
+    try std.testing.expectEqualStrings("signal", (try commandTermValue(allocator, .signal)).object.get("kind").?.string);
+    try std.testing.expectEqualStrings("stopped", (try commandTermValue(allocator, .stopped)).object.get("kind").?.string);
+    try std.testing.expectEqualStrings("unknown", (try commandTermValue(allocator, .unknown)).object.get("kind").?.string);
+
+    const lossy = try safeTextAlloc(allocator, "a\xe2");
+    try std.testing.expect(lossy.invalid_utf8);
+    try std.testing.expect(std.mem.indexOf(u8, lossy.text, &std.unicode.replacement_character_utf8) != null);
+
+    const split = try splitArgs(allocator, "one\\ two 'three four' \"five\"");
+    defer freeArgList(allocator, split);
+    try std.testing.expectEqualStrings("one two", split[0]);
+    try std.testing.expectEqualStrings("three four", split[1]);
+    try std.testing.expectEqualStrings("five", split[2]);
+
+    const split_other = try splitToolArgsError(allocator, "zig_build", "args", "bad", error.UnexpectedCall);
+    defer mcp_result.deinitToolResult(allocator, split_other);
+    try std.testing.expectEqualStrings("tool_error", split_other.structuredContent.?.object.get("kind").?.string);
+
+    const version_argument = try versionFailureResult(allocator, .{ .argument = app_errors.missingArgument("file", "path") });
+    defer mcp_result.deinitToolResult(allocator, version_argument);
+    try std.testing.expectEqualStrings("argument_error", version_argument.structuredContent.?.object.get("kind").?.string);
+
+    const version_workspace = try versionFailureResult(allocator, .{ .workspace_path = .{
+        .error_info = app_errors.workspacePathRejected("../x", "/workspace", "path_resolution_failed", "PathOutsideWorkspace", "stay inside workspace"),
+        .err = error.PathOutsideWorkspace,
+        .path = "../x",
+    } });
+    defer mcp_result.deinitToolResult(allocator, version_workspace);
+    try std.testing.expectEqualStrings("workspace_path_error", version_workspace.structuredContent.?.object.get("kind").?.string);
+
+    try std.testing.expectEqualStrings("execution", backendErrorKind(error.UnexpectedCall));
+}
+
+test "core adapter JSON helpers clean up partially allocated values" {
+    const sample_run = core_usecase.CommandRun{
+        .title = "zig build",
+        .argv = .{ .items = &.{ "zig", "build" } },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .result = .{
+            .term = .{ .exited = 1 },
+            .stdout = "ok",
+            .stderr = "src/main.zig:1:1: error: bad\n",
+            .duration_ms = 1,
+        },
+    };
+    const sample_failure = core_usecase.CommandRunFailure{
+        .title = "zig build",
+        .argv = .{ .items = &.{ "zig", "build" } },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .err = error.StreamTooLong,
+    };
+    for (0..80) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = commandResultValue(failing.allocator(), sample_run) catch {};
+        backing.deinit();
+    }
+    for (0..80) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = commandErrorValue(failing.allocator(), sample_failure) catch {};
+        backing.deinit();
+    }
+    for (0..80) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = backendErrorResult(failing.allocator(), "zig", "version", error.FileNotFound, "fix path") catch {};
+        backing.deinit();
+    }
+    for (0..80) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = compilerErrorIndexValue(failing.allocator(), "src/main.zig:1:1: error: bad\n", "", &.{"zig"}) catch {};
+        backing.deinit();
+    }
+    for (0..80) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = compilerInsightsValue(failing.allocator(), "", "src/main.zig:1:1: error: bad\n", &.{"zig"}) catch {};
+        backing.deinit();
+    }
+    for (0..24) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = compilerLineValue(failing.allocator(), .{ .severity = "error", .message = "bad", .raw = "error: bad" }) catch {};
+        backing.deinit();
+    }
+    for (0..40) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = failureSummaryValue(failing.allocator(), .null, false, &.{ "zig", "test" }) catch {};
+        backing.deinit();
+    }
+    for (0..40) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = commandErrorSummaryValue(failing.allocator(), error.Timeout, &.{ "zig", "build" }) catch {};
+        backing.deinit();
+    }
+    for (0..12) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = commandTermValue(failing.allocator(), .signal) catch {};
+        backing.deinit();
+    }
+    for (0..12) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = safeTextAlloc(failing.allocator(), "\xff") catch {};
+        backing.deinit();
+    }
+    for (0..12) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = argvValue(failing.allocator(), &.{ "zig", "build" }) catch {};
+        backing.deinit();
+    }
+    for (0..12) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = commandString(failing.allocator(), &.{ "zig", "build" }) catch {};
+        backing.deinit();
+    }
+    for (0..24) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const args = splitArgs(failing.allocator(), "one two") catch {
+            backing.deinit();
+            continue;
+        };
+        freeArgList(failing.allocator(), args);
+        backing.deinit();
+    }
 }

@@ -28,6 +28,7 @@ pub const zls = @import("tools/zls.zig");
 
 test {
     _ = @import("../../testing/mcp/adapter_tests.zig");
+    _ = @import("server/http_transport.zig");
 }
 
 test {
@@ -57,4 +58,5 @@ test {
     _ = static_analysis;
     _ = static_source_summary;
     _ = transactional_editing;
+    _ = zls;
 }

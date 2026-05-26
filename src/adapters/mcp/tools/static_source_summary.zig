@@ -5,6 +5,7 @@ const analysis_contract = @import("../../../domain/zig/static_analysis_contracts
 const app_context = @import("../../../app/context.zig");
 const source_summary_usecase = @import("../../../app/usecases/static_analysis/source_summary.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
+const ports = @import("../../../app/ports.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
@@ -348,4 +349,211 @@ fn staticTextResult(
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     return mcp_result.structured(allocator, staticTextValue(arena.allocator(), tool_name, body) catch return error.OutOfMemory);
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "static source summary adapters read workspace source and return structured outputs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const source =
+        \\const std = @import("std");
+        \\pub const Thing = struct {
+        \\    pub fn make(allocator: std.mem.Allocator) ![]u8 {
+        \\        return try allocator.alloc(u8, 1);
+        \\    }
+        \\};
+        \\pub const Failure = error{Bad};
+        \\fn privateThing() void {}
+        \\test "Thing.make" {}
+        \\
+    ;
+    const args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    const context = staticSummaryContext(workspace.port(), scanner.port());
+
+    inline for (.{
+        "zig_decl_summary",
+        "zig_decl_summary_json",
+        "zig_ast_imports",
+        "zig_ast_decl_summary",
+        "zig_allocations",
+        "zig_error_sets",
+        "zig_public_api",
+        "zig_dead_decl_candidates",
+        "zig_ast_tests",
+    }) |_| {
+        try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = source_summary_usecase.default_source_read_limit, .provenance = source_summary_usecase.provenance }, source);
+    }
+
+    const decl_text = try zigDeclSummary(allocator, context, args.value);
+    try expectStructuredKind(decl_text, "zig_decl_summary");
+    try std.testing.expect(std.mem.indexOf(u8, decl_text.structuredContent.?.object.get("text").?.string, "Thing") != null);
+
+    const decl_json = try zigDeclSummaryJson(allocator, context, args.value);
+    try std.testing.expectEqualStrings("src/main.zig", decl_json.structuredContent.?.object.get("file").?.string);
+    try std.testing.expect(decl_json.structuredContent.?.object.get("declarations").?.array.items.len > 0);
+
+    const imports = try zigAstImports(allocator, context, args.value);
+    try expectStructuredKind(imports, "zig_ast_imports");
+    try std.testing.expect(imports.structuredContent.?.object.get("imports").?.array.items.len > 0);
+
+    const ast_decls = try zigAstDeclSummary(allocator, context, args.value);
+    try expectStructuredKind(ast_decls, "zig_ast_decl_summary");
+    try std.testing.expect(ast_decls.structuredContent.?.object.get("declarations").?.array.items.len > 0);
+
+    const allocations = try zigAllocations(allocator, context, args.value);
+    try expectStructuredKind(allocations, "zig_allocations");
+    try std.testing.expect(std.mem.indexOf(u8, allocations.structuredContent.?.object.get("text").?.string, "alloc") != null);
+
+    const errors = try zigErrorSets(allocator, context, args.value);
+    try expectStructuredKind(errors, "zig_error_sets");
+    try std.testing.expect(std.mem.indexOf(u8, errors.structuredContent.?.object.get("text").?.string, "Failure") != null);
+
+    const public_api = try zigPublicApi(allocator, context, args.value);
+    try expectStructuredKind(public_api, "zig_public_api");
+    try std.testing.expect(std.mem.indexOf(u8, public_api.structuredContent.?.object.get("text").?.string, "pub const Thing") != null);
+
+    const dead_decls = try zigDeadDeclCandidates(allocator, context, args.value);
+    try expectStructuredKind(dead_decls, "zig_dead_decl_candidates");
+    try std.testing.expect(std.mem.indexOf(u8, dead_decls.structuredContent.?.object.get("text").?.string, "privateThing") != null);
+
+    const tests = try zigAstTests(allocator, context, args.value);
+    try expectStructuredKind(tests, "zig_ast_tests");
+    try std.testing.expect(tests.structuredContent.?.object.get("tests").?.array.items.len > 0);
+
+    try workspace.verify();
+    try scanner.verify();
+}
+
+test "static source summary argument errors cover missing skipped workspace and analysis failures" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = staticSummaryContext(workspace.port(), scanner.port());
+
+    const no_args = try readSourceArgError(allocator, context, "zig_decl_summary", null, error.MissingFile);
+    try std.testing.expect(no_args.is_error);
+
+    const empty_obj = try std.json.parseFromSlice(std.json.Value, allocator, "{}", .{});
+    const outside_without_file = try readSourceArgError(allocator, context, "zig_decl_summary", empty_obj.value, error.PathOutsideWorkspace);
+    try std.testing.expect(outside_without_file.is_error);
+
+    const outside_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"../escape.zig\"}", .{});
+    const outside = try readSourceArgError(allocator, context, "zig_decl_summary", outside_args.value, error.PathOutsideWorkspace);
+    try std.testing.expect(outside.is_error);
+
+    const skipped_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"zig-cache/generated.zig\"}", .{});
+    const skipped = try readSourceArgError(allocator, context, "zig_decl_summary", skipped_args.value, error.SkippedWorkspacePath);
+    try std.testing.expect(skipped.is_error);
+
+    const skipped_missing = try readSourceArgError(allocator, context, "zig_decl_summary", empty_obj.value, error.SkippedWorkspacePath);
+    try std.testing.expect(skipped_missing.is_error);
+
+    const read_failed = try readSourceArgError(allocator, context, "zig_decl_summary", outside_args.value, error.FileNotFound);
+    try std.testing.expect(read_failed.is_error);
+
+    const malformed = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":123}", .{});
+    try std.testing.expect(argString(malformed.value, "file") == null);
+    try std.testing.expect(argString(.{ .string = "not-object" }, "file") == null);
+    try std.testing.expect(argString(null, "file") == null);
+
+    const analysis_error = try analysisToolError(allocator, "zig_ast_imports", "parse_ast_imports", error.InvalidRequest);
+    try std.testing.expect(analysis_error.is_error);
+}
+
+test "static source summary value builders clean up partial allocations" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseStaticSummaryValueBuilders, .{});
+    try exerciseAstValueBuilderFixedBufferFailures();
+}
+
+fn exerciseStaticSummaryValueBuilders(backing_allocator: std.mem.Allocator) !void {
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    _ = try staticTextValue(allocator, "zig_decl_summary", "pub const Thing = struct {};");
+
+    var decls = [_]zig_analysis.Declaration{
+        .{ .line = 1, .kind = "const", .name = "Thing", .public = true, .signature = "pub const Thing = struct {};" },
+    };
+    _ = try declSummaryValue(allocator, "src/main.zig", .{ .items = decls[0..] });
+
+    var imports = [_]zig_analysis.Import{
+        .{ .file = "src/main.zig", .line = 1, .import = "std", .alias = "std", .declaration = "const std = @import(\"std\");" },
+    };
+    var ast_decls = [_]zig_analysis.Declaration{
+        .{ .line = 2, .kind = "fn", .name = "main", .public = true, .is_comptime = false, .depth = 0, .signature = "pub fn main() void {}" },
+    };
+    var tests = [_]zig_analysis.TestDecl{
+        .{ .file = "src/main.zig", .line = 3, .name = "unit", .declaration = "test \"unit\" {}", .command = "zig test src/main.zig --test-filter unit" },
+    };
+    const summary = zig_analysis.SourceSummary{
+        .parse = .{ .status = .syntax_errors, .partial_result = true, .result_complete = false, .parse_error_count = 1 },
+        .declarations = ast_decls[0..],
+        .imports = imports[0..],
+        .tests = tests[0..],
+    };
+    _ = try astImportsValue(allocator, "src/main.zig", summary);
+    _ = try astDeclSummaryValue(allocator, "src/main.zig", summary);
+    _ = try astTestsValue(allocator, "src/main.zig", summary);
+}
+
+fn exerciseAstValueBuilderFixedBufferFailures() !void {
+    var imports = [_]zig_analysis.Import{
+        .{ .file = "src/main.zig", .line = 1, .import = "std", .alias = "std", .declaration = "const std = @import(\"std\");" },
+    };
+    var ast_decls = [_]zig_analysis.Declaration{
+        .{ .line = 2, .kind = "fn", .name = "main", .public = true, .is_comptime = false, .depth = 0, .signature = "pub fn main() void {}" },
+    };
+    var tests = [_]zig_analysis.TestDecl{
+        .{ .file = "src/main.zig", .line = 3, .name = "unit", .declaration = "test \"unit\" {}", .command = "zig test src/main.zig --test-filter unit" },
+    };
+    const summary = zig_analysis.SourceSummary{
+        .parse = .{ .status = .syntax_errors, .partial_result = true, .result_complete = false, .parse_error_count = 1 },
+        .declarations = ast_decls[0..],
+        .imports = imports[0..],
+        .tests = tests[0..],
+    };
+
+    var storage: [4096]u8 = undefined;
+    for (0..storage.len) |cap| {
+        var fba = std.heap.FixedBufferAllocator.init(storage[0..cap]);
+        _ = astDeclSummaryValue(fba.allocator(), "src/main.zig", summary) catch |err| switch (err) {
+            error.OutOfMemory => continue,
+        };
+    }
+    for (0..storage.len) |cap| {
+        var fba = std.heap.FixedBufferAllocator.init(storage[0..cap]);
+        _ = astTestsValue(fba.allocator(), "src/main.zig", summary) catch |err| switch (err) {
+            error.OutOfMemory => continue,
+        };
+    }
+}
+
+fn staticSummaryContext(workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.StaticAnalysisContext {
+    return .{
+        .workspace = .{
+            .root = "/repo",
+            .cache_root = "/repo/.zigar-cache",
+            .transport = "stdio",
+        },
+        .workspace_store = workspace_store,
+        .workspace_scanner = workspace_scanner,
+    };
+}
+
+fn expectStructuredKind(result: mcp.tools.ToolResult, expected: []const u8) !void {
+    try std.testing.expect(result.structuredContent != null);
+    try std.testing.expectEqualStrings(expected, result.structuredContent.?.object.get("kind").?.string);
 }

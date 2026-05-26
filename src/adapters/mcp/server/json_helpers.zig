@@ -6,7 +6,7 @@ const types = mcp.types;
 pub fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.json.Array, content_item: types.ContentBlock) !void {
     var item_obj: std.json.ObjectMap = .empty;
     var item_obj_in_array = false;
-    errdefer if (!item_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = item_obj });
+    defer if (!item_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = item_obj });
 
     switch (content_item) {
         .text => |text| {
@@ -35,7 +35,7 @@ pub fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.
             try item_obj.put(allocator, "type", .{ .string = "resource" });
             var res_obj: std.json.ObjectMap = .empty;
             var res_obj_in_item = false;
-            errdefer if (!res_obj_in_item) res_obj.deinit(allocator);
+            defer if (!res_obj_in_item) res_obj.deinit(allocator);
             try res_obj.put(allocator, "uri", .{ .string = res.resource.uri });
             if (res.resource.text) |text| try res_obj.put(allocator, "text", .{ .string = text });
             if (res.resource.mimeType) |mime| try res_obj.put(allocator, "mimeType", .{ .string = mime });

@@ -129,3 +129,58 @@ fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerr
         .resolution = "Retry after confirming the supplied evidence, workspace paths, and optional backend paths.",
     }, err);
 }
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "performance adapter maps structured and thrown usecase failures" {
+    const Stub = struct {
+        fn structuredFailure(_: *workflows.App, allocator: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
+            var obj = std.json.ObjectMap.empty;
+            const key = try allocator.dupe(u8, "kind");
+            var key_owned = true;
+            defer if (key_owned) allocator.free(key);
+            const value = try allocator.dupe(u8, "performance_failure");
+            var value_owned = true;
+            defer if (value_owned) allocator.free(value);
+            try obj.put(allocator, key, .{ .string = value });
+            key_owned = false;
+            value_owned = false;
+            return .{ .value = .{ .object = obj }, .is_error = true };
+        }
+
+        fn thrownFailure(_: *workflows.App, _: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
+            return error.AccessDenied;
+        }
+
+        fn oomFailure(_: *workflows.App, _: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
+            return error.OutOfMemory;
+        }
+    };
+
+    var runner = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer runner.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context: app_context.PerformanceContext = .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .tool_paths = .{},
+        .timeouts = .{},
+        .command_runner = runner.port(),
+        .workspace_store = workspace.port(),
+        .workspace_scanner = scanner.port(),
+    };
+
+    const structured = try invoke(std.testing.allocator, context, null, "zig_coverage_run", Stub.structuredFailure);
+    defer mcp_result.deinitToolResult(std.testing.allocator, structured);
+    try std.testing.expect(structured.is_error);
+    try std.testing.expectEqualStrings("performance_failure", structured.structuredContent.?.object.get("kind").?.string);
+
+    const thrown = try invoke(std.testing.allocator, context, null, "zig_coverage_run", Stub.thrownFailure);
+    defer mcp_result.deinitToolResult(std.testing.allocator, thrown);
+    try std.testing.expect(thrown.is_error);
+    try std.testing.expectEqualStrings("tool_error", thrown.structuredContent.?.object.get("kind").?.string);
+
+    try std.testing.expectError(error.OutOfMemory, invoke(std.testing.allocator, context, null, "zig_coverage_run", Stub.oomFailure));
+}

@@ -4,6 +4,7 @@ const mcp = @import("mcp");
 const app_context = @import("../../../app/context.zig");
 const editing = @import("../../../app/usecases/editing/patch_sessions.zig");
 const editing_workflows = @import("../../../app/usecases/editing/workflows.zig");
+const validation_workflows = @import("../../../app/usecases/validation/workflows.zig");
 const validation_adapter = @import("project_intelligence.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
@@ -596,4 +597,136 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
     const hex = std.fmt.bytesToHex(digest, .lower);
     return allocator.dupe(u8, &hex);
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "transactional editing adapter covers create validate revert and code action flows" {
+    const allocator = std.testing.allocator;
+    var commands = fakes.FakeCommandRunner.init(allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(allocator);
+    defer clock.deinit();
+    const context = transactionalTestContext(&commands, &workspace, &clock);
+
+    try workspace.expectRead(.{
+        .path = "src/main.zig",
+        .max_bytes = editing.max_session_file_bytes,
+        .provenance = "patch_session_snapshot",
+    }, "const value = 1;\n");
+    try workspace.expectReadError(.{
+        .path = "src/denied.zig",
+        .max_bytes = editing.max_session_file_bytes,
+        .provenance = "patch_session_snapshot",
+    }, error.AccessDenied);
+    var create_args = std.json.ObjectMap.empty;
+    defer create_args.deinit(allocator);
+    try create_args.put(allocator, "files", .{ .string = "src/main.zig src/denied.zig" });
+    try create_args.put(allocator, "goal", .{ .string = "cover mixed session creation" });
+    const created = try zigarPatchSessionCreate(allocator, context, .{ .object = create_args });
+    defer mcp_result.deinitToolResult(allocator, created);
+    try std.testing.expect(!created.structuredContent.?.object.get("safe_to_edit").?.bool);
+
+    var revert_args = std.json.ObjectMap.empty;
+    defer revert_args.deinit(allocator);
+    try revert_args.put(allocator, "session_id", .{ .string = "missing-session" });
+    try revert_args.put(allocator, "history", .{ .string = "" });
+    const missing_revert = try zigarPatchSessionRevert(allocator, context, .{ .object = revert_args });
+    defer mcp_result.deinitToolResult(allocator, missing_revert);
+    try std.testing.expectEqualStrings("not_found", missing_revert.structuredContent.?.object.get("error_kind").?.string);
+
+    try clock.pushInstant(.{ .unix_ms = 1_700_000_010_000, .monotonic_ms = 1 });
+    try workspace.expectReadError(.{
+        .path = "validation.jsonl",
+        .max_bytes = validation_workflows.history_max_bytes,
+        .provenance = "zigar_validation_run history preimage",
+    }, error.FileNotFound);
+    var validate_args = std.json.ObjectMap.empty;
+    defer validate_args.deinit(allocator);
+    try validate_args.put(allocator, "mode", .{ .string = "quick" });
+    try validate_args.put(allocator, "changed_files", .{ .string = "notes.txt" });
+    try validate_args.put(allocator, "output", .{ .string = "validation.jsonl" });
+    try validate_args.put(allocator, "apply", .{ .bool = true });
+    const validation_failed = try zigarPatchSessionValidate(allocator, context, .{ .object = validate_args });
+    defer mcp_result.deinitToolResult(allocator, validation_failed);
+    try std.testing.expectEqualStrings("tool_error", validation_failed.structuredContent.?.object.get("kind").?.string);
+    try std.testing.expectEqual(@as(usize, 1), workspace.writeCalls().len);
+
+    var zls_running = context;
+    zls_running.zls_state = .{ .running = true, .status = "connected" };
+    const batch = try zigCodeActionBatch(allocator, zls_running, null);
+    defer mcp_result.deinitToolResult(allocator, batch);
+    try std.testing.expectEqualStrings("unsupported_state", batch.structuredContent.?.object.get("error_kind").?.string);
+
+    try workspace.verify();
+    try commands.verify();
+    try clock.verify();
+}
+
+test "transactional editing adapter helper parsers and errors are explicit" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, scratch,
+        \\{"files":[{"path":"src/a.zig","content":"a"},{"file":"src/b.zig","content":"b"}]}
+    , .{});
+    var replacements = std.ArrayList(editing.Replacement).empty;
+    defer replacements.deinit(scratch);
+    try collectReplacements(scratch, &replacements, parsed.value);
+    try std.testing.expectEqual(@as(usize, 2), replacements.items.len);
+
+    const bad_files = try std.json.parseFromSlice(std.json.Value, scratch, "{\"files\":123}", .{});
+    try std.testing.expectError(error.InvalidArguments, collectReplacements(scratch, &replacements, bad_files.value));
+    const bad_item = try std.json.parseFromSlice(std.json.Value, scratch, "[123]", .{});
+    try std.testing.expectError(error.InvalidArguments, collectReplacements(scratch, &replacements, bad_item.value));
+
+    var validation_args_source = std.json.ObjectMap.empty;
+    defer validation_args_source.deinit(allocator);
+    try validation_args_source.put(allocator, "edits", .{ .string = "[{\"file\":\"src/a.zig\",\"content\":\"a\"},{\"path\":\"src/b.zig\",\"content\":\"b\"}]" });
+    const validation_args = try validationArgsFromSessionArgs(scratch, .{ .object = validation_args_source });
+    try std.testing.expectEqualStrings("src/a.zig src/b.zig", validation_args.object.get("changed_files").?.string);
+
+    var policy_args = std.json.ObjectMap.empty;
+    defer policy_args.deinit(allocator);
+    try policy_args.put(allocator, "patch", .{ .string = "--- a/src/old.zig\n+++ b/src/new.zig\n" });
+    const policy = try zigarEditPolicyCheck(allocator, app_context.Context{}, .{ .object = policy_args });
+    defer mcp_result.deinitToolResult(allocator, policy);
+    try std.testing.expectEqual(@as(usize, 2), policy.structuredContent.?.object.get("checked").?.array.items.len);
+
+    try std.testing.expectError(error.OutOfMemory, transactionalError(allocator, "zig_update_imports", "parse", error.OutOfMemory));
+    const invalid = try transactionalError(allocator, "zig_update_imports", "parse", error.InvalidArguments);
+    defer mcp_result.deinitToolResult(allocator, invalid);
+    try std.testing.expectEqualStrings("argument_error", invalid.structuredContent.?.object.get("kind").?.string);
+    const outside = try transactionalError(allocator, "zig_update_imports", "read", error.PathOutsideWorkspace);
+    defer mcp_result.deinitToolResult(allocator, outside);
+    try std.testing.expectEqualStrings("workspace_path_error", outside.structuredContent.?.object.get("kind").?.string);
+    const generic = try transactionalError(allocator, "zig_update_imports", "read", error.AccessDenied);
+    defer mcp_result.deinitToolResult(allocator, generic);
+    try std.testing.expectEqualStrings("tool_error", generic.structuredContent.?.object.get("kind").?.string);
+
+    try std.testing.expect(argString(.{ .string = "not-object" }, "file") == null);
+    try std.testing.expect(argBoolOptional(.{ .string = "not-object" }, "apply") == null);
+    try std.testing.expect(argIntOptional(.{ .string = "not-object" }, "timeout_ms") == null);
+}
+
+fn transactionalTestContext(
+    command_runner: *fakes.FakeCommandRunner,
+    workspace_store: *fakes.FakeWorkspaceStore,
+    clock_and_ids: *fakes.FakeClockAndIds,
+) app_context.Context {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+        .zls_state = .{},
+        .ports = .{
+            .command_runner = command_runner.port(),
+            .workspace = workspace_store.port(),
+            .clock_and_ids = clock_and_ids.port(),
+        },
+    };
 }

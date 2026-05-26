@@ -361,6 +361,17 @@ test "metrics v2 adapter exposes observed latency and backend history" {
     try std.testing.expect(root.get("tool_latency").?.object.get("tools").?.array.items.len >= 2);
     try std.testing.expectEqual(@as(i64, 1), root.get("backend_health_history").?.object.get("recorded_events").?.integer);
     try std.testing.expectEqual(@as(i64, 1), root.get("zls_timeline").?.object.get("recorded_events").?.integer);
+
+    const history = try zigarBackendHealthHistory(std.testing.allocator, context, null);
+    defer mcp_result.deinitToolResult(std.testing.allocator, history);
+    try std.testing.expectEqualStrings("zigar_backend_health_history", history.structuredContent.?.object.get("kind").?.string);
+
+    const latency = try zigarToolLatency(std.testing.allocator, context, null);
+    defer mcp_result.deinitToolResult(std.testing.allocator, latency);
+    try std.testing.expectEqualStrings("zigar_tool_latency", latency.structuredContent.?.object.get("kind").?.string);
+
+    const write_result = try context.workspace_store.write(.{ .path = ".zigar-cache/probe", .bytes = "ok", .provenance = "unit" });
+    try std.testing.expectEqual(@as(usize, 2), write_result.bytes_written);
 }
 
 test "timeline adapter returns current snapshot without recorded transitions" {
@@ -406,4 +417,78 @@ test "timeline adapter returns current snapshot without recorded transitions" {
     const events = root.get("events").?.array;
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expectEqualStrings("current_snapshot", events.items[0].object.get("source").?.string);
+
+    const write_result = try context.workspace_store.write(.{ .path = ".zigar-cache/probe", .bytes = "", .provenance = "unit" });
+    try std.testing.expectEqual(@as(usize, 0), write_result.bytes_written);
+}
+
+test "runtime metrics value builders release partial objects on allocation failure" {
+    const Fixture = struct {
+        var tool_stats = [_]ports.ObservabilityToolStats{
+            .{ .name = "zig_check", .calls = 2, .errors = 1, .total_latency_ms = 12, .max_latency_ms = 8, .last_latency_ms = 4, .last_error = true },
+        };
+        var backend_events = [_]ports.ObservabilityBackendEvent{
+            .{ .sequence = 1, .backend = "zig", .ok = true, .status = "ok", .resolution = "backend command completed" },
+        };
+        var zls_events = [_]ports.ObservabilityZlsEvent{
+            .{ .sequence = 2, .status = "failed", .failure = "FileNotFound", .restart_attempts = 1 },
+        };
+        var command_events = [_]ports.ObservabilityCommandEvent{
+            .{ .sequence = 3, .title = "zig build", .argv0 = "zig", .duration_ms = 15, .ok = false, .error_name = "BuildFailed" },
+        };
+
+        fn snapshot() ports.ObservabilitySnapshot {
+            return .{
+                .tool_stats = tool_stats[0..],
+                .backend_events = backend_events[0..],
+                .zls_events = zls_events[0..],
+                .command_events = command_events[0..],
+                .total_tool_calls = 2,
+                .total_tool_errors = 1,
+                .total_command_duration_ms = 15,
+                .command_event_count = 1,
+                .backend_event_count = 1,
+                .zls_event_count = 1,
+            };
+        }
+
+        fn report() read_model.MetricsReport {
+            return .{
+                .base = .{
+                    .workspace = "/workspace",
+                    .command_calls = 4,
+                    .zls_requests = 5,
+                    .tool_errors = 1,
+                    .zls_status = "failed",
+                    .zls_last_failure = "FileNotFound",
+                    .zls_restart_attempts = 2,
+                    .backend_probe_cache = .{
+                        .zig = .{ .ok = true, .status = "ok", .resolution = "backend command completed" },
+                    },
+                    .analysis_cache = .{ .present = true, .hits = 1, .refreshes = 2, .bytes = 3 },
+                    .artifacts = .{ .registry_available = true, .registry_entries = 1, .scanned_artifacts = 2, .scan_limit = 3, .status = "ok" },
+                },
+                .observed = snapshot(),
+            };
+        }
+    };
+
+    var fail_index: usize = 0;
+    while (fail_index < 256) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const allocator = failing.allocator();
+        const report = Fixture.report();
+        const snapshot = Fixture.snapshot();
+
+        if (metricsV2Value(allocator, report)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (backendHistoryValue(allocator, report)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (zlsTimelineValue(allocator, report)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (toolLatencyValue(allocator, snapshot)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (commandDurationsValue(allocator, snapshot)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (zlsEventsValue(allocator, .{}, report.base)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (backendCacheValue(allocator, report.base.backend_probe_cache)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+        if (limitationsValue(allocator)) |_| {} else |err| try std.testing.expect(err == error.OutOfMemory);
+    }
 }

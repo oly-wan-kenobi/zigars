@@ -18,6 +18,9 @@ const fixture_tool_content = [_]mcp.types.ContentBlock{
 const fixture_prompt_messages = [_]mcp.prompts.PromptMessage{
     .{ .role = .user, .content = .{ .text = .{ .text = "prompt text" } } },
     .{ .role = .assistant, .content = .{ .resource_link = .{ .name = "prompt-link", .uri = "file:///prompt" } } },
+    .{ .role = .user, .content = .{ .image = .{ .data = "prompt-image", .mimeType = "image/png" } } },
+    .{ .role = .assistant, .content = .{ .audio = .{ .data = "prompt-audio", .mimeType = "audio/wav" } } },
+    .{ .role = .user, .content = .{ .resource = .{ .resource = .{ .uri = "file:///prompt-resource", .text = "prompt resource text" } } } },
 };
 
 const ScriptTransport = struct {
@@ -61,6 +64,14 @@ const ScriptTransport = struct {
     fn closeVtable(_: *anyopaque) void {}
 };
 
+test "script transport frees messages when recording send fails" {
+    var transport = ScriptTransport{ .messages = &.{} };
+    defer transport.deinit(std.testing.allocator);
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
+    try std.testing.expectError(error.OutOfMemory, transport.transport().send(std.testing.io, failing.allocator(), "message"));
+    transport.transport().close();
+}
+
 fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     for (transport.sent.items) |message| {
@@ -100,6 +111,21 @@ fn failResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: []con
     return error.ReadFailed;
 }
 
+fn dynamicResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []const u8) !mcp.resources.ResourceContent {
+    return .{
+        .uri = uri,
+        .text = "dynamic text",
+        .blob = "ZHluYW1pYw==",
+        .mimeType = "text/plain",
+    };
+}
+
+fn failDynamicResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) !mcp.resources.ResourceContent {
+    return error.ReadFailed;
+}
+
+fn noopResourceDeinit(_: std.mem.Allocator, _: mcp.resources.ResourceContent) void {}
+
 fn testPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
     return fixture_prompt_messages[0..];
 }
@@ -107,6 +133,8 @@ fn testPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.js
 fn failPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
     return error.GenerationFailed;
 }
+
+fn noopPromptDeinit(_: std.mem.Allocator, _: []const mcp.prompts.PromptMessage) void {}
 
 test "Server initialization" {
     var server: Server = .init(std.testing.allocator, .{
@@ -129,11 +157,7 @@ test "Server add tool" {
     const tool: Tool = .{
         .name = "test_tool",
         .description = "A test tool",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
-                return .{ .content = &.{} };
-            }
-        }.handler,
+        .handler = okToolHandler,
     };
 
     try server.addTool(tool);
@@ -148,16 +172,13 @@ test "Server add resource" {
     });
     defer server.deinit();
 
-    try server.addResource(.{
+    try server.addResourceWithDeinit(.{
         .uri = "file:///test",
         .name = "Test",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []const u8) !mcp.resources.ResourceContent {
-                return .{ .uri = uri };
-            }
-        }.handler,
-    });
+        .handler = testResourceHandler,
+    }, noopResourceDeinit);
     try std.testing.expect(server.resources.contains("file:///test"));
+    try std.testing.expect(server.resource_content_deinits.contains("file:///test"));
     try std.testing.expect(server.capabilities.resources != null);
 }
 
@@ -168,16 +189,13 @@ test "Server add prompt" {
     });
     defer server.deinit();
 
-    try server.addPrompt(.{
+    try server.addPromptWithDeinit(.{
         .name = "test_prompt",
         .description = "A test prompt",
-        .handler = struct {
-            fn handler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
-                return &.{};
-            }
-        }.handler,
-    });
+        .handler = testPromptHandler,
+    }, noopPromptDeinit);
     try std.testing.expect(server.prompts.contains("test_prompt"));
+    try std.testing.expect(server.prompt_message_deinits.contains("test_prompt"));
     try std.testing.expect(server.capabilities.prompts != null);
 }
 
@@ -233,7 +251,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         .description = "A failing tool",
         .handler = failToolHandler,
     });
-    try server.addResource(.{
+    try server.addResourceWithDeinit(.{
         .uri = "file:///resource",
         .name = "Resource",
         .title = "Resource Title",
@@ -241,7 +259,8 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         .mimeType = "text/plain",
         .size = 12,
         .handler = testResourceHandler,
-    });
+    }, noopResourceDeinit);
+    server.enableResourceSubscriptions();
     try server.addResourceTemplate(.{
         .uriTemplate = "file:///{name}",
         .name = "Template",
@@ -249,13 +268,13 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         .description = "Template description",
         .mimeType = "text/plain",
     });
-    try server.addPrompt(.{
+    try server.addPromptWithDeinit(.{
         .name = "prompt",
         .title = "Prompt Title",
         .description = "Prompt description",
         .arguments = &.{.{ .name = "topic", .title = "Topic", .description = "Prompt topic", .required = true }},
         .handler = testPromptHandler,
-    });
+    }, noopPromptDeinit);
 
     const messages = [_][]const u8{
         "{ bad json",
@@ -280,9 +299,16 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"prompts/get\",\"params\":{\"name\":\"missing\"}}",
         "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"debug\"}}",
         "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"completion/complete\",\"params\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":18,\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\"},\"argument\":{\"name\":\"topic\",\"value\":\"pro\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/resource\"},\"argument\":{\"name\":\"uri\",\"value\":\"file\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"client\",\"value\":\"co\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"workflow\",\"value\":\"zigar_\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"unknown/method\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":23,\"result\":{}}",
         "{\"jsonrpc\":\"2.0\",\"id\":24,\"error\":{\"code\":-32603,\"message\":\"client error\"}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":\"string-response\",\"result\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":\"string-error\",\"error\":{\"code\":-32603,\"message\":\"client error\"}}",
     };
     var transport: ScriptTransport = .{ .messages = messages[0..] };
     defer transport.deinit(allocator);
@@ -314,13 +340,57 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "Tool not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resources\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resourceTemplates\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "Resource subscriptions are not supported") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"completion\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "zigar_compile_error_workflow") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Method not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/tools/list_changed") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/resources/updated") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/prompts/list_changed") != null);
+}
+
+test "Server dynamic resources cover fallback handler success and failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var success_server: Server = .init(allocator, .{
+        .name = "dynamic-server",
+        .version = "1.0.0",
+    });
+    defer success_server.deinit();
+    success_server.setDynamicResourceHandler(dynamicResourceHandler, null, noopResourceDeinit);
+
+    const success_messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///dynamic\"}}",
+    };
+    var success_transport: ScriptTransport = .{ .messages = success_messages[0..] };
+    defer success_transport.deinit(allocator);
+    try success_server.runWithTransport(std.testing.io, allocator, success_transport.transport());
+    const success_sent = try joinedSent(allocator, &success_transport);
+    try std.testing.expect(std.mem.indexOf(u8, success_sent, "dynamic text") != null);
+    try std.testing.expect(std.mem.indexOf(u8, success_sent, "ZHluYW1pYw==") != null);
+
+    var failure_server: Server = .init(allocator, .{
+        .name = "dynamic-failure-server",
+        .version = "1.0.0",
+    });
+    defer failure_server.deinit();
+    failure_server.setDynamicResourceHandler(failDynamicResourceHandler, null, null);
+
+    const failure_messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///missing\"}}",
+    };
+    var failure_transport: ScriptTransport = .{ .messages = failure_messages[0..] };
+    defer failure_transport.deinit(allocator);
+    try failure_server.runWithTransport(std.testing.io, allocator, failure_transport.transport());
+    const failure_sent = try joinedSent(allocator, &failure_transport);
+    try std.testing.expect(std.mem.indexOf(u8, failure_sent, "Dynamic resource not found or could not be read") != null);
 }
 
 test "Server discovery lists follow registration order" {

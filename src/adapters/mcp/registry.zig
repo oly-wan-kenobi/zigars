@@ -77,3 +77,26 @@ fn elapsedMs(io: std.Io, started_ns: anytype) u64 {
     if (duration_ns <= 0) return 0;
     return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
+
+test "mcp handler records thrown handler failures" {
+    const Runtime = struct {
+        calls: usize = 0,
+        last_error: bool = false,
+    };
+    const Stub = struct {
+        fn handler(_: *Runtime, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+            return @as(mcp.tools.ToolError, error.ExecutionFailed);
+        }
+
+        fn record(runtime: *Runtime, _: []const u8, _: u64, is_error: bool) void {
+            runtime.calls += 1;
+            runtime.last_error = is_error;
+        }
+    };
+
+    var runtime = Runtime{};
+    const handler = mcpHandler(*Runtime, manifest.entries[0].meta, Stub.handler, Stub.record);
+    try std.testing.expectError(error.ExecutionFailed, handler(&runtime, std.testing.io, std.testing.allocator, null));
+    try std.testing.expectEqual(@as(usize, 1), runtime.calls);
+    try std.testing.expect(runtime.last_error);
+}

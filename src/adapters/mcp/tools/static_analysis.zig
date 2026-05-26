@@ -1381,6 +1381,11 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     return .{ .array = array };
 }
 
+const command_runner_fake = @import("../../../testing/fakes/command_runner.zig");
+const static_cache_fake = @import("../../../testing/fakes/static_cache.zig");
+const workspace_store_fake = @import("../../../testing/fakes/workspace_store.zig");
+const workspace_scanner_fake = @import("../../../testing/fakes/workspace_scanner.zig");
+
 test "semantic adapter metadata preserves public contract fields" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1399,4 +1404,596 @@ test "semantic adapter metadata preserves public contract fields" {
     try putMetadata(arena.allocator(), &zwanzig_obj, "zig_analysis_graphs");
     try std.testing.expectEqualStrings("optional_zwanzig_analysis_graph", zwanzig_obj.get("analysis_kind").?.string);
     try std.testing.expectEqualStrings("zwanzig_backed", zwanzig_obj.get("capability_tier").?.string);
+}
+
+test "static analysis adapters exercise scanner and project value wrappers" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(backing_allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(backing_allocator);
+    defer scanner.deinit();
+    var cache = static_cache_fake.FakeStaticCache.init(backing_allocator);
+    defer cache.deinit();
+    const context = testStaticAdapterContext(&commands, &store, &scanner, &cache);
+
+    try scanner.expectScan(.{ .max_files = 2, .provenance = "static_analysis.import_graph" }, &.{"src/main.zig"});
+    try store.expectRead(.{ .path = "src/main.zig", .max_bytes = workspace_scans.default_source_read_limit, .provenance = "static_analysis.import_graph" },
+        \\const std = @import("std");
+        \\const dep = @import("dep.zig");
+    );
+    const graph_text = try zigImportGraph(allocator, context, try testArgs(arena.allocator(), "{\"limit\":2}"));
+    defer mcp_result.deinitToolResult(allocator, graph_text);
+    try expectResultObjectKind(graph_text, "zig_import_graph");
+
+    try scanner.expectScan(.{ .max_files = 1, .provenance = "static_analysis.import_graph" }, &.{"src/lib.zig"});
+    try store.expectRead(.{ .path = "src/lib.zig", .max_bytes = workspace_scans.default_source_read_limit, .provenance = "static_analysis.import_graph" },
+        \\const std = @import("std");
+    );
+    const graph_json = try zigImportGraphJson(allocator, context, try testArgs(arena.allocator(), "{\"limit\":1}"));
+    defer mcp_result.deinitToolResult(allocator, graph_json);
+    try expectResultHasMetadata(graph_json);
+
+    try scanner.expectScan(.{ .max_files = 3, .provenance = "static_analysis.test_discover" }, &.{"src/main.zig"});
+    try store.expectRead(.{ .path = "src/main.zig", .max_bytes = workspace_scans.default_source_read_limit, .provenance = "static_analysis.test_discover" },
+        \\test "alpha" {}
+        \\pub fn main() void {}
+    );
+    const tests = try zigTestDiscover(allocator, context, try testArgs(arena.allocator(), "{\"limit\":3}"));
+    defer mcp_result.deinitToolResult(allocator, tests);
+    try expectResultHasMetadata(tests);
+
+    try expectBuildGraphReads(&store);
+    const build_graph = try zigBuildGraph(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, build_graph);
+    try expectResultHasMetadata(build_graph);
+
+    try expectBuildGraphReads(&store);
+    const build_targets = try zigBuildTargets(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, build_targets);
+    try expectResultHasMetadata(build_targets);
+
+    try expectBuildOptionsRead(&store);
+    const build_options = try zigBuildOptions(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, build_options);
+    try expectResultHasMetadata(build_options);
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.file_owner" }, "/workspace/src/main.zig");
+    try expectBuildGraphReads(&store);
+    const owner = try zigFileOwner(allocator, context, try testArgs(arena.allocator(), "{\"file\":\"src/main.zig\"}"));
+    defer mcp_result.deinitToolResult(allocator, owner);
+    try expectResultHasMetadata(owner);
+
+    try expectBuildGraphReads(&store);
+    const resolved = try zigImportResolve(allocator, context, try testArgs(arena.allocator(), "{\"import\":\"dep\",\"from\":\"src/main.zig\"}"));
+    defer mcp_result.deinitToolResult(allocator, resolved);
+    try expectResultHasMetadata(resolved);
+
+    try expectDependencyInspect(&store);
+    const deps = try zigDependencyInspect(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, deps);
+    try expectResultHasMetadata(deps);
+
+    const matrix = try zigTargetMatrixPlan(allocator, context, try testArgs(arena.allocator(), "{\"targets\":\"native wasm32-freestanding\",\"steps\":\"build test\"}"));
+    defer mcp_result.deinitToolResult(allocator, matrix);
+    try expectResultObjectKind(matrix, "zig_target_matrix_plan");
+
+    const triage = try zigTestFailureTriage(allocator, context, try testArgs(arena.allocator(), "{\"text\":\"src/main.zig:1:1: error: bad\",\"args\":\"--summary all\"}"));
+    defer mcp_result.deinitToolResult(allocator, triage);
+    try expectResultObjectKind(triage, "zig_test_failure_triage");
+
+    const semantic_status = try zigSemanticIndexStatus(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, semantic_status);
+    try expectResultObjectKind(semantic_status, "zig_semantic_index_status");
+
+    try commands.verify();
+    try store.verify();
+    try scanner.verify();
+}
+
+test "static lint adapters exercise argument parsing metadata and backend errors" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(backing_allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(backing_allocator);
+    defer scanner.deinit();
+    var cache = static_cache_fake.FakeStaticCache.init(backing_allocator);
+    defer cache.deinit();
+    const context = testStaticAdapterContext(&commands, &store, &scanner, &cache);
+
+    try store.expectResolve(.{ .path = "src", .provenance = "static_analysis.zlint_path" }, "/workspace/src");
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--format", "json", "--rules", "style", "/workspace/src", "--trace" },
+        .cwd = "/workspace",
+        .timeout_ms = 12,
+        .provenance = "static_analysis.zlint",
+    }, .{ .stdout = "[{\"rule\":\"style\",\"severity\":\"warning\",\"path\":\"src/main.zig\",\"line\":1,\"message\":\"warn\"}]" });
+    const zlint = try zigZlintSarif(allocator, context, try testArgs(arena.allocator(), "{\"path\":\"src\",\"rules\":\"style\",\"args\":\"--trace\",\"timeout_ms\":12}"));
+    defer mcp_result.deinitToolResult(allocator, zlint);
+    try expectResultObjectKind(zlint, "zig_zlint_sarif");
+
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--help" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zlint_rules_help",
+    }, .{ .stdout = "--rules\n--format\n" });
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--rules", "--format", "json" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zlint_rules",
+    }, .{ .stdout = "{\"rules\":[{\"id\":\"style\",\"severity\":\"warning\"}]}" });
+    const rules = try zigZlintRules(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, rules);
+    try expectResultObjectKind(rules, "zig_zlint_rules");
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zlint_fix_path" }, "/workspace/src/main.zig");
+    const fix = try zigZlintFix(allocator, context, try testArgs(arena.allocator(), "{\"path\":\"src/main.zig\",\"rules\":\"style\",\"dangerous\":true,\"args\":\"--dry\"}"));
+    defer mcp_result.deinitToolResult(allocator, fix);
+    try expectResultObjectKind(fix, "zig_zlint_fix");
+
+    const compare = try zigLintCompare(allocator, context, try testArgs(arena.allocator(),
+        \\{"zlint_findings":"[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1}]","zwanzig_findings":"[]"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, compare);
+    try expectResultObjectKind(compare, "zig_lint_compare");
+
+    const profile = try zigLintProfile(allocator, context, try testArgs(arena.allocator(), "{\"profile\":\"strict\"}"));
+    defer mcp_result.deinitToolResult(allocator, profile);
+    try expectResultObjectKind(profile, "zig_lint_profile");
+
+    const gate = try zigLintGate(allocator, context, try testArgs(arena.allocator(),
+        \\{"findings":"[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1}]","profile":"strict","max_warnings":0}
+    ));
+    defer mcp_result.deinitToolResult(allocator, gate);
+    try expectResultObjectKind(gate, "zig_lint_gate");
+
+    const plan = try zigLintFixPlan(allocator, context, try testArgs(arena.allocator(),
+        \\{"findings":"[{\"rule\":\"fmt\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1,\"message\":\"format\"}]"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, plan);
+    try expectResultObjectKind(plan, "zig_lint_fix_plan");
+
+    const baseline = try zigLintBaseline(allocator, context, try testArgs(arena.allocator(),
+        \\{"findings":"[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1}]","baseline":"[]"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, baseline);
+    try expectResultObjectKind(baseline, "zig_lint_baseline");
+
+    const suppressions = try zigLintSuppressions(allocator, context, try testArgs(arena.allocator(),
+        \\{"findings":"[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1}]","suppressions":"[]"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, suppressions);
+    try expectResultObjectKind(suppressions, "zig_lint_suppressions");
+
+    const trend = try zigLintTrend(allocator, context, try testArgs(arena.allocator(),
+        \\{"before":"[]","after":"[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1}]"}
+    ));
+    defer mcp_result.deinitToolResult(allocator, trend);
+    try expectResultObjectKind(trend, "zig_lint_trend");
+
+    try store.expectResolve(.{ .path = "src", .provenance = "static_analysis.zwanzig_path" }, "/workspace/src");
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--format", "json", "--do", "safety", "/workspace/src", "--trace" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zwanzig",
+    }, .{ .stdout = "ok\n" });
+    const lint = try zigLint(allocator, context, try testArgs(arena.allocator(), "{\"path\":\"src\",\"rules_do\":\"safety\",\"args\":\"--trace\"}"));
+    defer mcp_result.deinitToolResult(allocator, lint);
+    try expectResultObjectKind(lint, "command");
+    try std.testing.expectEqualStrings("zig_lint", lint.structuredContent.?.object.get("tool").?.string);
+
+    try commands.expectRunError(.{
+        .argv = &.{ "zwanzig-test", "--help" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zwanzig",
+    }, error.RequestTimeout);
+    const lint_rules = try zigLintRules(allocator, context, null);
+    defer mcp_result.deinitToolResult(allocator, lint_rules);
+    try expectResultObjectKind(lint_rules, "command_error");
+    try std.testing.expectEqualStrings("zig_lint_rules", lint_rules.structuredContent.?.object.get("tool").?.string);
+
+    const split_error = try zigZlintFix(allocator, context, try testArgs(arena.allocator(), "{\"args\":\"\\\"unterminated\"}"));
+    defer mcp_result.deinitToolResult(allocator, split_error);
+    try std.testing.expect(split_error.is_error);
+
+    try commands.verify();
+    try store.verify();
+    try scanner.verify();
+}
+
+test "static adapter private error classifiers cover public categories" {
+    try std.testing.expectEqualStrings("missing_command_runner", staticErrorCode(error.MissingCommandRunner));
+    try std.testing.expectEqualStrings("workspace_path", staticErrorCode(error.PathOutsideWorkspace));
+    try std.testing.expectEqualStrings("file_not_found", staticErrorCode(error.FileNotFound));
+    try std.testing.expectEqualStrings("timeout", staticErrorCode(error.RequestTimeout));
+    try std.testing.expectEqualStrings("output_limit", staticErrorCode(error.OutputLimitExceeded));
+    try std.testing.expectEqualStrings("static_analysis_failed", staticErrorCode(error.UnexpectedCall));
+    try std.testing.expect(staticErrorRetryable(error.Timeout));
+    try std.testing.expect(!staticErrorRetryable(error.FileNotFound));
+    try std.testing.expectEqualStrings("configuration", staticErrorCategory(error.MissingCommandRunner));
+    try std.testing.expectEqualStrings("Retry with a smaller scope or a larger timeout_ms value.", staticErrorResolution(error.Timeout));
+
+    try std.testing.expectEqualStrings("invalid_request", lintErrorCode(error.InvalidRequest));
+    try std.testing.expectEqualStrings("argument", lintErrorCategory(error.InvalidRequest));
+    try std.testing.expect(lintErrorRetryable(error.RequestTimeout));
+    try std.testing.expect(!lintErrorRetryable(error.InvalidRequest));
+    try std.testing.expectEqualStrings("Retry with narrower lint output, a smaller path scope, or backend flags that reduce output.", lintErrorResolution(error.OutputLimitExceeded));
+
+    try std.testing.expectEqualStrings("missing_cache_port", semanticErrorCode(error.MissingCachePort));
+    try std.testing.expectEqualStrings("cache", semanticErrorCategory(error.InvalidCache));
+    try std.testing.expect(semanticErrorRetryable(error.Timeout));
+    try std.testing.expect(semanticErrorRetryable(error.InvalidCache));
+    try std.testing.expectEqualStrings("Retry with refresh=true to rebuild the semantic index from workspace sources.", semanticErrorResolution(error.InvalidCache));
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const non_object = try structuredLintValue(std.testing.allocator, allocator, "zig_lint_profile", .{ .string = "plain" });
+    defer mcp_result.deinitToolResult(std.testing.allocator, non_object);
+    const zwanzig = try structuredZwanzigValue(std.testing.allocator, allocator, "zig_lint_rules", .{ .object = std.json.ObjectMap.empty });
+    defer mcp_result.deinitToolResult(std.testing.allocator, zwanzig);
+    const graph = try structuredGraphValue(std.testing.allocator, allocator, .{ .object = std.json.ObjectMap.empty });
+    defer mcp_result.deinitToolResult(std.testing.allocator, graph);
+}
+
+test "static adapter error result helpers cover tool path lint semantic and export failures" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(backing_allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(backing_allocator);
+    defer scanner.deinit();
+    var cache = static_cache_fake.FakeStaticCache.init(backing_allocator);
+    defer cache.deinit();
+    const context = testStaticAdapterContext(&commands, &store, &scanner, &cache);
+
+    try std.testing.expectError(error.OutOfMemory, staticToolError(allocator, "zig_build_graph", "op", "phase", error.OutOfMemory));
+    const static_error = try staticToolError(backing_allocator, "zig_build_graph", "op", "phase", error.FileNotFound);
+    defer mcp_result.deinitToolResult(backing_allocator, static_error);
+    try std.testing.expect(static_error.is_error);
+    try std.testing.expectEqualStrings("file_not_found", static_error.structuredContent.?.object.get("code").?.string);
+
+    const path_error = try staticPathError(backing_allocator, context, "zig_file_owner", "../out.zig", error.PathOutsideWorkspace);
+    defer mcp_result.deinitToolResult(backing_allocator, path_error);
+    try std.testing.expectEqualStrings("workspace_path_error", path_error.structuredContent.?.object.get("kind").?.string);
+    const generic_path = try staticPathError(backing_allocator, context, "zig_file_owner", "src/main.zig", error.UnexpectedCall);
+    defer mcp_result.deinitToolResult(backing_allocator, generic_path);
+    try std.testing.expectEqualStrings("static_analysis_failed", generic_path.structuredContent.?.object.get("code").?.string);
+
+    try std.testing.expectError(error.OutOfMemory, semanticToolError(allocator, "zig_semantic_query", "op", "phase", error.OutOfMemory));
+    const semantic_error = try semanticToolError(backing_allocator, "zig_semantic_query", "op", "phase", error.InvalidCache);
+    defer mcp_result.deinitToolResult(backing_allocator, semantic_error);
+    try std.testing.expectEqualStrings("invalid_semantic_cache", semantic_error.structuredContent.?.object.get("code").?.string);
+
+    try std.testing.expectError(error.OutOfMemory, lintToolError(allocator, context, "zig_lint", ".", "op", "phase", error.OutOfMemory));
+    const lint_path = try lintToolError(backing_allocator, context, "zig_lint", "../out", "op", "phase", error.PathOutsideWorkspace);
+    defer mcp_result.deinitToolResult(backing_allocator, lint_path);
+    try std.testing.expectEqualStrings("workspace_path_error", lint_path.structuredContent.?.object.get("kind").?.string);
+    const lint_invalid = try lintToolError(backing_allocator, context, "zig_lint", "src", "op", "phase", error.InvalidRequest);
+    defer mcp_result.deinitToolResult(backing_allocator, lint_invalid);
+    try std.testing.expectEqualStrings("argument_error", lint_invalid.structuredContent.?.object.get("kind").?.string);
+    const lint_generic = try lintToolError(backing_allocator, context, "zig_lint", "src", "op", "phase", error.StreamTooLong);
+    defer mcp_result.deinitToolResult(backing_allocator, lint_generic);
+    try std.testing.expectEqualStrings("output_limit", lint_generic.structuredContent.?.object.get("code").?.string);
+
+    try std.testing.expectError(error.OutOfMemory, splitToolArgsError(allocator, "zig_zlint_fix", "args", "--x", error.OutOfMemory));
+    const split_generic = try splitToolArgsError(backing_allocator, "zig_zlint_fix", "args", "--x", error.UnexpectedCall);
+    defer mcp_result.deinitToolResult(backing_allocator, split_generic);
+    try std.testing.expectEqualStrings("argument_parse_failed", split_generic.structuredContent.?.object.get("code").?.string);
+
+    try std.testing.expectError(error.OutOfMemory, exportError(allocator, context, "zig_code_index_export", "out.json", error.OutOfMemory));
+    const export_path = try exportError(backing_allocator, context, "zig_code_index_export", "../out.json", error.PathOutsideWorkspace);
+    defer mcp_result.deinitToolResult(backing_allocator, export_path);
+    try std.testing.expectEqualStrings("workspace_path_error", export_path.structuredContent.?.object.get("kind").?.string);
+    const export_generic = try exportError(backing_allocator, context, "zig_code_index_export", "out.json", error.MissingCachePort);
+    defer mcp_result.deinitToolResult(backing_allocator, export_generic);
+    try std.testing.expectEqualStrings("missing_cache_port", export_generic.structuredContent.?.object.get("code").?.string);
+}
+
+test "static adapter JSON value helpers include skipped files and metadata fallbacks" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var graph_imports = [_]workspace_scans.ImportEdge{.{ .import = "std" }};
+    var graph_files = [_]workspace_scans.ImportFile{.{
+        .file = "src/main.zig",
+        .imports = graph_imports[0..],
+    }};
+    var graph_skipped = [_]workspace_scans.SkippedFile{.{ .path = "src/bad.zig", .error_name = "AccessDenied" }};
+    const graph = workspace_scans.ImportGraphResult{
+        .files = graph_files[0..],
+        .skipped_files = graph_skipped[0..],
+    };
+    const graph_value = try importGraphJsonValue(allocator, graph);
+    try std.testing.expectEqual(@as(usize, 1), graph_value.object.get("skipped_files").?.array.items.len);
+    try std.testing.expectEqual(@as(i64, 1), graph_value.object.get("skipped_file_count").?.integer);
+
+    var test_decls = [_]workspace_scans.TestDecl{.{
+        .file = "src/main.zig",
+        .line = 9,
+        .declaration = "test \"unit\"",
+        .command = "zig test src/main.zig --test-filter unit",
+    }};
+    var test_skipped = [_]workspace_scans.SkippedFile{.{ .path = "src/unreadable.zig", .error_name = "FileNotFound" }};
+    const discovered = workspace_scans.TestDiscoverResult{
+        .tests = test_decls[0..],
+        .skipped_files = test_skipped[0..],
+    };
+    const discover_value = try testDiscoverJsonValue(allocator, discovered);
+    try std.testing.expectEqual(@as(usize, 1), discover_value.object.get("skipped_files").?.array.items.len);
+    try std.testing.expectEqual(@as(i64, 1), discover_value.object.get("skipped_file_count").?.integer);
+
+    const unknown_contract = contractFor("zig_unknown_tool");
+    try std.testing.expect(unknown_contract == null);
+    const custom_contract = Contract{
+        .tool = "custom",
+        .analysis_kind = "kind",
+        .capability_tier = "tier",
+        .confidence = "low",
+        .confidence_class = "class",
+        .source_coverage = "coverage",
+        .limitations = &.{},
+        .verify_with = &.{},
+    };
+    const cross_check = try crossCheckValue(allocator, custom_contract);
+    try std.testing.expect(cross_check.object.get("primary").? == .null);
+}
+
+test "static adapter argument and findings validators cover edge cases" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try splitArgs(allocator, " --one \"two words\" 'three four' escaped\\ value ");
+    try std.testing.expectEqual(@as(usize, 4), parsed.len);
+    try std.testing.expectEqualStrings("--one", parsed[0]);
+    try std.testing.expectEqualStrings("two words", parsed[1]);
+    try std.testing.expectEqualStrings("three four", parsed[2]);
+    try std.testing.expectEqualStrings("escaped value", parsed[3]);
+    try std.testing.expectError(error.InvalidArguments, splitArgs(allocator, "unterminated\\"));
+
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1000 });
+    const copied = try splitArgs(failing.allocator(), "a b");
+    defer freeArgList(failing.allocator(), copied);
+    try std.testing.expectEqual(@as(usize, 2), copied.len);
+    try std.testing.expectEqualStrings("a", copied[0]);
+
+    var fail_index: usize = 0;
+    while (fail_index < 8) : (fail_index += 1) {
+        var fail_list_append = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
+        if (splitArgs(fail_list_append.allocator(), "a b")) |args| {
+            freeArgList(fail_list_append.allocator(), args);
+        } else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+    }
+
+    try std.testing.expect((try validateFindingsArgument(allocator, null, "zlint_findings")) == null);
+    try std.testing.expect((try validateFindingsArgument(allocator, try testArgs(allocator, "{\"zlint_findings\":\"   \\n \"}"), "zlint_findings")) == null);
+    try std.testing.expect((try validateFindingsArgument(allocator, try testArgs(allocator, "{\"zlint_findings\":\"[]\"}"), "zlint_findings")) == null);
+    const invalid = try validateFindingsArgument(std.testing.allocator, try testArgs(allocator, "{\"zlint_findings\":\"not json\"}"), "zlint_findings");
+    defer if (invalid) |result| mcp_result.deinitToolResult(std.testing.allocator, result);
+    try std.testing.expect(invalid != null);
+    try std.testing.expect(invalid.?.is_error);
+}
+
+test "static adapter public error branches preserve structured failures" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(backing_allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(backing_allocator);
+    defer scanner.deinit();
+    var cache = static_cache_fake.FakeStaticCache.init(backing_allocator);
+    defer cache.deinit();
+    const context = testStaticAdapterContext(&commands, &store, &scanner, &cache);
+
+    const triage_args_error = try zigTestFailureTriage(backing_allocator, context, try testArgs(allocator, "{\"args\":\"\\\"unterminated\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, triage_args_error);
+    try std.testing.expectEqualStrings("argument_error", triage_args_error.structuredContent.?.object.get("kind").?.string);
+
+    try store.expectResolveError(.{ .path = "../bad.zig", .provenance = "static_analysis.test_failure_triage" }, error.PathOutsideWorkspace);
+    const triage_path_error = try zigTestFailureTriage(backing_allocator, context, try testArgs(allocator, "{\"file\":\"../bad.zig\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, triage_path_error);
+    try std.testing.expectEqualStrings("workspace_path_error", triage_path_error.structuredContent.?.object.get("kind").?.string);
+
+    var no_runner_context = context;
+    no_runner_context.command_runner = null;
+    const triage_backend_error = try zigTestFailureTriage(backing_allocator, no_runner_context, try testArgs(allocator, "{\"filter\":\"unit\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, triage_backend_error);
+    try std.testing.expectEqualStrings("missing_command_runner", triage_backend_error.structuredContent.?.object.get("code").?.string);
+
+    var failing = std.testing.FailingAllocator.init(backing_allocator, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, zigPublicApiDiff(failing.allocator(), context, try testArgs(allocator,
+        \\{"before":"pub fn old() void {}","after":"pub fn new() void {}"}
+    )));
+
+    const analysis_mode_error = try zigAnalysisGraphs(backing_allocator, context, try testArgs(allocator, "{\"mode\":\"raw-flag\",\"path\":\"src/main.zig\",\"output\":\"graphs\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, analysis_mode_error);
+    try std.testing.expectEqualStrings("argument_error", analysis_mode_error.structuredContent.?.object.get("kind").?.string);
+
+    try store.expectResolveError(.{ .path = "src/main.zig", .provenance = "static_analysis.zwanzig_graph_path" }, error.FileNotFound);
+    const analysis_resolve_error = try zigAnalysisGraphs(backing_allocator, context, try testArgs(allocator, "{\"mode\":\"cfg\",\"path\":\"src/main.zig\",\"output\":\"graphs\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, analysis_resolve_error);
+    try std.testing.expectEqualStrings("file_not_found", analysis_resolve_error.structuredContent.?.object.get("code").?.string);
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/main.zig");
+    try store.expectResolve(.{ .path = "graphs", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/graphs");
+    try store.expectEnsureDir(.{ .path = "graphs", .provenance = "static_analysis.zwanzig_graph_output" }, .{ .created_or_existing = true });
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/graphs", "/workspace/src/main.zig" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zwanzig_graph",
+    }, .{ .exit_code = 1, .stderr = "graph failed\n" });
+    const analysis_backend_error = try zigAnalysisGraphs(backing_allocator, context, try testArgs(allocator, "{\"mode\":\"cfg\",\"path\":\"src/main.zig\",\"output\":\"graphs\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, analysis_backend_error);
+    try std.testing.expect(analysis_backend_error.is_error);
+    try std.testing.expectEqualStrings("zwanzig_graph_command_failed", analysis_backend_error.structuredContent.?.object.get("code").?.string);
+
+    const semantic_query_error = try zigSemanticQuery(backing_allocator, no_runnerContextWithCache(context), try testArgs(allocator, "{\"query\":\"main\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, semantic_query_error);
+    try std.testing.expectEqualStrings("missing_cache_port", semantic_query_error.structuredContent.?.object.get("code").?.string);
+
+    const semantic_decl_error = try zigSemanticDecl(backing_allocator, no_runnerContextWithCache(context), try testArgs(allocator, "{\"symbol\":\"main\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, semantic_decl_error);
+    try std.testing.expectEqualStrings("missing_cache_port", semantic_decl_error.structuredContent.?.object.get("code").?.string);
+
+    try scanner.expectScanError(.{ .max_files = null, .provenance = "static_analysis.semantic_refs" }, error.RequestTimeout);
+    const refs_error = try zigSemanticRefs(backing_allocator, context, try testArgs(allocator, "{\"symbol\":\"main\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, refs_error);
+    try std.testing.expectEqualStrings("timeout", refs_error.structuredContent.?.object.get("code").?.string);
+
+    const fusion_error = try zigStaticFusion(backing_allocator, no_runnerContextWithCache(context), try testArgs(allocator, "{\"query\":\"main\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, fusion_error);
+    try std.testing.expectEqualStrings("missing_cache_port", fusion_error.structuredContent.?.object.get("code").?.string);
+
+    try store.expectResolveError(.{ .path = "src", .provenance = "static_analysis.zlint_path" }, error.PathOutsideWorkspace);
+    const zlint_error = try zigZlint(backing_allocator, context, try testArgs(allocator, "{\"path\":\"src\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, zlint_error);
+    try std.testing.expectEqualStrings("workspace_path_error", zlint_error.structuredContent.?.object.get("kind").?.string);
+
+    try commands.expectRunError(.{
+        .argv = &.{ "zlint-test", "--help" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zlint_rules_help",
+    }, error.StreamTooLong);
+    const zlint_rules_error = try zigZlintRules(backing_allocator, context, null);
+    defer mcp_result.deinitToolResult(backing_allocator, zlint_rules_error);
+    try expectResultObjectKind(zlint_rules_error, "backend_error");
+
+    const zlint_rules_missing_runner = try zigZlintRules(backing_allocator, no_runner_context, null);
+    defer mcp_result.deinitToolResult(backing_allocator, zlint_rules_missing_runner);
+    try std.testing.expectEqualStrings("missing_command_runner", zlint_rules_missing_runner.structuredContent.?.object.get("code").?.string);
+
+    try store.expectResolveError(.{ .path = "src/main.zig", .provenance = "static_analysis.zlint_fix_path" }, error.InvalidRequest);
+    const zlint_fix_error = try zigZlintFix(backing_allocator, context, try testArgs(allocator, "{\"path\":\"src/main.zig\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, zlint_fix_error);
+    try std.testing.expectEqualStrings("argument_error", zlint_fix_error.structuredContent.?.object.get("kind").?.string);
+
+    try store.expectResolveError(.{ .path = "src", .provenance = "static_analysis.zwanzig_path" }, error.FileNotFound);
+    const zwanzig_error = try zigLint(backing_allocator, context, try testArgs(allocator, "{\"path\":\"src\"}"));
+    defer mcp_result.deinitToolResult(backing_allocator, zwanzig_error);
+    try std.testing.expectEqualStrings("file_not_found", zwanzig_error.structuredContent.?.object.get("code").?.string);
+
+    try store.verify();
+    try scanner.verify();
+    try commands.verify();
+}
+
+fn testStaticAdapterContext(
+    commands: *command_runner_fake.FakeCommandRunner,
+    store: *workspace_store_fake.FakeWorkspaceStore,
+    scanner: *workspace_scanner_fake.FakeWorkspaceScanner,
+    cache: *static_cache_fake.FakeStaticCache,
+) app_context.StaticAnalysisContext {
+    return .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .tool_paths = .{ .zig = "zig-test", .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
+        .timeouts = .{ .command_ms = 42 },
+        .command_runner = commands.port(),
+        .workspace_store = store.port(),
+        .workspace_scanner = scanner.port(),
+        .semantic_index_cache = cache.port(),
+    };
+}
+
+fn no_runnerContextWithCache(context: app_context.StaticAnalysisContext) app_context.StaticAnalysisContext {
+    var copy = context;
+    copy.semantic_index_cache = null;
+    return copy;
+}
+
+fn testArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+    return parsed.value;
+}
+
+fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
+    for (args) |arg| allocator.free(arg);
+    allocator.free(args);
+}
+
+fn expectResultObjectKind(result: mcp.tools.ToolResult, expected_kind: []const u8) !void {
+    const structured = result.structuredContent orelse return error.MissingStructuredContent;
+    try std.testing.expect(structured == .object);
+    const kind = structured.object.get("kind") orelse return error.MissingKind;
+    try std.testing.expect(kind == .string);
+    try std.testing.expectEqualStrings(expected_kind, kind.string);
+}
+
+fn expectResultHasMetadata(result: mcp.tools.ToolResult) !void {
+    const structured = result.structuredContent orelse return error.MissingStructuredContent;
+    try std.testing.expect(structured == .object);
+    try std.testing.expect(structured.object.get("analysis_kind") != null);
+    try std.testing.expect(structured.object.get("capability_tier") != null);
+    try std.testing.expect(structured.object.get("confidence") != null);
+}
+
+fn expectBuildGraphReads(store: *workspace_store_fake.FakeWorkspaceStore) !void {
+    try store.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" },
+        \\const exe = b.addExecutable(.{ .name = "demo", .root_source_file = b.path("src/main.zig") });
+        \\const mod = b.addModule("core", .{ .root_source_file = b.path("src/lib.zig") });
+        \\exe.root_module.addImport("dep", mod);
+        \\const tests = b.addTest(.{ .root_source_file = b.path("src/main_test.zig") });
+        \\const step = b.step("check", "Run checks");
+    );
+    try store.expectRead(.{ .path = "build.zig.zon", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" },
+        \\.{
+        \\    .dependencies = .{
+        \\        .dep = .{ .url = "https://example.invalid/dep.tar.gz", .hash = "abc" },
+        \\    },
+        \\    .paths = .{ "build.zig", "src" },
+        \\}
+    );
+}
+
+fn expectBuildOptionsRead(store: *workspace_store_fake.FakeWorkspaceStore) !void {
+    try store.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_options" },
+        \\const target = b.standardTargetOptions(.{});
+        \\const optimize = b.standardOptimizeOption(.{});
+        \\const feature = b.option(bool, "feature", "Enable feature") orelse false;
+        \\_ = target;
+        \\_ = optimize;
+        \\_ = feature;
+    );
+}
+
+fn expectDependencyInspect(store: *workspace_store_fake.FakeWorkspaceStore) !void {
+    try store.expectRead(.{ .path = "build.zig.zon", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.dependency_inspect" },
+        \\.{
+        \\    .dependencies = .{
+        \\        .dep = .{ .url = "https://example.invalid/dep.tar.gz", .hash = "abc" },
+        \\    },
+        \\}
+    );
+    try store.expectResolve(.{ .path = "zig-pkg", .provenance = "static_analysis.cache_path_status" }, "/workspace/zig-pkg");
+    try store.expectExists(.{ .path = "zig-pkg", .provenance = "static_analysis.cache_path_status" }, .{ .exists = true, .kind = .directory });
 }

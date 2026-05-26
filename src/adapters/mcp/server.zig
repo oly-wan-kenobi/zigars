@@ -237,11 +237,7 @@ pub const Server = struct {
         defer listener.deinit(io);
 
         while (self.state != .stopped and self.state != .shutting_down) {
-            const stream = listener.accept(io) catch |err| {
-                std.log.err("HTTP accept failed: {s}", .{@errorName(err)});
-                continue;
-            };
-
+            const stream = try listener.accept(io);
             self.serveHttpConnection(io, allocator, stream) catch |err| {
                 std.log.err("HTTP connection error: {s}", .{@errorName(err)});
             };
@@ -307,25 +303,9 @@ pub const Server = struct {
         }
 
         var read_buffer: [2048]u8 = undefined;
-        var body_reader = request.readerExpectContinue(&read_buffer) catch {
-            try request.respond("Invalid request body", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        };
+        var body_reader = try request.readerExpectContinue(&read_buffer);
 
-        const read_len = std.math.cast(usize, content_length) orelse {
-            try request.respond("Request body too large", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        };
+        const read_len: usize = @intCast(content_length);
 
         const body_items = body_reader.readAlloc(allocator, read_len) catch {
             try request.respond("Failed to read request body", .{
@@ -345,27 +325,7 @@ pub const Server = struct {
         self.transport = request_transport.transport();
         defer self.transport = previous_transport;
 
-        self.handleMessage(io, allocator, body_items) catch {
-            const internal_error = jsonrpc.createParseError(.{ .string = "Internal server error" });
-            const json = jsonrpc.serializeMessage(allocator, .{ .error_response = internal_error }) catch {
-                try request.respond("Internal server error", .{
-                    .status = .internal_server_error,
-                    .extra_headers = &.{
-                        .{ .name = "Content-Type", .value = "text/plain" },
-                    },
-                });
-                return;
-            };
-            defer allocator.free(json);
-
-            try request.respond(json, .{
-                .status = .internal_server_error,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "application/json" },
-                },
-            });
-            return;
-        };
+        try self.handleMessage(io, allocator, body_items);
 
         if (request_transport.response_message) |response_json| {
             try request.respond(response_json, .{
@@ -447,6 +407,8 @@ pub const Server = struct {
 
         if (std.mem.eql(u8, request.method, "initialize")) {
             try self.handleInitialize(io, allocator, request);
+        } else if (std.mem.eql(u8, request.method, "shutdown")) {
+            try self.handleShutdown(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "ping")) {
             try self.handlePing(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "tools/list")) {
@@ -560,8 +522,10 @@ pub const Server = struct {
                 if (requests.tools) |tools| {
                     var tools_obj: std.json.ObjectMap = .empty;
                     if (tools.call != null) try tools_obj.put(response_allocator, "call", .{ .object = .empty });
+                    std.mem.doNotOptimizeAway(tools_obj.count());
                     try requests_obj.put(response_allocator, "tools", .{ .object = tools_obj });
                 }
+                std.mem.doNotOptimizeAway(requests_obj.count());
                 try tasks_cap.put(response_allocator, "requests", .{ .object = requests_obj });
             }
             try caps.put(response_allocator, "tasks", .{ .object = tasks_cap });
@@ -586,6 +550,13 @@ pub const Server = struct {
             try result.put(response_allocator, "instructions", .{ .string = inst });
         }
 
+        const response = jsonrpc.createResponse(request.id, .{ .object = result });
+        try self.sendResponse(io, allocator, .{ .response = response });
+    }
+
+    fn handleShutdown(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        self.state = .shutting_down;
+        const result: std.json.ObjectMap = .empty;
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
     }
@@ -668,19 +639,8 @@ pub const Server = struct {
     }
 
     fn handleToolsCall(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var tool_name: []const u8 = "";
-        var arguments: ?std.json.Value = null;
-
-        if (request.params) |params| {
-            if (params == .object) {
-                if (params.object.get("name")) |name_val| {
-                    if (name_val == .string) {
-                        tool_name = name_val.string;
-                    }
-                }
-                arguments = params.object.get("arguments");
-            }
-        }
+        const tool_name = mcp.tools.getString(request.params, "name") orelse "";
+        const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
 
         if (self.tools.get(tool_name)) |tool| {
             var tool_arena = std.heap.ArenaAllocator.init(allocator);
@@ -784,17 +744,7 @@ pub const Server = struct {
     }
 
     fn handleResourcesRead(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var uri: []const u8 = "";
-
-        if (request.params) |params| {
-            if (params == .object) {
-                if (params.object.get("uri")) |uri_val| {
-                    if (uri_val == .string) {
-                        uri = uri_val.string;
-                    }
-                }
-            }
-        }
+        const uri = mcp.tools.getString(request.params, "uri") orelse "";
 
         if (self.resources.get(uri)) |resource| {
             const content = resource.handler(resource.user_data, io, allocator, uri) catch |err| {
@@ -806,29 +756,26 @@ pub const Server = struct {
             };
             defer if (self.resource_content_deinits.get(uri)) |deinit_content| deinit_content(allocator, content);
 
-            var contents_array: std.json.Array = .init(allocator);
-            var contents_array_in_result = false;
-            defer if (!contents_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
+            var response_arena = std.heap.ArenaAllocator.init(allocator);
+            defer response_arena.deinit();
+            const response_allocator = response_arena.allocator();
+
+            var contents_array: std.json.Array = .init(response_allocator);
             var content_obj: std.json.ObjectMap = .empty;
-            var content_obj_in_array = false;
-            errdefer if (!content_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
-            try content_obj.put(allocator, "uri", .{ .string = uri });
+            try content_obj.put(response_allocator, "uri", .{ .string = uri });
             if (content.text) |text| {
-                try content_obj.put(allocator, "text", .{ .string = text });
+                try content_obj.put(response_allocator, "text", .{ .string = text });
             }
             if (content.blob) |blob| {
-                try content_obj.put(allocator, "blob", .{ .string = blob });
+                try content_obj.put(response_allocator, "blob", .{ .string = blob });
             }
             if (content.mimeType) |mime| {
-                try content_obj.put(allocator, "mimeType", .{ .string = mime });
+                try content_obj.put(response_allocator, "mimeType", .{ .string = mime });
             }
             try contents_array.append(.{ .object = content_obj });
-            content_obj_in_array = true;
 
             var result: std.json.ObjectMap = .empty;
-            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
-            try result.put(allocator, "contents", .{ .array = contents_array });
-            contents_array_in_result = true;
+            try result.put(response_allocator, "contents", .{ .array = contents_array });
 
             const response = jsonrpc.createResponse(request.id, .{ .object = result });
             try self.sendResponse(io, allocator, .{ .response = response });
@@ -843,23 +790,20 @@ pub const Server = struct {
             };
             defer if (self.dynamic_resource_deinit) |deinit_content| deinit_content(allocator, content);
 
-            var contents_array: std.json.Array = .init(allocator);
-            var contents_array_in_result = false;
-            defer if (!contents_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = contents_array });
+            var response_arena = std.heap.ArenaAllocator.init(allocator);
+            defer response_arena.deinit();
+            const response_allocator = response_arena.allocator();
+
+            var contents_array: std.json.Array = .init(response_allocator);
             var content_obj: std.json.ObjectMap = .empty;
-            var content_obj_in_array = false;
-            errdefer if (!content_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
-            try content_obj.put(allocator, "uri", .{ .string = uri });
-            if (content.text) |text| try content_obj.put(allocator, "text", .{ .string = text });
-            if (content.blob) |blob| try content_obj.put(allocator, "blob", .{ .string = blob });
-            if (content.mimeType) |mime| try content_obj.put(allocator, "mimeType", .{ .string = mime });
+            try content_obj.put(response_allocator, "uri", .{ .string = uri });
+            if (content.text) |text| try content_obj.put(response_allocator, "text", .{ .string = text });
+            if (content.blob) |blob| try content_obj.put(response_allocator, "blob", .{ .string = blob });
+            if (content.mimeType) |mime| try content_obj.put(response_allocator, "mimeType", .{ .string = mime });
             try contents_array.append(.{ .object = content_obj });
-            content_obj_in_array = true;
 
             var result: std.json.ObjectMap = .empty;
-            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
-            try result.put(allocator, "contents", .{ .array = contents_array });
-            contents_array_in_result = true;
+            try result.put(response_allocator, "contents", .{ .array = contents_array });
 
             const response = jsonrpc.createResponse(request.id, .{ .object = result });
             try self.sendResponse(io, allocator, .{ .response = response });
@@ -968,19 +912,8 @@ pub const Server = struct {
     }
 
     fn handlePromptsGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var prompt_name: []const u8 = "";
-        var arguments: ?std.json.Value = null;
-
-        if (request.params) |params| {
-            if (params == .object) {
-                if (params.object.get("name")) |name_val| {
-                    if (name_val == .string) {
-                        prompt_name = name_val.string;
-                    }
-                }
-                arguments = params.object.get("arguments");
-            }
-        }
+        const prompt_name = mcp.tools.getString(request.params, "name") orelse "";
+        const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
 
         if (self.prompts.get(prompt_name)) |prompt| {
             const messages = prompt.handler(prompt.user_data, io, allocator, arguments) catch |err| {
@@ -992,60 +925,51 @@ pub const Server = struct {
             };
             defer if (self.prompt_message_deinits.get(prompt_name)) |deinit_messages| deinit_messages(allocator, messages);
 
-            var messages_array: std.json.Array = .init(allocator);
-            var messages_array_in_result = false;
-            defer if (!messages_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = messages_array });
+            var response_arena = std.heap.ArenaAllocator.init(allocator);
+            defer response_arena.deinit();
+            const response_allocator = response_arena.allocator();
+
+            var messages_array: std.json.Array = .init(response_allocator);
             for (messages) |msg| {
                 var msg_obj: std.json.ObjectMap = .empty;
-                var msg_obj_in_array = false;
-                errdefer if (!msg_obj_in_array) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = msg_obj });
-                try msg_obj.put(allocator, "role", .{ .string = msg.role.toString() });
+                try msg_obj.put(response_allocator, "role", .{ .string = msg.role.toString() });
                 var content_obj: std.json.ObjectMap = .empty;
-                var content_obj_in_msg = false;
-                errdefer if (!content_obj_in_msg) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = content_obj });
                 switch (msg.content) {
                     .text => |text| {
-                        try content_obj.put(allocator, "type", .{ .string = "text" });
-                        try content_obj.put(allocator, "text", .{ .string = text.text });
+                        try content_obj.put(response_allocator, "type", .{ .string = "text" });
+                        try content_obj.put(response_allocator, "text", .{ .string = text.text });
                     },
                     .image => |img| {
-                        try content_obj.put(allocator, "type", .{ .string = "image" });
-                        try content_obj.put(allocator, "data", .{ .string = img.data });
-                        try content_obj.put(allocator, "mimeType", .{ .string = img.mimeType });
+                        try content_obj.put(response_allocator, "type", .{ .string = "image" });
+                        try content_obj.put(response_allocator, "data", .{ .string = img.data });
+                        try content_obj.put(response_allocator, "mimeType", .{ .string = img.mimeType });
                     },
                     .audio => |aud| {
-                        try content_obj.put(allocator, "type", .{ .string = "audio" });
-                        try content_obj.put(allocator, "data", .{ .string = aud.data });
-                        try content_obj.put(allocator, "mimeType", .{ .string = aud.mimeType });
+                        try content_obj.put(response_allocator, "type", .{ .string = "audio" });
+                        try content_obj.put(response_allocator, "data", .{ .string = aud.data });
+                        try content_obj.put(response_allocator, "mimeType", .{ .string = aud.mimeType });
                     },
                     .resource_link => |link| {
-                        try content_obj.put(allocator, "type", .{ .string = "resource_link" });
-                        try content_obj.put(allocator, "uri", .{ .string = link.uri });
-                        try content_obj.put(allocator, "name", .{ .string = link.name });
+                        try content_obj.put(response_allocator, "type", .{ .string = "resource_link" });
+                        try content_obj.put(response_allocator, "uri", .{ .string = link.uri });
+                        try content_obj.put(response_allocator, "name", .{ .string = link.name });
                     },
                     .resource => |res| {
-                        try content_obj.put(allocator, "type", .{ .string = "resource" });
+                        try content_obj.put(response_allocator, "type", .{ .string = "resource" });
                         var res_inner: std.json.ObjectMap = .empty;
-                        var res_inner_in_content = false;
-                        errdefer if (!res_inner_in_content) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = res_inner });
-                        try res_inner.put(allocator, "uri", .{ .string = res.resource.uri });
-                        if (res.resource.text) |text| try res_inner.put(allocator, "text", .{ .string = text });
-                        try content_obj.put(allocator, "resource", .{ .object = res_inner });
-                        res_inner_in_content = true;
+                        try res_inner.put(response_allocator, "uri", .{ .string = res.resource.uri });
+                        if (res.resource.text) |text| try res_inner.put(response_allocator, "text", .{ .string = text });
+                        try content_obj.put(response_allocator, "resource", .{ .object = res_inner });
                     },
                 }
-                try msg_obj.put(allocator, "content", .{ .object = content_obj });
-                content_obj_in_msg = true;
+                try msg_obj.put(response_allocator, "content", .{ .object = content_obj });
                 try messages_array.append(.{ .object = msg_obj });
-                msg_obj_in_array = true;
             }
 
             var result: std.json.ObjectMap = .empty;
-            defer json_helpers.deinitBorrowedJsonContainers(allocator, .{ .object = result });
-            try result.put(allocator, "messages", .{ .array = messages_array });
-            messages_array_in_result = true;
+            try result.put(response_allocator, "messages", .{ .array = messages_array });
             if (prompt.description) |desc| {
-                try result.put(allocator, "description", .{ .string = desc });
+                try result.put(response_allocator, "description", .{ .string = desc });
             }
 
             const response = jsonrpc.createResponse(request.id, .{ .object = result });
@@ -1224,3 +1148,97 @@ pub const Server = struct {
         }
     }
 };
+
+test "server rollback and transport error branches" {
+    {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
+        var server = Server.init(failing.allocator(), .{ .name = "rollback", .version = "1" });
+        defer server.deinit();
+        try std.testing.expectError(error.OutOfMemory, server.addResourceWithDeinit(.{
+            .uri = "file:///rollback",
+            .name = "Rollback",
+            .handler = undefined,
+        }, undefined));
+        try std.testing.expect(!server.resources.contains("file:///rollback"));
+    }
+    {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
+        var server = Server.init(failing.allocator(), .{ .name = "rollback", .version = "1" });
+        defer server.deinit();
+        try std.testing.expectError(error.OutOfMemory, server.addPromptWithDeinit(.{
+            .name = "rollback",
+            .handler = undefined,
+        }, undefined));
+        try std.testing.expect(!server.prompts.contains("rollback"));
+    }
+
+    const ErrorReceiveTransport = struct {
+        calls: usize = 0,
+
+        fn transport(self: *@This()) transport_mod.Transport {
+            return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
+        }
+
+        fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {}
+
+        fn receive(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
+            const self: *@This() = @ptrCast(@alignCast(ptr));
+            self.calls += 1;
+            if (self.calls == 1) return error.ReadError;
+            return error.EndOfStream;
+        }
+
+        fn close(_: *anyopaque) void {}
+    };
+
+    var receive_transport: ErrorReceiveTransport = .{};
+    var receive_server = Server.init(std.testing.allocator, .{ .name = "receive", .version = "1" });
+    defer receive_server.deinit();
+    try receive_server.runWithTransport(std.testing.io, std.testing.allocator, receive_transport.transport());
+    try std.testing.expectEqual(@as(usize, 2), receive_transport.calls);
+    try receive_transport.transport().send(std.testing.io, std.testing.allocator, "{}");
+    receive_transport.transport().close();
+
+    const ErrorSendTransport = struct {
+        fn transport(self: *@This()) transport_mod.Transport {
+            return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
+        }
+
+        fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {
+            return error.WriteError;
+        }
+
+        fn receive(_: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
+            return error.EndOfStream;
+        }
+
+        fn close(_: *anyopaque) void {}
+    };
+
+    var send_transport: ErrorSendTransport = .{};
+    var send_server = Server.init(std.testing.allocator, .{ .name = "send", .version = "1" });
+    defer send_server.deinit();
+    send_server.transport = send_transport.transport();
+    try send_server.sendNotification(std.testing.io, std.testing.allocator, "notifications/test", null);
+    try std.testing.expectError(error.EndOfStream, send_transport.transport().receive(std.testing.io, std.testing.allocator));
+    send_transport.transport().close();
+
+    var serialize_failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    try send_server.sendNotification(std.testing.io, serialize_failing.allocator(), "notifications/test", null);
+
+    var stdio: transport_mod.StdioTransport = .{};
+    send_server.stdio_transport = &stdio;
+    send_server.log(std.testing.io, "log message");
+    send_server.logError(std.testing.io, "log error");
+    send_server.stdio_transport = null;
+    stdio.deinit(std.testing.allocator);
+
+    try send_server.pending_requests.put(1, .{ .method = "client/request", .timestamp = 1 });
+    send_server.handleResponse(.{ .id = .{ .string = "string-id" }, .result = null });
+    try std.testing.expect(send_server.pending_requests.contains(1));
+    send_server.handleErrorResponse(std.testing.io, .{
+        .id = .{ .string = "string-id" },
+        .@"error" = .{ .code = -32603, .message = "client error" },
+    });
+    try std.testing.expect(send_server.pending_requests.contains(1));
+}

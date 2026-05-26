@@ -186,3 +186,40 @@ fn taskStatusText(status: []const u8) []const u8 {
     if (std.mem.eql(u8, status, "queued") or std.mem.eql(u8, status, "running")) return "working";
     return status;
 }
+
+test "task value maps queued and running status to working" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const queued = try taskValue(allocator, .{
+        .id = "queued-job",
+        .label = "Queued job",
+        .status = "queued",
+        .ok = true,
+        .stdout_tail = "",
+        .stderr_tail = "",
+        .stdout_truncated = false,
+        .stderr_truncated = false,
+        .created_sequence = 10,
+        .updated_sequence = 11,
+    });
+    try std.testing.expectEqualStrings("working", queued.object.get("status").?.string);
+    try std.testing.expectEqualStrings("process-sequence-10", queued.object.get("createdAt").?.string);
+    try std.testing.expectEqual(@as(i64, 500), queued.object.get("pollInterval").?.integer);
+
+    const completed = try taskValue(allocator, .{
+        .id = "done-job",
+        .label = "Done job",
+        .status = "completed",
+        .ok = true,
+        .stdout_tail = "",
+        .stderr_tail = "",
+        .stdout_truncated = false,
+        .stderr_truncated = false,
+        .created_sequence = 12,
+        .updated_sequence = 13,
+    });
+    try std.testing.expectEqualStrings("completed", completed.object.get("status").?.string);
+    try std.testing.expectEqualStrings("working", taskStatusText("running"));
+}

@@ -35,7 +35,8 @@ pub fn fromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.to
 
 pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_in_result = false;
+    defer if (!obj_in_result) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = spec.kind });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "tool", .{ .string = spec.tool });
@@ -47,6 +48,7 @@ pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     if (spec.cause) |cause| try obj.put(allocator, "cause", .{ .string = cause });
     try obj.put(allocator, "resolution", .{ .string = spec.resolution });
     for (spec.details) |detail| try obj.put(allocator, detail.key, detail.value);
+    obj_in_result = true;
     return .{ .object = obj };
 }
 

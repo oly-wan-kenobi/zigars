@@ -47,9 +47,12 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
 
 pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     std.json.Stringify.value(result_value, .{ .whitespace = .indent_2 }, &aw.writer) catch return error.OutOfMemory;
-    return .{ .uri = uri, .mimeType = "application/json", .text = aw.toOwnedSlice() catch return error.OutOfMemory };
+    const text = aw.toOwnedSlice() catch return error.OutOfMemory;
+    aw_owned = false;
+    return .{ .uri = uri, .mimeType = "application/json", .text = text };
 }
 
 pub fn jsonContentFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
