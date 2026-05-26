@@ -15,11 +15,13 @@ Current delegation:
 
 - `zig build smoke` covers HTTP MCP transport scenarios.
 - `zig build stdio-fixtures` covers stdio MCP transport scenarios and fake backend success paths.
+- `zig build backend-contract-scenarios` checks fake backend conformance
+  scenario discovery against the executable contract harnesses.
 
 Scenario floors remain enforced by `tools/coverage_config.zig`:
 
-- HTTP smoke scenarios: at least 150.
-- Stdio fixture tool calls: at least 60.
+- HTTP smoke scenarios: at least 154.
+- Stdio fixture tool calls: at least 76.
 
 `zig build release-asset-smoke` remains an explicit release packaging gate rather
 than part of the default integration alias because it builds cross-target release
@@ -33,8 +35,8 @@ zig build public-contracts
 ```
 
 This direct gate checks MCP no-patch, advertised capability, schema, structured
-argument-error, resource/prompt fixture, and report contract invariants. It is
-also part of `zig build release-check`.
+argument-error, resource/prompt fixture, scenario-manifest drift, and report
+contract invariants. It is also part of `zig build release-check`.
 
 Rules:
 

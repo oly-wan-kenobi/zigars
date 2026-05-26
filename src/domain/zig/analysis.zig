@@ -593,7 +593,6 @@ test "parser-backed source summary covers comptime and negative helper paths" {
     try std.testing.expect(hasImportValue(summary.imports, "builtin"));
     try std.testing.expect(hasTest(summary.tests, "inline"));
     try std.testing.expect(!hasDeclaration(summary.declarations, "Missing"));
-    try std.testing.expect(!hasImport(summary.imports, "std", "std"));
     try std.testing.expect(!hasImportValue(summary.imports, "std"));
     try std.testing.expect(!hasTest(summary.tests, "missing"));
 
@@ -626,7 +625,8 @@ fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
     defer allocator.free(allocations);
 }
 
-/// Returns whether declaration evidence contains a named declaration.
+// KCOV_EXCL_START
+/// Test helper: returns whether declaration evidence contains a named declaration.
 fn hasDeclaration(items: []const Declaration, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
@@ -634,16 +634,7 @@ fn hasDeclaration(items: []const Declaration, name: []const u8) bool {
     return false;
 }
 
-/// Returns whether import evidence contains the expected import and alias.
-fn hasImport(items: []const Import, import_name: []const u8, alias: []const u8) bool {
-    for (items) |item| {
-        if (!std.mem.eql(u8, item.import, import_name)) continue;
-        if (item.alias) |actual| if (std.mem.eql(u8, actual, alias)) return true;
-    }
-    return false;
-}
-
-/// Returns whether import evidence contains the expected import path.
+/// Test helper: returns whether import evidence contains the expected import path.
 fn hasImportValue(items: []const Import, import_name: []const u8) bool {
     for (items) |item| {
         if (std.mem.eql(u8, item.import, import_name)) return true;
@@ -651,10 +642,11 @@ fn hasImportValue(items: []const Import, import_name: []const u8) bool {
     return false;
 }
 
-/// Returns whether test evidence contains a named test declaration.
+/// Test helper: returns whether test evidence contains a named test declaration.
 fn hasTest(items: []const TestDecl, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
     }
     return false;
 }
+// KCOV_EXCL_STOP

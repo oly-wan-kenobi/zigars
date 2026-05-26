@@ -61,6 +61,65 @@ empty. New boundary pressure should be resolved by adding app ports, bootstrap
 composition, or infra-owned state rather than by adding temporary guard
 exceptions.
 
+## Enforced Hexagonal Rules
+
+The authoritative rule implementations are `tools/architecture_guard.zig`,
+`tools/hex_arch_inventory.zig`, and the build wiring in `build.zig`. This
+section describes the contract those tools enforce.
+
+| Area | Rule |
+|---|---|
+| `src/domain/**` | Pure domain code may import only `std` and other domain modules. It must not import MCP, app, adapters, infra, bootstrap, manifest, broad runtime state, retired handler facades, or concrete effect modules. |
+| `src/app/**` | App code owns typed requests, results, errors, use cases, context, and ports. It may import `std`, domain, and app modules. Effects must be expressed through app ports, not concrete process, workspace, artifact, ZLS, backend, clock, ID, or observability implementations. |
+| `src/adapters/mcp/**` | MCP adapters own JSON argument mapping, schema projection, public result rendering, and structured public error mapping. Production adapter code may depend on MCP, app/domain values, manifest metadata, and adapter-local modules; it must not import infra, bootstrap, broad runtime, retired handler facades, or concrete effects. |
+| `src/infra/**` | Infra implements app ports using concrete effects. It may depend on app port contracts and domain values, but not MCP, adapters, bootstrap composition, manifest dispatch, public MCP result renderers, or handler modules. |
+| `src/bootstrap/**` | Bootstrap is the composition root. It may wire adapters, infra, runtime state, and registration, but reusable policy belongs in app/domain code. |
+| `src/manifest/**` | Manifest code is metadata-only: tool definitions, schema vocabulary, groups, risk flags, planning metadata, and invariants. It must not import runtime `App`, handlers, adapters, infra, bootstrap, MCP `ToolResult`, or app use cases. |
+| `src/testing/fakes/**` | Fakes are the sanctioned deterministic app-port implementations for use-case tests. They may import app port contracts and domain types, but not MCP, adapters, infra, runtime, retired handlers, or concrete effects. |
+
+Import walls are normalized before checking, including `@import("zigar").<name>`
+aliases. Production target-layer code must not import `src/testing/**`.
+App-layer tests may use `src/testing/fakes/**`; integration scenarios do not
+belong in the fake-port layer.
+
+Effect rules are equally important as import rules. Domain code must be pure.
+App use cases may orchestrate command execution, workspace access, artifact
+persistence, ZLS/LSP work, backend probing, observability, time, and IDs only
+through ports in app context. MCP adapters must call typed app/domain behavior
+instead of reaching through `context.workspace_store`, command runners, backend
+probes, artifact stores, ZLS gateways, or observability state directly. Infra may
+perform concrete effects only as a named port implementation assembled by
+bootstrap.
+
+`src/root.zig` is a package-owner aggregator. The source root may contain only
+`src/main.zig` and `src/root.zig`, and the public root may expose only these
+package-owner aliases: `adapters`, `app`, `bootstrap`, `domain`, `infra`, and
+`manifest`. New public imports should go through those owners instead of adding
+root-level implementation aliases.
+
+Retired path and surface bans keep migrated behavior from reappearing in old
+locations. `architecture_guard` fails closed on retired root files, retired
+prefixes such as `src/tools/**`, `src/tool_manifest/**`, `src/mcp_server/**`,
+`src/lsp/**`, `src/state/**`, and public compatibility terminology in
+production target-layer code. `hex-architecture-inventory` adds a narrow
+inventory check for root files, retired `src/tools` imports outside the MCP
+adapter transition surface, and adapter imports of retired root handler names.
+
+The architecture guard allowlist is intentionally empty. If a future exception
+is unavoidable, it must be exact-path and exact-pattern scoped, name the rule
+ID, owner task, reason, retirement condition, and verification command. Broad
+directory allowlists and new app/domain exceptions are not acceptable; prefer a
+port, typed app boundary, bootstrap wiring, or infra wrapper instead.
+
+Run the architecture gates directly when changing layer boundaries:
+
+```sh
+zig build architecture-guard
+zig build hex-architecture-inventory
+```
+
+Both commands are part of `zig build release-check`.
+
 ## Tool Registry Rules
 
 When adding or changing a tool:

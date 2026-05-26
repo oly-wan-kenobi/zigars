@@ -18,15 +18,17 @@ support for optional backends. The package is release-citable only when
 setup, the evidence package also includes `backend-provisioning/real_backend_pins.json`
 and `backend-provisioning/checksums.sha256`.
 
-The gate includes formatting, generated docs/JSON checks, unit tests,
-ReleaseSafe compilation, HTTP and stdio MCP smoke tests, required kcov line
-coverage floors, structured tool-error contract scans, line-budget headroom, and
-artifact hygiene. It also checks [trust.md](trust.md) and
-[maturity.md](maturity.md) so release readiness cannot drift away from the
-documented product boundaries. It checks that the build imports the pinned
-upstream `mcp` package directly instead of routing through a patched MCP server
-wrapper, and that the first-party adapter still exposes explicit `tools/call`,
-`resources/read`, and `prompts/get` post-serialization cleanup hooks.
+The gate includes formatting, generated docs/JSON drift checks, `zig build
+test`, ReleaseSafe compilation, release-binary coverage, HTTP and stdio MCP
+fixture coverage through coverage/conformance gates, backend conformance
+contract smoke, backend scenario manifest drift, artifact hygiene, architecture
+guard, hex architecture inventory, and public MCP contracts. It also checks
+[trust.md](trust.md) and [maturity.md](maturity.md) so release readiness cannot
+drift away from the documented product boundaries. It checks that the build
+imports the pinned upstream `mcp` package directly instead of routing through a
+patched MCP server wrapper, and that the first-party adapter still exposes
+explicit `tools/call`, `resources/read`, and `prompts/get`
+post-serialization cleanup hooks.
 The release drift tools provide the same contract as MCP-facing preflight
 checks: `zigar_docs_drift_check` verifies public documentation markers and
 generated-index coverage, `zigar_release_claim_check` scans public docs for
@@ -52,6 +54,46 @@ fixture covers newline JSON transport, formatting preview/apply, zwanzig SARIF
 passthrough, zflame SVG output metadata, ZLint diagnostics/SARIF/rules/fix
 preview normalization, CI annotation contracts, structured profiling plans, and
 diff-folded flamegraph flow with fake backend executables.
+
+## Release Gate Topology
+
+`build.zig` is the authoritative topology for local release gates:
+
+| Gate | Command or owner | Purpose |
+|---|---|---|
+| Format and drift | `zig build fmt-check`, `zig build docs-check`, `zig build json-check` | Check Zig formatting, generated `docs/tool-index.generated.md`, and JSON fixture/catalog syntax. |
+| Unit binaries | `zig build test` | Run library, executable, tools, and fuzz test binaries. |
+| ReleaseSafe | `zig build release-safe` | Compile the release binary with ReleaseSafe optimization. |
+| Coverage and fixtures | `zig build coverage` and the release coverage command in `release-check` | Enforce kcov floors and run HTTP/stdio fixture coverage against the built binary. |
+| Backend contracts | `zig build backend-contract-scenarios`, `zig build backend-conformance-contract` | Detect scenario manifest drift and smoke-test fake backend conformance report shape. |
+| Architecture | `zig build architecture-guard`, `zig build hex-architecture-inventory` | Enforce target-layer import/effect rules and root/retired-surface inventory. |
+| Public contracts | `zig build public-contracts` | Check no-patch MCP behavior, advertised capabilities, public schema/result/error shape, resource/prompt fixtures, and report contracts. |
+| Hygiene | `zig build artifact-hygiene` | Check generated artifact paths, line budgets, pure-Zig tree policy, stale/forbidden tokens, workflow permissions, security policy, public claims, and tool/resource/CLI error contracts. |
+
+`zig build dist release-asset-smoke` is the separate package gate. It builds the
+archives, verifies checksums and required archive contents, and runs the native
+archive when one matches the current host.
+
+## Public Contracts
+
+`tools/public_contracts.zig` aggregates the MCP contract checks used by
+`zig build public-contracts` and `zig build release-check`. The current public
+contract practice is:
+
+- no local patched MCP dependency in `build.zig` or `build.zig.zon`;
+- first-party MCP server cleanup hooks for tool results, resources, and prompts;
+- advertised capabilities for completions, resource subscriptions, tasks, and
+  pagination;
+- manifest-to-MCP schema projection, required-field counts, structured
+  invalid-argument results, apply gates, and plan metadata;
+- resource and prompt fixture coverage, public resource URI and prompt names,
+  and resource/prompt routing contracts;
+- backend conformance, release-readiness, and real-ZLS report invariants;
+- backend scenario manifest drift between
+  `tests/integration/backend-contract/scenarios.zig`,
+  `tests/integration/backend-contract/SCENARIOS.md`,
+  `.github/scripts/backend-conformance.sh`, and
+  `.github/scripts/backend-conformance-contract-smoke.sh`.
 
 Release notes must include a short validation evidence block. At minimum, record
 the source commit, clean-tree status, `zig build release-check`, `zig build dist
@@ -80,6 +122,25 @@ floors, and floor pass/fail fields.
 `release-check` includes `zig build artifact-hygiene`, which fails if known
 generated directories such as `.zig-cache/`, `zig-out/`, `zig-pkg/`, `dist/`, or
 `coverage/` are tracked by git.
+
+`artifact-hygiene` is broader than generated-file detection. Its policy tables
+live in `tools/release_rules.zig`, and its checker lives in
+`tools/release_checks.zig`. The hygiene gate also enforces:
+
+- line budgets and required headroom for large or trust-critical files;
+- pure-Zig project-owned trees by rejecting Python files under `.github`,
+  `docs`, `examples`, `scripts`, `src`, `tests`, and `tools`;
+- forbidden global/runtime/logging tokens and known stale-code tokens;
+- ignored-error hygiene for LSP, smoke, fixture, fake-backend, release-check,
+  and CLI helper paths;
+- workflow permission minima, including read-only contents for CI/conformance
+  workflows and write/id-token/attestation permissions for release publishing;
+- structured tool, resource, and CLI error contract scans;
+- static-analysis capability tier and source-read-only/apply-gated write
+  checks;
+- optional-backend, command-running, agent-workflow, CI-artifact,
+  docs-lookup, release-evidence, maturity, trust, foundation, adoption,
+  security-policy, and public-claim documentation checks.
 
 `zig build dist` builds all release targets with ReleaseSafe optimization and
 writes archives plus `zigar-checksums.txt` under `dist/assets`.

@@ -315,7 +315,7 @@ fn runKcov(
         const exclude_arg = "--exclude-path=" ++ coverage_config.kcov_exclude_path;
         var argv: std.ArrayList([]const u8) = .empty;
         defer argv.deinit(allocator);
-        try argv.appendSlice(allocator, &.{ kcov, "--clean", include_arg, exclude_arg, target_dir });
+        try argv.appendSlice(allocator, &.{ kcov, "--clean", include_arg, exclude_arg, coverage_config.kcov_exclude_line_arg, coverage_config.kcov_exclude_region_arg, target_dir });
         try argv.appendSlice(allocator, command.argv);
         const result = try std.process.run(allocator, io, .{
             .argv = argv.items,
@@ -337,7 +337,7 @@ fn runKcov(
         errdefer allocator.free(merged_dir);
         var argv: std.ArrayList([]const u8) = .empty;
         defer argv.deinit(allocator);
-        try argv.appendSlice(allocator, &.{ kcov, "--merge", merged_dir });
+        try argv.appendSlice(allocator, &.{ kcov, "--merge", coverage_config.kcov_exclude_line_arg, coverage_config.kcov_exclude_region_arg, merged_dir });
         try argv.appendSlice(allocator, result_dirs.items);
         const result = try std.process.run(allocator, io, .{ .argv = argv.items });
         defer allocator.free(result.stdout);

@@ -27,7 +27,7 @@ Fake backend coverage:
 
 Current floor:
 
-- `tools/coverage_config.zig` requires at least 60 stdio fixture tool calls.
+- `tools/coverage_config.zig` requires at least 76 stdio fixture tool calls.
 
 Public behavior covered:
 

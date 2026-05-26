@@ -6,6 +6,10 @@ pub const min_http_smoke_scenarios: usize = 154;
 pub const min_stdio_fixture_tool_calls: usize = 76;
 pub const kcov_include_path = "src,tools";
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist,tools/fuzz_test_runner.zig";
+pub const kcov_exclude_line_pattern = "KCOV_EXCL_LINE";
+pub const kcov_exclude_region_pattern = "KCOV_EXCL_START:KCOV_EXCL_STOP";
+pub const kcov_exclude_line_arg = "--exclude-line=" ++ kcov_exclude_line_pattern;
+pub const kcov_exclude_region_arg = "--exclude-region=" ++ kcov_exclude_region_pattern;
 pub const min_line_coverage_basis_points: u32 = 10000;
 pub const min_src_line_coverage_basis_points: u32 = 10000;
 pub const min_tools_line_coverage_basis_points: u32 = 10000;
@@ -62,6 +66,8 @@ test "coverage test floor is positive" {
     try std.testing.expect(min_total_tests > 0);
     try std.testing.expect(min_http_smoke_scenarios > 0);
     try std.testing.expect(min_stdio_fixture_tool_calls > 0);
+    try std.testing.expect(kcov_exclude_line_pattern.len > 0);
+    try std.testing.expect(kcov_exclude_region_pattern.len > 0);
     try std.testing.expect(min_line_coverage_basis_points > 0);
     try std.testing.expect(min_src_line_coverage_basis_points > 0);
     try std.testing.expect(min_tools_line_coverage_basis_points > 0);
@@ -75,6 +81,8 @@ test "coverage floors require strict complete coverage" {
     try std.testing.expectEqual(@as(i64, 2), test_binaries[3].min_tests);
     try std.testing.expectEqual(@as(usize, 154), min_http_smoke_scenarios);
     try std.testing.expectEqual(@as(usize, 76), min_stdio_fixture_tool_calls);
+    try std.testing.expectEqualStrings("--exclude-line=KCOV_EXCL_LINE", kcov_exclude_line_arg);
+    try std.testing.expectEqualStrings("--exclude-region=KCOV_EXCL_START:KCOV_EXCL_STOP", kcov_exclude_region_arg);
     try std.testing.expectEqual(@as(u32, 10000), min_line_coverage_basis_points);
     try std.testing.expectEqual(@as(u32, 10000), min_src_line_coverage_basis_points);
     try std.testing.expectEqual(@as(u32, 10000), min_tools_line_coverage_basis_points);

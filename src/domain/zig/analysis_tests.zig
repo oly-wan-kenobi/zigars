@@ -16,6 +16,10 @@ test "parser-backed source summary covers static-analysis fixture" {
     try std.testing.expect(hasImport(summary.imports, "math.zig", "math_alias"));
     try std.testing.expect(hasTest(summary.tests, "outer works"));
     try std.testing.expect(hasTest(summary.tests, "escaped \"quote\" text"));
+    try std.testing.expect(!hasDeclaration(summary.declarations, "Missing"));
+    try std.testing.expect(!hasImport(summary.imports, "std", "wrong_alias"));
+    try std.testing.expect(!hasImportValue(summary.imports, "missing.zig"));
+    try std.testing.expect(!hasTest(summary.tests, "missing"));
 }
 
 test "parser-backed source summary marks malformed fixtures partial" {
@@ -58,7 +62,8 @@ test "workspace skip policy remains cache and artifact oriented" {
     try std.testing.expect(!analysis.skipWorkspacePath("src/main.zig"));
 }
 
-/// Returns whether declaration evidence contains a named declaration.
+// KCOV_EXCL_START
+/// Test helper: returns whether declaration evidence contains a named declaration.
 fn hasDeclaration(items: []const analysis.Declaration, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
@@ -66,17 +71,16 @@ fn hasDeclaration(items: []const analysis.Declaration, name: []const u8) bool {
     return false;
 }
 
-/// Returns whether import evidence contains the expected import and alias.
+/// Test helper: returns whether import evidence contains the expected import and alias.
 fn hasImport(items: []const analysis.Import, import_name: []const u8, alias: []const u8) bool {
     for (items) |item| {
-        if (std.mem.eql(u8, item.import, import_name)) {
-            if (item.alias) |actual| return std.mem.eql(u8, actual, alias);
-        }
+        if (!std.mem.eql(u8, item.import, import_name)) continue;
+        if (item.alias) |actual| if (std.mem.eql(u8, actual, alias)) return true;
     }
     return false;
 }
 
-/// Returns whether import evidence contains the expected import path.
+/// Test helper: returns whether import evidence contains the expected import path.
 fn hasImportValue(items: []const analysis.Import, value: []const u8) bool {
     for (items) |item| {
         if (std.mem.eql(u8, item.import, value)) return true;
@@ -84,10 +88,11 @@ fn hasImportValue(items: []const analysis.Import, value: []const u8) bool {
     return false;
 }
 
-/// Returns whether test evidence contains a named test declaration.
+/// Test helper: returns whether test evidence contains a named test declaration.
 fn hasTest(items: []const analysis.TestDecl, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
     }
     return false;
 }
+// KCOV_EXCL_STOP

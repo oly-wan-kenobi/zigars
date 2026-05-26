@@ -4,6 +4,7 @@ const cli_io = @import("cli_io.zig");
 const coverage = @import("coverage.zig");
 const dist = @import("dist.zig");
 const backend_docs = @import("backend_docs.zig");
+const backend_contract_scenarios = @import("backend_contract_scenarios.zig");
 const fake_backends = @import("fake_backends.zig");
 const http_adoption_smoke = @import("http_adoption_smoke.zig");
 const http_performance_smoke = @import("http_performance_smoke.zig");
@@ -43,6 +44,7 @@ const stderrPrint = cli_io.stderrPrint;
 test {
     _ = architecture_guard;
     _ = backend_docs;
+    _ = backend_contract_scenarios;
     _ = coverage;
     _ = cli_io;
     _ = dist;
@@ -136,6 +138,10 @@ pub fn main(init: std.process.Init) !void {
         public_contracts.run(allocator, io, args[2..]) catch |err| {
             return reportInvalidArguments(io, cmd, "public-contracts", err);
         };
+    } else if (std.mem.eql(u8, cmd, "backend-contract-scenarios")) {
+        backend_contract_scenarios.run(allocator, io, args[2..]) catch |err| {
+            return reportInvalidArguments(io, cmd, "backend-contract-scenarios", err);
+        };
     } else if (std.mem.eql(u8, cmd, "architecture-guard")) {
         architecture_guard.run(allocator, io, args[2..]) catch |err| {
             return reportInvalidArguments(io, cmd, "architecture-guard", err);
@@ -165,6 +171,7 @@ fn usage(io: Io) !void {
         \\  dist-smoke [--assets-dir <path>] [--version <version>]
         \\  artifact-hygiene
         \\  public-contracts
+        \\  backend-contract-scenarios
         \\  architecture-guard
         \\  hex-architecture-inventory [--strict-root-files]
         \\

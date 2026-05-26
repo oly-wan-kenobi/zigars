@@ -1,5 +1,6 @@
 const std = @import("std");
 const zigar = @import("zigar");
+const backend_contract_scenarios = @import("backend_contract_scenarios.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -35,6 +36,7 @@ pub fn checkPublicSurfaceContract(allocator: Allocator, io: Io) !bool {
     ok = (try checkPresent(allocator, io, "MCP prompt contract", "src/adapters/mcp/prompts.zig", &.{ "zigar_profile_workflow", "zigar_compile_error_workflow", "zigar_release_workflow" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP resource/prompt routing contract", "src/adapters/mcp/server.zig", &.{ "resources/list", "resources/read", "resources/templates/list", "resources/subscribe", "Resource not found", "prompts/list", "prompts/get", "completion/complete", "tasks/list", "Prompt not found", "createInvalidParams", "deinit_content", "deinit_messages" })) and ok;
     ok = (try checkPresent(allocator, io, "backend conformance report contract", ".github/scripts/backend-conformance.sh", &.{ "\"kind\": \"zigar_backend_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"claimed_backends\"", "\"compatibility_matrix\"", "\"tool_evidence\"", "\"artifacts\"", "profile.svg", "diff.svg", "validate_svg_artifact", "ET.parse(path).getroot()" })) and ok;
+    ok = (try backend_contract_scenarios.check(allocator, io)) and ok;
     ok = (try checkPresent(allocator, io, "release-readiness report contract", ".github/scripts/release-readiness.sh", &.{ "\"kind\": \"zigar_release_readiness_report\"", "\"schema_version\": 2", "\"source_tree_clean\"", "\"backend_conformance\"", "\"zls_conformance\"", "\"subreport_commits\"", "\"compatibility_matrix\"" })) and ok;
     ok = (try checkPresent(allocator, io, "real-ZLS report contract", ".github/scripts/real-zls-conformance.sh", &.{ "\"kind\": \"zigar_real_zls_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"backends\"", "\"scenarios\"", "\"response_count\"" })) and ok;
     return ok;

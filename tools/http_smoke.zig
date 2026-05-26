@@ -209,6 +209,8 @@ fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_
             "--clean",
             "--include-path=" ++ coverage_config.kcov_include_path,
             "--exclude-path=" ++ coverage_config.kcov_exclude_path,
+            coverage_config.kcov_exclude_line_arg,
+            coverage_config.kcov_exclude_region_arg,
             dir,
         });
     }

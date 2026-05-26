@@ -22,7 +22,7 @@ Fixture ownership:
 
 Current floor:
 
-- `tools/coverage_config.zig` requires at least 150 HTTP smoke scenarios.
+- `tools/coverage_config.zig` requires at least 154 HTTP smoke scenarios.
 
 Public behavior covered:
 

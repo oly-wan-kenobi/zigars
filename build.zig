@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
     });
     tools_mod.addImport("mcp", mcp_mod);
     tools_mod.addImport("zigar", zigar_mod);
+    tools_mod.addImport("backend_contract_scenarios_manifest", b.createModule(.{
+        .root_source_file = b.path("tests/integration/backend-contract/scenarios.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
     const tools_exe = b.addExecutable(.{
         .name = "zigar-tools",
         .root_module = tools_mod,
@@ -139,6 +144,11 @@ pub fn build(b: *std.Build) void {
     const json_check_step = b.step("json-check", "Validate JSON fixtures and catalogs");
     json_check_step.dependOn(&json_check_cmd.step);
 
+    const backend_contract_scenarios_cmd = b.addRunArtifact(tools_exe);
+    backend_contract_scenarios_cmd.addArg("backend-contract-scenarios");
+    const backend_contract_scenarios_step = b.step("backend-contract-scenarios", "Check fake backend contract scenario manifest drift");
+    backend_contract_scenarios_step.dependOn(&backend_contract_scenarios_cmd.step);
+
     const version_cmd = b.addRunArtifact(tools_exe);
     version_cmd.addArg("version");
     const version_step = b.step("version", "Print zigar package version");
@@ -172,11 +182,12 @@ pub fn build(b: *std.Build) void {
 
     const backend_conformance_contract_cmd = b.addSystemCommand(&.{ "bash", ".github/scripts/backend-conformance-contract-smoke.sh", "--binary" });
     backend_conformance_contract_cmd.addFileArg(release_exe.getEmittedBin());
+    backend_conformance_contract_cmd.step.dependOn(&backend_contract_scenarios_cmd.step);
     backend_conformance_contract_cmd.step.dependOn(&release_coverage_cmd.step);
     const backend_conformance_contract_step = b.step("backend-conformance-contract", "Smoke-test backend conformance evidence report contract");
     backend_conformance_contract_step.dependOn(&backend_conformance_contract_cmd.step);
 
-    const fmt_check_cmd = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build.zig.zon", "src", "tools" });
+    const fmt_check_cmd = b.addSystemCommand(&.{ b.graph.zig_exe, "fmt", "--check", "build.zig", "build.zig.zon", "src", "tools", "tests/integration/backend-contract/scenarios.zig" });
     const fmt_check_step = b.step("fmt-check", "Check Zig formatting");
     fmt_check_step.dependOn(&fmt_check_cmd.step);
 
@@ -208,6 +219,7 @@ pub fn build(b: *std.Build) void {
     release_check_step.dependOn(fmt_check_step);
     release_check_step.dependOn(docs_check_step);
     release_check_step.dependOn(json_check_step);
+    release_check_step.dependOn(backend_contract_scenarios_step);
     release_check_step.dependOn(test_step);
     release_check_step.dependOn(release_safe_step);
     release_check_step.dependOn(&release_coverage_cmd.step);
