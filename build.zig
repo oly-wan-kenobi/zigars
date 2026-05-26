@@ -38,6 +38,37 @@ pub fn build(b: *std.Build) void {
         .root_module = tools_mod,
     });
 
+    const fuzz_mod = b.createModule(.{
+        .root_source_file = b.path("src/testing/fuzz_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fuzz_mod.addImport("coverage_model", b.createModule(.{
+        .root_source_file = b.path("src/domain/performance/coverage_model.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+    fuzz_mod.addImport("path_policy", b.createModule(.{
+        .root_source_file = b.path("src/domain/editing/path_policy.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+    fuzz_mod.addImport("stacktrace", b.createModule(.{
+        .root_source_file = b.path("src/domain/diagnostics/stacktrace.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+    fuzz_mod.addImport("crash", b.createModule(.{
+        .root_source_file = b.path("src/domain/diagnostics/crash.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+    fuzz_mod.addImport("command", b.createModule(.{
+        .root_source_file = b.path("src/infra/process/command.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+
     const release_optimize: std.builtin.OptimizeMode = .ReleaseSafe;
     const release_mcp_dep = b.dependency("mcp", .{
         .target = target,
@@ -68,19 +99,30 @@ pub fn build(b: *std.Build) void {
     const tools_tests = b.addTest(.{ .name = "zigar-tools-tests", .root_module = tools_mod, .use_llvm = true });
     const run_tools_tests = b.addRunArtifact(tools_tests);
 
+    const fuzz_tests = b.addTest(.{
+        .name = "zigar-fuzz-tests",
+        .root_module = fuzz_mod,
+        .test_runner = .{ .path = b.path("build_support/fuzz_test_runner.zig"), .mode = .server },
+        .use_llvm = true,
+    });
+    const run_fuzz_tests = b.addRunArtifact(fuzz_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_tests.step);
     test_step.dependOn(&run_exe_tests.step);
     test_step.dependOn(&run_tools_tests.step);
+    test_step.dependOn(&run_fuzz_tests.step);
 
     const test_bin_dir: std.Build.Step.InstallArtifact.Options.Dir = .{ .override = .{ .custom = "test-bin" } };
     const install_lib_tests = b.addInstallArtifact(lib_tests, .{ .dest_dir = test_bin_dir });
     const install_exe_tests = b.addInstallArtifact(exe_tests, .{ .dest_dir = test_bin_dir });
     const install_tools_tests = b.addInstallArtifact(tools_tests, .{ .dest_dir = test_bin_dir });
+    const install_fuzz_tests = b.addInstallArtifact(fuzz_tests, .{ .dest_dir = test_bin_dir });
     const install_test_bins_step = b.step("install-test-bins", "Install compiled test executables for coverage tools");
     install_test_bins_step.dependOn(&install_lib_tests.step);
     install_test_bins_step.dependOn(&install_exe_tests.step);
     install_test_bins_step.dependOn(&install_tools_tests.step);
+    install_test_bins_step.dependOn(&install_fuzz_tests.step);
 
     const tool_index_cmd = b.addRunArtifact(tools_exe);
     tool_index_cmd.addArg("generate-tool-index");
@@ -93,7 +135,7 @@ pub fn build(b: *std.Build) void {
     docs_check_step.dependOn(&docs_check_cmd.step);
 
     const json_check_cmd = b.addRunArtifact(tools_exe);
-    json_check_cmd.addArgs(&.{ "check-json", "src/tool_catalog.json", "tests/fixtures/http-smoke.expect.json" });
+    json_check_cmd.addArgs(&.{ "check-json", "src/manifest/tool_catalog.json", "tests/fixtures/http-smoke.expect.json" });
     const json_check_step = b.step("json-check", "Validate JSON fixtures and catalogs");
     json_check_step.dependOn(&json_check_cmd.step);
 
@@ -110,7 +152,11 @@ pub fn build(b: *std.Build) void {
     const stdio_fixtures_step = b.step("stdio-fixtures", "Run stdio MCP fixture integration tests");
     stdio_fixtures_step.dependOn(&stdio_fixtures_cmd.step);
 
-    const coverage_cmd = addCoverageCommand(b, tools_exe);
+    const integration_step = b.step("integration", "Run default HTTP and stdio MCP integration tests");
+    integration_step.dependOn(smoke_step);
+    integration_step.dependOn(stdio_fixtures_step);
+
+    const coverage_cmd = addCoverageCommand(b, tools_exe, exe.getEmittedBin());
     coverage_cmd.step.dependOn(install_test_bins_step);
     const coverage_step = b.step("coverage", "Run test binaries, require kcov, and enforce line coverage floors");
     coverage_step.dependOn(&coverage_cmd.step);
@@ -121,7 +167,7 @@ pub fn build(b: *std.Build) void {
     const release_stdio_fixtures_cmd = addStdioFixturesCommand(b, tools_exe, release_exe.getEmittedBin());
     release_stdio_fixtures_cmd.step.dependOn(&release_smoke_cmd.step);
 
-    const release_coverage_cmd = addCoverageCommand(b, tools_exe);
+    const release_coverage_cmd = addCoverageCommand(b, tools_exe, exe.getEmittedBin());
     release_coverage_cmd.step.dependOn(&release_stdio_fixtures_cmd.step);
 
     const backend_conformance_contract_cmd = b.addSystemCommand(&.{ "bash", ".github/scripts/backend-conformance-contract-smoke.sh", "--binary" });
@@ -142,6 +188,22 @@ pub fn build(b: *std.Build) void {
     const hygiene_step = b.step("artifact-hygiene", "Check generated artifacts are not tracked");
     hygiene_step.dependOn(&hygiene_cmd.step);
 
+    const architecture_guard_cmd = b.addRunArtifact(tools_exe);
+    architecture_guard_cmd.addArg("architecture-guard");
+    const architecture_guard_step = b.step("architecture-guard", "Check Phase 10 architecture dependency guards");
+    architecture_guard_step.dependOn(&architecture_guard_cmd.step);
+
+    const hex_architecture_inventory_cmd = b.addRunArtifact(tools_exe);
+    hex_architecture_inventory_cmd.addArg("hex-architecture-inventory");
+    if (b.args) |args| hex_architecture_inventory_cmd.addArgs(args);
+    const hex_architecture_inventory_step = b.step("hex-architecture-inventory", "Inventory hexagonal architecture migration anchors without architecture_guard");
+    hex_architecture_inventory_step.dependOn(&hex_architecture_inventory_cmd.step);
+
+    const public_contracts_cmd = b.addRunArtifact(tools_exe);
+    public_contracts_cmd.addArg("public-contracts");
+    const public_contracts_step = b.step("public-contracts", "Check public MCP contract invariants");
+    public_contracts_step.dependOn(&public_contracts_cmd.step);
+
     const release_check_step = b.step("release-check", "Run the full local release gate");
     release_check_step.dependOn(fmt_check_step);
     release_check_step.dependOn(docs_check_step);
@@ -151,6 +213,9 @@ pub fn build(b: *std.Build) void {
     release_check_step.dependOn(&release_coverage_cmd.step);
     release_check_step.dependOn(backend_conformance_contract_step);
     release_check_step.dependOn(hygiene_step);
+    release_check_step.dependOn(architecture_guard_step);
+    release_check_step.dependOn(hex_architecture_inventory_step);
+    release_check_step.dependOn(public_contracts_step);
 
     const dist_cmd = b.addRunArtifact(tools_exe);
     dist_cmd.addArgs(&.{ "dist", "--out-dir", "dist", "--version", version });
@@ -214,9 +279,10 @@ fn addStdioFixturesCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile, bi
     return cmd;
 }
 
-fn addCoverageCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile) *std.Build.Step.Run {
+fn addCoverageCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile, binary: std.Build.LazyPath) *std.Build.Step.Run {
     const cmd = b.addRunArtifact(tools_exe);
-    cmd.addArgs(&.{ "coverage", "--no-build", "--require-kcov" });
+    cmd.addArgs(&.{ "coverage", "--no-build", "--require-kcov", "--integration-binary" });
+    cmd.addFileArg(binary);
     return cmd;
 }
 

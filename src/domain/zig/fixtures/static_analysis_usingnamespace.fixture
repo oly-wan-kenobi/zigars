@@ -1,0 +1,5 @@
+const std = @import("std");
+
+usingnamespace struct {
+    pub const Old = u8;
+};

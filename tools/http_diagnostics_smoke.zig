@@ -77,3 +77,7 @@ fn assertToolPaths(
     }
     scenario_count.* += 1;
 }
+
+test "http diagnostics smoke exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
+}

@@ -20,6 +20,8 @@ const writeFile = cli_io.writeFile;
 const StdioOptions = struct {
     binary: []const u8 = "zig-out/bin/zigar",
     zig_path: []const u8 = "zig",
+    server_kcov_path: []const u8 = "kcov",
+    server_kcov_dir: ?[]const u8 = null,
 };
 
 pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []const []const u8) !void {
@@ -30,8 +32,12 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
             options.binary = try flagValue(args, &i, io, "stdio-fixtures", "--binary", "stdio-fixtures [--binary <path>] [--zig-path <path>]");
         } else if (std.mem.eql(u8, args[i], "--zig-path")) {
             options.zig_path = try flagValue(args, &i, io, "stdio-fixtures", "--zig-path", "stdio-fixtures [--binary <path>] [--zig-path <path>]");
+        } else if (std.mem.eql(u8, args[i], "--server-kcov-path")) {
+            options.server_kcov_path = try flagValue(args, &i, io, "stdio-fixtures", "--server-kcov-path", "stdio-fixtures [--binary <path>] [--zig-path <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
+        } else if (std.mem.eql(u8, args[i], "--server-kcov-dir")) {
+            options.server_kcov_dir = try flagValue(args, &i, io, "stdio-fixtures", "--server-kcov-dir", "stdio-fixtures [--binary <path>] [--zig-path <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
         } else {
-            return unexpectedArgument(io, "stdio-fixtures", args[i], "stdio-fixtures [--binary <path>] [--zig-path <path>]");
+            return unexpectedArgument(io, "stdio-fixtures", args[i], "stdio-fixtures [--binary <path>] [--zig-path <path>] [--server-kcov-path <path>] [--server-kcov-dir <path>]");
         }
     }
 
@@ -53,33 +59,16 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
     const fake_diff = try installFakeBackend(allocator, io, workspace, tool_path, "fake-diff-folded");
     defer allocator.free(fake_diff);
 
+    var server_argv = try stdioServerArgv(allocator, options, workspace, fake_zlint, fake_zwanzig, fake_zflame, fake_diff);
+    defer server_argv.deinit(allocator);
     var child = try std.process.spawn(io, .{
-        .argv = &.{
-            options.binary,
-            "--workspace",
-            workspace,
-            "--transport",
-            "stdio",
-            "--zig-path",
-            options.zig_path,
-            "--zls-path",
-            "/definitely/missing/zls",
-            "--zlint-path",
-            fake_zlint,
-            "--zwanzig-path",
-            fake_zwanzig,
-            "--zflame-path",
-            fake_zflame,
-            "--diff-folded-path",
-            fake_diff,
-            "--timeout-ms",
-            "10000",
-        },
+        .argv = server_argv.items,
         .stdin = .pipe,
         .stdout = .pipe,
-        .stderr = .pipe,
+        .stderr = .ignore,
     });
-    defer child.kill(io);
+    var child_done = false;
+    defer if (!child_done) child.kill(io);
 
     var client = StdioClient{
         .allocator = allocator,
@@ -89,7 +78,63 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
         .tool_calls = 0,
     };
     try client.runFixture(workspace);
+    const shutdown = try client.request("shutdown", null);
+    defer allocator.free(shutdown);
+    const term = try child.wait(io);
+    child_done = true;
+    if (!termOk(term)) return error.AssertionFailed;
     try stdoutWrite(io, "stdio fixtures ok\n");
+}
+
+fn stdioServerArgv(
+    allocator: std.mem.Allocator,
+    options: StdioOptions,
+    workspace: []const u8,
+    fake_zlint: []const u8,
+    fake_zwanzig: []const u8,
+    fake_zflame: []const u8,
+    fake_diff: []const u8,
+) !std.ArrayList([]const u8) {
+    var argv: std.ArrayList([]const u8) = .empty;
+    errdefer argv.deinit(allocator);
+    if (options.server_kcov_dir) |dir| {
+        try argv.appendSlice(allocator, &.{
+            options.server_kcov_path,
+            "--clean",
+            "--include-path=" ++ coverage_config.kcov_include_path,
+            "--exclude-path=" ++ coverage_config.kcov_exclude_path,
+            dir,
+        });
+    }
+    try argv.appendSlice(allocator, &.{
+        options.binary,
+        "--workspace",
+        workspace,
+        "--transport",
+        "stdio",
+        "--zig-path",
+        options.zig_path,
+        "--zls-path",
+        "/definitely/missing/zls",
+        "--zlint-path",
+        fake_zlint,
+        "--zwanzig-path",
+        fake_zwanzig,
+        "--zflame-path",
+        fake_zflame,
+        "--diff-folded-path",
+        fake_diff,
+        "--timeout-ms",
+        "10000",
+    });
+    return argv;
+}
+
+fn termOk(term: std.process.Child.Term) bool {
+    return switch (term) {
+        .exited => |code| code == 0,
+        else => false,
+    };
 }
 
 fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
@@ -245,10 +290,35 @@ const StdioClient = struct {
         defer self.allocator.free(formatted);
         if (std.mem.indexOf(u8, formatted, "const x = 1;") == null) return error.AssertionFailed;
 
+        const format_check = try self.callTool("zig_format_check", "{\"path\":\"src/main.zig\"}");
+        defer self.allocator.free(format_check);
+        try self.expectPathJson(format_check, "ok", .{ .bool = true });
+
         const patch = try self.callTool("zig_patch_preview", "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void {\\n    const x = 2;\\n    _ = x;\\n}\\n\"}");
         defer self.allocator.free(patch);
         try self.expectPathJson(patch, "applied", .{ .bool = false });
         if (std.mem.indexOf(u8, patch, "-    const x = 1;") == null) return error.AssertionFailed;
+
+        try self.expectZlsUnavailable("zig_document_open", "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void {}\\n\"}");
+        const close_doc = try self.callTool("zig_document_close", "{\"file\":\"src/main.zig\"}");
+        defer self.allocator.free(close_doc);
+        try self.expectPathJson(close_doc, "open", .{ .bool = false });
+        const document_status = try self.callTool("zig_document_status", "{\"file\":\"src/main.zig\"}");
+        defer self.allocator.free(document_status);
+        try self.expectPathString(document_status, "file", "src/main.zig");
+        try self.expectZlsUnavailable("zig_hover", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_definition", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_references", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_completion", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_signature_help", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_workspace_symbols", "{\"query\":\"main\"}");
+        try self.expectZlsUnavailable("zig_code_actions", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_code_action_apply", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
+        try self.expectZlsUnavailable("zig_rename", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0,\"new_name\":\"renamed\"}");
+        try self.expectZlsUnavailable("zig_diagnostics_all", "{\"file\":\"src/main.zig\"}");
+        const diagnostics_workspace = try self.callTool("zig_diagnostics_workspace", "{}");
+        defer self.allocator.free(diagnostics_workspace);
+        try self.expectPathString(diagnostics_workspace, "kind", "zig_diagnostics_workspace");
 
         const compile_index = try self.callTool("zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\n\"}");
         defer self.allocator.free(compile_index);
@@ -445,6 +515,20 @@ const StdioClient = struct {
         const value = valueAt(parsed.value, path) orelse return error.AssertionFailed;
         try smoke.expectJsonEq(self.io, value, expected, path);
     }
+
+    fn expectZlsUnavailable(self: *StdioClient, name: []const u8, args_json: []const u8) !void {
+        const result = try self.callTool(name, args_json);
+        defer self.allocator.free(result);
+        const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, result, .{});
+        defer parsed.deinit();
+        if (valueAt(parsed.value, "backend")) |backend| {
+            if (backend == .string and std.mem.eql(u8, backend.string, "zls")) return;
+        }
+        if (valueAt(parsed.value, "ok")) |ok| {
+            if (ok == .bool and !ok.bool) return;
+        }
+        return error.AssertionFailed;
+    }
 };
 
 fn joinedRead(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8) ![]u8 {
@@ -457,4 +541,8 @@ fn expectFileStartsWith(allocator: std.mem.Allocator, io: Io, workspace: []const
     const bytes = try joinedRead(allocator, io, workspace, rel);
     defer allocator.free(bytes);
     if (!std.mem.startsWith(u8, bytes, prefix)) return error.AssertionFailed;
+}
+
+test "stdio fixtures command exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
 }

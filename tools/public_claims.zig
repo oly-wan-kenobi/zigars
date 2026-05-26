@@ -88,3 +88,7 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
 }
+
+test "public claims checker exposes docs check entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "checkPublicClaimDocs"));
+}

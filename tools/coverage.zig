@@ -1,10 +1,13 @@
 const std = @import("std");
+const cobertura = @import("coverage_cobertura.zig");
 const coverage_config = @import("coverage_config.zig");
 const json_util = @import("json_util.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
+const CoverageFileStats = cobertura.CoverageFileStats;
+const CoverageStats = cobertura.CoverageStats;
 
 const percent_scale: u32 = 100;
 
@@ -23,6 +26,7 @@ fn nowNs(io: Io) i96 {
 const CoverageOptions = struct {
     out_dir: []const u8 = "coverage",
     zig: []const u8 = "zig",
+    integration_binary: ?[]const u8 = null,
     min_tests: i64 = coverage_config.min_total_tests,
     no_build: bool = false,
     require_kcov: bool = false,
@@ -44,24 +48,31 @@ const TestResult = struct {
     stderr_bytes: usize,
 };
 
-const CoverageStats = struct {
-    covered_lines: u64 = 0,
-    total_lines: u64 = 0,
-    src_covered_lines: u64 = 0,
-    src_total_lines: u64 = 0,
-    tools_covered_lines: u64 = 0,
-    tools_total_lines: u64 = 0,
+const KcovCommand = struct {
+    name: []const u8,
+    argv: []const []const u8,
 
-    fn lineRateBasisPoints(self: CoverageStats) ?u32 {
-        return rateBasisPoints(self.covered_lines, self.total_lines);
+    fn init(allocator: Allocator, name: []const u8, argv: []const []const u8) !KcovCommand {
+        var owned_argv = try allocator.alloc([]const u8, argv.len);
+        errdefer allocator.free(owned_argv);
+        var initialized: usize = 0;
+        errdefer {
+            for (owned_argv[0..initialized]) |arg| allocator.free(arg);
+        }
+        for (argv) |arg| {
+            owned_argv[initialized] = try allocator.dupe(u8, arg);
+            initialized += 1;
+        }
+        return .{
+            .name = try allocator.dupe(u8, name),
+            .argv = owned_argv,
+        };
     }
 
-    fn srcLineRateBasisPoints(self: CoverageStats) ?u32 {
-        return rateBasisPoints(self.src_covered_lines, self.src_total_lines);
-    }
-
-    fn toolsLineRateBasisPoints(self: CoverageStats) ?u32 {
-        return rateBasisPoints(self.tools_covered_lines, self.tools_total_lines);
+    fn deinit(self: KcovCommand, allocator: Allocator) void {
+        allocator.free(self.name);
+        for (self.argv) |arg| allocator.free(arg);
+        allocator.free(self.argv);
     }
 };
 
@@ -78,7 +89,7 @@ const KcovInput = struct {
     floors_ok: bool,
 };
 
-pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
+pub fn run(allocator: Allocator, io: Io, self_path: []const u8, args: []const []const u8) !void {
     var options: CoverageOptions = .{};
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
@@ -90,6 +101,10 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
             i += 1;
             if (i >= args.len) return error.InvalidArguments;
             options.zig = args[i];
+        } else if (std.mem.eql(u8, args[i], "--integration-binary")) {
+            i += 1;
+            if (i >= args.len) return error.InvalidArguments;
+            options.integration_binary = args[i];
         } else if (std.mem.eql(u8, args[i], "--min-tests")) {
             i += 1;
             if (i >= args.len) return error.InvalidArguments;
@@ -119,14 +134,16 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
         for (test_results.items) |result| freeTestResult(allocator, result);
         test_results.deinit(allocator);
     }
-    var test_paths: std.ArrayList([]const u8) = .empty;
-    defer test_paths.deinit(allocator);
+    var kcov_commands: std.ArrayList(KcovCommand) = .empty;
+    defer {
+        for (kcov_commands.items) |command| command.deinit(allocator);
+        kcov_commands.deinit(allocator);
+    }
     for (coverage_config.test_binaries) |binary| {
         const path = binary.path();
         try test_results.append(allocator, try runTestBinary(allocator, io, path, binary));
-        try test_paths.append(allocator, path);
+        try kcov_commands.append(allocator, try KcovCommand.init(allocator, binary.name, &.{path}));
     }
-
     const version_result = try std.process.run(allocator, io, .{ .argv = &.{ options.zig, "version" } });
     defer allocator.free(version_result.stdout);
     defer allocator.free(version_result.stderr);
@@ -150,9 +167,10 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var kcov_ran = false;
     var kcov_error: ?[]const u8 = null;
     var coverage_stats: ?CoverageStats = null;
+    defer if (coverage_stats) |*stats| stats.deinit(allocator);
     if (kcov_path) |kcov| {
         kcov_ran = true;
-        coverage_stats = runKcov(allocator, io, kcov, options.out_dir, test_paths.items, &kcov_error) catch |err| blk: {
+        coverage_stats = runKcov(allocator, io, kcov, options.out_dir, kcov_commands.items, self_path, options.integration_binary, &kcov_error) catch |err| blk: {
             if (kcov_error == null) kcov_error = try std.fmt.allocPrint(allocator, "kcov exited with {s}", .{@errorName(err)});
             break :blk null;
         };
@@ -167,7 +185,7 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     const coverage_ok = coverageMeetsFloors(coverage_stats, options);
     if (!coverage_ok) {
         ok = false;
-        if (kcov_error == null) kcov_error = try coverageFloorMessage(allocator, options);
+        if (kcov_error == null) kcov_error = try coverageFailureMessage(allocator, coverage_stats, options);
     }
     defer if (kcov_error) |e| allocator.free(e);
 
@@ -269,9 +287,19 @@ fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
     return try allocator.dupe(u8, name);
 }
 
-fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, tests: []const []const u8, error_message: *?[]const u8) !CoverageStats {
+fn runKcov(
+    allocator: Allocator,
+    io: Io,
+    kcov: []const u8,
+    out_dir: []const u8,
+    commands: []const KcovCommand,
+    self_path: []const u8,
+    integration_binary: ?[]const u8,
+    error_message: *?[]const u8,
+) !CoverageStats {
     const kcov_root = try std.fmt.allocPrint(allocator, "{s}/kcov", .{out_dir});
     defer allocator.free(kcov_root);
+    if (dirExists(io, kcov_root)) try Io.Dir.cwd().deleteTree(io, kcov_root);
     try Io.Dir.cwd().createDirPath(io, kcov_root);
 
     var result_dirs: std.ArrayList([]const u8) = .empty;
@@ -280,22 +308,28 @@ fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, 
         result_dirs.deinit(allocator);
     }
 
-    for (tests) |test_path| {
-        const stem = std.fs.path.stem(test_path);
-        const target_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/{s}", .{ out_dir, stem });
+    for (commands) |command| {
+        const target_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/{s}", .{ out_dir, command.name });
         errdefer allocator.free(target_dir);
         const include_arg = "--include-path=" ++ coverage_config.kcov_include_path;
         const exclude_arg = "--exclude-path=" ++ coverage_config.kcov_exclude_path;
+        var argv: std.ArrayList([]const u8) = .empty;
+        defer argv.deinit(allocator);
+        try argv.appendSlice(allocator, &.{ kcov, "--clean", include_arg, exclude_arg, target_dir });
+        try argv.appendSlice(allocator, command.argv);
         const result = try std.process.run(allocator, io, .{
-            .argv = &.{ kcov, "--clean", include_arg, exclude_arg, target_dir, test_path },
+            .argv = argv.items,
         });
         defer allocator.free(result.stdout);
         defer allocator.free(result.stderr);
         if (!termOk(result.term)) {
-            try recordCommandFailure(allocator, error_message, "kcov", result.stdout, result.stderr);
+            try recordCommandFailure(allocator, error_message, command.name, result.stdout, result.stderr);
             return error.KcovFailed;
         }
         try result_dirs.append(allocator, target_dir);
+    }
+    if (integration_binary) |binary| {
+        try runIntegrationKcov(allocator, io, kcov, out_dir, self_path, binary, &result_dirs, error_message);
     }
 
     const report_dir = if (result_dirs.items.len == 1) result_dirs.items[0] else blk: {
@@ -318,9 +352,64 @@ fn runKcov(allocator: Allocator, io: Io, kcov: []const u8, out_dir: []const u8, 
 
     const xml = try readCoberturaXml(allocator, io, report_dir);
     defer allocator.free(xml);
-    const stats = try parseCobertura(xml);
+    var stats = try cobertura.parseCobertura(allocator, xml);
+    errdefer stats.deinit(allocator);
+    try cobertura.addMissingTrackedFiles(allocator, io, &stats);
     if (stats.total_lines == 0) return error.EmptyCoverageReport;
     return stats;
+}
+
+fn runIntegrationKcov(
+    allocator: Allocator,
+    io: Io,
+    kcov: []const u8,
+    out_dir: []const u8,
+    self_path: []const u8,
+    binary: []const u8,
+    result_dirs: *std.ArrayList([]const u8),
+    error_message: *?[]const u8,
+) !void {
+    const http_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/http-server", .{out_dir});
+    errdefer allocator.free(http_dir);
+    const http = try std.process.run(allocator, io, .{ .argv = &.{
+        self_path,
+        "http-smoke",
+        "--binary",
+        binary,
+        "--workspace",
+        ".",
+        "--server-kcov-path",
+        kcov,
+        "--server-kcov-dir",
+        http_dir,
+    } });
+    defer allocator.free(http.stdout);
+    defer allocator.free(http.stderr);
+    if (!termOk(http.term)) {
+        try recordCommandFailure(allocator, error_message, "http-smoke server coverage", http.stdout, http.stderr);
+        return error.KcovFailed;
+    }
+    try result_dirs.append(allocator, http_dir);
+
+    const stdio_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/stdio-server", .{out_dir});
+    errdefer allocator.free(stdio_dir);
+    const stdio = try std.process.run(allocator, io, .{ .argv = &.{
+        self_path,
+        "stdio-fixtures",
+        "--binary",
+        binary,
+        "--server-kcov-path",
+        kcov,
+        "--server-kcov-dir",
+        stdio_dir,
+    } });
+    defer allocator.free(stdio.stdout);
+    defer allocator.free(stdio.stderr);
+    if (!termOk(stdio.term)) {
+        try recordCommandFailure(allocator, error_message, "stdio-fixtures server coverage", stdio.stdout, stdio.stderr);
+        return error.KcovFailed;
+    }
+    try result_dirs.append(allocator, stdio_dir);
 }
 
 fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 {
@@ -359,20 +448,35 @@ fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase
     error_message.* = try std.fmt.allocPrint(allocator, "{s} exited unsuccessfully: {s}", .{ phase, detail[0..limit] });
 }
 
-fn rateBasisPoints(covered: u64, total: u64) ?u32 {
-    if (total == 0) return null;
-    return @intCast((covered * 100 * percent_scale) / total);
-}
-
 fn coverageMeetsFloors(stats: ?CoverageStats, options: CoverageOptions) bool {
     const measured = stats orelse return !options.require_kcov;
     return meetsFloor(measured.lineRateBasisPoints(), options.min_line_coverage) and
         meetsFloor(measured.srcLineRateBasisPoints(), options.min_src_line_coverage) and
-        meetsFloor(measured.toolsLineRateBasisPoints(), options.min_tools_line_coverage);
+        meetsFloor(measured.toolsLineRateBasisPoints(), options.min_tools_line_coverage) and
+        measured.uncoveredLineCount() == 0 and
+        measured.missingFileCount() == 0;
 }
 
 fn meetsFloor(actual: ?u32, minimum: u32) bool {
     return if (actual) |value| value >= minimum else false;
+}
+
+fn coverageFailureMessage(allocator: Allocator, stats: ?CoverageStats, options: CoverageOptions) ![]u8 {
+    const measured = stats orelse return coverageFloorMessage(allocator, options);
+    return std.fmt.allocPrint(
+        allocator,
+        "line coverage did not meet configured floors: total >= {d}.{d:0>2}%, src >= {d}.{d:0>2}%, tools >= {d}.{d:0>2}%; uncovered_lines={d}, missing_files={d}",
+        .{
+            options.min_line_coverage / percent_scale,
+            options.min_line_coverage % percent_scale,
+            options.min_src_line_coverage / percent_scale,
+            options.min_src_line_coverage % percent_scale,
+            options.min_tools_line_coverage / percent_scale,
+            options.min_tools_line_coverage % percent_scale,
+            measured.uncoveredLineCount(),
+            measured.missingFileCount(),
+        },
+    );
 }
 
 fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
@@ -390,89 +494,10 @@ fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
     );
 }
 
-fn parseCobertura(xml: []const u8) !CoverageStats {
-    var stats: CoverageStats = .{};
-    var pos: usize = 0;
-    while (std.mem.indexOfPos(u8, xml, pos, "<class")) |class_start| {
-        const tag_end = std.mem.indexOfScalarPos(u8, xml, class_start, '>') orelse return error.InvalidCoverageReport;
-        const tag = xml[class_start .. tag_end + 1];
-        const filename = attributeValue(tag, "filename") orelse {
-            pos = tag_end + 1;
-            continue;
-        };
-        const body_start = tag_end + 1;
-        const class_end = std.mem.indexOfPos(u8, xml, body_start, "</class>") orelse body_start;
-        const body = xml[body_start..class_end];
-        const scope = coverageScope(filename);
-        if (scope == .ignored) {
-            pos = class_end + "</class>".len;
-            continue;
-        }
-
-        var line_pos: usize = 0;
-        while (std.mem.indexOfPos(u8, body, line_pos, "<line")) |line_start| {
-            const line_tag_end = std.mem.indexOfScalarPos(u8, body, line_start, '>') orelse return error.InvalidCoverageReport;
-            const line_tag = body[line_start .. line_tag_end + 1];
-            const hits_text = attributeValue(line_tag, "hits") orelse {
-                line_pos = line_tag_end + 1;
-                continue;
-            };
-            const covered = (std.fmt.parseInt(u64, hits_text, 10) catch 0) > 0;
-            stats.total_lines += 1;
-            if (covered) stats.covered_lines += 1;
-            switch (scope) {
-                .src => {
-                    stats.src_total_lines += 1;
-                    if (covered) stats.src_covered_lines += 1;
-                },
-                .tools => {
-                    stats.tools_total_lines += 1;
-                    if (covered) stats.tools_covered_lines += 1;
-                },
-                .ignored => {},
-            }
-            line_pos = line_tag_end + 1;
-        }
-        pos = if (class_end == body_start) body_start else class_end + "</class>".len;
-    }
-    return stats;
-}
-
-const CoverageScope = enum { src, tools, ignored };
-
-fn coverageScope(filename: []const u8) CoverageScope {
-    if (isScopePath(filename, "src")) return .src;
-    if (isScopePath(filename, "tools")) return .tools;
-    return .ignored;
-}
-
-fn isScopePath(filename: []const u8, scope: []const u8) bool {
-    if (std.mem.eql(u8, filename, scope)) return true;
-    if (std.mem.startsWith(u8, filename, scope) and filename.len > scope.len and isPathSep(filename[scope.len])) return true;
-    const needle = if (std.mem.eql(u8, scope, "src")) "/src/" else "/tools/";
-    return std.mem.indexOf(u8, filename, needle) != null;
-}
-
-fn isPathSep(byte: u8) bool {
-    return byte == '/' or byte == '\\';
-}
-
-fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
-    var pos: usize = 0;
-    while (std.mem.indexOfPos(u8, tag, pos, name)) |idx| {
-        const before_ok = idx == 0 or std.ascii.isWhitespace(tag[idx - 1]) or tag[idx - 1] == '<';
-        const after = idx + name.len;
-        if (before_ok and after < tag.len and tag[after] == '=') {
-            if (after + 1 >= tag.len) return null;
-            const quote = tag[after + 1];
-            if (quote != '"' and quote != '\'') return null;
-            const value_start = after + 2;
-            const value_end = std.mem.indexOfScalarPos(u8, tag, value_start, quote) orelse return null;
-            return tag[value_start..value_end];
-        }
-        pos = after;
-    }
-    return null;
+fn dirExists(io: Io, path: []const u8) bool {
+    var dir = Io.Dir.cwd().openDir(io, path, .{}) catch return false;
+    dir.close(io);
+    return true;
 }
 
 const CoverageSummaryInput = struct {
@@ -488,7 +513,8 @@ const CoverageSummaryInput = struct {
 
 fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInput) ![]u8 {
     var aw: Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     try aw.writer.writeAll("{\n");
     try aw.writer.writeAll("  \"kind\": \"test_summary\",\n");
     try aw.writer.print("  \"ok\": {},\n", .{input.ok});
@@ -511,7 +537,9 @@ fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInp
     try aw.writer.writeAll("\n  ],\n");
     try renderCoverageObject(&aw.writer, input.kcov);
     try aw.writer.writeAll("\n}\n");
-    return try aw.toOwnedSlice();
+    const rendered = try aw.toOwnedSlice();
+    aw_owned = false;
+    return rendered;
 }
 
 fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
@@ -557,12 +585,46 @@ fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
         try writer.print("{}", .{meetsFloor(stats.srcLineRateBasisPoints(), input.min_src_line_coverage)});
         try writer.writeAll(",\n    \"tools_line_coverage_ok\": ");
         try writer.print("{}", .{meetsFloor(stats.toolsLineRateBasisPoints(), input.min_tools_line_coverage)});
+        try writer.writeAll(",\n    \"uncovered_line_count\": ");
+        try writer.print("{d}", .{stats.uncoveredLineCount()});
+        try writer.writeAll(",\n    \"missing_file_count\": ");
+        try writer.print("{d}", .{stats.missingFileCount()});
+        try writer.writeAll(",\n    \"missing_files\": [");
+        for (stats.missing_files, 0..) |path, i| {
+            if (i > 0) try writer.writeAll(", ");
+            try json_util.writeString(writer, path);
+        }
+        try writer.writeAll("],\n    \"files\": [\n");
+        for (stats.files, 0..) |file, i| {
+            if (i > 0) try writer.writeAll(",\n");
+            try renderCoverageFile(writer, file);
+        }
+        try writer.writeAll("\n    ]");
     }
     if (input.error_message) |err| {
         try writer.writeAll(",\n    \"error\": ");
         try json_util.writeString(writer, err);
     }
     try writer.writeAll("\n  }");
+}
+
+fn renderCoverageFile(writer: *Io.Writer, file: CoverageFileStats) !void {
+    try writer.writeAll("      {\n        \"path\": ");
+    try json_util.writeString(writer, file.path);
+    try writer.writeAll(",\n        \"scope\": ");
+    try json_util.writeString(writer, @tagName(file.scope));
+    try writer.writeAll(",\n        \"covered_lines\": ");
+    try writer.print("{d}", .{file.covered_lines});
+    try writer.writeAll(",\n        \"total_lines\": ");
+    try writer.print("{d}", .{file.total_lines});
+    try writer.writeAll(",\n        \"line_coverage_percent\": ");
+    try writeOptionalPercent(writer, file.lineRateBasisPoints());
+    try writer.writeAll(",\n        \"uncovered_lines\": [");
+    for (file.uncovered_lines, 0..) |line, i| {
+        if (i > 0) try writer.writeAll(", ");
+        try writer.print("{d}", .{line});
+    }
+    try writer.writeAll("]\n      }");
 }
 
 fn writePercent(writer: *Io.Writer, value: u32) !void {
@@ -628,40 +690,6 @@ test "parseTestCount extracts Zig test runner totals" {
     try std.testing.expectEqual(@as(?i64, null), parseTestCount("All tests passed.\n"));
 }
 
-test "parseCobertura counts src and tools lines" {
-    const xml =
-        \\<?xml version="1.0" ?>
-        \\<coverage>
-        \\  <packages>
-        \\    <class filename="src/root.zig">
-        \\      <lines>
-        \\        <line number="1" hits="1"/>
-        \\        <line number="2" hits="0"/>
-        \\      </lines>
-        \\    </class>
-        \\    <class filename="/repo/tools/coverage.zig">
-        \\      <lines>
-        \\        <line number="1" hits="3"/>
-        \\      </lines>
-        \\    </class>
-        \\    <class filename="zig-pkg/mcp.zig">
-        \\      <lines>
-        \\        <line number="1" hits="1"/>
-        \\      </lines>
-        \\    </class>
-        \\  </packages>
-        \\</coverage>
-    ;
-    const stats = try parseCobertura(xml);
-    try std.testing.expectEqual(@as(u64, 2), stats.covered_lines);
-    try std.testing.expectEqual(@as(u64, 3), stats.total_lines);
-    try std.testing.expectEqual(@as(u64, 1), stats.src_covered_lines);
-    try std.testing.expectEqual(@as(u64, 2), stats.src_total_lines);
-    try std.testing.expectEqual(@as(u32, 6666), stats.lineRateBasisPoints().?);
-    try std.testing.expectEqual(@as(u32, 5000), stats.srcLineRateBasisPoints().?);
-    try std.testing.expectEqual(@as(u32, 10000), stats.toolsLineRateBasisPoints().?);
-}
-
 test "coverage floors require measured kcov data when configured" {
     try std.testing.expect(!coverageMeetsFloors(null, .{ .require_kcov = true }));
     try std.testing.expect(coverageMeetsFloors(null, .{}));
@@ -673,6 +701,15 @@ test "coverage floors require measured kcov data when configured" {
         .tools_covered_lines = 8,
         .tools_total_lines = 10,
     }, .{}));
+    try std.testing.expect(!coverageMeetsFloors(.{
+        .covered_lines = 10,
+        .total_lines = 10,
+        .src_covered_lines = 5,
+        .src_total_lines = 5,
+        .tools_covered_lines = 5,
+        .tools_total_lines = 5,
+        .missing_files = @constCast(&[_][]const u8{"src/missing.zig"}),
+    }, .{}));
 }
 
 test "renderCoverageSummary includes suite floors and coverage details" {
@@ -682,8 +719,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-lib-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 122,
-            .min_tests = 115,
+            .tests = 380,
+            .min_tests = 350,
             .tests_ok = true,
             .stdout_bytes = 100,
             .stderr_bytes = 0,
@@ -693,8 +730,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-exe-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 3,
-            .min_tests = 3,
+            .tests = 121,
+            .min_tests = 100,
             .tests_ok = true,
             .stdout_bytes = 20,
             .stderr_bytes = 0,
@@ -704,18 +741,29 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .path = "zig-out/test-bin/zigar-tools-tests",
             .ok = true,
             .exit_code = 0,
-            .tests = 14,
-            .min_tests = 10,
+            .tests = 21,
+            .min_tests = 18,
             .tests_ok = true,
             .stdout_bytes = 40,
+            .stderr_bytes = 0,
+        },
+        .{
+            .name = "zigar-no-count-tests",
+            .path = "zig-out/test-bin/zigar-no-count-tests",
+            .ok = true,
+            .exit_code = 0,
+            .tests = null,
+            .min_tests = 0,
+            .tests_ok = true,
+            .stdout_bytes = 0,
             .stderr_bytes = 0,
         },
     };
     const summary = try renderCoverageSummary(std.testing.allocator, std.testing.io, .{
         .ok = true,
         .zig_version = "0.16.0",
-        .total_tests = 139,
-        .min_total_tests = 135,
+        .total_tests = 522,
+        .min_total_tests = 480,
         .total_tests_ok = true,
         .suite_tests_ok = true,
         .tests = &results,
@@ -732,6 +780,22 @@ test "renderCoverageSummary includes suite floors and coverage details" {
                 .src_total_lines = 7,
                 .tools_covered_lines = 3,
                 .tools_total_lines = 3,
+                .files = @constCast(&[_]CoverageFileStats{
+                    .{
+                        .path = "src/root.zig",
+                        .scope = .src,
+                        .covered_lines = 5,
+                        .total_lines = 7,
+                        .uncovered_lines = @constCast(&[_]u32{ 3, 5 }),
+                    },
+                    .{
+                        .path = "tools/coverage.zig",
+                        .scope = .tools,
+                        .covered_lines = 3,
+                        .total_lines = 3,
+                    },
+                }),
+                .missing_files = @constCast(&[_][]const u8{"src/missing.zig"}),
             },
             .min_line_coverage = 7000,
             .min_src_line_coverage = 7000,
@@ -744,16 +808,52 @@ test "renderCoverageSummary includes suite floors and coverage details" {
     const parsed = try std.json.parseFromSlice(JsonValue, std.testing.allocator, summary, .{});
     defer parsed.deinit();
     try std.testing.expectEqualStrings("test_summary", valueAt(parsed.value, "kind").?.string);
-    try std.testing.expectEqual(@as(usize, 3), valueAt(parsed.value, "tests").?.array.items.len);
-    try std.testing.expectEqual(@as(i64, 135), valueAt(parsed.value, "min_total_tests").?.integer);
+    try std.testing.expectEqual(@as(usize, 4), valueAt(parsed.value, "tests").?.array.items.len);
+    try std.testing.expectEqual(@as(i64, 480), valueAt(parsed.value, "min_total_tests").?.integer);
     try std.testing.expect(valueAt(parsed.value, "suite_tests_ok").?.bool);
-    try std.testing.expectEqual(@as(i64, 115), valueAt(parsed.value, "tests.0.min_tests").?.integer);
-    try std.testing.expectEqual(@as(i64, 3), valueAt(parsed.value, "tests.1.min_tests").?.integer);
+    try std.testing.expectEqual(@as(i64, 350), valueAt(parsed.value, "tests.0.min_tests").?.integer);
+    try std.testing.expectEqual(@as(i64, 100), valueAt(parsed.value, "tests.1.min_tests").?.integer);
     try std.testing.expect(valueAt(parsed.value, "tests.2.tests_ok").?.bool);
+    try std.testing.expect(valueAt(parsed.value, "tests.3.tests").? == .null);
     try std.testing.expect(valueAt(parsed.value, "coverage.measured").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.floors_ok").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.line_coverage_ok").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.src_line_coverage_ok").?.bool);
     try std.testing.expect(valueAt(parsed.value, "coverage.tools_line_coverage_ok").?.bool);
     try std.testing.expectEqual(@as(i64, 8), valueAt(parsed.value, "coverage.covered_lines").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), valueAt(parsed.value, "coverage.uncovered_line_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), valueAt(parsed.value, "coverage.missing_file_count").?.integer);
+    try std.testing.expectEqualStrings("src/missing.zig", valueAt(parsed.value, "coverage.missing_files.0").?.string);
+    try std.testing.expectEqualStrings("src/root.zig", valueAt(parsed.value, "coverage.files.0.path").?.string);
+    try std.testing.expectEqual(@as(i64, 3), valueAt(parsed.value, "coverage.files.0.uncovered_lines.0").?.integer);
+}
+
+test "renderCoverageSummary renders absent kcov path and error details" {
+    const summary = try renderCoverageSummary(std.testing.allocator, std.testing.io, .{
+        .ok = false,
+        .zig_version = "0.16.0",
+        .total_tests = 0,
+        .min_total_tests = 0,
+        .total_tests_ok = true,
+        .suite_tests_ok = true,
+        .tests = &.{},
+        .kcov = .{
+            .available = false,
+            .path = null,
+            .required = true,
+            .ran = false,
+            .error_message = "kcov failed",
+            .stats = null,
+            .min_line_coverage = 10000,
+            .min_src_line_coverage = 10000,
+            .min_tools_line_coverage = 10000,
+            .floors_ok = false,
+        },
+    });
+    defer std.testing.allocator.free(summary);
+
+    const parsed = try std.json.parseFromSlice(JsonValue, std.testing.allocator, summary, .{});
+    defer parsed.deinit();
+    try std.testing.expect(valueAt(parsed.value, "coverage.path").? == .null);
+    try std.testing.expectEqualStrings("kcov failed", valueAt(parsed.value, "coverage.error").?.string);
 }

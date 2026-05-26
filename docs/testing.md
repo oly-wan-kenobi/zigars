@@ -110,10 +110,25 @@ test-count floor.
 The coverage helper writes per-binary reports under `coverage/kcov/`, merges
 them, parses Cobertura XML, and fails when kcov is unavailable, produces no
 project-source report, or total, `src/`, or `tools` line coverage falls below the
-configured floors. The coverage job uploads the complete `coverage/` directory
-as the `zigar-coverage` artifact. A build/test/ReleaseSafe plus HTTP/stdio
-transport smoke matrix runs on macOS and Windows to catch path, process,
-transport, and executable suffix issues.
+configured floors. It also emits per-file line coverage, uncovered line numbers,
+and tracked `src/**/*.zig` or `tools/**/*.zig` files missing from Cobertura; the
+strict gate fails unless both counts are zero. The coverage job uploads the
+complete `coverage/` directory as the `zigar-coverage` artifact. A
+build/test/ReleaseSafe plus HTTP/stdio transport smoke matrix runs on macOS and
+Windows to catch path, process, transport, and executable suffix issues.
+
+## Fuzzing
+
+`zig build test --fuzz=10K` runs the bounded parser/classifier fuzz target used
+by CI. The target is intentionally small and deterministic enough for pull
+requests: it fuzzes Cobertura/LCOV-style coverage parsing, stacktrace and crash
+classifiers, path policy checks, and command argument splitting. Longer fuzz
+runs remain manual or scheduled work.
+
+Zig 0.16.0's fuzz runner currently fails to compile on this macOS Homebrew
+toolchain with an upstream `compiler/test_runner.zig` stacktrace type mismatch;
+CI runs the bounded fuzz smoke on Linux, while macOS still runs normal
+`zig build test` and transport smoke coverage.
 
 The MCP coverage workflow is separate from the `zig build coverage` release
 gate. `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`,

@@ -30,7 +30,7 @@ const release_items = [_]ReleaseItem{
 
 const DistOptions = struct {
     out_dir: []const u8 = "dist",
-    version: []const u8 = zigar.version.string,
+    version: []const u8 = zigar.manifest.version.string,
     packages: std.ArrayList(PackageInput) = .empty,
 
     fn deinit(self: *DistOptions, allocator: Allocator) void {
@@ -39,7 +39,7 @@ const DistOptions = struct {
 };
 
 pub fn printVersion(io: Io) !void {
-    try stdoutPrint(io, "{s}\n", .{zigar.version.string});
+    try stdoutPrint(io, "{s}\n", .{zigar.manifest.version.string});
 }
 
 pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !void {
@@ -66,7 +66,7 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
 
 pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var assets_dir: []const u8 = "dist/assets";
-    var version: []const u8 = zigar.version.string;
+    var version: []const u8 = zigar.manifest.version.string;
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
         if (std.mem.eql(u8, args[i], "--assets-dir")) {
@@ -112,13 +112,6 @@ fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
             return error.InvalidArguments;
         }
         seen[index] = true;
-    }
-
-    for (release_targets.all, 0..) |target, i| {
-        if (!seen[i]) {
-            if (io) |output| try stderrPrint(output, "dist package missing release target: {s}\n", .{target.package_name});
-            return error.InvalidArguments;
-        }
     }
 }
 
@@ -477,6 +470,13 @@ test "dist package validation requires the configured release set" {
     var wrong_exe = packages;
     wrong_exe[4].exe_name = "zigar";
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &wrong_exe));
+
+    var missing_with_io = packages[0 .. packages.len - 1].*;
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &missing_with_io));
+
+    var unknown_with_io = packages;
+    unknown_with_io[0].name = "zigar-unknown";
+    try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &unknown_with_io));
 }
 
 test "countNonEmptyLines ignores trailing blank lines" {

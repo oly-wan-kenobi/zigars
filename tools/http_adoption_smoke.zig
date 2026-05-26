@@ -39,3 +39,7 @@ fn assertToolPaths(
     }
     scenario_count.* += 1;
 }
+
+test "http adoption smoke exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
+}

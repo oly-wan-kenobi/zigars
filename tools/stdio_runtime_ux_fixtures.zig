@@ -53,7 +53,23 @@ pub fn run(client: anytype) !void {
     defer client.allocator.free(run_stream);
     try client.expectPathString(run_stream, "kind", "zigar_run_stream");
     try client.expectPathString(run_stream, "status", "completed");
+    const job_result = try client.callTool("zigar_job_result", "{\"job_id\":\"job-1\",\"limit\":5}");
+    defer client.allocator.free(job_result);
+    try client.expectPathString(job_result, "kind", "zigar_job_result");
     const tasks = try client.request("tasks/list", "{\"limit\":5}");
     defer client.allocator.free(tasks);
     if (std.mem.indexOf(u8, tasks, "job-1") == null) return error.AssertionFailed;
+    const task = try client.request("tasks/get", "{\"taskId\":\"job-1\"}");
+    defer client.allocator.free(task);
+    if (std.mem.indexOf(u8, task, "\"taskId\":\"job-1\"") == null) return error.AssertionFailed;
+    const task_result = try client.request("tasks/result", "{\"taskId\":\"job-1\"}");
+    defer client.allocator.free(task_result);
+    if (std.mem.indexOf(u8, task_result, "\"job_id\":\"job-1\"") == null) return error.AssertionFailed;
+    const task_cancel = try client.request("tasks/cancel", "{\"taskId\":\"job-1\"}");
+    defer client.allocator.free(task_cancel);
+    if (std.mem.indexOf(u8, task_cancel, "\"taskId\":\"job-1\"") == null) return error.AssertionFailed;
+}
+
+test "stdio runtime UX fixture exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
 }

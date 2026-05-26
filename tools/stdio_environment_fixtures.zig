@@ -6,6 +6,23 @@ pub fn run(client: anytype) !void {
     try client.expectPathJson(profile_v2, "profile.schema_version", .{ .integer = 2 });
     try client.expectPathJson(profile_v2, "applied", .{ .bool = false });
 
+    const profile_apply = try client.callTool("zigar_project_profile_v2", "{\"apply\":true}");
+    defer client.allocator.free(profile_apply);
+    try client.expectPathJson(profile_apply, "applied", .{ .bool = true });
+
+    const profile_read = try client.callTool("zigar_profile_read", "{}");
+    defer client.allocator.free(profile_read);
+    try client.expectPathJson(profile_read, "exists", .{ .bool = true });
+    try client.expectPathJson(profile_read, "validation.valid", .{ .bool = true });
+
+    const profile_validate = try client.callTool("zigar_profile_validate", "{}");
+    defer client.allocator.free(profile_validate);
+    try client.expectPathJson(profile_validate, "validation.valid", .{ .bool = true });
+
+    const profile_diff = try client.callTool("zigar_profile_diff", "{}");
+    defer client.allocator.free(profile_diff);
+    try client.expectPathJson(profile_diff, "current_exists", .{ .bool = true });
+
     const profile_bootstrap = try client.callTool("zigar_profile_bootstrap", "{}");
     defer client.allocator.free(profile_bootstrap);
     try client.expectPathString(profile_bootstrap, "kind", "zigar_profile_bootstrap");
@@ -16,10 +33,22 @@ pub fn run(client: anytype) !void {
     try client.expectPathString(env_pack, "kind", "zigar_env_pack");
     try client.expectPathJson(env_pack, "schema_version", .{ .integer = 1 });
 
+    const zvm_probe = try client.callTool("zigar_zvm_probe", "{\"zvm_path\":\"/definitely/missing/zvm\"}");
+    defer client.allocator.free(zvm_probe);
+    try client.expectPathJson(zvm_probe, "available", .{ .bool = false });
+
     const zvm_switch = try client.callTool("zigar_zvm_switch_plan", "{\"version\":\"0.16.0\"}");
     defer client.allocator.free(zvm_switch);
     try client.expectPathJson(zvm_switch, "plan_only", .{ .bool = true });
     try client.expectPathJson(zvm_switch, "mutates_environment", .{ .bool = false });
+
+    const toolchain_pin = try client.callTool("zig_toolchain_pin", "{\"apply\":true,\"zig_version\":\"0.16.0\",\"zls_version\":\"0.16.0\"}");
+    defer client.allocator.free(toolchain_pin);
+    try client.expectPathJson(toolchain_pin, "applied", .{ .bool = true });
+
+    const dev_env = try client.callTool("zigar_dev_env_generate", "{\"kind\":\"mise\",\"apply\":true}");
+    defer client.allocator.free(dev_env);
+    try client.expectPathJson(dev_env, "applied", .{ .bool = true });
 
     const backend_plan = try client.callTool("zigar_backend_install_plan", "{\"backend\":\"zflame\",\"manager\":\"manual\"}");
     defer client.allocator.free(backend_plan);
@@ -35,4 +64,8 @@ pub fn run(client: anytype) !void {
     defer client.allocator.free(backend_evidence);
     try client.expectPathJson(backend_evidence, "evidence.available", .{ .bool = false });
     try client.expectPathJson(backend_evidence, "applied", .{ .bool = false });
+}
+
+test "stdio environment fixture exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
 }

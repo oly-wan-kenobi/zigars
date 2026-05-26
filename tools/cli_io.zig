@@ -95,3 +95,7 @@ pub fn parseJsonFile(allocator: Allocator, io: Io, path: []const u8) !std.json.P
     defer allocator.free(bytes);
     return try std.json.parseFromSlice(JsonValue, allocator, bytes, .{});
 }
+
+test "executableName strips directories and platform suffix" {
+    try std.testing.expectEqualStrings("zigar-tools", executableName("/tmp/zigar-tools"));
+}

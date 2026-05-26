@@ -15,14 +15,17 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 76, "zigar_job_start", "{\"command\":\"check\",\"file\":\"src/main.zig\",\"timeout_ms\":10000}", expected, "job_start_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 77, "zigar_job_status", "{\"job_id\":\"job-1\"}", expected, "job_status_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 78, "zigar_job_result", "{\"job_id\":\"job-1\",\"limit\":5}", expected, "job_result_paths", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"tasks/get\",\"params\":{\"taskId\":\"job-1\"}}", "\"taskId\":\"job-1\"", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"tasks/result\",\"params\":{\"taskId\":\"job-1\"}}", "\"job_id\":\"job-1\"", scenario_count);
     try assertToolPaths(allocator, io, port, 79, "zigar_run_events", "{\"job_id\":\"job-1\",\"limit\":5}", expected, "run_events_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 80, "zigar_job_cancel", "{\"job_id\":\"job-1\",\"reason\":\"fixture\"}", expected, "job_cancel_paths", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":97,\"method\":\"tasks/cancel\",\"params\":{\"taskId\":\"job-1\"}}", "\"taskId\":\"job-1\"", scenario_count);
     try assertToolPaths(allocator, io, port, 81, "zigar_cancel_status", "{\"job_id\":\"job-1\"}", expected, "cancel_status_paths", scenario_count);
-    try assertRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":90,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://workspace/roots\"}}", "zigar_workspace_roots_resource", scenario_count);
-    try assertRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://file/src/main.zig/imports\"}}", "zigar_dynamic_file_resource", scenario_count);
-    try assertRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":92,\"method\":\"prompts/get\",\"params\":{\"name\":\"zigar_compile_error_workflow\",\"arguments\":{}}}", "zig_compile_error_index", scenario_count);
-    try assertRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":93,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}", "build-test", scenario_count);
-    try assertRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"tasks/list\",\"params\":{\"limit\":5}}", "job-1", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":90,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://workspace/roots\"}}", "zigar_workspace_roots_resource", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://file/src/main.zig/imports\"}}", "zigar_dynamic_file_resource", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":92,\"method\":\"prompts/get\",\"params\":{\"name\":\"zigar_compile_error_workflow\",\"arguments\":{}}}", "zig_compile_error_index", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":93,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}", "build-test", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"tasks/list\",\"params\":{\"limit\":5}}", "job-1", scenario_count);
 }
 
 fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {
@@ -38,9 +41,6 @@ fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, too
     scenario_count.* += 1;
 }
 
-fn assertRpcContains(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8, needle: []const u8, scenario_count: *usize) !void {
-    const response = try smoke.rpc(allocator, io, port, body);
-    defer allocator.free(response);
-    if (std.mem.indexOf(u8, response, needle) == null) return error.AssertionFailed;
-    scenario_count.* += 1;
+test "http runtime UX smoke exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
 }

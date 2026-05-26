@@ -29,13 +29,15 @@ Optional runtime backends:
 - Preserve the workspace sandbox: every user-provided path must resolve under
   the configured workspace before it is read or written.
 - Source-mutating tools must require `apply=true`.
-- Keep `src/tool_catalog.json` synchronized with tool grouping, discovery
+- Keep `src/manifest/tool_catalog.json` synchronized with tool grouping, discovery
   keywords, docs, and compact `tool_arguments` hints for common
   argument-heavy tools.
-- Keep `src/tool_metadata.zig` as the typed tool source for ids, schemas, MCP
-  read-only annotations, and fine-grained risk metadata.
-- Keep heuristic source scanners in `src/analysis.zig` or a dedicated analysis
-  module, with confidence labels and fixture tests.
+- Keep `src/manifest/definitions.zig`, `src/manifest/types.zig`, and
+  `src/manifest/groups.zig` as the typed tool source for ids, schemas, MCP
+  read-only annotations, grouping, planning policy, and risk metadata.
+- Keep source scanners in `src/domain/zig/**` for pure parsing policy and
+  `src/app/usecases/static_analysis/**` for port-backed workspace workflows,
+  with confidence labels and fixture tests.
 - Regenerate and check `docs/tool-index.generated.md` with
   `zig build tool-index` and `zig build docs-check`.
 - Prefer structured MCP results with JSON-native `structuredContent` and a text
@@ -46,9 +48,10 @@ Optional runtime backends:
 - Keep `src/main.zig` as a small startup/lifecycle entrypoint and keep
   `tools/zigar_tools.zig` as a dispatcher; move large helper logic into focused
   Zig modules.
-- Keep `src/server.zig` as MCP registration and dispatch only. Tool behavior
-  belongs in the focused `src/tools/*.zig` handler modules, with shared code
-  behind the small `src/tools/common.zig` facade.
+- Keep MCP protocol work in `src/adapters/mcp/**` and runtime composition in
+  `src/bootstrap/**`. Tool behavior belongs under focused
+  `src/app/usecases/**` modules, with MCP-only projection in
+  `src/adapters/mcp/tools/*.zig`.
 - Add or update tests for path handling, parser behavior, command arguments,
   diagnostics conversion, and source-write gating when those areas change.
 
@@ -58,6 +61,7 @@ Optional runtime backends:
 zig fmt build.zig build.zig.zon src tools
 zig build docs-check json-check
 zig build test
+zig build test --fuzz=10K
 zig build -Doptimize=ReleaseSafe
 zig build smoke stdio-fixtures coverage
 ```

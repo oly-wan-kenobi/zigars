@@ -278,19 +278,20 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
 
 fn checkStaticAnalysisContracts(io: Io) !bool {
     var ok = true;
-    for (zigar.tool_metadata.entries) |entry| {
+    for (zigar.manifest.entries) |entry| {
         if (entry.group != .static_analysis and entry.group != .zwanzig) continue;
         const tier = entry.static_analysis_tier orelse {
             try stderrPrint(io, "static-analysis capability tier missing for tool: {s}\n", .{entry.name});
             ok = false;
             continue;
         };
-        const contract = zigar.analysis_contract.forTool(entry.name) orelse {
+        const contract = zigar.domain.zig.static_analysis_contracts.forTool(entry.name) orelse {
             try stderrPrint(io, "static-analysis contract missing for tool: {s}\n", .{entry.name});
             ok = false;
             continue;
         };
-        if (tier != contract.tier) {
+        const tier_name = @tagName(tier);
+        if (!std.mem.eql(u8, tier_name, zigar.domain.zig.static_analysis_contracts.capabilityTierName(contract.tier))) {
             try stderrPrint(io, "static-analysis manifest tier disagrees with contract for tool: {s}\n", .{entry.name});
             ok = false;
         }
@@ -298,11 +299,11 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
             try stderrPrint(io, "static-analysis contract incomplete for tool: {s}\n", .{entry.name});
             ok = false;
         }
-        if (tier == .advisory_orientation and (contract.confidence == .high or contract.classification == .release_gating_candidate)) {
+        if (std.mem.eql(u8, tier_name, "advisory_orientation") and (contract.confidence == .high or contract.classification == .release_gating_candidate)) {
             try stderrPrint(io, "advisory static-analysis tool overclaims confidence or release-gating status: {s}\n", .{entry.name});
             ok = false;
         }
-        if (tier == .parser_backed and
+        if (std.mem.eql(u8, tier_name, "parser_backed") and
             (std.mem.indexOf(u8, contract.source_coverage, "parse_status") == null or
                 std.mem.indexOf(u8, contract.source_coverage, "partial_result") == null or
                 std.mem.indexOf(u8, contract.source_coverage, "parse_error_count") == null))
@@ -310,11 +311,15 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
             try stderrPrint(io, "parser-backed static-analysis contract must expose parse status and partial-result fields: {s}\n", .{entry.name});
             ok = false;
         }
-        if (contract.classification == .release_gating_candidate and tier != .compiler_backed and tier != .zlint_backed and tier != .zwanzig_backed) {
+        if (contract.classification == .release_gating_candidate and
+            !std.mem.eql(u8, tier_name, "compiler_backed") and
+            !std.mem.eql(u8, tier_name, "zlint_backed") and
+            !std.mem.eql(u8, tier_name, "zwanzig_backed"))
+        {
             try stderrPrint(io, "release-gating static-analysis tool must be compiler-backed, ZLint-backed, or zwanzig-backed: {s}\n", .{entry.name});
             ok = false;
         }
-        if (entry.group == .zwanzig and tier != .zwanzig_backed) {
+        if (entry.group == .zwanzig and !std.mem.eql(u8, tier_name, "zwanzig_backed")) {
             try stderrPrint(io, "zwanzig tool must use zwanzig_backed capability tier: {s}\n", .{entry.name});
             ok = false;
         }

@@ -3,9 +3,9 @@
 `zigar_capabilities`, `zigar_tool_index`, and `zigar_schema` expose the same
 catalog. Tool grouping, discovery keywords, argument schemas, risk metadata,
 planning metadata, and handler references are generated from
-the typed manifest under `src/tool_manifest/`; the public MCP tool/resource
+the typed manifest under `src/manifest/`; the public MCP tool/resource
 response adds static safety notes and common intents from
-`src/tool_catalog.json`.
+`src/manifest/tool_catalog.json`.
 
 Standard MCP discovery is the first-class path: `tools/list` publishes each
 registered `inputSchema` with `properties`, `required` fields, defaults, enums,
@@ -43,8 +43,8 @@ setup entries, and capability tiers are compatibility-sensitive. Additive fields
 are usually safe; removals, renames, risk changes, or stronger/weaker precision
 claims need changelog notes and smoke fixture updates before a public tag.
 
-`src/tool_manifest/` is the authority for structured contract data, while
-`src/tool_catalog.json` adds static safety notes and common intents. Do not
+`src/manifest/` is the authority for structured contract data, while
+`src/manifest/tool_catalog.json` adds static safety notes and common intents. Do not
 teach clients to scrape prose when the manifest or schema exposes a structured
 field.
 
@@ -199,7 +199,7 @@ mode or higher bounded limit.
 ## Observability
 
 `zigar_metrics_v2` reports in-memory runtime counters for the current server
-process: command calls, ZLS requests, legacy tool errors, observed tool
+process: command calls, ZLS requests, runtime tool errors, observed tool
 dispatch calls/errors, analysis-cache state, artifact registry counts, bounded
 artifact scan counts, backend health history, ZLS timeline, tool latency, and
 observed command durations. `zigar_backend_health_history`,

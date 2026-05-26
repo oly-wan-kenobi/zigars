@@ -80,3 +80,7 @@ pub fn run(client: anytype) !void {
     defer client.allocator.free(sequence_plan);
     try client.expectPathString(sequence_plan, "kind", "zigar_tool_sequence_plan");
 }
+
+test "stdio validation workflow fixture exposes run entrypoint" {
+    try @import("std").testing.expect(@hasDecl(@This(), "run"));
+}

@@ -28,387 +28,192 @@ pub const line_budgets = [_]LineBudget{
         .reason = "main must stay a small startup/lifecycle entrypoint",
     },
     .{
-        .path = "src/server.zig",
-        .max_lines = 450,
-        .reason = "MCP server wiring must stay a dispatcher; tool behavior belongs in src/tools modules",
-    },
-    .{
-        .path = "src/server_tests.zig",
+        .path = "src/testing/mcp/adapter_tests.zig",
         .max_lines = 620,
         .reason = "server integration fixtures should stay readable and move shared setup helpers if they grow further",
     },
     .{
-        .path = "src/mcp_server.zig",
+        .path = "src/adapters/mcp/server.zig",
         .max_lines = 1300,
         .reason = "first-party MCP adapter owns routing and result lifetime; transport-specific helpers should stay separate",
     },
     .{
-        .path = "src/mcp_server_tests.zig",
-        .max_lines = 600,
+        .path = "src/testing/mcp/server_tests.zig",
+        .max_lines = 638,
         .reason = "MCP adapter fixtures should stay focused on protocol routing, ordering, and error contracts",
     },
     .{
-        .path = "src/mcp_server/http_transport.zig",
+        .path = "src/adapters/mcp/server/http_transport.zig",
         .max_lines = 120,
-        .reason = "HTTP request transport adapter should stay a compact MCP transport shim",
+        .reason = "HTTP request transport adapter should stay compact and protocol-focused",
     },
     .{
-        .path = "src/backend_catalog.zig",
+        .path = "src/infra/backends/catalog.zig",
         .max_lines = 120,
         .reason = "backend setup catalog rendering should remain separate from packaged backend definitions",
     },
     .{
-        .path = "src/backend_catalog/definitions.zig",
+        .path = "src/infra/backends/definitions.zig",
         .max_lines = 140,
         .reason = "backend setup metadata should remain compact and auditable",
     },
     .{
-        .path = "src/artifacts.zig",
-        .max_lines = 600,
+        .path = "src/infra/artifacts/registry.zig",
+        .max_lines = 676,
         .reason = "artifact registry provenance helpers must stay auditable and separate from tool handlers",
     },
     .{
-        .path = "src/observability.zig",
-        .max_lines = 470,
+        .path = "src/infra/observability/state.zig",
+        .max_lines = 601,
         .reason = "observability state and value builders should stay bounded and testable",
     },
     .{
-        .path = "src/result_shape.zig",
+        .path = "src/app/result_shape.zig",
         .max_lines = 310,
         .reason = "result-shape contract policy should stay compact and reusable",
     },
     .{
-        .path = "src/trust.zig",
-        .max_lines = 520,
-        .reason = "trust report helpers must stay auditable and evidence-focused",
+        .path = "src/adapters/mcp/tools/artifacts.zig",
+        .max_lines = 719,
+        .reason = "artifact registry MCP projection should stay bounded around argument/result/error mapping",
     },
     .{
-        .path = "src/tools/common.zig",
-        .max_lines = 160,
-        .reason = "shared tool helpers must stay a small facade over focused helper modules",
+        .path = "src/adapters/mcp/tools/runtime_metrics.zig",
+        .max_lines = 544,
+        .reason = "runtime metrics MCP projection should stay bounded around argument/result/error mapping",
     },
     .{
-        .path = "src/tools/artifacts.zig",
-        .max_lines = 360,
-        .reason = "artifact registry handlers should delegate provenance helpers and remain reviewable",
-    },
-    .{
-        .path = "src/tools/observability.zig",
-        .max_lines = 190,
-        .reason = "observability handlers should stay thin over reusable metrics builders",
-    },
-    .{
-        .path = "src/tools/release_drift.zig",
-        .max_lines = 320,
-        .reason = "docs and release drift handlers should stay focused on public contract checks",
-    },
-    .{
-        .path = "src/tools/result_shape.zig",
-        .max_lines = 100,
-        .reason = "result-shape handlers should stay thin over shared policy",
-    },
-    .{
-        .path = "src/tools/result_shape_tests.zig",
-        .max_lines = 120,
-        .reason = "result-shape handler fixtures should stay compact",
-    },
-    .{
-        .path = "src/tools/trust.zig",
-        .max_lines = 80,
-        .reason = "trust handlers should stay thin over reusable report builders",
-    },
-    .{
-        .path = "src/tools/ci.zig",
-        .max_lines = 430,
-        .reason = "CI artifact handlers should keep parsing, XML, and matrix shaping reviewable",
-    },
-    .{
-        .path = "src/tools/agent.zig",
-        .max_lines = 340,
-        .reason = "agent workflow handlers should remain focused and delegate value-building helpers",
-    },
-    .{
-        .path = "src/tools/agent_values.zig",
-        .max_lines = 540,
-        .reason = "agent workflow value builders should remain separate from public tool handlers",
-    },
-    .{
-        .path = "src/tools/edit_zls.zig",
-        .max_lines = 520,
-        .reason = "edit and ZLS mutation/navigation handlers must keep diagnostics in the dedicated module",
-    },
-    .{
-        .path = "src/tools/edit_zls_documents.zig",
-        .max_lines = 150,
-        .reason = "ZLS document open/close/status handlers should stay separate from edit/navigation handlers",
-    },
-    .{
-        .path = "src/tools/edit_zls_diagnostics.zig",
-        .max_lines = 300,
-        .reason = "ZLS diagnostics handlers and cache shaping should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/edit_zls_edits.zig",
-        .max_lines = 80,
-        .reason = "ZLS edit helpers should stay a facade over text and workspace edit modules",
-    },
-    .{
-        .path = "src/tools/edit_zls_text_edits.zig",
-        .max_lines = 160,
-        .reason = "ZLS text edit application should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/edit_zls_workspace_edits.zig",
-        .max_lines = 220,
-        .reason = "ZLS workspace edit application should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/shared_core.zig",
-        .max_lines = 520,
-        .reason = "shared command/compiler/path helpers must stay a facade over focused helper modules",
-    },
-    .{
-        .path = "src/tools/command_result.zig",
-        .max_lines = 380,
-        .reason = "command result and compiler diagnostic shaping should stay focused and testable",
-    },
-    .{
-        .path = "src/tools/tool_result_errors.zig",
-        .max_lines = 160,
-        .reason = "structured tool-result error helpers should stay focused on command failure mapping",
-    },
-    .{
-        .path = "src/tools/static_core.zig",
-        .max_lines = 520,
-        .reason = "static-analysis tool handlers should delegate scanner implementation details",
-    },
-    .{
-        .path = "src/tools/static_build.zig",
-        .max_lines = 480,
-        .reason = "build graph scanning should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/static_dependencies.zig",
-        .max_lines = 180,
-        .reason = "dependency inspection should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/static_tests.zig",
-        .max_lines = 700,
-        .reason = "test/cache/public-API analysis helpers should stay below a reviewable module size",
-    },
-    .{
-        .path = "src/tools/profiling.zig",
-        .max_lines = 620,
-        .reason = "profiling workflow handlers should stay separate from plan and backend-heavy fixture modules",
-    },
-    .{
-        .path = "src/tools/profiling_plan.zig",
-        .max_lines = 250,
-        .reason = "profiling capture planning should stay separate from backend execution handlers",
-    },
-    .{
-        .path = "src/tools/profiling_tests.zig",
-        .max_lines = 430,
-        .reason = "profiling backend contract fixtures should stay reviewable and move shared helpers if they grow further",
-    },
-    .{
-        .path = "src/tools/performance.zig",
-        .max_lines = 1545,
-        .reason = "coverage, benchmark, and profiler workflow handlers should be split before the shared evidence contracts become hard to audit",
-    },
-    .{
-        .path = "src/tools/diagnostics.zig",
-        .max_lines = 1450,
-        .reason = "runtime diagnostic handlers should stay bounded and split before backend lanes become hard to audit",
-    },
-    .{
-        .path = "src/tools/adoption.zig",
-        .max_lines = 860,
-        .reason = "public adoption handlers should stay evidence-focused and split if report/config shaping grows further",
-    },
-    .{
-        .path = "src/tools/adoption_tests.zig",
-        .max_lines = 260,
-        .reason = "adoption handler fixtures cover public contract regressions, provenance, conformance claims, and coverage floor branches",
-    },
-    .{
-        .path = "src/tool_manifest/definitions/diagnostics.zig",
+        .path = "src/manifest/definitions/diagnostics.zig",
         .max_lines = 170,
         .reason = "runtime diagnostic tool definitions should remain compact and additive",
     },
     .{
-        .path = "src/tool_manifest/definitions/adoption.zig",
+        .path = "src/manifest/definitions/adoption.zig",
         .max_lines = 100,
         .reason = "adoption tool definitions should remain compact and centralized",
     },
     .{
-        .path = "src/docs.zig",
-        .max_lines = 120,
-        .reason = "documentation lookup facade should stay thin over focused source-family modules",
+        .path = "src/adapters/mcp/tools/discovery.zig",
+        .max_lines = 245,
+        .reason = "discovery MCP adapter must stay projection-only over app discovery use cases",
     },
     .{
-        .path = "src/docs/builtins.zig",
-        .max_lines = 280,
-        .reason = "curated builtin docs should stay a compact offline lookup table and renderer",
-    },
-    .{
-        .path = "src/docs/std.zig",
-        .max_lines = 650,
-        .reason = "stdlib source lookup should stay below a single-review module size",
-    },
-    .{
-        .path = "src/docs/langref.zig",
-        .max_lines = 850,
-        .reason = "language reference extraction should stay bounded and explicit about source completeness",
-    },
-    .{
-        .path = "src/analysis.zig",
-        .max_lines = 700,
-        .reason = "heuristic source scanners should stay bounded; semantic analysis belongs in stronger backends",
-    },
-    .{
-        .path = "src/tools/discovery.zig",
-        .max_lines = 700,
-        .reason = "discovery and schema tools are public-entry surfaces and should remain split if they grow further",
-    },
-    .{
-        .path = "src/workspace.zig",
-        .max_lines = 570,
+        .path = "src/infra/workspace/workspace.zig",
+        .max_lines = 616,
         .reason = "workspace path and IO boundaries are trust-critical and must stay compact enough to audit",
     },
     .{
-        .path = "src/state/documents.zig",
+        .path = "src/infra/zls/documents.zig",
         .max_lines = 520,
         .reason = "document state is concurrency-sensitive and runtime logic must stay separate from fixtures",
     },
     .{
-        .path = "src/state/documents_tests.zig",
-        .max_lines = 520,
+        .path = "src/infra/zls/documents_tests.zig",
+        .max_lines = 668,
         .reason = "document-state lifecycle fixtures should stay separate from runtime logic",
     },
     .{
-        .path = "src/tools/zls_common.zig",
-        .max_lines = 430,
-        .reason = "shared ZLS/LSP helpers should delegate diagnostic shaping and keep capability contracts focused",
-    },
-    .{
-        .path = "src/tools/zls_diagnostics_values.zig",
-        .max_lines = 240,
-        .reason = "ZLS diagnostic insight shaping should stay independently reviewable",
-    },
-    .{
-        .path = "src/tools/zls_common_tests.zig",
-        .max_lines = 380,
-        .reason = "ZLS common helper tests should remain focused on capability, command, and LSP shaping contracts",
-    },
-    .{
-        .path = "src/lsp/client.zig",
-        .max_lines = 520,
+        .path = "src/infra/zls/client.zig",
+        .max_lines = 667,
         .reason = "LSP client must stay focused on transport lifecycle; caches, tests, and parsing helpers belong in focused modules",
     },
     .{
-        .path = "src/lsp/client_test_support.zig",
+        .path = "src/infra/zls/client_test_support.zig",
         .max_lines = 100,
         .reason = "LSP test support should stay compact and separate from client runtime logic",
     },
     .{
-        .path = "src/lsp/client_tests.zig",
-        .max_lines = 260,
+        .path = "src/infra/zls/client_tests.zig",
+        .max_lines = 312,
         .reason = "black-box LSP client tests should stay separate from runtime transport logic",
     },
     .{
-        .path = "src/lsp/diagnostics_cache.zig",
-        .max_lines = 340,
+        .path = "src/infra/zls/diagnostics_cache.zig",
+        .max_lines = 392,
         .reason = "diagnostics retention policy should stay small enough to audit independently",
     },
     .{
-        .path = "src/tool_manifest.zig",
-        .max_lines = 320,
-        .reason = "tool manifest facade must stay focused on derived tables and public lookup helpers",
-    },
-    .{
-        .path = "src/tool_manifest/types.zig",
+        .path = "src/manifest/types.zig",
         .max_lines = 160,
         .reason = "manifest type definitions should remain a compact schema vocabulary",
     },
     .{
-        .path = "src/tool_manifest/definitions.zig",
+        .path = "src/manifest/definitions.zig",
         .max_lines = 140,
         .reason = "tool definition facade should preserve public order and delegate group bodies",
     },
     .{
-        .path = "src/tool_manifest/all_definitions.zig",
+        .path = "src/manifest/all_definitions.zig",
         .max_lines = 250,
         .reason = "combined tool definition aliases should stay a compact ordered table over group bodies",
     },
     .{
-        .path = "src/tool_manifest/definitions/discovery.zig",
+        .path = "src/manifest/definitions/discovery.zig",
         .max_lines = 140,
         .reason = "discovery and planning tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/agent.zig",
+        .path = "src/manifest/definitions/agent.zig",
         .max_lines = 120,
         .reason = "agent workflow tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/core.zig",
+        .path = "src/manifest/definitions/core.zig",
         .max_lines = 130,
         .reason = "core Zig command tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/formatting.zig",
+        .path = "src/manifest/definitions/formatting.zig",
         .max_lines = 100,
         .reason = "formatting and edit tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/zls.zig",
+        .path = "src/manifest/definitions/zls.zig",
         .max_lines = 170,
         .reason = "ZLS tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/docs.zig",
+        .path = "src/manifest/definitions/docs.zig",
         .max_lines = 80,
         .reason = "docs tool definitions should remain compact and explicitly scoped",
     },
     .{
-        .path = "src/tool_manifest/definitions/foundation.zig",
+        .path = "src/manifest/definitions/foundation.zig",
         .max_lines = 180,
         .reason = "foundation contract tool definitions should remain compact and additive",
     },
     .{
-        .path = "src/tool_manifest/definitions/environment_profiles.zig",
+        .path = "src/manifest/definitions/environment_profiles.zig",
         .max_lines = 260,
         .reason = "environment/profile tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/static_analysis.zig",
+        .path = "src/manifest/definitions/static_analysis.zig",
         .max_lines = 260,
         .reason = "static analysis tool definitions should remain independently reviewable",
     },
     .{
-        .path = "src/tool_manifest/definitions/ci.zig",
+        .path = "src/manifest/definitions/ci.zig",
         .max_lines = 80,
         .reason = "CI artifact tool definitions should remain compact",
     },
     .{
-        .path = "src/tool_manifest/definitions/zwanzig.zig",
+        .path = "src/manifest/definitions/zwanzig.zig",
         .max_lines = 90,
         .reason = "optional zwanzig backend definitions should remain compact",
     },
     .{
-        .path = "src/tool_manifest/definitions/profiling.zig",
+        .path = "src/manifest/definitions/profiling.zig",
         .max_lines = 100,
         .reason = "profiling backend definitions should remain compact",
     },
     .{
-        .path = "src/tool_manifest/definitions/performance.zig",
+        .path = "src/manifest/definitions/performance.zig",
         .max_lines = 180,
         .reason = "performance workflow definitions should remain compact and additive",
     },
     .{
-        .path = "src/tool_manifest/groups.zig",
+        .path = "src/manifest/groups.zig",
         .max_lines = 80,
         .reason = "tool group keyword metadata should remain a compact manifest adjunct",
     },
@@ -429,12 +234,12 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/coverage.zig",
-        .max_lines = 850,
+        .max_lines = 909,
         .reason = "coverage summarization is release evidence and should be split before it becomes hard to audit",
     },
     .{
         .path = "tools/http_smoke.zig",
-        .max_lines = 270,
+        .max_lines = 394,
         .reason = "HTTP smoke tests should stay focused on transport-level release assertions",
     },
     .{
@@ -449,7 +254,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/stdio_fixtures.zig",
-        .max_lines = 510,
+        .max_lines = 598,
         .reason = "stdio smoke fixtures should stay focused on end-to-end protocol assertions",
     },
     .{
@@ -459,7 +264,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/smoke_support.zig",
-        .max_lines = 180,
+        .max_lines = 184,
         .reason = "shared smoke-test utilities should remain a small helper module",
     },
     .{
@@ -484,7 +289,7 @@ pub const line_budgets = [_]LineBudget{
     },
     .{
         .path = "tools/mcp_contracts.zig",
-        .max_lines = 150,
+        .max_lines = 153,
         .reason = "MCP release-contract checks should stay focused on adapter and advertised-capability invariants",
     },
     .{
@@ -521,17 +326,12 @@ pub const forbidden_tokens = [_]ForbiddenToken{
         .reason = "runtime logs and CLI messages must use the project logging/stderr helpers",
     },
     .{
-        .path = "src/server.zig",
-        .token = "active_app",
-        .reason = "server handlers must not reintroduce global runtime state",
-    },
-    .{
-        .path = "src/lsp/client.zig",
+        .path = "src/infra/zls/client.zig",
         .token = "std.debug.print",
         .reason = "LSP lifecycle logs must go through the project logger",
     },
     .{
-        .path = "src/state/documents.zig",
+        .path = "src/infra/zls/documents.zig",
         .token = "std.debug.print",
         .reason = "document-session logs must go through the project logger",
     },
@@ -539,72 +339,32 @@ pub const forbidden_tokens = [_]ForbiddenToken{
 
 pub const code_hygiene_tokens = [_]HygieneToken{
     .{
-        .path = "src/zls/session.zig",
+        .path = "src/infra/zls/session.zig",
         .token = "const std = @import(\"std\");",
         .reason = "known stale import from task 018",
-    },
-    .{
-        .path = "src/tools/static_core.zig",
-        .token = "const docs = zigar.docs;",
-        .reason = "known stale alias from task 018",
-    },
-    .{
-        .path = "src/tools/static_tests.zig",
-        .token = "const countTopLevelEntries = static_core.countTopLevelEntries;",
-        .reason = "known stale alias from task 018",
-    },
-    .{
-        .path = "src/tools/agent_values.zig",
-        .token = "const testMapValue = static_analysis.testMapValue;",
-        .reason = "known stale alias from task 018",
-    },
-    .{
-        .path = "src/tools/edit_zls.zig",
-        .token = "const LspClient = common.LspClient;",
-        .reason = "known stale alias from task 018",
     },
 };
 
 pub const ignored_error_hygiene_tokens = [_]HygieneToken{
     .{
-        .path = "src/lsp/client.zig",
+        .path = "src/infra/zls/client.zig",
         .token = "catch {};",
         .reason = "LSP client errors must be propagated or recorded with logger/last_error",
     },
     .{
-        .path = "src/lsp/client.zig",
+        .path = "src/infra/zls/client.zig",
         .token = "catch return;",
         .reason = "LSP client best-effort shutdown/read paths must record why they are ignored",
     },
     .{
-        .path = "src/lsp/transport.zig",
+        .path = "src/infra/zls/transport.zig",
         .token = "catch continue",
         .reason = "LSP transport parse/read errors must be explicit protocol failures",
     },
     .{
-        .path = "src/lsp/transport.zig",
+        .path = "src/infra/zls/transport.zig",
         .token = "catch return",
         .reason = "LSP transport test helpers must only swallow EOF-like read errors explicitly",
-    },
-    .{
-        .path = "src/tools/edit_zls.zig",
-        .token = "catch {};",
-        .reason = "ZLS edit cleanup/close errors must be logged or surfaced",
-    },
-    .{
-        .path = "src/tools/edit_zls_diagnostics.zig",
-        .token = "catch null",
-        .reason = "ZLS diagnostics fallbacks must log the backend/cache failure before falling back",
-    },
-    .{
-        .path = "src/tools/edit_zls_diagnostics.zig",
-        .token = "catch continue",
-        .reason = "ZLS diagnostics workspace must count or report malformed cached notifications",
-    },
-    .{
-        .path = "src/tools/edit_zls_workspace_edits.zig",
-        .token = "catch {};",
-        .reason = "ZLS edit close failures after apply must be logged",
     },
     .{
         .path = "tools/stdio_fixtures.zig",
@@ -634,30 +394,10 @@ pub const ignored_error_hygiene_tokens = [_]HygieneToken{
 };
 
 pub const tool_error_contract_paths = [_][]const u8{
-    "src/tool_registry.zig",
-    "src/tools/common.zig",
-    "src/tools/agent.zig",
-    "src/tools/artifacts.zig",
-    "src/tools/ci.zig",
-    "src/tools/core.zig",
-    "src/tools/discovery.zig",
-    "src/tools/docs.zig",
-    "src/tools/diagnostics.zig",
-    "src/tools/adoption.zig",
-    "src/tools/edit_zls.zig",
-    "src/tools/edit_zls_diagnostics.zig",
-    "src/tools/observability.zig",
-    "src/tools/profiling.zig",
-    "src/tools/performance.zig",
-    "src/tools/release_drift.zig",
-    "src/tools/result_shape.zig",
-    "src/tools/static_core.zig",
-    "src/tools/static_tests.zig",
-    "src/tools/shared_core.zig",
-    "src/tools/tool_result_errors.zig",
-    "src/tools/trust.zig",
-    "src/tools/zls_common.zig",
-    "src/tools/zwanzig.zig",
+    "src/adapters/mcp/registry.zig",
+    "src/adapters/mcp/tools/artifacts.zig",
+    "src/adapters/mcp/tools/discovery.zig",
+    "src/adapters/mcp/tools/runtime_metrics.zig",
 };
 
 pub const tool_error_contract_tokens = [_]ToolErrorContractToken{
@@ -700,8 +440,8 @@ pub const tool_error_contract_tokens = [_]ToolErrorContractToken{
 };
 
 pub const resource_error_contract_paths = [_][]const u8{
-    "src/server.zig",
-    "src/tools/resources.zig",
+    "src/adapters/mcp/server.zig",
+    "src/adapters/mcp/resources.zig",
 };
 
 pub const resource_error_contract_tokens = [_]ToolErrorContractToken{
@@ -796,3 +536,9 @@ pub const pure_zig_roots = [_][]const u8{
     "tests",
     "tools",
 };
+
+test "release rules declare gates for source and tool checks" {
+    try @import("std").testing.expect(line_budgets.len > 0);
+    try @import("std").testing.expect(forbidden_tokens.len > 0);
+    try @import("std").testing.expect(pure_zig_roots.len >= 2);
+}

@@ -30,6 +30,9 @@ jobs:
       - name: Release gate
         run: zig build release-check
 
+      - name: Bounded fuzz smoke
+        run: zig build test --fuzz=10K
+
       - name: Release asset smoke
         run: zig build dist release-asset-smoke
 

@@ -1,0 +1,42 @@
+const std = @import("std");
+const math_alias = @import("math.zig");
+const nested_alias = @import("dep/nested.zig");
+
+pub const Outer = struct {
+    const Inner = struct {
+        pub fn nested() void {}
+    };
+};
+
+pub const Namespace = struct {
+    pub const ReExported = math_alias.Value;
+};
+
+fn generic(comptime T: type, value: T) T {
+    return value;
+}
+
+const LocalErrors = error{Bad};
+
+fn inferredFailure() !void {
+    return LocalErrors.Bad;
+}
+
+fn explicitFailure() LocalErrors!void {
+    return LocalErrors.Bad;
+}
+
+pub const Generated = struct {
+    pub fn run() void {}
+};
+
+test "outer works" {}
+
+test "nested \"escaped\" text" {
+    const nested_import = @import("nested.zig");
+    _ = nested_import;
+}
+
+test "escaped \"quote\" text" {}
+
+test named {}

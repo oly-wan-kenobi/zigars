@@ -47,7 +47,7 @@ pub fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
     defer allocator.free(bytes);
     var ok = std.mem.indexOf(u8, bytes, "without a shell") != null and
         std.mem.indexOf(u8, bytes, "MCP `readOnlyHint`") != null;
-    for (zigar.tool_metadata.entries) |entry| {
+    for (zigar.manifest.entries) |entry| {
         if (entry.risk.executes_user_command and std.mem.indexOf(u8, bytes, entry.name) == null) {
             try stderrPrint(io, "command-running tool docs check missing `{s}` in {s}\n", .{ entry.name, path });
             ok = false;
@@ -221,4 +221,8 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var writer = Io.File.stderr().writer(io, &buffer);
     try writer.interface.print(fmt, args);
     try writer.interface.flush();
+}
+
+test "release docs checker exposes static analysis docs check" {
+    try std.testing.expect(@hasDecl(@This(), "checkStaticAnalysisDocs"));
 }

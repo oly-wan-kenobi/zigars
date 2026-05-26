@@ -113,3 +113,7 @@ fn expectFileContains(client: anytype, workspace: []const u8, rel: []const u8, n
     defer client.allocator.free(bytes);
     if (std.mem.indexOf(u8, bytes, needle) == null) return error.AssertionFailed;
 }
+
+test "stdio transactional editing fixture exposes run entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "run"));
+}

@@ -4,8 +4,8 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const JsonValue = std.json.Value;
 const zigar = @import("zigar");
-const catalog_mod = zigar.catalog;
-const tool_metadata = zigar.tool_metadata;
+const catalog_mod = zigar.manifest.tool_catalog_render;
+const manifest = zigar.manifest;
 
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
@@ -96,13 +96,13 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
 
     var keys: std.ArrayList([]const u8) = .empty;
     defer keys.deinit(allocator);
-    for (tool_metadata.specs) |spec| {
+    for (manifest.specs) |spec| {
         if (spec.input_schema.fields.len > 0) try keys.append(allocator, spec.name);
     }
     std.mem.sort([]const u8, keys.items, {}, stringLessThan);
 
     for (keys.items) |tool_name| {
-        const spec = tool_metadata.find(tool_name).?;
+        const spec = manifest.find(tool_name).?;
         try out.writer.print("- `{s}`: ", .{tool_name});
         var wrote_fragment = false;
         if (hasSchemaFields(spec, true)) {
@@ -121,12 +121,12 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
     try out.writer.writeAll("\n## Planning Support\n\n");
     var plan_keys: std.ArrayList([]const u8) = .empty;
     defer plan_keys.deinit(allocator);
-    for (tool_metadata.entries) |entry| try plan_keys.append(allocator, entry.name);
+    for (manifest.entries) |entry| try plan_keys.append(allocator, entry.name);
     std.mem.sort([]const u8, plan_keys.items, {}, stringLessThan);
 
     for (plan_keys.items) |tool_name| {
-        const entry = tool_metadata.findEntry(tool_name).?;
-        try out.writer.print("- `{s}`: `{s}`", .{ tool_name, tool_metadata.planKind(entry.plan) });
+        const entry = manifest.findEntry(tool_name).?;
+        try out.writer.print("- `{s}`: `{s}`", .{ tool_name, manifest.planKind(entry.plan) });
         switch (entry.plan) {
             .exact_command => try out.writer.writeAll(" exact argv"),
             .dynamic_command => try out.writer.writeAll(" runtime-dependent backend plan"),
@@ -143,7 +143,7 @@ fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
     const static_contracts = obj.get("registry_static_analysis_contracts").?.object;
     var static_keys: std.ArrayList([]const u8) = .empty;
     defer static_keys.deinit(allocator);
-    for (tool_metadata.entries) |entry| {
+    for (manifest.entries) |entry| {
         if (entry.static_analysis_tier != null) try static_keys.append(allocator, entry.name);
     }
     std.mem.sort([]const u8, static_keys.items, {}, stringLessThan);
@@ -174,14 +174,14 @@ fn renderBacktickList(writer: *Io.Writer, items: []const JsonValue) !void {
     }
 }
 
-fn hasSchemaFields(spec: tool_metadata.ToolMeta, required: bool) bool {
+fn hasSchemaFields(spec: manifest.ToolMeta, required: bool) bool {
     for (spec.input_schema.fields) |field| {
         if (field[2] == required) return true;
     }
     return false;
 }
 
-fn renderArgumentFields(writer: *Io.Writer, spec: tool_metadata.ToolMeta, required: bool) !void {
+fn renderArgumentFields(writer: *Io.Writer, spec: manifest.ToolMeta, required: bool) !void {
     var i: usize = 0;
     for (spec.input_schema.fields) |field| {
         if (field[2] != required) continue;
@@ -189,4 +189,8 @@ fn renderArgumentFields(writer: *Io.Writer, spec: tool_metadata.ToolMeta, requir
         try writer.print("`{s}: {s}`", .{ field[0], field[1] });
         i += 1;
     }
+}
+
+test "tool index renderer exposes generate entrypoint" {
+    try std.testing.expect(@hasDecl(@This(), "generate"));
 }
