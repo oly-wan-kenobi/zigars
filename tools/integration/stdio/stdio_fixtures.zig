@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const cli_io = @import("../../common/cli_io.zig");
 const coverage_config = @import("../../coverage/coverage_config.zig");
 const smoke = @import("../smoke_support.zig");
+const stdio_core_fixtures = @import("stdio_core_fixtures.zig");
 const stdio_environment_fixtures = @import("stdio_environment_fixtures.zig");
 const stdio_runtime_ux_fixtures = @import("stdio_runtime_ux_fixtures.zig");
 const stdio_validation_workflow_fixtures = @import("stdio_validation_workflow_fixtures.zig");
@@ -17,6 +18,9 @@ const unexpectedArgument = cli_io.unexpectedArgument;
 const valueAt = smoke.valueAt;
 const writeFile = cli_io.writeFile;
 
+// Owns stdio protocol lifecycle fixtures and delegates larger tool families to
+// sibling modules that share the same StdioClient boundary.
+
 const StdioOptions = struct {
     binary: []const u8 = "zig-out/bin/zigar",
     zig_path: []const u8 = "zig",
@@ -24,6 +28,7 @@ const StdioOptions = struct {
     server_kcov_dir: ?[]const u8 = null,
 };
 
+/// Runs end-to-end stdio fixtures against a temporary workspace.
 pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []const []const u8) !void {
     var options: StdioOptions = .{};
     var i: usize = 0;
@@ -263,20 +268,6 @@ const StdioClient = struct {
         try stdio_runtime_ux_fixtures.run(self);
         try @import("stdio_adoption_fixtures.zig").run(self);
 
-        const profile_plan = try self.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
-        defer self.allocator.free(profile_plan);
-        try self.expectPathString(profile_plan, "kind", "zig_profile_plan");
-
-        const panic_trace = try self.callTool("zig_panic_trace_analyze", "{\"content\":\"thread 1 panic: reached unreachable code\\n#0 0x1 in main src/main.zig:1\\n\"}");
-        defer self.allocator.free(panic_trace);
-        try self.expectPathString(panic_trace, "kind", "zig_panic_trace_analyze");
-        try self.expectPathString(panic_trace, "failure_kind", "panic");
-
-        const binary_size = try self.callTool("zig_binary_size", "{\"path\":\"src/main.zig\"}");
-        defer self.allocator.free(binary_size);
-        try self.expectPathString(binary_size, "kind", "zig_binary_size");
-        try self.expectPathString(binary_size, "format", "unknown");
-
         const preview = try self.callTool("zig_format", "{\"file\":\"src/main.zig\",\"apply\":false}");
         defer self.allocator.free(preview);
         try self.expectPathJson(preview, "applied", .{ .bool = false });
@@ -301,65 +292,10 @@ const StdioClient = struct {
         try self.expectPathJson(patch, "applied", .{ .bool = false });
         if (std.mem.indexOf(u8, patch, "-    const x = 1;") == null) return error.AssertionFailed;
 
-        try self.expectZlsUnavailable("zig_document_open", "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void {}\\n\"}");
-        const close_doc = try self.callTool("zig_document_close", "{\"file\":\"src/main.zig\"}");
-        defer self.allocator.free(close_doc);
-        try self.expectPathJson(close_doc, "open", .{ .bool = false });
-        const document_status = try self.callTool("zig_document_status", "{\"file\":\"src/main.zig\"}");
-        defer self.allocator.free(document_status);
-        try self.expectPathString(document_status, "file", "src/main.zig");
-        try self.expectZlsUnavailable("zig_hover", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_definition", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_references", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_completion", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_signature_help", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_workspace_symbols", "{\"query\":\"main\"}");
-        try self.expectZlsUnavailable("zig_code_actions", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_code_action_apply", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}");
-        try self.expectZlsUnavailable("zig_rename", "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0,\"new_name\":\"renamed\"}");
-        try self.expectZlsUnavailable("zig_diagnostics_all", "{\"file\":\"src/main.zig\"}");
-        const diagnostics_workspace = try self.callTool("zig_diagnostics_workspace", "{}");
-        defer self.allocator.free(diagnostics_workspace);
-        try self.expectPathString(diagnostics_workspace, "kind", "zig_diagnostics_workspace");
-
-        const compile_index = try self.callTool("zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\n\"}");
-        defer self.allocator.free(compile_index);
-        try self.expectPathJson(compile_index, "summary.error_count", .{ .integer = 1 });
-
         const context = try self.callTool("zigar_context_pack", "{\"mode\":\"tiny\"}");
         defer self.allocator.free(context);
         try self.expectPathString(context, "kind", "zigar_context_pack");
         try self.expectPathJson(context, "workspace.zls_running", .{ .bool = false });
-
-        const langref = try self.callTool("zig_lang_ref_search", "{\"query\":\"defer\",\"limit\":1}");
-        defer self.allocator.free(langref);
-        try self.expectPathString(langref, "kind", "zig_lang_ref_search");
-        if (std.mem.indexOf(u8, langref, "Language reference search source:") == null) return error.AssertionFailed;
-        if (std.mem.indexOf(u8, langref, "wasm/main.zig") != null) return error.AssertionFailed;
-
-        const next_action = try self.callTool("zigar_next_action", "{\"goal\":\"fix compile error\",\"changed_files\":\"src/main.zig\"}");
-        defer self.allocator.free(next_action);
-        try self.expectPathString(next_action, "recommended_steps.0.tool", "zig_compile_error_index");
-        try self.expectPathString(next_action, "workflow_contract.confidence", "medium");
-
-        const guard = try self.callTool("zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
-        defer self.allocator.free(guard);
-        try self.expectPathJson(guard, "safe", .{ .bool = false });
-
-        const api_diff = try self.callTool("zig_public_api_diff", "{\"before\":\"pub fn oldName() void {}\\n\",\"after\":\"pub fn newName() void {}\\n\"}");
-        defer self.allocator.free(api_diff);
-        try self.expectPathJson(api_diff, "breaking_change_risk", .{ .bool = true });
-        try self.expectPathString(api_diff, "capability_tier", "advisory_orientation");
-
-        const ast_decls = try self.callTool("zig_ast_decl_summary", "{\"file\":\"src/tests.zig\"}");
-        defer self.allocator.free(ast_decls);
-        try self.expectPathString(ast_decls, "capability_tier", "parser_backed");
-        if (std.mem.indexOf(u8, ast_decls, "Fixture") == null) return error.AssertionFailed;
-
-        const annotations = try self.callTool("zig_ci_annotations", "{\"file\":\"src/bad.zig\"}");
-        defer self.allocator.free(annotations);
-        try self.expectPathString(annotations, "artifact_kind", "ci_annotations");
-        try self.expectPathString(annotations, "parser_confidence", "high");
 
         const validate = try self.callTool("zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(validate);
@@ -368,64 +304,7 @@ const StdioClient = struct {
         try stdio_validation_workflow_fixtures.run(self);
         try @import("stdio_transactional_editing_fixtures.zig").run(self, workspace);
 
-        const lint = try self.callTool("zig_lint", "{\"path\":\"src\",\"config\":\"src/main.zig\",\"rules_do\":\"fake-rule\",\"rules_skip\":\"style\",\"args\":\"--verbose\"}");
-        defer self.allocator.free(lint);
-        try self.expectPathJson(lint, "ok", .{ .bool = true });
-        try self.expectPathString(lint, "capability_tier", "zwanzig_backed");
-        if (std.mem.indexOf(u8, lint, "diagnostics") == null) return error.AssertionFailed;
-
-        const sarif = try self.callTool("zig_lint_sarif", "{\"path\":\"src\",\"rules_do\":\"fake-rule\"}");
-        defer self.allocator.free(sarif);
-        try self.expectPathJson(sarif, "ok", .{ .bool = true });
-        if (std.mem.indexOf(u8, sarif, "fake-zwanzig") == null or std.mem.indexOf(u8, sarif, "--format") == null) return error.AssertionFailed;
-
-        const rules = try self.callTool("zig_lint_rules", "{}");
-        defer self.allocator.free(rules);
-        if (std.mem.indexOf(u8, rules, "--dump-cfg") == null) return error.AssertionFailed;
-
-        const zlint = try self.callTool("zig_zlint", "{\"path\":\"src\",\"rules\":\"fake-rule\"}");
-        defer self.allocator.free(zlint);
-        try self.expectPathString(zlint, "capability_tier", "zlint_backed");
-        try self.expectPathString(zlint, "findings.0.rule", "fake.zlint.rule");
-
-        const zlint_sarif = try self.callTool("zig_zlint_sarif", "{\"path\":\"src\"}");
-        defer self.allocator.free(zlint_sarif);
-        try self.expectPathString(zlint_sarif, "sarif.version", "2.1.0");
-
-        const zlint_rules = try self.callTool("zig_zlint_rules", "{}");
-        defer self.allocator.free(zlint_rules);
-        try self.expectPathString(zlint_rules, "rules.0.id", "fake.zlint.rule");
-
-        const zlint_fix_preview = try self.callTool("zig_zlint_fix", "{\"path\":\"src\",\"apply\":false}");
-        defer self.allocator.free(zlint_fix_preview);
-        try self.expectPathJson(zlint_fix_preview, "requires_apply", .{ .bool = true });
-        try self.expectPathString(zlint_fix_preview, "argv.3", "--fix");
-
-        const zlint_fix_apply = try self.callTool("zig_zlint_fix", "{\"path\":\"src\",\"apply\":true}");
-        defer self.allocator.free(zlint_fix_apply);
-        try self.expectPathJson(zlint_fix_apply, "applied", .{ .bool = true });
-        try self.expectPathJson(zlint_fix_apply, "summary.error_count", .{ .integer = 0 });
-
-        const semantic_refs = try self.callTool("zig_semantic_refs", "{\"symbol\":\"main\",\"limit\":5}");
-        defer self.allocator.free(semantic_refs);
-        try self.expectPathString(semantic_refs, "references.0.source", "zlint");
-        try self.expectPathJson(semantic_refs, "zlint_ast_files", .{ .integer = 1 });
-
-        const graph = try self.callTool("zig_analysis_graphs", "{\"mode\":\"cfg\",\"path\":\"src/main.zig\",\"output\":\"graphs/cfg\"}");
-        defer self.allocator.free(graph);
-        try self.expectPathString(graph, "kind", "zig_analysis_graphs");
-        try self.expectPathString(graph, "mode", "cfg");
-        try expectFileStartsWith(self.allocator, self.io, workspace, "graphs/cfg/fake-cfg.dot", "digraph");
-
-        const flame = try self.callTool("zig_flamegraph", "{\"format\":\"recursive\",\"input\":\"stacks.folded\",\"output\":\"profile.svg\",\"title\":\"fixture\"}");
-        defer self.allocator.free(flame);
-        try self.expectPathString(flame, "kind", "zig_flamegraph");
-        try expectFileStartsWith(self.allocator, self.io, workspace, "profile.svg", "<svg");
-
-        const diff = try self.callTool("zig_flamegraph_diff", "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"title\":\"diff fixture\"}");
-        defer self.allocator.free(diff);
-        try self.expectPathString(diff, "kind", "zig_flamegraph_diff");
-        try expectFileStartsWith(self.allocator, self.io, workspace, "diff.svg", "<svg");
+        try stdio_core_fixtures.run(self, workspace);
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 
@@ -518,7 +397,7 @@ const StdioClient = struct {
         try smoke.expectJsonEq(self.io, value, expected, path);
     }
 
-    fn expectZlsUnavailable(self: *StdioClient, name: []const u8, args_json: []const u8) !void {
+    pub fn expectZlsUnavailable(self: *StdioClient, name: []const u8, args_json: []const u8) !void {
         const result = try self.callTool(name, args_json);
         defer self.allocator.free(result);
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, result, .{});
@@ -532,18 +411,6 @@ const StdioClient = struct {
         return error.AssertionFailed;
     }
 };
-
-fn joinedRead(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8) ![]u8 {
-    const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workspace, rel });
-    defer allocator.free(path);
-    return readFileAlloc(allocator, io, path, 1024 * 1024);
-}
-
-fn expectFileStartsWith(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8, prefix: []const u8) !void {
-    const bytes = try joinedRead(allocator, io, workspace, rel);
-    defer allocator.free(bytes);
-    if (!std.mem.startsWith(u8, bytes, prefix)) return error.AssertionFailed;
-}
 
 test "stdio fixtures command exposes run entrypoint" {
     try std.testing.expect(@hasDecl(@This(), "run"));
