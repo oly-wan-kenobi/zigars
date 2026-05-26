@@ -67,6 +67,7 @@ pub const Store = struct {
         self.workspace.allocator.free(path);
     }
 
+    /// Resolves resolve and returns borrowed or owned data according to the result contract.
     fn resolve(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)
@@ -77,6 +78,7 @@ pub const Store = struct {
         return .{ .path = allocator.dupe(u8, resolved) catch return error.OutOfMemory, .owns_path = true };
     }
 
+    /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const use_output = request.for_output orelse (self.read_resolution == .output);
@@ -96,6 +98,7 @@ pub const Store = struct {
         return .{ .bytes = bytes, .owns_bytes = true };
     }
 
+    /// Writes bytes through this port implementation.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.workspace.writeFile(self.io, request.path, request.bytes) catch |err| return mapPortError(err);
@@ -105,6 +108,7 @@ pub const Store = struct {
         };
     }
 
+    /// Deletes a path through this port implementation.
     fn delete(ptr: *anyopaque, request: ports.WorkspaceDeleteRequest) ports.PortError!ports.WorkspaceDeleteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = self.workspace.resolve(request.path) catch |err| return mapPortError(err);
@@ -119,6 +123,7 @@ pub const Store = struct {
         return .{ .deleted = true };
     }
 
+    /// Checks path existence through this port implementation.
     fn exists(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)
@@ -144,6 +149,7 @@ pub const Store = struct {
         return .{ .exists = true, .kind = .directory, .entry_count = count };
     }
 
+    /// Maps path-resolution failure into an existence-check result.
     fn existsResolveError(err: anyerror) ports.PortError!ports.WorkspaceExistsResult {
         // For existence probes, path/safety resolution failures map to "missing".
         return switch (mapPortError(err)) {
@@ -152,6 +158,7 @@ pub const Store = struct {
         };
     }
 
+    /// Ensures a directory exists through this port implementation.
     fn ensureDir(ptr: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err);
@@ -160,6 +167,7 @@ pub const Store = struct {
         return .{};
     }
 
+    /// Scans a directory through this port implementation.
     fn scanDirectory(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)

@@ -49,6 +49,7 @@ pub const Gateway = struct {
         };
     }
 
+    /// Reports whether the fake ZLS gateway supports a capability.
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.state.client == null) return error.Unavailable;
@@ -80,6 +81,7 @@ pub const Gateway = struct {
         };
     }
 
+    /// Applies a text synchronization request through the fake ZLS gateway.
     fn sync(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         zls_session.ensureReady(self.state, self.slots, self.config) catch |err| return mapZlsError(err);
@@ -98,6 +100,7 @@ pub const Gateway = struct {
         };
     }
 
+    /// Sends a raw request through the fake ZLS gateway.
     fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const client = self.state.client orelse return error.Unavailable;
@@ -114,6 +117,7 @@ pub const Gateway = struct {
     }
 };
 
+/// Wraps a ZLS JSON response result with its ownership state.
 fn responseResult(value: std.json.Value) ?std.json.Value {
     const obj = switch (value) {
         .object => |object| object,
@@ -122,6 +126,7 @@ fn responseResult(value: std.json.Value) ?std.json.Value {
     return obj.get("result");
 }
 
+/// Maps zls error into the port-facing representation without taking ownership unless documented by the result.
 fn mapZlsError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

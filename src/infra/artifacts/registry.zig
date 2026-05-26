@@ -355,6 +355,7 @@ pub fn deinitValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     }
 }
 
+/// Builds an owned registry entry from serialized artifact metadata.
 fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !OwnedEntry {
     if (value != .object) return error.InvalidArtifactRegistryEntry;
     const obj = value.object;
@@ -385,6 +386,7 @@ fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Own
     return owned;
 }
 
+/// Clones entry into allocator-owned storage.
 fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
     var owned = emptyOwnedEntry();
     errdefer owned.deinit(allocator);
@@ -409,6 +411,7 @@ fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
     return owned;
 }
 
+/// Creates an empty owned registry entry for rollback paths.
 fn emptyOwnedEntry() OwnedEntry {
     return .{
         .path = "",
@@ -432,6 +435,7 @@ fn emptyOwnedEntry() OwnedEntry {
     };
 }
 
+/// Reads the optional toolchain field from artifact metadata.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -444,6 +448,7 @@ fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.
     return .{ .object = obj };
 }
 
+/// Reads the argv array from artifact metadata.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -453,6 +458,7 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
     return .{ .array = array };
 }
 
+/// Reads preimage metadata from artifact JSON.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -468,22 +474,26 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     return .{ .object = obj };
 }
 
+/// Returns an object field from artifact JSON when present.
 fn objectValue(value: ?std.json.Value) ?std.json.ObjectMap {
     const actual = value orelse return null;
     if (actual != .object) return null;
     return actual.object;
 }
 
+/// Duplicates a required string field from artifact JSON.
 fn dupStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ![]u8 {
     const value = obj.get(key) orelse return error.InvalidArtifactRegistryEntry;
     if (value != .string) return error.InvalidArtifactRegistryEntry;
     return allocator.dupe(u8, value.string);
 }
 
+/// Duplicates an optional string field from artifact JSON.
 fn dupOptionalStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ![]u8 {
     return dupOptionalStringFieldDefault(allocator, obj, key, "");
 }
 
+/// Duplicates an optional string field or uses the default value.
 fn dupOptionalStringFieldDefault(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8, default: []const u8) ![]u8 {
     const value = obj.get(key) orelse return allocator.dupe(u8, default);
     if (value == .null) return allocator.dupe(u8, default);
@@ -491,6 +501,7 @@ fn dupOptionalStringFieldDefault(allocator: std.mem.Allocator, obj: std.json.Obj
     return allocator.dupe(u8, value.string);
 }
 
+/// Reads a bounded integer field from artifact JSON.
 fn integerField(obj: std.json.ObjectMap, key: []const u8) ?i64 {
     const value = obj.get(key) orelse return null;
     if (value != .integer) return null;

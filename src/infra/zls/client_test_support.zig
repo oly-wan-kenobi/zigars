@@ -1,8 +1,10 @@
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
 
+/// Paired file handles used to script in-process LSP transport tests.
 pub const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
 
+/// Creates paired file handles for scripted transport tests.
 pub fn testPipe() !TestPipe {
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
@@ -16,12 +18,14 @@ pub fn testPipe() !TestPipe {
     }
 }
 
+/// Threaded fake ZLS process that reads requests and writes scripted responses.
 pub const FakeZls = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     read_end: std.Io.File,
     write_end: std.Io.File,
 
+    /// Executes queued work and returns owned results or the first failure.
     pub fn run(self: *FakeZls) void {
         defer self.read_end.close(self.io);
         defer self.write_end.close(self.io);
@@ -61,6 +65,7 @@ pub const FakeZls = struct {
         }
     }
 
+    /// Writes one scripted JSON-RPC response to the test pipe.
     fn writeResponse(self: *FakeZls, id: i64, result_json: []const u8) !void {
         var aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer aw.deinit();
@@ -72,6 +77,7 @@ pub const FakeZls = struct {
         try self.writeRaw(body);
     }
 
+    /// Writes raw bytes to the scripted ZLS output stream.
     fn writeRaw(self: *FakeZls, body: []const u8) !void {
         try LspTransport.writeMessage(self.write_end, self.io, body);
     }

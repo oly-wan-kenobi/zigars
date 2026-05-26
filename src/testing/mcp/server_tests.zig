@@ -23,16 +23,19 @@ const fixture_prompt_messages = [_]mcp.prompts.PromptMessage{
     .{ .role = .user, .content = .{ .resource = .{ .resource = .{ .uri = "file:///prompt-resource", .text = "prompt resource text" } } } },
 };
 
+/// Scripted transport that queues inbound JSON-RPC messages and captures sends.
 const ScriptTransport = struct {
     messages: []const []const u8,
     index: usize = 0,
     sent: std.ArrayList([]const u8) = .empty,
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     fn deinit(self: *ScriptTransport, allocator: std.mem.Allocator) void {
         for (self.sent.items) |message| allocator.free(message);
         self.sent.deinit(allocator);
     }
 
+    /// Returns the transport vtable used by this test double.
     fn transport(self: *ScriptTransport) mcp.transport.Transport {
         return .{
             .ptr = self,
@@ -44,6 +47,7 @@ const ScriptTransport = struct {
         };
     }
 
+    /// Sends a JSON-RPC message through the transport vtable.
     fn sendVtable(ptr: *anyopaque, _: std.Io, allocator: std.mem.Allocator, message: []const u8) mcp.transport.Transport.SendError!void {
         const self: *ScriptTransport = @ptrCast(@alignCast(ptr));
         const owned = allocator.dupe(u8, message) catch return error.OutOfMemory;
@@ -53,6 +57,7 @@ const ScriptTransport = struct {
         };
     }
 
+    /// Receives a JSON-RPC message through the transport vtable.
     fn receiveVtable(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
         const self: *ScriptTransport = @ptrCast(@alignCast(ptr));
         if (self.index >= self.messages.len) return error.EndOfStream;
@@ -61,6 +66,7 @@ const ScriptTransport = struct {
         return message;
     }
 
+    /// Closes the transport through the transport vtable.
     fn closeVtable(_: *anyopaque) void {}
 };
 
@@ -72,6 +78,7 @@ test "script transport frees messages when recording send fails" {
     transport.transport().close();
 }
 
+/// Joins captured transport sends into a single owned buffer.
 fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     for (transport.sent.items) |message| {
@@ -81,12 +88,14 @@ fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]cons
     return out.toOwnedSlice(allocator);
 }
 
+/// Records an expected before call, cloning request data and failing on allocation errors.
 fn expectBefore(haystack: []const u8, first: []const u8, second: []const u8) !void {
     const first_index = std.mem.indexOf(u8, haystack, first) orelse return error.TestExpectedEqual;
     const second_index = std.mem.indexOf(u8, haystack, second) orelse return error.TestExpectedEqual;
     try std.testing.expect(first_index < second_index);
 }
 
+/// Tool handler fixture that returns a successful response.
 fn okToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
     return .{
         .content = fixture_tool_content[0..],
@@ -94,10 +103,12 @@ fn okToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.V
     };
 }
 
+/// Tool handler fixture that returns a structured failure.
 fn failToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
     return error.ExecutionFailed;
 }
 
+/// Resource handler fixture that returns borrowed content.
 fn testResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []const u8) !mcp.resources.ResourceContent {
     return .{
         .uri = uri,
@@ -107,10 +118,12 @@ fn testResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []c
     };
 }
 
+/// Resource handler fixture that returns a structured failure.
 fn failResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) !mcp.resources.ResourceContent {
     return error.ReadFailed;
 }
 
+/// Dynamic resource handler fixture that resolves content at call time.
 fn dynamicResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: []const u8) !mcp.resources.ResourceContent {
     return .{
         .uri = uri,
@@ -120,20 +133,25 @@ fn dynamicResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, uri: 
     };
 }
 
+/// Dynamic resource handler fixture that returns a structured failure.
 fn failDynamicResourceHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) !mcp.resources.ResourceContent {
     return error.ReadFailed;
 }
 
+/// Releases owned allocations/resources; callers must not use the value afterward.
 fn noopResourceDeinit(_: std.mem.Allocator, _: mcp.resources.ResourceContent) void {}
 
+/// Prompt handler fixture that returns borrowed messages.
 fn testPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
     return fixture_prompt_messages[0..];
 }
 
+/// Prompt handler fixture that returns a structured failure.
 fn failPromptHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) ![]const mcp.prompts.PromptMessage {
     return error.GenerationFailed;
 }
 
+/// Releases owned allocations/resources; callers must not use the value afterward.
 fn noopPromptDeinit(_: std.mem.Allocator, _: []const mcp.prompts.PromptMessage) void {}
 
 test "Server initialization" {

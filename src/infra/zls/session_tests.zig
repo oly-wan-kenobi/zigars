@@ -18,6 +18,7 @@ const restart = session.restart;
 const ensureReady = session.ensureReady;
 const start = session.start;
 
+/// Creates a minimal ZLS session configuration for tests.
 fn testConfig() Config {
     return .{
         .allocator = testing.allocator,
@@ -28,6 +29,7 @@ fn testConfig() Config {
     };
 }
 
+/// Finds an executable in the test PATH fixture.
 fn findExecutable(io: Io, candidates: []const []const u8) ![]const u8 {
     for (candidates) |candidate| {
         Io.Dir.accessAbsolute(io, candidate, .{}) catch continue;
@@ -36,6 +38,7 @@ fn findExecutable(io: Io, candidates: []const []const u8) ![]const u8 {
     return error.SkipZigTest;
 }
 
+/// Creates a temporary workspace root for tests.
 fn tmpRoot(allocator: Allocator, io: Io, tmp_sub_path: []const u8) ![]u8 {
     const rel_base = try fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp_sub_path });
     defer allocator.free(rel_base);

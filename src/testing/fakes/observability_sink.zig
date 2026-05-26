@@ -56,6 +56,7 @@ pub const FakeObservabilitySink = struct {
         if (self.next_event != self.expected_events.items.len) return error.MissingExpectedCall;
     }
 
+    /// Records an observability event in the fake sink.
     fn emit(ptr: *anyopaque, event: ports.ObservationEvent) ports.PortError!void {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_event = try cloneEvent(self.allocator, event);
@@ -70,6 +71,7 @@ pub const FakeObservabilitySink = struct {
         self.next_event += 1;
     }
 
+    /// Clones event into allocator-owned storage.
     fn cloneEvent(allocator: Allocator, event: ports.ObservationEvent) !ports.ObservationEvent {
         const name = try common.dupString(allocator, event.name);
         errdefer allocator.free(name);
@@ -85,12 +87,14 @@ pub const FakeObservabilitySink = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned event.
     fn freeEvent(allocator: Allocator, event: ports.ObservationEvent) void {
         allocator.free(event.name);
         allocator.free(event.phase);
         freeAttributes(allocator, event.attributes);
     }
 
+    /// Clones attributes into allocator-owned storage.
     fn cloneAttributes(allocator: Allocator, attributes: []const ports.ObservationAttribute) ![]const ports.ObservationAttribute {
         const copied = try allocator.alloc(ports.ObservationAttribute, attributes.len);
         errdefer allocator.free(copied);
@@ -113,6 +117,7 @@ pub const FakeObservabilitySink = struct {
         return copied;
     }
 
+    /// Releases allocator-owned fields held by the cloned attributes.
     fn freeAttributes(allocator: Allocator, attributes: []const ports.ObservationAttribute) void {
         for (attributes) |attribute| {
             allocator.free(attribute.key);
@@ -121,6 +126,7 @@ pub const FakeObservabilitySink = struct {
         allocator.free(attributes);
     }
 
+    /// Compares events by the fields that affect behavior.
     fn eventsEqual(expected: ports.ObservationEvent, actual: ports.ObservationEvent) bool {
         return std.mem.eql(u8, expected.name, actual.name) and
             std.mem.eql(u8, expected.phase, actual.phase) and
@@ -128,6 +134,7 @@ pub const FakeObservabilitySink = struct {
             attributesEqual(expected.attributes, actual.attributes);
     }
 
+    /// Compares attributes by the fields that affect behavior.
     fn attributesEqual(expected: []const ports.ObservationAttribute, actual: []const ports.ObservationAttribute) bool {
         if (expected.len != actual.len) return false;
         for (expected, actual) |expected_attribute, actual_attribute| {
@@ -200,6 +207,7 @@ test "observability sink event cloning cleans partial allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, expectObservabilityEventWithAllocator, .{});
 }
 
+/// Records an expected observability event with allocator call, cloning request data and failing on allocation errors.
 fn expectObservabilityEventWithAllocator(allocator: Allocator) !void {
     var fake = FakeObservabilitySink.init(allocator);
     defer fake.deinit();

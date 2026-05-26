@@ -1,11 +1,13 @@
 const std = @import("std");
 const Mutex = @import("../process/sync.zig").Mutex;
 
+/// One cached diagnostic payload plus the sequence used for stable snapshots.
 const DiagnosticEntry = struct {
     value: []const u8,
     sequence: u64,
 };
 
+/// Owned diagnostic payload and ordering metadata returned to callers.
 const SnapshotEntry = struct {
     value: []const u8,
     sequence: u64,
@@ -168,6 +170,7 @@ pub const DiagnosticsCache = struct {
         };
     }
 
+    /// Subtracts cached byte usage while the diagnostics mutex is held.
     fn subtractBytesLocked(self: *DiagnosticsCache, bytes: usize) void {
         if (bytes <= self.retained_bytes) {
             self.retained_bytes -= bytes;
@@ -176,12 +179,14 @@ pub const DiagnosticsCache = struct {
         }
     }
 
+    /// Evicts diagnostics until the cache can hold the requested byte count.
     fn evictUntilFitsLocked(self: *DiagnosticsCache, incoming_bytes: usize) void {
         while (self.retained_bytes > self.max_bytes -| incoming_bytes) {
             if (!self.evictOldestLocked()) return;
         }
     }
 
+    /// Evicts the oldest diagnostic entry while the mutex is held.
     fn evictOldestLocked(self: *DiagnosticsCache) bool {
         var oldest_key: ?[]const u8 = null;
         var oldest_sequence: u64 = 0;
@@ -202,6 +207,7 @@ pub const DiagnosticsCache = struct {
         return true;
     }
 
+    /// Releases allocator-owned fields held by the cloned entry locked.
     fn freeEntryLocked(self: *DiagnosticsCache, key: []const u8, entry: DiagnosticEntry) void {
         self.subtractBytesLocked(entry.value.len);
         self.allocator.free(key);
@@ -209,11 +215,13 @@ pub const DiagnosticsCache = struct {
     }
 };
 
+/// Builds a bounded in-memory I/O fixture for tests.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();
 }
 
+/// Parses object from caller-owned input and reports malformed data without taking ownership.
 fn parseObject(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(std.json.Value) {
     return std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
 }

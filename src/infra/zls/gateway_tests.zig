@@ -3,6 +3,7 @@ const Gateway = @import("gateway.zig").Gateway;
 const zls_session = @import("session.zig");
 const Workspace = @import("../workspace/workspace.zig").Workspace;
 
+/// Creates a temporary workspace and seed document for ZLS gateway tests.
 fn testWorkspace() Workspace {
     return .{
         .allocator = std.testing.allocator,
@@ -12,6 +13,7 @@ fn testWorkspace() Workspace {
     };
 }
 
+/// Creates a minimal ZLS session configuration for tests.
 fn testConfig() zls_session.Config {
     return .{
         .allocator = std.testing.allocator,
@@ -22,6 +24,7 @@ fn testConfig() zls_session.Config {
     };
 }
 
+/// Creates a temporary workspace root for tests.
 fn tmpRoot(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8) ![]u8 {
     const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp_sub_path });
     defer allocator.free(rel_base);

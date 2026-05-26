@@ -88,6 +88,7 @@ pub fn stripFilePrefix(uri: []const u8) []const u8 {
     return if (std.mem.startsWith(u8, uri, "file://")) uri[7..] else uri;
 }
 
+/// Reports whether a URI byte must be percent-encoded.
 fn needsEncoding(c: u8) bool {
     return switch (c) {
         'A'...'Z', 'a'...'z', '0'...'9', '-', '.', '_', '~', '/', ':' => false,
@@ -95,10 +96,12 @@ fn needsEncoding(c: u8) bool {
     };
 }
 
+/// Returns the lowercase hexadecimal digit for a four-bit value.
 fn hexDigit(v: u8) u8 {
     return "0123456789ABCDEF"[v & 0xf];
 }
 
+/// Decodes one ASCII hexadecimal digit.
 fn unhex(c: u8) ?u4 {
     return switch (c) {
         '0'...'9' => @intCast(c - '0'),

@@ -37,6 +37,7 @@ pub const FakeWorkspaceStore = struct {
         request: ports.WorkspaceResolveRequest,
         result: ExpectedResolveResult,
 
+        /// Frees the cloned resolve request and stored resolve outcome.
         fn deinit(self: ExpectedResolve, allocator: Allocator) void {
             freeResolveRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -48,6 +49,7 @@ pub const FakeWorkspaceStore = struct {
         request: ports.WorkspaceReadRequest,
         result: ExpectedReadResult,
 
+        /// Frees the cloned read request and stored read outcome.
         fn deinit(self: ExpectedRead, allocator: Allocator) void {
             freeReadRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -59,52 +61,63 @@ pub const FakeWorkspaceStore = struct {
         request: ports.WorkspaceWriteRequest,
         result: ExpectedWriteResult,
 
+        /// Frees the cloned write request.
         fn deinit(self: ExpectedWrite, allocator: Allocator) void {
             freeWriteRequest(allocator, self.request);
         }
     };
 
+    /// Expected delete call and result status.
     const ExpectedDelete = struct {
         request: ports.WorkspaceDeleteRequest,
         result: ExpectedDeleteResult,
 
+        /// Frees the cloned delete request.
         fn deinit(self: ExpectedDelete, allocator: Allocator) void {
             freeDeleteRequest(allocator, self.request);
         }
     };
 
+    /// Expected existence check and result status.
     const ExpectedExists = struct {
         request: ports.WorkspaceExistsRequest,
         result: ExpectedExistsResult,
 
+        /// Frees the cloned exists request.
         fn deinit(self: ExpectedExists, allocator: Allocator) void {
             freeExistsRequest(allocator, self.request);
         }
     };
 
+    /// Expected directory creation call and result status.
     const ExpectedEnsureDir = struct {
         request: ports.WorkspaceEnsureDirRequest,
         result: ExpectedEnsureDirResult,
 
+        /// Frees the cloned ensure-dir request.
         fn deinit(self: ExpectedEnsureDir, allocator: Allocator) void {
             freeEnsureDirRequest(allocator, self.request);
         }
     };
 
+    /// Expected directory scan call and owned scan result.
     const ExpectedDirectoryScan = struct {
         request: ports.WorkspaceDirectoryScanRequest,
         result: ExpectedDirectoryScanResult,
 
+        /// Frees the cloned scan request and stored scan outcome.
         fn deinit(self: ExpectedDirectoryScan, allocator: Allocator) void {
             freeDirectoryScanRequest(allocator, self.request);
             self.result.deinit(allocator);
         }
     };
 
+    /// Stored read outcome; successful bytes are allocator-owned.
     const ExpectedReadResult = union(enum) {
         ok: []const u8,
         err: ports.PortError,
 
+        /// Releases owned bytes for successful read outcomes.
         fn deinit(self: ExpectedReadResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |bytes| allocator.free(bytes),
@@ -113,10 +126,12 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    /// Stored resolve outcome; successful paths are allocator-owned.
     const ExpectedResolveResult = union(enum) {
         ok: []const u8,
         err: ports.PortError,
 
+        /// Releases owned paths for successful resolve outcomes.
         fn deinit(self: ExpectedResolveResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |path| allocator.free(path),
@@ -125,30 +140,36 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    /// Stored write outcome for a matched write request.
     const ExpectedWriteResult = union(enum) {
         ok: ports.WorkspaceWriteResult,
         err: ports.PortError,
     };
 
+    /// Stored delete outcome for a matched delete request.
     const ExpectedDeleteResult = union(enum) {
         ok: ports.WorkspaceDeleteResult,
         err: ports.PortError,
     };
 
+    /// Stored existence outcome for a matched exists request.
     const ExpectedExistsResult = union(enum) {
         ok: ports.WorkspaceExistsResult,
         err: ports.PortError,
     };
 
+    /// Stored ensure-dir outcome for a matched directory request.
     const ExpectedEnsureDirResult = union(enum) {
         ok: ports.WorkspaceEnsureDirResult,
         err: ports.PortError,
     };
 
+    /// Stored scan outcome; successful entry paths are allocator-owned.
     const ExpectedDirectoryScanResult = union(enum) {
         ok: []ports.WorkspaceDirectoryEntry,
         err: ports.PortError,
 
+        /// Releases owned directory entries for successful scan outcomes.
         fn deinit(self: ExpectedDirectoryScanResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |entries| {
@@ -227,6 +248,7 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Records an expected resolve call, cloning request data and failing on allocation errors.
     pub fn expectResolve(self: *Self, request: ports.WorkspaceResolveRequest, path: []const u8) !void {
         const owned_request = try cloneResolveRequest(self.allocator, request);
         var request_owned = true;
@@ -243,6 +265,7 @@ pub const FakeWorkspaceStore = struct {
         path_owned = false;
     }
 
+    /// Records an expected resolve error call, cloning request data and failing on allocation errors.
     pub fn expectResolveError(self: *Self, request: ports.WorkspaceResolveRequest, err: ports.PortError) !void {
         const owned_request = try cloneResolveRequest(self.allocator, request);
         var request_owned = true;
@@ -254,6 +277,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected read call, cloning request data and failing on allocation errors.
     pub fn expectRead(self: *Self, request: ports.WorkspaceReadRequest, bytes: []const u8) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
@@ -270,6 +294,7 @@ pub const FakeWorkspaceStore = struct {
         bytes_owned = false;
     }
 
+    /// Records an expected read error call, cloning request data and failing on allocation errors.
     pub fn expectReadError(self: *Self, request: ports.WorkspaceReadRequest, err: ports.PortError) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
@@ -281,6 +306,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected write call, cloning request data and failing on allocation errors.
     pub fn expectWrite(self: *Self, request: ports.WorkspaceWriteRequest, result: ports.WorkspaceWriteResult) !void {
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
@@ -292,6 +318,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected write error call, cloning request data and failing on allocation errors.
     pub fn expectWriteError(self: *Self, request: ports.WorkspaceWriteRequest, err: ports.PortError) !void {
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
@@ -303,6 +330,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected delete call, cloning request data and failing on allocation errors.
     pub fn expectDelete(self: *Self, request: ports.WorkspaceDeleteRequest, result: ports.WorkspaceDeleteResult) !void {
         const owned_request = try cloneDeleteRequest(self.allocator, request);
         var request_owned = true;
@@ -314,6 +342,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected delete error call, cloning request data and failing on allocation errors.
     pub fn expectDeleteError(self: *Self, request: ports.WorkspaceDeleteRequest, err: ports.PortError) !void {
         const owned_request = try cloneDeleteRequest(self.allocator, request);
         var request_owned = true;
@@ -325,6 +354,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected exists call, cloning request data and failing on allocation errors.
     pub fn expectExists(self: *Self, request: ports.WorkspaceExistsRequest, result: ports.WorkspaceExistsResult) !void {
         const owned_request = try cloneExistsRequest(self.allocator, request);
         var request_owned = true;
@@ -336,6 +366,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected exists error call, cloning request data and failing on allocation errors.
     pub fn expectExistsError(self: *Self, request: ports.WorkspaceExistsRequest, err: ports.PortError) !void {
         const owned_request = try cloneExistsRequest(self.allocator, request);
         var request_owned = true;
@@ -347,6 +378,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected ensure dir call, cloning request data and failing on allocation errors.
     pub fn expectEnsureDir(self: *Self, request: ports.WorkspaceEnsureDirRequest, result: ports.WorkspaceEnsureDirResult) !void {
         const owned_request = try cloneEnsureDirRequest(self.allocator, request);
         var request_owned = true;
@@ -358,6 +390,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected ensure dir error call, cloning request data and failing on allocation errors.
     pub fn expectEnsureDirError(self: *Self, request: ports.WorkspaceEnsureDirRequest, err: ports.PortError) !void {
         const owned_request = try cloneEnsureDirRequest(self.allocator, request);
         var request_owned = true;
@@ -369,6 +402,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Records an expected scan directory call, cloning request data and failing on allocation errors.
     pub fn expectScanDirectory(self: *Self, request: ports.WorkspaceDirectoryScanRequest, paths: []const []const u8) !void {
         const owned_request = try cloneDirectoryScanRequest(self.allocator, request);
         var request_owned = true;
@@ -387,6 +421,7 @@ pub const FakeWorkspaceStore = struct {
         entries_owned = false;
     }
 
+    /// Records an expected scan directory error call, cloning request data and failing on allocation errors.
     pub fn expectScanDirectoryError(self: *Self, request: ports.WorkspaceDirectoryScanRequest, err: ports.PortError) !void {
         const owned_request = try cloneDirectoryScanRequest(self.allocator, request);
         var request_owned = true;
@@ -398,34 +433,42 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
+    /// Resolves calls and returns borrowed or owned data according to the result contract.
     pub fn resolveCalls(self: *const Self) []const ports.WorkspaceResolveRequest {
         return self.resolve_records.items;
     }
 
+    /// Returns recorded read call snapshots owned by this fake.
     pub fn readCalls(self: *const Self) []const ports.WorkspaceReadRequest {
         return self.read_records.items;
     }
 
+    /// Returns recorded write call snapshots owned by this fake.
     pub fn writeCalls(self: *const Self) []const ports.WorkspaceWriteRequest {
         return self.write_records.items;
     }
 
+    /// Returns recorded delete call snapshots owned by this fake.
     pub fn deleteCalls(self: *const Self) []const ports.WorkspaceDeleteRequest {
         return self.delete_records.items;
     }
 
+    /// Returns recorded exists call snapshots owned by this fake.
     pub fn existsCalls(self: *const Self) []const ports.WorkspaceExistsRequest {
         return self.exists_records.items;
     }
 
+    /// Returns recorded ensure dir call snapshots owned by this fake.
     pub fn ensureDirCalls(self: *const Self) []const ports.WorkspaceEnsureDirRequest {
         return self.ensure_dir_records.items;
     }
 
+    /// Returns recorded scan directory call snapshots owned by this fake.
     pub fn scanDirectoryCalls(self: *const Self) []const ports.WorkspaceDirectoryScanRequest {
         return self.scan_records.items;
     }
 
+    /// Verifies that all queued expectations were consumed, returning the first missing-call error.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_resolve != self.expected_resolves.items.len) return error.MissingExpectedCall;
         if (self.next_read != self.expected_reads.items.len) return error.MissingExpectedCall;
@@ -436,6 +479,7 @@ pub const FakeWorkspaceStore = struct {
         if (self.next_scan != self.expected_scans.items.len) return error.MissingExpectedCall;
     }
 
+    /// Resolves resolve and returns borrowed or owned data according to the result contract.
     fn resolve(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneResolveRequest(self.allocator, request);
@@ -457,6 +501,7 @@ pub const FakeWorkspaceStore = struct {
         return .{ .path = path, .owns_path = true };
     }
 
+    /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneReadRequest(self.allocator, request);
@@ -478,6 +523,7 @@ pub const FakeWorkspaceStore = struct {
         return .{ .bytes = bytes, .owns_bytes = true };
     }
 
+    /// Writes bytes through this port implementation.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneWriteRequest(self.allocator, request);
@@ -496,6 +542,7 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Deletes a path through this port implementation.
     fn delete(ptr: *anyopaque, request: ports.WorkspaceDeleteRequest) ports.PortError!ports.WorkspaceDeleteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneDeleteRequest(self.allocator, request);
@@ -514,6 +561,7 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Checks path existence through this port implementation.
     fn exists(ptr: *anyopaque, _: Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneExistsRequest(self.allocator, request);
@@ -532,6 +580,7 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Ensures a directory exists through this port implementation.
     fn ensureDir(ptr: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneEnsureDirRequest(self.allocator, request);
@@ -550,6 +599,7 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Scans a directory through this port implementation.
     fn scanDirectory(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneDirectoryScanRequest(self.allocator, request);
@@ -577,6 +627,7 @@ pub const FakeWorkspaceStore = struct {
         return .{ .entries = copied, .owns_memory = true };
     }
 
+    /// Clones resolve request into allocator-owned storage.
     fn cloneResolveRequest(allocator: Allocator, request: ports.WorkspaceResolveRequest) !ports.WorkspaceResolveRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -593,11 +644,13 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned resolve request.
     fn freeResolveRequest(allocator: Allocator, request: ports.WorkspaceResolveRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones read request into allocator-owned storage.
     fn cloneReadRequest(allocator: Allocator, request: ports.WorkspaceReadRequest) !ports.WorkspaceReadRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -615,11 +668,13 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned read request.
     fn freeReadRequest(allocator: Allocator, request: ports.WorkspaceReadRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones write request into allocator-owned storage.
     fn cloneWriteRequest(allocator: Allocator, request: ports.WorkspaceWriteRequest) !ports.WorkspaceWriteRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -642,12 +697,14 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned write request.
     fn freeWriteRequest(allocator: Allocator, request: ports.WorkspaceWriteRequest) void {
         allocator.free(request.path);
         allocator.free(request.bytes);
         allocator.free(request.provenance);
     }
 
+    /// Clones delete request into allocator-owned storage.
     fn cloneDeleteRequest(allocator: Allocator, request: ports.WorkspaceDeleteRequest) !ports.WorkspaceDeleteRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -664,11 +721,13 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned delete request.
     fn freeDeleteRequest(allocator: Allocator, request: ports.WorkspaceDeleteRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones exists request into allocator-owned storage.
     fn cloneExistsRequest(allocator: Allocator, request: ports.WorkspaceExistsRequest) !ports.WorkspaceExistsRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -685,11 +744,13 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned exists request.
     fn freeExistsRequest(allocator: Allocator, request: ports.WorkspaceExistsRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones ensure dir request into allocator-owned storage.
     fn cloneEnsureDirRequest(allocator: Allocator, request: ports.WorkspaceEnsureDirRequest) !ports.WorkspaceEnsureDirRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -705,11 +766,13 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned ensure dir request.
     fn freeEnsureDirRequest(allocator: Allocator, request: ports.WorkspaceEnsureDirRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones directory scan request into allocator-owned storage.
     fn cloneDirectoryScanRequest(allocator: Allocator, request: ports.WorkspaceDirectoryScanRequest) !ports.WorkspaceDirectoryScanRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -732,18 +795,21 @@ pub const FakeWorkspaceStore = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned directory scan request.
     fn freeDirectoryScanRequest(allocator: Allocator, request: ports.WorkspaceDirectoryScanRequest) void {
         allocator.free(request.path);
         allocator.free(request.suffix);
         allocator.free(request.provenance);
     }
 
+    /// Resolves requests equal and returns borrowed or owned data according to the result contract.
     fn resolveRequestsEqual(expected: ports.WorkspaceResolveRequest, actual: ports.WorkspaceResolveRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.for_output == actual.for_output and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares read requests by the fields that affect behavior.
     fn readRequestsEqual(expected: ports.WorkspaceReadRequest, actual: ports.WorkspaceReadRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.max_bytes == actual.max_bytes and
@@ -751,6 +817,7 @@ pub const FakeWorkspaceStore = struct {
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares write requests by the fields that affect behavior.
     fn writeRequestsEqual(expected: ports.WorkspaceWriteRequest, actual: ports.WorkspaceWriteRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             std.mem.eql(u8, expected.bytes, actual.bytes) and
@@ -759,23 +826,27 @@ pub const FakeWorkspaceStore = struct {
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares delete requests by the fields that affect behavior.
     fn deleteRequestsEqual(expected: ports.WorkspaceDeleteRequest, actual: ports.WorkspaceDeleteRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.missing_ok == actual.missing_ok and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares exists requests by the fields that affect behavior.
     fn existsRequestsEqual(expected: ports.WorkspaceExistsRequest, actual: ports.WorkspaceExistsRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.for_output == actual.for_output and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares ensure dir requests by the fields that affect behavior.
     fn ensureDirRequestsEqual(expected: ports.WorkspaceEnsureDirRequest, actual: ports.WorkspaceEnsureDirRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares directory scan requests by the fields that affect behavior.
     fn directoryScanRequestsEqual(expected: ports.WorkspaceDirectoryScanRequest, actual: ports.WorkspaceDirectoryScanRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             std.mem.eql(u8, expected.suffix, actual.suffix) and

@@ -6,6 +6,7 @@ pub const RequestId = union(enum) {
     string: []const u8,
     none,
 
+    /// Parses JSON into allocator-owned values using the JSON-RPC allocator contract.
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !RequestId {
         _ = allocator;
         _ = options;
@@ -18,6 +19,7 @@ pub const RequestId = union(enum) {
         };
     }
 
+    /// Serializes JSON-RPC payloads with allocator-owned output.
     pub fn jsonStringify(self: RequestId, jw: anytype) !void {
         switch (self) {
             .integer => |i| try jw.write(i),
@@ -26,6 +28,7 @@ pub const RequestId = union(enum) {
         }
     }
 
+    /// Compares JSON-RPC identifiers by tag and payload.
     pub fn eql(a: RequestId, b: RequestId) bool {
         return switch (a) {
             .integer => |ai| switch (b) {
@@ -55,6 +58,7 @@ pub const Message = struct {
     @"error": ?ErrorObject = null,
 };
 
+/// JSON-RPC error payload with optional structured data owned by the message.
 pub const ErrorObject = struct {
     code: i64,
     message: []const u8,

@@ -10,6 +10,7 @@ pub const ZlsProcess = struct {
     restart_count: u32 = 0,
     max_restarts: u32 = 5,
 
+    /// Stores process configuration; `spawn` creates the child owned by `deinit`.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, workspace_path: []const u8, zls_path: []const u8) ZlsProcess {
         return .{
             .allocator = allocator,
@@ -88,6 +89,7 @@ pub const ZlsProcess = struct {
         return true;
     }
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     pub fn deinit(self: *ZlsProcess) void {
         self.kill();
     }

@@ -35,6 +35,7 @@ test "fuzz coverage seed exercises successful coverage parsing" {
     try std.testing.expectEqual(@as(usize, 1), changed.count);
 }
 
+/// Feeds arbitrary bytes through text parsers that accept untrusted input.
 fn fuzzTextParsers(_: void, smith: *std.testing.Smith) !void {
     @disableInstrumentation();
     var buffer: [512]u8 = undefined;

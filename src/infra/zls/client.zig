@@ -162,11 +162,14 @@ pub const LspClient = struct {
         return self.sendRawRequestWithTimeout(allocator, id, msg, self.request_timeout_ms, "RequestTimeout");
     }
 
+    /// Sends an LSP request and waits for its response before the deadline.
     fn sendRawRequestWithTimeout(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8) ![]const u8 {
         const stdin = self.zls_stdin orelse return error.NotConnected;
 
         const pending = try self.allocator.create(PendingRequest);
         pending.* = .{ .allocator = self.allocator };
+        // Register the pending request before writing so the reader thread can
+        // attach a fast response without racing the sender.
         {
             self.pending_mutex.lock();
             defer self.pending_mutex.unlock();
@@ -276,6 +279,7 @@ pub const LspClient = struct {
         return try allocator.dupe(u8, value);
     }
 
+    /// Continuously records ZLS stderr output until the process exits.
     fn stderrLoop(self: *LspClient) void {
         const stderr = self.zls_stderr orelse return;
         var buf: [4096]u8 = undefined;
@@ -299,6 +303,7 @@ pub const LspClient = struct {
         }
     }
 
+    /// Takes ownership of a pending request slot by ID.
     fn takePending(self: *LspClient, id: i64) ?*PendingRequest {
         self.pending_mutex.lock();
         defer self.pending_mutex.unlock();
@@ -306,12 +311,14 @@ pub const LspClient = struct {
         return removed.value;
     }
 
+    /// Removes a pending request without taking its response.
     fn removePending(self: *LspClient, id: i64) void {
         const pending = self.takePending(id) orelse return;
         if (pending.response) |response| self.allocator.free(response);
         self.allocator.destroy(pending);
     }
 
+    /// Stores a response into a pending request while the client mutex is held.
     fn storePendingResponseLocked(self: *LspClient, id: i64, data: []const u8) void {
         if (self.pending.get(id)) |p| {
             if (p.response) |old| {
@@ -326,6 +333,7 @@ pub const LspClient = struct {
         }
     }
 
+    /// Writes one framed JSON-RPC message to the ZLS process.
     fn writeMessage(self: *LspClient, stdin: std.Io.File, msg: []const u8) !void {
         self.write_mutex.lock();
         defer self.write_mutex.unlock();
@@ -370,6 +378,7 @@ pub const LspClient = struct {
         return self.shutdownWithTimeout(self.request_timeout_ms);
     }
 
+    /// Attempts graceful ZLS shutdown before force cleanup.
     fn shutdownWithTimeout(self: *LspClient, timeout_ms: i64) !void {
         if (self.zls_stdin == null or !self.running.load(.acquire)) return;
         const id = self.next_id.fetchAdd(1, .monotonic);
@@ -384,6 +393,7 @@ pub const LspClient = struct {
         self.running.store(false, .release);
     }
 
+    /// Classifies exit-notification errors and records unexpected failures.
     fn handleExitNotificationError(self: *LspClient, err: anyerror) void {
         if (isBenignExitNotificationError(err)) {
             self.logger.debug("lsp", "exit notification skipped after shutdown response: {}", .{err});
@@ -415,6 +425,7 @@ pub const LspClient = struct {
         }
     }
 
+    /// Stores the latest client error for later diagnostics.
     fn setLastError(self: *LspClient, value: []const u8) !void {
         self.last_error_mutex.lock();
         defer self.last_error_mutex.unlock();
@@ -422,6 +433,7 @@ pub const LspClient = struct {
         self.last_error = try self.allocator.dupe(u8, value);
     }
 
+    /// Persists an error message in allocator-owned client state.
     fn rememberLastError(self: *LspClient, value: []const u8) void {
         self.setLastError(value) catch |err| {
             self.logger.warn("lsp", "failed to record last error `{s}`: {}", .{ value, err });
@@ -429,17 +441,20 @@ pub const LspClient = struct {
     }
 };
 
+/// Reports whether an exit-notification failure can be ignored during shutdown.
 fn isBenignExitNotificationError(err: anyerror) bool {
     return err == error.BrokenPipe or err == error.EndOfStream or err == error.NotConnected;
 }
 
 // ── Tests ──
 
+/// Creates a threaded IO handle for tests that need file and condition support.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();
 }
 
+/// Creates paired file handles for scripted transport tests.
 fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
@@ -576,6 +591,7 @@ test "shutdown treats missing exit pipe as benign after response" {
     client.zls_stdin = to_server.write_end;
     client.running.store(true, .release);
 
+    // Responder fixture state shared by the scripted transport.
     const Responder = struct {
         fn run(c: *LspClient, read_end: std.Io.File, thread_io: std.Io) void {
             defer read_end.close(thread_io);

@@ -418,6 +418,7 @@ test "core adapter renders command-backed compile index and explain failures" {
     try workspace.verify();
 }
 
+/// Builds the adapter test context with fake ports and allocator ownership.
 fn testCoreContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },

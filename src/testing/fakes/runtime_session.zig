@@ -5,6 +5,7 @@ const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 
+/// Runtime session fake that records submitted jobs and lifecycle events.
 pub const FakeRuntimeSession = struct {
     jobs: std.ArrayList(ports.RuntimeJobSnapshot) = .empty,
     events: std.ArrayList(ports.RuntimeEventSnapshot) = .empty,
@@ -15,6 +16,7 @@ pub const FakeRuntimeSession = struct {
     next_subscription: u64 = 1,
     selected_root: usize = 0,
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     pub fn deinit(self: *FakeRuntimeSession, allocator: std.mem.Allocator) void {
         self.jobs.deinit(allocator);
         self.events.deinit(allocator);
@@ -24,6 +26,7 @@ pub const FakeRuntimeSession = struct {
         self.owned_strings.deinit(allocator);
     }
 
+    /// Exposes this implementation through its application port vtable.
     pub fn port(self: *FakeRuntimeSession) ports.RuntimeSession {
         return .{
             .ptr = self,
@@ -49,6 +52,7 @@ pub const FakeRuntimeSession = struct {
         };
     }
 
+    /// Ensures runtime state has a default workspace root.
     fn ensureDefaultRoot(ptr: *anyopaque, workspace_root: []const u8) ports.PortError!void {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         if (self.roots.items.len > 0) return;
@@ -56,6 +60,7 @@ pub const FakeRuntimeSession = struct {
         self.selected_root = 0;
     }
 
+    /// Starts a runtime job and records its initial event.
     fn startJob(ptr: *anyopaque, label: []const u8, command_text: []const u8, timeout_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const id = try self.allocPrint("job-{d}", .{self.next_job});
@@ -84,6 +89,7 @@ pub const FakeRuntimeSession = struct {
         return self.jobs.items[self.jobs.items.len - 1];
     }
 
+    /// Marks a runtime job complete and records its event.
     fn finishJob(ptr: *anyopaque, job_id: []const u8, finish: ports.RuntimeJobFinish) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
@@ -100,6 +106,7 @@ pub const FakeRuntimeSession = struct {
         return job.*;
     }
 
+    /// Marks a runtime job failed and records its event.
     fn failJob(ptr: *anyopaque, job_id: []const u8, err_name: []const u8, duration_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
@@ -111,6 +118,7 @@ pub const FakeRuntimeSession = struct {
         return job.*;
     }
 
+    /// Cancels a runtime job and records its event.
     fn cancelJob(ptr: *anyopaque, job_id: []const u8, reason: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
@@ -121,33 +129,39 @@ pub const FakeRuntimeSession = struct {
         return job.*;
     }
 
+    /// Returns a runtime job snapshot by identifier.
     fn jobById(ptr: *anyopaque, job_id: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         return (self.jobPtr(job_id) orelse return error.NotFound).*;
     }
 
+    /// Returns the number of tracked runtime jobs.
     fn jobCount(ptr: *anyopaque) ports.PortError!usize {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         return self.jobs.items.len;
     }
 
+    /// Returns a runtime job snapshot by index.
     fn jobAt(ptr: *anyopaque, index: usize) ports.PortError!ports.RuntimeJobSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         if (index >= self.jobs.items.len) return error.NotFound;
         return self.jobs.items[index];
     }
 
+    /// Returns the number of recorded runtime events.
     fn eventCount(ptr: *anyopaque) ports.PortError!u64 {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         return @intCast(self.events.items.len);
     }
 
+    /// Returns a runtime event by sequence number.
     fn eventAtSequence(ptr: *anyopaque, sequence: u64) ports.PortError!ports.RuntimeEventSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         if (sequence == 0 or sequence > self.events.items.len) return error.NotFound;
         return self.events.items[@intCast(sequence - 1)];
     }
 
+    /// Registers a runtime event subscription.
     fn subscribe(ptr: *anyopaque, uri: []const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const id = try self.allocPrint("sub-{d}", .{self.next_subscription});
@@ -157,6 +171,7 @@ pub const FakeRuntimeSession = struct {
         return sub;
     }
 
+    /// Removes a runtime event subscription.
     fn unsubscribe(ptr: *anyopaque, id: []const u8, uri: ?[]const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         for (self.subscriptions.items) |*sub| {
@@ -168,6 +183,7 @@ pub const FakeRuntimeSession = struct {
         return error.NotFound;
     }
 
+    /// Synchronizes workspace roots with runtime state.
     fn syncRoots(ptr: *anyopaque, workspace_root: []const u8, roots_text: []const u8, apply: bool) ports.PortError!void {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         if (!apply) return;
@@ -186,6 +202,7 @@ pub const FakeRuntimeSession = struct {
         self.selected_root = 0;
     }
 
+    /// Selects the active runtime root.
     fn selectRoot(ptr: *anyopaque, root_id: []const u8, apply: bool) ports.PortError!ports.RuntimeRootSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         for (self.roots.items, 0..) |*root, index| {
@@ -201,22 +218,26 @@ pub const FakeRuntimeSession = struct {
         return error.NotFound;
     }
 
+    /// Returns the number of tracked runtime roots.
     fn rootCount(ptr: *anyopaque) ports.PortError!usize {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         return self.roots.items.len;
     }
 
+    /// Returns the selected runtime root index.
     fn selectedRootIndex(ptr: *anyopaque) ports.PortError!usize {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         return self.selected_root;
     }
 
+    /// Returns a runtime root snapshot by index.
     fn rootAt(ptr: *anyopaque, index: usize) ports.PortError!ports.RuntimeRootSnapshot {
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         if (index >= self.roots.items.len) return error.NotFound;
         return self.roots.items[index];
     }
 
+    /// Returns mutable state for a tracked runtime job.
     fn jobPtr(self: *FakeRuntimeSession, job_id: []const u8) ?*ports.RuntimeJobSnapshot {
         for (self.jobs.items) |*job| {
             if (std.mem.eql(u8, job.id, job_id)) return job;
@@ -224,6 +245,7 @@ pub const FakeRuntimeSession = struct {
         return null;
     }
 
+    /// Appends a lifecycle event and assigns its sequence number.
     fn appendEvent(self: *FakeRuntimeSession, job_id: []const u8, event: []const u8, stream: []const u8, message: []const u8, text: []const u8) ports.PortError!void {
         try self.events.append(std.testing.allocator, .{
             .sequence = @intCast(self.events.items.len + 1),
@@ -236,6 +258,7 @@ pub const FakeRuntimeSession = struct {
         });
     }
 
+    /// Builds an allocator-owned snapshot of a runtime root.
     fn rootSnapshot(self: *FakeRuntimeSession, id: []const u8, path: []const u8, selected: bool) ports.PortError!ports.RuntimeRootSnapshot {
         const uri = try self.allocPrint("file://{s}", .{path});
         return .{
@@ -247,6 +270,7 @@ pub const FakeRuntimeSession = struct {
         };
     }
 
+    /// Formats test-owned text with the fake allocator.
     fn allocPrint(self: *FakeRuntimeSession, comptime fmt: []const u8, args: anytype) ports.PortError![]const u8 {
         const value = std.fmt.allocPrint(std.testing.allocator, fmt, args) catch return error.OutOfMemory;
         var value_owned = true;

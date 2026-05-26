@@ -124,6 +124,7 @@ pub const State = struct {
         self.zls_event_count = sequence;
     }
 
+    /// Returns the mutable metrics slot for a tool name.
     fn toolSlot(self: *State, name: []const u8) ?*ToolStats {
         for (self.tool_stats[0..self.tool_stat_count]) |*stat| {
             if (std.mem.eql(u8, stat.name, name)) return stat;
@@ -268,6 +269,7 @@ pub fn commandDurationsValue(allocator: std.mem.Allocator, state: State) !std.js
     return .{ .object = obj };
 }
 
+/// Builds a snapshot of analysis-cache metrics.
 fn analysisCacheValue(allocator: std.mem.Allocator, cache: AnalysisCacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -278,6 +280,7 @@ fn analysisCacheValue(allocator: std.mem.Allocator, cache: AnalysisCacheSnapshot
     return .{ .object = obj };
 }
 
+/// Builds a snapshot of artifact-store metrics.
 fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: ArtifactMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -290,6 +293,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: ArtifactMetrics) 
     return .{ .object = obj };
 }
 
+/// Builds a snapshot of tool invocation metrics.
 fn toolStatsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -309,6 +313,7 @@ fn toolStatsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     return .{ .array = array };
 }
 
+/// Builds a snapshot of backend event counters.
 fn backendEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -328,6 +333,7 @@ fn backendEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Valu
     return .{ .array = array };
 }
 
+/// Builds a snapshot of command execution counters.
 fn commandEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -348,6 +354,7 @@ fn commandEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Valu
     return .{ .array = array };
 }
 
+/// Builds a snapshot of ZLS event counters.
 fn zlsEventsValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -379,6 +386,7 @@ fn zlsEventsValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics)
     return .{ .array = array };
 }
 
+/// Builds a snapshot of backend probe cache metrics.
 fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeCacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -390,6 +398,7 @@ fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeCache
     return .{ .object = obj };
 }
 
+/// Builds a snapshot of one backend probe result.
 fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?ProbeSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -407,6 +416,7 @@ fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?ProbeSnapshot) !std.
     return .{ .object = obj };
 }
 
+/// Builds a snapshot of recorded runtime limitations.
 fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -417,26 +427,31 @@ fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = array };
 }
 
+/// Converts an optional string into a JSON value.
 fn optionalString(value: ?[]const u8) std.json.Value {
     return if (value) |text| .{ .string = text } else .null;
 }
 
+/// Compares optional string by the fields that affect behavior.
 fn optionalStringEqual(a: ?[]const u8, b: ?[]const u8) bool {
     if (a == null and b == null) return true;
     if (a == null or b == null) return false;
     return std.mem.eql(u8, a.?, b.?);
 }
 
+/// Calculates a per-thousand rate with zero-denominator protection.
 fn ratePerThousand(numerator: u64, denominator: u64) u64 {
     if (denominator == 0) return 0;
     return numerator * 1000 / denominator;
 }
 
+/// Finds the first sequence number retained in a ring buffer.
 fn firstSequence(count: u64, capacity: u64) u64 {
     if (count <= capacity) return 1;
     return count - capacity + 1;
 }
 
+/// Maps a sequence number to its ring-buffer index.
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % capacity);
 }
@@ -522,6 +537,7 @@ test "zls timeline falls back to current snapshot when no transitions were obser
 }
 
 test "observability metric builders clean up partially allocated JSON" {
+    // Fixture values shared by this test module.
     const Fixture = struct {
         fn state() State {
             var s = State{};

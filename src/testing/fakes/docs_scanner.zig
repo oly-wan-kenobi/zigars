@@ -22,6 +22,7 @@ pub const FakeDocsScanner = struct {
         request: ports.DocsReadAbsoluteRequest,
         result: ReadResult,
 
+        /// Frees the cloned read request and stored read outcome.
         fn deinit(self: ExpectedRead, allocator: Allocator) void {
             freeReadRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -33,6 +34,7 @@ pub const FakeDocsScanner = struct {
         ok: []const u8,
         err: ports.PortError,
 
+        /// Releases owned bytes for successful read outcomes.
         fn deinit(self: ReadResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |bytes| allocator.free(bytes),
@@ -46,6 +48,7 @@ pub const FakeDocsScanner = struct {
         request: ports.DocsScanAbsoluteZigPathsRequest,
         result: ScanResult,
 
+        /// Frees the cloned absolute-scan request and stored scan outcome.
         fn deinit(self: ExpectedAbsoluteScan, allocator: Allocator) void {
             freeAbsoluteScanRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -57,6 +60,7 @@ pub const FakeDocsScanner = struct {
         request: ports.DocsScanWorkspacePathsRequest,
         result: ScanResult,
 
+        /// Frees the cloned workspace-scan request and stored scan outcome.
         fn deinit(self: ExpectedWorkspaceScan, allocator: Allocator) void {
             freeWorkspaceScanRequest(allocator, self.request);
             self.result.deinit(allocator);
@@ -68,6 +72,7 @@ pub const FakeDocsScanner = struct {
         ok: []ports.DocsPath,
         err: ports.PortError,
 
+        /// Releases owned path entries for successful scan outcomes.
         fn deinit(self: ScanResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |paths| {
@@ -123,6 +128,7 @@ pub const FakeDocsScanner = struct {
         bytes_owned = false;
     }
 
+    /// Records an expected read error call, cloning request data and failing on allocation errors.
     pub fn expectReadError(self: *Self, request: ports.DocsReadAbsoluteRequest, err: ports.PortError) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
@@ -134,6 +140,7 @@ pub const FakeDocsScanner = struct {
         request_owned = false;
     }
 
+    /// Records an expected absolute scan call, cloning request data and failing on allocation errors.
     pub fn expectAbsoluteScan(self: *Self, request: ports.DocsScanAbsoluteZigPathsRequest, paths: []const []const u8) !void {
         const owned_request = try cloneAbsoluteScanRequest(self.allocator, request);
         var request_owned = true;
@@ -152,6 +159,7 @@ pub const FakeDocsScanner = struct {
         paths_owned = false;
     }
 
+    /// Records an expected workspace scan call, cloning request data and failing on allocation errors.
     pub fn expectWorkspaceScan(self: *Self, request: ports.DocsScanWorkspacePathsRequest, paths: []const []const u8) !void {
         const owned_request = try cloneWorkspaceScanRequest(self.allocator, request);
         var request_owned = true;
@@ -170,12 +178,14 @@ pub const FakeDocsScanner = struct {
         paths_owned = false;
     }
 
+    /// Verifies that all queued expectations were consumed, returning the first missing-call error.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_read != self.expected_reads.items.len) return error.MissingExpectedCall;
         if (self.next_absolute_scan != self.expected_absolute_scans.items.len) return error.MissingExpectedCall;
         if (self.next_workspace_scan != self.expected_workspace_scans.items.len) return error.MissingExpectedCall;
     }
 
+    /// Reads bytes from an absolute path through this port.
     fn readAbsolute(ptr: *anyopaque, allocator: Allocator, request: ports.DocsReadAbsoluteRequest) ports.PortError!ports.DocsReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_read >= self.expected_reads.items.len) return error.UnexpectedCall;
@@ -188,6 +198,7 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Scans absolute Zig source paths through this port.
     fn scanAbsoluteZigPaths(ptr: *anyopaque, allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) ports.PortError!ports.DocsPathScanResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_absolute_scan >= self.expected_absolute_scans.items.len) return error.UnexpectedCall;
@@ -200,6 +211,7 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Scans workspace-relative paths through this port.
     fn scanWorkspacePaths(ptr: *anyopaque, allocator: Allocator, request: ports.DocsScanWorkspacePathsRequest) ports.PortError!ports.DocsPathScanResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_workspace_scan >= self.expected_workspace_scans.items.len) return error.UnexpectedCall;
@@ -212,6 +224,7 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Clones read request into allocator-owned storage.
     fn cloneReadRequest(allocator: Allocator, request: ports.DocsReadAbsoluteRequest) !ports.DocsReadAbsoluteRequest {
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
@@ -228,11 +241,13 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned read request.
     fn freeReadRequest(allocator: Allocator, request: ports.DocsReadAbsoluteRequest) void {
         allocator.free(request.path);
         allocator.free(request.provenance);
     }
 
+    /// Clones absolute scan request into allocator-owned storage.
     fn cloneAbsoluteScanRequest(allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) !ports.DocsScanAbsoluteZigPathsRequest {
         const root = try common.dupString(allocator, request.root);
         var root_owned = true;
@@ -249,11 +264,13 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned absolute scan request.
     fn freeAbsoluteScanRequest(allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) void {
         allocator.free(request.root);
         allocator.free(request.provenance);
     }
 
+    /// Clones workspace scan request into allocator-owned storage.
     fn cloneWorkspaceScanRequest(allocator: Allocator, request: ports.DocsScanWorkspacePathsRequest) !ports.DocsScanWorkspacePathsRequest {
         return .{
             .max_files = request.max_files,
@@ -261,10 +278,12 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned workspace scan request.
     fn freeWorkspaceScanRequest(allocator: Allocator, request: ports.DocsScanWorkspacePathsRequest) void {
         allocator.free(request.provenance);
     }
 
+    /// Clones paths into allocator-owned storage.
     fn clonePaths(allocator: Allocator, raw_paths: []const []const u8) ![]ports.DocsPath {
         const paths = try allocator.alloc(ports.DocsPath, raw_paths.len);
         var initialized: usize = 0;
@@ -279,6 +298,7 @@ pub const FakeDocsScanner = struct {
         return paths;
     }
 
+    /// Clones path slices into allocator-owned storage.
     fn copyPaths(allocator: Allocator, paths: []ports.DocsPath) ![]ports.DocsPath {
         const copied = try allocator.alloc(ports.DocsPath, paths.len);
         var initialized: usize = 0;
@@ -293,18 +313,21 @@ pub const FakeDocsScanner = struct {
         return copied;
     }
 
+    /// Compares read requests by the fields that affect behavior.
     fn readRequestsEqual(expected: ports.DocsReadAbsoluteRequest, actual: ports.DocsReadAbsoluteRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.max_bytes == actual.max_bytes and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares absolute scan requests by the fields that affect behavior.
     fn absoluteScanRequestsEqual(expected: ports.DocsScanAbsoluteZigPathsRequest, actual: ports.DocsScanAbsoluteZigPathsRequest) bool {
         return std.mem.eql(u8, expected.root, actual.root) and
             expected.max_files == actual.max_files and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares workspace scan requests by the fields that affect behavior.
     fn workspaceScanRequestsEqual(expected: ports.DocsScanWorkspacePathsRequest, actual: ports.DocsScanWorkspacePathsRequest) bool {
         return expected.max_files == actual.max_files and
             std.mem.eql(u8, expected.provenance, actual.provenance);
@@ -332,6 +355,7 @@ test "docs scanner fake expectations clean partial allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, expectDocsScannerWithAllocator, .{});
 }
 
+/// Records an expected docs scanner with allocator call, cloning request data and failing on allocation errors.
 fn expectDocsScannerWithAllocator(allocator: Allocator) !void {
     var fake = FakeDocsScanner.init(allocator);
     defer fake.deinit();

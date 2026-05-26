@@ -275,6 +275,7 @@ pub const State = struct {
         self.event_count = sequence;
     }
 
+    /// Allocates or reuses a runtime job slot under the state mutex.
     fn reserveJobSlot(self: *State) *JobRecord {
         if (self.job_count < self.jobs.len) {
             const slot = &self.jobs[self.job_count];
@@ -284,6 +285,7 @@ pub const State = struct {
         return &self.jobs[0];
     }
 
+    /// Stores a runtime root entry at the requested index.
     fn setRoot(self: *State, index: usize, id: []const u8, path: []const u8, name: []const u8, selected: bool) *WorkspaceRoot {
         const root = &self.roots[index];
         root.* = .{};

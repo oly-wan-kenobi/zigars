@@ -3,6 +3,7 @@ const process_mod = @import("process.zig");
 
 const ZlsProcess = process_mod.ZlsProcess;
 
+/// Builds a bounded in-memory I/O fixture for tests.
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();

@@ -33,6 +33,7 @@ pub const Env = struct {
         };
     }
 
+    /// Reads the requested environment value through this port implementation.
     fn get(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const result = command.run(allocator, self.io, self.cwd, &.{ self.zig_path, "env" }, self.timeout_ms) catch |err| return mapPortError(err);
@@ -49,6 +50,7 @@ pub const Env = struct {
     }
 };
 
+/// Maps port error into the port-facing representation without taking ownership unless documented by the result.
 fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

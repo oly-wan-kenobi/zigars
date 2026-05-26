@@ -22,6 +22,7 @@ pub fn appForCommandPlanning(allocator: std.mem.Allocator) !App {
     };
 }
 
+/// Manifest fixture for the zig_explain_errors tool.
 pub fn zigExplainErrors(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{
         .non_exited_exit_code = 0,
@@ -31,6 +32,7 @@ pub fn zigExplainErrors(app: *App, allocator: std.mem.Allocator, args: ?std.json
     return mcp_core.zigExplainErrors(allocator, context, args);
 }
 
+/// Manifest fixture for the zig_compile_error_index tool.
 pub fn zigCompileErrorIndex(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{
         .non_exited_exit_code = 0,
@@ -40,6 +42,7 @@ pub fn zigCompileErrorIndex(app: *App, allocator: std.mem.Allocator, args: ?std.
     return mcp_core.zigCompileErrorIndex(allocator, context, args);
 }
 
+/// Manifest fixture for the zigar_failure_fusion tool.
 pub fn zigarFailureFusion(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     // This tool maps runtime setup faults into user-facing MCP tool errors.
@@ -47,12 +50,14 @@ pub fn zigarFailureFusion(app: *App, allocator: std.mem.Allocator, args: ?std.js
     return mcp_project_intelligence.zigarFailureFusion(allocator, context, args);
 }
 
+/// Manifest fixture for the zig_target_matrix_plan tool.
 pub fn zigTargetMatrixPlan(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     const context = runtime_ports.context().staticAnalysis() catch return error.OutOfMemory;
     return mcp_static_analysis.zigTargetMatrixPlan(allocator, context, args);
 }
 
+/// Manifest fixture for the zig_public_api_diff tool.
 pub fn zigPublicApiDiff(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     const context = runtime_ports.context().staticAnalysis() catch return error.OutOfMemory;

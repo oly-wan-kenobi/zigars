@@ -31,12 +31,14 @@ pub const Scanner = struct {
         };
     }
 
+    /// Reads bytes from an absolute path through this port.
     fn readAbsolute(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.DocsReadAbsoluteRequest) ports.PortError!ports.DocsReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = std.Io.Dir.cwd().readFileAlloc(self.io, request.path, allocator, .limited(request.max_bytes)) catch |err| return filesystem.mapPortError(err);
         return .{ .bytes = bytes, .owns_bytes = true };
     }
 
+    /// Scans absolute Zig source paths through this port.
     fn scanAbsoluteZigPaths(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,
@@ -48,6 +50,7 @@ pub const Scanner = struct {
         return scanPaths(self.io, allocator, &dir, .zig_only, request.max_files);
     }
 
+    /// Scans workspace-relative paths through this port.
     fn scanWorkspacePaths(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,
@@ -65,6 +68,7 @@ pub const Scanner = struct {
 /// Selects which path extensions a docs scan includes.
 const PathMode = enum { zig_only, text_candidates };
 
+/// Collects files matching the requested documentation path filters.
 fn scanPaths(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -124,6 +128,7 @@ test "docs scanner cleans scanned paths on allocation failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, scanDocsWithAllocator, .{});
 }
 
+/// Scans documentation files using an explicit test allocator.
 fn scanDocsWithAllocator(allocator: std.mem.Allocator) !void {
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{});

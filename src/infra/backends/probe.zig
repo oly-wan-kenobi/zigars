@@ -27,6 +27,7 @@ pub const Runner = struct {
         };
     }
 
+    /// Invokes the configured backend command and maps process failures to availability.
     fn check(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (request.argv.len == 0) return unavailable(allocator, request.backend, "missing probe argv", "backend probe request did not include an argv");

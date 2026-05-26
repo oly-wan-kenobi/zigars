@@ -89,6 +89,7 @@ pub const Workspace = struct {
     }
 };
 
+/// Resolves inside root and returns borrowed or owned data according to the result contract.
 fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
@@ -115,6 +116,7 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
     return real;
 }
 
+/// Resolves output inside root and returns borrowed or owned data according to the result contract.
 fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
@@ -149,6 +151,7 @@ fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []con
     return real_output;
 }
 
+/// Canonicalizes the parent directory for an output path.
 fn canonicalOutputParent(allocator: std.mem.Allocator, io: std.Io, root: []const u8, parent: []const u8) ![]u8 {
     const real = realPathFileAbsoluteOwned(allocator, io, parent) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -175,6 +178,7 @@ fn canonicalOutputParent(allocator: std.mem.Allocator, io: std.Io, root: []const
     return joined;
 }
 
+/// Returns an allocator-owned absolute real path for a file.
 fn realPathFileAbsoluteOwned(allocator: std.mem.Allocator, io: std.Io, absolute_path: []const u8) ![]u8 {
     const sentinel_path = try std.Io.Dir.realPathFileAbsoluteAlloc(io, absolute_path, allocator);
     defer allocator.free(sentinel_path);

@@ -25,6 +25,7 @@ pub const FakeZlsGateway = struct {
         request: ports.ZlsCapabilityRequest,
         outcome: CapabilityOutcome,
 
+        /// Frees the cloned capability request and successful result payload.
         fn deinit(self: ExpectedCapability, allocator: Allocator) void {
             freeCapabilityRequest(allocator, self.request);
             switch (self.outcome) {
@@ -45,6 +46,7 @@ pub const FakeZlsGateway = struct {
         request: ports.ZlsSyncRequest,
         outcome: SyncOutcome,
 
+        /// Frees the cloned sync request and successful sync result.
         fn deinit(self: ExpectedSync, allocator: Allocator) void {
             freeSyncRequest(allocator, self.request);
             switch (self.outcome) {
@@ -65,6 +67,7 @@ pub const FakeZlsGateway = struct {
         request: ports.ZlsRequest,
         outcome: RequestOutcome,
 
+        /// Frees the cloned raw request and successful response payload.
         fn deinit(self: ExpectedRequest, allocator: Allocator) void {
             freeRequest(allocator, self.request);
             switch (self.outcome) {
@@ -135,6 +138,7 @@ pub const FakeZlsGateway = struct {
         result_owned = false;
     }
 
+    /// Records an expected capability error call, cloning request data and failing on allocation errors.
     pub fn expectCapabilityError(self: *Self, request_value: ports.ZlsCapabilityRequest, err: ports.PortError) !void {
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
         var request_owned = true;
@@ -146,6 +150,7 @@ pub const FakeZlsGateway = struct {
         request_owned = false;
     }
 
+    /// Records an expected sync call, cloning request data and failing on allocation errors.
     pub fn expectSync(self: *Self, request_value: ports.ZlsSyncRequest, result: ports.ZlsSyncResult) !void {
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
         var request_owned = true;
@@ -161,6 +166,7 @@ pub const FakeZlsGateway = struct {
         result_owned = false;
     }
 
+    /// Records an expected sync error call, cloning request data and failing on allocation errors.
     pub fn expectSyncError(self: *Self, request_value: ports.ZlsSyncRequest, err: ports.PortError) !void {
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
         var request_owned = true;
@@ -172,6 +178,7 @@ pub const FakeZlsGateway = struct {
         request_owned = false;
     }
 
+    /// Records an expected request call, cloning request data and failing on allocation errors.
     pub fn expectRequest(self: *Self, request_value: ports.ZlsRequest, response: ports.ZlsResponse) !void {
         const owned_request = try cloneRequest(self.allocator, request_value);
         var request_owned = true;
@@ -187,6 +194,7 @@ pub const FakeZlsGateway = struct {
         response_owned = false;
     }
 
+    /// Records an expected request error call, cloning request data and failing on allocation errors.
     pub fn expectRequestError(self: *Self, request_value: ports.ZlsRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request_value);
         var request_owned = true;
@@ -198,24 +206,29 @@ pub const FakeZlsGateway = struct {
         request_owned = false;
     }
 
+    /// Returns recorded capability call snapshots owned by this fake.
     pub fn capabilityCalls(self: *const Self) []const ports.ZlsCapabilityRequest {
         return self.capability_records.items;
     }
 
+    /// Returns recorded sync call snapshots owned by this fake.
     pub fn syncCalls(self: *const Self) []const ports.ZlsSyncRequest {
         return self.sync_records.items;
     }
 
+    /// Returns recorded request call snapshots owned by this fake.
     pub fn requestCalls(self: *const Self) []const ports.ZlsRequest {
         return self.request_records.items;
     }
 
+    /// Verifies that all queued expectations were consumed, returning the first missing-call error.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_capability != self.expected_capabilities.items.len) return error.MissingExpectedCall;
         if (self.next_sync != self.expected_syncs.items.len) return error.MissingExpectedCall;
         if (self.next_request != self.expected_requests.items.len) return error.MissingExpectedCall;
     }
 
+    /// Reports whether the fake ZLS gateway supports a capability.
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneCapabilityRequest(self.allocator, request_value);
@@ -234,6 +247,7 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Applies a text synchronization request through the fake ZLS gateway.
     fn sync(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneSyncRequest(self.allocator, request_value);
@@ -252,6 +266,7 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Sends a raw request through the fake ZLS gateway.
     fn request(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request_value);
@@ -278,14 +293,17 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Clones capability request into allocator-owned storage.
     fn cloneCapabilityRequest(allocator: Allocator, request_value: ports.ZlsCapabilityRequest) !ports.ZlsCapabilityRequest {
         return .{ .capability = try common.dupString(allocator, request_value.capability) };
     }
 
+    /// Releases allocator-owned fields held by the cloned capability request.
     fn freeCapabilityRequest(allocator: Allocator, request_value: ports.ZlsCapabilityRequest) void {
         allocator.free(request_value.capability);
     }
 
+    /// Clones capability result into allocator-owned storage.
     fn cloneCapabilityResult(allocator: Allocator, result: ports.ZlsCapabilityResult) !ports.ZlsCapabilityResult {
         const capability_name = try common.dupString(allocator, result.capability);
         var capability_owned = true;
@@ -302,11 +320,13 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned capability result.
     fn freeCapabilityResult(allocator: Allocator, result: ports.ZlsCapabilityResult) void {
         allocator.free(result.capability);
         allocator.free(result.basis);
     }
 
+    /// Clones sync request into allocator-owned storage.
     fn cloneSyncRequest(allocator: Allocator, request_value: ports.ZlsSyncRequest) !ports.ZlsSyncRequest {
         const file = try common.dupString(allocator, request_value.file);
         var file_owned = true;
@@ -327,12 +347,14 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned sync request.
     fn freeSyncRequest(allocator: Allocator, request_value: ports.ZlsSyncRequest) void {
         allocator.free(request_value.file);
         common.freeOptionalString(allocator, request_value.content);
         allocator.free(request_value.provenance);
     }
 
+    /// Clones sync result into allocator-owned storage.
     fn cloneSyncResult(allocator: Allocator, result: ports.ZlsSyncResult) !ports.ZlsSyncResult {
         const uri = try common.dupString(allocator, result.uri);
         var uri_owned = true;
@@ -349,11 +371,13 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned sync result.
     fn freeSyncResult(allocator: Allocator, result: ports.ZlsSyncResult) void {
         if (result.owns_uri) allocator.free(result.uri);
         allocator.free(result.basis);
     }
 
+    /// Clones sync result for caller into allocator-owned storage.
     fn cloneSyncResultForCaller(allocator: Allocator, result: ports.ZlsSyncResult) ports.PortError!ports.ZlsSyncResult {
         const uri = try common.dupString(allocator, result.uri);
         return .{
@@ -363,6 +387,7 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request_value: ports.ZlsRequest) !ports.ZlsRequest {
         const method = try common.dupString(allocator, request_value.method);
         var method_owned = true;
@@ -383,12 +408,14 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned request.
     fn freeRequest(allocator: Allocator, request_value: ports.ZlsRequest) void {
         allocator.free(request_value.method);
         common.freeOptionalString(allocator, request_value.uri);
         allocator.free(request_value.payload);
     }
 
+    /// Clones response into allocator-owned storage.
     fn cloneResponse(allocator: Allocator, response: ports.ZlsResponse) !ports.ZlsResponse {
         const method = try common.dupString(allocator, response.method);
         var method_owned = true;
@@ -405,21 +432,25 @@ pub const FakeZlsGateway = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned response.
     fn freeResponse(allocator: Allocator, response: ports.ZlsResponse) void {
         allocator.free(response.method);
         if (response.owns_payload) allocator.free(response.payload);
     }
 
+    /// Compares capability requests by the fields that affect behavior.
     fn capabilityRequestsEqual(expected: ports.ZlsCapabilityRequest, actual: ports.ZlsCapabilityRequest) bool {
         return std.mem.eql(u8, expected.capability, actual.capability);
     }
 
+    /// Compares sync requests by the fields that affect behavior.
     fn syncRequestsEqual(expected: ports.ZlsSyncRequest, actual: ports.ZlsSyncRequest) bool {
         return std.mem.eql(u8, expected.file, actual.file) and
             common.optionalStringsEqual(expected.content, actual.content) and
             std.mem.eql(u8, expected.provenance, actual.provenance);
     }
 
+    /// Compares requests by the fields that affect behavior.
     fn requestsEqual(expected: ports.ZlsRequest, actual: ports.ZlsRequest) bool {
         return std.mem.eql(u8, expected.method, actual.method) and
             common.optionalStringsEqual(expected.uri, actual.uri) and

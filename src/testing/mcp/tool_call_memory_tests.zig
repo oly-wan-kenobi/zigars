@@ -4,16 +4,19 @@ const mcp = @import("mcp");
 const json_result = @import("../../adapters/mcp/result.zig");
 const mcp_server = @import("../../adapters/mcp/server.zig");
 
+/// Transport test double that captures all outbound JSON-RPC messages.
 const CaptureTransport = struct {
     messages: []const []const u8,
     index: usize = 0,
     responses: std.ArrayList([]u8) = .empty,
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     fn deinit(self: *CaptureTransport, allocator: std.mem.Allocator) void {
         for (self.responses.items) |response| allocator.free(response);
         self.responses.deinit(allocator);
     }
 
+    /// Returns the transport vtable used by this test double.
     fn transport(self: *CaptureTransport) mcp.transport.Transport {
         return .{
             .ptr = self,
@@ -25,6 +28,7 @@ const CaptureTransport = struct {
         };
     }
 
+    /// Captures an outbound JSON-RPC message.
     fn send(self: *CaptureTransport, _: std.Io, allocator: std.mem.Allocator, message: []const u8) mcp.transport.Transport.SendError!void {
         const owned = allocator.dupe(u8, message) catch return error.OutOfMemory;
         var response_owned = true;
@@ -33,24 +37,29 @@ const CaptureTransport = struct {
         response_owned = false;
     }
 
+    /// Dequeues the next inbound JSON-RPC message.
     fn receive(self: *CaptureTransport, _: std.Io, _: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
         if (self.index >= self.messages.len) return error.EndOfStream;
         defer self.index += 1;
         return self.messages[self.index];
     }
 
+    /// Marks the scripted transport closed.
     fn close(_: *CaptureTransport) void {}
 
+    /// Sends a JSON-RPC message through the transport vtable.
     fn sendVtable(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, message: []const u8) mcp.transport.Transport.SendError!void {
         const self: *CaptureTransport = @ptrCast(@alignCast(ptr));
         return self.send(io, allocator, message);
     }
 
+    /// Receives a JSON-RPC message through the transport vtable.
     fn receiveVtable(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
         const self: *CaptureTransport = @ptrCast(@alignCast(ptr));
         return self.receive(io, allocator);
     }
 
+    /// Closes the transport through the transport vtable.
     fn closeVtable(ptr: *anyopaque) void {
         const self: *CaptureTransport = @ptrCast(@alignCast(ptr));
         self.close();
@@ -199,17 +208,20 @@ test "mcp prompts/get releases repeated owned prompt messages" {
     }
 }
 
+/// Tool-call handler fixture that returns a success payload.
 fn successHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = makeOwnedNestedValue(allocator, "structured_success") catch return error.OutOfMemory;
     return json_result.structuredOwned(allocator, value);
 }
 
+/// Tool-call handler fixture that returns a structured error.
 fn structuredErrorHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = makeOwnedNestedValue(allocator, "structured_error") catch return error.OutOfMemory;
     defer json_result.deinitOwnedValue(allocator, value);
     return json_result.structuredError(allocator, value);
 }
 
+/// Resource handler fixture that returns allocator-owned content.
 fn ownedResourceHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     const text = allocator.dupe(u8, "owned resource text") catch return error.OutOfMemory;
     return .{
@@ -219,6 +231,7 @@ fn ownedResourceHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator,
     };
 }
 
+/// Prompt handler fixture that returns allocator-owned prompt messages.
 fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
     const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
     var messages_owned = true;
@@ -229,6 +242,7 @@ fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _
     return messages;
 }
 
+/// Records an expected tool call response call, cloning request data and failing on allocation errors.
 fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -249,6 +263,7 @@ fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: [
     try expectJsonNumber(details.items[1], 99.5);
 }
 
+/// Records an expected resource read response call, cloning request data and failing on allocation errors.
 fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -260,6 +275,7 @@ fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !
     try std.testing.expectEqualStrings(expected_text, contents.items[0].object.get("text").?.string);
 }
 
+/// Records an expected prompt get response call, cloning request data and failing on allocation errors.
 fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -273,6 +289,7 @@ fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !voi
     try std.testing.expectEqualStrings(expected_text, content.get("text").?.string);
 }
 
+/// Records an expected json number call, cloning request data and failing on allocation errors.
 fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
     const actual = switch (value) {
         .float => |float| float,
@@ -283,6 +300,7 @@ fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
     try std.testing.expectApproxEqAbs(expected, actual, 0.000001);
 }
 
+/// Builds nested JSON test data with allocator-owned containers.
 fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -310,6 +328,7 @@ fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.jso
     return .{ .object = obj };
 }
 
+/// Inserts an owned JSON value into an object.
 fn putOwnedValue(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
     const owned_key = try allocator.dupe(u8, key);
     var key_owned = true;
@@ -318,6 +337,7 @@ fn putOwnedValue(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []
     key_owned = false;
 }
 
+/// Inserts an allocator-owned string into a JSON object.
 fn putOwnedString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     var value_owned = true;
@@ -326,6 +346,7 @@ fn putOwnedString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: [
     value_owned = false;
 }
 
+/// Inserts a number encoded as an owned JSON string.
 fn putOwnedNumberString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     var value_owned = true;
@@ -334,6 +355,7 @@ fn putOwnedNumberString(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, 
     value_owned = false;
 }
 
+/// Appends an allocator-owned string to a JSON array.
 fn appendOwnedString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     var value_owned = true;
@@ -342,6 +364,7 @@ fn appendOwnedString(allocator: std.mem.Allocator, array: *std.json.Array, value
     value_owned = false;
 }
 
+/// Appends a number encoded as an owned JSON string.
 fn appendOwnedNumberString(allocator: std.mem.Allocator, array: *std.json.Array, value: []const u8) !void {
     const owned_value = try allocator.dupe(u8, value);
     var value_owned = true;

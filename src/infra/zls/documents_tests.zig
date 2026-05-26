@@ -6,6 +6,7 @@ const uri_util = @import("uri.zig");
 
 const DocumentState = documents.DocumentState;
 
+/// Creates a temporary workspace root for tests.
 fn tmpRoot(allocator: std.mem.Allocator, io: std.Io, tmp_sub_path: []const u8) ![]u8 {
     const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp_sub_path });
     defer allocator.free(rel_base);
@@ -97,8 +98,10 @@ test "DocumentState ensureOpen enforces open document budget" {
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
 
+/// Paired file handles used to emulate an LSP connection in document tests.
 const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
 
+/// Creates paired file handles for scripted transport tests.
 fn testPipe() !TestPipe {
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,

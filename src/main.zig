@@ -4,6 +4,7 @@ const zigar = @import("zigar");
 const bootstrap_runtime = zigar.bootstrap.runtime;
 const version = zigar.manifest.version.string;
 
+/// Program entry point that delegates to the configured bootstrap runner.
 pub fn main(init: std.process.Init) !void {
     try bootstrap_runtime.run(init);
 }

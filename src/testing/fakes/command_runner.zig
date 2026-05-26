@@ -7,6 +7,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// Command runner fake with ordered expectations and owned call snapshots.
 pub const FakeCommandRunner = struct {
     allocator: Allocator,
     expected_runs: std.ArrayList(ExpectedRun) = .empty,
@@ -15,20 +16,24 @@ pub const FakeCommandRunner = struct {
 
     const Self = @This();
 
+    /// Expected command invocation and its cloned result.
     const ExpectedRun = struct {
         request: ports.CommandRequest,
         result: ExpectedRunResult,
 
+        /// Frees the cloned command request and stored outcome.
         fn deinit(self: ExpectedRun, allocator: Allocator) void {
             freeRequest(allocator, self.request);
             self.result.deinit(allocator);
         }
     };
 
+    /// Stored command outcome; successful payloads own stdout, stderr, and provenance.
     const ExpectedRunResult = union(enum) {
         ok: ports.CommandResult,
         err: ports.PortError,
 
+        /// Releases owned command output for successful outcomes.
         fn deinit(self: ExpectedRunResult, allocator: Allocator) void {
             switch (self) {
                 .ok => |result| {
@@ -41,10 +46,12 @@ pub const FakeCommandRunner = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Releases owned allocations/resources; callers must not use the value afterward.
     pub fn deinit(self: *Self) void {
         for (self.expected_runs.items) |expected| expected.deinit(self.allocator);
         self.expected_runs.deinit(self.allocator);
@@ -54,6 +61,7 @@ pub const FakeCommandRunner = struct {
         self.* = undefined;
     }
 
+    /// Exposes this implementation through its application port vtable.
     pub fn port(self: *Self) ports.CommandRunner {
         return .{
             .ptr = self,
@@ -63,6 +71,7 @@ pub const FakeCommandRunner = struct {
         };
     }
 
+    /// Records an expected run call, cloning request data and failing on allocation errors.
     pub fn expectRun(self: *Self, request: ports.CommandRequest, result: ports.CommandResult) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         errdefer freeRequest(self.allocator, owned_request);
@@ -90,6 +99,7 @@ pub const FakeCommandRunner = struct {
         });
     }
 
+    /// Records an expected run error call, cloning request data and failing on allocation errors.
     pub fn expectRunError(self: *Self, request: ports.CommandRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
@@ -101,14 +111,17 @@ pub const FakeCommandRunner = struct {
         request_owned = false;
     }
 
+    /// Returns recorded command call snapshots owned by this fake.
     pub fn calls(self: *const Self) []const ports.CommandRequest {
         return self.call_records.items;
     }
 
+    /// Verifies that all queued expectations were consumed, returning the first missing-call error.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_run != self.expected_runs.items.len) return error.MissingExpectedCall;
     }
 
+    /// Executes queued work and returns owned results or the first failure.
     fn run(ptr: *anyopaque, allocator: Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         // Keep an immutable snapshot of every attempted call, even when it fails,
@@ -151,6 +164,7 @@ pub const FakeCommandRunner = struct {
         };
     }
 
+    /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.CommandRequest) !ports.CommandRequest {
         const argv = try common.dupStringList(allocator, request.argv);
         errdefer common.freeStringList(allocator, argv);
@@ -169,12 +183,14 @@ pub const FakeCommandRunner = struct {
         };
     }
 
+    /// Releases allocator-owned fields held by the cloned request.
     fn freeRequest(allocator: Allocator, request: ports.CommandRequest) void {
         common.freeStringList(allocator, request.argv);
         common.freeOptionalString(allocator, request.cwd);
         allocator.free(request.provenance);
     }
 
+    /// Compares requests by the fields that affect behavior.
     fn requestsEqual(expected: ports.CommandRequest, actual: ports.CommandRequest) bool {
         return common.stringListsEqual(expected.argv, actual.argv) and
             common.optionalStringsEqual(expected.cwd, actual.cwd) and
@@ -261,6 +277,7 @@ test "command runner expected runs clean partial allocations on failure" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, expectCommandRunsWithAllocator, .{});
 }
 
+/// Records an expected command runs with allocator call, cloning request data and failing on allocation errors.
 fn expectCommandRunsWithAllocator(allocator: Allocator) !void {
     var fake = FakeCommandRunner.init(allocator);
     defer fake.deinit();

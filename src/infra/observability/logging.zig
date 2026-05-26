@@ -8,6 +8,7 @@ pub const Level = enum(u8) {
     err = 3,
     off = 4,
 
+    /// Returns the static label for this log level.
     fn label(self: Level) []const u8 {
         return switch (self) {
             .debug => "debug",
@@ -82,6 +83,7 @@ pub const Logger = struct {
         writer.interface.flush() catch return;
     }
 
+    /// Reports whether messages at this level should be emitted.
     fn enabled(self: Logger, level: Level) bool {
         if (self.min_level == .off) return false;
         return @intFromEnum(level) >= @intFromEnum(self.min_level);

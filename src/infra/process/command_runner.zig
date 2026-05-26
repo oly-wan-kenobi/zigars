@@ -57,6 +57,7 @@ pub const Runner = struct {
         };
     }
 
+    /// Executes queued work and returns owned results or the first failure.
     fn run(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const cwd = request.cwd orelse self.default_cwd;
@@ -91,6 +92,7 @@ pub const Runner = struct {
         };
     }
 
+    /// Records a command execution event from captured process output.
     fn recordCommand(self: *Self, title: []const u8, argv: []const []const u8, duration_ms: i64, ok: bool, error_name: ?[]const u8) void {
         if (!self.record_observability) return;
         if (self.observability) |state| state.recordCommand(title, argv, duration_ms, ok, error_name);
@@ -116,6 +118,7 @@ pub fn mapPortError(err: anyerror) ports.PortError {
     };
 }
 
+/// Maps child-process termination into the domain command status.
 fn commandTerm(term: std.process.Child.Term) ports.CommandTerm {
     return switch (term) {
         .exited => |code| .{ .exited = @intCast(code) },
@@ -125,6 +128,7 @@ fn commandTerm(term: std.process.Child.Term) ports.CommandTerm {
     };
 }
 
+/// Extracts the numeric exit code from a termination status when present.
 fn commandExitCode(result: command.RunResult, non_exited_exit_code: i32) i32 {
     return switch (result.term) {
         .exited => |code| @intCast(code),
@@ -132,12 +136,14 @@ fn commandExitCode(result: command.RunResult, non_exited_exit_code: i32) i32 {
     };
 }
 
+/// Converts unsigned counters to i64 without overflow.
 fn saturatingI64(value: u64) i64 {
     const max_i64: u64 = @intCast(std.math.maxInt(i64));
     if (value > max_i64) return std.math.maxInt(i64);
     return @intCast(value);
 }
 
+/// Converts elapsed nanoseconds to saturated milliseconds.
 fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
     if (duration_ns <= 0) return 0;
