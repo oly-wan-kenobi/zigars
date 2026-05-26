@@ -75,6 +75,7 @@ test "release model allocation failure cleanup is bounded" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, evidencePackWithAllocator, .{});
 }
 
+/// Exercises release-plan construction under allocation-failure testing.
 fn releasePlanWithAllocator(allocator: std.mem.Allocator) !void {
     var plan = try release_model.buildReleasePlan(allocator, &.{
         .{ .name = "validation", .text = "tests passed", .verify_with = "zig build test" },
@@ -83,6 +84,7 @@ fn releasePlanWithAllocator(allocator: std.mem.Allocator) !void {
     defer plan.deinit(allocator);
 }
 
+/// Exercises release-note markdown construction under allocation-failure testing.
 fn releaseNotesWithAllocator(allocator: std.mem.Allocator) !void {
     var draft = try release_model.draftReleaseNotes(allocator, "1.0.0", &.{
         .{ .title = "Changes", .text = "Added release tooling." },
@@ -91,6 +93,7 @@ fn releaseNotesWithAllocator(allocator: std.mem.Allocator) !void {
     defer draft.deinit(allocator);
 }
 
+/// Exercises release evidence-pack construction under allocation-failure testing.
 fn evidencePackWithAllocator(allocator: std.mem.Allocator) !void {
     var pack = try release_model.buildEvidencePack(allocator, &.{
         .{ .name = "validation", .text = "zig build test" },

@@ -6,6 +6,7 @@ const tool = types.tool;
 const fieldHint = types.fieldHint;
 const backend_contracts = @import("../../domain/zig/backend_contracts.zig");
 
+/// Run zwanzig as optional Zig static-analysis backend with JSON output by default.
 pub const zig_lint = tool(.{
     .description = "Run zwanzig as optional Zig static-analysis backend with JSON output by default.",
     .input_schema = schema(&.{ .{ "path", "string", false }, .{ "rules_do", "string", false }, .{ "rules_skip", "string", false }, .{ "config", "string", false }, .{ "args", "string", false } }),
@@ -15,6 +16,7 @@ pub const zig_lint = tool(.{
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     .static_analysis_tier = .zwanzig_backed,
 });
+/// Run optional zwanzig-backed static analysis with SARIF output.
 pub const zig_lint_sarif = tool(.{
     .description = "Run optional zwanzig-backed static analysis with SARIF output.",
     .input_schema = schema(&.{ .{ "path", "string", false }, .{ "rules_do", "string", false }, .{ "rules_skip", "string", false }, .{ "config", "string", false }, .{ "args", "string", false } }),
@@ -24,6 +26,7 @@ pub const zig_lint_sarif = tool(.{
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     .static_analysis_tier = .zwanzig_backed,
 });
+/// List optional zwanzig-backed lint/static-analysis rules when the backend is installed.
 pub const zig_lint_rules = tool(.{
     .description = "List optional zwanzig-backed lint/static-analysis rules when the backend is installed.",
     .input_schema = schema(&.{}),
@@ -33,6 +36,7 @@ pub const zig_lint_rules = tool(.{
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     .static_analysis_tier = .zwanzig_backed,
 });
+/// Run an optional zwanzig-backed graph dump mode, writing DOT files under an explicit workspace output directory.
 pub const zig_analysis_graphs = tool(.{
     .description = "Run an optional zwanzig-backed graph dump mode, writing DOT files under an explicit workspace output directory.",
     .input_schema = schemaWithHints(&.{ .{ "mode", "string", true }, .{ "path", "string", true }, .{ "output", "string", true }, .{ "args", "string", false } }, &.{

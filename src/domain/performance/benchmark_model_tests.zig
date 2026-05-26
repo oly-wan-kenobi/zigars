@@ -102,6 +102,7 @@ test "benchmark model allocation failure cleanup is bounded" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, compareBenchmarksWithAllocator, .{});
 }
 
+/// Exercises text benchmark parsing under allocation-failure testing.
 fn parseTextWithAllocator(allocator: std.mem.Allocator) !void {
     var set = try benchmark_model.parseText(allocator,
         \\parse small: 12.5 ns
@@ -110,6 +111,7 @@ fn parseTextWithAllocator(allocator: std.mem.Allocator) !void {
     defer set.deinit(allocator);
 }
 
+/// Exercises JSON benchmark parsing under allocation-failure testing.
 fn parseJsonWithAllocator(allocator: std.mem.Allocator) !void {
     var set = try benchmark_model.parseEvidence(allocator,
         \\{"benchmarks":[{"name":"parse","ns_per_iter":112.0},{"name":"emit","ns_per_iter":80.0}]}
@@ -117,6 +119,7 @@ fn parseJsonWithAllocator(allocator: std.mem.Allocator) !void {
     defer set.deinit(allocator);
 }
 
+/// Exercises benchmark comparison under allocation-failure testing.
 fn compareBenchmarksWithAllocator(allocator: std.mem.Allocator) !void {
     var current = try benchmark_model.parseEvidence(allocator,
         \\[{"name":"parse","ns_per_iter":112},{"name":"emit","ns_per_iter":80}]

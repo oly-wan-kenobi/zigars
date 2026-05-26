@@ -273,10 +273,12 @@ fn parseMetadata(tree: std.zig.Ast) ParseMetadata {
     };
 }
 
+/// Appends declarations from AST nodes into caller-owned storage; allocation failures are returned.
 fn appendAstDecls(allocator: std.mem.Allocator, tree: *const std.zig.Ast, nodes: []const std.zig.Ast.Node.Index, declarations: *std.ArrayList(Declaration), depth: usize) anyerror!void {
     for (nodes) |node| try appendAstDecl(allocator, tree, node, declarations, depth);
 }
 
+/// Appends one AST declaration summary and descends into containers when needed.
 fn appendAstDecl(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: std.zig.Ast.Node.Index, declarations: *std.ArrayList(Declaration), depth: usize) anyerror!void {
     switch (tree.nodeTag(node)) {
         .global_var_decl, .simple_var_decl, .aligned_var_decl => {
@@ -295,6 +297,7 @@ fn appendAstDecl(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: s
     }
 }
 
+/// Appends child declarations from AST containers or blocks at the next depth.
 fn appendAstContainerOrBlockDecls(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: std.zig.Ast.Node.Index, declarations: *std.ArrayList(Declaration), depth: usize) anyerror!void {
     var container_buffer: [2]std.zig.Ast.Node.Index = undefined;
     if (tree.fullContainerDecl(&container_buffer, node)) |container| {
@@ -307,6 +310,7 @@ fn appendAstContainerOrBlockDecls(allocator: std.mem.Allocator, tree: *const std
     }
 }
 
+/// Builds an owned declaration summary from an AST variable declaration.
 fn astVarDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, decl: std.zig.Ast.full.VarDecl, depth: usize) !Declaration {
     const kind = try allocator.dupe(u8, tree.tokenSlice(decl.ast.mut_token));
     errdefer allocator.free(kind);
@@ -324,6 +328,7 @@ fn astVarDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast
     };
 }
 
+/// Builds an owned declaration summary from an AST function declaration.
 fn astFnDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, proto: std.zig.Ast.full.FnProto, depth: usize) !Declaration {
     const kind = try allocator.dupe(u8, "fn");
     errdefer allocator.free(kind);
@@ -341,6 +346,7 @@ fn astFnDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.
     };
 }
 
+/// Builds an owned declaration summary from an AST test declaration.
 fn astTestDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, depth: usize) !Declaration {
     const kind = try allocator.dupe(u8, "test");
     errdefer allocator.free(kind);
@@ -358,6 +364,7 @@ fn astTestDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.As
     };
 }
 
+/// Appends import evidence from AST builtin import calls; allocation failures are returned.
 fn appendAstImports(allocator: std.mem.Allocator, file: []const u8, tree: *const std.zig.Ast, imports: *std.ArrayList(Import)) !void {
     var buffer: [2]std.zig.Ast.Node.Index = undefined;
     for (0..tree.nodes.len) |node_i| {
@@ -371,6 +378,7 @@ fn appendAstImports(allocator: std.mem.Allocator, file: []const u8, tree: *const
     }
 }
 
+/// Appends test declaration evidence from AST test nodes; allocation failures are returned.
 fn appendAstTests(allocator: std.mem.Allocator, file: []const u8, tree: *const std.zig.Ast, tests: *std.ArrayList(TestDecl)) !void {
     for (0..tree.nodes.len) |node_i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
@@ -379,24 +387,28 @@ fn appendAstTests(allocator: std.mem.Allocator, file: []const u8, tree: *const s
     }
 }
 
+/// Appends an owned declaration and releases it if append fails.
 fn appendOwnedDeclaration(allocator: std.mem.Allocator, declarations: *std.ArrayList(Declaration), declaration: Declaration) !void {
     var owned = declaration;
     errdefer owned.deinit(allocator);
     try declarations.append(allocator, owned);
 }
 
+/// Appends owned import evidence and releases it if append fails.
 fn appendOwnedImport(allocator: std.mem.Allocator, imports: *std.ArrayList(Import), import: Import) !void {
     var owned = import;
     errdefer owned.deinit(allocator);
     try imports.append(allocator, owned);
 }
 
+/// Appends owned test evidence and releases it if append fails.
 fn appendOwnedTestDecl(allocator: std.mem.Allocator, tests: *std.ArrayList(TestDecl), test_decl: TestDecl) !void {
     var owned = test_decl;
     errdefer owned.deinit(allocator);
     try tests.append(allocator, owned);
 }
 
+/// Builds owned import evidence from an AST builtin import call.
 fn astImportDecl(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, import_node: std.zig.Ast.Node.Index) !Import {
     const file_owned = try allocator.dupe(u8, file);
     errdefer allocator.free(file_owned);
@@ -414,6 +426,7 @@ fn astImportDecl(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.A
     };
 }
 
+/// Builds owned test evidence and a focused test command from an AST test node.
 fn astTestRun(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !TestDecl {
     const file_owned = try allocator.dupe(u8, file);
     errdefer allocator.free(file_owned);
@@ -431,16 +444,19 @@ fn astTestRun(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast,
     };
 }
 
+/// Returns the owned test name when the AST test declaration has one.
 fn astTestName(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !?[]const u8 {
     const name_token = tree.nodeData(node).opt_token_and_node[0].unwrap() orelse return null;
     if (tree.tokenTag(name_token) == .string_literal) return try astStringLiteralToken(allocator, tree, name_token);
     return try allocator.dupe(u8, tree.tokenSlice(name_token));
 }
 
+/// Parses an AST string literal into allocator-owned text.
 fn astStringLiteral(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) ![]const u8 {
     return astStringLiteralToken(allocator, tree, tree.nodeMainToken(node));
 }
 
+/// Finds the local alias for an import node and returns owned text when present.
 fn astImportAlias(allocator: std.mem.Allocator, tree: std.zig.Ast, import_node: std.zig.Ast.Node.Index) !?[]const u8 {
     for (0..tree.nodes.len) |node_i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
@@ -456,16 +472,19 @@ fn astImportAlias(allocator: std.mem.Allocator, tree: std.zig.Ast, import_node: 
     return null;
 }
 
+/// Parses a string-literal token, falling back to stripped raw text when parsing fails.
 fn astStringLiteralToken(allocator: std.mem.Allocator, tree: std.zig.Ast, token: std.zig.Ast.TokenIndex) ![]const u8 {
     const raw = tree.tokenSlice(token);
     return std.zig.string_literal.parseAlloc(allocator, raw) catch allocator.dupe(u8, stripQuotes(raw));
 }
 
+/// Duplicates an identifier token when it is present at the given AST token index.
 fn astOptionalIdentifier(allocator: std.mem.Allocator, tree: std.zig.Ast, token: std.zig.Ast.TokenIndex) !?[]const u8 {
     if (token < tree.tokens.len and tree.tokenTag(token) == .identifier) return try allocator.dupe(u8, tree.tokenSlice(token));
     return null;
 }
 
+/// Builds an owned heuristic declaration summary from one trimmed source line.
 fn declarationFromLine(allocator: std.mem.Allocator, line_no: usize, trimmed: []const u8, kind: []const u8, depth: usize, comptime_decl: bool) !Declaration {
     const kind_owned = try allocator.dupe(u8, kind);
     errdefer allocator.free(kind_owned);
@@ -483,27 +502,33 @@ fn declarationFromLine(allocator: std.mem.Allocator, line_no: usize, trimmed: []
     };
 }
 
+/// Returns the one-based source line for an AST node.
 fn lineForNode(tree: std.zig.Ast, node: std.zig.Ast.Node.Index) usize {
     return tree.tokenLocation(0, tree.firstToken(node)).line + 1;
 }
 
+/// Returns a trimmed source slice for an AST node span.
 fn compactNodeSource(source: []const u8) []const u8 {
     return std.mem.trim(u8, source, " \t\r\n");
 }
 
+/// Returns the inside of a quoted string slice when both quotes are present.
 fn stripQuotes(raw: []const u8) []const u8 {
     if (raw.len >= 2 and raw[0] == '"' and raw[raw.len - 1] == '"') return raw[1 .. raw.len - 1];
     return raw;
 }
 
+/// Releases owned declaration summaries in a slice without freeing the slice itself.
 fn deinitDeclarations(allocator: std.mem.Allocator, declarations: []Declaration) void {
     for (declarations) |item| item.deinit(allocator);
 }
 
+/// Releases owned import evidence in a slice without freeing the slice itself.
 fn deinitImports(allocator: std.mem.Allocator, imports: []Import) void {
     for (imports) |item| item.deinit(allocator);
 }
 
+/// Releases owned test evidence in a slice without freeing the slice itself.
 fn deinitTests(allocator: std.mem.Allocator, tests: []TestDecl) void {
     for (tests) |item| item.deinit(allocator);
 }
@@ -542,6 +567,7 @@ pub fn skipWorkspacePath(path: []const u8) bool {
         std.mem.indexOf(u8, path, "/zig-pkg/") != null;
 }
 
+/// Returns whether a trimmed line has a declaration-like prefix for summaries.
 fn isDeclarationSummaryLine(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "pub const ") or
         std.mem.startsWith(u8, line, "pub var ") or
@@ -584,6 +610,7 @@ test "heuristic analysis builders clean up allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, heuristicAnalysisAllocationCase, .{});
 }
 
+/// Exercises heuristic analysis builders under allocation-failure testing.
 fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
     var decls = try heuristicDeclarations(allocator,
         \\pub fn main() void {}
@@ -599,6 +626,7 @@ fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
     defer allocator.free(allocations);
 }
 
+/// Returns whether declaration evidence contains a named declaration.
 fn hasDeclaration(items: []const Declaration, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;
@@ -606,6 +634,7 @@ fn hasDeclaration(items: []const Declaration, name: []const u8) bool {
     return false;
 }
 
+/// Returns whether import evidence contains the expected import and alias.
 fn hasImport(items: []const Import, import_name: []const u8, alias: []const u8) bool {
     for (items) |item| {
         if (!std.mem.eql(u8, item.import, import_name)) continue;
@@ -614,6 +643,7 @@ fn hasImport(items: []const Import, import_name: []const u8, alias: []const u8) 
     return false;
 }
 
+/// Returns whether import evidence contains the expected import path.
 fn hasImportValue(items: []const Import, import_name: []const u8) bool {
     for (items) |item| {
         if (std.mem.eql(u8, item.import, import_name)) return true;
@@ -621,6 +651,7 @@ fn hasImportValue(items: []const Import, import_name: []const u8) bool {
     return false;
 }
 
+/// Returns whether test evidence contains a named test declaration.
 fn hasTest(items: []const TestDecl, name: []const u8) bool {
     for (items) |item| {
         if (item.name) |actual| if (std.mem.eql(u8, actual, name)) return true;

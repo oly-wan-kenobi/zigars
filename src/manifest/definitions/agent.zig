@@ -5,6 +5,7 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
+/// Return a compact deterministic Zig project context pack for agent orientation.
 pub const zigar_context_pack = tool(.{
     .description = "Return a compact deterministic Zig project context pack for agent orientation.",
     .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "token_budget", "integer", false }, .{ "include", "string", false } }, &.{
@@ -14,6 +15,7 @@ pub const zigar_context_pack = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Agent-orientation snapshot; reads workspace files and manifest metadata without executing tools." },
 });
+/// Route a Zig development goal to the next deterministic zigar tool calls.
 pub const zigar_next_action = tool(.{
     .description = "Route a Zig development goal to the next deterministic zigar tool calls.",
     .input_schema = schema(&.{ .{ "goal", "string", true }, .{ "changed_files", "string", false }, .{ "last_error", "string", false } }),
@@ -21,6 +23,7 @@ pub const zigar_next_action = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Goal router; returns deterministic next tool suggestions without executing tools." },
 });
+/// Return compact client-specific instructions for using zigar efficiently.
 pub const zigar_agent_guide = tool(.{
     .description = "Return compact Codex/Claude/Gemini/Hermes/generic instructions for using zigar efficiently.",
     .input_schema = schemaWithHints(&.{ .{ "client", "string", false }, .{ "task", "string", false } }, &.{
@@ -30,6 +33,7 @@ pub const zigar_agent_guide = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Client guidance lookup; returns deterministic instructions without executing tools." },
 });
+/// Run an agent-friendly changed-file validation loop and return structured blockers.
 pub const zigar_validate_patch = tool(.{
     .description = "Run an agent-friendly changed-file validation loop and return structured blockers.",
     .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "changed_files", "string", false }, .{ "stop_on_failure", "boolean", false }, .{ "timeout_ms", "integer", false } }, &.{
@@ -40,6 +44,7 @@ pub const zigar_validate_patch = tool(.{
     .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
 });
+/// Fuse compiler/test output, primary failure data, impact hints, and suggested zigar tools.
 pub const zigar_failure_fusion = tool(.{
     .description = "Fuse compiler/test output, primary failure data, impact hints, and suggested zigar tools.",
     .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }, &.{
@@ -50,6 +55,7 @@ pub const zigar_failure_fusion = tool(.{
     .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
 });
+/// Analyze affected imports, tests, public API, and validation commands for files or symbols.
 pub const zigar_impact = tool(.{
     .description = "Analyze affected imports, tests, public API, and validation commands for files or symbols.",
     .input_schema = schema(&.{ .{ "files", "string", false }, .{ "symbols", "string", false }, .{ "limit", "integer", false } }),
@@ -57,6 +63,7 @@ pub const zigar_impact = tool(.{
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
 });
+/// Read or explicitly write a workspace-local deterministic zigar project profile.
 pub const zigar_project_profile = tool(.{
     .description = "Read or explicitly write a workspace-local deterministic zigar project profile.",
     .input_schema = schema(&.{ .{ "apply", "boolean", false }, .{ "content", "string", false } }),
@@ -65,6 +72,7 @@ pub const zigar_project_profile = tool(.{
     .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
+/// Validate proposed patch/file paths against zigar workspace and generated-path safety rules.
 pub const zigar_patch_guard = tool(.{
     .description = "Validate proposed patch/file paths against zigar workspace and generated-path safety rules.",
     .input_schema = schema(&.{ .{ "files", "string", false }, .{ "patch", "string", false } }),

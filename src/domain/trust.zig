@@ -37,10 +37,12 @@ pub fn quotedValue(line: []const u8) ?[]const u8 {
     return rest[0..second];
 }
 
+/// Returns whether is generated or vendored is true for the supplied input.
 pub fn isGeneratedOrVendored(path: []const u8) bool {
     return zig_analysis.skipWorkspacePath(path);
 }
 
+/// Builds clean tree gate from status; allocation failures are returned to the caller.
 pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []const u8, stdout: []const u8, git_ok: bool, evidence_command: []const u8) !std.json.Value {
     var paths = std.json.Array.init(allocator);
     var paths_owned = true;
@@ -86,6 +88,7 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
     return .{ .object = obj };
 }
 
+/// Builds a JSON evidence object; allocation failures are returned.
 pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -97,6 +100,7 @@ pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference
     return .{ .object = obj };
 }
 
+/// Builds string array; allocation failures are returned to the caller.
 pub fn stringArray(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;

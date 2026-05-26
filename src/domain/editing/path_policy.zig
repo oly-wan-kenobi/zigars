@@ -11,6 +11,7 @@ pub const PathPolicy = struct {
     confidence: []const u8,
 };
 
+/// Classifies a path by generated, cache, vendored, and source policy rules.
 pub fn classify(path: []const u8) PathPolicy {
     if (isCachePath(path)) return .{
         .classification = "cache",

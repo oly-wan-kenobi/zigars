@@ -111,6 +111,7 @@ pub fn backendSetupValue(allocator: std.mem.Allocator, paths: backend_catalog.Pa
     return .{ .object = obj };
 }
 
+/// Builds JSON metadata for one backend, including optional configured paths.
 fn backendValue(allocator: std.mem.Allocator, backend: backend_catalog.Backend, paths: backend_catalog.Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -131,6 +132,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: backend_catalog.Backend, 
     return .{ .object = obj };
 }
 
+/// Selects the configured executable path for a backend name.
 fn backendPathFor(name: []const u8, paths: backend_catalog.Paths) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
@@ -141,6 +143,7 @@ fn backendPathFor(name: []const u8, paths: backend_catalog.Paths) []const u8 {
     return paths.diff_folded_path;
 }
 
+/// Builds backend probe argv JSON, replacing argv[0] with the configured path.
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -152,6 +155,7 @@ fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, 
     return .{ .array = array };
 }
 
+/// Builds JSON group metadata with tool names and search keywords.
 fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
     var groups = std.json.Array.init(allocator);
     var groups_owned = true;
@@ -170,6 +174,7 @@ fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = groups };
 }
 
+/// Builds the JSON list of tool names assigned to one group.
 fn groupToolsValue(allocator: std.mem.Allocator, group: ToolGroup) !std.json.Value {
     var tools = std.json.Array.init(allocator);
     var tools_owned = true;
@@ -181,6 +186,7 @@ fn groupToolsValue(allocator: std.mem.Allocator, group: ToolGroup) !std.json.Val
     return .{ .array = tools };
 }
 
+/// Builds a JSON string array from borrowed string slices.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -190,6 +196,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     return .{ .array = array };
 }
 
+/// Builds JSON argument schema metadata for one registered tool.
 fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -212,10 +219,12 @@ fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Val
     return .{ .object = obj };
 }
 
+/// Builds JSON risk metadata for one registered tool.
 fn toolRiskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     return riskValue(allocator, spec);
 }
 
+/// Builds JSON planning metadata for one registered tool.
 fn planningValue(allocator: std.mem.Allocator, entry: ToolEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -269,6 +278,7 @@ fn planningValue(allocator: std.mem.Allocator, entry: ToolEntry) !std.json.Value
     return .{ .object = obj };
 }
 
+/// Finds a tool by name and returns null when no registry entry matches.
 fn find(name: []const u8) ?ToolMeta {
     for (aggregate.entries) |entry| {
         if (std.mem.eql(u8, entry.name, name)) return entry.meta;
@@ -276,26 +286,32 @@ fn find(name: []const u8) ?ToolMeta {
     return null;
 }
 
+/// Returns the registry entry for a tool id.
 fn entryFor(id: aggregate.ToolId) ToolEntry {
     return aggregate.entries[@intFromEnum(id)];
 }
 
+/// Returns the manifest group assigned to a tool id.
 fn groupFor(id: aggregate.ToolId) ToolGroup {
     return entryFor(id).group;
 }
 
+/// Returns the serialized manifest group name.
 fn groupName(group: ToolGroup) []const u8 {
     return @tagName(group);
 }
 
+/// Returns the risk policy assigned to a tool id.
 fn riskFor(id: aggregate.ToolId) ToolRisk {
     return entryFor(id).risk;
 }
 
+/// Returns the planning policy assigned to a tool id.
 fn planFor(id: aggregate.ToolId) PlanPolicy {
     return entryFor(id).plan;
 }
 
+/// Returns an exact command plan when the tool is command-backed.
 fn commandPlanFor(id: aggregate.ToolId) ?CommandPlan {
     return switch (planFor(id)) {
         .exact_command => |plan| plan,
@@ -303,6 +319,7 @@ fn commandPlanFor(id: aggregate.ToolId) ?CommandPlan {
     };
 }
 
+/// Returns the serialized planning policy kind.
 fn planKind(plan: PlanPolicy) []const u8 {
     return switch (plan) {
         .exact_command => "exact_command",
@@ -315,6 +332,7 @@ fn planKind(plan: PlanPolicy) []const u8 {
     };
 }
 
+/// Returns the serialized risk level implied by risk flags.
 fn riskLevel(risk: ToolRisk) []const u8 {
     if (risk.writes_source or risk.executes_user_command) return "high";
     if (risk.executes_project_code or risk.writes_artifacts) return "medium";
@@ -322,6 +340,7 @@ fn riskLevel(risk: ToolRisk) []const u8 {
     return "none";
 }
 
+/// Builds JSON risk flags and planner hints for one registered tool.
 fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     const risk_value = riskFor(spec.id);
     var obj = std.json.ObjectMap.empty;
@@ -341,6 +360,7 @@ fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Returns whether manifest risk metadata allows a read-only hint.
 fn readOnlyHintFor(spec: ToolMeta) bool {
     const risk_value = riskFor(spec.id);
     return spec.read_only and
@@ -351,6 +371,7 @@ fn readOnlyHintFor(spec: ToolMeta) bool {
         !risk_value.executes_user_command;
 }
 
+/// Builds JSON schema fields filtered by required or optional status.
 fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, required: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -364,6 +385,7 @@ fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaS
     return .{ .object = obj };
 }
 
+/// Builds JSON schema fields with field-level hint metadata.
 fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -375,6 +397,7 @@ fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.Sch
     return .{ .object = obj };
 }
 
+/// Builds JSON metadata for one schema field and its optional hints.
 fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, field: tooling.SchemaField) !std.json.Value {
     const hint = tooling.hintFor(input_schema, field);
     var obj = std.json.ObjectMap.empty;
@@ -401,6 +424,7 @@ fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.Sche
     return .{ .object = obj };
 }
 
+/// Serializes a JSON value into allocator-owned bytes; allocation failures are returned.
 fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var writer_owned = true;

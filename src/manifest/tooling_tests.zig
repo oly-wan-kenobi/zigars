@@ -42,6 +42,7 @@ test "field hints can be scoped to one schema" {
     try std.testing.expect(!containsString(hintFor(validate, validate.fields[0]).enum_values, "deep"));
 }
 
+/// Returns whether a string slice set contains the expected value.
 fn containsString(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| {
         if (std.mem.eql(u8, value, needle)) return true;
