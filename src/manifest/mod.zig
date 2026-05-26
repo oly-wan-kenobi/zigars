@@ -1,3 +1,4 @@
+//! Canonical manifest contract for tool metadata, risk flags, and planning policies.
 const std = @import("std");
 
 const types = @import("types.zig");
@@ -113,6 +114,7 @@ pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Computes the external mutability hint from both declared read_only and risk capabilities.
 pub fn readOnlyHintFor(spec: ToolMeta) bool {
     const risk_value = riskFor(spec.id);
     return spec.read_only and

@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Parse completeness state for a source summary.
 pub const ParseStatus = enum {
     ok,
     syntax_errors,
     heuristic_fallback,
 };
 
+/// Parser result metadata carried beside partial source evidence.
 pub const ParseMetadata = struct {
     status: ParseStatus = .ok,
     partial_result: bool = false,
@@ -13,6 +15,7 @@ pub const ParseMetadata = struct {
     parse_error_count: i64 = 0,
 };
 
+/// Declaration summary with allocator-owned kind/name/signature fields.
 pub const Declaration = struct {
     line: usize,
     kind: []const u8,
@@ -22,6 +25,7 @@ pub const Declaration = struct {
     depth: usize = 0,
     signature: []const u8,
 
+    /// Frees owned text fields allocated while parsing or scanning.
     pub fn deinit(self: Declaration, allocator: std.mem.Allocator) void {
         allocator.free(self.kind);
         if (self.name) |name| allocator.free(name);
@@ -29,6 +33,7 @@ pub const Declaration = struct {
     }
 };
 
+/// Import evidence with allocator-owned file/import/alias/declaration text.
 pub const Import = struct {
     file: []const u8,
     line: usize,
@@ -36,6 +41,7 @@ pub const Import = struct {
     alias: ?[]const u8 = null,
     declaration: []const u8,
 
+    /// Frees owned text fields allocated while parsing import evidence.
     pub fn deinit(self: Import, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         allocator.free(self.import);
@@ -44,6 +50,7 @@ pub const Import = struct {
     }
 };
 
+/// Test declaration evidence plus a suggested focused test command.
 pub const TestDecl = struct {
     file: []const u8,
     line: usize,
@@ -51,6 +58,7 @@ pub const TestDecl = struct {
     declaration: []const u8,
     command: []const u8,
 
+    /// Frees owned text fields allocated for test evidence.
     pub fn deinit(self: TestDecl, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         if (self.name) |name| allocator.free(name);
@@ -59,21 +67,25 @@ pub const TestDecl = struct {
     }
 };
 
+/// Owned list returned by heuristic declaration scans.
 pub const DeclarationList = struct {
     items: []Declaration,
 
+    /// Frees every declaration and the backing slice.
     pub fn deinit(self: DeclarationList, allocator: std.mem.Allocator) void {
         for (self.items) |item| item.deinit(allocator);
         allocator.free(self.items);
     }
 };
 
+/// Owned parser-backed summary of declarations, imports, and tests.
 pub const SourceSummary = struct {
     parse: ParseMetadata,
     declarations: []Declaration,
     imports: []Import,
     tests: []TestDecl,
 
+    /// Frees all owned evidence slices and their nested strings.
     pub fn deinit(self: SourceSummary, allocator: std.mem.Allocator) void {
         for (self.declarations) |item| item.deinit(allocator);
         allocator.free(self.declarations);
@@ -84,10 +96,12 @@ pub const SourceSummary = struct {
     }
 };
 
+/// Returns the serialized token for parse metadata.
 pub fn parseStatusName(status: ParseStatus) []const u8 {
     return @tagName(status);
 }
 
+/// Parses one Zig source file and returns owned declaration/import/test evidence.
 pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !SourceSummary {
     var tree = try parseAst(allocator, contents);
     const parsed_source = tree.source;
@@ -118,6 +132,7 @@ pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, conten
     };
 }
 
+/// Scans source text for top-level-looking declarations without parsing Zig.
 pub fn heuristicDeclarations(allocator: std.mem.Allocator, contents: []const u8) !DeclarationList {
     var declarations: std.ArrayList(Declaration) = .empty;
     errdefer {
@@ -135,6 +150,7 @@ pub fn heuristicDeclarations(allocator: std.mem.Allocator, contents: []const u8)
     return .{ .items = try declarations.toOwnedSlice(allocator) };
 }
 
+/// Renders heuristic declaration evidence as markdown for advisory tools.
 pub fn declarationSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -155,6 +171,7 @@ pub fn declarationSummaryText(allocator: std.mem.Allocator, file: []const u8, co
     return out.toOwnedSlice(allocator);
 }
 
+/// Renders allocation keyword matches as advisory markdown.
 pub fn allocationSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     return keywordSummaryText(allocator, file, contents, "allocation-related sites", &.{
         ".alloc(",
@@ -166,6 +183,7 @@ pub fn allocationSummaryText(allocator: std.mem.Allocator, file: []const u8, con
     }, "Capability tier: advisory_orientation. Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
 }
 
+/// Renders error-related keyword matches as advisory markdown.
 pub fn errorSetSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     return keywordSummaryText(allocator, file, contents, "error-related sites", &.{
         "error{",
@@ -176,6 +194,7 @@ pub fn errorSetSummaryText(allocator: std.mem.Allocator, file: []const u8, conte
     }, "Capability tier: advisory_orientation. Confidence: low heuristic keyword scan (orientation_only). Review matches before acting.\n\n");
 }
 
+/// Renders public-looking API declarations as advisory markdown.
 pub fn publicApiSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     return keywordSummaryText(allocator, file, contents, "public API declarations", &.{
         "pub const ",
@@ -186,6 +205,7 @@ pub fn publicApiSummaryText(allocator: std.mem.Allocator, file: []const u8, cont
     }, "Capability tier: advisory_orientation. Confidence: medium heuristic keyword scan (advisory). Comparison basis is public-looking source lines; verify API changes with `zig_ast_decl_summary`, ZLS, compiler checks, and release review.\n\n");
 }
 
+/// Renders private-looking declaration candidates that still need reference checks.
 pub fn deadDeclCandidatesText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -206,6 +226,7 @@ pub fn deadDeclCandidatesText(allocator: std.mem.Allocator, file: []const u8, co
     return out.toOwnedSlice(allocator);
 }
 
+/// Shared markdown renderer for text-scan evidence tools.
 fn keywordSummaryText(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -235,11 +256,13 @@ fn keywordSummaryText(
     return out.toOwnedSlice(allocator);
 }
 
+/// Parses Zig source with an owned NUL-terminated source buffer.
 fn parseAst(allocator: std.mem.Allocator, contents: []const u8) !std.zig.Ast {
     const source = try allocator.dupeZ(u8, contents);
     return std.zig.Ast.parse(allocator, source, .zig);
 }
 
+/// Converts AST diagnostics into summary completeness metadata.
 fn parseMetadata(tree: std.zig.Ast) ParseMetadata {
     const has_errors = tree.errors.len != 0;
     return .{
@@ -485,6 +508,7 @@ fn deinitTests(allocator: std.mem.Allocator, tests: []TestDecl) void {
     for (tests) |item| item.deinit(allocator);
 }
 
+/// Returns the declaration kind for a public or private source line.
 pub fn declKind(line: []const u8) ?[]const u8 {
     const rest = if (std.mem.startsWith(u8, line, "pub ")) line["pub ".len..] else line;
     if (std.mem.startsWith(u8, rest, "const ")) return "const";
@@ -495,6 +519,7 @@ pub fn declKind(line: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Extracts a likely declaration name from a source line and kind token.
 pub fn declName(line: []const u8, kind: []const u8) ?[]const u8 {
     const rest = if (std.mem.startsWith(u8, line, "pub ")) line["pub ".len..] else line;
     const prefix_len = kind.len + 1;
@@ -505,6 +530,7 @@ pub fn declName(line: []const u8, kind: []const u8) ?[]const u8 {
     return if (name.len == 0) null else name;
 }
 
+/// Shared generated/cache path filter for workspace source scans.
 pub fn skipWorkspacePath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, ".zig-cache") or
         std.mem.startsWith(u8, path, ".zigar-cache") or

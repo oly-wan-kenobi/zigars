@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Borrowed stack frame slices extracted from a crash transcript line.
 pub const Frame = struct {
     index: usize,
     raw: []const u8,
@@ -7,21 +8,25 @@ pub const Frame = struct {
     location: []const u8,
 };
 
+/// Owned frame list; frame text slices borrow from the original transcript.
 pub const ParsedFrames = struct {
     frames: []Frame,
     count: usize,
 
+    /// Frees only the frame slice; individual frame fields are borrowed.
     pub fn deinit(self: *ParsedFrames, allocator: std.mem.Allocator) void {
         allocator.free(self.frames);
         self.* = undefined;
     }
 
+    /// Returns the first retained frame, if any.
     pub fn top(self: ParsedFrames) ?Frame {
         if (self.frames.len == 0) return null;
         return self.frames[0];
     }
 };
 
+/// Parses up to limit frames while counting all frame-looking lines.
 pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize) !ParsedFrames {
     var frames = std.ArrayList(Frame).empty;
     var frames_owned = true;
@@ -47,6 +52,7 @@ pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize)
     return .{ .frames = owned_frames, .count = count };
 }
 
+/// Heuristically detects common Zig, LLDB, and symbolized frame lines.
 pub fn looksLikeFrame(line: []const u8) bool {
     if (line.len == 0) return false;
     return std.mem.startsWith(u8, line, "#") or
@@ -56,6 +62,7 @@ pub fn looksLikeFrame(line: []const u8) bool {
         std.mem.indexOf(u8, line, ":0x") != null;
 }
 
+/// Extracts the best-effort symbol name from a frame line.
 pub fn frameSymbol(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, " in ")) |idx| {
         const rest = line[idx + 4 ..];
@@ -70,6 +77,7 @@ pub fn frameSymbol(line: []const u8) []const u8 {
     return "unknown";
 }
 
+/// Extracts the best-effort source or binary location from a frame line.
 pub fn frameLocation(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, " at ")) |idx| return std.mem.trim(u8, line[idx + 4 ..], " \t");
     if (std.mem.lastIndexOfScalar(u8, line, ':')) |idx| if (idx > 0) return std.mem.trim(u8, line[0..idx], " \t");

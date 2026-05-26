@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Classifies a workspace path and prescribes whether direct edits are allowed.
 pub const PathPolicy = struct {
     classification: []const u8,
     direct_edit_allowed: bool,
@@ -67,19 +68,23 @@ pub fn classify(path: []const u8) PathPolicy {
     };
 }
 
+/// Matches top-level cache/output directories that are always regeneration targets.
 fn isCachePath(path: []const u8) bool {
     return startsPath(path, ".zig-cache") or startsPath(path, "zig-out") or startsPath(path, "coverage") or startsPath(path, "dist");
 }
 
+/// Identifies persisted artifact outputs owned by zigar tooling.
 fn isZigarArtifactPath(path: []const u8) bool {
     return startsPath(path, ".zigar-cache");
 }
 
+/// Captures common vendored dependency locations that should not be edited in place.
 fn isVendorPath(path: []const u8) bool {
     return startsPath(path, "zig-pkg") or startsPath(path, "vendor") or startsPath(path, "third_party") or startsPath(path, "deps") or
         std.mem.indexOf(u8, path, "/vendor/") != null or std.mem.indexOf(u8, path, "/third_party/") != null or std.mem.indexOf(u8, path, "/deps/") != null;
 }
 
+/// Generated filename heuristics for files expected to be rewritten by tools.
 fn isGeneratedName(path: []const u8) bool {
     return std.mem.endsWith(u8, path, ".generated.md") or
         std.mem.endsWith(u8, path, ".generated.zig") or
@@ -88,6 +93,7 @@ fn isGeneratedName(path: []const u8) bool {
         std.mem.eql(u8, path, "docs/tool-index.generated.md");
 }
 
+/// Workspace-level skip policy shared with analysis for generated dependency trees.
 fn skipWorkspacePath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, ".zig-cache") or
         std.mem.startsWith(u8, path, ".zigar-cache") or
@@ -99,6 +105,7 @@ fn skipWorkspacePath(path: []const u8) bool {
         std.mem.indexOf(u8, path, "/zig-pkg/") != null;
 }
 
+/// Prefix match that only accepts path-boundary matches (not partial segments).
 fn startsPath(path: []const u8, prefix: []const u8) bool {
     return std.mem.eql(u8, path, prefix) or (std.mem.startsWith(u8, path, prefix) and path.len > prefix.len and path[prefix.len] == '/');
 }

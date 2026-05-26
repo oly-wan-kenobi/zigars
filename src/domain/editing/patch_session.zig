@@ -1,15 +1,18 @@
 const std = @import("std");
 
+/// File identity snapshot used to verify preimage and post-apply integrity.
 pub const Identity = struct {
     exists: bool,
     bytes: usize,
     sha256: ?[]const u8 = null,
 
+    /// Frees owned hash memory and invalidates the snapshot.
     pub fn deinit(self: *Identity, allocator: std.mem.Allocator) void {
         if (self.sha256) |hash| allocator.free(hash);
         self.* = undefined;
     }
 
+    /// Deep-copies optional hash data so caller ownership is independent.
     pub fn clone(self: Identity, allocator: std.mem.Allocator) !Identity {
         return .{
             .exists = self.exists,
@@ -18,6 +21,7 @@ pub const Identity = struct {
         };
     }
 
+    /// Compares semantic identity, treating non-existent files as equal by absence.
     pub fn matches(self: Identity, other: Identity) bool {
         if (self.exists != other.exists) return false;
         if (!self.exists) return true;
@@ -28,6 +32,7 @@ pub const Identity = struct {
     }
 };
 
+/// Expected preimage for one file in a patch session.
 pub const ExpectedPreimage = struct {
     file: []const u8,
     identity: Identity,
@@ -42,6 +47,7 @@ pub fn identityFromBytes(allocator: std.mem.Allocator, exists: bool, bytes: []co
     };
 }
 
+/// Returns a lowercase hex-encoded SHA-256 digest owned by the allocator.
 pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -56,6 +62,7 @@ pub fn expectedMatches(expected: []const ExpectedPreimage, file: []const u8, act
     return false;
 }
 
+/// Builds a stable session id from goal and path seed inputs.
 pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
     var seed = std.ArrayList(u8).empty;
     try seed.appendSlice(allocator, prefix);
@@ -67,12 +74,14 @@ pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]cons
     return std.fmt.allocPrint(allocator, "session-{s}", .{hash[0..16]});
 }
 
+/// Produces a cache artifact path for persisted file preimages.
 pub fn preimageArtifactPath(allocator: std.mem.Allocator, session_id: []const u8, index: usize, file: []const u8) ![]const u8 {
     const safe = try sanitizePath(allocator, file);
     defer allocator.free(safe);
     return std.fmt.allocPrint(allocator, ".zigar-cache/patch-sessions/{s}/{d}-{s}.preimage", .{ session_id, index, safe });
 }
 
+/// Replaces path separators and shell-hostile characters for cache filenames.
 pub fn sanitizePath(allocator: std.mem.Allocator, file: []const u8) ![]const u8 {
     const out = try allocator.dupe(u8, file);
     for (out) |*ch| {
@@ -81,6 +90,7 @@ pub fn sanitizePath(allocator: std.mem.Allocator, file: []const u8) ![]const u8 
     return out;
 }
 
+/// Splits by newline without retaining separator bytes.
 fn collectLines(allocator: std.mem.Allocator, text: []const u8) ![][]const u8 {
     var lines = std.ArrayList([]const u8).empty;
     errdefer lines.deinit(allocator);
@@ -89,6 +99,7 @@ fn collectLines(allocator: std.mem.Allocator, text: []const u8) ![][]const u8 {
     return lines.toOwnedSlice(allocator);
 }
 
+/// Emits a single-hunk unified diff focused on the changed span plus small context.
 pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []const u8, after: []const u8) ![]u8 {
     if (std.mem.eql(u8, before, after)) return allocator.dupe(u8, "");
 

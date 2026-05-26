@@ -1,24 +1,32 @@
 const std = @import("std");
 
+/// Maximum bytes read from local stdlib source files.
 pub const std_source_read_limit: usize = 512 * 1024;
+/// Maximum bytes read while probing an installed language reference.
 pub const langref_probe_read_limit: usize = 128 * 1024;
+/// Maximum bytes read from installed language-reference HTML.
 pub const langref_html_read_limit: usize = 2 * 1024 * 1024;
+/// Maximum bytes read from caller-supplied evidence artifacts.
 pub const evidence_read_limit: usize = 8 * 1024 * 1024;
+/// Default upper bound for path walks that feed docs indexing.
 pub const default_path_scan_limit: usize = 10_000;
 
 const builtin_list_ranking = "curated builtin declaration order";
 const builtin_doc_ranking = "case-insensitive builtin-name substring match in curated order; limit is applied after matching";
 const std_search_ranking = "case-insensitive declaration/source hit sorted by relative path then line; limit is applied after sorting";
 const std_item_ranking = "exact declaration-name match, preferring the path implied by a qualified std name, then relative path and line; limit is applied after sorting";
+/// Limitation text shared by stdlib source-scan results.
 pub const std_scan_limitations = "Source scan only: no semantic import resolution, no rendered autodoc, and declaration docs are adjacent triple-slash comments only.";
 const bundled_ranking = "bundled curated sections with title or anchor matches before summary/body matches; limit is applied after ranking";
 const installed_ranking = "installed HTML heading order for matching language-reference sections; limit is applied after document-order ranking";
 
+/// Completeness class for a documentation source.
 pub const Completeness = enum {
     installed_complete,
     partial_curated,
     source_scan,
 
+    /// Returns the serialized completeness token.
     pub fn text(self: Completeness) []const u8 {
         return switch (self) {
             .installed_complete => "installed_complete",
@@ -28,6 +36,7 @@ pub const Completeness = enum {
     }
 };
 
+/// Documentation source provenance attached to docs results.
 pub const Source = struct {
     id: []const u8,
     label: []const u8,
@@ -37,6 +46,7 @@ pub const Source = struct {
     path: ?[]const u8 = null,
 };
 
+/// Result contract metadata describing ranking and no-result state.
 pub const Contract = struct {
     query: ?[]const u8 = null,
     limit: ?usize = null,
@@ -45,6 +55,7 @@ pub const Contract = struct {
     ranking: []const u8,
 };
 
+/// Returns metadata for the bundled curated builtin docs.
 pub fn curatedBuiltinsSource() Source {
     return .{
         .id = "curated_zigar_builtins",
@@ -55,6 +66,7 @@ pub fn curatedBuiltinsSource() Source {
     };
 }
 
+/// Returns metadata for local stdlib Zig source scans.
 pub fn stdlibSource(path: []const u8, version: ?[]const u8) Source {
     return .{
         .id = "local_stdlib_zig_source",
@@ -66,6 +78,7 @@ pub fn stdlibSource(path: []const u8, version: ?[]const u8) Source {
     };
 }
 
+/// Returns metadata for an installed Zig language-reference HTML file.
 pub fn installedLangrefSource(path: []const u8, version: ?[]const u8) Source {
     return .{
         .id = "installed_langref_html",
@@ -77,6 +90,7 @@ pub fn installedLangrefSource(path: []const u8, version: ?[]const u8) Source {
     };
 }
 
+/// Returns metadata for the bundled language-reference fallback index.
 pub fn bundledLangrefSource() Source {
     return .{
         .id = "bundled_langref_index",
@@ -87,12 +101,14 @@ pub fn bundledLangrefSource() Source {
     };
 }
 
+/// Curated builtin documentation entry.
 pub const BuiltinDoc = struct {
     name: []const u8,
     signature: []const u8,
     summary: []const u8,
 };
 
+/// Drift evidence comparing curated builtins with active toolchain source.
 pub const BuiltinDriftInfo = struct {
     status: []const u8,
     confidence: []const u8,
@@ -104,6 +120,7 @@ pub const BuiltinDriftInfo = struct {
     extra_names_sample: []const []const u8 = &.{},
 };
 
+/// Optional toolchain evidence used when listing builtin docs.
 pub const BuiltinIndexInput = struct {
     toolchain_version: ?[]const u8 = null,
     owns_toolchain_version: bool = false,
@@ -111,6 +128,7 @@ pub const BuiltinIndexInput = struct {
     owns_active_source_path: bool = false,
 };
 
+/// Curated builtin docs bundled with zigar.
 pub const builtins = [_]BuiltinDoc{
     .{ .name = "@import", .signature = "@import(comptime path: []const u8) type", .summary = "Imports a Zig source file or package module at comptime." },
     .{ .name = "@This", .signature = "@This() type", .summary = "Returns the innermost container type." },
@@ -137,31 +155,37 @@ pub const builtins = [_]BuiltinDoc{
     .{ .name = "@panic", .signature = "@panic(message: []const u8) noreturn", .summary = "Terminates execution with a panic message." },
 };
 
+/// Builtin list result; owns only fields marked by its input.
 pub const BuiltinListResult = struct {
     input: BuiltinIndexInput,
 
+    /// Frees owned input evidence, if present.
     pub fn deinit(self: BuiltinListResult, allocator: std.mem.Allocator) void {
         deinitBuiltinIndexInput(self.input, allocator);
     }
 };
 
+/// Ranked builtin doc match.
 pub const BuiltinDocMatch = struct {
     rank: usize,
     item: BuiltinDoc,
 };
 
+/// Owned builtin-doc search result.
 pub const BuiltinDocResult = struct {
     query: []const u8,
     limit: usize,
     input: BuiltinIndexInput,
     matches: []BuiltinDocMatch,
 
+    /// Frees owned input evidence and match storage.
     pub fn deinit(self: BuiltinDocResult, allocator: std.mem.Allocator) void {
         deinitBuiltinIndexInput(self.input, allocator);
         allocator.free(self.matches);
     }
 };
 
+/// Frees owned optional strings and drift samples in builtin index input.
 pub fn deinitBuiltinIndexInput(input: BuiltinIndexInput, allocator: std.mem.Allocator) void {
     if (input.owns_toolchain_version) if (input.toolchain_version) |version| allocator.free(version);
     if (input.drift) |drift| {
@@ -171,10 +195,12 @@ pub fn deinitBuiltinIndexInput(input: BuiltinIndexInput, allocator: std.mem.Allo
     }
 }
 
+/// Wraps builtin index metadata for list responses.
 pub fn builtinList(input: BuiltinIndexInput) BuiltinListResult {
     return .{ .input = input };
 }
 
+/// Searches curated builtin docs by case-insensitive builtin name match.
 pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize, input: BuiltinIndexInput) !BuiltinDocResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -198,6 +224,7 @@ pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize,
     };
 }
 
+/// Builds owned builtin index input and drift evidence from active source text.
 pub fn buildBuiltinIndexInput(
     allocator: std.mem.Allocator,
     toolchain_version: ?[]const u8,
@@ -293,18 +320,21 @@ fn nameIn(names: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Borrowed text file input used by stdlib source indexing.
 pub const TextFile = struct {
     path: []const u8,
     source_path: ?[]const u8 = null,
     bytes: []const u8,
 };
 
+/// Counts collected during stdlib source file walking.
 pub const StdIndexMetadata = struct {
     files_scanned: usize = 0,
     skipped_files: usize = 0,
     walk_errors: usize = 0,
 };
 
+/// Owned stdlib source-search match with adjacent declaration docs.
 pub const StdSourceMatch = struct {
     rank: usize,
     root: []const u8 = "std",
@@ -319,6 +349,7 @@ pub const StdSourceMatch = struct {
     doc_comments: []const u8,
     doc_comment_count: usize,
 
+    /// Frees all owned match strings.
     fn deinit(self: StdSourceMatch, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
         allocator.free(self.source_path);
@@ -330,6 +361,7 @@ pub const StdSourceMatch = struct {
     }
 };
 
+/// Owned stdlib search result over source text.
 pub const StdSearchResult = struct {
     std_dir: []const u8,
     query: []const u8,
@@ -338,6 +370,7 @@ pub const StdSearchResult = struct {
     metadata: StdIndexMetadata,
     matches: []StdSourceMatch,
 
+    /// Frees query metadata and all owned matches.
     pub fn deinit(self: StdSearchResult, allocator: std.mem.Allocator) void {
         allocator.free(self.std_dir);
         allocator.free(self.query);
@@ -346,6 +379,7 @@ pub const StdSearchResult = struct {
     }
 };
 
+/// Searches stdlib source files by case-insensitive text match.
 pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []const u8, files: []const TextFile, metadata: StdIndexMetadata, limit: usize) !StdSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -390,6 +424,7 @@ pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []con
     };
 }
 
+/// Owned stdlib item lookup match for an exact declaration name.
 pub const StdItemMatch = struct {
     rank: usize,
     name: []const u8,
@@ -404,6 +439,7 @@ pub const StdItemMatch = struct {
     preferred_path: bool,
     qualified_name: []const u8,
 
+    /// Frees all owned match strings.
     fn deinit(self: StdItemMatch, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         allocator.free(self.decl_name);
@@ -415,6 +451,7 @@ pub const StdItemMatch = struct {
     }
 };
 
+/// Owned stdlib declaration lookup result.
 pub const StdItemResult = struct {
     std_dir: []const u8,
     name: []const u8,
@@ -425,6 +462,7 @@ pub const StdItemResult = struct {
     metadata: StdIndexMetadata,
     matches: []StdItemMatch,
 
+    /// Frees query metadata and all owned matches.
     pub fn deinit(self: StdItemResult, allocator: std.mem.Allocator) void {
         allocator.free(self.std_dir);
         allocator.free(self.name);
@@ -435,6 +473,7 @@ pub const StdItemResult = struct {
     }
 };
 
+/// Finds stdlib declarations by exact final name segment.
 pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const u8, files: []const TextFile, metadata: StdIndexMetadata, limit: usize) !StdItemResult {
     const normalized_limit = @max(limit, 1);
     const item_name = lastNameSegment(name);
@@ -629,6 +668,7 @@ fn stdItemMatchLessThan(_: void, lhs: StdItemMatch, rhs: StdItemMatch) bool {
     return lhs.line < rhs.line;
 }
 
+/// Curated fallback language-reference section.
 pub const Section = struct {
     title: []const u8,
     anchor: []const u8,
@@ -636,6 +676,7 @@ pub const Section = struct {
     body: []const u8,
 };
 
+/// Bundled fallback language-reference sections.
 pub const sections = [_]Section{
     .{ .title = "Assignment", .anchor = "Assignment", .summary = "Assignment writes a value to a mutable memory location.", .body = "Use var for mutable local variables and const for immutable bindings. Assignment is not an expression and does not produce a value." },
     .{ .title = "Arrays", .anchor = "Arrays", .summary = "Arrays have a compile-time-known length and element type.", .body = "Array syntax is [N]T. Slices use []T and carry pointer plus length at runtime." },
@@ -657,6 +698,7 @@ pub const sections = [_]Section{
     .{ .title = "While", .anchor = "while", .summary = "while repeats a body while a condition holds.", .body = "while supports continue expressions, optional captures, error-union captures, and else clauses for natural completion." },
 };
 
+/// Candidate relative paths for installed language reference HTML.
 pub const langref_candidates = [_][]const u8{
     "doc/langref.html",
     "doc/langref.html.in",
@@ -666,17 +708,20 @@ pub const langref_candidates = [_][]const u8{
     "docs/index.html",
 };
 
+/// Probe counters collected while looking for installed language reference HTML.
 pub const LangrefProbe = struct {
     path: ?[]const u8 = null,
     candidates_checked: usize = 0,
     rejected_candidates: usize = 0,
     unreadable_candidates: usize = 0,
 
+    /// Returns rejected plus unreadable candidate count.
     pub fn skippedCandidates(self: LangrefProbe) usize {
         return self.rejected_candidates + self.unreadable_candidates;
     }
 };
 
+/// Heuristically validates that bytes look like Zig language-reference HTML.
 pub fn looksLikeLangref(rel_path: []const u8, bytes: []const u8) bool {
     if (std.mem.eql(u8, rel_path, "docs/index.html")) return false;
     if (std.mem.indexOf(u8, bytes, "Language Reference") != null or
@@ -688,6 +733,7 @@ pub fn looksLikeLangref(rel_path: []const u8, bytes: []const u8) bool {
     return std.mem.indexOf(u8, bytes, "Zig") != null or std.mem.indexOf(u8, bytes, "zig") != null;
 }
 
+/// Metadata explaining why bundled langref fallback was used.
 pub const BundledFallbackMetadata = struct {
     installed_doc_available: bool = false,
     candidate_count: usize = 0,
@@ -698,6 +744,7 @@ pub const BundledFallbackMetadata = struct {
     fallback_reason: []const u8 = "installed_langref_not_found",
 };
 
+/// Metadata describing installed or bundled langref indexing.
 pub const LangrefIndexMetadata = struct {
     strategy: []const u8,
     source_path: ?[]const u8 = null,
@@ -713,6 +760,7 @@ pub const LangrefIndexMetadata = struct {
     fallback_reason: ?[]const u8 = null,
 };
 
+/// Owned language-reference match.
 pub const LangrefMatch = struct {
     rank: usize,
     title: []const u8,
@@ -723,6 +771,7 @@ pub const LangrefMatch = struct {
     match_pass: []const u8,
     source_path: ?[]const u8 = null,
 
+    /// Frees owned match text and optional source path.
     fn deinit(self: LangrefMatch, allocator: std.mem.Allocator) void {
         allocator.free(self.title);
         allocator.free(self.anchor);
@@ -733,6 +782,7 @@ pub const LangrefMatch = struct {
     }
 };
 
+/// Owned language-reference search result.
 pub const LangrefSearchResult = struct {
     query: []const u8,
     limit: usize,
@@ -740,6 +790,7 @@ pub const LangrefSearchResult = struct {
     metadata: LangrefIndexMetadata,
     matches: []LangrefMatch,
 
+    /// Frees query, source path metadata, and all matches.
     pub fn deinit(self: LangrefSearchResult, allocator: std.mem.Allocator) void {
         allocator.free(self.query);
         if (self.source.path) |path| allocator.free(path);
@@ -749,6 +800,7 @@ pub const LangrefSearchResult = struct {
     }
 };
 
+/// Searches the bundled curated language-reference fallback.
 pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize, fallback: BundledFallbackMetadata) !LangrefSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -783,6 +835,7 @@ pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: us
     };
 }
 
+/// Searches installed language-reference HTML headings and section text.
 pub fn langrefInstalled(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize, probe: LangrefProbe) !LangrefSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -1012,18 +1065,21 @@ fn boundedSummary(text: []const u8) []const u8 {
     return trimmed[0..@min(trimmed.len, 360)];
 }
 
+/// Owned docs index entry for one scanned file.
 pub const DocsEntry = struct {
     path: []const u8,
     source_family: []const u8,
     bytes: usize,
     first_heading: ?[]const u8 = null,
 
+    /// Frees owned path and optional heading.
     fn deinit(self: DocsEntry, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
         if (self.first_heading) |value| allocator.free(value);
     }
 };
 
+/// Owned docs query match.
 pub const DocsMatch = struct {
     path: []const u8,
     source_family: []const u8,
@@ -1031,18 +1087,21 @@ pub const DocsMatch = struct {
     snippet: []const u8,
     confidence: []const u8 = "medium",
 
+    /// Frees owned path and snippet text.
     fn deinit(self: DocsMatch, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
         allocator.free(self.snippet);
     }
 };
 
+/// Owned index result for documentation-relevant files.
 pub const DocsIndexResult = struct {
     scope: []const u8,
     files_scanned: usize,
     skipped_files: usize,
     entries: []DocsEntry,
 
+    /// Frees scope and all owned entries.
     pub fn deinit(self: DocsIndexResult, allocator: std.mem.Allocator) void {
         allocator.free(self.scope);
         for (self.entries) |entry| entry.deinit(allocator);
@@ -1050,6 +1109,7 @@ pub const DocsIndexResult = struct {
     }
 };
 
+/// Owned docs query result over project docs and optional autodoc text.
 pub const DocsQueryResult = struct {
     query: []const u8,
     scope: []const u8,
@@ -1057,6 +1117,7 @@ pub const DocsQueryResult = struct {
     skipped_files: usize,
     matches: []DocsMatch,
 
+    /// Frees query metadata and all owned matches.
     pub fn deinit(self: DocsQueryResult, allocator: std.mem.Allocator) void {
         allocator.free(self.query);
         allocator.free(self.scope);
@@ -1065,6 +1126,7 @@ pub const DocsQueryResult = struct {
     }
 };
 
+/// Builds an index of documentation files within the requested scope.
 pub fn docsIndex(allocator: std.mem.Allocator, scope: []const u8, files: []const TextFile, skipped_files: usize, limit: usize) !DocsIndexResult {
     var entries: std.ArrayList(DocsEntry) = .empty;
     errdefer {
@@ -1087,6 +1149,7 @@ pub fn docsIndex(allocator: std.mem.Allocator, scope: []const u8, files: []const
     };
 }
 
+/// Queries documentation files and optional autodoc text for a source match.
 pub fn docsQuery(allocator: std.mem.Allocator, query: []const u8, scope: []const u8, files: []const TextFile, autodoc_text: ?[]const u8, skipped_files: usize, limit: usize) !DocsQueryResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -1123,6 +1186,7 @@ pub fn docsQuery(allocator: std.mem.Allocator, query: []const u8, scope: []const
     };
 }
 
+/// Returns whether a path participates in a docs query scope.
 pub fn isDocsScopePath(scope: []const u8, path: []const u8) bool {
     if (std.mem.startsWith(u8, path, ".") or std.mem.indexOf(u8, path, "zig-cache") != null or std.mem.startsWith(u8, path, "zig-out/")) return false;
     const is_md = std.mem.endsWith(u8, path, ".md");
@@ -1142,6 +1206,7 @@ fn docsEntrySummary(allocator: std.mem.Allocator, path: []const u8, bytes: []con
     };
 }
 
+/// Builds one owned docs match from a byte offset.
 pub fn docsMatch(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8, hit: usize, source: []const u8) !DocsMatch {
     return .{
         .path = try allocator.dupe(u8, path),
@@ -1160,6 +1225,7 @@ fn firstMarkdownHeading(bytes: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Stable source fingerprint for raw docs or autodoc evidence.
 pub const RawReference = struct {
     source_kind: []const u8,
     path: ?[]const u8 = null,
@@ -1167,6 +1233,7 @@ pub const RawReference = struct {
     sha256: [64]u8,
 };
 
+/// Computes a raw evidence reference without allocating.
 pub fn rawReference(source_kind: []const u8, path: ?[]const u8, bytes: []const u8) RawReference {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
@@ -1178,6 +1245,7 @@ pub fn rawReference(source_kind: []const u8, path: ?[]const u8, bytes: []const u
     };
 }
 
+/// Owned autodoc entry normalized from JSON or text input.
 pub const AutodocEntry = struct {
     name: ?[]const u8 = null,
     path: ?[]const u8 = null,
@@ -1185,6 +1253,7 @@ pub const AutodocEntry = struct {
     line: ?usize = null,
     source_family: []const u8,
 
+    /// Frees owned optional fields.
     fn deinit(self: AutodocEntry, allocator: std.mem.Allocator) void {
         if (self.name) |value| allocator.free(value);
         if (self.path) |value| allocator.free(value);
@@ -1192,16 +1261,19 @@ pub const AutodocEntry = struct {
     }
 };
 
+/// Owned autodoc ingest result plus raw evidence reference.
 pub const AutodocIngestResult = struct {
     raw_reference: RawReference,
     entries: []AutodocEntry,
 
+    /// Frees all owned autodoc entries.
     pub fn deinit(self: AutodocIngestResult, allocator: std.mem.Allocator) void {
         for (self.entries) |entry| entry.deinit(allocator);
         allocator.free(self.entries);
     }
 };
 
+/// Ingests autodoc JSON recursively or falls back to line-oriented text entries.
 pub fn autodocIngest(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !AutodocIngestResult {
     var entries: std.ArrayList(AutodocEntry) = .empty;
     errdefer {
@@ -1255,6 +1327,7 @@ fn appendTextDocEntries(allocator: std.mem.Allocator, entries: *std.ArrayList(Au
     }
 }
 
+/// Owned parse result for one fenced Zig snippet.
 pub const SnippetCheck = struct {
     label: []const u8,
     parse_status: []const u8,
@@ -1263,22 +1336,26 @@ pub const SnippetCheck = struct {
     confidence: []const u8 = "high",
     source_bytes: usize,
 
+    /// Frees the owned snippet label.
     pub fn deinit(self: SnippetCheck, allocator: std.mem.Allocator) void {
         allocator.free(self.label);
     }
 };
 
+/// Owned parse-check result for examples extracted from docs.
 pub const DocExampleCheckResult = struct {
     raw_reference: RawReference,
     snippets: []SnippetCheck,
     ok: bool,
 
+    /// Frees all owned snippet checks.
     pub fn deinit(self: DocExampleCheckResult, allocator: std.mem.Allocator) void {
         for (self.snippets) |snippet| snippet.deinit(allocator);
         allocator.free(self.snippets);
     }
 };
 
+/// Parses one snippet with std.zig.Ast and reports syntax status.
 pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []const u8) !SnippetCheck {
     const source = try allocator.dupeZ(u8, content);
     var tree = try std.zig.Ast.parse(allocator, source, .zig);
@@ -1296,6 +1373,7 @@ pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []
     };
 }
 
+/// Extracts fenced Zig snippets and parse-checks them without executing code.
 pub fn docExampleCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !DocExampleCheckResult {
     var snippets: std.ArrayList(SnippetCheck) = .empty;
     errdefer {
@@ -1349,26 +1427,31 @@ fn collectFencedZigSnippets(allocator: std.mem.Allocator, text: []const u8, snip
     }
 }
 
+/// Shell command discovered in README-style fenced blocks.
 pub const ReadmeCommand = struct {
     line: usize,
     command: []const u8,
     classification: []const u8,
 
+    /// Frees the owned command text.
     fn deinit(self: ReadmeCommand, allocator: std.mem.Allocator) void {
         allocator.free(self.command);
     }
 };
 
+/// Owned README command extraction result.
 pub const ReadmeCommandCheckResult = struct {
     raw_reference: RawReference,
     commands: []ReadmeCommand,
 
+    /// Frees all owned commands.
     pub fn deinit(self: ReadmeCommandCheckResult, allocator: std.mem.Allocator) void {
         for (self.commands) |command| command.deinit(allocator);
         allocator.free(self.commands);
     }
 };
 
+/// Extracts README shell commands for review without running them.
 pub fn readmeCommandCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !ReadmeCommandCheckResult {
     var commands: std.ArrayList(ReadmeCommand) = .empty;
     errdefer {
@@ -1524,6 +1607,7 @@ fn lineStart(text: []const u8, index: usize) usize {
     return start;
 }
 
+/// Converts a byte offset into a 1-based line number.
 pub fn lineNumber(text: []const u8, index: usize) usize {
     var line: usize = 1;
     for (text[0..@min(index, text.len)]) |c| {
@@ -1532,6 +1616,7 @@ pub fn lineNumber(text: []const u8, index: usize) usize {
     return line;
 }
 
+/// Returns the trimmed line containing a byte offset.
 pub fn lineAt(text: []const u8, index: usize) []const u8 {
     var start = @min(index, text.len);
     while (start > 0 and text[start - 1] != '\n') start -= 1;

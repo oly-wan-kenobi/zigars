@@ -1,3 +1,4 @@
+//! Performance-domain data models for benchmarks and coverage reports.
 pub const coverage_model = @import("coverage_model.zig");
 pub const benchmark_model = @import("benchmark_model.zig");
 

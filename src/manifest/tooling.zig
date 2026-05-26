@@ -1,17 +1,22 @@
 const std = @import("std");
 
+/// Static catalog JSON that is enriched with generated manifest metadata.
 pub const catalog_json = @embedFile("tool_catalog.json");
 
+/// Minimal schema field tuple: name, JSON type, and required flag.
 pub const SchemaField = struct { []const u8, []const u8, bool };
+/// Optional metadata override for one schema field.
 pub const SchemaFieldHint = struct {
     field_name: []const u8,
     hint: FieldHint,
 };
+/// Schema fields plus optional field-level UI and validation hints.
 pub const SchemaSpec = struct {
     fields: []const SchemaField,
     field_hints: []const SchemaFieldHint = &.{},
 };
 
+/// Human-facing field metadata used when rendering rich catalog schemas.
 pub const FieldHint = struct {
     description: []const u8,
     default_bool: ?bool = null,
@@ -23,14 +28,17 @@ pub const FieldHint = struct {
     maximum: ?i64 = null,
 };
 
+/// Creates a schema with no custom field hints.
 pub fn schema(comptime fields: []const SchemaField) SchemaSpec {
     return .{ .fields = fields };
 }
 
+/// Creates a schema with explicit hints for selected fields.
 pub fn schemaWithHints(comptime fields: []const SchemaField, comptime field_hints: []const SchemaFieldHint) SchemaSpec {
     return .{ .fields = fields, .field_hints = field_hints };
 }
 
+/// Resolves a field hint, falling back to conventional defaults by field name.
 pub fn hintFor(spec: SchemaSpec, field: SchemaField) FieldHint {
     for (spec.field_hints) |override| {
         if (std.mem.eql(u8, override.field_name, field[0])) return override.hint;
@@ -38,6 +46,7 @@ pub fn hintFor(spec: SchemaSpec, field: SchemaField) FieldHint {
     return defaultHintFor(field);
 }
 
+/// Supplies common defaults for shared argument names.
 fn defaultHintFor(field: SchemaField) FieldHint {
     const name = field[0];
     if (std.mem.eql(u8, name, "file")) return .{ .description = "Workspace-relative source file path.", .path_kind = "input_file" };
@@ -74,18 +83,21 @@ fn defaultHintFor(field: SchemaField) FieldHint {
     return .{ .description = "Tool argument." };
 }
 
+/// Returns the declared boolean default for a field, or the caller fallback.
 pub fn boolDefault(spec: SchemaSpec, name: []const u8, fallback: bool) bool {
     const field = findField(spec, name) orelse return fallback;
     const hint = hintFor(spec, field);
     return hint.default_bool orelse fallback;
 }
 
+/// Returns the declared integer default for a field, or the caller fallback.
 pub fn intDefault(spec: SchemaSpec, name: []const u8, fallback: i64) i64 {
     const field = findField(spec, name) orelse return fallback;
     const hint = hintFor(spec, field);
     return hint.default_int orelse fallback;
 }
 
+/// Finds a schema field by name without allocating.
 fn findField(spec: SchemaSpec, name: []const u8) ?SchemaField {
     for (spec.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return field;

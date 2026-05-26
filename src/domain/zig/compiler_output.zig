@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Borrowed compiler diagnostic line normalized into fields when possible.
 pub const CompilerLine = struct {
     severity: []const u8,
     path: ?[]const u8 = null,
@@ -9,6 +10,7 @@ pub const CompilerLine = struct {
     raw: []const u8,
 };
 
+/// Parses Zig compiler output with or without file location fields.
 pub fn parseCompilerLine(line: []const u8) ?CompilerLine {
     if (parseLocatedCompilerLine(line, "error")) |parsed| return parsed;
     if (parseLocatedCompilerLine(line, "warning")) |parsed| return parsed;
@@ -19,6 +21,7 @@ pub fn parseCompilerLine(line: []const u8) ?CompilerLine {
     return null;
 }
 
+/// Parses `path:line:column: severity: message` diagnostics for one severity.
 pub fn parseLocatedCompilerLine(line: []const u8, severity: []const u8) ?CompilerLine {
     var token_buf: [16]u8 = undefined;
     const token = std.fmt.bufPrint(&token_buf, ": {s}: ", .{severity}) catch return null;
@@ -40,6 +43,7 @@ pub fn parseLocatedCompilerLine(line: []const u8, severity: []const u8) ?Compile
     };
 }
 
+/// Maps compiler messages into coarse triage categories.
 pub fn classifyDiagnosticMessage(message: []const u8) []const u8 {
     if (std.mem.indexOf(u8, message, "expected type") != null) return "type_mismatch";
     if (std.mem.indexOf(u8, message, "expected ") != null and std.mem.indexOf(u8, message, "found ") != null) return "syntax_or_type_mismatch";
