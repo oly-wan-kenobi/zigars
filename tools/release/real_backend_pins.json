@@ -87,7 +87,7 @@
       ],
       "patches": [
         {
-          "path": "tools/backend-patches/zflame-pin-zbench-archive.patch",
+          "path": "tools/release/backend-patches/zflame-pin-zbench-archive.patch",
           "sha256": "3fc443cb37bac5e8689d5df78a4e5b8780497f05389bba2740399bc0919cadb6",
           "applies_to_commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
           "purpose": "Replace zflame's moving zBench main archive with the v0.13.0 tag archive that matches the declared Zig package hash."
@@ -134,7 +134,7 @@
       ],
       "patches": [
         {
-          "path": "tools/backend-patches/zflame-pin-zbench-archive.patch",
+          "path": "tools/release/backend-patches/zflame-pin-zbench-archive.patch",
           "sha256": "3fc443cb37bac5e8689d5df78a4e5b8780497f05389bba2740399bc0919cadb6",
           "applies_to_commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
           "purpose": "Shared zflame repository patch used before building diff-folded."

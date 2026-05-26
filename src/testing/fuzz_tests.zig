@@ -31,7 +31,7 @@ test "fuzz coverage seed exercises successful coverage parsing" {
     var set = try coverage_model.parse(std.testing.allocator, "SF:src/main.zig\nDA:1,1\nDA:2,0\nend_of_record\n", "seed", "");
     defer set.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(u64, 5000), coverage_model.rateBp(set.covered, set.total));
-    const changed = coverage_model.changedCoverage(set, &.{ "src/main.zig", "tools/coverage.zig" });
+    const changed = coverage_model.changedCoverage(set, &.{ "src/main.zig", "tools/coverage/coverage.zig" });
     try std.testing.expectEqual(@as(usize, 1), changed.count);
 }
 
@@ -48,7 +48,7 @@ fn fuzzTextParsers(_: void, smith: *std.testing.Smith) !void {
         try coverage_model.parse(std.testing.allocator, "SF:src/main.zig\nDA:1,1\nend_of_record\n", "seed", "");
     defer set.deinit(std.testing.allocator);
     _ = coverage_model.rateBp(set.covered, set.total);
-    _ = coverage_model.changedCoverage(set, &.{ "src/main.zig", "tools/coverage.zig" });
+    _ = coverage_model.changedCoverage(set, &.{ "src/main.zig", "tools/coverage/coverage.zig" });
 
     var frames = try stacktrace.parseFrames(std.testing.allocator, text, 8);
     defer frames.deinit(std.testing.allocator);

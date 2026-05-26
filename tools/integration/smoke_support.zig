@@ -1,6 +1,6 @@
 const std = @import("std");
-const cli_io = @import("cli_io.zig");
-const json_query = @import("json_query.zig");
+const cli_io = @import("../common/cli_io.zig");
+const json_query = @import("../common/json_query.zig");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;

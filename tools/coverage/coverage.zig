@@ -1,7 +1,7 @@
 const std = @import("std");
 const cobertura = @import("coverage_cobertura.zig");
 const coverage_config = @import("coverage_config.zig");
-const json_util = @import("json_util.zig");
+const json_util = @import("../common/json_util.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -789,7 +789,7 @@ test "renderCoverageSummary includes suite floors and coverage details" {
                         .uncovered_lines = @constCast(&[_]u32{ 3, 5 }),
                     },
                     .{
-                        .path = "tools/coverage.zig",
+                        .path = "tools/coverage/coverage.zig",
                         .scope = .tools,
                         .covered_lines = 3,
                         .total_lines = 3,

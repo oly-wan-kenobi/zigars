@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli_io = @import("cli_io.zig");
+const cli_io = @import("../common/cli_io.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;

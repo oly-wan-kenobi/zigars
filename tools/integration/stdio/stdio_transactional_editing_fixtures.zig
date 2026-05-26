@@ -1,6 +1,6 @@
 const std = @import("std");
-const cli_io = @import("cli_io.zig");
-const smoke = @import("smoke_support.zig");
+const cli_io = @import("../../common/cli_io.zig");
+const smoke = @import("../smoke_support.zig");
 
 const JsonValue = std.json.Value;
 

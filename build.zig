@@ -1,6 +1,6 @@
 const std = @import("std");
 const package = @import("build.zig.zon");
-const release_targets = @import("tools/release_targets.zig");
+const release_targets = @import("tools/release/release_targets.zig");
 
 pub fn build(b: *std.Build) void {
     const version = package.version;

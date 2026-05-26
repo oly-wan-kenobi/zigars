@@ -1,5 +1,5 @@
 const std = @import("std");
-const smoke = @import("smoke_support.zig");
+const smoke = @import("../smoke_support.zig");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;

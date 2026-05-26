@@ -32,7 +32,7 @@ pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
         "Release Readiness",
         "backend compatibility matrix",
         "ZLS Conformance",
-        "tools/real_backend_pins.json",
+        "tools/release/real_backend_pins.json",
         ".github/scripts/setup-real-backends.sh",
         "Repo-pinned release validation",
     };

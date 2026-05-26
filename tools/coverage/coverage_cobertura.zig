@@ -226,12 +226,12 @@ fn isTrackedCoverageFile(path: []const u8) bool {
 
 fn isGeneratedCoveragePath(path: []const u8) bool {
     if (std.mem.eql(u8, path, "tools/fuzz_test_runner.zig")) return true;
+    if (std.mem.eql(u8, path, "coverage") or std.mem.startsWith(u8, path, "coverage/")) return true;
     var parts = std.mem.splitScalar(u8, path, '/');
     while (parts.next()) |part| {
         if (std.mem.eql(u8, part, ".zig-cache") or
             std.mem.eql(u8, part, "zig-out") or
             std.mem.eql(u8, part, "zig-pkg") or
-            std.mem.eql(u8, part, "coverage") or
             std.mem.eql(u8, part, "dist"))
         {
             return true;
@@ -298,7 +298,7 @@ test "parseCobertura counts src and tools lines" {
         \\        <line number="2" hits="0"/>
         \\      </lines>
         \\    </class>
-        \\    <class filename="/repo/tools/coverage.zig">
+        \\    <class filename="/repo/tools/coverage/coverage.zig">
         \\      <lines>
         \\        <line number="1" hits="3"/>
         \\      </lines>
@@ -324,7 +324,7 @@ test "parseCobertura counts src and tools lines" {
     try std.testing.expectEqualStrings("src/root.zig", stats.files[0].path);
     try std.testing.expectEqual(@as(usize, 1), stats.files[0].uncovered_lines.len);
     try std.testing.expectEqual(@as(u32, 2), stats.files[0].uncovered_lines[0]);
-    try std.testing.expectEqualStrings("tools/coverage.zig", stats.files[1].path);
+    try std.testing.expectEqualStrings("tools/coverage/coverage.zig", stats.files[1].path);
 }
 
 test "parseCobertura skips classes and lines missing required attributes" {
@@ -368,12 +368,12 @@ test "parseCobertura releases parsed files when a later class is malformed" {
 }
 
 test "coverage path and attribute helpers handle backslashes and prefix collisions" {
-    const normalized = try normalizeCoveragePath(std.testing.allocator, "C:\\repo\\tools\\coverage.zig");
+    const normalized = try normalizeCoveragePath(std.testing.allocator, "C:\\repo\\tools\\coverage\\coverage.zig");
     defer if (normalized) |path| std.testing.allocator.free(path);
-    try std.testing.expectEqualStrings("tools/coverage.zig", normalized.?);
+    try std.testing.expectEqualStrings("tools/coverage/coverage.zig", normalized.?);
     try std.testing.expect(!isTrackedCoverageFile("tools/fuzz_test_runner.zig"));
     try std.testing.expect(!isTrackedCoverageFile("zig-out/test.zig"));
-    try std.testing.expect(isTrackedCoverageFile("tools/coverage.zig"));
+    try std.testing.expect(isTrackedCoverageFile("tools/coverage/coverage.zig"));
     try std.testing.expectEqualStrings("src/root.zig", attributeValue("<class otherfilename=\"x\" filename=\"src/root.zig\">", "filename").?);
     try std.testing.expect(attributeValue("<line number=1 hits=\"1\"/>", "number") == null);
 }
