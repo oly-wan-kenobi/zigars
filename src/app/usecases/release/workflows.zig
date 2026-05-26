@@ -1,3 +1,4 @@
+//! Top-level release workflow handlers composing CI, API, docs, and policy evidence.
 const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");

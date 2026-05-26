@@ -1,3 +1,4 @@
+//! Release drift reporting workflow that summarizes repo and artifact divergence by depth.
 const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");

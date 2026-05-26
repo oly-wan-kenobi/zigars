@@ -1,18 +1,26 @@
+//! JSON-building helpers for response shape metadata and token budget plans.
+//! Returned values are allocator-owned unless a function documents borrowing.
 const std = @import("std");
 
+/// Version for JSON result-shape metadata emitted by these helpers.
 pub const schema_version = 1;
+/// Lower bound applied to requested token budgets.
 pub const min_token_budget: i64 = 500;
+/// Upper bound applied to requested token budgets.
 pub const max_token_budget: i64 = 50_000;
 
+/// JSON-oriented response shape profile.
 pub const ResultShapeMode = enum {
     compact,
     standard,
     deep,
 
+    /// Stable mode name used in JSON payloads.
     pub fn name(self: ResultShapeMode) []const u8 {
         return @tagName(self);
     }
 
+    /// Human-facing description for JSON metadata.
     pub fn description(self: ResultShapeMode) []const u8 {
         return switch (self) {
             .compact => "Small response with stable machine fields, a short summary, and explicit omissions.",
@@ -21,6 +29,7 @@ pub const ResultShapeMode = enum {
         };
     }
 
+    /// Default planning budget for this mode.
     pub fn defaultBudget(self: ResultShapeMode) i64 {
         return switch (self) {
             .compact => 1_200,
@@ -30,6 +39,7 @@ pub const ResultShapeMode = enum {
     }
 };
 
+/// Parses a mode name, returning null for caller-specific error handling.
 pub fn parseMode(raw: []const u8) ?ResultShapeMode {
     inline for (std.meta.fields(ResultShapeMode)) |field| {
         if (std.mem.eql(u8, raw, field.name)) return @field(ResultShapeMode, field.name);
@@ -37,10 +47,12 @@ pub fn parseMode(raw: []const u8) ?ResultShapeMode {
     return null;
 }
 
+/// Returns a static human-readable list of supported modes.
 pub fn supportedModesText() []const u8 {
     return "compact, standard, or deep";
 }
 
+/// Allocates a JSON array containing supported mode names.
 pub fn supportedModeNamesValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -50,7 +62,9 @@ pub fn supportedModeNamesValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = array };
 }
 
+/// Allocates JSON metadata for one result shape mode.
 pub fn modeMetadataValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.json.Value {
+    // Ownership of child values is transferred into `obj` via put().
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -66,7 +80,9 @@ pub fn modeMetadataValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !s
     return .{ .object = obj };
 }
 
+/// Allocates the full JSON result-shape contract for transport output.
 pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.json.Value {
+    // Contract payload is fully materialized JSON for transport serialization.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -99,12 +115,14 @@ pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.j
     return .{ .object = obj };
 }
 
+/// Input for JSON token budget planning.
 pub const BudgetPlanInput = struct {
     mode: ResultShapeMode,
     requested_token_budget: ?i64 = null,
     tool_name: ?[]const u8 = null,
 };
 
+/// Allocates a JSON token budget plan.
 pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !std.json.Value {
     const default_budget = input.mode.defaultBudget();
     const requested = input.requested_token_budget orelse default_budget;
@@ -135,10 +153,12 @@ pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !st
     return .{ .object = obj };
 }
 
+/// Clamps a requested budget to the supported range.
 pub fn clampTokenBudget(value: i64) i64 {
     return @max(min_token_budget, @min(value, max_token_budget));
 }
 
+/// Allocates one omitted-section JSON object.
 pub fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []const u8, recovery: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -148,6 +168,7 @@ pub fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: 
     return .{ .object = obj };
 }
 
+/// Attaches mode metadata and caller-owned omission array to an existing object.
 pub fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mode: ResultShapeMode, omitted_sections: std.json.Array) !void {
     try obj.put(allocator, "mode", .{ .string = mode.name() });
     try obj.put(allocator, "result_shape", try modeMetadataValue(allocator, mode));

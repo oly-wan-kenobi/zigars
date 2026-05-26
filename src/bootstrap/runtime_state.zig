@@ -9,6 +9,7 @@ const static_cache = @import("../infra/backends/static_cache.zig");
 const workspace_mod = @import("../infra/workspace/workspace.zig");
 const zls_session = @import("../infra/zls/session.zig");
 
+/// Cached backend probe outcomes retained by bootstrap and exposed to app code as snapshots.
 pub const BackendProbeCache = struct {
     zig: ?doctor.Probe = null,
     zls: ?doctor.Probe = null,
@@ -18,6 +19,8 @@ pub const BackendProbeCache = struct {
     diff_folded: ?doctor.Probe = null,
 };
 
+/// Process-wide mutable runtime state owned by bootstrap.
+/// App use cases receive projected Context values and ports instead of mutating this directly.
 pub const App = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -36,6 +39,7 @@ pub const App = struct {
     runtime_ux: runtime_ux.State = .{},
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
+    /// Releases runtime-owned caches, ZLS state, and parsed configuration.
     pub fn deinit(self: *App) void {
         self.analysis_cache.deinit(self.allocator);
         self.semantic_index_cache.deinit(self.allocator);

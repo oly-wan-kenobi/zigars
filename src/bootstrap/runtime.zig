@@ -1,3 +1,4 @@
+//! Bootstraps process-scoped dependencies and starts the selected MCP transport.
 const std = @import("std");
 
 const config_mod = @import("config.zig");
@@ -17,6 +18,7 @@ const zls_session = @import("../infra/zls/session.zig");
 
 const App = runtime_mod.App;
 
+/// Initializes runtime state, registers MCP surfaces, and serves the selected transport.
 pub fn run(init: std.process.Init) !void {
     const allocator = init.gpa;
 
@@ -33,6 +35,7 @@ pub fn run(init: std.process.Init) !void {
     var ws = try workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir);
     defer ws.deinit();
 
+    // ZLS process/client/document state are infra-owned and must outlive app runtime references.
     var zls_proc: ?ZlsProcess = null;
     defer if (zls_proc) |*proc| proc.deinit();
     var lsp_client: ?LspClient = null;
@@ -40,6 +43,7 @@ pub fn run(init: std.process.Init) !void {
     var doc_state: ?DocumentState = null;
     defer if (doc_state) |*docs_state| docs_state.deinit();
 
+    // App captures shared runtime state; deinit closes caches/sessions in reverse dependency order.
     var runtime = App{
         .allocator = allocator,
         .io = init.io,
@@ -90,16 +94,19 @@ pub fn run(init: std.process.Init) !void {
     server.enableResourceSubscriptions();
     server.enableTasks(&runtime.runtime_ux);
 
+    // Transport selection is the final bootstrap contract boundary before entering request serving.
     switch (cfg.transport) {
         .stdio => try server.run(init.io, allocator, .stdio),
         .http => try server.run(init.io, allocator, .{ .http = .{ .host = cfg.host, .port = cfg.port } }),
     }
 }
 
+/// MCP tool callbacks update runtime observability counters without crossing into app use-case logic.
 fn recordMcpToolCall(runtime: *App, name: []const u8, duration_ms: u64, is_error: bool) void {
     runtime.observability.recordToolCall(name, duration_ms, is_error);
 }
 
+/// Config parse exits are normalized at the process boundary so transports never start on invalid startup state.
 fn handleConfigParseError(io: std.Io, err: anyerror) !void {
     switch (err) {
         error.HelpRequested => {
@@ -117,12 +124,14 @@ fn handleConfigParseError(io: std.Io, err: anyerror) !void {
     }
 }
 
+/// Runtime logs only successful ZLS session state to avoid duplicate "disabled" logs from startup failures.
 fn logZlsSession(logger: logging.Logger, client_present: bool, status: []const u8) void {
     if (client_present) {
         logger.info("main", "zls session: {s}", .{status});
     }
 }
 
+/// Writes directly to stderr so startup diagnostics remain visible before server logging is fully active.
 fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.File.stderr().writer(io, &buffer);

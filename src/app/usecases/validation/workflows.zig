@@ -1,3 +1,4 @@
+//! Validation workflow state and history tracking around command/tool execution phases.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

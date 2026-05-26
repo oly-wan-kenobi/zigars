@@ -1,3 +1,4 @@
+//! Structured profile-capture planning values for supported profiling backends.
 const std = @import("std");
 
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");

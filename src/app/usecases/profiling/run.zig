@@ -1,3 +1,4 @@
+//! Controlled command runner for explicit user profiling commands without shell expansion.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

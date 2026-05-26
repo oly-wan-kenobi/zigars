@@ -1,3 +1,4 @@
+//! Semantic index use-case around symbol/reference extraction with cache and tool boundaries.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -1,3 +1,4 @@
+//! Bootstrap layer owns startup composition, runtime wiring, and process-lifetime state.
 pub const app_context = @import("app_context.zig");
 pub const config = @import("config.zig");
 pub const manifest_catalog = @import("manifest_catalog.zig");

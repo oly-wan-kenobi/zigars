@@ -1,24 +1,32 @@
+//! Shared helpers for usecase execution: workspace access, command launching,
+//! and common JSON/argument utilities across tool handlers.
 const std = @import("std");
 
 const ports = @import("../ports.zig");
 const zig_analysis = @import("../../domain/zig/analysis.zig");
 const compiler_output = @import("../../domain/zig/compiler_output.zig");
 
+/// Maximum stdout/stderr bytes captured by shared command helpers.
 pub const command_output_limit: usize = 1024 * 1024;
+/// Policy label reported when command output reaches the shared byte limit.
 pub const command_output_limit_mode = "truncate_on_limit";
+/// Maximum source bytes read by shared workspace helpers.
 pub const source_read_limit: usize = 1024 * 1024;
 
+/// JSON result wrapper used by usecase handlers before MCP transport encoding.
 pub const Result = struct {
     value: std.json.Value,
     is_error: bool = false,
 };
 
+/// Backend probe summary with caller-owned status/resolution when allocated by checkBackend.
 pub const Probe = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
 };
 
+/// Builds the lightweight app facade used by JSON-oriented usecase handlers.
 pub fn UsecaseApp(comptime Context: type) type {
     return struct {
         context: Context,
@@ -29,6 +37,7 @@ pub fn UsecaseApp(comptime Context: type) type {
         command_calls: usize = 0,
         tool_errors: usize = 0,
 
+        /// Creates a facade over an injected app context without taking ownership of it.
         pub fn init(context: Context, allocator: std.mem.Allocator) @This() {
             return .{
                 .context = context,
@@ -50,7 +59,9 @@ pub fn UsecaseApp(comptime Context: type) type {
     };
 }
 
+/// Minimal runtime config projection consumed by shared usecase helpers.
 pub const Config = struct {
+    /// Transport projection used by shared usecase helpers.
     pub const Transport = enum { stdio, http };
 
     timeout_ms: i64,
@@ -66,6 +77,7 @@ pub const Config = struct {
     port: u16 = 8080,
 };
 
+/// Builds the workspace facade for a specific injected context type.
 pub fn Workspace(comptime Context: type) type {
     return struct {
         context: Context,
@@ -75,6 +87,7 @@ pub fn Workspace(comptime Context: type) type {
 
         const Self = @This();
 
+        /// Creates a workspace facade over borrowed context state.
         pub fn init(context: Context, allocator: std.mem.Allocator) Self {
             return .{
                 .context = context,
@@ -84,7 +97,9 @@ pub fn Workspace(comptime Context: type) type {
             };
         }
 
+        /// Resolves an input path through the workspace port.
         pub fn resolve(self: Self, path: []const u8) ![]u8 {
+            // Existing usecases expect mutable path slices after port resolution.
             const resolved = try self.context.workspace_store.resolve(self.allocator, .{
                 .path = path,
                 .provenance = "arch110-workflow-resolve",
@@ -92,6 +107,7 @@ pub fn Workspace(comptime Context: type) type {
             return @constCast(resolved.path);
         }
 
+        /// Resolves an output path through the workspace port.
         pub fn resolveOutput(self: Self, path: []const u8) ![]u8 {
             const resolved = try self.context.workspace_store.resolve(self.allocator, .{
                 .path = path,
@@ -101,6 +117,7 @@ pub fn Workspace(comptime Context: type) type {
             return @constCast(resolved.path);
         }
 
+        /// Reads workspace bytes through the port using the facade allocator.
         pub fn readFileAlloc(self: Self, _: anytype, path: []const u8, max_bytes: usize) ![]u8 {
             const read = try self.context.workspace_store.read(self.allocator, .{
                 .path = path,
@@ -110,6 +127,7 @@ pub fn Workspace(comptime Context: type) type {
             return @constCast(read.bytes);
         }
 
+        /// Writes workspace bytes, creating parent directories when needed.
         pub fn putFile(self: Self, path: []const u8, bytes: []const u8) !void {
             _ = try self.context.workspace_store.write(.{
                 .path = path,
@@ -120,6 +138,7 @@ pub fn Workspace(comptime Context: type) type {
             });
         }
 
+        /// Scans a workspace directory and returns the port-owned result contract.
         pub fn scanDirectory(self: Self, allocator: std.mem.Allocator, path: []const u8, max_files: ?usize) !ports.WorkspaceDirectoryScanResult {
             return self.context.workspace_store.scanDirectory(allocator, .{
                 .path = path,
@@ -128,6 +147,7 @@ pub fn Workspace(comptime Context: type) type {
             });
         }
 
+        /// Best-effort existence check that treats port failures as not found.
         pub fn exists(self: Self, allocator: std.mem.Allocator, path: []const u8, for_output: bool) bool {
             const result = self.context.workspace_store.exists(allocator, .{
                 .path = path,
@@ -137,6 +157,7 @@ pub fn Workspace(comptime Context: type) type {
             return result.exists;
         }
 
+        /// Ensures the parent directory for an absolute workspace output exists.
         pub fn ensureParentForAbsoluteOutput(self: Self, abs_path: []const u8) !void {
             const parent_abs = std.fs.path.dirname(abs_path) orelse return;
             const rel = relativeFromAbs(self.root, parent_abs) orelse return error.PathOutsideWorkspace;
@@ -148,6 +169,7 @@ pub fn Workspace(comptime Context: type) type {
     };
 }
 
+/// Command result normalized for shared usecase JSON builders.
 pub const CommandRunResult = struct {
     term: ports.CommandTerm,
     stdout: []const u8,
@@ -158,33 +180,43 @@ pub const CommandRunResult = struct {
     owns_stdout: bool = false,
     owns_stderr: bool = false,
 
+    /// Frees stdout/stderr only when ownership was transferred by the command port.
     pub fn deinit(self: CommandRunResult, allocator: std.mem.Allocator) void {
         if (self.owns_stdout) allocator.free(self.stdout);
         if (self.owns_stderr) allocator.free(self.stderr);
     }
 
+    /// True when the command termination does not represent failure.
     pub fn succeeded(self: CommandRunResult) bool {
         return !self.term.failed();
     }
 };
 
+/// Namespace for command helper aliases and classifiers.
 pub const command = struct {
+    /// Stable public alias for command run results.
     pub const RunResult = CommandRunResult;
+    /// Stable public alias for the shared command output limit.
     pub const output_limit = command_output_limit;
+    /// Stable public alias for the shared output limit policy.
     pub const output_limit_mode = command_output_limit_mode;
 
+    /// Maps command errors to stable JSON error classes.
     pub fn errorKind(err: anyerror) []const u8 {
         return kindForError(err);
     }
 
+    /// True for timeout-class command errors.
     pub fn isTimeoutError(err: anyerror) bool {
         return err == error.RequestTimeout or err == error.Timeout;
     }
 
+    /// True for output-limit command errors.
     pub fn isOutputLimitError(err: anyerror) bool {
         return err == error.StreamTooLong or err == error.OutputLimitExceeded;
     }
 
+    /// Allocates a concatenated argv slice; argument strings remain borrowed.
     pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: []const []const u8) ![]const []const u8 {
         const out = try allocator.alloc([]const u8, base.len + extra.len);
         @memcpy(out[0..base.len], base);
@@ -193,6 +225,7 @@ pub const command = struct {
     }
 };
 
+/// Runs a command through the injected command port with shared output limits.
 pub fn runCommand(allocator: std.mem.Allocator, app: anytype, argv: []const []const u8, timeout_ms: i64) !CommandRunResult {
     const result = try app.context.command_runner.run(allocator, .{
         .argv = argv,
@@ -214,6 +247,7 @@ pub fn runCommand(allocator: std.mem.Allocator, app: anytype, argv: []const []co
     };
 }
 
+/// Checks backend availability, returning an unavailable probe when no port is bound.
 pub fn checkBackend(app: anytype, allocator: std.mem.Allocator, name: []const u8, argv: []const []const u8, timeout_ms: i64) Probe {
     const backend_port = app.context.backend_probe orelse {
         return .{
@@ -244,14 +278,17 @@ pub fn checkBackend(app: anytype, allocator: std.mem.Allocator, name: []const u8
     };
 }
 
+/// Clones a JSON value into a non-error handler result.
 pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) !Result {
     return .{ .value = try cloneValue(allocator, value) };
 }
 
+/// Clones a JSON value into an error handler result.
 pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) !Result {
     return .{ .value = try cloneValue(allocator, value), .is_error = true };
 }
 
+/// Reads an optional string field from object-shaped tool args.
 pub fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     const value = argValue(args, name) orelse return null;
     return switch (value) {
@@ -260,6 +297,7 @@ pub fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     };
 }
 
+/// Reads an optional bool field from object-shaped tool args.
 pub fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     const value = argValue(args, name) orelse return default;
     return switch (value) {
@@ -268,6 +306,7 @@ pub fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     };
 }
 
+/// Reads an optional integer field from object-shaped tool args.
 pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     const value = argValue(args, name) orelse return default;
     return switch (value) {
@@ -284,10 +323,12 @@ fn argValue(args: ?std.json.Value, name: []const u8) ?std.json.Value {
     return root.object.get(name);
 }
 
+/// Returns a bounded timeout from tool args or the app default.
 pub fn toolTimeout(app: anytype, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", app.config.timeout_ms), 60 * 60 * 1000));
 }
 
+/// Copies a facade while swapping in a scratch allocator.
 pub fn scratchApp(app: anytype, allocator: std.mem.Allocator) @TypeOf(app.*) {
     var copy = app.*;
     copy.allocator = allocator;
@@ -295,14 +336,17 @@ pub fn scratchApp(app: anytype, allocator: std.mem.Allocator) @TypeOf(app.*) {
     return copy;
 }
 
+/// Builds a structured missing-argument error result.
 pub fn missingArgumentResult(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, expected: []const u8) !Result {
     return structuredError(allocator, try argumentValue(allocator, tool_name, "missing_required_argument", field, expected, "missing"));
 }
 
+/// Builds a structured invalid-argument error result.
 pub fn invalidArgumentResult(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, expected: []const u8, actual: []const u8, resolution: []const u8) !Result {
     return structuredError(allocator, try invalidArgumentValue(allocator, tool_name, field, expected, actual, resolution));
 }
 
+/// Converts shell-style argument splitting failures into structured errors.
 pub fn splitToolArgsErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) !Result {
     if (err == error.InvalidArguments) {
         return structuredError(allocator, try invalidArgumentValue(
@@ -324,6 +368,7 @@ pub fn splitToolArgsErrorResult(allocator: std.mem.Allocator, tool_name: []const
     }, err);
 }
 
+/// Builds a structured workspace path error result.
 pub fn workspacePathErrorResult(app: anytype, allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, err: anyerror) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "workspace_path_error" });
@@ -341,6 +386,7 @@ pub fn workspacePathErrorResult(app: anytype, allocator: std.mem.Allocator, tool
     return structuredError(allocator, .{ .object = obj });
 }
 
+/// Allocates a human-readable workspace path error message.
 pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, root: []const u8, err: anyerror) ![]u8 {
     if (err == error.EmptyPath) {
         return std.fmt.allocPrint(
@@ -356,6 +402,7 @@ pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []cons
     );
 }
 
+/// Structured tool error template.
 pub const ToolErrorSpec = struct {
     tool: []const u8,
     operation: []const u8,
@@ -366,11 +413,13 @@ pub const ToolErrorSpec = struct {
     details: []const ToolErrorDetail = &.{},
 };
 
+/// Extra structured field attached to a tool error.
 pub const ToolErrorDetail = struct {
     key: []const u8,
     value: std.json.Value,
 };
 
+/// Builds a structured tool error result from an error value.
 pub fn toolErrorFromError(allocator: std.mem.Allocator, spec: ToolErrorSpec, err: anyerror) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "tool_error" });
@@ -411,6 +460,7 @@ fn invalidArgumentValue(allocator: std.mem.Allocator, tool_name: []const u8, fie
     return value;
 }
 
+/// Builds a structured backend-unavailable result.
 pub fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, configured_path: []const u8, status: []const u8, resolution: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -425,10 +475,12 @@ pub fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []co
     return structured(allocator, .{ .object = obj });
 }
 
+/// Builds a structured backend error result from an error value.
 pub fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !Result {
     return structured(allocator, try backendErrorValue(allocator, backend_name, operation, err, resolution));
 }
 
+/// Allocates the JSON object used by backend error results.
 pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -454,6 +506,7 @@ fn kindForError(err: anyerror) []const u8 {
     };
 }
 
+/// Splits shell-style argument text into owned argv fragments.
 pub fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -512,22 +565,27 @@ pub fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]c
     return list.toOwnedSlice(allocator);
 }
 
+/// Frees a list of allocator-owned strings.
 pub fn freeStringList(allocator: std.mem.Allocator, list: []const []const u8) void {
     for (list) |item| allocator.free(item);
 }
 
+/// Stable public alias for freeing split argv fragments.
 pub const freeArgList = freeStringList;
 
+/// Allocates a JSON string value by cloning the input.
 pub fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Allocates a JSON array from borrowed argv strings.
 pub fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (argv) |arg| try array.append(.{ .string = arg });
     return .{ .array = array };
 }
 
+/// Allocates the standard JSON command result object.
 pub fn commandResultValue(
     allocator: std.mem.Allocator,
     title: []const u8,
@@ -560,6 +618,7 @@ pub fn commandResultValue(
     return .{ .object = obj };
 }
 
+/// Allocates the standard JSON command error object.
 pub fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "command_error" });
@@ -583,6 +642,7 @@ pub fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: 
     return .{ .object = obj };
 }
 
+/// Wraps commandErrorValue in a handler result.
 pub fn commandRunErrorResult(allocator: std.mem.Allocator, spec: anytype) !Result {
     const value = commandErrorValue(allocator, spec.operation, spec.argv, spec.cwd, spec.timeout_ms, spec.err) catch return error.OutOfMemory;
     return structured(allocator, value);
@@ -603,10 +663,14 @@ fn emptyDiagnosticsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Re-exported parsed compiler diagnostic line type.
 pub const CompilerLine = compiler_output.CompilerLine;
+/// Re-exported compiler diagnostic parser.
 pub const parseCompilerLine = compiler_output.parseCompilerLine;
+/// Re-exported diagnostic classifier.
 pub const classifyDiagnosticMessage = compiler_output.classifyDiagnosticMessage;
 
+/// Allocates a space-joined command string for reporting.
 pub fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
@@ -618,6 +682,7 @@ pub fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]
     return out.toOwnedSlice(allocator);
 }
 
+/// Returns true when argv contains an exact argument.
 pub fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     for (argv) |arg| {
         if (std.mem.eql(u8, arg, needle)) return true;
@@ -625,6 +690,7 @@ pub fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Allocates compiler diagnostic insight JSON from command stdout/stderr.
 pub fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
@@ -689,6 +755,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.js
     return .{ .object = obj };
 }
 
+/// Allocates a command failure summary from compiler insights.
 pub fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = ok });
@@ -714,6 +781,7 @@ pub fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Valu
     return .{ .object = obj };
 }
 
+/// Allocates a command failure summary when no command result exists.
 pub fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -728,6 +796,7 @@ pub fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, arg
     return .{ .object = obj };
 }
 
+/// Classifies the likely source area for a primary compiler finding.
 pub fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
     const primary_obj = switch (primary) {
         .object => |o| o,
@@ -742,6 +811,7 @@ pub fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.V
     return .{ .string = try std.fmt.allocPrint(allocator, "path:{s}", .{path}) };
 }
 
+/// Returns owned changed paths from explicit input or git status.
 pub fn changedPathList(allocator: std.mem.Allocator, app: anytype, explicit_files: ?[]const u8, timeout_ms: i64) !std.ArrayList([]const u8) {
     var list: std.ArrayList([]const u8) = .empty;
     errdefer {
@@ -762,12 +832,14 @@ pub fn changedPathList(allocator: std.mem.Allocator, app: anytype, explicit_file
     return list;
 }
 
+/// Extracts the path portion from a git porcelain status line.
 pub fn statusLinePath(line: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, if (line.len > 3) line[3..] else "", " \t");
     if (std.mem.indexOf(u8, trimmed, " -> ")) |arrow| return trimmed[arrow + " -> ".len ..];
     return trimmed;
 }
 
+/// Appends unique paths found in unified diff headers.
 pub fn appendPatchPaths(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), patch_text: ?[]const u8) !void {
     const patch = patch_text orelse return;
     var lines = std.mem.splitScalar(u8, patch, '\n');
@@ -787,6 +859,7 @@ pub fn appendPatchPaths(allocator: std.mem.Allocator, list: *std.ArrayList([]con
     }
 }
 
+/// Returns true when a string list contains an exact value.
 pub fn stringListContains(list: []const []const u8, value: []const u8) bool {
     for (list) |item| {
         if (std.mem.eql(u8, item, value)) return true;
@@ -808,6 +881,7 @@ fn appendUniqueString(allocator: std.mem.Allocator, list: *std.ArrayList([]const
     try list.append(allocator, try allocator.dupe(u8, value));
 }
 
+/// Converts a byte index to a one-based line number.
 pub fn lineNumberLocal(text_value: []const u8, index: usize) usize {
     var line: usize = 1;
     for (text_value[0..@min(index, text_value.len)]) |ch| {
@@ -816,6 +890,7 @@ pub fn lineNumberLocal(text_value: []const u8, index: usize) usize {
     return line;
 }
 
+/// Serializes a JSON value into an owned byte buffer.
 pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
@@ -823,6 +898,7 @@ pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8
     return try out.toOwnedSlice();
 }
 
+/// Appends JSON serialization to an existing byte list.
 pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -855,6 +931,7 @@ pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
     }
 }
 
+/// Appends a JSON-escaped string to an existing byte list.
 pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
@@ -878,6 +955,7 @@ pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), va
     try out.append(allocator, '"');
 }
 
+/// Deep-clones a JSON value into allocator-owned storage.
 pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
     return switch (value) {
         .null => .null,
@@ -904,6 +982,7 @@ pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json
     };
 }
 
+/// Recursively frees a JSON value produced by cloneValue or owned builders.
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     switch (value) {
         .string => |s| allocator.free(s),
@@ -926,9 +1005,12 @@ pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) voi
     }
 }
 
+/// Artifact registry JSON helpers shared by evidence-producing use cases.
 pub const artifacts = struct {
+    /// Default workspace-relative registry path for artifact records.
     pub const default_registry_path = ".zigar-cache/artifacts/registry.jsonl";
 
+    /// Toolchain path metadata stored with artifact provenance.
     pub const Toolchain = struct {
         zig_path: []const u8,
         zls_path: []const u8 = "",
@@ -936,6 +1018,7 @@ pub const artifacts = struct {
         diff_folded_path: []const u8 = "",
     };
 
+    /// Borrowed artifact provenance fields serialized into registry entries.
     pub const Provenance = struct {
         producer: []const u8,
         artifact_kind: []const u8,
@@ -948,6 +1031,7 @@ pub const artifacts = struct {
         toolchain: Toolchain,
     };
 
+    /// File identity recorded for workspace artifacts.
     pub const FileIdentity = struct {
         path: []const u8,
         abs_path: []const u8,
@@ -955,6 +1039,7 @@ pub const artifacts = struct {
         sha256: []const u8,
     };
 
+    /// Complete artifact registry entry before JSON serialization.
     pub const RegistryEntry = struct {
         identity: FileIdentity,
         provenance: Provenance,
@@ -963,6 +1048,7 @@ pub const artifacts = struct {
         raw_reference: []const u8 = "workspace_file",
     };
 
+    /// Allocates a lowercase SHA-256 hex digest for bytes.
     pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
         var digest: [32]u8 = undefined;
         std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -970,6 +1056,7 @@ pub const artifacts = struct {
         return allocator.dupe(u8, &hex);
     }
 
+    /// Builds file identity from borrowed paths and owned digest bytes.
     pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_path: []const u8, bytes: []const u8) !FileIdentity {
         return .{
             .path = path,
@@ -979,6 +1066,7 @@ pub const artifacts = struct {
         };
     }
 
+    /// Allocates the JSON representation of a registry entry.
     pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "path", .{ .string = entry.identity.path });
@@ -1016,6 +1104,7 @@ pub const artifacts = struct {
     }
 };
 
+/// Records an existing workspace artifact through the optional artifact port.
 pub fn recordArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifacts.RegistryEntry) !void {
     const store = app.context.artifact_store orelse return error.Unavailable;
     const ref = try store.recordWorkspace(allocator, .{
@@ -1040,6 +1129,7 @@ pub fn recordArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifac
     ref.deinit(allocator);
 }
 
+/// Records an artifact and its bytes through the optional artifact port.
 pub fn recordWrittenArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifacts.RegistryEntry, bytes: []const u8) !void {
     const store = app.context.artifact_store orelse return error.Unavailable;
     const ref = try store.recordWorkspace(allocator, .{
@@ -1064,6 +1154,7 @@ pub fn recordWrittenArtifact(app: anytype, allocator: std.mem.Allocator, entry: 
     ref.deinit(allocator);
 }
 
+/// Returns current unix milliseconds from the clock port, or 0 when unavailable.
 pub fn unixMs(app: anytype) i64 {
     if (app.context.clock_and_ids) |clock| {
         const instant = clock.now() catch return 0;

@@ -7,6 +7,7 @@ const runtime_mod = @import("runtime_state.zig");
 const app_context_bridge = @import("app_context.zig");
 const manifest_catalog = @import("manifest_catalog.zig");
 
+/// Construction knobs for concrete infra adapters exposed as app ports.
 pub const Options = struct {
     workspace_read_resolution: infra.workspace.filesystem.ReadResolution = .input,
     default_read_limit: usize = @import("../infra/process/command.zig").output_limit,
@@ -15,6 +16,8 @@ pub const Options = struct {
     record_command_observability: bool = false,
 };
 
+/// Owns concrete infra adapters and projects them into the app PortSet contract.
+/// The pointed-to App owns the underlying state and must outlive this value.
 pub const RuntimePorts = struct {
     app: *runtime_mod.App,
     command_runner: infra.process.command_runner.Runner,
@@ -35,6 +38,7 @@ pub const RuntimePorts = struct {
 
     const Self = @This();
 
+    /// Builds concrete ports over bootstrap-owned runtime state.
     pub fn init(app: *runtime_mod.App, options: Options) Self {
         var result = Self{
             .app = app,
@@ -91,10 +95,12 @@ pub const RuntimePorts = struct {
         return result;
     }
 
+    /// Rebinds ports whose dependencies can change after construction.
     pub fn refreshDerivedPorts(self: *Self) void {
         self.backend_probe = infra.backends.probe.Runner.init(self.command_runner.port(), self.app.workspace.root, self.app.config.timeout_ms);
     }
 
+    /// Returns the app-facing port table for the current runtime state.
     pub fn portSet(self: *Self) app_context.PortSet {
         self.refreshDerivedPorts();
         return .{
@@ -116,86 +122,107 @@ pub const RuntimePorts = struct {
         };
     }
 
+    /// Projects the current runtime into a read-only app Context plus live ports.
     pub fn context(self: *Self) app_context.Context {
         return app_context_bridge.fromRuntime(self.app, self.portSet());
     }
 
+    /// Narrows the projected app context to profiling dependencies.
     pub fn profilingContext(self: *Self) app_context.ContextError!app_context.ProfilingContext {
         return self.context().profiling();
     }
 
+    /// Narrows the projected app context to performance dependencies.
     pub fn performanceContext(self: *Self) app_context.ContextError!app_context.PerformanceContext {
         return self.context().performance();
     }
 
+    /// Narrows the projected app context to diagnostics dependencies.
     pub fn diagnosticsContext(self: *Self) app_context.ContextError!app_context.DiagnosticsContext {
         return self.context().diagnostics();
     }
 
+    /// Narrows the projected app context to release workflow dependencies.
     pub fn releaseWorkflowContext(self: *Self) app_context.ContextError!app_context.ReleaseWorkflowContext {
         return self.context().releaseWorkflows();
     }
 
+    /// Narrows the projected app context to environment/toolchain dependencies.
     pub fn environmentContext(self: *Self) app_context.ContextError!app_context.EnvironmentContext {
         return self.context().environment();
     }
 
+    /// Narrows the projected app context to adoption guidance dependencies.
     pub fn adoptionContext(self: *Self) app_context.ContextError!app_context.AdoptionContext {
         return self.context().adoption();
     }
 
+    /// Narrows the projected app context to trust/probe dependencies.
     pub fn trustContext(self: *Self) app_context.ContextError!app_context.TrustContext {
         return self.context().trust();
     }
 
+    /// Narrows the projected app context to core Zig command dependencies.
     pub fn coreContext(self: *Self) app_context.ContextError!app_context.CoreCommandContext {
         return self.context().coreCommands();
     }
 
+    /// Narrows the projected app context to validation workflow dependencies.
     pub fn validationContext(self: *Self) app_context.ContextError!app_context.ValidationContext {
         return self.context().validation();
     }
 
+    /// Narrows the projected app context to editing workflow dependencies.
     pub fn editingContext(self: *Self) app_context.ContextError!app_context.EditingContext {
         return self.context().editing();
     }
 
+    /// Narrows the projected app context to artifact registry dependencies.
     pub fn artifactContext(self: *Self) app_context.ContextError!app_context.ArtifactContext {
         return self.context().artifacts();
     }
 
+    /// Narrows the projected app context to ZLS dependencies.
     pub fn zlsContext(self: *Self) app_context.ContextError!app_context.ZlsContext {
         return self.context().zls();
     }
 
+    /// Narrows the projected app context to runtime UX session dependencies.
     pub fn runtimeUxContext(self: *Self) app_context.ContextError!app_context.RuntimeUxContext {
         return self.context().runtimeUx();
     }
 
+    /// Narrows the projected app context to observability reader dependencies.
     pub fn observabilityContext(self: *Self) app_context.ContextError!app_context.ObservabilityContext {
         return self.context().observability();
     }
 
+    /// Narrows the projected app context to project intelligence dependencies.
     pub fn projectIntelligenceContext(self: *Self) app_context.ContextError!app_context.ProjectIntelligenceContext {
         return self.context().projectIntelligence();
     }
 
+    /// Narrows the projected app context to release documentation dependencies.
     pub fn releaseDocsContext(self: *Self) app_context.ContextError!app_context.ReleaseDocsContext {
         return self.context().releaseDocs();
     }
 
+    /// Resolves a workspace input path; caller owns the returned buffer.
     pub fn resolveInputPath(self: *Self, path: []const u8) ![]const u8 {
         return self.workspace_store.resolveInputPath(path);
     }
 
+    /// Resolves a workspace output path; caller owns the returned buffer.
     pub fn resolveOutputPath(self: *Self, path: []const u8) ![]const u8 {
         return self.workspace_store.resolveOutputPath(path);
     }
 
+    /// Frees a path returned by resolveInputPath or resolveOutputPath.
     pub fn freeResolvedPath(self: *Self, path: []const u8) void {
         self.workspace_store.freeResolvedPath(path);
     }
 
+    /// Returns the allocator used for resolved workspace paths.
     pub fn pathAllocator(self: *Self) std.mem.Allocator {
         return self.app.workspace.allocator;
     }

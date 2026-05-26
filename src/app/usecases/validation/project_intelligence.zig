@@ -1,3 +1,4 @@
+//! Validation intelligence orchestration for next-step planning and patch safety checks.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

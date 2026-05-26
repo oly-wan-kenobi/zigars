@@ -1,3 +1,4 @@
+//! Render-only profiling use-case that normalizes path and backend failures.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

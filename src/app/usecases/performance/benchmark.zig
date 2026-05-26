@@ -1,3 +1,4 @@
+//! Performance benchmark use-case adapters for parse/compare/budget/profile planning flows.
 const std = @import("std");
 
 const benchmark_model = @import("../../../domain/performance/benchmark_model.zig");
@@ -53,6 +54,7 @@ pub fn parse(allocator: std.mem.Allocator, request: EvidenceRequest) !benchmark_
 }
 
 pub fn compare(allocator: std.mem.Allocator, request: CompareRequest) !benchmark_model.BenchComparison {
+    // Returned comparison owns allocated slices; caller deinitializes it.
     var current = try parse(allocator, request.current);
     defer current.deinit(allocator);
     var baseline = try parse(allocator, request.baseline);

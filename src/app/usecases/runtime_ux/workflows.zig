@@ -1,3 +1,5 @@
+//! Runtime UX workflows for process-local jobs, events, resource queries, and
+//! subscription state surfaced through MCP-facing tool handlers.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -44,6 +46,8 @@ pub const ResourceQueryRequest = struct {
 };
 
 pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!std.json.Value {
+    // Jobs are tracked in process-local session state; subprocess lifetime is
+    // summarized into immutable tails so clients can poll deterministically.
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const plan = try buildRunPlan(allocator, context, request);
     const title = try std.fmt.allocPrint(allocator, "{s} {s}", .{ request.tool_name, request.command });

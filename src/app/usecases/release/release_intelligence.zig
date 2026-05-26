@@ -1,3 +1,4 @@
+//! Release decision helpers for plan completeness, semver, and changelog evidence wiring.
 const std = @import("std");
 
 const release_model = @import("../../../domain/release/release_model.zig");

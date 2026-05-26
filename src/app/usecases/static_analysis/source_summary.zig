@@ -1,3 +1,4 @@
+//! Source-summary adapter that maps analyzed files or text into typed JSON summaries.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

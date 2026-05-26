@@ -1,3 +1,5 @@
+//! Core Zig command workflows with explicit argument parsing, workspace
+//! boundary checks, and normalized app error mapping.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -10,6 +12,7 @@ pub const command_output_limit_mode = "truncate_on_limit";
 pub const OwnedArgv = struct {
     items: []const []const u8,
 
+    /// Releases each duplicated argv segment and the argv slice itself.
     pub fn deinit(self: *OwnedArgv, allocator: std.mem.Allocator) void {
         for (self.items) |arg| allocator.free(arg);
         allocator.free(self.items);
