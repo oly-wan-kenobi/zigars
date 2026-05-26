@@ -24,10 +24,13 @@ pub fn hashHex(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
 
 fn collectLines(allocator: std.mem.Allocator, text_value: []const u8) ![][]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
-    errdefer lines.deinit(allocator);
+    var lines_owned = true;
+    defer if (lines_owned) lines.deinit(allocator);
     var it = std.mem.splitScalar(u8, text_value, '\n');
     while (it.next()) |line| try lines.append(allocator, line);
-    return lines.toOwnedSlice(allocator);
+    const owned = try lines.toOwnedSlice(allocator);
+    lines_owned = false;
+    return owned;
 }
 
 pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []const u8, after: []const u8) ![]u8 {
@@ -60,7 +63,8 @@ pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []con
     const new_count = new_hunk_end - new_hunk_start;
 
     var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
+    var out_owned = true;
+    defer if (out_owned) out.deinit();
     try out.writer.print("--- a/{s}\n+++ b/{s}\n@@ -{d},{d} +{d},{d} @@\n", .{
         path,
         path,
@@ -85,7 +89,9 @@ pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []con
     while (i < old_hunk_end) : (i += 1) {
         try out.writer.print(" {s}\n", .{before_lines[i]});
     }
-    return try out.toOwnedSlice();
+    const diff = try out.toOwnedSlice();
+    out_owned = false;
+    return diff;
 }
 
 pub fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_value: std.json.Value) ![]u8 {
@@ -123,7 +129,8 @@ pub fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_va
     }.lessThan);
 
     var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
+    var out_owned = true;
+    defer if (out_owned) out.deinit();
     var cursor: usize = 0;
     for (edits.items) |edit| {
         if (edit.start < cursor or edit.end > source.len) return error.InvalidTextEdit;
@@ -132,7 +139,9 @@ pub fn applyTextEdits(allocator: std.mem.Allocator, source: []const u8, edits_va
         cursor = edit.end;
     }
     try out.writer.writeAll(source[cursor..]);
-    return try out.toOwnedSlice();
+    const updated = try out.toOwnedSlice();
+    out_owned = false;
+    return updated;
 }
 
 fn positionOffset(source: []const u8, position: std.json.Value) !usize {
@@ -257,8 +266,10 @@ fn expectApplyTextEditsError(source: []const u8, edits_json: []const u8) !void {
 
 test "lspPositionToByteOffset maps UTF-16 code units" {
     const e = "\xc3\xa9";
+    const euro = "\xe2\x82\xac";
     const grin = "\xf0\x9f\x98\x80";
     try std.testing.expectEqual(@as(usize, 2), try lspPositionToByteOffset(e ++ "a", 0, 1));
+    try std.testing.expectEqual(@as(usize, 3), try lspPositionToByteOffset(euro ++ "a", 0, 1));
 
     const mixed = "a" ++ e ++ grin ++ "b\nx";
     try std.testing.expectEqual(@as(usize, 0), try lspPositionToByteOffset(mixed, 0, 0));
@@ -276,6 +287,11 @@ test "lspPositionToByteOffset rejects invalid source and positions" {
     try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xc3\xa9", 0, 2));
     try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset(grin, 0, 1));
     try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("ok\xff", 0, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xe2\x82", 0, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xe2A\xac", 0, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xe2\x82A", 0, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xe0\x80\x80", 0, 0));
+    try std.testing.expectError(error.InvalidTextEdit, lspPositionToByteOffset("\xed\xa0\x80", 0, 0));
 }
 
 test "applyTextEdits keeps ASCII behavior" {

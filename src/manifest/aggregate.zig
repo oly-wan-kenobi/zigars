@@ -86,3 +86,9 @@ fn buildToolId() type {
     }
     return @Enum(IntTag, .exhaustive, &names, &values);
 }
+
+test "aggregate builds stable entries and specs" {
+    try std.testing.expect(entries.len > 0);
+    try std.testing.expectEqual(entries.len, specs.len);
+    try std.testing.expectEqualStrings(entries[0].name, specs[0].name);
+}

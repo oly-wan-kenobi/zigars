@@ -265,3 +265,7 @@ pub const zig_github_dependency_submit_plan = tool(.{
     .group = .dependency_security,
     .plan = .{ .pure_analysis = dependency_plan },
 });
+
+test "phase6 definitions expose CI metadata" {
+    try @import("std").testing.expect(zig_ci_ingest.description.len > 0);
+}

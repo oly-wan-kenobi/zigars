@@ -36,9 +36,11 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
 
 pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet) !CoverageSet {
     var merged = CoverageSet{ .source_kind = "merged" };
-    errdefer merged.deinit(allocator);
+    var merged_owned = true;
+    defer if (merged_owned) merged.deinit(allocator);
     for (left.files.items) |file| try appendFile(allocator, &merged, file.path, file.total, file.covered);
     for (right.files.items) |file| try appendFile(allocator, &merged, file.path, file.total, file.covered);
+    merged_owned = false;
     return merged;
 }
 
@@ -66,7 +68,8 @@ pub fn findFile(set: CoverageSet, path: []const u8) ?CoverageFile {
 
 fn parseLcov(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8) !CoverageSet {
     var set = CoverageSet{ .source_kind = source_kind };
-    errdefer set.deinit(allocator);
+    var set_owned = true;
+    defer if (set_owned) set.deinit(allocator);
     var current_path: ?[]const u8 = null;
     var total: usize = 0;
     var covered: usize = 0;
@@ -95,6 +98,7 @@ fn parseLcov(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     }
     if (current_path) |path| try appendFile(allocator, &set, path, total, covered);
     if (set.files.items.len == 0) return error.InvalidCoverageEvidence;
+    set_owned = false;
     return set;
 }
 
@@ -103,7 +107,8 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
     defer parsed.deinit();
     const root = if (parsed.value == .object and parsed.value.object.get("files") != null) parsed.value else coverageRoot(parsed.value);
     var set = CoverageSet{ .source_kind = source_kind };
-    errdefer set.deinit(allocator);
+    var set_owned = true;
+    defer if (set_owned) set.deinit(allocator);
     switch (root) {
         .object => |obj| {
             if (obj.get("files")) |files| try parseFilesArray(allocator, &set, files);
@@ -118,6 +123,7 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
         else => return error.InvalidCoverageEvidence,
     }
     if (set.files.items.len == 0) return error.InvalidCoverageEvidence;
+    set_owned = false;
     return set;
 }
 
@@ -176,4 +182,43 @@ fn stringField(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
         .string => |s| s,
         else => null,
     };
+}
+
+test "coverage model parses nested and array JSON evidence shapes" {
+    const allocator = std.testing.allocator;
+    var nested = try parse(allocator,
+        \\{"baseline":{"coverage":{"files":[{"path":"src/nested.zig","total_lines":4,"covered_lines":2}]}}}
+    , "fixture", "json");
+    defer nested.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 4), nested.total);
+    try std.testing.expectEqual(@as(usize, 2), nested.covered);
+    try std.testing.expectEqualStrings("src/nested.zig", nested.files.items[0].path);
+
+    var array = try parse(allocator,
+        \\[{"file":"src/array.zig","total":3,"covered":5},{"path":"","total":1,"covered":1},{"path":"src/defaults.zig"}]
+    , "fixture", "json");
+    defer array.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), array.total);
+    try std.testing.expectEqual(@as(usize, 3), array.covered);
+    try std.testing.expectEqualStrings("src/array.zig", array.files.items[0].path);
+
+    var fallback_nested = try parse(allocator,
+        \\{"files":[],"coverage":{"files":[{"path":"src/fallback.zig","total":2,"covered":1}]}}
+    , "fixture", "json");
+    defer fallback_nested.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), fallback_nested.total);
+    try std.testing.expectEqualStrings("src/fallback.zig", fallback_nested.files.items[0].path);
+
+    try std.testing.expectError(error.InvalidCoverageEvidence, parse(allocator, "{\"coverage\":true}", "fixture", "json"));
+}
+
+test "coverage model integer fields accept float and number string values" {
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(std.testing.allocator);
+    try obj.put(std.testing.allocator, "float", .{ .float = 7.9 });
+    try obj.put(std.testing.allocator, "number_string", .{ .number_string = "42" });
+    try obj.put(std.testing.allocator, "bad", .{ .string = "nope" });
+    try std.testing.expectEqual(@as(i64, 7), intField(obj, "float").?);
+    try std.testing.expectEqual(@as(i64, 42), intField(obj, "number_string").?);
+    try std.testing.expect(intField(obj, "bad") == null);
 }

@@ -53,3 +53,7 @@ pub const zig_code_action_apply = tool(.{
     .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
+
+test "formatting definitions expose formatter metadata" {
+    try @import("std").testing.expect(zig_format.description.len > 0);
+}

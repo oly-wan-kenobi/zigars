@@ -307,6 +307,9 @@ test "output budget plan clamps typed request budgets" {
     try std.testing.expectEqualStrings("machine_fields", plan.allocation.priority_order[0]);
     try std.testing.expectEqual(Confidence.medium, plan.confidence);
     try std.testing.expect(!plan.ownsMemory());
+
+    const standard = planOutputBudget(.{ .mode = .standard, .requested_token_budget = 4000 });
+    try std.testing.expectEqualStrings("evidence", standard.allocation.priority_order[1]);
 }
 
 test "mode parsing returns a typed app error without raw argument payloads" {

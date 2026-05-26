@@ -18,7 +18,8 @@ pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText 
     }
 
     var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     var index: usize = 0;
     while (index < bytes.len) {
         const len = std.unicode.utf8ByteSequenceLength(bytes[index]) catch {
@@ -35,8 +36,10 @@ pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText 
         }
     }
 
+    const text = try out.toOwnedSlice(allocator);
+    out_owned = false;
     return .{
-        .text = try out.toOwnedSlice(allocator),
+        .text = text,
         .invalid_utf8 = true,
         .encoding = "utf-8-lossy",
         .byte_count = bytes.len,
@@ -74,4 +77,8 @@ test "safeTextAlloc replaces invalid UTF-8 bytes" {
     try std.testing.expectEqualStrings("utf-8-lossy", safe.encoding);
     try std.testing.expectEqual(input.len, safe.byte_count);
     try std.testing.expect(std.mem.indexOf(u8, safe.text, &std.unicode.replacement_character_utf8) != null);
+
+    const truncated = try safeTextAlloc(std.testing.allocator, "\xc3(");
+    defer std.testing.allocator.free(truncated.text);
+    try std.testing.expect(truncated.invalid_utf8);
 }

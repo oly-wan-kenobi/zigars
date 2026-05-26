@@ -63,11 +63,17 @@ pub const Store = struct {
         artifacts.writeRegistry(allocator, self.io, registry_abs, registry) catch |err| return mapPortError(err);
 
         const id = allocator.dupe(u8, rel_path) catch return error.OutOfMemory;
-        errdefer allocator.free(id);
+        var id_owned = true;
+        defer if (id_owned) allocator.free(id);
         const uri = std.fmt.allocPrint(allocator, "zigar://artifact/{s}", .{rel_path}) catch return error.OutOfMemory;
-        errdefer allocator.free(uri);
+        var uri_owned = true;
+        defer if (uri_owned) allocator.free(uri);
         const checksum = allocator.dupe(u8, identity.sha256) catch return error.OutOfMemory;
-        errdefer allocator.free(checksum);
+        var checksum_owned = true;
+        defer if (checksum_owned) allocator.free(checksum);
+        id_owned = false;
+        uri_owned = false;
+        checksum_owned = false;
         return .{
             .id = id,
             .uri = uri,
@@ -107,11 +113,14 @@ pub const Store = struct {
         const artifact_abs = self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(artifact_abs);
         const abs_owned = allocator.dupe(u8, artifact_abs) catch return error.OutOfMemory;
-        errdefer allocator.free(abs_owned);
+        var abs_owned_guard = true;
+        defer if (abs_owned_guard) allocator.free(abs_owned);
         const path_owned = allocator.dupe(u8, request.path) catch return error.OutOfMemory;
-        errdefer allocator.free(path_owned);
+        var path_owned_guard = true;
+        defer if (path_owned_guard) allocator.free(path_owned);
         const identity = artifacts.identityFromBytes(allocator, path_owned, abs_owned, bytes) catch |err| return mapPortError(err);
-        errdefer allocator.free(identity.sha256);
+        var sha_owned_guard = true;
+        defer if (sha_owned_guard) allocator.free(identity.sha256);
 
         const registry_abs = self.workspace.resolveOutput(artifacts.default_registry_path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(registry_abs);
@@ -139,6 +148,9 @@ pub const Store = struct {
         }) catch |err| return mapPortError(err);
         artifacts.writeRegistry(allocator, self.io, registry_abs, registry) catch |err| return mapPortError(err);
 
+        path_owned_guard = false;
+        abs_owned_guard = false;
+        sha_owned_guard = false;
         return .{
             .path = path_owned,
             .abs_path = abs_owned,
@@ -320,4 +332,108 @@ test "artifact registry store read is scoped to artifact ids" {
     try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = "src/main.zig" }));
     try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = ".zigar-cache/artifacts/reports/../escape.txt" }));
     try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = "/tmp/escape.txt" }));
+}
+
+test "artifact registry store records existing workspace artifacts and nested components" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/zig-out/nested");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/zig-out/nested/report.txt", .data = "existing artifact\n" });
+    const base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..], "root" });
+    defer allocator.free(base);
+    const root = try std.Io.Dir.cwd().realPathFileAlloc(io, base, allocator);
+    defer allocator.free(root);
+
+    var workspace = try workspace_mod.Workspace.init(allocator, io, root, null);
+    defer workspace.deinit();
+    var store = Store.init(&workspace, io, .{ .zig_path = "zig" });
+
+    const nested_path = try artifactPath(allocator, "nested/reports", "summary.json");
+    defer allocator.free(nested_path);
+    try std.testing.expectEqualStrings(".zigar-cache/artifacts/nested/reports/summary.json", nested_path);
+
+    const ref = try store.port().recordWorkspace(allocator, .{
+        .path = "zig-out/nested/report.txt",
+        .producer = "artifact-test",
+        .artifact_kind = "text",
+        .toolchain = .{ .zig_path = "zig" },
+        .indexed_at_unix_ms = 42,
+    });
+    defer ref.deinit(allocator);
+    try std.testing.expectEqualStrings("zig-out/nested/report.txt", ref.path);
+    try std.testing.expectEqual(@as(usize, "existing artifact\n".len), ref.bytes);
+    try std.testing.expectEqual(@as(i64, 42), ref.indexed_at_unix_ms);
+}
+
+test "artifact registry store maps upsert allocation failures" {
+    try exerciseAllocationFailures(putArtifactWithAllocator);
+    try exerciseAllocationFailures(recordWorkspaceWithAllocator);
+}
+
+fn exerciseAllocationFailures(comptime operation: fn (std.mem.Allocator) anyerror!void) !void {
+    var saw_out_of_memory = false;
+    for (0..64) |fail_index| {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
+        operation(failing.allocator()) catch |err| {
+            std.debug.assert(err == error.OutOfMemory or err == error.Unavailable);
+            if (err == error.OutOfMemory) saw_out_of_memory = true;
+            continue;
+        };
+    }
+    try std.testing.expect(saw_out_of_memory);
+}
+
+fn putArtifactWithAllocator(operation_allocator: std.mem.Allocator) !void {
+    const setup_allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root");
+    const base = try std.fs.path.join(setup_allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..], "root" });
+    defer setup_allocator.free(base);
+    const root = try std.Io.Dir.cwd().realPathFileAlloc(io, base, setup_allocator);
+    defer setup_allocator.free(root);
+
+    var workspace = try workspace_mod.Workspace.init(setup_allocator, io, root, null);
+    defer workspace.deinit();
+    var store = Store.init(&workspace, io, .{ .zig_path = "zig" });
+
+    const ref = try store.port().put(operation_allocator, .{
+        .namespace = "reports",
+        .name = "summary.json",
+        .kind = "json_report",
+        .bytes = "{\"ok\":true}\n",
+        .provenance = "allocation-test",
+    });
+    defer ref.deinit(operation_allocator);
+}
+
+fn recordWorkspaceWithAllocator(operation_allocator: std.mem.Allocator) !void {
+    const setup_allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/zig-out");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/zig-out/report.txt", .data = "existing artifact\n" });
+    const base = try std.fs.path.join(setup_allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..], "root" });
+    defer setup_allocator.free(base);
+    const root = try std.Io.Dir.cwd().realPathFileAlloc(io, base, setup_allocator);
+    defer setup_allocator.free(root);
+
+    var workspace = try workspace_mod.Workspace.init(setup_allocator, io, root, null);
+    defer workspace.deinit();
+    var store = Store.init(&workspace, io, .{ .zig_path = "zig" });
+
+    const ref = try store.port().recordWorkspace(operation_allocator, .{
+        .path = "zig-out/report.txt",
+        .producer = "allocation-test",
+        .artifact_kind = "text",
+        .toolchain = .{ .zig_path = "zig" },
+    });
+    defer ref.deinit(operation_allocator);
 }

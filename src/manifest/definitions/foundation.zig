@@ -129,3 +129,7 @@ pub const zigar_tool_index_check = tool(.{
     .group = .release_drift,
     .plan = .{ .pure_analysis = "Compares compiled tool manifest entries to docs/tool-index.generated.md." },
 });
+
+test "foundation definitions expose artifact metadata" {
+    try @import("std").testing.expect(zigar_artifact_index.description.len > 0);
+}

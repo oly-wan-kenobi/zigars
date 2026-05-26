@@ -86,3 +86,7 @@ pub const zig_toolchain_resolve = tool(.{
     .risk = .{ .executes_backend = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
 });
+
+test "discovery definitions expose capability metadata" {
+    try @import("std").testing.expect(zigar_capabilities.description.len > 0);
+}

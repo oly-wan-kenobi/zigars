@@ -377,7 +377,8 @@ fn entryFromValue(allocator: std.mem.Allocator, value: std.json.Value) ArtifactE
 
 fn registryEntryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = entry.path });
     try obj.put(allocator, "abs_path", .{ .string = entry.abs_path });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(entry.bytes) });
@@ -386,12 +387,14 @@ fn registryEntryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.j
     try obj.put(allocator, "parser_confidence", .{ .string = entry.parser_confidence });
     try obj.put(allocator, "raw_reference", .{ .string = entry.raw_reference });
     try obj.put(allocator, "provenance", try provenanceValue(allocator, entry.provenance));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "producer", .{ .string = provenance.producer });
     try obj.put(allocator, "artifact_kind", .{ .string = provenance.artifact_kind });
     try obj.put(allocator, "backend_name", .{ .string = provenance.backend_name });
@@ -401,16 +404,19 @@ fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.js
     try obj.put(allocator, "notes", .{ .string = provenance.notes });
     try obj.put(allocator, "command_argv", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "toolchain", try toolchainValue(allocator, provenance.toolchain));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "zig_path", .{ .string = toolchain.zig_path });
     try obj.put(allocator, "zls_path", .{ .string = toolchain.zls_path });
     try obj.put(allocator, "zflame_path", .{ .string = toolchain.zflame_path });
     try obj.put(allocator, "diff_folded_path", .{ .string = toolchain.diff_folded_path });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -461,8 +467,120 @@ fn mapWriteError(err: anyerror) ArtifactError {
     };
 }
 
+const fakes = @import("../../../testing/fakes/root.zig");
+
 test "artifact kind classifies common generated outputs" {
     try std.testing.expectEqualStrings("svg", artifactKind("zig-out/profile.svg"));
     try std.testing.expectEqualStrings("json", artifactKind(".zigar-cache/report.json"));
     try std.testing.expectEqualStrings("release_archive", artifactKind("dist/assets/zigar.tar.gz"));
+}
+
+test "artifact registry handles missing preimages and stream-too-long prune checks" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    const context = testArtifactContext(workspace.port());
+
+    try workspace.expectReadError(.{
+        .path = default_registry_path,
+        .max_bytes = max_registry_bytes,
+        .for_output = true,
+        .provenance = "artifacts.prune.preimage",
+    }, error.FileNotFound);
+    const preimage = try preimageIdentity(std.testing.allocator, context);
+    try std.testing.expect(!preimage.exists);
+    try std.testing.expectEqual(@as(usize, 0), preimage.bytes);
+    try std.testing.expect(preimage.sha256 == null);
+
+    const entry = RegistryEntry{
+        .path = "zig-out/report.json",
+        .abs_path = "/repo/zig-out/report.json",
+        .bytes = 2,
+        .sha256 = "old",
+        .provenance = .{
+            .producer = "test",
+            .artifact_kind = "json",
+            .toolchain = .{ .zig_path = "zig" },
+        },
+    };
+    try workspace.expectReadError(.{
+        .path = entry.path,
+        .max_bytes = entry.bytes + 1,
+        .for_output = false,
+        .provenance = "artifacts.prune.verify",
+    }, error.StreamTooLong);
+    var entries = [_]RegistryEntry{entry};
+    const pruned = try pruneStale(std.testing.allocator, context, .{ .entries = entries[0..] });
+    defer std.testing.allocator.free(pruned.entries);
+    try std.testing.expectEqual(@as(usize, 0), pruned.summary.kept);
+    try std.testing.expectEqual(@as(usize, 1), pruned.summary.changed);
+    try std.testing.expectEqual(@as(usize, 1), pruned.summary.pruned);
+
+    try workspace.verify();
+}
+
+test "artifact scan reports hash read failures for current root entries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    const context = testArtifactContext(workspace.port());
+
+    try workspace.expectResolve(.{
+        .path = ".",
+        .for_output = false,
+        .provenance = "artifacts.scan.resolve",
+    }, "/repo");
+    try workspace.expectScanDirectory(.{
+        .path = ".",
+        .max_files = 4,
+        .for_output = false,
+        .provenance = "artifacts.scan.walk",
+    }, &.{"report.log"});
+    try workspace.expectReadError(.{
+        .path = "report.log",
+        .max_bytes = max_hash_bytes,
+        .for_output = false,
+        .provenance = "artifacts.scan.hash",
+    }, error.AccessDenied);
+
+    const scanned = try scanArtifacts(allocator, context, ".", 4, true);
+    try std.testing.expectEqual(@as(usize, 1), scanned.artifacts.len);
+    try std.testing.expectEqualStrings("report.log", scanned.artifacts[0].path);
+    try std.testing.expectEqualStrings("AccessDenied", scanned.artifacts[0].hash_status);
+    try std.testing.expect(!scanned.limit_reached);
+
+    try workspace.verify();
+}
+
+test "artifact registry JSON helpers and write error mapping cover rollback edges" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const value = try registryEntryValue(allocator, .{
+        .path = "zig-out/report.json",
+        .abs_path = "/repo/zig-out/report.json",
+        .bytes = 2,
+        .sha256 = "abcd",
+        .provenance = .{
+            .producer = "test",
+            .artifact_kind = "json",
+            .backend_name = "zls",
+            .toolchain = .{ .zig_path = "zig" },
+        },
+    });
+    try std.testing.expectEqualStrings("zig-out/report.json", value.object.get("path").?.string);
+    try std.testing.expectEqualStrings("zig", value.object.get("provenance").?.object.get("toolchain").?.object.get("zig_path").?.string);
+
+    try std.testing.expectEqual(error.OutOfMemory, mapWriteError(error.OutOfMemory));
+    try std.testing.expectEqual(error.Unavailable, mapWriteError(error.WriteFailed));
+}
+
+fn testArtifactContext(workspace_store: ports.WorkspaceStore) app_context.ArtifactContext {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .workspace_store = workspace_store,
+    };
 }

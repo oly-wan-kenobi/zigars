@@ -188,3 +188,22 @@ test "observability sink fails unexpected events" {
         .phase = "complete",
     }));
 }
+
+test "observability sink event cloning cleans partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, expectObservabilityEventWithAllocator, .{});
+}
+
+fn expectObservabilityEventWithAllocator(allocator: Allocator) !void {
+    var fake = FakeObservabilitySink.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectEvent(.{
+        .name = "profile.run",
+        .phase = "complete",
+        .attributes = &.{
+            .{ .key = "backend", .value = "zflame" },
+            .{ .key = "status", .value = "ok" },
+        },
+        .duration_ms = 14,
+    });
+}

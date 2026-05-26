@@ -282,3 +282,12 @@ test "parse allows unused non-loopback host for stdio" {
     try std.testing.expectEqual(Transport.stdio, cfg.transport);
     try std.testing.expectEqualStrings("0.0.0.0", cfg.host);
 }
+
+test "parse defaults clean partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, parseDefaultsWithAllocator, .{});
+}
+
+fn parseDefaultsWithAllocator(allocator: std.mem.Allocator) !void {
+    var cfg = try parse(allocator, std.testing.io, &.{"zigar"});
+    defer cfg.deinit(allocator);
+}

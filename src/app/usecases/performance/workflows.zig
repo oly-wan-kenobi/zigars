@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 const benchmark_model = @import("../../../domain/performance/benchmark_model.zig");
@@ -1129,4 +1130,559 @@ fn performanceToolError(allocator: std.mem.Allocator, tool_name: []const u8, ope
         .category = "analysis",
         .resolution = "Provide readable LCOV, zigar coverage JSON, benchmark JSON, or simple textual benchmark timing evidence and retry.",
     }, err);
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+fn performanceTestContext(
+    command_runner: *fakes.FakeCommandRunner,
+    workspace_store: *fakes.FakeWorkspaceStore,
+    workspace_scanner: *fakes.FakeWorkspaceScanner,
+    backend_probe: ?*fakes.FakeBackendProbe,
+    artifact_store: ?*fakes.FakeArtifactStore,
+    platform: app_context.PlatformView,
+) app_context.PerformanceContext {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .tool_paths = .{ .zig = "zig", .zls = "zls", .zflame = "zflame", .diff_folded = "diff-folded" },
+        .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
+        .platform = platform,
+        .command_runner = command_runner.port(),
+        .workspace_store = workspace_store.port(),
+        .workspace_scanner = workspace_scanner.port(),
+        .backend_probe = if (backend_probe) |probe| probe.port() else null,
+        .artifact_store = if (artifact_store) |store| store.port() else null,
+    };
+}
+
+fn parsedArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
+    return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+}
+
+fn commandRequest(argv: []const []const u8, timeout_ms: u64) ports.CommandRequest {
+    return .{
+        .argv = argv,
+        .cwd = "/repo",
+        .timeout_ms = timeout_ms,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    };
+}
+
+fn expectMissingPreimage(workspace: *fakes.FakeWorkspaceStore, path: []const u8) !void {
+    try workspace.expectReadError(.{
+        .path = path,
+        .max_bytes = max_evidence_bytes,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+}
+
+fn expectResolveOutput(workspace: *fakes.FakeWorkspaceStore, path: []const u8, abs_path: []const u8) !void {
+    try workspace.expectResolve(.{
+        .path = path,
+        .for_output = true,
+        .provenance = "arch110-workflow-resolve-output",
+    }, abs_path);
+}
+
+fn expectResolveInput(workspace: *fakes.FakeWorkspaceStore, path: []const u8, abs_path: []const u8) !void {
+    try workspace.expectResolve(.{
+        .path = path,
+        .provenance = "arch110-workflow-resolve",
+    }, abs_path);
+}
+
+fn expectArtifactRecord(
+    allocator: std.mem.Allocator,
+    store: *fakes.FakeArtifactStore,
+    path: []const u8,
+    producer: []const u8,
+    artifact_kind: []const u8,
+    argv: []const []const u8,
+    backend: []const u8,
+    backend_version: []const u8,
+    target: []const u8,
+    notes: []const u8,
+) !void {
+    const abs_path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{path});
+    try store.expectRecordWorkspace(.{
+        .path = path,
+        .producer = producer,
+        .artifact_kind = artifact_kind,
+        .command_argv = argv,
+        .backend_name = backend,
+        .backend_version = backend_version,
+        .target = target,
+        .notes = notes,
+        .toolchain = .{
+            .zig_path = "zig",
+            .zls_path = "zls",
+            .zflame_path = "zflame",
+            .diff_folded_path = "diff-folded",
+        },
+        .indexed_at_unix_ms = 0,
+    }, .{
+        .path = path,
+        .abs_path = abs_path,
+        .bytes = 0,
+        .sha256 = "sha256",
+        .indexed_at_unix_ms = 0,
+    });
+}
+
+test "performance command workflows execute and register coverage and benchmark artifacts" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var artifacts_fake = fakes.FakeArtifactStore.init(std.testing.allocator);
+    defer artifacts_fake.deinit();
+
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, &artifacts_fake, .{});
+    var app = App.init(context, allocator);
+
+    var coverage_args = try parsedArgs(allocator,
+        \\{"command":"zig test --coverage","output":"coverage/run.json","target":"native","coverage_backend":"kcov","coverage_artifacts":"kcov-out","apply":true}
+    );
+    defer coverage_args.deinit();
+    const coverage_argv = &.{ "zig", "test", "--coverage" };
+    const coverage_run = CommandRunResult{
+        .term = .{ .exited = 0 },
+        .stdout = "coverage ok\n",
+        .stderr = "",
+        .duration_ms = 12,
+    };
+    const coverage_command_value = try commandResultValue(allocator, "coverage command", coverage_argv, "/repo", 1000, coverage_run);
+    const coverage_artifact_value = try coverageRunArtifactValue(allocator, &app, coverage_args.value, coverage_command_value);
+    const coverage_bytes = try serializeAlloc(allocator, coverage_artifact_value);
+
+    try commands.expectRun(commandRequest(coverage_argv, 1000), .{
+        .exit_code = 0,
+        .stdout = "coverage ok\n",
+        .stderr = "",
+        .duration_ms = 12,
+    });
+    try expectMissingPreimage(&workspace, "coverage/run.json");
+    try workspace.expectWrite(.{
+        .path = "coverage/run.json",
+        .bytes = coverage_bytes,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "arch110-workflow-write",
+    }, .{ .bytes_written = coverage_bytes.len });
+    try expectResolveOutput(&workspace, "coverage/run.json", "/repo/coverage/run.json");
+    try expectArtifactRecord(allocator, &artifacts_fake, "coverage/run.json", "zig_coverage_run", "coverage_run", coverage_argv, "kcov", "", "native", "coverage run evidence");
+    try expectResolveOutput(&workspace, "coverage/run.json", "/repo/coverage/run.json");
+
+    const coverage_result = try zigCoverageRun(&app, allocator, coverage_args.value);
+    try std.testing.expect(!coverage_result.is_error);
+    try std.testing.expect(coverage_result.value.object.get("applied").?.bool);
+
+    var bench_args = try parsedArgs(allocator,
+        \\{"command":"zig build bench","output":"bench/run.json","apply":true}
+    );
+    defer bench_args.deinit();
+    const bench_argv = &.{ "zig", "build", "bench" };
+    const bench_run = CommandRunResult{
+        .term = .{ .exited = 0 },
+        .stdout = "parseJson 25 ns\nrender 1.5 ms\n",
+        .stderr = "",
+        .duration_ms = 31,
+    };
+    const parsed = try benchmark_model.parseText(allocator, bench_run.stdout);
+    const bench_value = try benchRunArtifactValue(allocator, &app, bench_argv, 1000, bench_run, parsed);
+    const bench_bytes = try serializeAlloc(allocator, bench_value);
+
+    try commands.expectRun(commandRequest(bench_argv, 1000), .{
+        .exit_code = 0,
+        .stdout = bench_run.stdout,
+        .stderr = "",
+        .duration_ms = 31,
+    });
+    try expectMissingPreimage(&workspace, "bench/run.json");
+    try workspace.expectWrite(.{
+        .path = "bench/run.json",
+        .bytes = bench_bytes,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "arch110-workflow-write",
+    }, .{ .bytes_written = bench_bytes.len });
+    try expectResolveOutput(&workspace, "bench/run.json", "/repo/bench/run.json");
+    try expectArtifactRecord(allocator, &artifacts_fake, "bench/run.json", "zig_bench_run", "benchmark_run", bench_argv, "caller_command", "", "", "benchmark run evidence");
+    try expectResolveOutput(&workspace, "bench/run.json", "/repo/bench/run.json");
+
+    const bench_result = try zigBenchRun(&app, allocator, bench_args.value);
+    try std.testing.expect(!bench_result.is_error);
+    try std.testing.expectEqual(@as(i64, 2), bench_result.value.object.get("benchmark_count").?.integer);
+
+    try commands.verify();
+    try workspace.verify();
+    try scanner.verify();
+    try artifacts_fake.verify();
+}
+
+test "performance workflows report command errors and parse workspace evidence variants" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    var error_args = try parsedArgs(allocator,
+        \\{"command":"zig test","apply":true}
+    );
+    defer error_args.deinit();
+    try commands.expectRunError(commandRequest(&.{ "zig", "test" }, 1000), error.Timeout);
+    const command_error = try zigCoverageRun(&app, allocator, error_args.value);
+    try std.testing.expect(!command_error.value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("command_error", command_error.value.object.get("kind").?.string);
+
+    var bench_error_args = try parsedArgs(allocator,
+        \\{"command":"zig bench","apply":true}
+    );
+    defer bench_error_args.deinit();
+    try commands.expectRunError(commandRequest(&.{ "zig", "bench" }, 1000), error.Unavailable);
+    const bench_error = try zigBenchRun(&app, allocator, bench_error_args.value);
+    try std.testing.expect(!bench_error.value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("command_error", bench_error.value.object.get("kind").?.string);
+
+    var history_args = try parsedArgs(allocator,
+        \\{"path":"bench/history.json"}
+    );
+    defer history_args.deinit();
+    try workspace.expectRead(.{ .path = "bench/history.json", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, "[{\"name\":\"render\"}]");
+    const history = try zigBenchmarkHistory(&app, allocator, history_args.value);
+    try std.testing.expectEqual(@as(i64, 1), history.value.object.get("history_count").?.integer);
+
+    var text_history_args = try parsedArgs(allocator,
+        \\{"path":"bench/history.txt"}
+    );
+    defer text_history_args.deinit();
+    try workspace.expectRead(.{ .path = "bench/history.txt", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, "render 25 ns\n");
+    const text_history = try zigBenchmarkHistory(&app, allocator, text_history_args.value);
+    try std.testing.expectEqual(@as(i64, 1), text_history.value.object.get("history_count").?.integer);
+
+    var path_args = try parsedArgs(allocator,
+        \\{"path":"coverage/lcov.info","format":"lcov"}
+    );
+    defer path_args.deinit();
+    try workspace.expectRead(.{ .path = "coverage/lcov.info", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" },
+        \\SF:src/main.zig
+        \\DA:1,1
+        \\DA:2,0
+        \\end_of_record
+        \\
+    );
+    const mapped = try zigCoverageMap(&app, allocator, path_args.value);
+    try std.testing.expectEqual(@as(i64, 2), mapped.value.object.get("coverage").?.object.get("total_lines").?.integer);
+
+    var primary_path_args = try parsedArgs(allocator,
+        \\{"coverage":"coverage/current.info"}
+    );
+    defer primary_path_args.deinit();
+    try workspace.expectRead(.{ .path = "coverage/current.info", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" },
+        \\SF:src/main.zig
+        \\DA:1,1
+        \\end_of_record
+        \\
+    );
+    const budget_from_path = try zigCoverageBudgetCheck(&app, allocator, primary_path_args.value);
+    try std.testing.expect(budget_from_path.value.object.get("passed").?.bool);
+
+    const missing_evidence = try zigCoverageMap(&app, allocator, null);
+    try std.testing.expect(missing_evidence.is_error);
+    try std.testing.expectEqualStrings("missing_required_argument", missing_evidence.value.object.get("code").?.string);
+
+    var denied_path_args = try parsedArgs(allocator,
+        \\{"path":"coverage/denied.info"}
+    );
+    defer denied_path_args.deinit();
+    try workspace.expectReadError(.{ .path = "coverage/denied.info", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, error.AccessDenied);
+    const denied_evidence = try zigCoverageMap(&app, allocator, denied_path_args.value);
+    try std.testing.expect(denied_evidence.is_error);
+    try std.testing.expectEqualStrings("workspace_path_error", denied_evidence.value.object.get("kind").?.string);
+
+    const missing_budget = try zigPerfBudgetCheck(&app, allocator, null);
+    try std.testing.expect(missing_budget.value.object.get("passed").?.bool);
+
+    var invalid_profile_args = try parsedArgs(allocator,
+        \\{"content":"not json"}
+    );
+    defer invalid_profile_args.deinit();
+    const invalid_profile = try zigSamplySummary(&app, allocator, invalid_profile_args.value);
+    try std.testing.expect(invalid_profile.is_error);
+    try std.testing.expectEqualStrings("tool_error", invalid_profile.value.object.get("kind").?.string);
+
+    try commands.verify();
+    try workspace.verify();
+    try scanner.verify();
+}
+
+test "performance scanner and profile helpers cover discovery summaries and private edges" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    try workspace.expectScanDirectory(.{ .path = ".", .provenance = "arch110-workflow-scan" }, &.{
+        "build.zig",
+        "src/main.zig",
+        ".zig-cache/generated.zig",
+        "README.md",
+    });
+    try workspace.expectRead(.{ .path = "build.zig", .max_bytes = 128 * 1024, .provenance = "arch110-workflow-read" }, "const zbench = @import(\"zbench\");\n");
+    try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = 128 * 1024, .provenance = "arch110-workflow-read" }, "pub fn main() void {}\n");
+    var discover_args = try parsedArgs(allocator, "{\"limit\":3}");
+    defer discover_args.deinit();
+    const discovered = try zigBenchDiscover(&app, allocator, discover_args.value);
+    try std.testing.expectEqual(@as(i64, 1), discovered.value.object.get("suite_count").?.integer);
+
+    try workspace.expectScanDirectory(.{ .path = ".", .provenance = "arch110-workflow-scan" }, &.{
+        "src/tracy.zig",
+        "src/plain.zig",
+    });
+    try workspace.expectRead(.{ .path = "src/tracy.zig", .max_bytes = 128 * 1024, .provenance = "arch110-workflow-read" }, "pub fn work() void {\n    TracyCZone();\n}\n");
+    try workspace.expectRead(.{ .path = "src/plain.zig", .max_bytes = 128 * 1024, .provenance = "arch110-workflow-read" }, "pub fn plain() void {}\n");
+    const tracy_plan = try zigTracyPlan(&app, allocator, discover_args.value);
+    try std.testing.expectEqual(@as(i64, 1), tracy_plan.value.object.get("signal_count").?.integer);
+
+    const profile_json =
+        \\{"threads":[{"name":"main","samples":{"data":[1,2,3]},"frameTable":{"length":4}},{"samples":[1]}]}
+    ;
+    var summary_args = try parsedArgs(allocator,
+        \\{"content":"{\"threads\":[{\"name\":\"main\",\"samples\":{\"data\":[1,2,3]},\"frameTable\":{\"length\":4}},{\"samples\":[1]}]}","limit":2}
+    );
+    defer summary_args.deinit();
+    const summary = try zigSamplySummary(&app, allocator, summary_args.value);
+    try std.testing.expectEqual(@as(i64, 4), summary.value.object.get("sample_count").?.integer);
+
+    const parsed_profile = try std.json.parseFromSlice(std.json.Value, allocator, profile_json, .{});
+    defer parsed_profile.deinit();
+    try std.testing.expectEqual(@as(usize, 3), profileSamplesCount(parsed_profile.value.object.get("threads").?.array.items[0].object.get("samples").?));
+    try std.testing.expectEqual(@as(usize, 0), jsonArrayLength(parsed_profile.value.object.get("threads").?.array.items[0]));
+    try std.testing.expectEqual(@as(usize, 2), firstSignalLine("nope\nTracyFrameMark();\n"));
+    try std.testing.expectEqual(@as(usize, 1), firstSignalLine("no signals\n"));
+    try std.testing.expectEqual(@as(?i64, 7), intField(parsed_profile.value.object, "missing") orelse 7);
+    try std.testing.expectEqual(@as(?f64, 2.5), floatField(parsed_profile.value.object, "missing") orelse 2.5);
+    try std.testing.expectEqual(@as(?[]const u8, null), stringField(parsed_profile.value.object, "missing"));
+    var numbers = std.json.ObjectMap.empty;
+    try numbers.put(allocator, "int_float", .{ .float = 9.75 });
+    try numbers.put(allocator, "int_text", .{ .number_string = "42" });
+    try numbers.put(allocator, "float_int", .{ .integer = 5 });
+    try numbers.put(allocator, "float_text", .{ .number_string = "2.5" });
+    try numbers.put(allocator, "bad_text", .{ .number_string = "nan?" });
+    try std.testing.expectEqual(@as(?i64, 9), intField(numbers, "int_float"));
+    try std.testing.expectEqual(@as(?i64, 42), intField(numbers, "int_text"));
+    try std.testing.expectEqual(@as(?i64, null), intField(numbers, "bad_text"));
+    try std.testing.expectEqual(@as(?f64, 5.0), floatField(numbers, "float_int"));
+    try std.testing.expectEqual(@as(?f64, 2.5), floatField(numbers, "float_text"));
+    try std.testing.expectEqual(@as(?f64, null), floatField(numbers, "bad_text"));
+    try std.testing.expect(containsAny("abc ms", &.{" ms"}));
+    const lowered = try asciiLowerAlloc(allocator, "BenchMARK");
+    try std.testing.expectEqualStrings("benchmark", lowered);
+
+    try commands.verify();
+    try workspace.verify();
+    try scanner.verify();
+}
+
+test "performance backend workflows cover preview unavailable failed and successful captures" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var probe = fakes.FakeBackendProbe.init(std.testing.allocator);
+    defer probe.deinit();
+    var artifacts_fake = fakes.FakeArtifactStore.init(std.testing.allocator);
+    defer artifacts_fake.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, &probe, &artifacts_fake, .{ .os = "linux", .arch = "x86_64", .is_linux = true });
+    var app = App.init(context, allocator);
+
+    var tracy_probe_args = try parsedArgs(allocator,
+        \\{"probe_backend":true,"tracy_capture_path":"tracy-custom"}
+    );
+    defer tracy_probe_args.deinit();
+    try probe.expectCheck(.{ .backend = "tracy-capture", .argv = &.{ "tracy-custom", "--help" }, .cwd = "/repo", .timeout_ms = 1000, .provenance = "arch110-workflow-backend-check" }, .{
+        .backend = "tracy-capture",
+        .available = true,
+        .basis = "ok",
+    });
+    const tracy_probe = try zigTracyProbe(&app, allocator, tracy_probe_args.value);
+    try std.testing.expect(tracy_probe.value.object.get("backend_status").?.object.get("ok").?.bool);
+
+    var preview_args = try parsedArgs(allocator,
+        \\{"command":"zig build","samply_path":"samply","output":"profiles/samply.json"}
+    );
+    defer preview_args.deinit();
+    try expectResolveOutput(&workspace, "profiles/samply.json", "/repo/profiles/samply.json");
+    const preview = try zigSamplyRecord(&app, allocator, preview_args.value);
+    try std.testing.expect(!preview.value.object.get("applied").?.bool);
+
+    var unavailable_args = try parsedArgs(allocator,
+        \\{"command":"zig build","samply_path":"missing-samply","output":"profiles/missing.json","apply":true}
+    );
+    defer unavailable_args.deinit();
+    try expectResolveOutput(&workspace, "profiles/missing.json", "/repo/profiles/missing.json");
+    try probe.expectCheck(.{ .backend = "samply", .argv = &.{ "missing-samply", "--help" }, .cwd = "/repo", .timeout_ms = 1000, .provenance = "arch110-workflow-backend-check" }, .{
+        .backend = "samply",
+        .available = false,
+        .unavailable_reason = "not installed",
+        .basis = "PATH probe",
+    });
+    const unavailable = try zigSamplyRecord(&app, allocator, unavailable_args.value);
+    try std.testing.expect(!unavailable.value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("backend_error", unavailable.value.object.get("kind").?.string);
+
+    var success_args = try parsedArgs(allocator,
+        \\{"command":"zig build","samply_path":"samply","output":"profiles/samply.json","apply":true}
+    );
+    defer success_args.deinit();
+    const samply_argv = &.{ "samply", "record", "-o", "/repo/profiles/samply.json", "--", "zig", "build" };
+    try expectResolveOutput(&workspace, "profiles/samply.json", "/repo/profiles/samply.json");
+    try probe.expectCheck(.{ .backend = "samply", .argv = &.{ "samply", "--help" }, .cwd = "/repo", .timeout_ms = 1000, .provenance = "arch110-workflow-backend-check" }, .{
+        .backend = "samply",
+        .available = true,
+        .basis = "ok",
+    });
+    try workspace.expectEnsureDir(.{ .path = "profiles", .provenance = "arch110-workflow-ensure-parent" }, .{});
+    try commands.expectRun(commandRequest(samply_argv, 1000), .{ .exit_code = 0, .stdout = "", .stderr = "", .duration_ms = 5 });
+    try workspace.expectRead(.{ .path = "profiles/samply.json", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, "{\"profile\":true}");
+    try expectResolveInput(&workspace, "profiles/samply.json", "/repo/profiles/samply.json");
+    try expectArtifactRecord(allocator, &artifacts_fake, "profiles/samply.json", "zig_samply_record", "samply_profile", samply_argv, "samply", "", "", "captured Samply profile");
+    const captured = try zigSamplyRecord(&app, allocator, success_args.value);
+    try std.testing.expect(captured.value.object.get("applied").?.bool);
+
+    var failed_args = try parsedArgs(allocator,
+        \\{"tracy_capture_path":"tracy-capture","output":"profiles/failed.tracy","apply":true}
+    );
+    defer failed_args.deinit();
+    const tracy_failed_argv = &.{ "tracy-capture", "-o", "/repo/profiles/failed.tracy", "-a", "127.0.0.1", "-p", "8086", "-s", "5" };
+    try expectResolveOutput(&workspace, "profiles/failed.tracy", "/repo/profiles/failed.tracy");
+    try probe.expectCheck(.{ .backend = "tracy-capture", .argv = &.{ "tracy-capture", "--help" }, .cwd = "/repo", .timeout_ms = 1000, .provenance = "arch110-workflow-backend-check" }, .{
+        .backend = "tracy-capture",
+        .available = true,
+        .basis = "ok",
+    });
+    try workspace.expectEnsureDir(.{ .path = "profiles", .provenance = "arch110-workflow-ensure-parent" }, .{});
+    try commands.expectRun(commandRequest(tracy_failed_argv, 1000), .{ .exit_code = 2, .stdout = "", .stderr = "refused\n", .duration_ms = 4 });
+    const failed = try zigTracyCapture(&app, allocator, failed_args.value);
+    try std.testing.expect(!failed.value.object.get("ok").?.bool);
+
+    var tracy_args = try parsedArgs(allocator,
+        \\{"tracy_capture_path":"tracy-capture","output":"profiles/capture.tracy","address":"127.0.0.2","port":8087,"seconds":1,"apply":true}
+    );
+    defer tracy_args.deinit();
+    const tracy_argv = &.{ "tracy-capture", "-o", "/repo/profiles/capture.tracy", "-a", "127.0.0.2", "-p", "8087", "-s", "1" };
+    try expectResolveOutput(&workspace, "profiles/capture.tracy", "/repo/profiles/capture.tracy");
+    try probe.expectCheck(.{ .backend = "tracy-capture", .argv = &.{ "tracy-capture", "--help" }, .cwd = "/repo", .timeout_ms = 1000, .provenance = "arch110-workflow-backend-check" }, .{
+        .backend = "tracy-capture",
+        .available = true,
+        .basis = "ok",
+    });
+    try workspace.expectEnsureDir(.{ .path = "profiles", .provenance = "arch110-workflow-ensure-parent" }, .{});
+    try commands.expectRun(commandRequest(tracy_argv, 1000), .{ .exit_code = 0, .stdout = "", .stderr = "", .duration_ms = 6 });
+    try workspace.expectRead(.{ .path = "profiles/capture.tracy", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, "trace");
+    try expectResolveInput(&workspace, "profiles/capture.tracy", "/repo/profiles/capture.tracy");
+    try expectArtifactRecord(allocator, &artifacts_fake, "profiles/capture.tracy", "zig_tracy_capture", "tracy_capture", tracy_argv, "tracy-capture", "", "", "captured Tracy trace");
+    const tracy = try zigTracyCapture(&app, allocator, tracy_args.value);
+    try std.testing.expect(tracy.value.object.get("applied").?.bool);
+
+    const windows_context = performanceTestContext(&commands, &workspace, &scanner, &probe, &artifacts_fake, .{ .os = "windows", .arch = "x86_64", .is_windows = true });
+    var windows_app = App.init(windows_context, allocator);
+    const unsupported = try zigTracyCapture(&windows_app, allocator, null);
+    try std.testing.expect(!unsupported.value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("unsupported_platform", unsupported.value.object.get("error_kind").?.string);
+
+    try commands.verify();
+    try workspace.verify();
+    try scanner.verify();
+    try probe.verify();
+    try artifacts_fake.verify();
+}
+
+test "performance artifact pack apply writes artifacts and hashes existing preimages" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var artifacts_fake = fakes.FakeArtifactStore.init(std.testing.allocator);
+    defer artifacts_fake.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, &artifacts_fake, .{});
+    var app = App.init(context, allocator);
+
+    var pack_args = try parsedArgs(allocator,
+        \\{"coverage":"coverage/run.json","benchmarks":"bench/run.json","output":"perf/evidence.json","apply":true}
+    );
+    defer pack_args.deinit();
+
+    var obj = std.json.ObjectMap.empty;
+    try putBase(allocator, &obj, &app, "zig_perf_evidence_pack", "Performance evidence bundle", "medium", &.{
+        "Evidence pack stores supplied evidence and pointers; it does not run validation.",
+    });
+    var evidence = std.json.Array.init(allocator);
+    try appendEvidencePointer(allocator, &evidence, "coverage", "coverage/run.json");
+    try appendEvidencePointer(allocator, &evidence, "benchmarks", "bench/run.json");
+    try appendEvidencePointer(allocator, &evidence, "samply", null);
+    try appendEvidencePointer(allocator, &evidence, "tracy", null);
+    try appendEvidencePointer(allocator, &evidence, "flamegraph", null);
+    try appendEvidencePointer(allocator, &evidence, "validation", null);
+    try obj.put(allocator, "evidence", .{ .array = evidence });
+    try obj.put(allocator, "evidence_count", .{ .integer = 6 });
+    try obj.put(allocator, "ready_for_review", .{ .bool = true });
+    const expected_bytes = try serializeAlloc(allocator, .{ .object = obj });
+
+    try expectResolveOutput(&workspace, "perf/evidence.json", "/repo/perf/evidence.json");
+    try workspace.expectRead(.{ .path = "perf/evidence.json", .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, "old evidence");
+    try workspace.expectWrite(.{
+        .path = "perf/evidence.json",
+        .bytes = expected_bytes,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "arch110-workflow-write",
+    }, .{ .bytes_written = expected_bytes.len, .replaced_existing = true });
+    try expectResolveOutput(&workspace, "perf/evidence.json", "/repo/perf/evidence.json");
+    try expectArtifactRecord(allocator, &artifacts_fake, "perf/evidence.json", "zig_perf_evidence_pack", "performance_evidence_pack", &.{}, "", "", "", "performance workflow artifact");
+
+    const pack = try zigPerfEvidencePack(&app, allocator, pack_args.value);
+    try std.testing.expect(pack.value.object.get("applied").?.bool);
+    try std.testing.expect(pack.value.object.get("preimage_identity").?.object.get("exists").?.bool);
+
+    try commands.verify();
+    try workspace.verify();
+    try scanner.verify();
+    try artifacts_fake.verify();
 }

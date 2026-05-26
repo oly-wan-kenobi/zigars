@@ -85,9 +85,11 @@ pub const DiagnosticsCache = struct {
         }
 
         const key = try self.allocator.dupe(u8, uri);
-        errdefer self.allocator.free(key);
+        var key_owned = true;
+        defer if (key_owned) self.allocator.free(key);
         const value = try self.allocator.dupe(u8, data);
-        errdefer self.allocator.free(value);
+        var value_owned = true;
+        defer if (value_owned) self.allocator.free(value);
 
         self.evictUntilFitsLocked(value.len);
         self.sequence +%= 1;
@@ -95,6 +97,8 @@ pub const DiagnosticsCache = struct {
             .value = value,
             .sequence = self.sequence,
         });
+        key_owned = false;
+        value_owned = false;
         self.retained_bytes += value.len;
     }
 
@@ -111,18 +115,21 @@ pub const DiagnosticsCache = struct {
         defer self.mutex.unlock();
 
         var list: std.ArrayList(SnapshotEntry) = .empty;
-        errdefer {
+        var list_owned = true;
+        defer if (list_owned) {
             for (list.items) |item| allocator.free(item.value);
             list.deinit(allocator);
-        }
+        };
         var it = self.entries.iterator();
         while (it.next()) |entry| {
             const value = try allocator.dupe(u8, entry.value_ptr.value);
-            errdefer allocator.free(value);
+            var value_owned = true;
+            defer if (value_owned) allocator.free(value);
             try list.append(allocator, .{
                 .value = value,
                 .sequence = entry.value_ptr.sequence,
             });
+            value_owned = false;
         }
         std.mem.sort(SnapshotEntry, list.items, {}, struct {
             fn lessThan(_: void, a: SnapshotEntry, b: SnapshotEntry) bool {
@@ -132,6 +139,7 @@ pub const DiagnosticsCache = struct {
 
         const result = try allocator.alloc([]const u8, list.items.len);
         for (list.items, 0..) |item, index| result[index] = item.value;
+        list_owned = false;
         list.deinit(allocator);
         return result;
     }
@@ -294,4 +302,51 @@ test "diagnostics snapshot is ordered by update sequence" {
     try std.testing.expectEqual(@as(usize, 2), snapshot.len);
     try std.testing.expectEqualStrings(first, snapshot[0]);
     try std.testing.expectEqualStrings(second, snapshot[1]);
+}
+
+test "diagnostics cache clamps stale retained byte accounting when freeing" {
+    const alloc = std.testing.allocator;
+    const data =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
+    ;
+    var cache = DiagnosticsCache.init(alloc, testIo(), DiagnosticsCache.default_max_bytes);
+    defer cache.deinit();
+
+    const parsed = try parseObject(alloc, data);
+    defer parsed.deinit();
+    try cache.storeNotification(parsed.value.object, data);
+
+    const removed = cache.entries.fetchRemove("file:///tmp/a.zig") orelse return error.TestUnexpectedResult;
+    cache.retained_bytes = 0;
+    cache.freeEntryLocked(removed.key, removed.value);
+    try std.testing.expectEqual(@as(usize, 0), cache.retained_bytes);
+}
+
+test "diagnostics snapshot cleans cloned values on allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, snapshotDiagnosticsWithAllocator, .{});
+}
+
+fn snapshotDiagnosticsWithAllocator(allocator: std.mem.Allocator) !void {
+    const first =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/a.zig","diagnostics":[]}}
+    ;
+    const second =
+        \\{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/b.zig","diagnostics":[]}}
+    ;
+    var cache = DiagnosticsCache.init(allocator, testIo(), DiagnosticsCache.default_max_bytes);
+    defer cache.deinit();
+
+    const parsed_first = try parseObject(std.testing.allocator, first);
+    defer parsed_first.deinit();
+    try cache.storeNotification(parsed_first.value.object, first);
+
+    const parsed_second = try parseObject(std.testing.allocator, second);
+    defer parsed_second.deinit();
+    try cache.storeNotification(parsed_second.value.object, second);
+
+    const snapshot = try cache.snapshot(allocator);
+    defer {
+        for (snapshot) |item| allocator.free(item);
+        allocator.free(snapshot);
+    }
 }

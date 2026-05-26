@@ -58,20 +58,24 @@ pub const FakeToolchainEnv = struct {
 
     pub fn expectGet(self: *Self, request: ports.ToolchainEnvRequest, value: []const u8) !void {
         const owned_request = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         try self.expected_gets.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .ok = try common.dupString(self.allocator, value) },
         });
+        request_owned = false;
     }
 
     pub fn expectGetError(self: *Self, request: ports.ToolchainEnvRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         try self.expected_gets.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn verify(self: *const Self) ports.PortError!void {
@@ -81,8 +85,10 @@ pub const FakeToolchainEnv = struct {
     fn get(ptr: *anyopaque, allocator: Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_call);
+        var call_record_owned = false;
+        errdefer if (!call_record_owned) freeRequest(self.allocator, owned_call);
         try self.call_records.append(self.allocator, owned_call);
+        call_record_owned = true;
 
         if (self.next_get >= self.expected_gets.items.len) return error.UnexpectedCall;
         const expected = self.expected_gets.items[self.next_get];

@@ -132,11 +132,19 @@ pub const HistoryFileRecord = struct {
     }
 
     pub fn clone(self: HistoryFileRecord, allocator: std.mem.Allocator) !HistoryFileRecord {
+        const file = try allocator.dupe(u8, self.file);
+        errdefer allocator.free(file);
+        var preimage_identity = try self.preimage_identity.clone(allocator);
+        errdefer preimage_identity.deinit(allocator);
+        var updated_identity = try self.updated_identity.clone(allocator);
+        errdefer updated_identity.deinit(allocator);
+        const preimage_content_path = if (self.preimage_content_path) |path| try allocator.dupe(u8, path) else null;
+        errdefer if (preimage_content_path) |path| allocator.free(path);
         return .{
-            .file = try allocator.dupe(u8, self.file),
-            .preimage_identity = try self.preimage_identity.clone(allocator),
-            .updated_identity = try self.updated_identity.clone(allocator),
-            .preimage_content_path = if (self.preimage_content_path) |path| try allocator.dupe(u8, path) else null,
+            .file = file,
+            .preimage_identity = preimage_identity,
+            .updated_identity = updated_identity,
+            .preimage_content_path = preimage_content_path,
         };
     }
 };
@@ -260,10 +268,9 @@ pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext,
     for (request.paths) |path| {
         var snapshot = readSnapshot(allocator, context, path) catch |err| {
             safe = false;
-            try files.append(allocator, .{ .err = .{
-                .file = try allocator.dupe(u8, path),
-                .error_name = @errorName(err),
-            } });
+            try files.ensureUnusedCapacity(allocator, 1);
+            const failed_file = try createFileError(allocator, path, @errorName(err));
+            files.appendAssumeCapacity(failed_file);
             continue;
         };
         defer snapshot.deinit(allocator);
@@ -272,21 +279,31 @@ pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext,
         if (!policy.direct_edit_allowed) safe = false;
         var preimage = try session_domain.identityFromBytes(allocator, snapshot.exists, snapshot.bytes);
         defer preimage.deinit(allocator);
+        try expected.ensureUnusedCapacity(allocator, 1);
         const expected_preimage = try expectedPreimageFromIdentity(allocator, snapshot.file, preimage);
-        try expected.append(allocator, expected_preimage);
-        try files.append(allocator, .{ .ok = .{
-            .file = try allocator.dupe(u8, snapshot.file),
-            .preimage_identity = try preimage.clone(allocator),
-            .policy = policy,
-        } });
+        expected.appendAssumeCapacity(expected_preimage);
+
+        try files.ensureUnusedCapacity(allocator, 1);
+        const file = try createFileOk(allocator, snapshot.file, preimage, policy);
+        files.appendAssumeCapacity(file);
     }
 
+    const owned_files = try files.toOwnedSlice(allocator);
+    errdefer {
+        for (owned_files) |*file| file.deinit(allocator);
+        allocator.free(owned_files);
+    }
+    const owned_expected = try expected.toOwnedSlice(allocator);
+    errdefer freeExpectedPreimages(allocator, owned_expected);
+    const session_id = try allocator.dupe(u8, request.session_id);
+    errdefer allocator.free(session_id);
+    const goal = if (request.goal) |text| try allocator.dupe(u8, text) else null;
     return .{
-        .session_id = try allocator.dupe(u8, request.session_id),
-        .goal = if (request.goal) |goal| try allocator.dupe(u8, goal) else null,
+        .session_id = session_id,
+        .goal = goal,
         .safe_to_edit = safe,
-        .files = try files.toOwnedSlice(allocator),
-        .expected_preimages = try expected.toOwnedSlice(allocator),
+        .files = owned_files,
+        .expected_preimages = owned_expected,
     };
 }
 
@@ -324,29 +341,32 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         if (!policy.direct_edit_allowed or !expected_ok) safe = false;
 
         const diff = try session_domain.unifiedDiff(allocator, snapshot.file, snapshot.bytes, replacement.content);
-        errdefer allocator.free(diff);
-        try expected.append(allocator, try expectedPreimageFromIdentity(allocator, snapshot.file, preimage));
-        try files.append(allocator, .{
-            .file = try allocator.dupe(u8, snapshot.file),
-            .changed = changed,
-            .preimage_identity = try preimage.clone(allocator),
-            .updated_identity = try updated.clone(allocator),
-            .policy = policy,
-            .expected_preimage_matched = expected_ok,
-            .diff = diff,
-        });
+        var diff_owned = false;
+        errdefer if (!diff_owned) allocator.free(diff);
+        const expected_item = try expectedPreimageFromIdentity(allocator, snapshot.file, preimage);
+        var expected_owned = false;
+        errdefer if (!expected_owned) deinitExpectedPreimage(allocator, expected_item);
+        try expected.append(allocator, expected_item);
+        expected_owned = true;
 
-        try history_files.append(allocator, .{
-            .file = try allocator.dupe(u8, snapshot.file),
-            .preimage_identity = try preimage.clone(allocator),
-            .updated_identity = try updated.clone(allocator),
-            .preimage_content_path = if (changed) try session_domain.preimageArtifactPath(allocator, request.session_id, index, snapshot.file) else null,
-        });
+        var result_file = try replacementFileFromParts(allocator, snapshot.file, changed, preimage, updated, policy, expected_ok, diff);
+        diff_owned = true;
+        var result_file_owned = false;
+        errdefer if (!result_file_owned) result_file.deinit(allocator);
+        try files.append(allocator, result_file);
+        result_file_owned = true;
+
+        var history_file = try historyFileForReplacement(allocator, request.session_id, index, snapshot.file, preimage, updated, changed);
+        var history_file_owned = false;
+        errdefer if (!history_file_owned) history_file.deinit(allocator);
+        try history_files.append(allocator, history_file);
+        history_file_owned = true;
     }
 
     if (request.apply and !safe) {
         for (history_files.items) |*file| file.deinit(allocator);
         history_files.deinit(allocator);
+        history_files = .empty;
         return replacementResultFromParts(allocator, request, false, false, false, changed_count, true, &files, &expected);
     }
 
@@ -376,6 +396,7 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
 
     for (history_files.items) |*file| file.deinit(allocator);
     history_files.deinit(allocator);
+    history_files = .empty;
     return replacementResultFromParts(allocator, request, request.apply, !request.apply, safe, changed_count, false, &files, &expected);
 }
 
@@ -402,12 +423,18 @@ pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext,
         for (record.files) |record_file| try applyRevertFile(allocator, context, record_file);
     }
 
+    const owned_files = try files.toOwnedSlice(allocator);
+    errdefer {
+        for (owned_files) |*file| file.deinit(allocator);
+        allocator.free(owned_files);
+    }
+    const session_id = try allocator.dupe(u8, request.session_id);
     return .{ .ok = .{
-        .session_id = try allocator.dupe(u8, request.session_id),
+        .session_id = session_id,
         .applied = request.apply and safe,
         .requires_apply = !request.apply,
         .safe_to_revert = safe,
-        .files = try files.toOwnedSlice(allocator),
+        .files = owned_files,
         .record = record,
     } };
 }
@@ -431,17 +458,100 @@ fn replacementResultFromParts(
     files: *std.ArrayList(ReplacementFile),
     expected: *std.ArrayList(ExpectedPreimage),
 ) !ReplacementResult {
+    const owned_files = try files.toOwnedSlice(allocator);
+    errdefer {
+        for (owned_files) |*file| file.deinit(allocator);
+        allocator.free(owned_files);
+    }
+    const owned_expected = try expected.toOwnedSlice(allocator);
+    errdefer freeExpectedPreimages(allocator, owned_expected);
+    const session_id = try allocator.dupe(u8, request.session_id);
+    errdefer allocator.free(session_id);
+    const goal = if (request.goal) |text| try allocator.dupe(u8, text) else null;
     return .{
         .operation = request.operation,
-        .session_id = try allocator.dupe(u8, request.session_id),
-        .goal = if (request.goal) |goal| try allocator.dupe(u8, goal) else null,
+        .session_id = session_id,
+        .goal = goal,
         .applied = applied,
         .requires_apply = requires_apply,
         .safe_to_apply = safe,
         .changed_file_count = changed_count,
         .blocked = blocked,
-        .files = try files.toOwnedSlice(allocator),
-        .expected_preimages = try expected.toOwnedSlice(allocator),
+        .files = owned_files,
+        .expected_preimages = owned_expected,
+    };
+}
+
+fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identity, policy: PathPolicy) !CreateFile {
+    const owned_file = try allocator.dupe(u8, file);
+    errdefer allocator.free(owned_file);
+    var owned_identity = try preimage.clone(allocator);
+    errdefer owned_identity.deinit(allocator);
+    return .{ .ok = .{
+        .file = owned_file,
+        .preimage_identity = owned_identity,
+        .policy = policy,
+    } };
+}
+
+fn createFileError(allocator: std.mem.Allocator, file: []const u8, error_name: []const u8) !CreateFile {
+    const owned_file = try allocator.dupe(u8, file);
+    errdefer allocator.free(owned_file);
+    return .{ .err = .{
+        .file = owned_file,
+        .error_name = error_name,
+    } };
+}
+
+fn replacementFileFromParts(
+    allocator: std.mem.Allocator,
+    file: []const u8,
+    changed: bool,
+    preimage: Identity,
+    updated: Identity,
+    policy: PathPolicy,
+    expected_ok: bool,
+    diff: []const u8,
+) !ReplacementFile {
+    const owned_file = try allocator.dupe(u8, file);
+    errdefer allocator.free(owned_file);
+    var owned_preimage = try preimage.clone(allocator);
+    errdefer owned_preimage.deinit(allocator);
+    var owned_updated = try updated.clone(allocator);
+    errdefer owned_updated.deinit(allocator);
+    return .{
+        .file = owned_file,
+        .changed = changed,
+        .preimage_identity = owned_preimage,
+        .updated_identity = owned_updated,
+        .policy = policy,
+        .expected_preimage_matched = expected_ok,
+        .diff = diff,
+    };
+}
+
+fn historyFileForReplacement(
+    allocator: std.mem.Allocator,
+    session_id: []const u8,
+    index: usize,
+    file: []const u8,
+    preimage: Identity,
+    updated: Identity,
+    changed: bool,
+) !HistoryFileRecord {
+    const owned_file = try allocator.dupe(u8, file);
+    errdefer allocator.free(owned_file);
+    var owned_preimage = try preimage.clone(allocator);
+    errdefer owned_preimage.deinit(allocator);
+    var owned_updated = try updated.clone(allocator);
+    errdefer owned_updated.deinit(allocator);
+    const preimage_content_path = if (changed) try session_domain.preimageArtifactPath(allocator, session_id, index, file) else null;
+    errdefer if (preimage_content_path) |path| allocator.free(path);
+    return .{
+        .file = owned_file,
+        .preimage_identity = owned_preimage,
+        .updated_identity = owned_updated,
+        .preimage_content_path = preimage_content_path,
     };
 }
 
@@ -480,10 +590,20 @@ fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContex
 }
 
 fn expectedPreimageFromIdentity(allocator: std.mem.Allocator, file: []const u8, identity: Identity) !ExpectedPreimage {
+    const owned_file = try allocator.dupe(u8, file);
+    errdefer allocator.free(owned_file);
+    var owned_identity = try identity.clone(allocator);
+    errdefer owned_identity.deinit(allocator);
     return .{
-        .file = try allocator.dupe(u8, file),
-        .identity = try identity.clone(allocator),
+        .file = owned_file,
+        .identity = owned_identity,
     };
+}
+
+fn deinitExpectedPreimage(allocator: std.mem.Allocator, expected: ExpectedPreimage) void {
+    allocator.free(expected.file);
+    var identity = expected.identity;
+    identity.deinit(allocator);
 }
 
 fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const ExpectedPreimage) void {
@@ -493,9 +613,7 @@ fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const Expecte
 
 fn freeExpectedPreimageItems(allocator: std.mem.Allocator, expected: []const ExpectedPreimage) void {
     for (expected) |item| {
-        allocator.free(item.file);
-        var identity = item.identity;
-        identity.deinit(allocator);
+        deinitExpectedPreimage(allocator, item);
     }
 }
 
@@ -507,14 +625,23 @@ fn sessionRecord(
     files: []const HistoryFileRecord,
 ) !SessionRecord {
     const now = try context.clock_and_ids.now();
-    var owned_files = try allocator.alloc(HistoryFileRecord, files.len);
-    errdefer allocator.free(owned_files);
+    const owned_files = try allocator.alloc(HistoryFileRecord, files.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (owned_files[0..initialized]) |*file| file.deinit(allocator);
+        allocator.free(owned_files);
+    }
     for (files, 0..) |file, index| {
         owned_files[index] = try file.clone(allocator);
+        initialized += 1;
     }
+    const owned_session_id = try allocator.dupe(u8, session_id);
+    errdefer allocator.free(owned_session_id);
+    const owned_goal = if (goal) |text| try allocator.dupe(u8, text) else null;
+    errdefer if (owned_goal) |text| allocator.free(text);
     return .{
-        .session_id = try allocator.dupe(u8, session_id),
-        .goal = if (goal) |text| try allocator.dupe(u8, text) else null,
+        .session_id = owned_session_id,
+        .goal = owned_goal,
         .recorded_unix_ms = now.unix_ms,
         .files = owned_files,
     };
@@ -567,10 +694,7 @@ fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id
     if (trimmed[0] == '[') {
         var parsed = try std.json.parseFromSlice(std.json.Value, allocator, trimmed, .{});
         defer parsed.deinit();
-        const array = switch (parsed.value) {
-            .array => |value| value,
-            else => return error.SessionNotFound,
-        };
+        const array = parsed.value.array;
         for (array.items) |item| {
             if (try recordFromValueIfMatch(allocator, item, session_id)) |record| return record;
         }
@@ -605,13 +729,25 @@ fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, s
         files.deinit(allocator);
     }
     for (files_value.items) |item| {
-        try files.append(allocator, try historyFileFromValue(allocator, item));
+        var file = try historyFileFromValue(allocator, item);
+        var file_owned = false;
+        errdefer if (!file_owned) file.deinit(allocator);
+        try files.append(allocator, file);
+        file_owned = true;
     }
+    const owned_files = try files.toOwnedSlice(allocator);
+    errdefer {
+        for (owned_files) |*file| file.deinit(allocator);
+        allocator.free(owned_files);
+    }
+    const owned_session_id = try allocator.dupe(u8, found);
+    errdefer allocator.free(owned_session_id);
+    const owned_goal = if (stringField(obj, "goal")) |goal| try allocator.dupe(u8, goal) else null;
     return .{
-        .session_id = try allocator.dupe(u8, found),
-        .goal = if (stringField(obj, "goal")) |goal| try allocator.dupe(u8, goal) else null,
+        .session_id = owned_session_id,
+        .goal = owned_goal,
         .recorded_unix_ms = integerField(obj, "recorded_unix_ms") orelse 0,
-        .files = try files.toOwnedSlice(allocator),
+        .files = owned_files,
     };
 }
 
@@ -620,11 +756,19 @@ fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Hi
         .object => |object| object,
         else => return error.InvalidArguments,
     };
+    const file = try allocator.dupe(u8, stringField(obj, "file") orelse return error.InvalidArguments);
+    errdefer allocator.free(file);
+    var preimage_identity = try identityFromValue(allocator, obj.get("preimage_identity") orelse .null);
+    errdefer preimage_identity.deinit(allocator);
+    var updated_identity = try identityFromValue(allocator, obj.get("updated_identity") orelse .null);
+    errdefer updated_identity.deinit(allocator);
+    const preimage_content_path = if (stringField(obj, "preimage_content_path")) |path| try allocator.dupe(u8, path) else null;
+    errdefer if (preimage_content_path) |path| allocator.free(path);
     return .{
-        .file = try allocator.dupe(u8, stringField(obj, "file") orelse return error.InvalidArguments),
-        .preimage_identity = try identityFromValue(allocator, obj.get("preimage_identity") orelse .null),
-        .updated_identity = try identityFromValue(allocator, obj.get("updated_identity") orelse .null),
-        .preimage_content_path = if (stringField(obj, "preimage_content_path")) |path| try allocator.dupe(u8, path) else null,
+        .file = file,
+        .preimage_identity = preimage_identity,
+        .updated_identity = updated_identity,
+        .preimage_content_path = preimage_content_path,
     };
 }
 

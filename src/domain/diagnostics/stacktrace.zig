@@ -24,7 +24,8 @@ pub const ParsedFrames = struct {
 
 pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize) !ParsedFrames {
     var frames = std.ArrayList(Frame).empty;
-    errdefer frames.deinit(allocator);
+    var frames_owned = true;
+    defer if (frames_owned) frames.deinit(allocator);
 
     var count: usize = 0;
     var lines = std.mem.splitScalar(u8, text, '\n');
@@ -41,7 +42,9 @@ pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize)
         });
     }
 
-    return .{ .frames = try frames.toOwnedSlice(allocator), .count = count };
+    const owned_frames = try frames.toOwnedSlice(allocator);
+    frames_owned = false;
+    return .{ .frames = owned_frames, .count = count };
 }
 
 pub fn looksLikeFrame(line: []const u8) bool {

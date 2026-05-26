@@ -244,8 +244,10 @@ pub const FakeRuntimeSession = struct {
 
     fn allocPrint(self: *FakeRuntimeSession, comptime fmt: []const u8, args: anytype) ports.PortError![]const u8 {
         const value = std.fmt.allocPrint(std.testing.allocator, fmt, args) catch return error.OutOfMemory;
-        errdefer std.testing.allocator.free(value);
+        var value_owned = true;
+        defer if (value_owned) std.testing.allocator.free(value);
         try self.owned_strings.append(std.testing.allocator, value);
+        value_owned = false;
         return value;
     }
 };
@@ -272,4 +274,5 @@ test "fake runtime session covers job and root state" {
     try std.testing.expectEqual(@as(usize, 1), try port.jobCount());
     try std.testing.expectEqual(@as(u64, 2), try port.eventCount());
     try std.testing.expectEqualStrings("/repo", (try port.rootAt(0)).path);
+    try std.testing.expectError(error.NotFound, port.jobById("missing-job"));
 }

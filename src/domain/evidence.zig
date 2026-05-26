@@ -32,8 +32,10 @@ pub fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Va
 
 pub fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (values) |value| try array.append(try ownedString(allocator, value));
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -46,10 +48,12 @@ pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !
 
 pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try obj.put(allocator, "line", .{ .integer = @intCast(@max(line, 1)) });
     try obj.put(allocator, "column", .{ .integer = @intCast(@max(column, 1)) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -61,11 +65,13 @@ pub fn evidenceValue(
     verify_with: []const []const u8,
 ) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "source", .{ .string = sourceName(source) });
     try obj.put(allocator, "confidence", .{ .string = confidenceName(confidence) });
     try obj.put(allocator, "detail", try ownedString(allocator, detail));
     try obj.put(allocator, "verify_with", try stringArrayValue(allocator, verify_with));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -81,7 +87,8 @@ pub fn findingValue(
     confidence: Confidence,
 ) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "source", .{ .string = sourceName(source) });
     try obj.put(allocator, "rule", try ownedString(allocator, rule));
     try obj.put(allocator, "severity", try ownedString(allocator, severity));
@@ -89,6 +96,7 @@ pub fn findingValue(
     try obj.put(allocator, "message", try ownedString(allocator, message));
     try obj.put(allocator, "confidence", .{ .string = confidenceName(confidence) });
     try obj.put(allocator, "recommended_cross_check", try stringArrayValue(allocator, &.{ "zig_lint_compare", "zig build test" }));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -114,11 +122,13 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
         }
     }
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "finding_count", .{ .integer = @intCast(findings.items.len) });
     try obj.put(allocator, "error_count", .{ .integer = @intCast(errors) });
     try obj.put(allocator, "warning_count", .{ .integer = @intCast(warnings) });
     try obj.put(allocator, "info_count", .{ .integer = @intCast(infos) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 

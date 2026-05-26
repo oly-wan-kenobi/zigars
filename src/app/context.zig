@@ -243,7 +243,31 @@ pub const EnvironmentContext = struct {
     }
 };
 
-pub const AdoptionContext = EnvironmentContext;
+pub const AdoptionContext = struct {
+    workspace: WorkspaceView,
+    tool_paths: ToolPaths,
+    timeouts: Timeouts,
+    platform: PlatformView = .{},
+    command_runner: ports.CommandRunner,
+    workspace_store: ports.WorkspaceStore,
+    workspace_scanner: ports.WorkspaceScanner,
+    backend_probe: ?ports.BackendProbe = null,
+    artifact_store: ?ports.ArtifactStore = null,
+    observability: ?ports.ObservabilitySink = null,
+    clock_and_ids: ?ports.ClockAndIds = null,
+
+    pub fn staticAnalysis(self: AdoptionContext) StaticAnalysisContext {
+        return .{
+            .workspace = self.workspace,
+            .tool_paths = self.tool_paths,
+            .timeouts = self.timeouts,
+            .command_runner = self.command_runner,
+            .workspace_store = self.workspace_store,
+            .workspace_scanner = self.workspace_scanner,
+            .observability = self.observability,
+        };
+    }
+};
 
 pub const TrustProbeCache = struct {
     zig: CachedBackendProbe = .{},
@@ -527,7 +551,19 @@ pub const Context = struct {
     }
 
     pub fn adoption(self: Context) ContextError!AdoptionContext {
-        return try self.environment();
+        return .{
+            .workspace = self.workspace,
+            .tool_paths = self.tool_paths,
+            .timeouts = self.timeouts,
+            .platform = self.platform,
+            .command_runner = try self.requireCommandRunner(),
+            .workspace_store = try self.requireWorkspace(),
+            .workspace_scanner = try self.requireWorkspaceScanner(),
+            .backend_probe = self.ports.backend_probe,
+            .artifact_store = self.ports.artifact_store,
+            .observability = self.ports.observability,
+            .clock_and_ids = self.ports.clock_and_ids,
+        };
     }
 
     pub fn trust(self: Context) ContextError!TrustContext {
@@ -713,6 +749,15 @@ test "profiling context requires only the pilot runtime capabilities" {
     try std.testing.expectEqualStrings("/bin/zflame", profiling_ctx.tool_paths.zflame);
     try std.testing.expectEqual(@as(i64, 5_000), profiling_ctx.timeouts.command_ms);
     try std.testing.expect(profiling_ctx.backend_probe == null);
+
+    const command = try profiling_ctx.command_runner.run(std.testing.allocator, .{ .argv = &.{"zig"} });
+    defer command.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ok", command.stdout);
+    const read = try profiling_ctx.workspace_store.read(std.testing.allocator, .{ .path = "README.md" });
+    defer read.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("", read.bytes);
+    const write = try profiling_ctx.workspace_store.write(.{ .path = "out.txt", .bytes = "bytes" });
+    try std.testing.expectEqual(@as(usize, 5), write.bytes_written);
 }
 
 test "validation context requires command workspace and clock ports" {
@@ -761,6 +806,18 @@ test "validation context requires command workspace and clock ports" {
     const validation_ctx = try missing_clock.validation();
     try std.testing.expectEqualStrings("zig", validation_ctx.tool_paths.zig);
     try std.testing.expectEqual(@as(i64, 30_000), validation_ctx.timeouts.command_ms);
+
+    const command = try validation_ctx.command_runner.run(std.testing.allocator, .{ .argv = &.{"zig"} });
+    defer command.deinit(std.testing.allocator);
+    const read = try validation_ctx.workspace_store.read(std.testing.allocator, .{ .path = "build.zig" });
+    defer read.deinit(std.testing.allocator);
+    const write = try validation_ctx.workspace_store.write(.{ .path = "build.zig", .bytes = "pub fn main() void {}" });
+    try std.testing.expectEqual(@as(usize, 21), write.bytes_written);
+    const instant = try validation_ctx.clock_and_ids.now();
+    try std.testing.expectEqual(@as(u64, 1), instant.monotonic_ms);
+    const id = try validation_ctx.clock_and_ids.nextId(std.testing.allocator, .{ .prefix = "run" });
+    defer std.testing.allocator.free(id);
+    try std.testing.expectEqualStrings("run-1", id);
 }
 
 test "editing context requires workspace and clock ports" {
@@ -802,6 +859,16 @@ test "editing context requires workspace and clock ports" {
 
     const editing_ctx = try ctx.editing();
     try std.testing.expectEqualStrings("/workspace", editing_ctx.workspace.root);
+    const read = try editing_ctx.workspace_store.read(std.testing.allocator, .{ .path = "src/main.zig" });
+    defer read.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("", read.bytes);
+    const write = try editing_ctx.workspace_store.write(.{ .path = "src/main.zig", .bytes = "const x = 1;" });
+    try std.testing.expectEqual(@as(usize, 12), write.bytes_written);
+    const instant = try editing_ctx.clock_and_ids.now();
+    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), instant.unix_ms);
+    const id = try editing_ctx.clock_and_ids.nextId(std.testing.allocator, .{ .prefix = "edit-" });
+    defer std.testing.allocator.free(id);
+    try std.testing.expectEqualStrings("edit-1", id);
 }
 
 test "counter handles are optional runtime bridges" {
@@ -830,6 +897,7 @@ test "cache snapshots expose status without concrete cache ownership" {
     };
 
     try std.testing.expect(state.backend_probe.anyCached());
+    try std.testing.expect((BackendProbeCacheSnapshot{ .diff_folded = true }).anyCached());
     try std.testing.expect(state.analysis.cached);
     try std.testing.expectEqual(@as(u64, 42), state.analysis.signature);
 }
@@ -898,4 +966,23 @@ test "static analysis context carries optional command and cache ports" {
     try std.testing.expect(static_ctx.command_runner != null);
     try std.testing.expect(static_ctx.semantic_index_cache != null);
     try std.testing.expectEqualStrings("/bin/zlint", static_ctx.tool_paths.zlint);
+
+    const command = try static_ctx.command_runner.?.run(std.testing.allocator, .{ .argv = &.{"zig"} });
+    defer command.deinit(std.testing.allocator);
+    const read = try static_ctx.workspace_store.read(std.testing.allocator, .{ .path = "src/lib.zig" });
+    defer read.deinit(std.testing.allocator);
+    const write = try static_ctx.workspace_store.write(.{ .path = "src/lib.zig", .bytes = "pub fn lib() void {}" });
+    try std.testing.expectEqual(@as(usize, 20), write.bytes_written);
+    const scan = try static_ctx.workspace_scanner.scanZigFiles(std.testing.allocator, .{});
+    defer scan.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), scan.files.len);
+    const status = try static_ctx.semantic_index_cache.?.status();
+    try std.testing.expectEqual(@as(u64, 99), status.signature);
+    const loaded = try static_ctx.semantic_index_cache.?.load(std.testing.allocator);
+    defer loaded.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("{}", loaded.bytes.?);
+    const stored = try static_ctx.semantic_index_cache.?.store(std.testing.allocator, .{ .signature = 7, .bytes = "[]" });
+    try std.testing.expectEqual(@as(u64, 7), stored.signature);
+    const hit = try static_ctx.semantic_index_cache.?.recordHit();
+    try std.testing.expectEqual(@as(usize, 1), hit.hits);
 }

@@ -147,3 +147,7 @@ pub const zig_tracy_capture = tool(.{ .description = "Capture or preview a Tracy
 pub const zig_tracy_artifacts = tool(.{ .description = "Describe and optionally register Tracy trace artifacts.", .input_schema = profile_artifact_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Registers Tracy trace artifacts only with apply=true." } });
 pub const zig_tracy_hints = tool(.{ .description = "Generate Tracy instrumentation hints from static signals and performance evidence.", .input_schema = tracy_hints_schema, .group = group, .plan = .{ .pure_analysis = "Produces instrumentation hints without modifying source." } });
 pub const zig_perf_evidence_pack = tool(.{ .description = "Build or preview a performance evidence bundle from supplied coverage, benchmark, and profiler evidence.", .input_schema = schema(&.{ .{ "coverage", "string", false }, .{ "benchmarks", "string", false }, .{ "samply", "string", false }, .{ "tracy", "string", false }, .{ "flamegraph", "string", false }, .{ "validation", "string", false }, .{ "output", "string", false }, .{ "apply", "boolean", false } }), .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes performance evidence bundles only with apply=true." } });
+
+test "performance definitions expose coverage metadata" {
+    try @import("std").testing.expect(zig_coverage_run.description.len > 0);
+}

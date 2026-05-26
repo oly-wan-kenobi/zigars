@@ -1252,6 +1252,10 @@ fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value:
     try out.append(allocator, '"');
 }
 
+const command_runner_fake = @import("../../../testing/fakes/command_runner.zig");
+const workspace_store_fake = @import("../../../testing/fakes/workspace_store.zig");
+const workspace_scanner_fake = @import("../../../testing/fakes/workspace_scanner.zig");
+
 test "normalizes findings and compares consensus" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1309,4 +1313,484 @@ test "zwanzig argv builders use supported typed flags" {
     });
     defer std.testing.allocator.free(graph_argv);
     try std.testing.expectEqualStrings("--dump-cfg", graph_argv[1]);
+}
+
+test "zlint diagnostics rules and fixes exercise command-backed outcomes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = testStaticContext(&commands, &store, &scanner);
+
+    try store.expectResolve(.{ .path = "zlint.json", .provenance = "static_analysis.zlint_config" }, "/workspace/zlint.json");
+    try store.expectResolve(.{ .path = "src", .provenance = "static_analysis.zlint_path" }, "/workspace/src");
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--format", "json", "--config", "/workspace/zlint.json", "--rules", "style", "/workspace/src", "--extra" },
+        .cwd = "/workspace",
+        .timeout_ms = 55,
+        .provenance = "static_analysis.zlint",
+    }, .{
+        .stdout =
+        \\{"diagnostics":[{"rule_id":"style.warn","level":"warn","location":{"path":"src/main.zig","line":4,"column":2},"title":"format this"}]}
+        ,
+    });
+    const diagnostics = try runZlintDiagnostics(allocator, context, .{
+        .tool_name = "zig_zlint",
+        .path = "src",
+        .config = "zlint.json",
+        .rules = "style",
+        .extra = &.{"--extra"},
+        .timeout_ms = 55,
+        .sarif = true,
+    });
+    try std.testing.expectEqualStrings("zig_zlint", diagnostics.object.get("kind").?.string);
+    try std.testing.expect(diagnostics.object.get("sarif") != null);
+
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--help" },
+        .cwd = "/workspace",
+        .timeout_ms = 77,
+        .provenance = "static_analysis.zlint_rules_help",
+    }, .{ .stdout = "Usage\n--rules\n--format\n--fix\n--fix-dangerously\n--print-ast\n" });
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--rules", "--format", "json" },
+        .cwd = "/workspace",
+        .timeout_ms = 77,
+        .provenance = "static_analysis.zlint_rules",
+    }, .{ .stdout = "{\"rules\":[{\"rule\":\"style.warn\",\"severity\":\"warning\",\"category\":\"style\",\"message\":\"Keep style tidy\"}]}" });
+    const rules = try runZlintRules(allocator, context, .{ .timeout_ms = 77 });
+    try std.testing.expectEqual(@as(i64, 1), rules.object.get("rule_count").?.integer);
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zlint_fix_path" }, "/workspace/src/main.zig");
+    const preview = try runZlintFix(allocator, context, .{
+        .path = "src/main.zig",
+        .rules = "style",
+        .dangerous = true,
+        .apply = false,
+    });
+    try std.testing.expect(!preview.object.get("applied").?.bool);
+    try std.testing.expect(preview.object.get("dangerous").?.bool);
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zlint_fix_path" }, "/workspace/src/main.zig");
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--format", "json", "--fix", "--rules", "style", "/workspace/src/main.zig" },
+        .cwd = "/workspace",
+        .timeout_ms = 88,
+        .provenance = "static_analysis.zlint_fix",
+    }, .{ .stdout = "[{\"rule\":\"style.warn\",\"severity\":\"info\",\"path\":\"src/main.zig\",\"line\":1,\"message\":\"fixed\"}]", .stderr = "fixed one\n" });
+    const applied = try runZlintFix(allocator, context, .{
+        .path = "src/main.zig",
+        .rules = "style",
+        .apply = true,
+        .timeout_ms = 88,
+    });
+    try std.testing.expect(applied.object.get("applied").?.bool);
+
+    try commands.verify();
+    try store.verify();
+    try scanner.verify();
+}
+
+test "lint backends report failures malformed output and zwanzig command metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = testStaticContext(&commands, &store, &scanner);
+
+    try store.expectResolve(.{ .path = "bad", .provenance = "static_analysis.zlint_path" }, "/workspace/bad");
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--format", "json", "/workspace/bad" },
+        .cwd = "/workspace",
+        .timeout_ms = null,
+        .provenance = "static_analysis.zlint",
+    }, .{ .stdout = "not json", .stderr = "\xffbad", .exit_code = 1, .term = .{ .exited = 1 }, .timed_out = true });
+    const failed = try runZlintDiagnostics(allocator, context, .{ .tool_name = "zig_zlint", .path = "bad" });
+    try std.testing.expectEqualStrings("command_failed", failed.object.get("error_kind").?.string);
+
+    try store.expectResolve(.{ .path = "malformed", .provenance = "static_analysis.zlint_path" }, "/workspace/malformed");
+    try commands.expectRun(.{
+        .argv = &.{ "zlint-test", "--format", "json", "/workspace/malformed" },
+        .cwd = "/workspace",
+        .timeout_ms = null,
+        .provenance = "static_analysis.zlint",
+    }, .{ .stdout = "{not-json", .stderr = "backend wrote junk" });
+    const malformed = try runZlintDiagnostics(allocator, context, .{ .tool_name = "zig_zlint", .path = "malformed" });
+    try std.testing.expectEqualStrings("backend_output_malformed", malformed.object.get("error_kind").?.string);
+
+    try commands.expectRunError(.{
+        .argv = &.{ "zwanzig-test", "--help" },
+        .cwd = "/workspace",
+        .timeout_ms = 1,
+        .provenance = "static_analysis.zwanzig",
+    }, error.FileNotFound);
+    const rules = try runZwanzigRules(allocator, context, 0);
+    try std.testing.expectEqualStrings("command_error", rules.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("zig_lint_rules", rules.object.get("tool").?.string);
+
+    try store.expectResolve(.{ .path = "zwanzig.json", .provenance = "static_analysis.zwanzig_config" }, "/workspace/zwanzig.json");
+    try store.expectResolve(.{ .path = "src", .provenance = "static_analysis.zwanzig_path" }, "/workspace/src");
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--format", "json", "--config", "/workspace/zwanzig.json", "--do", "safety", "--skip", "style", "/workspace/src", "--trace" },
+        .cwd = "/workspace",
+        .timeout_ms = 66,
+        .provenance = "static_analysis.zwanzig",
+    }, .{
+        .stdout = "src/main.zig:1:1: error: bad\nsrc/main.zig:2:1: note: context\n",
+        .stderr = "\xff",
+        .duration_ms = 9,
+        .stdout_truncated = true,
+        .stderr_truncated = true,
+    });
+    const zwanzig = try runZwanzigLint(allocator, context, .{
+        .tool_name = "zig_zwanzig_lint",
+        .format = .json,
+        .path = "src",
+        .config = "zwanzig.json",
+        .rules_do = "safety",
+        .rules_skip = "style",
+        .extra = &.{"--trace"},
+        .timeout_ms = 66,
+    });
+    try std.testing.expectEqualStrings("command", zwanzig.object.get("kind").?.string);
+    try std.testing.expect(zwanzig.object.get("stdout_truncated").?.bool);
+    try std.testing.expect(zwanzig.object.get("failure_summary").?.object.get("suggested_tools").?.array.items.len == 0);
+
+    try commands.verify();
+    try store.verify();
+    try scanner.verify();
+}
+
+test "lint planning values classify baselines suppressions trends and serialization" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const findings = try normalizeFindingsText(allocator,
+        \\{"results":[
+        \\{"code":"fmt","severity":"warning","file":"src/a.zig","line":"1","column":"2","detail":"format needed"},
+        \\{"rule":"panic","severity":"error","path":"src/b.zig","line":3,"message":"panic risk"},
+        \\{"rule":"info","severity":"info","path":"README.md","line":1,"message":"manual review"}
+        \\]}
+    , .zlint);
+    const baseline = try normalizeFindingsText(allocator,
+        \\[{"rule":"panic","severity":"error","path":"src/b.zig","line":3,"message":"panic risk"},{"rule":"old","severity":"warning","path":"old.zig","line":1,"message":"old"}]
+    , .zlint);
+
+    const profiles = try lintProfileValue(allocator, "advisory");
+    try std.testing.expectEqual(@as(usize, 3), profiles.object.get("profiles").?.array.items.len);
+    const advisory = lintProfileDefaults("advisory");
+    try std.testing.expect(advisory.allow_warnings);
+    const standard = lintProfileDefaults("standard");
+    try std.testing.expect(standard.max_warnings == 25);
+
+    const plan = try fixPlanValue(allocator, findings.array);
+    try std.testing.expectEqual(@as(usize, 1), plan.object.get("safe").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), plan.object.get("risky").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), plan.object.get("manual").?.array.items.len);
+
+    const base = try baselineValue(allocator, findings.array, baseline.array);
+    try std.testing.expectEqual(@as(usize, 2), base.object.get("new_findings").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), base.object.get("accepted_findings").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), base.object.get("resolved_findings").?.array.items.len);
+
+    const suppressions = try suppressionsValue(allocator, findings.array,
+        \\{"findings":[{"rule":"fmt","severity":"warning","path":"src/a.zig","line":1,"message":"format needed"},{"rule":"stale","severity":"info","path":"stale.zig","line":2,"message":"gone"}]}
+    );
+    try std.testing.expectEqual(@as(usize, 1), suppressions.object.get("suppressed").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 2), suppressions.object.get("active").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), suppressions.object.get("stale_suppressions").?.array.items.len);
+
+    const trend = try trendValue(allocator, baseline.array, findings.array);
+    try std.testing.expectEqual(@as(usize, 2), trend.object.get("new_findings").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), trend.object.get("resolved_findings").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), trend.object.get("persistent_findings").?.array.items.len);
+
+    var store = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const expected_baseline_bytes = try serializeAlloc(allocator, base);
+    try store.expectWrite(.{
+        .path = ".zigar-cache/lint-baseline.json",
+        .bytes = expected_baseline_bytes,
+        .provenance = "static_analysis.lint_baseline",
+    }, .{ .bytes_written = 1 });
+    const context = testStaticContext(&commands, &store, &scanner);
+    _ = try lintBaseline(allocator, context, findings.array, baseline.array, true, ".zigar-cache/lint-baseline.json");
+    try store.verify();
+}
+
+test "zwanzig graph errors include command and output metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var store = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    var scanner = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = testStaticContext(&commands, &store, &scanner);
+
+    try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/main.zig");
+    try store.expectResolve(.{ .path = ".zigar-cache/graphs", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/graphs");
+    try store.expectEnsureDir(.{ .path = ".zigar-cache/graphs", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/graphs", "/workspace/src/main.zig", "--trace" },
+        .cwd = "/workspace",
+        .timeout_ms = 42,
+        .provenance = "static_analysis.zwanzig_graph",
+    }, .{
+        .exit_code = 2,
+        .term = .{ .exited = 2 },
+        .stdout = "bad\xffgraph",
+        .stderr = "mode unsupported",
+        .stdout_truncated = true,
+        .stderr_truncated = true,
+    });
+    const failed = try runZwanzigGraph(allocator, context, .{
+        .mode = .cfg,
+        .path = "src/main.zig",
+        .output = ".zigar-cache/graphs",
+        .extra = &.{"--trace"},
+    });
+    try std.testing.expect(failed == .error_value);
+    const failed_value = failed.error_value;
+    try std.testing.expectEqualStrings("zwanzig_graph_command_failed", failed_value.object.get("code").?.string);
+    try std.testing.expectEqualStrings("zwanzig-test --dump-cfg /workspace/.zigar-cache/graphs /workspace/src/main.zig --trace", failed_value.object.get("command").?.string);
+    try std.testing.expectEqual(@as(i64, 42), failed_value.object.get("timeout_ms").?.integer);
+    try std.testing.expect(failed_value.object.get("stdout_invalid_utf8").?.bool);
+    try std.testing.expect(failed_value.object.get("stdout_truncated").?.bool);
+
+    try store.expectResolve(.{ .path = "src/scan.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/scan.zig");
+    try store.expectResolve(.{ .path = ".zigar-cache/scan", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/scan");
+    try store.expectEnsureDir(.{ .path = ".zigar-cache/scan", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/scan", "/workspace/src/scan.zig" },
+        .cwd = "/workspace",
+        .timeout_ms = 7,
+        .provenance = "static_analysis.zwanzig_graph",
+    }, .{});
+    try store.expectScanDirectoryError(.{
+        .path = ".zigar-cache/scan",
+        .suffix = ".dot",
+        .provenance = "static_analysis.zwanzig_graph_verify",
+    }, error.AccessDenied);
+    const inspect_failed = try runZwanzigGraph(allocator, context, .{
+        .mode = .cfg,
+        .path = "src/scan.zig",
+        .output = ".zigar-cache/scan",
+        .timeout_ms = 7,
+    });
+    try std.testing.expect(inspect_failed == .error_value);
+    const inspect_value = inspect_failed.error_value;
+    try std.testing.expectEqualStrings("inspect_output_directory", inspect_value.object.get("phase").?.string);
+    try std.testing.expectEqualStrings("permission", inspect_value.object.get("error_kind").?.string);
+
+    try store.expectResolve(.{ .path = "src/empty.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/empty.zig");
+    try store.expectResolve(.{ .path = ".zigar-cache/empty", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/empty");
+    try store.expectEnsureDir(.{ .path = ".zigar-cache/empty", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try commands.expectRun(.{
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/empty", "/workspace/src/empty.zig" },
+        .cwd = "/workspace",
+        .timeout_ms = 9,
+        .provenance = "static_analysis.zwanzig_graph",
+    }, .{});
+    try store.expectScanDirectory(.{
+        .path = ".zigar-cache/empty",
+        .suffix = ".dot",
+        .provenance = "static_analysis.zwanzig_graph_verify",
+    }, &.{});
+    const missing = try runZwanzigGraph(allocator, context, .{
+        .mode = .cfg,
+        .path = "src/empty.zig",
+        .output = ".zigar-cache/empty",
+        .timeout_ms = 9,
+    });
+    try std.testing.expect(missing == .error_value);
+    const missing_value = missing.error_value;
+    try std.testing.expectEqualStrings("backend_output_malformed", missing_value.object.get("code").?.string);
+    try std.testing.expectEqualStrings(".zigar-cache/empty", missing_value.object.get("output").?.string);
+
+    try commands.verify();
+    try store.verify();
+    try scanner.verify();
+}
+
+test "lint helper edge branches normalize fallback values and command insight metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const no_findings = try normalizeFindingsText(allocator, "42", .zlint);
+    try std.testing.expectEqual(@as(usize, 0), no_findings.array.items.len);
+
+    var finding_obj = std.json.ObjectMap.empty;
+    try finding_obj.put(allocator, "rule", .{ .string = "style.note" });
+    try finding_obj.put(allocator, "severity", .{ .string = "info" });
+    const sarif = try sarifFindingValue(allocator, .{ .object = finding_obj });
+    try std.testing.expectEqualStrings("note", sarif.object.get("level").?.string);
+
+    const fingerprint = try fingerprintValue(allocator, .{ .object = finding_obj });
+    try std.testing.expectEqualStrings("unknown:style.note:unknown:0:", fingerprint.string);
+    try std.testing.expectEqualStrings("", comparisonKey(.null));
+    try std.testing.expectEqualStrings("", severityOf(.{ .bool = false }));
+
+    var numbered = std.json.ObjectMap.empty;
+    try numbered.put(allocator, "line", .{ .number_string = "17" });
+    try numbered.put(allocator, "bad", .{ .number_string = "nan" });
+    try std.testing.expectEqual(@as(i64, 17), integerField(numbered, "line").?);
+    try std.testing.expect(integerField(numbered, "bad") == null);
+
+    const warning_insights = try compilerInsightsValue(allocator, "", "src/warn.zig:3:2: warning: expected optional\n", &.{ "zig", "build" });
+    try std.testing.expectEqual(@as(i64, 1), warning_insights.object.get("warning_count").?.integer);
+    try std.testing.expectEqualStrings("zig ast-check src/warn.zig", warning_insights.object.get("next_command").?.string);
+
+    const plain_command = try compilerNextCommand(allocator, .{
+        .severity = "warning",
+        .path = "README.md",
+        .message = "review docs",
+        .raw = "README.md: warning: review docs",
+    }, &.{ "zig", "build" });
+    try std.testing.expectEqualStrings("zig build", plain_command.string);
+
+    const global_actions = try compilerNextActions(allocator, .{
+        .severity = "warning",
+        .path = null,
+        .message = "global warning",
+        .raw = "warning: global warning",
+    }, 0);
+    try std.testing.expect(std.mem.startsWith(u8, global_actions.array.items[0].string, "Address the primary warning"));
+
+    const plain_summary = try failureSummaryValue(allocator, .null, false, &.{ "zig", "build" });
+    try std.testing.expect(plain_summary.object.get("primary").? == .null);
+    const path_scope = try likelyFailureScopeValue(allocator, .{ .object = blk: {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "path", .{ .string = "README.md" });
+        break :blk obj;
+    } });
+    try std.testing.expectEqualStrings("path:README.md", path_scope.string);
+
+    try std.testing.expectEqual(@as(u64, 42), commandTimeout(.{
+        .workspace = .{ .root = "/workspace" },
+        .timeouts = .{ .command_ms = 42 },
+        .workspace_store = undefined,
+        .workspace_scanner = undefined,
+    }, null));
+
+    const signal_term = try commandTermValue(allocator, .signal);
+    const stopped_term = try commandTermValue(allocator, .stopped);
+    const unknown_term = try commandTermValue(allocator, .unknown);
+    try std.testing.expectEqualStrings("signal", signal_term.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("stopped", stopped_term.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("unknown", unknown_term.object.get("kind").?.string);
+}
+
+test "lint serializers and safe text handle lossy bytes and escaped JSON primitives" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const lossy = try safeTextAlloc(allocator, "a\xff\xe2\x82\xac\xe2");
+    try std.testing.expect(lossy.invalid_utf8);
+    try std.testing.expectEqual(@as(usize, 6), lossy.byte_count);
+    try std.testing.expect(std.mem.indexOf(u8, lossy.text, &std.unicode.replacement_character_utf8) != null);
+
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    try serializeValue(allocator, &out, .null);
+    try out.append(allocator, ' ');
+    try serializeValue(allocator, &out, .{ .bool = true });
+    try out.append(allocator, ' ');
+    try serializeValue(allocator, &out, .{ .float = 1.5 });
+    try out.append(allocator, ' ');
+    try serializeValue(allocator, &out, .{ .number_string = "27" });
+    try std.testing.expectEqualStrings("null true 1.5 27", out.items);
+
+    const escaped = try serializeAlloc(allocator, .{ .string = "\"\\\n\r\t\x01" });
+    try std.testing.expectEqualStrings("\"\\\"\\\\\\n\\r\\t\\u0001\"", escaped);
+}
+
+test "lint builders and temporary buffers clean up after allocator failure" {
+    var argv_buf: [1]u8 = undefined;
+    var zlint_fba = std.heap.FixedBufferAllocator.init(&argv_buf);
+    try std.testing.expectError(error.OutOfMemory, buildZlintArgv(zlint_fba.allocator(), .{
+        .executable = "zlint",
+        .path = "src",
+        .config = "zlint.json",
+        .rules = "style",
+        .extra = &.{"--extra"},
+    }));
+
+    var fix_fba = std.heap.FixedBufferAllocator.init(&argv_buf);
+    try std.testing.expectError(error.OutOfMemory, buildZlintFixArgv(fix_fba.allocator(), .{
+        .executable = "zlint",
+        .path = "src",
+        .config = "zlint.json",
+        .rules = "style",
+        .extra = &.{"--extra"},
+    }, true));
+
+    var lint_fba = std.heap.FixedBufferAllocator.init(&argv_buf);
+    try std.testing.expectError(error.OutOfMemory, buildZwanzigLintArgv(lint_fba.allocator(), .{
+        .executable = "zwanzig",
+        .format = .json,
+        .path = "src",
+        .config = "zwanzig.json",
+        .rules_do = "safety",
+        .rules_skip = "style",
+        .extra = &.{"--extra"},
+    }));
+
+    var graph_fba = std.heap.FixedBufferAllocator.init(&argv_buf);
+    try std.testing.expectError(error.OutOfMemory, buildZwanzigGraphArgv(graph_fba.allocator(), .{
+        .executable = "zwanzig",
+        .mode = .cfg,
+        .source_path = "src/main.zig",
+        .output_dir = ".zigar-cache/graphs",
+        .extra = &.{"--extra"},
+    }));
+
+    var text_buf: [2]u8 = undefined;
+    var text_fba = std.heap.FixedBufferAllocator.init(&text_buf);
+    try std.testing.expectError(error.OutOfMemory, safeTextAlloc(text_fba.allocator(), "\xff"));
+
+    var command_buf: [2]u8 = undefined;
+    var command_fba = std.heap.FixedBufferAllocator.init(&command_buf);
+    try std.testing.expectError(error.OutOfMemory, commandString(command_fba.allocator(), &.{ "zig", "build" }));
+
+    var serialize_buf: [1]u8 = undefined;
+    var serialize_fba = std.heap.FixedBufferAllocator.init(&serialize_buf);
+    try std.testing.expectError(error.OutOfMemory, serializeAlloc(serialize_fba.allocator(), .{ .string = "long" }));
+}
+
+fn testStaticContext(
+    commands: *command_runner_fake.FakeCommandRunner,
+    store: *workspace_store_fake.FakeWorkspaceStore,
+    scanner: *workspace_scanner_fake.FakeWorkspaceScanner,
+) app_context.StaticAnalysisContext {
+    return .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .tool_paths = .{ .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
+        .timeouts = .{ .command_ms = 42 },
+        .command_runner = commands.port(),
+        .workspace_store = store.port(),
+        .workspace_scanner = scanner.port(),
+    };
 }

@@ -357,4 +357,5 @@ test "capability contracts cover optional backend handlers" {
         const contract = capabilityFor(tool_name) orelse return error.MissingContract;
         try std.testing.expect(contract.argv_shape.len > 0);
     }
+    try std.testing.expect(capabilityFor("missing_backend_tool") == null);
 }

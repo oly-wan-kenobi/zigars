@@ -106,10 +106,14 @@ pub fn runWithOutputLimit(
     }
 
     const stdout = try takeOwnedLimited(&multi_reader, allocator, 0, stdout_limit);
-    errdefer allocator.free(stdout.bytes);
+    var stdout_owned = true;
+    defer if (stdout_owned) allocator.free(stdout.bytes);
     const stderr = try takeOwnedLimited(&multi_reader, allocator, 1, stderr_limit);
-    errdefer allocator.free(stderr.bytes);
+    var stderr_owned = true;
+    defer if (stderr_owned) allocator.free(stderr.bytes);
 
+    stdout_owned = false;
+    stderr_owned = false;
     return .{
         .term = term,
         .stdout = stdout.bytes,
@@ -147,11 +151,14 @@ fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv:
     if (interpreter.len == 0) return argv;
 
     var out: std.ArrayList([]const u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     try out.appendSlice(allocator, interpreter);
     try out.append(allocator, script_path);
     try out.appendSlice(allocator, argv[1..]);
-    return out.toOwnedSlice(allocator);
+    const spawn_argv = try out.toOwnedSlice(allocator);
+    out_owned = false;
+    return spawn_argv;
 }
 
 fn executablePathForRead(allocator: std.mem.Allocator, cwd: []const u8, executable: []const u8) ![]const u8 {
@@ -170,11 +177,16 @@ fn parseShebang(bytes: []const u8) ?[]const u8 {
 
 fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.Allocator, index: usize, limit: usize) !OwnedOutput {
     const bytes = try multi_reader.toOwnedSlice(index);
-    errdefer allocator.free(bytes);
-    if (bytes.len <= limit) return .{ .bytes = bytes, .truncated = false };
+    var bytes_owned = true;
+    defer if (bytes_owned) allocator.free(bytes);
+    if (bytes.len <= limit) {
+        bytes_owned = false;
+        return .{ .bytes = bytes, .truncated = false };
+    }
 
     const trimmed = try allocator.dupe(u8, bytes[0..limit]);
     allocator.free(bytes);
+    bytes_owned = false;
     return .{ .bytes = trimmed, .truncated = true };
 }
 
@@ -254,16 +266,21 @@ pub fn splitArgs(allocator: std.mem.Allocator, text: ?[]const u8) ![]const []con
 
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
-    errdefer allocator.free(arg);
+    var arg_owned = true;
+    defer if (arg_owned) allocator.free(arg);
     try list.append(allocator, arg);
+    arg_owned = false;
 }
 
 pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: []const []const u8) ![]const []const u8 {
     var out = try std.ArrayList([]const u8).initCapacity(allocator, base.len + extra.len);
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     try out.appendSlice(allocator, base);
     try out.appendSlice(allocator, extra);
-    return out.toOwnedSlice(allocator);
+    const argv = try out.toOwnedSlice(allocator);
+    out_owned = false;
+    return argv;
 }
 
 pub fn formatRunResult(allocator: std.mem.Allocator, title: []const u8, result: RunResult) ![]u8 {
@@ -345,6 +362,35 @@ test "command runner executes shebang scripts through their interpreter" {
 
 test "split args rejects unfinished quotes" {
     try std.testing.expectError(error.InvalidArguments, splitArgs(std.testing.allocator, "--name 'unterminated"));
+}
+
+test "argv shebang detection preserves oom from path and file reads" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const root = ".zig-cache/tmp/command-argv-oom-test";
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, root);
+    const script = ".zig-cache/tmp/command-argv-oom-test/script";
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = script,
+        .data =
+        \\#!/bin/sh
+        \\echo ok
+        \\
+        ,
+        .flags = .{ .permissions = .executable_file },
+    });
+
+    var path_failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    var path_arena = std.heap.ArenaAllocator.init(path_failing.allocator());
+    defer path_arena.deinit();
+    try std.testing.expectError(error.OutOfMemory, argvForSpawn(path_arena.allocator(), std.testing.io, ".", &.{script}));
+
+    var read_failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
+    var read_arena = std.heap.ArenaAllocator.init(read_failing.allocator());
+    defer read_arena.deinit();
+    try std.testing.expectError(error.OutOfMemory, argvForSpawn(read_arena.allocator(), std.testing.io, ".", &.{script}));
 }
 
 test "classifies command errors" {

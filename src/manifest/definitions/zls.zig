@@ -115,3 +115,7 @@ pub const zig_workspace_symbols = tool(.{
     .risk = .{ .executes_backend = true },
     .plan = .{ .zls_request = .{ .method = "workspace/symbol", .required_capability = "workspaceSymbolProvider" } },
 });
+
+test "zls definitions expose document metadata" {
+    try @import("std").testing.expect(zig_document_open.description.len > 0);
+}

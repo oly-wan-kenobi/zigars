@@ -60,7 +60,9 @@ pub fn parseText(allocator: std.mem.Allocator, bytes: []const u8) !BenchSet {
     while (lines.next()) |line_raw| {
         const line = std.mem.trim(u8, line_raw, " \t\r");
         if (parseTimingLine(line)) |timing| {
-            try set.samples.append(allocator, .{ .name = try allocator.dupe(u8, timing.name), .ns_per_iter = timing.ns_per_iter });
+            const name = try allocator.dupe(u8, timing.name);
+            errdefer allocator.free(name);
+            try set.samples.append(allocator, .{ .name = name, .ns_per_iter = timing.ns_per_iter });
         }
     }
     if (set.samples.items.len == 0) return error.InvalidBenchmarkEvidence;
@@ -76,10 +78,14 @@ pub fn compare(allocator: std.mem.Allocator, current: BenchSet, baseline: BenchS
         if (before.ns_per_iter <= 0) continue;
         const pct = ((sample.ns_per_iter - before.ns_per_iter) / before.ns_per_iter) * 100.0;
         if (pct > @as(f64, @floatFromInt(threshold_pct))) {
-            try out.regressions.append(allocator, try delta(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct));
+            const item = try delta(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct);
+            errdefer allocator.free(item.name);
+            try out.regressions.append(allocator, item);
             out.worst_regression_pct = @max(out.worst_regression_pct, pct);
         } else if (pct < -@as(f64, @floatFromInt(threshold_pct))) {
-            try out.improvements.append(allocator, try delta(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct));
+            const item = try delta(allocator, sample.name, before.ns_per_iter, sample.ns_per_iter, pct);
+            errdefer allocator.free(item.name);
+            try out.improvements.append(allocator, item);
         }
     }
     return out;
@@ -121,7 +127,9 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
         if (item != .object) continue;
         const name = stringField(item.object, "name") orelse stringField(item.object, "benchmark") orelse continue;
         const ns = floatField(item.object, "ns_per_iter") orelse floatField(item.object, "time_ns") orelse floatField(item.object, "mean_ns") orelse continue;
-        try set.samples.append(allocator, .{ .name = try allocator.dupe(u8, name), .ns_per_iter = ns });
+        const owned_name = try allocator.dupe(u8, name);
+        errdefer allocator.free(owned_name);
+        try set.samples.append(allocator, .{ .name = owned_name, .ns_per_iter = ns });
     }
     if (set.samples.items.len == 0) return error.InvalidBenchmarkEvidence;
     return set;
@@ -217,4 +225,12 @@ fn stringField(obj: std.json.ObjectMap, name: []const u8) ?[]const u8 {
         .string => |s| s,
         else => null,
     };
+}
+
+test "benchmark float field accepts JSON number strings" {
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(std.testing.allocator);
+
+    try obj.put(std.testing.allocator, "mean_ns", .{ .number_string = "2.5" });
+    try std.testing.expectEqual(@as(f64, 2.5), floatField(obj, "mean_ns").?);
 }

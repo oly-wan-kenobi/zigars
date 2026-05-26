@@ -362,23 +362,7 @@ pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []con
         const hit = std.mem.indexOf(u8, lower_contents, lower_query) orelse continue;
         const hit_line = lineAt(file.bytes, hit);
         const parsed_decl = parseDeclaration(hit_line);
-        const qualified_name = if (parsed_decl) |decl| try qualifiedNameForDecl(allocator, file.path, decl.name) else null;
-        errdefer if (qualified_name) |value| allocator.free(value);
-        const doc_comments = if (parsed_decl != null) try docCommentsBefore(allocator, file.bytes, hit) else try allocator.dupe(u8, "");
-        errdefer allocator.free(doc_comments);
-        try collected.append(allocator, .{
-            .rank = 0,
-            .path = try allocator.dupe(u8, file.path),
-            .source_path = try allocator.dupe(u8, file.source_path orelse file.path),
-            .line = lineNumber(file.bytes, hit),
-            .snippet = try allocator.dupe(u8, hit_line),
-            .match_kind = if (parsed_decl) |decl| decl.kind else "source_line",
-            .decl_name = if (parsed_decl) |decl| try allocator.dupe(u8, decl.name) else null,
-            .qualified_name = qualified_name,
-            .import_hint = if (qualified_name) |name| try allocator.dupe(u8, name) else null,
-            .doc_comments = doc_comments,
-            .doc_comment_count = countDocCommentLines(doc_comments),
-        });
+        try appendStdSourceMatch(allocator, &collected, file, hit, hit_line, parsed_decl);
     }
     std.mem.sort(StdSourceMatch, collected.items, {}, stdSourceMatchLessThan);
     const total_match_count = collected.items.len;
@@ -391,10 +375,14 @@ pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []con
     if (result_count < collected.items.len) {
         for (collected.items[result_count..]) |item| item.deinit(allocator);
     }
-    collected.clearRetainingCapacity();
+    const owned_std_dir = try allocator.dupe(u8, std_dir);
+    errdefer allocator.free(owned_std_dir);
+    const owned_query = try allocator.dupe(u8, query);
+    errdefer allocator.free(owned_query);
+    collected.deinit(allocator);
     return .{
-        .std_dir = try allocator.dupe(u8, std_dir),
-        .query = try allocator.dupe(u8, query),
+        .std_dir = owned_std_dir,
+        .query = owned_query,
         .limit = normalized_limit,
         .total_match_count = total_match_count,
         .metadata = metadata,
@@ -482,20 +470,7 @@ pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const 
                     }
                     continue;
                 };
-                try collected.append(allocator, .{
-                    .rank = 0,
-                    .name = try allocator.dupe(u8, name),
-                    .decl_name = try allocator.dupe(u8, item_name),
-                    .match_kind = kind,
-                    .path = try allocator.dupe(u8, file.path),
-                    .source_path = try allocator.dupe(u8, file.source_path orelse file.path),
-                    .line = line_no,
-                    .snippet = try allocator.dupe(u8, std.mem.trim(u8, line, " \t\r\n")),
-                    .doc_comments = try allocator.dupe(u8, pending_doc_comments.items),
-                    .doc_comment_count = pending_doc_comment_count,
-                    .preferred_path = if (path_hint) |hint| pathMatchesHint(file.path, hint) else false,
-                    .qualified_name = try qualifiedNameForDecl(allocator, file.path, item_name),
-                });
+                try appendStdItemMatch(allocator, &collected, name, item_name, kind, file, line_no, line, pending_doc_comments.items, pending_doc_comment_count, path_hint);
                 pending_doc_comments.clearRetainingCapacity();
                 pending_doc_comment_count = 0;
             }
@@ -512,17 +487,133 @@ pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const 
         for (collected.items[result_count..]) |item| item.deinit(allocator);
     }
     const total_match_count = collected.items.len;
-    collected.clearRetainingCapacity();
+    const owned_std_dir = try allocator.dupe(u8, std_dir);
+    errdefer allocator.free(owned_std_dir);
+    const owned_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned_name);
+    const owned_decl_name = try allocator.dupe(u8, item_name);
+    errdefer allocator.free(owned_decl_name);
+    collected.deinit(allocator);
     return .{
-        .std_dir = try allocator.dupe(u8, std_dir),
-        .name = try allocator.dupe(u8, name),
-        .decl_name = try allocator.dupe(u8, item_name),
+        .std_dir = owned_std_dir,
+        .name = owned_name,
+        .decl_name = owned_decl_name,
         .qualified_path_hint = path_hint,
         .limit = normalized_limit,
         .total_match_count = total_match_count,
         .metadata = metadata,
         .matches = matches,
     };
+}
+
+fn appendStdSourceMatch(
+    allocator: std.mem.Allocator,
+    collected: *std.ArrayList(StdSourceMatch),
+    file: TextFile,
+    hit: usize,
+    hit_line: []const u8,
+    parsed_decl: ?ParsedDecl,
+) !void {
+    var path: ?[]const u8 = null;
+    var source_path: ?[]const u8 = null;
+    var snippet: ?[]const u8 = null;
+    var decl_name: ?[]const u8 = null;
+    var qualified_name: ?[]const u8 = null;
+    var import_hint: ?[]const u8 = null;
+    var doc_comments: ?[]const u8 = null;
+    var committed = false;
+    errdefer if (!committed) {
+        if (path) |value| allocator.free(value);
+        if (source_path) |value| allocator.free(value);
+        if (snippet) |value| allocator.free(value);
+        if (decl_name) |value| allocator.free(value);
+        if (qualified_name) |value| allocator.free(value);
+        if (import_hint) |value| allocator.free(value);
+        if (doc_comments) |value| allocator.free(value);
+    };
+
+    path = try allocator.dupe(u8, file.path);
+    source_path = try allocator.dupe(u8, file.source_path orelse file.path);
+    snippet = try allocator.dupe(u8, hit_line);
+    if (parsed_decl) |decl| {
+        decl_name = try allocator.dupe(u8, decl.name);
+        qualified_name = try qualifiedNameForDecl(allocator, file.path, decl.name);
+        import_hint = try allocator.dupe(u8, qualified_name.?);
+        doc_comments = try docCommentsBefore(allocator, file.bytes, hit);
+    } else {
+        doc_comments = try allocator.dupe(u8, "");
+    }
+
+    try collected.append(allocator, .{
+        .rank = 0,
+        .path = path.?,
+        .source_path = source_path.?,
+        .line = lineNumber(file.bytes, hit),
+        .snippet = snippet.?,
+        .match_kind = if (parsed_decl) |decl| decl.kind else "source_line",
+        .decl_name = decl_name,
+        .qualified_name = qualified_name,
+        .import_hint = import_hint,
+        .doc_comments = doc_comments.?,
+        .doc_comment_count = countDocCommentLines(doc_comments.?),
+    });
+    committed = true;
+}
+
+fn appendStdItemMatch(
+    allocator: std.mem.Allocator,
+    collected: *std.ArrayList(StdItemMatch),
+    name: []const u8,
+    item_name: []const u8,
+    kind: []const u8,
+    file: TextFile,
+    line_no: usize,
+    line: []const u8,
+    doc_comment_text: []const u8,
+    doc_comment_count: usize,
+    path_hint: ?[]const u8,
+) !void {
+    var owned_name: ?[]const u8 = null;
+    var decl_name: ?[]const u8 = null;
+    var path: ?[]const u8 = null;
+    var source_path: ?[]const u8 = null;
+    var snippet: ?[]const u8 = null;
+    var doc_comments: ?[]const u8 = null;
+    var qualified_name: ?[]const u8 = null;
+    var committed = false;
+    errdefer if (!committed) {
+        if (owned_name) |value| allocator.free(value);
+        if (decl_name) |value| allocator.free(value);
+        if (path) |value| allocator.free(value);
+        if (source_path) |value| allocator.free(value);
+        if (snippet) |value| allocator.free(value);
+        if (doc_comments) |value| allocator.free(value);
+        if (qualified_name) |value| allocator.free(value);
+    };
+
+    owned_name = try allocator.dupe(u8, name);
+    decl_name = try allocator.dupe(u8, item_name);
+    path = try allocator.dupe(u8, file.path);
+    source_path = try allocator.dupe(u8, file.source_path orelse file.path);
+    snippet = try allocator.dupe(u8, std.mem.trim(u8, line, " \t\r\n"));
+    doc_comments = try allocator.dupe(u8, doc_comment_text);
+    qualified_name = try qualifiedNameForDecl(allocator, file.path, item_name);
+
+    try collected.append(allocator, .{
+        .rank = 0,
+        .name = owned_name.?,
+        .decl_name = decl_name.?,
+        .match_kind = kind,
+        .path = path.?,
+        .source_path = source_path.?,
+        .line = line_no,
+        .snippet = snippet.?,
+        .doc_comments = doc_comments.?,
+        .doc_comment_count = doc_comment_count,
+        .preferred_path = if (path_hint) |hint| pathMatchesHint(file.path, hint) else false,
+        .qualified_name = qualified_name.?,
+    });
+    committed = true;
 }
 
 fn stdSourceMatchLessThan(_: void, lhs: StdSourceMatch, rhs: StdSourceMatch) bool {
@@ -1499,4 +1590,469 @@ test "docs snippet checks report syntax status without execution" {
     defer bad.deinit(allocator);
     try std.testing.expect(!bad.ok);
     try std.testing.expectEqualStrings("syntax_errors", bad.parse_status);
+}
+
+test "docs index source metadata and builtin lookup cover provenance contracts" {
+    const allocator = std.testing.allocator;
+
+    try std.testing.expectEqualStrings("partial_curated", curatedBuiltinsSource().completeness.text());
+    try std.testing.expectEqualStrings("source_scan", stdlibSource("/zig/lib/std", "0.16.0").completeness.text());
+    try std.testing.expectEqualStrings("installed_complete", installedLangrefSource("/zig/doc/langref.html", null).completeness.text());
+    try std.testing.expectEqualStrings("bundled_langref_index", bundledLangrefSource().id);
+
+    const listed = builtinList(.{});
+    listed.deinit(allocator);
+
+    var import_doc = try builtinDoc(allocator, "IMPORT", 0, .{});
+    defer import_doc.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), import_doc.limit);
+    try std.testing.expect(import_doc.matches.len >= 1);
+    try std.testing.expectEqualStrings("@import", import_doc.matches[0].item.name);
+
+    var no_doc = try builtinDoc(allocator, "definitely-not-a-builtin", 3, .{});
+    defer no_doc.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), no_doc.matches.len);
+
+    const failed_parse = try buildBuiltinIndexInput(allocator, null, "/zig/std/zig/BuiltinFn.zig", "pub const other = .{};");
+    defer deinitBuiltinIndexInput(failed_parse, allocator);
+    try std.testing.expectEqualStrings("active_builtin_source_parse_failed", failed_parse.drift.?.status);
+    try std.testing.expectEqualStrings("source_backed", failed_parse.drift.?.confidence);
+
+    const missing_source =
+        \\pub const list = list: {
+        \\    break :list std.StaticStringMap(BuiltinFn).initComptime([_]struct { []const u8, BuiltinFn }{
+        \\        .{ "@import", .{ .param_count = 1 } },
+        \\        .{ "@not_curated", .{ .param_count = 0 } },
+        \\        .{ "not_builtin", .{ .param_count = 0 } },
+        \\        .{ "@bad-name", .{ .param_count = 0 } },
+        \\    });
+        \\};
+    ;
+    const missing = try buildBuiltinIndexInput(allocator, "0.16.0", null, missing_source);
+    defer deinitBuiltinIndexInput(missing, allocator);
+    try std.testing.expectEqualStrings("curated_entries_missing_from_active_builtin_source", missing.drift.?.status);
+    try std.testing.expect(missing.drift.?.curated_missing_count > 0);
+    try std.testing.expectEqual(@as(usize, 1), missing.drift.?.active_extra_count);
+}
+
+test "std source search and item lookup parse declarations docs and ranking" {
+    const allocator = std.testing.allocator;
+    const files = [_]TextFile{
+        .{
+            .path = "mem.zig",
+            .source_path = "/zig/lib/std/mem.zig",
+            .bytes =
+            \\/// Allocator docs
+            \\/// second line
+            \\pub fn Allocator() void {}
+            \\plain alpha text
+            \\
+            ,
+        },
+        .{
+            .path = "other.zig",
+            .bytes =
+            \\pub const alpha_value = 1;
+            \\pub extern fn Allocator() void;
+            \\pub inline fn helper() void {}
+            \\
+            ,
+        },
+    };
+
+    var search = try stdSearch(allocator, "/zig/lib/std", "alpha", files[0..], .{ .files_scanned = 2, .skipped_files = 1, .walk_errors = 1 }, 1);
+    defer search.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), search.total_match_count);
+    try std.testing.expectEqual(@as(usize, 1), search.matches.len);
+    try std.testing.expectEqualStrings("mem.zig", search.matches[0].path);
+    try std.testing.expectEqualStrings("source_line", search.matches[0].match_kind);
+    try std.testing.expectEqual(@as(usize, 1), search.metadata.skipped_files);
+
+    var decl_search = try stdSearch(allocator, "/zig/lib/std", "alpha_value", files[0..], .{}, 4);
+    defer decl_search.deinit(allocator);
+    try std.testing.expectEqualStrings("const", decl_search.matches[0].match_kind);
+    try std.testing.expectEqualStrings("std.other.alpha_value", decl_search.matches[0].qualified_name.?);
+
+    var item = try stdItem(allocator, "/zig/lib/std", "std.mem.Allocator", files[0..], .{}, 1);
+    defer item.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), item.total_match_count);
+    try std.testing.expectEqualStrings("mem.zig", item.matches[0].path);
+    try std.testing.expect(item.matches[0].preferred_path);
+    try std.testing.expectEqual(@as(usize, 2), item.matches[0].doc_comment_count);
+    try std.testing.expectEqualStrings("std.mem.Allocator", item.matches[0].qualified_name);
+
+    var empty_item = try stdItem(allocator, "/zig/lib/std", "   ", files[0..], .{}, 0);
+    defer empty_item.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), empty_item.total_match_count);
+    try std.testing.expect(empty_item.qualified_path_hint == null);
+}
+
+test "langref bundled and installed indexes handle headings anchors and snippets" {
+    const allocator = std.testing.allocator;
+
+    try std.testing.expect(!looksLikeLangref("docs/index.html", "Zig Language Reference"));
+    try std.testing.expect(looksLikeLangref("langref.html", "Zig"));
+    try std.testing.expect(looksLikeLangref("anything.html", "Language Reference"));
+    try std.testing.expect(!looksLikeLangref("readme.html", "plain"));
+    try std.testing.expectEqual(@as(usize, 5), (LangrefProbe{ .rejected_candidates = 2, .unreadable_candidates = 3 }).skippedCandidates());
+
+    var bundled = try langrefBundled(allocator, "sentinel-terminated", 2, .{
+        .installed_doc_available = true,
+        .candidate_count = 3,
+        .skipped_candidate_count = 2,
+        .rejected_candidate_count = 1,
+        .unreadable_candidate_count = 1,
+        .parse_failure_count = 1,
+        .fallback_reason = "parse_failed",
+    });
+    defer bundled.deinit(allocator);
+    try std.testing.expectEqualStrings("bundled_curated_langref_index", bundled.metadata.strategy);
+    try std.testing.expect(bundled.matches.len >= 1);
+    try std.testing.expectEqualStrings("body", bundled.matches[0].match_pass);
+
+    const html =
+        \\<html><body>
+        \\<hr>
+        \\<h2></h2><p>skip docs</p>
+        \\<h2 id="Pointers">Pointers</h2><p>Pointer docs &lt;data&gt;. More text.</p>
+        \\<h3><a href="#Slices">Slices</a></h3><p>Slice docs after the first match.</p>
+        \\<h4 name='Errors'>Errors</h4><p>No query here.</p>
+        \\</body></html>
+    ;
+    var installed = try langrefInstalled(allocator, "/zig/doc/langref.html", html, "docs", 1, .{ .candidates_checked = 4, .rejected_candidates = 1, .unreadable_candidates = 1 });
+    defer installed.deinit(allocator);
+    try std.testing.expectEqualStrings("installed_html_heading_scan", installed.metadata.strategy);
+    try std.testing.expectEqual(@as(usize, 4), installed.metadata.heading_count);
+    try std.testing.expectEqual(@as(usize, 1), installed.metadata.skipped_heading_count);
+    try std.testing.expectEqual(@as(usize, 1), installed.matches.len);
+    try std.testing.expectEqualStrings("Pointers", installed.matches[0].anchor);
+    try std.testing.expect(std.mem.indexOf(u8, installed.matches[0].snippet.?, "<data>") != null);
+
+    const no_hit = snippetForQuery("prefix body", "prefix body", "absent");
+    try std.testing.expectEqualStrings("prefix body", no_hit);
+    try std.testing.expect(attrValue("id = bad", "id") == null);
+    try std.testing.expect(attrValue("id = \"ok\"", "id") != null);
+    try std.testing.expect(anchorHrefFragment("href='plain'") == null);
+}
+
+test "workspace docs index query autodoc ingest and command checks cover edge cases" {
+    const allocator = std.testing.allocator;
+    const docs_files = [_]TextFile{
+        .{ .path = "README.md", .bytes = "# Title\nNeedle in readme\n" },
+        .{ .path = "docs/guide.md", .bytes = "plain guide\n" },
+        .{ .path = "src/lib.zig", .bytes = "pub fn needle() void {}\n" },
+        .{ .path = ".hidden.md", .bytes = "Needle hidden\n" },
+        .{ .path = "zig-cache/tmp.zig", .bytes = "Needle cache\n" },
+        .{ .path = "zig-out/tmp.zig", .bytes = "Needle out\n" },
+    };
+
+    var index = try docsIndex(allocator, "docs", docs_files[0..], 2, 10);
+    defer index.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), index.files_scanned);
+    try std.testing.expectEqualStrings("# Title", index.entries[0].first_heading.?);
+    try std.testing.expect(index.entries[1].first_heading == null);
+
+    var query = try docsQuery(allocator, "needle", "all", docs_files[0..], "autodoc needle", 1, 2);
+    defer query.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), query.matches.len);
+    try std.testing.expectEqualStrings("workspace_text", query.matches[0].source_family);
+
+    var autodoc_query = try docsQuery(allocator, "autodoc", "src", docs_files[0..], "autodoc needle", 0, 4);
+    defer autodoc_query.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), autodoc_query.matches.len);
+    try std.testing.expectEqualStrings("inline_autodoc", autodoc_query.matches[0].path);
+
+    try std.testing.expect(isDocsScopePath("docs", "README.md"));
+    try std.testing.expect(!isDocsScopePath("docs", "src/lib.zig"));
+    try std.testing.expect(isDocsScopePath("src", "src/lib.zig"));
+    try std.testing.expect(isDocsScopePath("all", "docs/guide.md"));
+    try std.testing.expect(!isDocsScopePath("default", ".zig-cache/file.zig"));
+
+    var json_ingest = try autodocIngest(allocator, "autodoc_json", "autodoc.json",
+        \\{"children":[{"name":"Thing","path":"src/lib.zig","doc":"Thing docs"},{"docs":"extra"}]}
+    , 4);
+    defer json_ingest.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), json_ingest.entries.len);
+    try std.testing.expectEqualStrings("Thing", json_ingest.entries[0].name.?);
+    try std.testing.expectEqualStrings("Thing docs", json_ingest.entries[0].docs.?);
+
+    var text_ingest = try autodocIngest(allocator, "autodoc_text", null,
+        \\first line
+        \\
+        \\second line that is deliberately long enough to be truncated by the short string helper when called directly below
+    , 2);
+    defer text_ingest.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), text_ingest.entries.len);
+    const shortened = try shortString(allocator, "  abcdef  ", 3);
+    defer allocator.free(shortened);
+    try std.testing.expectEqualStrings("abc...", shortened);
+
+    var examples = try docExampleCheck(allocator, "readme", "README.md",
+        \\```zig
+        \\pub fn ok() void {}
+        \\```
+        \\```text
+        \\not zig
+        \\```
+        \\```zig,no_run
+        \\pub fn bad( void {}
+        \\```
+    , 4);
+    defer examples.deinit(allocator);
+    try std.testing.expect(!examples.ok);
+    try std.testing.expectEqual(@as(usize, 2), examples.snippets.len);
+
+    var commands = try readmeCommandCheck(allocator, "readme", "README.md",
+        \\zig version
+        \\```sh
+        \\zig build test
+        \\echo ignored
+        \\```
+        \\```console
+        \\zig fmt src/main.zig
+        \\```
+    , 3);
+    defer commands.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), commands.commands.len);
+    try std.testing.expectEqualStrings("zig_command", commands.commands[0].classification);
+    try std.testing.expectEqualStrings("zig_validation_command", commands.commands[1].classification);
+}
+
+test "docs index domain covers parser sort and documentation edge cases" {
+    const allocator = std.testing.allocator;
+    const files = [_]TextFile{
+        .{ .path = "same.zig", .bytes = "pub const Needle = 1;\n" },
+        .{
+            .path = "same.zig",
+            .bytes =
+            \\intro
+            \\pub const Needle = 2;
+            ,
+        },
+        .{
+            .path = "mem.zig",
+            .bytes =
+            \\/// first doc
+            \\/// second doc
+            \\pub fn Allocator() void {}
+            ,
+        },
+    };
+    var search = try stdSearch(allocator, "/zig/lib/std", "Needle", files[0..], .{}, 4);
+    defer search.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), search.matches[0].line);
+    try std.testing.expectEqual(@as(usize, 2), search.matches[1].line);
+
+    var docs_search = try stdSearch(allocator, "/zig/lib/std", "Allocator", files[0..], .{}, 4);
+    defer docs_search.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), docs_search.matches[0].doc_comment_count);
+    try std.testing.expectEqualStrings("first doc\nsecond doc", docs_search.matches[0].doc_comments);
+
+    const html =
+        \\<h2 id="Unknown">Unknown &bogus; entity</h2>
+        \\<p>Text with query inside a sentence. Tail.</p>
+    ;
+    var installed = try langrefInstalled(allocator, "/zig/doc/langref.html", html, "query", 2, .{});
+    defer installed.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), installed.matches.len);
+
+    const lower = try asciiLowerAlloc(allocator, "One. Two query words. Three.");
+    defer allocator.free(lower);
+    try std.testing.expectEqualStrings(" Two query words.", snippetForQuery("One. Two query words. Three.", lower, "query"));
+    try std.testing.expect(consumeEntity("&bogus;") == null);
+
+    const commented =
+        \\/// first
+        \\/// second
+        \\pub fn Thing() void {}
+    ;
+    const decl_index = std.mem.indexOf(u8, commented, "Thing").?;
+    const comments = try docCommentsBefore(allocator, commented, decl_index);
+    defer allocator.free(comments);
+    try std.testing.expectEqualStrings("first\nsecond", comments);
+
+    var fail_index: usize = 0;
+    while (fail_index < 8) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        if (docCommentsBefore(failing.allocator(), commented, decl_index)) |owned| {
+            failing.allocator().free(owned);
+        } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+    }
+}
+
+test "docs index domain cleans partial allocations on builder failures" {
+    const builtin_source =
+        \\pub const list = list: {
+        \\    break :list std.StaticStringMap(BuiltinFn).initComptime([_]struct { []const u8, BuiltinFn }{
+        \\        .{ "@import", .{ .param_count = 1 } },
+        \\        .{ "@not_curated", .{ .param_count = 0 } },
+        \\    });
+        \\};
+    ;
+    const std_files = [_]TextFile{
+        .{
+            .path = "mem.zig",
+            .bytes =
+            \\/// Allocator docs
+            \\pub fn Allocator() void {}
+            \\pub const needle = 1;
+            ,
+        },
+        .{ .path = "other.zig", .bytes = "pub const needle = 2;\n" },
+    };
+    const docs_files = [_]TextFile{
+        .{ .path = "README.md", .bytes = "# Title\nneedle\n" },
+        .{ .path = "src/lib.zig", .bytes = "pub fn needle() void {}\n" },
+    };
+    const html =
+        \\<h2 id="Needle">Needle</h2>
+        \\<p>Needle docs &amp; details.</p>
+    ;
+    const fenced =
+        \\```zig
+        \\pub fn ok() void {}
+        \\```
+    ;
+    const shell =
+        \\```sh
+        \\zig build test
+        \\```
+    ;
+
+    var fail_index: usize = 0;
+    while (fail_index < 128) : (fail_index += 1) {
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (builtinDoc(allocator, "import", 2, .{})) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (buildBuiltinIndexInput(allocator, "0.16.0", "/zig/std/zig/BuiltinFn.zig", builtin_source)) |input| {
+                deinitBuiltinIndexInput(input, allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (stdSearch(allocator, "/zig/lib/std", "needle", std_files[0..], .{}, 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (stdItem(allocator, "/zig/lib/std", "std.mem.Allocator", std_files[0..], .{}, 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (langrefBundled(allocator, "pointer", 2, .{})) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (langrefInstalled(allocator, "/zig/doc/langref.html", html, "needle", 2, .{})) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (docsIndex(allocator, "all", docs_files[0..], 0, 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (docsQuery(allocator, "needle", "all", docs_files[0..], "needle autodoc", 0, 3)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (autodocIngest(allocator, "autodoc_json", "autodoc.json", "{\"name\":\"Needle\",\"docs\":\"Docs\"}", 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (docExampleCheck(allocator, "readme", "README.md", fenced, 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (readmeCommandCheck(allocator, "readme", "README.md", shell, 2)) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+            }
+        }
+    }
 }

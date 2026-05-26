@@ -196,3 +196,7 @@ pub const zigar_backend_evidence_pack = tool(.{
     .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace artifact write; reads existing conformance evidence and writes a compact pack only when apply=true." },
 });
+
+test "environment profile definitions expose setup metadata" {
+    try @import("std").testing.expect(zigar_setup_elicit.description.len > 0);
+}

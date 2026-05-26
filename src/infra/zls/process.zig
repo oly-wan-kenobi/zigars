@@ -145,6 +145,33 @@ test "ZlsProcess max restart count logic" {
     try std.testing.expectEqual(@as(u32, 3), proc.restart_count);
 }
 
+test "ZlsProcess restart records failed spawn attempts" {
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var proc = ZlsProcess.init(alloc, io, ".", "/nonexistent-zls-binary");
+    defer proc.deinit();
+    proc.max_restarts = 1;
+
+    const can_restart = try proc.restart();
+    try std.testing.expect(!can_restart);
+    try std.testing.expectEqual(@as(u32, 1), proc.restart_count);
+}
+
+test "ZlsProcess restart succeeds for a spawnable process" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var proc = ZlsProcess.init(alloc, io, ".", "/bin/sh");
+    defer proc.deinit();
+    proc.max_restarts = 1;
+
+    const can_restart = try proc.restart();
+    try std.testing.expect(can_restart);
+    try std.testing.expect(proc.isAlive());
+    try std.testing.expectEqual(@as(u32, 1), proc.restart_count);
+}
+
 /// Find ZLS binary. Checks: explicit path, PATH lookup, common locations.
 pub fn findZls(allocator: std.mem.Allocator, io: std.Io, environ: ?*const std.process.Environ.Map) ![]const u8 {
     // Try PATH first

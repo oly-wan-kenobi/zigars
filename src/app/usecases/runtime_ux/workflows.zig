@@ -925,3 +925,451 @@ fn errorKind(err: anyerror) []const u8 {
         else => "execution_failed",
     };
 }
+
+const test_fakes = @import("../../../testing/fakes/root.zig");
+
+const NonOwningCatalog = struct {
+    text_value: []const u8,
+    calls: usize = 0,
+
+    fn port(self: *NonOwningCatalog) ports.ToolCatalog {
+        return .{
+            .ptr = self,
+            .vtable = &.{ .text = text },
+        };
+    }
+
+    fn text(ptr: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ToolCatalogText {
+        const self: *NonOwningCatalog = @ptrCast(@alignCast(ptr));
+        self.calls += 1;
+        return .{ .text = self.text_value, .owns_text = false };
+    }
+};
+
+fn runtimeUxTestContext(
+    command_runner: *test_fakes.FakeCommandRunner,
+    workspace_store: *test_fakes.FakeWorkspaceStore,
+    workspace_scanner: *test_fakes.FakeWorkspaceScanner,
+    runtime_session: *test_fakes.FakeRuntimeSession,
+    tool_catalog: ?ports.ToolCatalog,
+) app_context.RuntimeUxContext {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls", .zwanzig = "/bin/zwanzig", .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
+        .timeouts = .{ .command_ms = 1000, .zls_ms = 2000 },
+        .zls_state = .{ .status = "connected", .initialize_response = "{}", .last_failure = "old failure", .restart_attempts = 2 },
+        .command_runner = command_runner.port(),
+        .workspace_store = workspace_store.port(),
+        .workspace_scanner = workspace_scanner.port(),
+        .runtime_session = runtime_session.port(),
+        .tool_catalog = tool_catalog,
+    };
+}
+
+fn expectRuntimeWorkspaceMapExists(workspace: *test_fakes.FakeWorkspaceStore) !void {
+    try workspace.expectExists(.{ .path = "build.zig", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
+    try workspace.expectExists(.{ .path = "build.zig.zon", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
+    try workspace.expectExists(.{ .path = "src", .provenance = "runtime_ux.workspace_map" }, .{ .exists = false });
+}
+
+fn seedRuntimeJob(session: *test_fakes.FakeRuntimeSession) !void {
+    const port = session.port();
+    try port.ensureDefaultRoot("/repo");
+    const job = try port.startJob("seed", "/bin/zig build", 1000);
+    _ = try port.finishJob(job.id, .{
+        .status = .completed,
+        .ok = true,
+        .duration_ms = 9,
+        .term = "exited",
+        .exit_code = 0,
+        .stdout_tail = "ok\n",
+        .stderr_tail = "",
+        .stdout_truncated = false,
+        .stderr_truncated = false,
+    });
+}
+
+test "runtime UX covers resource variants and non owning catalog text" {
+    var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var session = test_fakes.FakeRuntimeSession{};
+    defer session.deinit(std.testing.allocator);
+    var catalog = NonOwningCatalog{ .text_value = "catalog text" };
+    const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+
+    try workspace.expectResolve(.{ .path = "src/main.zig", .provenance = "runtime_ux.run_plan" }, "/repo/src/main.zig");
+    try commands.expectRun(.{
+        .argv = &.{ "/bin/zig", "test", "src/main.zig", "--summary", "all" },
+        .cwd = "/repo",
+        .timeout_ms = 123,
+        .provenance = "zigar_job_start",
+    }, .{ .exit_code = 0, .term = .{ .exited = 0 }, .stdout = "test ok\n", .stderr = "", .duration_ms = 5 });
+
+    try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
+        \\const std = @import("std");
+        \\pub fn main() void {}
+    );
+    try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
+        \\const std = @import("std");
+        \\pub fn main() void {}
+    );
+    try expectRuntimeWorkspaceMapExists(&workspace);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const run = try runJobValue(allocator, context, .{
+        .tool_name = "zigar_job_start",
+        .command = "test",
+        .file = "src/main.zig",
+        .extra_args = &.{ "--summary", "all" },
+        .timeout_ms = 123,
+    });
+    try std.testing.expect(run.object.get("ok").?.bool);
+
+    const symbols = try dynamicResourceValue(allocator, context, "zigar://file/src/main.zig/symbols");
+    try std.testing.expectEqualStrings("symbols", symbols.object.get("resource_kind").?.string);
+
+    const diagnostics = try resourceQueryValue(allocator, context, .{ .uri = "zigar://file/src/main.zig/diagnostics" });
+    try std.testing.expectEqualStrings("diagnostics", diagnostics.object.get("resource_kind").?.string);
+
+    const empty_roots = try rootsSyncValue(allocator, context, "", false);
+    try std.testing.expectEqual(@as(usize, 1), empty_roots.object.get("preview_roots").?.array.items.len);
+
+    const map = try workspaceMapResultValue(allocator, context, "zigar_workspace_map", "zigar://workspace/roots");
+    try std.testing.expectEqualStrings("zigar://workspace/roots", map.object.get("uri").?.string);
+
+    const catalog_text = try catalogResourceText(allocator, context);
+    try std.testing.expectEqualStrings("catalog text", catalog_text);
+    try std.testing.expectEqual(@as(usize, 1), catalog.calls);
+
+    const subscribed = try resourceSubscribeValue(allocator, context, "zigar://jobs");
+    const sub_uri = subscribed.object.get("subscription").?.object.get("uri").?.string;
+    const unsubscribed = try resourceUnsubscribeValue(allocator, context, null, sub_uri);
+    try std.testing.expect(!unsubscribed.object.get("subscription").?.object.get("active").?.bool);
+
+    const cancel_status = try cancelStatusValue(allocator, context, "job-1");
+    try std.testing.expectEqual(@as(i64, 1), cancel_status.object.get("job_count").?.integer);
+
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "runtime UX private helpers classify analysis and error kinds" {
+    try std.testing.expectEqual(error.OutOfMemory, analysisError(error.OutOfMemory));
+    try std.testing.expectEqual(error.InvalidArguments, analysisError(error.SyntaxError));
+    try std.testing.expectEqualStrings("timeout", errorKind(error.Timeout));
+    try std.testing.expectEqualStrings("not_found", errorKind(error.FileNotFound));
+    try std.testing.expectEqualStrings("permission", errorKind(error.AccessDenied));
+    try std.testing.expectEqualStrings("workspace_path", errorKind(error.PathOutsideWorkspace));
+    try std.testing.expectEqualStrings("invalid_data", errorKind(error.InvalidRequest));
+    try std.testing.expectEqualStrings("execution_failed", errorKind(error.UnexpectedCall));
+}
+
+test "runtime UX value builders clean partial objects on allocation failure" {
+    const source =
+        \\const std = @import("std");
+        \\pub fn main() void {}
+    ;
+    const def = WorkflowDef{
+        .name = "wf",
+        .title = "Workflow",
+        .prompt = "prompt",
+        .tools = &.{ "zig", "build" },
+    };
+
+    var fail_index: usize = 0;
+    while (fail_index < 64) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const allocator = failing.allocator();
+
+        if (agentGuideV2Value(allocator, "codex", "fix")) |_| {} else |err| try expectRuntimeOom(err);
+        if (clientGuideValue(allocator, "mcp", "discover")) |_| {} else |err| try expectRuntimeOom(err);
+        if (promptPackValue(allocator, null, "standard")) |_| {} else |err| try expectRuntimeOom(err);
+        if (workflowValue(allocator, def)) |_| {} else |err| try expectRuntimeOom(err);
+        if (workflowContractValue(allocator, "input", "evidence", "medium", "limit", "closed", "stop", &.{"tool"})) |_| {} else |err| try expectRuntimeOom(err);
+        if (diagnosticsResourceValue(allocator, "src/main.zig")) |_| {} else |err| try expectRuntimeOom(err);
+        if (astDeclSummaryJson(allocator, "src/main.zig", source)) |_| {} else |err| try expectRuntimeOom(err);
+        if (astImportsJson(allocator, "src/main.zig", source)) |_| {} else |err| try expectRuntimeOom(err);
+        if (backendCacheValue(allocator, .{ .zig = true, .zls = true, .zlint = true })) |_| {} else |err| try expectRuntimeOom(err);
+        if (cachedProbeValue(allocator, true)) |_| {} else |err| try expectRuntimeOom(err);
+        if (analysisCacheStatusValue(allocator, .{ .cached = true, .signature = 0xabc, .hits = 1, .refreshes = 2 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (rootsPreviewValue(allocator, "", "/repo")) |_| {} else |err| try expectRuntimeOom(err);
+    }
+}
+
+test "runtime UX context values clean partial objects on allocation failure" {
+    var fail_index: usize = 0;
+    while (fail_index < 96) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const allocator = failing.allocator();
+
+        var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+        defer commands.deinit();
+        var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+        defer workspace.deinit();
+        var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+        defer scanner.deinit();
+        var session = test_fakes.FakeRuntimeSession{};
+        defer session.deinit(std.testing.allocator);
+        var catalog = NonOwningCatalog{ .text_value = "catalog" };
+        var context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+        var command_calls: u64 = 1;
+        var zls_requests: u64 = 2;
+        var tool_errors: u64 = 3;
+        context.counters.command_calls = &command_calls;
+        context.counters.zls_requests = &zls_requests;
+        context.counters.tool_errors = &tool_errors;
+        context.caches.backend_probe.zig = true;
+        context.caches.backend_probe.zls = true;
+        context.caches.analysis = .{ .cached = true, .signature = 0x123, .hits = 2, .refreshes = 1 };
+
+        try seedRuntimeJob(&session);
+        _ = try context.runtime_session.subscribe("zigar://jobs");
+
+        try commands.expectRun(.{
+            .argv = &.{ "/bin/zig", "build" },
+            .cwd = "/repo",
+            .timeout_ms = 1000,
+            .provenance = "zigar_job_start",
+        }, .{ .exit_code = 0, .term = .{ .exited = 0 }, .stdout = "ok\n", .stderr = "", .duration_ms = 4 });
+        try commands.expectRunError(.{
+            .argv = &.{ "/bin/zig", "build" },
+            .cwd = "/repo",
+            .timeout_ms = 1000,
+            .provenance = "zigar_run_stream",
+        }, error.RequestTimeout);
+        try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
+            \\const std = @import("std");
+            \\pub fn main() void {}
+        );
+        try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
+            \\const std = @import("std");
+            \\pub fn main() void {}
+        );
+        try expectRuntimeWorkspaceMapExists(&workspace);
+        try expectRuntimeWorkspaceMapExists(&workspace);
+        try expectRuntimeWorkspaceMapExists(&workspace);
+
+        if (runJobValue(allocator, context, .{ .tool_name = "zigar_job_start", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
+        if (runJobValue(allocator, context, .{ .tool_name = "zigar_run_stream", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
+        if (jobStatusValue(allocator, context, "job-1")) |_| {} else |err| try expectRuntimeOom(err);
+        if (jobResultValue(allocator, context, .{ .job_id = "job-1", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (jobCancelValue(allocator, context, "job-1", "stop")) |_| {} else |err| try expectRuntimeOom(err);
+        if (cancelStatusValue(allocator, context, null)) |_| {} else |err| try expectRuntimeOom(err);
+        if (runEventsValue(allocator, context, .{ .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://run/events", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceSubscribeValue(allocator, context, "zigar://run/events")) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceUnsubscribeValue(allocator, context, null, "zigar://jobs")) |_| {} else |err| try expectRuntimeOom(err);
+        if (rootsSyncValue(allocator, context, "file:///repo\n/tmp/alt", false)) |_| {} else |err| try expectRuntimeOom(err);
+        if (workspaceMapResultValue(allocator, context, "zigar_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
+        if (workspaceSelectValue(allocator, context, "/repo", true)) |_| {} else |err| try expectRuntimeOom(err);
+        if (zlsStatusResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
+        if (metricsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
+        if (jobsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
+        if (runEventsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
+        if (workspaceRootsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
+        if (dynamicResourceValue(allocator, context, "zigar://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
+    }
+
+    var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var session = test_fakes.FakeRuntimeSession{};
+    defer session.deinit(std.testing.allocator);
+    var catalog = NonOwningCatalog{ .text_value = "catalog" };
+    const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+    try std.testing.expectError(error.InvalidArguments, resourceQueryValue(std.testing.allocator, context, .{ .uri = "zigar://unknown" }));
+}
+
+test "runtime UX remaining builders cover late allocation cleanup" {
+    const source =
+        \\const std = @import("std");
+        \\pub fn main() void {}
+    ;
+
+    var fail_index: usize = 0;
+    while (fail_index < 128) : (fail_index += 1) {
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            if (astDeclSummaryJson(failing.allocator(), "src/main.zig", source)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            if (astImportsJson(failing.allocator(), "src/main.zig", source)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try expectRuntimeWorkspaceMapExists(&workspace);
+            if (rootsSyncValue(failing.allocator(), context, "file:///repo\n/tmp/alt", false)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try seedRuntimeJob(&session);
+            if (jobsResourceValue(failing.allocator(), context)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try seedRuntimeJob(&session);
+            if (runEventsResourceValue(failing.allocator(), context)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            if (workspaceRootsResourceValue(failing.allocator(), context)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" }, source);
+            if (dynamicResourceValue(failing.allocator(), context, "zigar://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" }, source);
+            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigar://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try expectRuntimeWorkspaceMapExists(&workspace);
+            if (workspaceMapResultValue(failing.allocator(), context, "zigar_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            try seedRuntimeJob(&session);
+            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigar://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        }
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer commands.deinit();
+            var workspace = test_fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var scanner = test_fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+            defer scanner.deinit();
+            var session = test_fakes.FakeRuntimeSession{};
+            defer session.deinit(std.testing.allocator);
+            var catalog = NonOwningCatalog{ .text_value = "catalog" };
+            const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
+            if (resourceSubscribeValue(failing.allocator(), context, "zigar://jobs")) |_| {} else |err| try expectRuntimeOom(err);
+        }
+    }
+}
+
+fn expectRuntimeOom(err: anyerror) !void {
+    try std.testing.expectEqual(error.OutOfMemory, err);
+}

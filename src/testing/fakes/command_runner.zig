@@ -90,11 +90,13 @@ pub const FakeCommandRunner = struct {
 
     pub fn expectRunError(self: *Self, request: ports.CommandRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         try self.expected_runs.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn calls(self: *const Self) []const ports.CommandRequest {
@@ -248,4 +250,35 @@ test "command runner fails unexpected calls" {
     try std.testing.expectError(error.UnexpectedCall, fake.port().run(std.testing.allocator, .{
         .argv = &.{ "zig", "build", "test" },
     }));
+}
+
+test "command runner expected runs clean partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, expectCommandRunsWithAllocator, .{});
+}
+
+fn expectCommandRunsWithAllocator(allocator: Allocator) !void {
+    var fake = FakeCommandRunner.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectRun(.{
+        .argv = &.{ "zig", "build", "test" },
+        .cwd = "/repo",
+        .timeout_ms = 30_000,
+        .max_stdout_bytes = 1024,
+        .max_stderr_bytes = 2048,
+        .provenance = "fake-command",
+    }, .{
+        .exit_code = 0,
+        .stdout = "ok\n",
+        .stderr = "warn\n",
+        .duration_ms = 42,
+        .provenance = "runner",
+    });
+
+    try fake.expectRunError(.{
+        .argv = &.{ "zig", "build", "smoke" },
+        .cwd = "/repo",
+        .timeout_ms = 10_000,
+        .provenance = "fake-error",
+    }, error.Timeout);
 }

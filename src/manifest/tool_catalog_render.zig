@@ -17,7 +17,8 @@ const ToolEntry = aggregate.ToolEntry;
 
 pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     var catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
-    errdefer catalog.deinit();
+    var catalog_owned = true;
+    defer if (catalog_owned) catalog.deinit();
 
     if (catalog.value != .object) return error.InvalidCatalog;
     const catalog_allocator = catalog.arena.allocator();
@@ -30,6 +31,7 @@ pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     try obj.put(catalog_allocator, "backend_setup", try backendSetupValue(catalog_allocator, .{}, false));
     try obj.put(catalog_allocator, "registered_tool_count", .{ .integer = @intCast(aggregate.specs.len) });
     try obj.put(catalog_allocator, "registry_tool_schema_source", .{ .string = "generated from src/manifest/mod.zig" });
+    catalog_owned = false;
     return catalog;
 }
 
@@ -42,29 +44,35 @@ pub fn text(allocator: std.mem.Allocator) ![]u8 {
 
 pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     for (aggregate.specs) |spec| {
         if (spec.input_schema.fields.len == 0) continue;
         try obj.put(allocator, spec.name, try toolArgumentValue(allocator, spec));
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     for (aggregate.entries) |entry| {
         try obj.put(allocator, entry.name, try planningValue(allocator, entry));
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     for (analysis_contract.contracts) |contract| {
         var item = std.json.ObjectMap.empty;
-        errdefer item.deinit(allocator);
+        var item_owned = true;
+        defer if (item_owned) item.deinit(allocator);
         try item.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
         try item.put(allocator, "capability_tier", .{ .string = analysis_contract.capabilityTierName(contract.tier) });
         try item.put(allocator, "confidence", .{ .string = analysis_contract.confidenceName(contract.confidence) });
@@ -74,26 +82,33 @@ pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Valu
         try item.put(allocator, "verify_with", try stringArrayValue(allocator, contract.verify_with));
         if (contract.verify_with.len > 0) try item.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
         try obj.put(allocator, contract.tool, .{ .object = item });
+        item_owned = false;
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn backendSetupValue(allocator: std.mem.Allocator, paths: backend_catalog.Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_setup_catalog" });
     try obj.put(allocator, "supported_zig_version", .{ .string = backend_catalog.supported_zig_version });
     try obj.put(allocator, "packaging_model", .{ .string = "zigar ships backend metadata and probes; optional backends remain external executables pinned by each project or CI image" });
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (backend_catalog.backends) |backend| try array.append(try backendValue(allocator, backend, paths, include_configured_paths));
     try obj.put(allocator, "backends", .{ .array = array });
+    obj_owned = false;
+    array_owned = false;
     return .{ .object = obj };
 }
 
 fn backendValue(allocator: std.mem.Allocator, backend: backend_catalog.Backend, paths: backend_catalog.Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     const configured_path = backendPathFor(backend.name, paths);
     try obj.put(allocator, "name", .{ .string = backend.name });
     try obj.put(allocator, "optional", .{ .bool = backend.optional });
@@ -106,6 +121,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: backend_catalog.Backend, 
     try obj.put(allocator, "tools", try stringArrayValue(allocator, backend.tools));
     try obj.put(allocator, "probe_argv", try probeArgvValue(allocator, backend.probe_argv, configured_path));
     try obj.put(allocator, "verify", try stringArrayValue(allocator, backend.verify));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -115,52 +131,63 @@ fn backendPathFor(name: []const u8, paths: backend_catalog.Paths) []const u8 {
     if (std.mem.eql(u8, name, "zlint")) return paths.zlint_path;
     if (std.mem.eql(u8, name, "zwanzig")) return paths.zwanzig_path;
     if (std.mem.eql(u8, name, "zflame")) return paths.zflame_path;
-    if (std.mem.eql(u8, name, "diff-folded")) return paths.diff_folded_path;
-    unreachable;
+    std.debug.assert(std.mem.eql(u8, name, "diff-folded"));
+    return paths.diff_folded_path;
 }
 
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (probe_argv, 0..) |item, index| {
         try array.append(.{ .string = if (index == 0) configured_path else item });
     }
+    array_owned = false;
     return .{ .array = array };
 }
 
 fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
     var groups = std.json.Array.init(allocator);
-    errdefer groups.deinit();
+    var groups_owned = true;
+    defer if (groups_owned) groups.deinit();
     for (groups_mod.group_specs) |group_spec| {
         var obj = std.json.ObjectMap.empty;
-        errdefer obj.deinit(allocator);
+        var obj_owned = true;
+        defer if (obj_owned) obj.deinit(allocator);
         try obj.put(allocator, "name", .{ .string = groupName(group_spec.group) });
         try obj.put(allocator, "tools", try groupToolsValue(allocator, group_spec.group));
         try obj.put(allocator, "keywords", try stringArrayValue(allocator, group_spec.keywords));
         try groups.append(.{ .object = obj });
+        obj_owned = false;
     }
+    groups_owned = false;
     return .{ .array = groups };
 }
 
 fn groupToolsValue(allocator: std.mem.Allocator, group: ToolGroup) !std.json.Value {
     var tools = std.json.Array.init(allocator);
-    errdefer tools.deinit();
+    var tools_owned = true;
+    defer if (tools_owned) tools.deinit();
     for (aggregate.entries) |entry| {
         if (entry.group == group) try tools.append(.{ .string = entry.name });
     }
+    tools_owned = false;
     return .{ .array = tools };
 }
 
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (values) |value| try array.append(.{ .string = value });
+    array_owned = false;
     return .{ .array = array };
 }
 
 fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "risk", try toolRiskValue(allocator, spec));
     var required = try schemaFieldsValue(allocator, spec.input_schema, true);
     var optional = try schemaFieldsValue(allocator, spec.input_schema, false);
@@ -175,6 +202,7 @@ fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Val
         optional.object.deinit(allocator);
     }
     try obj.put(allocator, "fields", try richSchemaFieldsValue(allocator, spec.input_schema));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -184,7 +212,8 @@ fn toolRiskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
 
 fn planningValue(allocator: std.mem.Allocator, entry: ToolEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = planKind(entry.plan) });
     try obj.put(allocator, "group", .{ .string = groupName(entry.group) });
     try obj.put(allocator, "exact_command", .{ .bool = commandPlanFor(entry.id) != null });
@@ -230,6 +259,7 @@ fn planningValue(allocator: std.mem.Allocator, entry: ToolEntry) !std.json.Value
             try obj.put(allocator, "reason", .{ .string = reason });
         },
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -289,7 +319,8 @@ fn riskLevel(risk: ToolRisk) []const u8 {
 fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     const risk_value = riskFor(spec.id);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "level", .{ .string = riskLevel(risk_value) });
     try obj.put(allocator, "mcp_read_only_hint", .{ .bool = readOnlyHintFor(spec) });
     try obj.put(allocator, "writes_source", .{ .bool = risk_value.writes_source });
@@ -300,6 +331,7 @@ fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
     try obj.put(allocator, "executes_project_code", .{ .bool = risk_value.executes_project_code });
     try obj.put(allocator, "executes_user_command", .{ .bool = risk_value.executes_user_command });
     try obj.put(allocator, "executes_backend", .{ .bool = risk_value.executes_backend });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -315,28 +347,33 @@ fn readOnlyHintFor(spec: ToolMeta) bool {
 
 fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, required: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     for (input_schema.fields) |field| {
         if (field[2] == required) {
             try obj.put(allocator, field[0], .{ .string = field[1] });
         }
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     for (input_schema.fields) |field| {
         try obj.put(allocator, field[0], try richSchemaFieldValue(allocator, input_schema, field));
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, field: tooling.SchemaField) !std.json.Value {
     const hint = tooling.hintFor(input_schema, field);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "type", .{ .string = field[1] });
     try obj.put(allocator, "required", .{ .bool = field[2] });
     try obj.put(allocator, "description", .{ .string = hint.description });
@@ -348,10 +385,13 @@ fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.Sche
     if (hint.maximum) |value| try obj.put(allocator, "maximum", .{ .integer = value });
     if (hint.enum_values.len > 0) {
         var values = std.json.Array.init(allocator);
-        errdefer values.deinit();
+        var values_owned = true;
+        defer if (values_owned) values.deinit();
         for (hint.enum_values) |value| try values.append(.{ .string = value });
         try obj.put(allocator, "enum", .{ .array = values });
+        values_owned = false;
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -428,6 +468,16 @@ test "manifest-generated catalog groups match typed registry groups" {
     }
 }
 
+test "catalog lookup helpers return null for unknown tools" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const parsed_catalog = try parsed(arena.allocator());
+    const groups = parsed_catalog.value.object.get("groups").?.array;
+    try std.testing.expect(find("__zigar_unknown_tool__") == null);
+    try std.testing.expect(catalogGroupForTool(groups, "__zigar_unknown_tool__") == null);
+}
+
 fn catalogGroupForTool(groups: std.json.Array, tool_name: []const u8) ?[]const u8 {
     for (groups.items) |group_value| {
         const group = group_value.object;
@@ -442,7 +492,10 @@ fn catalogGroupForTool(groups: std.json.Array, tool_name: []const u8) ?[]const u
 
 fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var writer_owned = true;
+    defer if (writer_owned) aw.deinit();
     try std.json.Stringify.value(value, .{}, &aw.writer);
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    writer_owned = false;
+    return bytes;
 }

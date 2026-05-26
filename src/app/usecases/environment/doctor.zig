@@ -85,7 +85,8 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     if (input.diff_folded_probe) |probe| try checks.append(try probeValue(allocator, "diff_folded_probe", probe));
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_doctor" });
     try obj.put(allocator, "workspace", .{ .string = input.workspace });
     try obj.put(allocator, "transport", .{ .string = input.transport });
@@ -98,6 +99,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     try obj.put(allocator, "timeout_ms", .{ .integer = input.timeout_ms });
     try obj.put(allocator, "zls_timeout_ms", .{ .integer = input.zls_timeout_ms });
     try obj.put(allocator, "checks", .{ .array = checks });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -152,4 +154,28 @@ test "doctor report includes checks" {
     try std.testing.expect(saw_zig_probe);
     try std.testing.expect(saw_zls_probe);
     try std.testing.expect(saw_tools_schema);
+}
+
+test "doctor report uses default ZLS resolution when disconnected without failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const value = try report(arena.allocator(), .{
+        .workspace = "/tmp/project",
+        .cache = "/tmp/project/.zigar-cache",
+        .transport = "stdio",
+        .zig_path = "zig",
+        .zls_path = "zls",
+        .zlint_path = "zlint",
+        .zwanzig_path = "zwanzig",
+        .zflame_path = "zflame",
+        .diff_folded_path = "diff-folded",
+        .zls_status = "not started",
+        .zls_last_failure = null,
+        .timeout_ms = 30_000,
+        .zls_timeout_ms = 30_000,
+        .mcp_dependency = "mcp.zig 0.0.4",
+        .http_available = true,
+    });
+    const checks = value.object.get("checks").?.array;
+    try std.testing.expect(checks.items.len >= 1);
 }

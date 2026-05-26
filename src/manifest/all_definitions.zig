@@ -216,3 +216,8 @@ pub const definitions = struct {
     pub const zig_flamegraph = profiling.zig_flamegraph;
     pub const zig_flamegraph_diff = profiling.zig_flamegraph_diff;
 };
+
+test "all definitions expose core tool metadata" {
+    try @import("std").testing.expect(definitions.zig_version.description.len > 0);
+    try @import("std").testing.expect(definitions.zigar_capabilities.read_only);
+}

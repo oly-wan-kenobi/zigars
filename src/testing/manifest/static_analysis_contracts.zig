@@ -34,7 +34,11 @@ test "static analysis source writes are explicit apply-gated exceptions" {
 }
 
 test "static analysis contracts do not overstate evidence maturity" {
-    for (contracts.contracts) |contract| switch (contract.tier) {
+    for (contracts.contracts) |contract| try expectContractEvidenceBounded(contract);
+}
+
+fn expectContractEvidenceBounded(contract: contracts.Contract) !void {
+    switch (contract.tier) {
         .advisory_orientation => {
             try std.testing.expect(contract.confidence != .high);
             try std.testing.expect(contract.classification != .release_gating_candidate);
@@ -74,22 +78,41 @@ test "static analysis contracts do not overstate evidence maturity" {
             try std.testing.expect(contract.verify_with.len > 0);
             try std.testing.expect(contains(contract.verify_with[0], "configured zwanzig"));
         },
-    };
+    }
 }
 
 test "release-gating static analysis claims require executable-backed evidence" {
     for (contracts.contracts) |contract| {
         if (contract.classification != .release_gating_candidate) continue;
-        switch (contract.tier) {
-            .compiler_backed, .zlint_backed, .zwanzig_backed => {},
-            else => return error.ReleaseGatingClaimWithoutExecutableEvidence,
-        }
+        try std.testing.expect(releaseGateTierAllowed(contract.tier));
         const entry = tool_manifest.findEntry(contract.tool).?;
         try std.testing.expect(entry.risk.executes_backend or entry.risk.executes_project_code);
         try std.testing.expectEqual(contracts.Confidence.high, contract.confidence);
         try std.testing.expect(contract.verify_with.len > 0);
         try std.testing.expect(contains(contract.source_coverage, "output") or contains(contract.source_coverage, "Compiler") or contains(contract.source_coverage, "ZLint") or contains(contract.source_coverage, "zwanzig"));
     }
+}
+
+fn releaseGateTierAllowed(tier: contracts.CapabilityTier) bool {
+    return switch (tier) {
+        .compiler_backed, .zlint_backed, .zwanzig_backed => true,
+        else => false,
+    };
+}
+
+test "static analysis contract checks cover unsupported helper branches" {
+    try expectContractEvidenceBounded(.{
+        .tool = "zig_hover",
+        .analysis_kind = "zls",
+        .tier = .zls_backed,
+        .confidence = .medium,
+        .classification = .advisory,
+        .source_coverage = "ZLS response",
+        .limitations = &.{"requires ZLS"},
+        .verify_with = &.{},
+    });
+    try std.testing.expect(!releaseGateTierAllowed(.advisory_orientation));
+    try std.testing.expect(!anyContains(&.{"parser"}, "ZLS"));
 }
 
 fn contains(haystack: []const u8, needle: []const u8) bool {

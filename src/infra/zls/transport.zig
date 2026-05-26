@@ -98,13 +98,12 @@ pub const LspTransport = struct {
 
             // Read exact body (drains internal buffer first, then reads directly)
             const body = try allocator.alloc(u8, len);
-            errdefer allocator.free(body);
+            var body_owned = true;
+            defer if (body_owned) allocator.free(body);
 
-            if (!try self.readExact(body)) {
-                allocator.free(body);
-                return null;
-            }
+            if (!try self.readExact(body)) return null;
 
+            body_owned = false;
             return body;
         }
     };
@@ -187,6 +186,18 @@ test "writeMessage empty body" {
     try std.testing.expectEqualStrings("Content-Length: 0\r\n\r\n", data);
 }
 
+test "readPipeAll returns when caller buffer fills" {
+    const io = testIo();
+    const p = try testPipe();
+    defer p.read_end.close(io);
+    defer p.write_end.close(io);
+
+    try p.write_end.writeStreamingAll(io, "abcd");
+    var buf: [4]u8 = undefined;
+    const data = try readPipeAll(p.read_end, io, &buf);
+    try std.testing.expectEqualStrings("abcd", data);
+}
+
 test "Reader parses single message" {
     const alloc = std.testing.allocator;
     const io = testIo();
@@ -230,6 +241,25 @@ test "Reader parses multiple sequential messages" {
     try std.testing.expect(try reader.readMessage(alloc) == null);
 }
 
+test "Reader parses a body larger than the buffered header read-ahead" {
+    const alloc = std.testing.allocator;
+    const io = testIo();
+    const p = try testPipe();
+    defer p.read_end.close(io);
+
+    const body = try alloc.alloc(u8, 9000);
+    defer alloc.free(body);
+    @memset(body, 'x');
+    try LspTransport.writeMessage(p.write_end, io, body);
+    p.write_end.close(io);
+
+    var reader = LspTransport.Reader.init(p.read_end, io);
+    const msg = (try reader.readMessage(alloc)).?;
+    defer alloc.free(msg);
+    try std.testing.expectEqual(body.len, msg.len);
+    try std.testing.expectEqual(@as(u8, 'x'), msg[8999]);
+}
+
 test "Reader returns null on empty pipe" {
     const alloc = std.testing.allocator;
     const io = testIo();
@@ -265,4 +295,17 @@ test "Reader returns error on zero Content-Length" {
 
     var reader = LspTransport.Reader.init(p.read_end, io);
     try std.testing.expectError(error.MissingContentLength, reader.readMessage(alloc));
+}
+
+test "Reader returns null for truncated message bodies" {
+    const alloc = std.testing.allocator;
+    const io = testIo();
+    const p = try testPipe();
+    defer p.read_end.close(io);
+
+    try p.write_end.writeStreamingAll(io, "Content-Length: 5\r\n\r\nhi");
+    p.write_end.close(io);
+
+    var reader = LspTransport.Reader.init(p.read_end, io);
+    try std.testing.expect(try reader.readMessage(alloc) == null);
 }

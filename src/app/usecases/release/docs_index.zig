@@ -228,7 +228,6 @@ fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDoc
     var skipped: usize = 0;
     for (scan.paths) |entry| {
         const source_path = std.fs.path.join(allocator, &.{ std_dir, entry.path }) catch return error.OutOfMemory;
-        errdefer allocator.free(source_path);
         const read = context.docs_scanner.readAbsolute(allocator, .{
             .path = source_path,
             .max_bytes = docs_domain.std_source_read_limit,
@@ -238,11 +237,23 @@ fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDoc
             skipped += 1;
             continue;
         };
+        var owned_path: ?[]u8 = null;
+        var owned_bytes: ?[]const u8 = null;
+        var committed = false;
+        errdefer if (!committed) {
+            if (owned_path) |path| allocator.free(path);
+            allocator.free(source_path);
+            if (owned_bytes) |bytes| allocator.free(bytes);
+        };
+
+        owned_path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory;
+        owned_bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory;
         try files.append(allocator, .{
-            .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory,
+            .path = owned_path.?,
             .source_path = source_path,
-            .bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory,
+            .bytes = owned_bytes.?,
         });
+        committed = true;
     }
     return .{
         .files = try files.toOwnedSlice(allocator),
@@ -276,10 +287,21 @@ fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.
             skipped += 1;
             continue;
         };
+        var owned_path: ?[]u8 = null;
+        var owned_bytes: ?[]const u8 = null;
+        var committed = false;
+        errdefer if (!committed) {
+            if (owned_path) |path| allocator.free(path);
+            if (owned_bytes) |bytes| allocator.free(bytes);
+        };
+
+        owned_path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory;
+        owned_bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory;
         try files.append(allocator, .{
-            .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory,
-            .bytes = if (read.owns_bytes) read.bytes else allocator.dupe(u8, read.bytes) catch return error.OutOfMemory,
+            .path = owned_path.?,
+            .bytes = owned_bytes.?,
         });
+        committed = true;
     }
     return .{
         .files = try files.toOwnedSlice(allocator),

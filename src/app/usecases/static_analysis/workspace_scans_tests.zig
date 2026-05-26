@@ -12,9 +12,9 @@ test "import graph scan uses scanner and workspace reads" {
 
     try fake_scanner.expectScan(.{
         .path_prefix = "",
-        .max_files = 2,
+        .max_files = 3,
         .provenance = "static_analysis.import_graph",
-    }, &.{ "src/main.zig", "src/lib.zig" });
+    }, &.{ "src/main.zig", "src/lib.zig", "src/unreadable.zig" });
     try fake_workspace.expectRead(.{
         .path = "src/main.zig",
         .max_bytes = usecase.default_source_read_limit,
@@ -25,6 +25,11 @@ test "import graph scan uses scanner and workspace reads" {
         .max_bytes = usecase.default_source_read_limit,
         .provenance = "static_analysis.import_graph",
     }, "pub fn x() void {}\n");
+    try fake_workspace.expectReadError(.{
+        .path = "src/unreadable.zig",
+        .max_bytes = usecase.default_source_read_limit,
+        .provenance = "static_analysis.import_graph",
+    }, error.AccessDenied);
 
     const ctx = app_context.StaticAnalysisContext{
         .workspace = .{ .root = "/workspace" },
@@ -32,13 +37,17 @@ test "import graph scan uses scanner and workspace reads" {
         .workspace_scanner = fake_scanner.port(),
     };
 
-    var graph = try usecase.importGraph(std.testing.allocator, ctx, .{ .limit = 2 });
+    var graph = try usecase.importGraph(std.testing.allocator, ctx, .{ .limit = 3 });
     defer graph.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), graph.files.len);
     try std.testing.expectEqual(@as(usize, 1), graph.files[0].imports.len);
     try std.testing.expectEqualStrings("std", graph.files[0].imports[0].import);
-    try std.testing.expectEqual(@as(usize, 0), graph.skipped_files.len);
+    try std.testing.expectEqual(@as(usize, 1), graph.skipped_files.len);
+    const text = try usecase.importGraphText(std.testing.allocator, graph);
+    defer std.testing.allocator.free(text);
+    try std.testing.expect(std.mem.indexOf(u8, text, "- no string-literal imports found") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Skipped unreadable files: 1") != null);
     try fake_scanner.verify();
     try fake_workspace.verify();
 }

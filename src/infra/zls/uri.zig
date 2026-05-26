@@ -143,6 +143,13 @@ test "uriToPath invalid percent encoding" {
     try std.testing.expectError(error.InvalidUri, uriToPath(allocator, "file:///a%GGb"));
 }
 
+test "uriToPath decodes lowercase percent escapes" {
+    const allocator = std.testing.allocator;
+    const path = try uriToPath(allocator, "file:///tmp/a%2fb.zig");
+    defer allocator.free(path);
+    try std.testing.expectEqualStrings("/tmp/a/b.zig", path);
+}
+
 test "pathToUri preserves allowed chars" {
     const allocator = std.testing.allocator;
     const path = "/usr/local/bin/zls-0.16.0";

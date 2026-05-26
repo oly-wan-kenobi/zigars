@@ -745,14 +745,15 @@ pub fn testFailureTriageFromWorkspaceValue(allocator: std.mem.Allocator, context
     var argv: std.ArrayList([]const u8) = .empty;
     defer argv.deinit(allocator);
     try argv.append(allocator, context.tool_paths.zig);
+    var resolved_file: ?ports.WorkspaceResolveResult = null;
+    defer if (resolved_file) |resolved| resolved.deinit(allocator);
     if (request.file) |file| {
-        const resolved = try context.workspace_store.resolve(allocator, .{
+        resolved_file = try context.workspace_store.resolve(allocator, .{
             .path = file,
             .provenance = "static_analysis.test_failure_triage",
         });
-        defer resolved.deinit(allocator);
         try argv.append(allocator, "test");
-        try argv.append(allocator, resolved.path);
+        try argv.append(allocator, resolved_file.?.path);
         if (request.filter) |filter| {
             try argv.append(allocator, "--test-filter");
             try argv.append(allocator, filter);
@@ -1569,9 +1570,9 @@ pub fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []cons
 }
 
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
+    try list.ensureUnusedCapacity(allocator, 1);
     const arg = try current.toOwnedSlice(allocator);
-    errdefer allocator.free(arg);
-    try list.append(allocator, arg);
+    list.appendAssumeCapacity(arg);
 }
 
 fn freeStringList(allocator: std.mem.Allocator, values: []const []const u8) void {

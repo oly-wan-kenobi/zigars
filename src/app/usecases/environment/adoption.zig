@@ -1,5 +1,6 @@
 const std = @import("std");
 const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 const backend_catalog = @import("backend_catalog.zig");
 
@@ -776,4 +777,266 @@ fn clientSet() []const u8 {
 
 fn backendSet() []const u8 {
     return "all, zig, zls, zlint, zwanzig, zflame, diff-folded, or diff_folded";
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+const AdoptionHarness = struct {
+    command_runner: fakes.FakeCommandRunner,
+    workspace: fakes.FakeWorkspaceStore,
+    scanner: fakes.FakeWorkspaceScanner,
+
+    fn init(allocator: std.mem.Allocator) AdoptionHarness {
+        return .{
+            .command_runner = fakes.FakeCommandRunner.init(allocator),
+            .workspace = fakes.FakeWorkspaceStore.init(allocator),
+            .scanner = fakes.FakeWorkspaceScanner.init(allocator),
+        };
+    }
+
+    fn deinit(self: *AdoptionHarness) void {
+        self.command_runner.deinit();
+        self.workspace.deinit();
+        self.scanner.deinit();
+    }
+
+    fn app(self: *AdoptionHarness, allocator: std.mem.Allocator) App {
+        return App.init(.{
+            .workspace = .{ .root = "/work", .cache_root = "/work/.zigar-cache", .transport = "http", .host = "127.0.0.1", .port = 9090 },
+            .tool_paths = .{
+                .zig = "zig-bin",
+                .zls = "zls-bin",
+                .zlint = "/definitely/missing/zlint",
+                .zwanzig = "zwanzig-bin",
+                .zflame = "zflame-bin",
+                .diff_folded = "diff-bin",
+            },
+            .timeouts = .{ .command_ms = 1000, .zls_ms = 2000 },
+            .platform = .{ .os = "windows", .arch = "x86_64", .is_windows = true },
+            .command_runner = self.command_runner.port(),
+            .workspace_store = self.workspace.port(),
+            .workspace_scanner = self.scanner.port(),
+        }, allocator);
+    }
+
+    fn verify(self: *AdoptionHarness) !void {
+        try self.command_runner.verify();
+        try self.workspace.verify();
+        try self.scanner.verify();
+    }
+};
+
+fn putStringArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: []const u8) !void {
+    try obj.put(allocator, name, .{ .string = value });
+}
+
+fn putBoolArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: bool) !void {
+    try obj.put(allocator, name, .{ .bool = value });
+}
+
+fn putIntArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: i64) !void {
+    try obj.put(allocator, name, .{ .integer = value });
+}
+
+fn expectResolveOutput(store: *fakes.FakeWorkspaceStore, path: []const u8, abs_path: []const u8) !void {
+    try store.expectResolve(.{ .path = path, .for_output = true, .provenance = "arch110-workflow-resolve-output" }, abs_path);
+}
+
+fn expectReadWorkflow(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
+    try store.expectRead(.{ .path = path, .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, bytes);
+}
+
+fn expectReadWorkflowError(store: *fakes.FakeWorkspaceStore, path: []const u8, err: ports.PortError) !void {
+    try store.expectReadError(.{ .path = path, .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, err);
+}
+
+fn expectWorkflowWrite(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
+    try store.expectWrite(.{
+        .path = path,
+        .bytes = bytes,
+        .create_parent_dirs = true,
+        .replace_existing = true,
+        .provenance = "arch110-workflow-write",
+    }, .{ .bytes_written = bytes.len });
+}
+
+test "adoption client config and smoke plans cover apply writes and timeout previews" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var harness = AdoptionHarness.init(std.testing.allocator);
+    defer harness.deinit();
+    var app = harness.app(allocator);
+    app.config.host = "127.0.0.1";
+    app.config.port = 9090;
+
+    var smoke_args = std.json.ObjectMap.empty;
+    try putIntArg(allocator, &smoke_args, "timeout_ms", 100);
+    const smoke = try zigarSmokePlan(&app, allocator, .{ .object = smoke_args });
+    try std.testing.expect(!smoke.value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("timeout_budget_too_low", smoke.value.object.get("status").?.string);
+
+    const output = ".zigar-cache/adoption/gemini-mcp.json";
+    const expected_content = try configContent(allocator, &app, "gemini", "http", "gemini-json", "zigar-bin");
+    try expectResolveOutput(&harness.workspace, output, "/work/.zigar-cache/adoption/gemini-mcp.json");
+    try expectReadWorkflowError(&harness.workspace, output, error.FileNotFound);
+    try expectWorkflowWrite(&harness.workspace, output, expected_content);
+    try expectResolveOutput(&harness.workspace, output, "/work/.zigar-cache/adoption/gemini-mcp.json");
+
+    var config_args = std.json.ObjectMap.empty;
+    try putStringArg(allocator, &config_args, "client", "gemini");
+    try putStringArg(allocator, &config_args, "transport", "http");
+    try putStringArg(allocator, &config_args, "kind", "gemini-json");
+    try putStringArg(allocator, &config_args, "server_path", "zigar-bin");
+    try putStringArg(allocator, &config_args, "output", output);
+    try putBoolArg(allocator, &config_args, "apply", true);
+    const generated = try zigarClientConfigGenerate(&app, allocator, .{ .object = config_args });
+    try std.testing.expect(generated.value.object.get("applied").?.bool);
+    try std.testing.expect(std.mem.indexOf(u8, generated.value.object.get("content").?.string, "http://127.0.0.1:9090") != null);
+
+    const markdown = try configContent(allocator, &app, "claude", "stdio", "markdown", "zigar");
+    try std.testing.expect(std.mem.indexOf(u8, markdown, "Client: claude") != null);
+    try std.testing.expectEqualStrings("windows", hostPlatformName(&app));
+    try std.testing.expectEqualStrings("claude-json", defaultKindForClient("claude"));
+    try std.testing.expectEqualStrings("gemini-json", defaultKindForClient("gemini"));
+    try std.testing.expectEqualStrings("mcp-json", defaultKindForClient("hermes"));
+    try std.testing.expectEqualStrings("mcp-json", defaultKindForClient("generic"));
+    try std.testing.expectEqualStrings(".zigar-cache/adoption/claude-mcp.json", defaultOutputForKind("claude", "claude-json"));
+    try std.testing.expectEqualStrings(".zigar-cache/adoption/gemini-mcp.json", defaultOutputForKind("gemini", "gemini-json"));
+    try std.testing.expectEqualStrings(".zigar-cache/adoption/client-config.md", defaultOutputForKind("generic", "markdown"));
+    try std.testing.expectEqualStrings(default_config_output, defaultOutputForKind("generic", "mcp-json"));
+    try std.testing.expectEqualStrings("generic, codex, claude, gemini, or hermes", clientSet());
+    try std.testing.expectEqualStrings("all, zig, zls, zlint, zwanzig, zflame, diff-folded, or diff_folded", backendSet());
+
+    try expectReadWorkflow(&harness.workspace, "existing-config.json", "{\"before\":true}");
+    const preimage = try preimageIdentityForPath(&app, allocator, "existing-config.json");
+    try std.testing.expect(preimage.object.get("exists").?.bool);
+    try std.testing.expectEqual(@as(i64, 15), preimage.object.get("bytes").?.integer);
+    try harness.verify();
+}
+
+test "adoption conformance report covers missing evidence file evidence read errors and apply writes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var missing_harness = AdoptionHarness.init(std.testing.allocator);
+    defer missing_harness.deinit();
+    var missing_app = missing_harness.app(allocator);
+    try expectReadWorkflowError(&missing_harness.workspace, default_conformance_input, error.FileNotFound);
+    try expectResolveOutput(&missing_harness.workspace, default_conformance_output, "/work/.zigar-cache/adoption/conformance-report.json");
+    try expectReadWorkflowError(&missing_harness.workspace, default_conformance_output, error.FileNotFound);
+    const missing = try zigarConformanceReport(&missing_app, allocator, null);
+    const missing_report = missing.value.object.get("report").?.object;
+    try std.testing.expect(!missing_report.get("ok").?.bool);
+    try std.testing.expectEqualStrings("missing_evidence", missing_report.get("status").?.string);
+    try std.testing.expectEqualStrings("missing", missing_report.get("source").?.object.get("report_kind").?.string);
+    try missing_harness.verify();
+
+    var read_error_harness = AdoptionHarness.init(std.testing.allocator);
+    defer read_error_harness.deinit();
+    var read_error_app = read_error_harness.app(allocator);
+    try expectReadWorkflowError(&read_error_harness.workspace, "evidence.json", error.AccessDenied);
+    var read_error_args = std.json.ObjectMap.empty;
+    try putStringArg(allocator, &read_error_args, "input", "evidence.json");
+    const read_error = try zigarConformanceReport(&read_error_app, allocator, .{ .object = read_error_args });
+    try std.testing.expect(read_error.is_error);
+    try read_error_harness.verify();
+
+    var preview_harness = AdoptionHarness.init(std.testing.allocator);
+    defer preview_harness.deinit();
+    var preview_app = preview_harness.app(allocator);
+    const evidence =
+        \\{"kind":"zigar_backend_conformance_report","backends":[{"backend":"zls","ok":true}]}
+    ;
+    try expectReadWorkflow(&preview_harness.workspace, "evidence.json", evidence);
+    try expectResolveOutput(&preview_harness.workspace, default_conformance_output, "/work/.zigar-cache/adoption/conformance-report.json");
+    try expectReadWorkflowError(&preview_harness.workspace, default_conformance_output, error.FileNotFound);
+    var preview_args = std.json.ObjectMap.empty;
+    try putStringArg(allocator, &preview_args, "backend", "zls");
+    try putStringArg(allocator, &preview_args, "input", "evidence.json");
+    const preview = try zigarConformanceReport(&preview_app, allocator, .{ .object = preview_args });
+    const content = preview.value.object.get("content").?.string;
+    try std.testing.expect(std.mem.indexOf(u8, content, "zigar_backend_conformance_report") != null);
+    try preview_harness.verify();
+
+    var apply_harness = AdoptionHarness.init(std.testing.allocator);
+    defer apply_harness.deinit();
+    var apply_app = apply_harness.app(allocator);
+    try expectReadWorkflow(&apply_harness.workspace, "evidence.json", evidence);
+    try expectResolveOutput(&apply_harness.workspace, default_conformance_output, "/work/.zigar-cache/adoption/conformance-report.json");
+    try expectReadWorkflowError(&apply_harness.workspace, default_conformance_output, error.FileNotFound);
+    try expectWorkflowWrite(&apply_harness.workspace, default_conformance_output, content);
+    try expectResolveOutput(&apply_harness.workspace, default_conformance_output, "/work/.zigar-cache/adoption/conformance-report.json");
+    var apply_args = std.json.ObjectMap.empty;
+    try putStringArg(allocator, &apply_args, "backend", "zls");
+    try putStringArg(allocator, &apply_args, "input", "evidence.json");
+    try putBoolArg(allocator, &apply_args, "apply", true);
+    const applied = try zigarConformanceReport(&apply_app, allocator, .{ .object = apply_args });
+    try std.testing.expect(applied.value.object.get("applied").?.bool);
+    try apply_harness.verify();
+
+    var oom_harness = AdoptionHarness.init(std.testing.allocator);
+    defer oom_harness.deinit();
+    var oom_app = oom_harness.app(allocator);
+    var oom_args = std.json.ObjectMap.empty;
+    try putStringArg(allocator, &oom_args, "content", "{\"ok\":true}");
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, zigarConformanceReport(&oom_app, failing.allocator(), .{ .object = oom_args }));
+    try oom_harness.verify();
+}
+
+test "adoption private claim and serialization helpers cover report shapes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_][]const u8{
+        \\{"backend":"zig","result":"pass"}
+        ,
+        \\{"compatibility_matrix":[{"name":"diff_folded","state":"conformant"}]}
+        ,
+        \\{"backends":[{"backend_name":"zls","status":"ok"}]}
+        ,
+        \\{"backends":{"zflame":{"conformant":true},"diff_folded":{"status":"failed"}}}
+        ,
+    };
+    var parsed_values: [cases.len]std.json.Parsed(std.json.Value) = undefined;
+    for (cases, 0..) |text, index| parsed_values[index] = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+    defer for (&parsed_values) |*parsed| parsed.deinit();
+
+    try std.testing.expect(observedClaim(parsed_values[0].value, "zig").claim_allowed);
+    try std.testing.expect(observedClaim(parsed_values[1].value, "diff-folded").claim_allowed);
+    try std.testing.expect(observedClaim(parsed_values[2].value, "zls").claim_allowed);
+    try std.testing.expect(observedClaim(parsed_values[3].value, "zflame").claim_allowed);
+    try std.testing.expect(!observedClaim(parsed_values[3].value, "diff-folded").claim_allowed);
+    try std.testing.expect(!observedClaim(null, "zig").claim_allowed);
+
+    var no_status = std.json.ObjectMap.empty;
+    try no_status.put(allocator, "backend", .{ .string = "zig" });
+    try std.testing.expectEqualStrings("observed", matchObjectClaim(no_status, "zig").?.status);
+    try std.testing.expect(statusFromObject(no_status) == null);
+
+    const report_kinds = [_][]const u8{
+        "zigar_backend_conformance_report",
+        "zigar_release_readiness_report",
+        "zigar_real_zls_conformance_report",
+        "other",
+    };
+    for (report_kinds) |kind| {
+        var obj = std.json.ObjectMap.empty;
+        try obj.put(allocator, "kind", .{ .string = kind });
+        _ = reportKind(.{ .object = obj });
+    }
+    try std.testing.expectEqualStrings("unknown", reportKind(.{ .array = std.json.Array.init(allocator) }));
+
+    var harness = AdoptionHarness.init(std.testing.allocator);
+    defer harness.deinit();
+    var app = harness.app(allocator);
+    try std.testing.expectEqualStrings("diff-bin", configuredBackendPath(&app, "diff-folded"));
+
+    var tiny: [8]u8 = undefined;
+    var fixed = std.heap.FixedBufferAllocator.init(&tiny);
+    try std.testing.expectError(error.WriteFailed, stringifyAlloc(fixed.allocator(), .{ .string = "long string" }, .{ .whitespace = .indent_2 }));
 }

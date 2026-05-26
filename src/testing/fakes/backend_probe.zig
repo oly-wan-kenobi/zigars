@@ -216,3 +216,27 @@ test "backend probe rejects unexpected calls" {
 
     try std.testing.expectError(error.UnexpectedCall, fake.port().check(std.testing.allocator, .{ .backend = "zwanzig" }));
 }
+
+test "backend probe expected checks clean partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, expectBackendCheckWithAllocator, .{});
+}
+
+fn expectBackendCheckWithAllocator(allocator: Allocator) !void {
+    var fake = FakeBackendProbe.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectCheck(.{
+        .backend = "zls",
+        .argv = &.{ "zls", "--version" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .required_capabilities = &.{ "symbols", "diagnostics" },
+        .provenance = "test-probe",
+    }, .{
+        .backend = "zls",
+        .available = true,
+        .version = "0.14.0",
+        .capabilities = &.{ "symbols", "diagnostics" },
+        .basis = "fake probe",
+    });
+}

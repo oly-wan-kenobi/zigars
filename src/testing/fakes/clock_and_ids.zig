@@ -55,13 +55,17 @@ pub const FakeClockAndIds = struct {
 
     pub fn expectId(self: *Self, request: ports.IdRequest, id: []const u8) !void {
         const prefix = try common.dupString(self.allocator, request.prefix);
-        errdefer self.allocator.free(prefix);
+        var prefix_owned = true;
+        defer if (prefix_owned) self.allocator.free(prefix);
         const owned_id = try common.dupString(self.allocator, id);
-        errdefer self.allocator.free(owned_id);
+        var id_owned = true;
+        defer if (id_owned) self.allocator.free(owned_id);
         try self.expected_ids.append(self.allocator, .{
             .request = .{ .prefix = prefix },
             .id = owned_id,
         });
+        prefix_owned = false;
+        id_owned = false;
     }
 
     pub fn nowCalls(self: *const Self) usize {

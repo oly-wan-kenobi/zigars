@@ -111,62 +111,80 @@ pub const FakeZlsGateway = struct {
 
     pub fn expectCapability(self: *Self, request_value: ports.ZlsCapabilityRequest, result: ports.ZlsCapabilityResult) !void {
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
-        errdefer freeCapabilityRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeCapabilityRequest(self.allocator, owned_request);
         const owned_result = try cloneCapabilityResult(self.allocator, result);
-        errdefer freeCapabilityResult(self.allocator, owned_result);
+        var result_owned = true;
+        defer if (result_owned) freeCapabilityResult(self.allocator, owned_result);
         try self.expected_capabilities.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .result = owned_result },
         });
+        request_owned = false;
+        result_owned = false;
     }
 
     pub fn expectCapabilityError(self: *Self, request_value: ports.ZlsCapabilityRequest, err: ports.PortError) !void {
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
-        errdefer freeCapabilityRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeCapabilityRequest(self.allocator, owned_request);
         try self.expected_capabilities.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn expectSync(self: *Self, request_value: ports.ZlsSyncRequest, result: ports.ZlsSyncResult) !void {
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
-        errdefer freeSyncRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeSyncRequest(self.allocator, owned_request);
         const owned_result = try cloneSyncResult(self.allocator, result);
-        errdefer freeSyncResult(self.allocator, owned_result);
+        var result_owned = true;
+        defer if (result_owned) freeSyncResult(self.allocator, owned_result);
         try self.expected_syncs.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .result = owned_result },
         });
+        request_owned = false;
+        result_owned = false;
     }
 
     pub fn expectSyncError(self: *Self, request_value: ports.ZlsSyncRequest, err: ports.PortError) !void {
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
-        errdefer freeSyncRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeSyncRequest(self.allocator, owned_request);
         try self.expected_syncs.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn expectRequest(self: *Self, request_value: ports.ZlsRequest, response: ports.ZlsResponse) !void {
         const owned_request = try cloneRequest(self.allocator, request_value);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         const owned_response = try cloneResponse(self.allocator, response);
-        errdefer freeResponse(self.allocator, owned_response);
+        var response_owned = true;
+        defer if (response_owned) freeResponse(self.allocator, owned_response);
         try self.expected_requests.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .response = owned_response },
         });
+        request_owned = false;
+        response_owned = false;
     }
 
     pub fn expectRequestError(self: *Self, request_value: ports.ZlsRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request_value);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         try self.expected_requests.append(self.allocator, .{
             .request = owned_request,
             .outcome = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn capabilityCalls(self: *const Self) []const ports.ZlsCapabilityRequest {
@@ -190,10 +208,10 @@ pub const FakeZlsGateway = struct {
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneCapabilityRequest(self.allocator, request_value);
-        var record_owned = false;
-        errdefer if (!record_owned) freeCapabilityRequest(self.allocator, owned_call);
+        var record_owned = true;
+        defer if (record_owned) freeCapabilityRequest(self.allocator, owned_call);
         try self.capability_records.append(self.allocator, owned_call);
-        record_owned = true;
+        record_owned = false;
 
         if (self.next_capability >= self.expected_capabilities.items.len) return error.UnexpectedCall;
         const expected = self.expected_capabilities.items[self.next_capability];
@@ -208,10 +226,10 @@ pub const FakeZlsGateway = struct {
     fn sync(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneSyncRequest(self.allocator, request_value);
-        var record_owned = false;
-        errdefer if (!record_owned) freeSyncRequest(self.allocator, owned_call);
+        var record_owned = true;
+        defer if (record_owned) freeSyncRequest(self.allocator, owned_call);
         try self.sync_records.append(self.allocator, owned_call);
-        record_owned = true;
+        record_owned = false;
 
         if (self.next_sync >= self.expected_syncs.items.len) return error.UnexpectedCall;
         const expected = self.expected_syncs.items[self.next_sync];
@@ -226,10 +244,10 @@ pub const FakeZlsGateway = struct {
     fn request(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request_value);
-        var record_owned = false;
-        errdefer if (!record_owned) freeRequest(self.allocator, owned_call);
+        var record_owned = true;
+        defer if (record_owned) freeRequest(self.allocator, owned_call);
         try self.request_records.append(self.allocator, owned_call);
-        record_owned = true;
+        record_owned = false;
 
         if (self.next_request >= self.expected_requests.items.len) return error.UnexpectedCall;
         const expected = self.expected_requests.items[self.next_request];
@@ -259,9 +277,13 @@ pub const FakeZlsGateway = struct {
 
     fn cloneCapabilityResult(allocator: Allocator, result: ports.ZlsCapabilityResult) !ports.ZlsCapabilityResult {
         const capability_name = try common.dupString(allocator, result.capability);
-        errdefer allocator.free(capability_name);
+        var capability_owned = true;
+        defer if (capability_owned) allocator.free(capability_name);
         const basis = try common.dupString(allocator, result.basis);
-        errdefer allocator.free(basis);
+        var basis_owned = true;
+        defer if (basis_owned) allocator.free(basis);
+        capability_owned = false;
+        basis_owned = false;
         return .{
             .capability = capability_name,
             .supported = result.supported,
@@ -276,11 +298,17 @@ pub const FakeZlsGateway = struct {
 
     fn cloneSyncRequest(allocator: Allocator, request_value: ports.ZlsSyncRequest) !ports.ZlsSyncRequest {
         const file = try common.dupString(allocator, request_value.file);
-        errdefer allocator.free(file);
+        var file_owned = true;
+        defer if (file_owned) allocator.free(file);
         const content = try common.dupOptionalString(allocator, request_value.content);
-        errdefer common.freeOptionalString(allocator, content);
+        var content_owned = true;
+        defer if (content_owned) common.freeOptionalString(allocator, content);
         const provenance = try common.dupString(allocator, request_value.provenance);
-        errdefer allocator.free(provenance);
+        var provenance_owned = true;
+        defer if (provenance_owned) allocator.free(provenance);
+        file_owned = false;
+        content_owned = false;
+        provenance_owned = false;
         return .{
             .file = file,
             .content = content,
@@ -296,9 +324,13 @@ pub const FakeZlsGateway = struct {
 
     fn cloneSyncResult(allocator: Allocator, result: ports.ZlsSyncResult) !ports.ZlsSyncResult {
         const uri = try common.dupString(allocator, result.uri);
-        errdefer allocator.free(uri);
+        var uri_owned = true;
+        defer if (uri_owned) allocator.free(uri);
         const basis = try common.dupString(allocator, result.basis);
-        errdefer allocator.free(basis);
+        var basis_owned = true;
+        defer if (basis_owned) allocator.free(basis);
+        uri_owned = false;
+        basis_owned = false;
         return .{
             .uri = uri,
             .basis = basis,
@@ -322,11 +354,17 @@ pub const FakeZlsGateway = struct {
 
     fn cloneRequest(allocator: Allocator, request_value: ports.ZlsRequest) !ports.ZlsRequest {
         const method = try common.dupString(allocator, request_value.method);
-        errdefer allocator.free(method);
+        var method_owned = true;
+        defer if (method_owned) allocator.free(method);
         const uri = try common.dupOptionalString(allocator, request_value.uri);
-        errdefer common.freeOptionalString(allocator, uri);
+        var uri_owned = true;
+        defer if (uri_owned) common.freeOptionalString(allocator, uri);
         const payload = try common.dupString(allocator, request_value.payload);
-        errdefer allocator.free(payload);
+        var payload_owned = true;
+        defer if (payload_owned) allocator.free(payload);
+        method_owned = false;
+        uri_owned = false;
+        payload_owned = false;
         return .{
             .method = method,
             .uri = uri,
@@ -342,9 +380,13 @@ pub const FakeZlsGateway = struct {
 
     fn cloneResponse(allocator: Allocator, response: ports.ZlsResponse) !ports.ZlsResponse {
         const method = try common.dupString(allocator, response.method);
-        errdefer allocator.free(method);
+        var method_owned = true;
+        defer if (method_owned) allocator.free(method);
         const payload = try common.dupString(allocator, response.payload);
-        errdefer allocator.free(payload);
+        var payload_owned = true;
+        defer if (payload_owned) allocator.free(payload);
+        method_owned = false;
+        payload_owned = false;
         return .{
             .method = method,
             .payload = payload,

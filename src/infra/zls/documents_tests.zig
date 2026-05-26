@@ -134,6 +134,67 @@ test "DocumentState ensureOpen enforces disk document byte budget" {
     try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
+
+test "DocumentState ensureOpen opens disk text and reuses existing URI" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
+    const root = try tmpRoot(alloc, io, tmp.sub_path[0..]);
+    defer alloc.free(root);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    ds.setLogger(.disabled());
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    const pipe = try testPipe();
+    defer pipe.read_end.close(io);
+    client.zls_stdin = pipe.write_end;
+
+    const uri = try ds.ensureOpen(&client, "main.zig", alloc);
+    defer alloc.free(uri);
+    const same_uri = try ds.ensureOpen(&client, "main.zig", alloc);
+    defer alloc.free(same_uri);
+    try std.testing.expectEqualStrings(uri, same_uri);
+    try std.testing.expectEqual(@as(i64, 1), ds.versionForUri(uri).?);
+    pipe.write_end.close(io);
+    client.zls_stdin = null;
+
+    var reader = LspTransport.Reader.init(pipe.read_end, io);
+    const msg = (try reader.readMessage(alloc)) orelse return error.TestUnexpectedResult;
+    defer alloc.free(msg);
+    try std.testing.expect(std.mem.indexOf(u8, msg, "textDocument/didOpen") != null);
+    try std.testing.expect(std.mem.indexOf(u8, msg, "const disk = true;") != null);
+    try std.testing.expect(try reader.readMessage(alloc) == null);
+}
+
+test "DocumentState ensureOpen removes reserved entry when didOpen fails" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/main.zig", .data = "const disk = true;\n" });
+    const root = try tmpRoot(alloc, io, tmp.sub_path[0..]);
+    defer alloc.free(root);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    ds.setLogger(.disabled());
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+
+    try std.testing.expectError(error.NotConnected, ds.ensureOpen(&client, "main.zig", alloc));
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
 test "DocumentState init and deinit" {
     const alloc = std.testing.allocator;
     var ds = DocumentState.init(alloc, "/tmp/workspace");
@@ -141,6 +202,7 @@ test "DocumentState init and deinit" {
 
     try std.testing.expectEqualStrings("/tmp/workspace", ds.workspace_path);
     try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expect(ds.versionForUri("file:///tmp/workspace/missing.zig") == null);
 }
 
 test "DocumentState double deinit on empty is safe" {
@@ -342,6 +404,29 @@ test "DocumentState summary reports aggregate state without content" {
     try std.testing.expect(!@hasField(@TypeOf(summary), "content"));
 }
 
+test "DocumentState close removes document when didClose fails" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+    ds.setLogger(.disabled());
+    var client = LspClient.init(alloc, std.testing.io);
+    defer client.deinit();
+
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    const content = try alloc.dupe(u8, "const dirty = true;\n");
+    ds.retained_content_bytes = content.len;
+    try ds.open_docs.put(alloc, uri, .{
+        .version = 1,
+        .content_hash = std.hash.Wyhash.hash(0, content),
+        .dirty = true,
+        .content = content,
+    });
+
+    try ds.closeDoc(&client, "file:///tmp/main.zig");
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+}
+
 test "DocumentState reopens retained unsaved content" {
     if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
 
@@ -361,9 +446,11 @@ test "DocumentState reopens retained unsaved content" {
     const abs = try std.fs.path.join(alloc, &.{ root, "main.zig" });
     defer alloc.free(abs);
     const uri = try uri_util.pathToUri(alloc, abs);
-    errdefer alloc.free(uri);
+    var uri_owned = true;
+    defer if (uri_owned) alloc.free(uri);
     const unsaved = try alloc.dupe(u8, "const unsaved = true;\n");
-    errdefer alloc.free(unsaved);
+    var unsaved_owned = true;
+    defer if (unsaved_owned) alloc.free(unsaved);
 
     var ds = DocumentState.initWithIo(alloc, root, io);
     defer ds.deinit();
@@ -373,6 +460,8 @@ test "DocumentState reopens retained unsaved content" {
         .dirty = true,
         .content = unsaved,
     });
+    uri_owned = false;
+    unsaved_owned = false;
 
     const pipe = try testPipe();
     defer pipe.read_end.close(io);
@@ -413,7 +502,8 @@ test "DocumentState reopens disk content from percent-encoded uri" {
     const abs = try std.fs.path.join(alloc, &.{ root, "dir with spaces", "main file.zig" });
     defer alloc.free(abs);
     const uri = try uri_util.pathToUri(alloc, abs);
-    errdefer alloc.free(uri);
+    var uri_owned = true;
+    defer if (uri_owned) alloc.free(uri);
     try std.testing.expect(std.mem.indexOf(u8, uri, "%20") != null);
 
     var ds = DocumentState.initWithIo(alloc, root, io);
@@ -424,6 +514,7 @@ test "DocumentState reopens disk content from percent-encoded uri" {
         .dirty = false,
         .content = null,
     });
+    uri_owned = false;
 
     const pipe = try testPipe();
     defer pipe.read_end.close(io);
@@ -442,4 +533,86 @@ test "DocumentState reopens disk content from percent-encoded uri" {
     const msg = (try reader.readMessage(alloc)) orelse return error.TestUnexpectedResult;
     defer alloc.free(msg);
     try std.testing.expect(std.mem.indexOf(u8, msg, "disk_with_spaces") != null);
+}
+
+test "DocumentState reopen records decode read and send failures" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/unsaved.zig", .data = "const disk = true;\n" });
+    const root = try tmpRoot(alloc, io, tmp.sub_path[0..]);
+    defer alloc.free(root);
+    const missing_abs = try std.fs.path.join(alloc, &.{ root, "missing.zig" });
+    defer alloc.free(missing_abs);
+    const missing_uri = try uri_util.pathToUri(alloc, missing_abs);
+    var missing_uri_owned = true;
+    defer if (missing_uri_owned) alloc.free(missing_uri);
+    const unsaved_abs = try std.fs.path.join(alloc, &.{ root, "unsaved.zig" });
+    defer alloc.free(unsaved_abs);
+    const unsaved_uri = try uri_util.pathToUri(alloc, unsaved_abs);
+    var unsaved_uri_owned = true;
+    defer if (unsaved_uri_owned) alloc.free(unsaved_uri);
+    const unsaved = try alloc.dupe(u8, "const unsaved = true;\n");
+    var unsaved_owned = true;
+    defer if (unsaved_owned) alloc.free(unsaved);
+
+    var ds = DocumentState.initWithIo(alloc, root, io);
+    defer ds.deinit();
+    ds.setLogger(.disabled());
+    try ds.open_docs.put(alloc, try alloc.dupe(u8, "not-a-valid-uri"), .{ .version = 1, .content_hash = 0, .dirty = false });
+    try ds.open_docs.put(alloc, missing_uri, .{ .version = 2, .content_hash = 0, .dirty = false });
+    missing_uri_owned = false;
+    try ds.open_docs.put(alloc, unsaved_uri, .{
+        .version = 3,
+        .content_hash = std.hash.Wyhash.hash(0, unsaved),
+        .dirty = true,
+        .content = unsaved,
+    });
+    unsaved_uri_owned = false;
+    unsaved_owned = false;
+
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    const summary = ds.reopenAll(&client);
+    try std.testing.expectEqual(@as(usize, 3), summary.attempted);
+    try std.testing.expectEqual(@as(usize, 0), summary.succeeded);
+    try std.testing.expectEqual(@as(usize, 3), summary.failed);
+    try std.testing.expectEqual(@as(usize, 3), ds.summary().last_reopen.failed);
+}
+
+test "DocumentState reopen skips documents whose temporary clones cannot be allocated" {
+    const alloc = std.testing.allocator;
+
+    var fail_index: usize = 0;
+    while (fail_index < 12) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(alloc);
+        defer backing.deinit();
+        var ds = DocumentState.init(backing.allocator(), "/tmp");
+        defer {
+            ds.allocator = backing.allocator();
+            ds.deinit();
+        }
+        const uri_a = try backing.allocator().dupe(u8, "file:///tmp/a.zig");
+        const uri_b = try backing.allocator().dupe(u8, "file:///tmp/b.zig");
+        const content_b = try backing.allocator().dupe(u8, "const b = true;\n");
+        try ds.open_docs.put(backing.allocator(), uri_a, .{ .version = 1, .content_hash = 1, .dirty = false });
+        try ds.open_docs.put(backing.allocator(), uri_b, .{
+            .version = 2,
+            .content_hash = std.hash.Wyhash.hash(0, content_b),
+            .dirty = true,
+            .content = content_b,
+        });
+
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        ds.allocator = failing.allocator();
+        var client = LspClient.init(alloc, std.testing.io);
+        defer client.deinit();
+
+        const summary = ds.reopenAll(&client);
+        try std.testing.expect(summary.skipped > 0 or summary.failed > 0);
+    }
 }

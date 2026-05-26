@@ -70,9 +70,13 @@ pub fn merge(allocator: std.mem.Allocator, request: MergeRequest) !coverage_mode
 
 pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
     var current = try map(allocator, request.current);
-    errdefer current.deinit(allocator);
+    var current_owned = true;
+    defer if (current_owned) current.deinit(allocator);
     var baseline = try map(allocator, request.baseline);
-    errdefer baseline.deinit(allocator);
+    var baseline_owned = true;
+    defer if (baseline_owned) baseline.deinit(allocator);
+    current_owned = false;
+    baseline_owned = false;
     return .{
         .line_rate_delta_bp = @as(i64, @intCast(coverage_model.rateBp(current.covered, current.total))) -
             @as(i64, @intCast(coverage_model.rateBp(baseline.covered, baseline.total))),

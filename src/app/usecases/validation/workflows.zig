@@ -449,18 +449,37 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
     });
     if (request.changed_paths.len == 0) try appendOwnedString(allocator, &unknowns, "No changed_files or diff were supplied; plan uses workspace-level fallback checks.");
 
-    const plan_id = try planId(allocator, request.changed_paths, request.mode);
-    errdefer allocator.free(plan_id);
+    const facts_items = try facts.toOwnedSlice(allocator);
+    errdefer {
+        freeStringItems(allocator, facts_items);
+        allocator.free(facts_items);
+    }
+    const phase_items = try phases.toOwnedSlice(allocator);
+    errdefer {
+        for (phase_items) |*phase| phase.deinit(allocator);
+        allocator.free(phase_items);
+    }
+    const skipped_items = try skipped.toOwnedSlice(allocator);
+    errdefer {
+        for (skipped_items) |*item| item.deinit(allocator);
+        allocator.free(skipped_items);
+    }
+    const unknown_items = try unknowns.toOwnedSlice(allocator);
+    errdefer {
+        freeStringItems(allocator, unknown_items);
+        allocator.free(unknown_items);
+    }
     const mode = try allocator.dupe(u8, request.mode);
     errdefer allocator.free(mode);
     const goal = if (request.goal) |goal_value| try allocator.dupe(u8, goal_value) else null;
     errdefer if (goal) |goal_value| allocator.free(goal_value);
+    const plan_id = try planId(allocator, request.changed_paths, request.mode);
 
     return .{
         .plan_id = plan_id,
         .mode = mode,
         .goal = goal,
-        .facts = .{ .items = try facts.toOwnedSlice(allocator) },
+        .facts = .{ .items = facts_items },
         .risk = .{
             .changed_file_count = request.changed_paths.len,
             .touches_zig_source = saw_zig,
@@ -468,9 +487,9 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
             .touches_docs = saw_docs,
             .level = if (saw_build) "high" else if (saw_zig) "medium" else "low",
         },
-        .phases = try phases.toOwnedSlice(allocator),
-        .skipped_phases = try skipped.toOwnedSlice(allocator),
-        .unknowns = .{ .items = try unknowns.toOwnedSlice(allocator) },
+        .phases = phase_items,
+        .skipped_phases = skipped_items,
+        .unknowns = .{ .items = unknown_items },
     };
 }
 
@@ -497,13 +516,10 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
             try appendSkipped(allocator, &skipped, phase_item.id, "Validation runner executes command phases only; call the named tool separately for read-only evidence.");
             continue;
         }
-        const argv = if (phase_item.argv) |argv_value| argv_value.items else &.{};
-        if (argv.len == 0) {
-            try appendSkipped(allocator, &skipped, phase_item.id, "Phase has no executable argv.");
-            continue;
-        }
+        const argv = phase_item.argv.?.items;
         executed_count += 1;
-        const phase_run = try runPhase(allocator, context, phase_item.id, argv, timeout_ms);
+        var phase_run = try runPhase(allocator, context, phase_item.id, argv, timeout_ms);
+        errdefer phase_run.deinit(allocator);
         if (!phase_run.ok) ok = false;
         try phases.append(allocator, phase_run);
         if (!phase_run.ok and request.stop_on_failure) break;
@@ -537,26 +553,49 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
             .create_parent_dirs = true,
             .replace_existing = true,
             .provenance = "zigar_validation_run history",
-        }) catch |err| return .{ .err = .{ .history_write_failed = .{
-            .error_info = app_errors.toolFailure(
-                "validation_workflow",
-                "write_history",
-                "validation_history_write_failed",
-                @errorName(err),
-                "Choose a writable validation history path inside the workspace or run with apply=false.",
-            ),
-            .err = err,
-            .path = request.output,
-        } } };
+        }) catch |err| {
+            const failure = WorkspaceFailure{
+                .error_info = app_errors.toolFailure(
+                    "validation_workflow",
+                    "write_history",
+                    "validation_history_write_failed",
+                    @errorName(err),
+                    "Choose a writable validation history path inside the workspace or run with apply=false.",
+                ),
+                .err = err,
+                .path = request.output,
+            };
+            preimage.deinit(allocator);
+            history_record.deinit(allocator);
+            for (phases.items) |*item| item.deinit(allocator);
+            phases.deinit(allocator);
+            for (skipped.items) |*item| item.deinit(allocator);
+            skipped.deinit(allocator);
+            planned.deinit(allocator);
+            return .{ .err = .{ .history_write_failed = failure } };
+        };
     }
+
+    const phase_runs = try phases.toOwnedSlice(allocator);
+    errdefer {
+        for (phase_runs) |*phase| phase.deinit(allocator);
+        allocator.free(phase_runs);
+    }
+    const skipped_runs = try skipped.toOwnedSlice(allocator);
+    errdefer {
+        for (skipped_runs) |*item| item.deinit(allocator);
+        allocator.free(skipped_runs);
+    }
+    const history_path = try allocator.dupe(u8, request.output);
+    errdefer allocator.free(history_path);
 
     return .{ .ok = .{
         .ok = ok,
         .plan = planned,
-        .phases = try phases.toOwnedSlice(allocator),
-        .skipped_phases = try skipped.toOwnedSlice(allocator),
+        .phases = phase_runs,
+        .skipped_phases = skipped_runs,
         .history_record = history_record,
-        .history_path = try allocator.dupe(u8, request.output),
+        .history_path = history_path,
         .history_applied = request.apply,
         .requires_apply_for_history = !request.apply,
         .preimage_identity = preimage,
@@ -636,30 +675,45 @@ const PhaseSpec = struct {
 };
 
 fn appendPhase(allocator: std.mem.Allocator, phases: *std.ArrayList(Phase), spec: PhaseSpec) !void {
-    var phase_item = Phase{
-        .id = try allocator.dupe(u8, spec.id),
+    const id = try allocator.dupe(u8, spec.id);
+    errdefer allocator.free(id);
+    const tool = if (spec.tool) |tool_value| try allocator.dupe(u8, tool_value) else null;
+    errdefer if (tool) |tool_value| allocator.free(tool_value);
+    var argv = if (spec.argv) |argv_value| try cloneArgv(allocator, argv_value) else null;
+    errdefer if (argv) |*argv_value| argv_value.deinit(allocator);
+    const reason = try allocator.dupe(u8, spec.reason);
+    errdefer allocator.free(reason);
+    const risk = try allocator.dupe(u8, spec.risk);
+    errdefer allocator.free(risk);
+
+    const phase_item = Phase{
+        .id = id,
         .kind = spec.kind,
-        .tool = if (spec.tool) |tool| try allocator.dupe(u8, tool) else null,
-        .argv = if (spec.argv) |argv| try cloneArgv(allocator, argv) else null,
-        .reason = try allocator.dupe(u8, spec.reason),
+        .tool = tool,
+        .argv = argv,
+        .reason = reason,
         .required = spec.required,
-        .risk = try allocator.dupe(u8, spec.risk),
+        .risk = risk,
     };
-    errdefer phase_item.deinit(allocator);
     try phases.append(allocator, phase_item);
 }
 
 fn appendSkipped(allocator: std.mem.Allocator, skipped: *std.ArrayList(SkippedPhase), name: []const u8, reason: []const u8) !void {
-    var item = SkippedPhase{
-        .name = try allocator.dupe(u8, name),
-        .reason = try allocator.dupe(u8, reason),
+    const owned_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned_name);
+    const owned_reason = try allocator.dupe(u8, reason);
+    errdefer allocator.free(owned_reason);
+    const item = SkippedPhase{
+        .name = owned_name,
+        .reason = owned_reason,
     };
-    errdefer item.deinit(allocator);
     try skipped.append(allocator, item);
 }
 
 fn appendOwnedString(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8), value: []const u8) !void {
-    try values.append(allocator, try allocator.dupe(u8, value));
+    const owned = try allocator.dupe(u8, value);
+    errdefer allocator.free(owned);
+    try values.append(allocator, owned);
 }
 
 fn runPhase(allocator: std.mem.Allocator, context: app_context.ValidationContext, name: []const u8, argv: []const []const u8, timeout_ms: u64) !PhaseRun {
@@ -731,31 +785,41 @@ fn buildHistoryRecord(
     }
     for (phases) |phase_item| {
         if (!phase_item.ok) {
-            var failure = FailureRecord{
-                .phase = try allocator.dupe(u8, phase_item.name),
-                .fingerprint = try std.fmt.allocPrint(allocator, "phase:{s}", .{phase_item.name}),
+            const phase = try allocator.dupe(u8, phase_item.name);
+            errdefer allocator.free(phase);
+            const fingerprint = try std.fmt.allocPrint(allocator, "phase:{s}", .{phase_item.name});
+            errdefer allocator.free(fingerprint);
+            const failure = FailureRecord{
+                .phase = phase,
+                .fingerprint = fingerprint,
             };
-            errdefer failure.deinit(allocator);
             try failures.append(allocator, failure);
         }
         const duration_ms = phaseDurationMs(phase_item);
         if (duration_ms > 1000) {
-            var item = SlowPhase{
-                .phase = try allocator.dupe(u8, phase_item.name),
+            const phase = try allocator.dupe(u8, phase_item.name);
+            errdefer allocator.free(phase);
+            const item = SlowPhase{
+                .phase = phase,
                 .duration_ms = duration_ms,
             };
-            errdefer item.deinit(allocator);
             try slow.append(allocator, item);
         }
     }
+    const failure_items = try failures.toOwnedSlice(allocator);
+    errdefer deinitFailureRecords(allocator, failure_items);
+    const slow_items = try slow.toOwnedSlice(allocator);
+    errdefer deinitSlowPhases(allocator, slow_items);
+    const owned_plan_id = try allocator.dupe(u8, plan_id_value);
+    errdefer allocator.free(owned_plan_id);
     return .{
         .recorded_unix_ms = recorded_unix_ms,
         .ok = ok,
-        .plan_id = try allocator.dupe(u8, plan_id_value),
+        .plan_id = owned_plan_id,
         .phase_count = phases.len,
         .skipped_count = skipped.len,
-        .failures = try failures.toOwnedSlice(allocator),
-        .slow_phases = try slow.toOwnedSlice(allocator),
+        .failures = failure_items,
+        .slow_phases = slow_items,
     };
 }
 
@@ -810,7 +874,9 @@ fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize
         };
         for (array.items) |item| {
             if (out.items.len >= limit) break;
-            try out.append(allocator, try historyRunFromValue(allocator, item));
+            var run_item = try historyRunFromValue(allocator, item);
+            errdefer run_item.deinit(allocator);
+            try out.append(allocator, run_item);
         }
         return out.toOwnedSlice(allocator);
     }
@@ -858,11 +924,14 @@ fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !His
             else => continue,
         };
         const fingerprint = stringField(failure_obj, "fingerprint") orelse stringField(failure_obj, "phase") orelse "unknown";
-        var item = HistoryFailure{
-            .fingerprint = try allocator.dupe(u8, fingerprint),
-            .sample_json = try serializeJsonValueAlloc(allocator, failure_value),
+        const owned_fingerprint = try allocator.dupe(u8, fingerprint);
+        errdefer allocator.free(owned_fingerprint);
+        const sample_json = try serializeJsonValueAlloc(allocator, failure_value);
+        errdefer allocator.free(sample_json);
+        const item = HistoryFailure{
+            .fingerprint = owned_fingerprint,
+            .sample_json = sample_json,
         };
-        errdefer item.deinit(allocator);
         try failures.append(allocator, item);
     }
     return .{
@@ -888,12 +957,15 @@ fn buildFailureGroups(allocator: std.mem.Allocator, runs: []const HistoryRun) ![
                 break;
             }
             if (found) continue;
-            var group = FailureGroup{
-                .fingerprint = try allocator.dupe(u8, failure.fingerprint),
+            const fingerprint = try allocator.dupe(u8, failure.fingerprint);
+            errdefer allocator.free(fingerprint);
+            const sample_json = try allocator.dupe(u8, failure.sample_json);
+            errdefer allocator.free(sample_json);
+            const group = FailureGroup{
+                .fingerprint = fingerprint,
                 .count = 1,
-                .sample_json = try allocator.dupe(u8, failure.sample_json),
+                .sample_json = sample_json,
             };
-            errdefer group.deinit(allocator);
             try groups.append(allocator, group);
         }
     }
@@ -1451,4 +1523,472 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
     const hex = std.fmt.bytesToHex(digest, .lower);
     return allocator.dupe(u8, &hex);
+}
+
+test "validation workflow private classifiers serializers and cleanup helpers cover edge cases" {
+    const allocator = std.testing.allocator;
+
+    const invalid_single = [_]u8{ 0xff, 'x' };
+    var lossy_single = try safeTextAlloc(allocator, invalid_single[0..]);
+    defer lossy_single.deinit(allocator);
+    try std.testing.expect(lossy_single.invalid_utf8);
+    try std.testing.expectEqualStrings("utf-8-lossy", lossy_single.encoding);
+
+    const invalid_truncated = [_]u8{ 0xe2, 0x82 };
+    var lossy_truncated = try safeTextAlloc(allocator, invalid_truncated[0..]);
+    defer lossy_truncated.deinit(allocator);
+    try std.testing.expect(lossy_truncated.invalid_utf8);
+    try std.testing.expect(std.mem.indexOf(u8, lossy_truncated.text, &std.unicode.replacement_character_utf8) != null);
+
+    try std.testing.expectEqualStrings("compiler_error", classifyEventLine("error: root cause"));
+    try std.testing.expectEqualStrings("compiler_warning", classifyEventLine("src/main.zig:2:1: warning: style"));
+    try std.testing.expectEqualStrings("test_failure", classifyEventLine("FAIL test.case"));
+    try std.testing.expectEqualStrings("test_pass", classifyEventLine("passed 12 tests"));
+    try std.testing.expectEqualStrings("build_step", classifyEventLine("Step 1/2"));
+    try std.testing.expectEqualStrings("output", classifyEventLine("plain output"));
+
+    try std.testing.expectEqualStrings("timeout", commandErrorKind(error.RequestTimeout));
+    try std.testing.expectEqualStrings("output_limit", commandErrorKind(error.OutputLimitExceeded));
+    try std.testing.expectEqualStrings("executable_not_found", commandErrorKind(error.NotFound));
+    try std.testing.expectEqualStrings("permission", commandErrorKind(error.AccessDenied));
+    try std.testing.expectEqualStrings("execution", commandErrorKind(error.UnexpectedCall));
+    try std.testing.expect(isOutputLimitError(error.StreamTooLong));
+    try std.testing.expect(isTimeoutError(error.Timeout));
+    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), saturatingI64(std.math.maxInt(u64)));
+    try std.testing.expect(phaseByName(&.{}, "missing") == null);
+
+    var escaped: std.ArrayList(u8) = .empty;
+    defer escaped.deinit(allocator);
+    try serializeJsonString(allocator, &escaped, "\"\\\n\r\t\x08\x0c\x01");
+    try std.testing.expectEqualStrings("\"\\\"\\\\\\n\\r\\t\\b\\f\\u0001\"", escaped.items);
+
+    const number_json = try serializeJsonValueAlloc(allocator, .{ .number_string = "1e3" });
+    defer allocator.free(number_json);
+    try std.testing.expectEqualStrings("1e3", number_json);
+
+    const float_json = try serializeJsonValueAlloc(allocator, .{ .float = 1.25 });
+    defer allocator.free(float_json);
+    try std.testing.expect(std.mem.startsWith(u8, float_json, "1.25"));
+
+    const null_json = try serializeJsonValueAlloc(allocator, .null);
+    defer allocator.free(null_json);
+    try std.testing.expectEqualStrings("null", null_json);
+
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, "{\"a\":[null,true,1,\"x\"]}", .{});
+    defer parsed.deinit();
+    const object_json = try serializeJsonValueAlloc(allocator, parsed.value);
+    defer allocator.free(object_json);
+    try std.testing.expect(std.mem.indexOf(u8, object_json, "\"a\"") != null);
+
+    var failure_records = try allocator.alloc(FailureRecord, 1);
+    failure_records[0] = .{
+        .phase = try allocator.dupe(u8, "fmt"),
+        .fingerprint = try allocator.dupe(u8, "phase:fmt"),
+    };
+    deinitFailureRecords(allocator, failure_records);
+
+    var slow_phases = try allocator.alloc(SlowPhase, 1);
+    slow_phases[0] = .{
+        .phase = try allocator.dupe(u8, "build"),
+        .duration_ms = 1200,
+    };
+    deinitSlowPhases(allocator, slow_phases);
+
+    var history_failures = try allocator.alloc(HistoryFailure, 1);
+    history_failures[0] = .{
+        .fingerprint = try allocator.dupe(u8, "fingerprint"),
+        .sample_json = try allocator.dupe(u8, "{}"),
+    };
+    var history_runs = try allocator.alloc(HistoryRun, 1);
+    history_runs[0] = .{
+        .raw_json = try allocator.dupe(u8, "{}"),
+        .ok = false,
+        .failures = history_failures,
+    };
+    deinitHistoryRuns(allocator, history_runs);
+
+    var groups = try allocator.alloc(FailureGroup, 1);
+    groups[0] = .{
+        .fingerprint = try allocator.dupe(u8, "group"),
+        .count = 1,
+        .sample_json = try allocator.dupe(u8, "{}"),
+    };
+    deinitFailureGroups(allocator, groups);
+
+    const strings = try allocator.alloc([]const u8, 2);
+    strings[0] = try allocator.dupe(u8, "one");
+    strings[1] = try allocator.dupe(u8, "two");
+    freeStringItems(allocator, strings);
+    allocator.free(strings);
+}
+
+test "validation workflow consumes owned workspace reads" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    const allocator = std.testing.allocator;
+
+    var command = fakes.FakeCommandRunner.init(allocator);
+    defer command.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(allocator);
+    defer clock.deinit();
+    const context = app_context.ValidationContext{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+        .command_runner = command.port(),
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    try workspace.expectRead(.{
+        .path = "history.jsonl",
+        .max_bytes = history_max_bytes,
+        .provenance = "zigar_validation_history read",
+    }, "{\"ok\":true,\"failures\":[]}\n");
+    var from_file = try history(allocator, context, .{ .view = .runs, .path = "history.jsonl" });
+    defer from_file.deinit(allocator);
+    try std.testing.expect(from_file.ok.history_available);
+    try std.testing.expectEqual(@as(?usize, 0), from_file.ok.last_good_index);
+
+    try workspace.expectRead(.{
+        .path = "history.jsonl",
+        .max_bytes = history_max_bytes,
+        .provenance = "zigar_validation_run history append",
+    }, "old\n");
+    const existing = existingHistoryBytes(allocator, context, "history.jsonl").?;
+    defer allocator.free(existing);
+    try std.testing.expectEqualStrings("old\n", existing);
+
+    try workspace.verify();
+    try command.verify();
+    try clock.verify();
+}
+
+test "validation workflow cleans partial allocations across planning running and history helpers" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    var fail_index: usize = 0;
+    while (fail_index < 192) : (fail_index += 1) {
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer command.deinit();
+            var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+            defer clock.deinit();
+            try workspace.expectRead(.{
+                .path = "src/main.zig",
+                .max_bytes = 0,
+                .provenance = "zigar_validation_plan path probe",
+            }, "");
+            const context = app_context.ValidationContext{
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .tool_paths = .{ .zig = "zig" },
+                .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+                .command_runner = command.port(),
+                .workspace_store = workspace.port(),
+                .clock_and_ids = clock.port(),
+            };
+            if (plan(allocator, context, .{
+                .mode = "standard",
+                .goal = "release",
+                .changed_paths = &.{ "src/main.zig", "build.zig.zon", "README.md" },
+                .include_semantic = true,
+            })) |result| {
+                var owned = result;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer command.deinit();
+            var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+            defer clock.deinit();
+            const context = app_context.ValidationContext{
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .tool_paths = .{ .zig = "zig" },
+                .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+                .command_runner = command.port(),
+                .workspace_store = workspace.port(),
+                .clock_and_ids = clock.port(),
+            };
+            if (history(allocator, context, .{
+                .view = .runs,
+                .history_text = "{\"ok\":false,\"failures\":[{\"fingerprint\":\"fmt\"}]}\n",
+            })) |outcome| {
+                var owned = outcome;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer command.deinit();
+            var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+            defer clock.deinit();
+            try clock.pushInstant(.{ .unix_ms = 1_700_000_001_000, .monotonic_ms = 10 });
+            try workspace.expectRead(.{
+                .path = "src/main.zig",
+                .max_bytes = 0,
+                .provenance = "zigar_validation_plan path probe",
+            }, "");
+            try workspace.expectRead(.{
+                .path = "history.jsonl",
+                .max_bytes = history_max_bytes,
+                .provenance = "zigar_validation_run history preimage",
+            }, "old\n");
+            try command.expectRun(.{
+                .argv = &.{ "zig", "fmt", "--check", "src/main.zig" },
+                .cwd = "/repo",
+                .timeout_ms = 10,
+                .max_stdout_bytes = command_output_limit,
+                .max_stderr_bytes = command_output_limit,
+                .provenance = "zigar_validation_run phase",
+            }, .{ .stdout = "PASS fmt\n", .stderr = "", .duration_ms = 2 });
+            try command.expectRun(.{
+                .argv = &.{ "zig", "ast-check", "src/main.zig" },
+                .cwd = "/repo",
+                .timeout_ms = 10,
+                .max_stdout_bytes = command_output_limit,
+                .max_stderr_bytes = command_output_limit,
+                .provenance = "zigar_validation_run phase",
+            }, .{ .stdout = "", .stderr = "src/main.zig:1:1: warning: note\n", .duration_ms = 1201 });
+            const context = app_context.ValidationContext{
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .tool_paths = .{ .zig = "zig" },
+                .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+                .command_runner = command.port(),
+                .workspace_store = workspace.port(),
+                .clock_and_ids = clock.port(),
+            };
+            if (run(allocator, context, .{
+                .plan = .{ .mode = "quick", .changed_paths = &.{"src/main.zig"}, .include_semantic = false },
+                .output = "history.jsonl",
+                .apply = false,
+                .timeout_ms = 10,
+            })) |outcome| {
+                var owned = outcome;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var phases = std.ArrayList(Phase).empty;
+            defer {
+                for (phases.items) |*phase| phase.deinit(allocator);
+                phases.deinit(allocator);
+            }
+            if (appendPhase(allocator, &phases, .{
+                .id = "phase",
+                .kind = .command,
+                .tool = "tool",
+                .argv = &.{ "zig", "build", "test" },
+                .reason = "reason",
+                .required = true,
+                .risk = "risk",
+            })) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var skipped = std.ArrayList(SkippedPhase).empty;
+            defer {
+                for (skipped.items) |*item| item.deinit(allocator);
+                skipped.deinit(allocator);
+            }
+            if (appendSkipped(allocator, &skipped, "phase", "reason")) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var values = std.ArrayList([]const u8).empty;
+            defer {
+                freeStringItems(allocator, values.items);
+                values.deinit(allocator);
+            }
+            if (appendOwnedString(allocator, &values, "value")) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+            defer command.deinit();
+            var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+            defer workspace.deinit();
+            var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+            defer clock.deinit();
+            try command.expectRun(.{
+                .argv = &.{ "zig", "build", "test" },
+                .cwd = "/repo",
+                .timeout_ms = 5,
+                .max_stdout_bytes = command_output_limit,
+                .max_stderr_bytes = command_output_limit,
+                .provenance = "zigar_validation_run phase",
+            }, .{ .stdout = "PASS\n", .stderr = "warning: x\n", .duration_ms = 1500 });
+            const context = app_context.ValidationContext{
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .tool_paths = .{ .zig = "zig" },
+                .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+                .command_runner = command.port(),
+                .workspace_store = workspace.port(),
+                .clock_and_ids = clock.port(),
+            };
+            if (runPhase(allocator, context, "build_test", &.{ "zig", "build", "test" }, 5)) |phase_run| {
+                var owned = phase_run;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        const sample_phase = PhaseRun{
+            .name = "fmt",
+            .ok = false,
+            .argv = .{ .items = &.{ "zig", "fmt" } },
+            .cwd = "/repo",
+            .timeout_ms = 10,
+            .outcome = .{ .result = .{
+                .exit_code = 1,
+                .term = .{ .exited = 1 },
+                .stdout = "FAIL case\n",
+                .stderr = "src/main.zig:1:1: error: bad\n",
+                .duration_ms = 1501,
+                .timed_out = false,
+                .stdout_truncated = false,
+                .stderr_truncated = false,
+            } },
+        };
+        const skipped_phase = SkippedPhase{ .name = "tool", .reason = "skip" };
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (buildHistoryRecord(allocator, 1, "plan", false, &.{sample_phase}, &.{skipped_phase})) |record| {
+                var owned = record;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (parseHistoryRuns(allocator, "[{\"ok\":false,\"failures\":[{\"fingerprint\":\"a\"}]},{\"ok\":true,\"failures\":[]}]", 4)) |runs| {
+                deinitHistoryRuns(allocator, runs);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (parseHistoryRuns(allocator,
+                \\{"ok":false,"failures":[{"phase":"fmt"}]}
+                \\{"ok":true,"failures":[]}
+                \\
+            , 4)) |runs| {
+                deinitHistoryRuns(allocator, runs);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            const failure = HistoryFailure{ .fingerprint = "fmt", .sample_json = "{\"phase\":\"fmt\"}" };
+            var failures = [_]HistoryFailure{failure};
+            const run_item = HistoryRun{ .raw_json = "{}", .ok = false, .failures = failures[0..] };
+            if (buildFailureGroups(allocator, &.{run_item})) |groups| {
+                deinitFailureGroups(allocator, groups);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            const failure = FailureRecord{ .phase = "fmt", .fingerprint = "phase:fmt" };
+            const slow = SlowPhase{ .phase = "fmt", .duration_ms = 1501 };
+            var failures = [_]FailureRecord{failure};
+            var slow_phases = [_]SlowPhase{slow};
+            const record = HistoryRecord{
+                .recorded_unix_ms = 1,
+                .ok = false,
+                .plan_id = "plan",
+                .phase_count = 1,
+                .skipped_count = 1,
+                .failures = failures[0..],
+                .slow_phases = slow_phases[0..],
+            };
+            if (historyLineForRun(allocator, record, &.{sample_phase}, &.{skipped_phase})) |line| {
+                allocator.free(line);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (safeTextAlloc(allocator, &.{ 0xff, 0xe2, 0x82, 'x' })) |safe| {
+                var owned = safe;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (serializeJsonValueAlloc(allocator, .{ .string = "value" })) |json| {
+                allocator.free(json);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+
+        {
+            var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer backing.deinit();
+            var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+            const allocator = failing.allocator();
+            if (cloneArgv(allocator, &.{ "zig", "build", "test" })) |argv| {
+                var owned = argv;
+                owned.deinit(allocator);
+            } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+    }
 }

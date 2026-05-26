@@ -168,12 +168,15 @@ fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, cha
         position: struct { line: i64, character: i64 },
     };
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     std.json.Stringify.value(Params{
         .textDocument = .{ .uri = uri },
         .position = .{ .line = line, .character = character },
     }, .{}, &aw.writer) catch return error.OutOfMemory;
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, include_declaration: bool) std.mem.Allocator.Error![]u8 {
@@ -183,13 +186,16 @@ fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, c
         context: struct { includeDeclaration: bool },
     };
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     std.json.Stringify.value(Params{
         .textDocument = .{ .uri = uri },
         .position = .{ .line = line, .character = character },
         .context = .{ .includeDeclaration = include_declaration },
     }, .{}, &aw.writer) catch return error.OutOfMemory;
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Allocator.Error![]u8 {
@@ -197,15 +203,21 @@ fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Alloca
         textDocument: struct { uri: []const u8 },
     };
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     std.json.Stringify.value(Params{ .textDocument = .{ .uri = uri } }, .{}, &aw.writer) catch return error.OutOfMemory;
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 fn workspaceSymbolPayload(allocator: std.mem.Allocator, query: []const u8) std.mem.Allocator.Error![]u8 {
     const Params = struct { query: []const u8 };
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     std.json.Stringify.value(Params{ .query = query }, .{}, &aw.writer) catch return error.OutOfMemory;
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }

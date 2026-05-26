@@ -81,3 +81,7 @@ pub const zig_translate_c = tool(.{
     .risk = .{ .executes_backend = true },
     .plan = .{ .exact_command = .{ .required_file = &.{"translate-c"} } },
 });
+
+test "core definitions expose zig version metadata" {
+    try @import("std").testing.expect(zig_version.description.len > 0);
+}

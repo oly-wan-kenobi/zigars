@@ -98,3 +98,9 @@ pub const backends = [_]Backend{
         .verify = backend_contracts.diff_folded_verify[0..],
     },
 };
+
+test "backend catalog exposes required and optional backends" {
+    try @import("std").testing.expect(backends.len >= 6);
+    try @import("std").testing.expect(!backends[0].optional);
+    try @import("std").testing.expect(backends[0].tools.len > 0);
+}

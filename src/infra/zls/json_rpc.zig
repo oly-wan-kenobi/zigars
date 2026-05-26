@@ -77,7 +77,8 @@ pub const ErrorCode = struct {
 /// Write a JSON-RPC response with the given ID and result value.
 pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     var jw: std.json.Stringify = .{
         .writer = &aw.writer,
         .options = .{},
@@ -90,13 +91,16 @@ pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytyp
     try jw.objectField("result");
     try jw.write(result);
     try jw.endObject();
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 /// Write a JSON-RPC error response.
 pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, message: []const u8) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     var jw: std.json.Stringify = .{
         .writer = &aw.writer,
         .options = .{},
@@ -118,13 +122,16 @@ pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, messa
     try jw.write(message);
     try jw.endObject();
     try jw.endObject();
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 /// Write a JSON-RPC notification (no id).
 pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, params: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     var jw: std.json.Stringify = .{
         .writer = &aw.writer,
         .options = .{},
@@ -137,7 +144,9 @@ pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, param
     try jw.objectField("params");
     try jw.write(params);
     try jw.endObject();
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }
 
 // ── Tests ──
@@ -291,7 +300,8 @@ test "ErrorCode constants" {
 /// Write a JSON-RPC request (with id).
 pub fn writeRequest(allocator: std.mem.Allocator, id: RequestId, method: []const u8, params: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
-    errdefer aw.deinit();
+    var aw_owned = true;
+    defer if (aw_owned) aw.deinit();
     var jw: std.json.Stringify = .{
         .writer = &aw.writer,
         .options = .{},
@@ -306,5 +316,7 @@ pub fn writeRequest(allocator: std.mem.Allocator, id: RequestId, method: []const
     try jw.objectField("params");
     try jw.write(params);
     try jw.endObject();
-    return try aw.toOwnedSlice();
+    const bytes = try aw.toOwnedSlice();
+    aw_owned = false;
+    return bytes;
 }

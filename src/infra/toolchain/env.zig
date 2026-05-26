@@ -58,3 +58,9 @@ fn mapPortError(err: anyerror) ports.PortError {
         else => error.Unavailable,
     };
 }
+
+test "toolchain env maps filesystem and timeout errors" {
+    try std.testing.expectEqual(error.AccessDenied, mapPortError(error.AccessDenied));
+    try std.testing.expectEqual(error.PermissionDenied, mapPortError(error.PermissionDenied));
+    try std.testing.expectEqual(error.Unavailable, mapPortError(error.BrokenPipe));
+}

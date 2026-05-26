@@ -29,3 +29,7 @@ pub const zig_matrix_check = tool(.{
     .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true, .executes_backend = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
 });
+
+test "ci definitions expose artifact metadata" {
+    try @import("std").testing.expect(zig_ci_annotations.description.len > 0);
+}

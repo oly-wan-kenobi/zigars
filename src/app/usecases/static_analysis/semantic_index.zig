@@ -335,7 +335,8 @@ fn appendFileIndex(allocator: std.mem.Allocator, file: []const u8, contents: []c
             try file_tests.append(item);
             try tests.append(item);
         }
-    } else {
+    }
+    if (summary == null or (stats.partial_result and file_decls.items.len == 0)) {
         var decl_list = try zig_analysis.heuristicDeclarations(allocator, contents);
         defer decl_list.deinit(allocator);
         for (decl_list.items) |decl_item| {
@@ -726,4 +727,68 @@ test "zlint ast confirms call references from prefixed output" {
     try std.testing.expect(try zlintAstSymbolHasReference(arena.allocator(), ast, "helper", false));
     try std.testing.expect(try zlintAstSymbolHasReference(arena.allocator(), ast, "helper", true));
     try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(), ast, "other", false));
+    try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(), ast, "missing", false));
+    try std.testing.expect(!try zlintAstSymbolHasReference(arena.allocator(),
+        \\{"symbols":[{"name":"helper","references":[{"flags":[1,"read"]}]}]}
+    , "helper", true));
+}
+
+test "semantic helper fallbacks normalize lint evidence and serialize primitives" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const empty = try normalizeFindingsText(allocator, "  \n", "zlint");
+    try std.testing.expectEqual(@as(usize, 0), empty.array.items.len);
+    const raw_array = try normalizeFindingsText(allocator, "[42]", "zlint");
+    try std.testing.expectEqualStrings("unknown", raw_array.array.items[0].object.get("location").?.object.get("file").?.string);
+    const findings = try normalizeFindingsText(allocator,
+        \\{"findings":[{"rule":"r1","severity":"warning","path":"src/a.zig","line":"2","column":"3","message":"Widget warning"}]}
+    , "zlint");
+    const diagnostics = try normalizeFindingsText(allocator,
+        \\{"diagnostics":[{"rule_id":"r2","level":"error","location":{"path":"src/b.zig","line":4,"column":5},"title":"Widget error"}]}
+    , "zlint");
+    const results = try normalizeFindingsText(allocator,
+        \\{"results":[{"code":"r3","file":"src/c.zig","detail":"Widget info"}]}
+    , "zwanzig");
+    const fallback = try normalizeFindingsText(allocator, "42", "zlint");
+    try std.testing.expectEqual(@as(usize, 0), fallback.array.items.len);
+    try std.testing.expectEqualStrings("src/a.zig", findings.array.items[0].object.get("location").?.object.get("file").?.string);
+    try std.testing.expectEqualStrings("src/b.zig", diagnostics.array.items[0].object.get("location").?.object.get("file").?.string);
+    try std.testing.expectEqualStrings("src/c.zig", results.array.items[0].object.get("location").?.object.get("file").?.string);
+
+    const related = try findingsMatchingQuery(allocator, findings.array, "widget");
+    try std.testing.expectEqual(@as(usize, 1), related.array.items.len);
+    const empty_search = try lintSearchableText(allocator, .null);
+    try std.testing.expectEqualStrings("", empty_search);
+    const searchable = try searchableText(allocator, .null);
+    try std.testing.expectEqualStrings("", searchable);
+    const unknown_fp = try fingerprintValue(allocator, .null);
+    try std.testing.expectEqualStrings("unknown", unknown_fp.string);
+    var fp_obj = std.json.ObjectMap.empty;
+    try fp_obj.put(allocator, "source", .{ .string = "zlint" });
+    try fp_obj.put(allocator, "rule", .{ .string = "rule" });
+    try fp_obj.put(allocator, "message", .{ .string = "message" });
+    try fp_obj.put(allocator, "location", .null);
+    const no_location_search = try lintSearchableText(allocator, .{ .object = fp_obj });
+    try std.testing.expectEqualStrings("rule message  ", no_location_search);
+    const fp = try fingerprintValue(allocator, .{ .object = fp_obj });
+    try std.testing.expectEqualStrings("zlint:rule:unknown:0:message", fp.string);
+    var numbered = std.json.ObjectMap.empty;
+    try numbered.put(allocator, "line", .{ .number_string = "12" });
+    try std.testing.expectEqual(@as(i64, 12), integerField(numbered, "line").?);
+
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    try serializeValue(allocator, &out, .{ .float = 2.5 });
+    try out.append(allocator, ' ');
+    try serializeValue(allocator, &out, .{ .number_string = "17" });
+    try std.testing.expectEqualStrings("2.5 17", out.items);
+
+    const escaped = try serializeAlloc(allocator, .{ .string = "\"\\\r\t\x01" });
+    try std.testing.expectEqualStrings("\"\\\"\\\\\\r\\t\\u0001\"", escaped);
+
+    var fail_buf: [1]u8 = undefined;
+    var fail_fba = std.heap.FixedBufferAllocator.init(&fail_buf);
+    try std.testing.expectError(error.OutOfMemory, serializeAlloc(fail_fba.allocator(), .{ .string = "too long" }));
 }

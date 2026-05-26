@@ -62,25 +62,36 @@ pub const FakeWorkspaceScanner = struct {
 
     pub fn expectScan(self: *Self, request: ports.WorkspaceScanRequest, files: []const []const u8) !void {
         const owned_request = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         const owned_files = try self.allocator.alloc(ports.WorkspaceScanFile, files.len);
-        errdefer self.allocator.free(owned_files);
+        var files_owned = true;
+        var filled: usize = 0;
+        defer if (files_owned) {
+            for (owned_files[0..filled]) |file| self.allocator.free(file.path);
+            self.allocator.free(owned_files);
+        };
         for (files, 0..) |path, index| {
             owned_files[index] = .{ .path = try common.dupString(self.allocator, path) };
+            filled += 1;
         }
         try self.expected_scans.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .ok = owned_files },
         });
+        request_owned = false;
+        files_owned = false;
     }
 
     pub fn expectScanError(self: *Self, request: ports.WorkspaceScanRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeRequest(self.allocator, owned_request);
         try self.expected_scans.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn verify(self: *const Self) ports.PortError!void {
@@ -94,8 +105,10 @@ pub const FakeWorkspaceScanner = struct {
     ) ports.PortError!ports.WorkspaceScanResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
-        errdefer freeRequest(self.allocator, owned_call);
+        var record_owned = false;
+        errdefer if (!record_owned) freeRequest(self.allocator, owned_call);
         try self.call_records.append(self.allocator, owned_call);
+        record_owned = true;
 
         if (self.next_scan >= self.expected_scans.items.len) return error.UnexpectedCall;
         const expected = self.expected_scans.items[self.next_scan];
@@ -116,10 +129,15 @@ pub const FakeWorkspaceScanner = struct {
     }
 
     fn cloneRequest(allocator: Allocator, request: ports.WorkspaceScanRequest) !ports.WorkspaceScanRequest {
+        const path_prefix = try common.dupString(allocator, request.path_prefix);
+        var path_prefix_owned = true;
+        defer if (path_prefix_owned) allocator.free(path_prefix);
+        const provenance = try common.dupString(allocator, request.provenance);
+        path_prefix_owned = false;
         return .{
-            .path_prefix = try common.dupString(allocator, request.path_prefix),
+            .path_prefix = path_prefix,
             .max_files = request.max_files,
-            .provenance = try common.dupString(allocator, request.provenance),
+            .provenance = provenance,
         };
     }
 
@@ -148,4 +166,16 @@ test "workspace scanner fake returns expected files" {
     defer result.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 2), result.files.len);
     try fake.verify();
+}
+
+test "workspace scanner fake expectations clean partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, expectWorkspaceScannerWithAllocator, .{});
+}
+
+fn expectWorkspaceScannerWithAllocator(allocator: Allocator) !void {
+    var fake = FakeWorkspaceScanner.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectScan(.{ .path_prefix = "src", .max_files = 2, .provenance = "scan" }, &.{ "src/main.zig", "src/lib.zig" });
+    try fake.expectScanError(.{ .path_prefix = "bad", .provenance = "scan" }, error.AccessDenied);
 }

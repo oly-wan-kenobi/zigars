@@ -151,6 +151,7 @@ test "runtime field inventory covers current App fields" {
         try std.testing.expect(found);
         try std.testing.expect(record.migration_note.len > 0);
     }
+    try std.testing.expect(runtimeFieldConcern("not_a_runtime_field") == null);
 }
 
 test "runtime bridge projects app context without changing runtime ownership" {
@@ -184,6 +185,9 @@ test "runtime bridge projects app context without changing runtime ownership" {
         .command_calls = 3,
         .zls_requests = 4,
         .tool_errors = 5,
+        .backend_probe_cache = .{
+            .zig = .{ .ok = true, .status = "ok", .resolution = "ready" },
+        },
         .analysis_cache = .{ .signature = 10, .index_json = analysis_json[0..], .hits = 11, .refreshes = 12 },
         .semantic_index_cache = .{ .signature = 20, .index_json = semantic_json[0..], .hits = 21, .refreshes = 22 },
     };
@@ -200,6 +204,11 @@ test "runtime bridge projects app context without changing runtime ownership" {
     try std.testing.expectEqual(@as(usize, 2), ctx.zls_state.restart_attempts);
     try std.testing.expect(ctx.caches.analysis.cached);
     try std.testing.expectEqual(@as(usize, 11), ctx.caches.analysis.hits);
+    try std.testing.expect(ctx.caches.backend_probe.zig);
+    try std.testing.expect(ctx.trust_probe_cache.zig.probed);
+    try std.testing.expect(ctx.trust_probe_cache.zig.ok.?);
+    try std.testing.expectEqualStrings("ok", ctx.trust_probe_cache.zig.status);
+    try std.testing.expectEqualStrings("ready", ctx.trust_probe_cache.zig.resolution);
 
     ctx.counters.incrementCommandCalls();
     try std.testing.expectEqual(@as(usize, 4), runtime.command_calls);

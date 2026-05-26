@@ -186,11 +186,10 @@ pub const command = struct {
     }
 
     pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: []const []const u8) ![]const []const u8 {
-        var out = try std.ArrayList([]const u8).initCapacity(allocator, base.len + extra.len);
-        errdefer out.deinit(allocator);
-        try out.appendSlice(allocator, base);
-        try out.appendSlice(allocator, extra);
-        return out.toOwnedSlice(allocator);
+        const out = try allocator.alloc([]const u8, base.len + extra.len);
+        @memcpy(out[0..base.len], base);
+        @memcpy(out[base.len..], extra);
+        return out;
     }
 };
 
@@ -235,10 +234,13 @@ pub fn checkBackend(app: anytype, allocator: std.mem.Allocator, name: []const u8
         .resolution = "confirm the configured backend path and executable permissions",
     };
     defer availability.deinit(allocator);
+    const raw_status = availability.unavailable_reason orelse if (availability.available) "ok" else "unavailable";
+    const status = allocator.dupe(u8, raw_status) catch @panic("out of memory cloning backend probe status");
+    const resolution = allocator.dupe(u8, availability.basis) catch @panic("out of memory cloning backend probe resolution");
     return .{
         .ok = availability.available,
-        .status = availability.unavailable_reason orelse if (availability.available) "ok" else "unavailable",
-        .resolution = availability.basis,
+        .status = status,
+        .resolution = resolution,
     };
 }
 
@@ -1077,6 +1079,8 @@ fn relativeFromAbs(root: []const u8, abs_path: []const u8) ?[]const u8 {
     return abs_path[root.len + 1 ..];
 }
 
+const fakes = @import("../../testing/fakes/root.zig");
+
 test "workflow support workspace facade delegates through workspace store port" {
     const Stub = struct {
         fn resolve(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
@@ -1131,7 +1135,7 @@ test "workflow support command and changed path helpers use command runner port"
             if (!std.mem.eql(u8, "arch110-workflow-command", request.provenance)) return error.StaleArguments;
             const stdout = try allocator.dupe(u8, " M src/main.zig\nR  src/old.zig -> src/new.zig\n?? .zigar-cache/tmp\n");
             errdefer allocator.free(stdout);
-            const stderr = try allocator.dupe(u8, "");
+            const stderr = try allocator.dupe(u8, "stderr");
             errdefer allocator.free(stderr);
             return .{
                 .exit_code = 0,
@@ -1155,6 +1159,9 @@ test "workflow support command and changed path helpers use command runner port"
     defer run.deinit(std.testing.allocator);
     try std.testing.expect(run.succeeded());
     try std.testing.expectEqual(@as(i64, 12), run.duration_ms);
+
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
+    try std.testing.expectError(error.OutOfMemory, runCommand(failing.allocator(), app, &.{ "git", "status", "--porcelain" }, 5000));
 
     var changed = try changedPathList(std.testing.allocator, app, null, 5000);
     defer {
@@ -1187,7 +1194,13 @@ test "workflow support result helpers clone and classify structured errors" {
     const invalid = try splitToolArgsErrorResult(allocator, "zig_tool", "extra", "\"unterminated", error.InvalidArguments);
     try std.testing.expect(invalid.is_error);
     try std.testing.expectEqualStrings("invalid_argument", invalid.value.object.get("code").?.string);
+    const parse_failed = try splitToolArgsErrorResult(allocator, "zig_tool", "extra", "value", error.FileNotFound);
+    try std.testing.expect(parse_failed.is_error);
+    try std.testing.expectEqualStrings("argument_parse_failed", parse_failed.value.object.get("code").?.string);
     try std.testing.expectEqual(@as(i64, 42), argInt(.{ .object = obj }, "count", 0));
+    try std.testing.expectEqual(@as(i64, 12), argInt(.{ .object = obj }, "missing", 12));
+    try obj.put(allocator, "float", .{ .float = 7.9 });
+    try std.testing.expectEqual(@as(i64, 7), argInt(.{ .object = obj }, "float", 0));
     try std.testing.expectEqual(@as(usize, 3), lineNumberLocal("a\nb\nc", 4));
 }
 
@@ -1209,4 +1222,169 @@ test "workflow support backend and workspace error helpers expose stable fields"
 
     const unavailable = try backendUnavailableResult(allocator, "tool", "run", "/bin/tool", "missing", "install tool");
     try std.testing.expectEqualStrings("missing", unavailable.value.object.get("status").?.string);
+}
+
+test "workflow support backend probe helper covers missing failing and unavailable probes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const no_probe_app = .{
+        .context = .{ .backend_probe = @as(?ports.BackendProbe, null) },
+        .workspace = .{ .root = "/workspace" },
+    };
+    const missing = checkBackend(no_probe_app, allocator, "zls", &.{"zls"}, 1000);
+    try std.testing.expect(!missing.ok);
+    try std.testing.expectEqualStrings("unavailable", missing.status);
+
+    var probe = fakes.FakeBackendProbe.init(std.testing.allocator);
+    defer probe.deinit();
+    const app = .{
+        .context = .{ .backend_probe = @as(?ports.BackendProbe, probe.port()) },
+        .workspace = .{ .root = "/workspace" },
+    };
+    const unexpected = checkBackend(app, allocator, "zls", &.{ "zls", "--version" }, 1000);
+    try std.testing.expect(!unexpected.ok);
+    try std.testing.expectEqualStrings("UnexpectedCall", unexpected.status);
+
+    try probe.expectCheck(.{
+        .backend = "zls",
+        .argv = &.{ "zls", "--version" },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "zls",
+        .available = false,
+        .unavailable_reason = "not executable",
+        .basis = "chmod +x zls",
+    });
+    const unavailable = checkBackend(app, allocator, "zls", &.{ "zls", "--version" }, 1000);
+    try std.testing.expect(!unavailable.ok);
+    try std.testing.expectEqualStrings("not executable", unavailable.status);
+    try std.testing.expectEqualStrings("chmod +x zls", unavailable.resolution);
+    try probe.verify();
+}
+
+test "workflow support command argument splitting covers quotes escaping and cleanup" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const args = try splitToolArgs(allocator, "zig\\ build \"src/main.zig\" 'single quoted'");
+    try std.testing.expectEqual(@as(usize, 3), args.len);
+    try std.testing.expectEqualStrings("zig build", args[0]);
+    try std.testing.expectEqualStrings("src/main.zig", args[1]);
+    try std.testing.expectEqualStrings("single quoted", args[2]);
+    try std.testing.expectError(error.InvalidArguments, splitToolArgs(allocator, "unterminated\\"));
+    try std.testing.expectError(error.InvalidArguments, splitToolArgs(allocator, "\"unterminated"));
+
+    var fail_index: usize = 0;
+    while (fail_index < 16) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const failing_allocator = failing.allocator();
+        if (splitToolArgs(failing_allocator, "one two three")) |owned| {
+            freeStringList(failing_allocator, owned);
+            failing_allocator.free(owned);
+        } else |err| try std.testing.expect(err == error.OutOfMemory or err == error.WriteFailed);
+
+        var join_failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        if (command.joinArgv(join_failing.allocator(), &.{"zig"}, &.{ "build", "test" })) |joined| {
+            join_failing.allocator().free(joined);
+        } else |err| try std.testing.expect(err == error.OutOfMemory or err == error.WriteFailed);
+
+        var command_failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        if (commandString(command_failing.allocator(), &.{ "zig", "build", "test" })) |text| {
+            command_failing.allocator().free(text);
+        } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+    }
+}
+
+test "workflow support compiler insights and changed paths cover edge classifications" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const insights = try compilerInsightsValue(
+        allocator,
+        "src/lib.zig:2:3: warning: unused local variable\nnote: referenced here\n",
+        "",
+        &.{ "zig", "test" },
+    );
+    const obj = insights.object;
+    try std.testing.expectEqual(@as(i64, 1), obj.get("warning_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("note_count").?.integer);
+
+    const summary = try failureSummaryValue(allocator, .{ .bool = true }, false, &.{ "zig", "test" });
+    try std.testing.expectEqual(.null, summary.object.get("primary").?);
+
+    var primary = std.json.ObjectMap.empty;
+    try primary.put(allocator, "path", .{ .string = "README.md" });
+    const likely = try likelyFailureScopeValue(allocator, .{ .object = primary });
+    try std.testing.expectEqualStrings("path:README.md", likely.string);
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    const dummy_app = .{
+        .context = .{ .command_runner = commands.port() },
+        .workspace = .{ .root = "/workspace" },
+    };
+    const explicit = try changedPathList(allocator, dummy_app, "src/a.zig, src/b.zig\nsrc/a.zig", 1000);
+    try std.testing.expectEqual(@as(usize, 2), explicit.items.len);
+    try std.testing.expect(stringListContains(explicit.items, "src/a.zig"));
+    try std.testing.expect(!stringListContains(explicit.items, "src/missing.zig"));
+
+    var fail_index: usize = 0;
+    while (fail_index < 16) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        if (changedPathList(failing.allocator(), dummy_app, "src/a.zig src/b.zig", 1000)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+    }
+
+    const command_error = try commandRunErrorResult(allocator, .{
+        .operation = "build",
+        .argv = &.{ "zig", "build" },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .err = error.StreamTooLong,
+    });
+    try std.testing.expectEqualStrings("command_error", command_error.value.object.get("kind").?.string);
+    try std.testing.expect(command_error.value.object.get("output_limit_exceeded").?.bool);
+}
+
+test "workflow support serialization and owned JSON teardown cover scalar variants" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var out: std.ArrayList(u8) = .empty;
+    try serializeValue(allocator, &out, .{ .float = 3.5 });
+    try out.append(allocator, ',');
+    try serializeValue(allocator, &out, .{ .number_string = "42" });
+    try out.append(allocator, ',');
+    try serializeString(allocator, &out, "\"\\\n\r\t\x08\x0c\x01");
+    try std.testing.expect(std.mem.indexOf(u8, out.items, "\\\"\\\\\\n\\r\\t\\b\\f\\u0001") != null);
+
+    var fail_index: usize = 0;
+    while (fail_index < 16) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        if (serializeAlloc(failing.allocator(), .{ .string = "value" })) |bytes| {
+            failing.allocator().free(bytes);
+        } else |err| try std.testing.expect(err == error.OutOfMemory or err == error.WriteFailed);
+    }
+
+    const owned_number = try std.testing.allocator.dupe(u8, "99");
+    deinitOwnedValue(std.testing.allocator, .{ .number_string = owned_number });
+
+    var array = std.json.Array.init(std.testing.allocator);
+    try array.append(.{ .string = try std.testing.allocator.dupe(u8, "item") });
+    var owned_obj = std.json.ObjectMap.empty;
+    const owned_key = try std.testing.allocator.dupe(u8, "items");
+    try owned_obj.put(std.testing.allocator, owned_key, .{ .array = array });
+    deinitOwnedValue(std.testing.allocator, .{ .object = owned_obj });
 }

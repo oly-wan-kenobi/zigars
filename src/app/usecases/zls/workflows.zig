@@ -6,10 +6,12 @@ pub fn documentSyncValue(allocator: std.mem.Allocator, context: app_context.ZlsC
     const sync = try context.zls_gateway.sync(allocator, .{ .file = file, .content = content, .provenance = tool_name });
     defer sync.deinit(allocator);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "uri", try ownedString(allocator, sync.uri));
     try obj.put(allocator, "version", .{ .integer = 0 });
     try obj.put(allocator, "open", .{ .bool = true });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -18,10 +20,12 @@ pub fn documentStatusValue(allocator: std.mem.Allocator, context: app_context.Co
     const resolved = try workspace_store.resolve(allocator, .{ .path = file, .provenance = "zls.document_status" });
     defer resolved.deinit(allocator);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "file", try ownedString(allocator, file));
     try obj.put(allocator, "uri", try uriValue(allocator, resolved.path));
     try obj.put(allocator, "open", .{ .bool = context.zls_state.running });
+    obj_owned = false;
     return .{ .object = obj };
 }
 

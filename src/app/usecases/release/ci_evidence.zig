@@ -1,5 +1,6 @@
 const std = @import("std");
 const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 
 const command = support.command;
@@ -71,7 +72,8 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     var annotations = std.json.Array.init(allocator);
     const parse_summary = tryParseAnnotations(allocator, &annotations, file, result.stderr) catch return error.OutOfMemory;
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     obj.put(allocator, "kind", .{ .string = "zig_ci_annotations" }) catch return error.OutOfMemory;
     obj.put(allocator, "ok", .{ .bool = result.succeeded() }) catch return error.OutOfMemory;
     obj.put(allocator, "artifact_kind", .{ .string = "ci_annotations" }) catch return error.OutOfMemory;
@@ -83,6 +85,7 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     obj.put(allocator, "parse_summary", annotationParseSummaryValue(allocator, parse_summary) catch return error.OutOfMemory) catch return error.OutOfMemory;
     obj.put(allocator, "annotations", .{ .array = annotations }) catch return error.OutOfMemory;
     obj.put(allocator, "raw", commandResultValue(allocator, "zig ast-check", argv, a.workspace.root, timeout_ms, result) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj_owned = false;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -117,7 +120,8 @@ fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parse
     const end_column = if (start_column == std.math.maxInt(i64)) start_column else start_column + 1;
     const details = std.json.Array.init(allocator);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = parsed.path orelse default_file });
     try obj.put(allocator, "start_line", .{ .integer = parsed.line orelse 1 });
     try obj.put(allocator, "start_column", .{ .integer = start_column });
@@ -132,6 +136,7 @@ fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parse
     try obj.put(allocator, "parser_confidence", .{ .string = if (located) "high" else "low" });
     try obj.put(allocator, "parsing_basis", .{ .string = if (located) "located Zig compiler diagnostic" else "unlocated Zig compiler diagnostic" });
     try obj.put(allocator, "details", .{ .array = details });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -156,19 +161,22 @@ fn annotationLevel(severity: []const u8) []const u8 {
 
 fn annotationParseSummaryValue(allocator: std.mem.Allocator, summary: AnnotationParseSummary) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "input_lines", .{ .integer = summary.input_lines });
     try obj.put(allocator, "annotation_count", .{ .integer = summary.annotation_count });
     try obj.put(allocator, "located_diagnostics", .{ .integer = summary.located_diagnostics });
     try obj.put(allocator, "unlocated_diagnostics", .{ .integer = summary.unlocated_diagnostics });
     try obj.put(allocator, "detail_lines", .{ .integer = summary.detail_lines });
     try obj.put(allocator, "parser_confidence", .{ .string = summary.confidence() });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     for (input) |c| {
         switch (c) {
             '&' => try out.appendSlice(allocator, "&amp;"),
@@ -179,7 +187,9 @@ pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
             else => if (isXmlChar(c)) try out.append(allocator, c) else try out.appendSlice(allocator, "&#xFFFD;"),
         }
     }
-    return out.toOwnedSlice(allocator);
+    const bytes = try out.toOwnedSlice(allocator);
+    out_owned = false;
+    return bytes;
 }
 
 fn isXmlChar(c: u8) bool {
@@ -226,7 +236,8 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !R
     const xml = junitXmlForCommand(allocator, list.items, result) catch return error.OutOfMemory;
     defer allocator.free(xml);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     obj.put(allocator, "kind", .{ .string = "zig_junit" }) catch return error.OutOfMemory;
     obj.put(allocator, "ok", .{ .bool = result.succeeded() }) catch return error.OutOfMemory;
     obj.put(allocator, "artifact_kind", .{ .string = junit_artifact_kind }) catch return error.OutOfMemory;
@@ -238,6 +249,7 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !R
     obj.put(allocator, "raw_output_available", .{ .bool = true }) catch return error.OutOfMemory;
     obj.put(allocator, "junit_xml", .{ .string = xml }) catch return error.OutOfMemory;
     obj.put(allocator, "command", commandResultValue(allocator, "zig test", list.items, a.workspace.root, timeout_ms, result) catch return error.OutOfMemory) catch return error.OutOfMemory;
+    obj_owned = false;
     return structured(allocator, .{ .object = obj });
 }
 
@@ -314,7 +326,8 @@ pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
         results.append(matrixRunEntryValue(allocator, zig_path, argv, a.workspace.root, timeout_ms, run) catch return error.OutOfMemory) catch return error.OutOfMemory;
     }
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     obj.put(allocator, "kind", .{ .string = "zig_matrix_check" }) catch return error.OutOfMemory;
     obj.put(allocator, "ok", .{ .bool = ok }) catch return error.OutOfMemory;
     obj.put(allocator, "artifact_kind", .{ .string = "zig_matrix_results" }) catch return error.OutOfMemory;
@@ -325,13 +338,15 @@ pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     obj.put(allocator, "limitations", .{ .string = matrix_limitations }) catch return error.OutOfMemory;
     obj.put(allocator, "raw_output_available", .{ .bool = true }) catch return error.OutOfMemory;
     obj.put(allocator, "results", .{ .array = results }) catch return error.OutOfMemory;
+    obj_owned = false;
     return structured(allocator, .{ .object = obj });
 }
 
 pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: command.RunResult) !std.json.Value {
     const insights = try compilerInsightsValue(allocator, result.stdout, result.stderr, argv);
     var item = std.json.ObjectMap.empty;
-    errdefer item.deinit(allocator);
+    var item_owned = true;
+    defer if (item_owned) item.deinit(allocator);
     try item.put(allocator, "kind", .{ .string = "zig_matrix_entry" });
     try item.put(allocator, "zig", .{ .string = zig_path });
     try item.put(allocator, "ok", .{ .bool = result.succeeded() });
@@ -339,12 +354,14 @@ pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, a
     try item.put(allocator, "argv", try argvValue(allocator, argv));
     try item.put(allocator, "failure_summary", try failureSummaryValue(allocator, insights, result.succeeded(), argv));
     try item.put(allocator, "result", try commandResultValue(allocator, "zig build test", argv, cwd, timeout_ms, result));
+    item_owned = false;
     return .{ .object = item };
 }
 
 pub fn matrixCommandErrorEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
     var item = std.json.ObjectMap.empty;
-    errdefer item.deinit(allocator);
+    var item_owned = true;
+    defer if (item_owned) item.deinit(allocator);
     try item.put(allocator, "kind", .{ .string = "zig_matrix_entry" });
     try item.put(allocator, "zig", .{ .string = zig_path });
     try item.put(allocator, "ok", .{ .bool = false });
@@ -354,5 +371,250 @@ pub fn matrixCommandErrorEntryValue(allocator: std.mem.Allocator, zig_path: []co
     try item.put(allocator, "error_kind", .{ .string = command.errorKind(err) });
     try item.put(allocator, "failure_summary", try commandErrorSummaryValue(allocator, err, argv));
     try item.put(allocator, "result", try commandErrorValue(allocator, "zig build test", argv, cwd, timeout_ms, err));
+    item_owned = false;
     return .{ .object = item };
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "CI annotation parsing captures located unlocated and detail lines" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var annotations = std.json.Array.init(allocator);
+    const summary = try tryParseAnnotations(allocator, &annotations, "src/default.zig",
+        \\src/main.zig:2:3: warning: unused local constant
+        \\    const x = 1;
+        \\    ^~~~~
+        \\error: build failed
+        \\note: rerun with --summary all
+        \\
+    );
+    try std.testing.expectEqual(@as(i64, 5), summary.input_lines);
+    try std.testing.expectEqual(@as(i64, 3), summary.annotation_count);
+    try std.testing.expectEqual(@as(i64, 1), summary.located_diagnostics);
+    try std.testing.expectEqual(@as(i64, 2), summary.unlocated_diagnostics);
+    try std.testing.expectEqual(@as(i64, 2), summary.detail_lines);
+    try std.testing.expectEqualStrings("medium", summary.confidence());
+
+    const first = annotations.items[0].object;
+    try std.testing.expectEqualStrings("src/main.zig", first.get("path").?.string);
+    try std.testing.expectEqualStrings("warning", first.get("annotation_level").?.string);
+    try std.testing.expectEqual(@as(usize, 2), first.get("details").?.array.items.len);
+    const summary_value = (try annotationParseSummaryValue(allocator, summary)).object;
+    try std.testing.expectEqualStrings("medium", summary_value.get("parser_confidence").?.string);
+
+    try std.testing.expectEqualStrings("low", (AnnotationParseSummary{}).confidence());
+    try std.testing.expectEqualStrings("high", (AnnotationParseSummary{ .annotation_count = 1, .located_diagnostics = 1 }).confidence());
+    try std.testing.expectEqualStrings("low", (AnnotationParseSummary{ .annotation_count = 1, .unlocated_diagnostics = 1 }).confidence());
+    try std.testing.expectEqualStrings("notice", annotationLevel("note"));
+    try std.testing.expectEqualStrings("failure", annotationLevel("error"));
+}
+
+test "CI XML and matrix projections escape command output" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const escaped = try xmlEscape(allocator, "&<>\"'\x01ok");
+    try std.testing.expectEqualStrings("&amp;&lt;&gt;&quot;&apos;&#xFFFD;ok", escaped);
+
+    const argv = &.{ "zig", "test", "src/main.zig" };
+    const failed = command.RunResult{
+        .term = .{ .exited = 1 },
+        .stdout = "out <ok>",
+        .stderr = "src/main.zig:1:1: error: bad & worse",
+        .duration_ms = 17,
+    };
+    const failed_xml = try junitXmlForCommand(allocator, argv, failed);
+    try std.testing.expect(std.mem.indexOf(u8, failed_xml, "<failure") != null);
+    try std.testing.expect(std.mem.indexOf(u8, failed_xml, "&amp; worse") != null);
+
+    const passed = command.RunResult{
+        .term = .{ .exited = 0 },
+        .stdout = "ok",
+        .stderr = "",
+        .duration_ms = 3,
+    };
+    const passed_xml = try junitXmlForCommand(allocator, argv, passed);
+    try std.testing.expect(std.mem.indexOf(u8, passed_xml, "failures=\"0\"") != null);
+
+    const run_entry = (try matrixRunEntryValue(allocator, "zig", argv, "/repo", 1000, failed)).object;
+    try std.testing.expectEqualStrings("zig_matrix_entry", run_entry.get("kind").?.string);
+    try std.testing.expect(!run_entry.get("ok").?.bool);
+
+    const error_entry = (try matrixCommandErrorEntryValue(allocator, "zig-nightly", argv, "/repo", 1000, error.Timeout)).object;
+    try std.testing.expectEqualStrings("Timeout", error_entry.get("error").?.string);
+    try std.testing.expect(error_entry.get("result") != null);
+}
+
+test "CI public workflows run annotations junit and matrix through ports" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try workspace_fake.expectResolve(.{ .path = "src/main.zig", .provenance = "arch110-workflow-resolve" }, "/repo/src/main.zig");
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig", "ast-check", "/repo/src/main.zig" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 1,
+        .stderr = "src/main.zig:1:1: error: bad\n    ^\n",
+        .duration_ms = 8,
+    });
+
+    try workspace_fake.expectResolve(.{ .path = "tests/main_test.zig", .provenance = "arch110-workflow-resolve" }, "/repo/tests/main_test.zig");
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig", "test", "/repo/tests/main_test.zig", "--test-filter", "case", "--summary", "all" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 1,
+        .stdout = "FAIL case\n",
+        .stderr = "tests/main_test.zig:2:1: error: failed\n",
+        .duration_ms = 11,
+    });
+
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig", "build", "test" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout = "ok\n",
+        .duration_ms = 5,
+    });
+
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig-a", "build", "test", "--summary", "all" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout = "ok\n",
+        .duration_ms = 6,
+    });
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig-b", "build", "test", "--summary", "all" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 1,
+        .stderr = "src/main.zig:3:1: error: nightly failure\n",
+        .duration_ms = 7,
+    });
+    try command_fake.expectRunError(.{
+        .argv = &.{ "zig-c", "build", "test", "--summary", "all" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, error.Timeout);
+
+    var app = App.init(releaseWorkflowTestContext(command_fake.port(), workspace_fake.port()), allocator);
+
+    const annotations_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    const annotations = try zigCiAnnotations(&app, allocator, annotations_args.value);
+    try std.testing.expectEqualStrings("zig_ci_annotations", annotations.value.object.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 1), annotations.value.object.get("annotation_count").?.integer);
+
+    const junit_file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"tests/main_test.zig\",\"filter\":\"case\",\"args\":\"--summary all\"}", .{});
+    const junit_file = try zigJunit(&app, allocator, junit_file_args.value);
+    try std.testing.expect(!junit_file.value.object.get("ok").?.bool);
+    try std.testing.expectEqual(@as(i64, 1), junit_file.value.object.get("failures").?.integer);
+
+    const junit_build = try zigJunit(&app, allocator, null);
+    try std.testing.expect(junit_build.value.object.get("ok").?.bool);
+
+    const matrix_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"zig_paths\":\"zig-a zig-b zig-c\",\"args\":\"--summary all\"}", .{});
+    const matrix = try zigMatrixCheck(&app, allocator, matrix_args.value);
+    try std.testing.expect(!matrix.value.object.get("ok").?.bool);
+    try std.testing.expectEqual(@as(i64, 1), matrix.value.object.get("passed").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), matrix.value.object.get("failed").?.integer);
+
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+test "CI workflows render command runner errors as structured results" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try workspace_fake.expectResolve(.{ .path = "src/main.zig", .provenance = "arch110-workflow-resolve" }, "/repo/src/main.zig");
+    try command_fake.expectRunError(.{
+        .argv = &.{ "zig", "ast-check", "/repo/src/main.zig" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, error.Unavailable);
+    try workspace_fake.expectResolve(.{ .path = "tests/main_test.zig", .provenance = "arch110-workflow-resolve" }, "/repo/tests/main_test.zig");
+    try command_fake.expectRunError(.{
+        .argv = &.{ "zig", "test", "/repo/tests/main_test.zig" },
+        .cwd = "/repo",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, error.Timeout);
+
+    var app = App.init(releaseWorkflowTestContext(command_fake.port(), workspace_fake.port()), allocator);
+    const annotations_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    const annotations = try zigCiAnnotations(&app, allocator, annotations_args.value);
+    try std.testing.expect(!annotations.is_error);
+    try std.testing.expectEqualStrings("command_error", annotations.value.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("run_ast_check", annotations.value.object.get("title").?.string);
+    try std.testing.expectEqualStrings("Unavailable", annotations.value.object.get("error").?.string);
+
+    const junit_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"tests/main_test.zig\"}", .{});
+    const junit = try zigJunit(&app, allocator, junit_args.value);
+    try std.testing.expect(!junit.is_error);
+    try std.testing.expectEqualStrings("command_error", junit.value.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("run_tests", junit.value.object.get("title").?.string);
+    try std.testing.expectEqualStrings("Timeout", junit.value.object.get("error").?.string);
+
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+fn releaseWorkflowTestContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.ReleaseWorkflowContext {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
+        .command_runner = command_runner,
+        .workspace_store = workspace_store,
+        .workspace_scanner = undefined,
+        .tool_manifest = undefined,
+    };
 }

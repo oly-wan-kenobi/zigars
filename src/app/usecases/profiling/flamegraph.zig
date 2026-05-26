@@ -172,7 +172,9 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
         .provenance = "zig_flamegraph zflame render",
     }) catch |err| {
         var owned_argv = try cloneArgv(allocator, argv.argv.items);
-        errdefer owned_argv.deinit(allocator);
+        var argv_owned = true;
+        defer if (argv_owned) owned_argv.deinit(allocator);
+        argv_owned = false;
         return .{ .err = .{ .backend_run_failed = .{
             .error_info = app_errors.AppError{
                 .category = .backend,
@@ -195,11 +197,17 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     const command_term = command_result.effectiveTerm();
     if (command_term.failed() or command_result.timed_out) {
         var owned_argv = try cloneArgv(allocator, argv.argv.items);
-        errdefer owned_argv.deinit(allocator);
+        var argv_owned = true;
+        defer if (argv_owned) owned_argv.deinit(allocator);
         const stdout = try allocator.dupe(u8, command_result.stdout);
-        errdefer allocator.free(stdout);
+        var stdout_owned = true;
+        defer if (stdout_owned) allocator.free(stdout);
         const stderr = try allocator.dupe(u8, command_result.stderr);
-        errdefer allocator.free(stderr);
+        var stderr_owned = true;
+        defer if (stderr_owned) allocator.free(stderr);
+        argv_owned = false;
+        stdout_owned = false;
+        stderr_owned = false;
         return .{ .err = .{ .command_failed = .{
             .error_info = app_errors.AppError{
                 .category = .backend,
@@ -254,9 +262,13 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     } } };
 
     var owned_argv = try cloneArgv(allocator, argv.argv.items);
-    errdefer owned_argv.deinit(allocator);
+    var argv_owned = true;
+    defer if (argv_owned) owned_argv.deinit(allocator);
     const hash = try sha256Hex(allocator, command_result.stdout);
-    errdefer allocator.free(hash);
+    var hash_owned = true;
+    defer if (hash_owned) allocator.free(hash);
+    argv_owned = false;
+    hash_owned = false;
 
     return .{ .ok = .{
         .backend_executable_path = context.tool_paths.zflame,
@@ -290,4 +302,23 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
     const hex = std.fmt.bytesToHex(digest, .lower);
     return allocator.dupe(u8, &hex);
+}
+
+test "flamegraph cloneArgv cleans partial allocations on failure" {
+    const argv = &.{ "zflame", "recursive", "stacks.folded" };
+    var saw_success = false;
+    var saw_oom = false;
+    for (0..8) |fail_index| {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
+        if (cloneArgv(failing.allocator(), argv)) |owned| {
+            var mutable = owned;
+            mutable.deinit(failing.allocator());
+            saw_success = true;
+        } else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+            saw_oom = true;
+        }
+    }
+    try std.testing.expect(saw_success);
+    try std.testing.expect(saw_oom);
 }

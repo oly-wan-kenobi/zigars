@@ -4,6 +4,7 @@ const support = @import("client_test_support.zig");
 
 const FakeZls = support.FakeZls;
 const LspClient = client_mod.LspClient;
+const LspTransport = @import("transport.zig").LspTransport;
 const testPipe = support.testPipe;
 
 fn testIo() std.Io {
@@ -121,6 +122,77 @@ test "reader EOF stops LSP client and records EndOfStream" {
     try std.testing.expectEqualStrings("EndOfStream", last);
 }
 
+test "reader transport errors stop LSP client and record last error" {
+    const alloc = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const to_server = try testPipe();
+    const from_server = try testPipe();
+    defer to_server.read_end.close(io);
+
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    client.setLogger(.disabled());
+    try client.connect(to_server.write_end, from_server.read_end, null);
+
+    try from_server.write_end.writeStreamingAll(io, "Bad-Header: 5\r\n\r\nhello");
+    from_server.write_end.close(io);
+
+    std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(20), .clock = .awake } }, io) catch {};
+    try std.testing.expect(!client.isRunning());
+    const last = (try client.lastError(alloc)).?;
+    defer alloc.free(last);
+    try std.testing.expectEqualStrings("MissingContentLength", last);
+}
+
+test "reader ignores malformed JSON-RPC body without stopping" {
+    const alloc = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const to_server = try testPipe();
+    const from_server = try testPipe();
+    defer to_server.read_end.close(io);
+
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    client.setLogger(.disabled());
+    try client.connect(to_server.write_end, from_server.read_end, null);
+
+    try LspTransport.writeMessage(from_server.write_end, io, "{not json");
+    std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(20), .clock = .awake } }, io) catch {};
+    try std.testing.expect(client.isRunning());
+    from_server.write_end.close(io);
+}
+
+test "stderr reader drains stderr and disconnect joins it" {
+    const alloc = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const to_server = try testPipe();
+    const from_server = try testPipe();
+    const stderr_pipe = try testPipe();
+    defer to_server.read_end.close(io);
+
+    var client = LspClient.init(alloc, io);
+    defer client.deinit();
+    client.setLogger(.disabled());
+    client.shutdown_timeout_ms = 1;
+    try client.connect(to_server.write_end, from_server.read_end, stderr_pipe.read_end);
+
+    try stderr_pipe.write_end.writeStreamingAll(io, "zls stderr noise");
+    std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(20), .clock = .awake } }, io) catch {};
+    stderr_pipe.write_end.close(io);
+    from_server.write_end.close(io);
+    std.Io.Timeout.sleep(.{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(20), .clock = .awake } }, io) catch {};
+
+    client.disconnect();
+    try std.testing.expect(client.stderr_thread == null);
+    try std.testing.expect(client.zls_stderr == null);
+}
+
 test "disconnect on already disconnected client is safe" {
     const alloc = std.testing.allocator;
     const io = testIo();
@@ -178,7 +250,7 @@ test "LspClient fake ZLS hover and diagnostics roundtrip" {
     defer client.deinit();
     try client.connect(to_server.write_end, from_server.read_end, null);
 
-    const init_response = try client.initialize(alloc, "file:///tmp");
+    const init_response = try client.initialize(alloc, "file:///tmp/quote\"slash\\root");
     defer alloc.free(init_response);
     try std.testing.expect(std.mem.indexOf(u8, init_response, "hoverProvider") != null);
 

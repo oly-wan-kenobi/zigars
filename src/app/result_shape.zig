@@ -52,7 +52,8 @@ pub fn supportedModeNamesValue(allocator: std.mem.Allocator) !std.json.Value {
 
 pub fn modeMetadataValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "mode", .{ .string = mode.name() });
     try obj.put(allocator, "description", .{ .string = mode.description() });
@@ -61,12 +62,14 @@ pub fn modeMetadataValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !s
     try obj.put(allocator, "included_sections", try stringArrayValue(allocator, includedSections(mode)));
     try obj.put(allocator, "omitted_by_default", try stringArrayValue(allocator, omittedByDefault(mode)));
     try obj.put(allocator, "omission_contract", .{ .string = "Every omitted or truncated section must be named in omitted_sections with a reason and recovery path." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_result_shape" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "ok", .{ .bool = true });
@@ -92,6 +95,7 @@ pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.j
     }));
     try obj.put(allocator, "limitations", .{ .string = "This contract standardizes response shape and omissions; it does not prove tool-specific correctness." });
     try obj.put(allocator, "resolution", .{ .string = "Validate public tool schemas and inspect each handler result for result_shape and omitted_sections." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -108,7 +112,8 @@ pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !st
     const clamp_applied = requested != effective;
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_output_budget_plan" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "tool", if (input.tool_name) |tool_name| .{ .string = tool_name } else .null);
@@ -126,6 +131,7 @@ pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !st
     try obj.put(allocator, "limitations", .{ .string = "Token counts are planning budgets, not tokenizer-exact guarantees for every MCP client." });
     try obj.put(allocator, "resolution", .{ .string = "Use mode=compact for routing, mode=standard for normal agent use, and mode=deep when a human or verifier needs fuller evidence." });
     try obj.put(allocator, "result_shape", try modeMetadataValue(allocator, input.mode));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -150,11 +156,13 @@ pub fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mo
 
 fn supportedModesValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     inline for (std.meta.fields(ResultShapeMode)) |field| {
         const mode = @field(ResultShapeMode, field.name);
         try array.append(try modeMetadataValue(allocator, mode));
     }
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -172,7 +180,8 @@ fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effectiv
     const human_pct = 100 - machine_pct - evidence_pct;
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "machine_fields_tokens", .{ .integer = @divTrunc(effective_budget * machine_pct, 100) });
     try obj.put(allocator, "evidence_tokens", .{ .integer = @divTrunc(effective_budget * evidence_pct, 100) });
     try obj.put(allocator, "human_summary_tokens", .{ .integer = @divTrunc(effective_budget * human_pct, 100) });
@@ -181,6 +190,7 @@ fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effectiv
         .standard => &.{ "machine_fields", "evidence", "limitations", "summary", "omitted_sections" },
         .deep => &.{ "machine_fields", "expanded_evidence", "diagnostics", "limitations", "omitted_sections" },
     }));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -210,8 +220,10 @@ fn omittedByDefault(mode: ResultShapeMode) []const []const u8 {
 
 fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (items) |item| try array.append(.{ .string = item });
+    array_owned = false;
     return .{ .array = array };
 }
 

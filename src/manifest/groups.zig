@@ -27,3 +27,8 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .runtime_diagnostics, .keywords = &.{ "debug", "lldb", "core dump", "sanitizer", "panic trace", "crash repro", "heaptrack", "valgrind", "callgrind", "fuzz", "afl", "libfuzzer", "binary size", "objdump", "dwarf", "symbolize", "qemu", "cross target", "embedded", "microzig", "board", "flash" } },
     .{ .group = .public_rollout, .keywords = &.{ "adoption", "client config", "mcp config", "codex", "claude", "gemini", "smoke plan", "conformance report", "public claims", "evidence basis", "rollout" } },
 };
+
+test "group specs cover every tool group" {
+    try @import("std").testing.expectEqual(@import("std").meta.fields(types.ToolGroup).len, group_specs.len);
+    try @import("std").testing.expect(group_specs[0].keywords.len > 0);
+}

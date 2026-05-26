@@ -118,7 +118,8 @@ pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_pat
 
 pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = entry.identity.path });
     try obj.put(allocator, "abs_path", .{ .string = entry.identity.abs_path });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(entry.identity.bytes) });
@@ -127,6 +128,7 @@ pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.
     try obj.put(allocator, "parser_confidence", .{ .string = entry.parser_confidence });
     try obj.put(allocator, "raw_reference", .{ .string = entry.raw_reference });
     try obj.put(allocator, "provenance", try provenanceValue(allocator, entry.provenance));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -161,7 +163,8 @@ pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.jso
 
 pub fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "producer", .{ .string = provenance.producer });
     try obj.put(allocator, "artifact_kind", .{ .string = provenance.artifact_kind });
     try obj.put(allocator, "backend_name", .{ .string = provenance.backend_name });
@@ -171,21 +174,28 @@ pub fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !st
     try obj.put(allocator, "notes", .{ .string = provenance.notes });
     try obj.put(allocator, "command_argv", try argvValue(allocator, provenance.command_argv));
     try obj.put(allocator, "toolchain", try toolchainValue(allocator, provenance.toolchain));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn registryValue(allocator: std.mem.Allocator, registry: Registry) !std.json.Value {
     var entries = std.json.Array.init(allocator);
-    errdefer entries.deinit();
+    var entries_owned = true;
+    defer if (entries_owned) entries.deinit();
     for (registry.entries.items) |entry| try entries.append(try ownedEntryValue(allocator, entry));
+    entries_owned = false;
     return .{ .array = entries };
 }
 
 pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !Registry {
     var registry: Registry = .{};
-    errdefer registry.deinit(allocator);
+    var registry_owned = true;
+    defer if (registry_owned) registry.deinit(allocator);
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, registry_abs_path, allocator, .limited(16 * 1024 * 1024)) catch |err| switch (err) {
-        error.FileNotFound => return registry,
+        error.FileNotFound => {
+            registry_owned = false;
+            return registry;
+        },
         else => return err,
     };
     defer allocator.free(bytes);
@@ -197,23 +207,24 @@ pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path:
         defer parsed.deinit();
         try registry.entries.append(allocator, try ownedEntryFromValue(allocator, parsed.value));
     }
+    registry_owned = false;
     return registry;
 }
 
 pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: RegistryEntry) !void {
-    const owned = try cloneEntry(allocator, entry);
-    errdefer {
-        var copy = owned;
-        copy.deinit(allocator);
-    }
+    var owned = try cloneEntry(allocator, entry);
+    var owned_entry = true;
+    defer if (owned_entry) owned.deinit(allocator);
     for (registry.entries.items, 0..) |*existing, index| {
         if (std.mem.eql(u8, existing.path, owned.path)) {
             existing.deinit(allocator);
             registry.entries.items[index] = owned;
+            owned_entry = false;
             return;
         }
     }
     try registry.entries.append(allocator, owned);
+    owned_entry = false;
 }
 
 pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8, registry: Registry) !void {
@@ -253,10 +264,11 @@ pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_p
 
 pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry) !PruneSummary {
     var kept: std.ArrayList(OwnedEntry) = .empty;
-    errdefer {
+    var kept_owned = true;
+    defer if (kept_owned) {
         for (kept.items) |*entry| entry.deinit(allocator);
         kept.deinit(allocator);
-    }
+    };
     var summary: PruneSummary = .{};
     for (registry.entries.items) |*entry| {
         const bytes = std.Io.Dir.cwd().readFileAlloc(io, entry.abs_path, allocator, .limited(entry.bytes + 1)) catch |err| switch (err) {
@@ -284,6 +296,7 @@ pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry)
     for (registry.entries.items) |*entry| entry.deinit(allocator);
     registry.entries.deinit(allocator);
     registry.entries = kept;
+    kept_owned = false;
     summary.pruned = summary.missing + summary.changed;
     return summary;
 }
@@ -297,11 +310,13 @@ pub const PruneSummary = struct {
 
 pub fn pruneSummaryValue(allocator: std.mem.Allocator, summary: PruneSummary) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kept", .{ .integer = @intCast(summary.kept) });
     try obj.put(allocator, "missing", .{ .integer = @intCast(summary.missing) });
     try obj.put(allocator, "changed", .{ .integer = @intCast(summary.changed) });
     try obj.put(allocator, "pruned", .{ .integer = @intCast(summary.pruned) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -319,49 +334,53 @@ fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Own
     const obj = value.object;
     const provenance = objectValue(obj.get("provenance")) orelse return error.InvalidArtifactRegistryEntry;
     const toolchain = objectValue(provenance.get("toolchain")) orelse return error.InvalidArtifactRegistryEntry;
-    return .{
-        .path = try dupStringField(allocator, obj, "path"),
-        .abs_path = try dupStringField(allocator, obj, "abs_path"),
-        .bytes = @intCast(integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry),
-        .sha256 = try dupStringField(allocator, obj, "sha256"),
-        .producer = try dupStringField(allocator, provenance, "producer"),
-        .artifact_kind = try dupStringField(allocator, provenance, "artifact_kind"),
-        .backend_name = try dupOptionalStringField(allocator, provenance, "backend_name"),
-        .backend_version = try dupOptionalStringField(allocator, provenance, "backend_version"),
-        .target = try dupOptionalStringField(allocator, provenance, "target"),
-        .baseline_identity = try dupOptionalStringField(allocator, provenance, "baseline_identity"),
-        .notes = try dupOptionalStringField(allocator, provenance, "notes"),
-        .zig_path = try dupOptionalStringField(allocator, toolchain, "zig_path"),
-        .zls_path = try dupOptionalStringField(allocator, toolchain, "zls_path"),
-        .zflame_path = try dupOptionalStringField(allocator, toolchain, "zflame_path"),
-        .diff_folded_path = try dupOptionalStringField(allocator, toolchain, "diff_folded_path"),
-        .indexed_at_unix_ms = integerField(obj, "indexed_at_unix_ms") orelse 0,
-        .parser_confidence = try dupOptionalStringFieldDefault(allocator, obj, "parser_confidence", "medium"),
-        .raw_reference = try dupOptionalStringFieldDefault(allocator, obj, "raw_reference", "registry_jsonl"),
-    };
+    var owned = emptyOwnedEntry();
+    var owned_guard = true;
+    defer if (owned_guard) owned.deinit(allocator);
+    owned.bytes = @intCast(integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry);
+    owned.indexed_at_unix_ms = integerField(obj, "indexed_at_unix_ms") orelse 0;
+    owned.path = try dupStringField(allocator, obj, "path");
+    owned.abs_path = try dupStringField(allocator, obj, "abs_path");
+    owned.sha256 = try dupStringField(allocator, obj, "sha256");
+    owned.producer = try dupStringField(allocator, provenance, "producer");
+    owned.artifact_kind = try dupStringField(allocator, provenance, "artifact_kind");
+    owned.backend_name = try dupOptionalStringField(allocator, provenance, "backend_name");
+    owned.backend_version = try dupOptionalStringField(allocator, provenance, "backend_version");
+    owned.target = try dupOptionalStringField(allocator, provenance, "target");
+    owned.baseline_identity = try dupOptionalStringField(allocator, provenance, "baseline_identity");
+    owned.notes = try dupOptionalStringField(allocator, provenance, "notes");
+    owned.zig_path = try dupOptionalStringField(allocator, toolchain, "zig_path");
+    owned.zls_path = try dupOptionalStringField(allocator, toolchain, "zls_path");
+    owned.zflame_path = try dupOptionalStringField(allocator, toolchain, "zflame_path");
+    owned.diff_folded_path = try dupOptionalStringField(allocator, toolchain, "diff_folded_path");
+    owned.parser_confidence = try dupOptionalStringFieldDefault(allocator, obj, "parser_confidence", "medium");
+    owned.raw_reference = try dupOptionalStringFieldDefault(allocator, obj, "raw_reference", "registry_jsonl");
+    owned_guard = false;
+    return owned;
 }
 
 fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
-    return .{
-        .path = try allocator.dupe(u8, entry.identity.path),
-        .abs_path = try allocator.dupe(u8, entry.identity.abs_path),
-        .bytes = entry.identity.bytes,
-        .sha256 = try allocator.dupe(u8, entry.identity.sha256),
-        .producer = try allocator.dupe(u8, entry.provenance.producer),
-        .artifact_kind = try allocator.dupe(u8, entry.provenance.artifact_kind),
-        .backend_name = try allocator.dupe(u8, entry.provenance.backend_name),
-        .backend_version = try allocator.dupe(u8, entry.provenance.backend_version),
-        .target = try allocator.dupe(u8, entry.provenance.target),
-        .baseline_identity = try allocator.dupe(u8, entry.provenance.baseline_identity),
-        .notes = try allocator.dupe(u8, entry.provenance.notes),
-        .zig_path = try allocator.dupe(u8, entry.provenance.toolchain.zig_path),
-        .zls_path = try allocator.dupe(u8, entry.provenance.toolchain.zls_path),
-        .zflame_path = try allocator.dupe(u8, entry.provenance.toolchain.zflame_path),
-        .diff_folded_path = try allocator.dupe(u8, entry.provenance.toolchain.diff_folded_path),
-        .indexed_at_unix_ms = entry.indexed_at_unix_ms,
-        .parser_confidence = try allocator.dupe(u8, entry.parser_confidence),
-        .raw_reference = try allocator.dupe(u8, entry.raw_reference),
-    };
+    var owned = emptyOwnedEntry();
+    errdefer owned.deinit(allocator);
+    owned.bytes = entry.identity.bytes;
+    owned.indexed_at_unix_ms = entry.indexed_at_unix_ms;
+    owned.path = try allocator.dupe(u8, entry.identity.path);
+    owned.abs_path = try allocator.dupe(u8, entry.identity.abs_path);
+    owned.sha256 = try allocator.dupe(u8, entry.identity.sha256);
+    owned.producer = try allocator.dupe(u8, entry.provenance.producer);
+    owned.artifact_kind = try allocator.dupe(u8, entry.provenance.artifact_kind);
+    owned.backend_name = try allocator.dupe(u8, entry.provenance.backend_name);
+    owned.backend_version = try allocator.dupe(u8, entry.provenance.backend_version);
+    owned.target = try allocator.dupe(u8, entry.provenance.target);
+    owned.baseline_identity = try allocator.dupe(u8, entry.provenance.baseline_identity);
+    owned.notes = try allocator.dupe(u8, entry.provenance.notes);
+    owned.zig_path = try allocator.dupe(u8, entry.provenance.toolchain.zig_path);
+    owned.zls_path = try allocator.dupe(u8, entry.provenance.toolchain.zls_path);
+    owned.zflame_path = try allocator.dupe(u8, entry.provenance.toolchain.zflame_path);
+    owned.diff_folded_path = try allocator.dupe(u8, entry.provenance.toolchain.diff_folded_path);
+    owned.parser_confidence = try allocator.dupe(u8, entry.parser_confidence);
+    owned.raw_reference = try allocator.dupe(u8, entry.raw_reference);
+    return owned;
 }
 
 fn emptyOwnedEntry() OwnedEntry {
@@ -389,24 +408,29 @@ fn emptyOwnedEntry() OwnedEntry {
 
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "zig_path", .{ .string = toolchain.zig_path });
     try obj.put(allocator, "zls_path", .{ .string = toolchain.zls_path });
     try obj.put(allocator, "zflame_path", .{ .string = toolchain.zflame_path });
     try obj.put(allocator, "diff_folded_path", .{ .string = toolchain.diff_folded_path });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (argv) |arg| try array.append(.{ .string = arg });
+    array_owned = false;
     return .{ .array = array };
 }
 
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "exists", .{ .bool = exists });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(bytes) });
     if (exists) {
@@ -414,6 +438,7 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     } else {
         try obj.put(allocator, "sha256", .null);
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -479,6 +504,24 @@ test "artifact registry upserts and loads jsonl entries" {
         },
         .indexed_at_unix_ms = 1234,
     });
+    try upsert(&registry, allocator, .{
+        .identity = identity,
+        .provenance = .{
+            .producer = "zig_flamegraph",
+            .artifact_kind = "profile_svg",
+            .command_argv = &.{ "zflame", "recursive", "profile.folded" },
+            .backend_name = "zflame",
+            .backend_version = "unknown",
+            .target = "native",
+            .notes = "updated",
+            .toolchain = .{ .zig_path = "zig" },
+        },
+        .indexed_at_unix_ms = 5678,
+    });
+    try std.testing.expectEqual(@as(usize, 1), registry.entries.items.len);
+    try std.testing.expectEqualStrings("updated", registry.entries.items[0].notes);
+    const registry_json = try registryValue(allocator, registry);
+    try std.testing.expectEqual(@as(usize, 1), registry_json.array.items.len);
     try writeRegistry(allocator, io, registry_path, registry);
 
     var loaded = try loadRegistry(allocator, io, registry_path);
@@ -499,6 +542,7 @@ test "artifact registry prunes missing and changed entries without deleting file
 
     try tmp.dir.writeFile(io, .{ .sub_path = "kept.txt", .data = "kept" });
     try tmp.dir.writeFile(io, .{ .sub_path = "changed.txt", .data = "changed" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "same-size-changed.txt", .data = "new" });
     const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
     defer allocator.free(rel_base);
     const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
@@ -507,6 +551,8 @@ test "artifact registry prunes missing and changed entries without deleting file
     defer allocator.free(kept_abs);
     const changed_abs = try std.fs.path.join(allocator, &.{ base_z[0..], "changed.txt" });
     defer allocator.free(changed_abs);
+    const same_size_changed_abs = try std.fs.path.join(allocator, &.{ base_z[0..], "same-size-changed.txt" });
+    defer allocator.free(same_size_changed_abs);
     const missing_abs = try std.fs.path.join(allocator, &.{ base_z[0..], "missing.txt" });
     defer allocator.free(missing_abs);
 
@@ -516,6 +562,8 @@ test "artifact registry prunes missing and changed entries without deleting file
     defer allocator.free(kept_identity.sha256);
     const changed_identity = try identityFromBytes(allocator, "changed.txt", changed_abs, "old");
     defer allocator.free(changed_identity.sha256);
+    const same_size_changed_identity = try identityFromBytes(allocator, "same-size-changed.txt", same_size_changed_abs, "old");
+    defer allocator.free(same_size_changed_identity.sha256);
     const missing_identity = try identityFromBytes(allocator, "missing.txt", missing_abs, "missing");
     defer allocator.free(missing_identity.sha256);
     const provenance: Provenance = .{
@@ -525,13 +573,54 @@ test "artifact registry prunes missing and changed entries without deleting file
     };
     try upsert(&registry, allocator, .{ .identity = kept_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
     try upsert(&registry, allocator, .{ .identity = changed_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
+    try upsert(&registry, allocator, .{ .identity = same_size_changed_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
     try upsert(&registry, allocator, .{ .identity = missing_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
 
     const summary = try pruneStale(allocator, io, &registry);
     try std.testing.expectEqual(@as(usize, 1), summary.kept);
-    try std.testing.expectEqual(@as(usize, 1), summary.changed);
+    try std.testing.expectEqual(@as(usize, 2), summary.changed);
     try std.testing.expectEqual(@as(usize, 1), summary.missing);
-    try std.testing.expectEqual(@as(usize, 2), summary.pruned);
+    try std.testing.expectEqual(@as(usize, 3), summary.pruned);
     try std.testing.expectEqual(@as(usize, 1), registry.entries.items.len);
     try std.testing.expectEqualStrings("kept.txt", registry.entries.items[0].path);
+    const summary_value = try pruneSummaryValue(allocator, summary);
+    try std.testing.expectEqual(@as(i64, 2), summary_value.object.get("changed").?.integer);
+}
+
+test "artifact registry cleans kept entries when prune aborts on read error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(io, .{ .sub_path = "kept.txt", .data = "kept" });
+    try tmp.dir.createDirPath(io, "bad-dir");
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const kept_abs = try std.fs.path.join(allocator, &.{ base_z[0..], "kept.txt" });
+    defer allocator.free(kept_abs);
+    const bad_abs = try std.fs.path.join(allocator, &.{ base_z[0..], "bad-dir" });
+    defer allocator.free(bad_abs);
+
+    var registry: Registry = .{};
+    defer registry.deinit(allocator);
+    const provenance: Provenance = .{
+        .producer = "fixture",
+        .artifact_kind = "text",
+        .toolchain = .{ .zig_path = "zig" },
+    };
+    const kept_identity = try identityFromBytes(allocator, "kept.txt", kept_abs, "kept");
+    defer allocator.free(kept_identity.sha256);
+    const bad_identity = try identityFromBytes(allocator, "bad-dir", bad_abs, "");
+    defer allocator.free(bad_identity.sha256);
+    try upsert(&registry, allocator, .{ .identity = kept_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
+    try upsert(&registry, allocator, .{ .identity = bad_identity, .provenance = provenance, .indexed_at_unix_ms = 1 });
+
+    if (pruneStale(allocator, io, &registry)) |_| {
+        return error.TestExpectedError;
+    } else |_| {}
 }

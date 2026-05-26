@@ -141,9 +141,11 @@ pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inp
     for (inputs) |input| {
         const body = input.text orelse continue;
         if (std.mem.trim(u8, body, " \t\r\n").len == 0) continue;
+        const section_body = try shortString(allocator, body, 1200);
+        errdefer allocator.free(section_body);
         try sections.append(allocator, .{
             .title = input.title,
-            .body = try shortString(allocator, body, 1200),
+            .body = section_body,
         });
     }
 
@@ -166,20 +168,24 @@ pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidenceP
 
 fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(EvidenceCheck), input: EvidenceCheckInput) !void {
     const observed = input.text != null and input.text.?.len > 0;
+    const summary = if (input.text) |text| try shortString(allocator, text, 240) else null;
+    errdefer if (summary) |text| allocator.free(text);
     try checks.append(allocator, .{
         .name = input.name,
         .observed = observed,
         .status = if (observed) "observed" else "missing",
         .verify_with = input.verify_with,
-        .summary = if (input.text) |text| try shortString(allocator, text, 240) else null,
+        .summary = summary,
     });
 }
 
 fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.ArrayList(EvidencePointer), input: EvidencePointerInput) !void {
+    const summary = if (input.text) |text| try shortString(allocator, text, 400) else null;
+    errdefer if (summary) |text| allocator.free(text);
     try evidence.append(allocator, .{
         .name = input.name,
         .provided = input.text != null and input.text.?.len > 0,
-        .summary = if (input.text) |text| try shortString(allocator, text, 400) else null,
+        .summary = summary,
     });
 }
 
@@ -193,10 +199,10 @@ fn hasMissingEvidence(checks: []const EvidenceCheck) bool {
 fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, sections: []const ReleaseNoteSection) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
-    try out.writer.print("# {s}\n\n", .{version});
-    if (sections.len == 0) try out.writer.writeAll("_No release evidence was supplied._\n");
+    out.writer.print("# {s}\n\n", .{version}) catch return error.OutOfMemory;
+    if (sections.len == 0) out.writer.writeAll("_No release evidence was supplied._\n") catch return error.OutOfMemory;
     for (sections) |section| {
-        try out.writer.print("## {s}\n\n{s}\n\n", .{ section.title, section.body });
+        out.writer.print("## {s}\n\n{s}\n\n", .{ section.title, section.body }) catch return error.OutOfMemory;
     }
     return try out.toOwnedSlice();
 }
@@ -224,7 +230,18 @@ fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![
     const trimmed = std.mem.trim(u8, input, " \t\r\n");
     if (trimmed.len <= limit) return allocator.dupe(u8, trimmed);
     var out = std.ArrayList(u8).empty;
+    errdefer out.deinit(allocator);
     try out.appendSlice(allocator, trimmed[0..limit]);
     try out.appendSlice(allocator, "...");
     return out.toOwnedSlice(allocator);
+}
+
+test "release short string truncation cleans partial allocations" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, truncateWithAllocator, .{});
+}
+
+fn truncateWithAllocator(allocator: std.mem.Allocator) !void {
+    const value = try shortString(allocator, "abcdef", 3);
+    defer allocator.free(value);
+    try std.testing.expectEqualStrings("abc...", value);
 }

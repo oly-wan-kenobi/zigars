@@ -22,13 +22,15 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
     const rel = workspaceRelative(context.workspace.root, resolved.path);
     const policy = classifyPath(rel);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_generated_file_trace" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "path", try ownedString(allocator, rel));
     try obj.put(allocator, "policy", try policyValue(allocator, policy));
     try obj.put(allocator, "evidence_source", .{ .string = "workspace_path_heuristics_and_zigar_generated_path_policy" });
     try obj.put(allocator, "confidence", try ownedString(allocator, policy.confidence));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -49,13 +51,15 @@ pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const
     }
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_edit_policy_check" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "allow_direct_edit", .{ .bool = allow });
     try obj.put(allocator, "checked", .{ .array = checked });
     try obj.put(allocator, "blocked_paths", .{ .array = blocked });
     try obj.put(allocator, "write_policy", .{ .string = "Direct source edits must avoid generated, cache, artifact, and vendored paths; mutating tools still require apply=true." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -65,7 +69,8 @@ pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.Ed
     const rel = workspaceRelative(context.workspace.root, resolved.path);
     const policy = classifyPath(rel);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_generated_route" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "path", try ownedString(allocator, rel));
@@ -75,6 +80,7 @@ pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.Ed
     try obj.put(allocator, "source_candidates", try stringArrayValue(allocator, policy.sources));
     try obj.put(allocator, "regeneration_commands", try stringArrayValue(allocator, policy.commands));
     try obj.put(allocator, "stop_condition", .{ .string = "Edit the source or dependency policy, regenerate the derived output, then validate the generated diff before release decisions." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -140,13 +146,15 @@ pub fn extractDeclValue(allocator: std.mem.Allocator, context: app_context.Editi
 
 pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_code_action_batch" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "applied", .{ .bool = false });
     try obj.put(allocator, "error_kind", .{ .string = "unsupported_state" });
     try obj.put(allocator, "resolution", .{ .string = "Use zig_code_actions to inspect actions and zig_code_action_apply one action at a time until ZLS exposes transaction-safe batch edits." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -204,7 +212,8 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     defer formatted.deinit(allocator);
     const diff = try session_domain.unifiedDiff(allocator, rel, input.bytes, formatted.bytes);
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "applied", .{ .bool = false });
     try obj.put(allocator, "file", try ownedString(allocator, rel));
     try obj.put(allocator, "source_hash", try hashHexValue(allocator, input.bytes));
@@ -212,6 +221,7 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     try obj.put(allocator, "diff", .{ .string = diff });
     try obj.put(allocator, "formatted", try ownedString(allocator, formatted.bytes));
     try obj.put(allocator, "preview_retained", .{ .bool = false });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -249,7 +259,8 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     });
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_patch_preview" });
     try obj.put(allocator, "applied", .{ .bool = apply });
     try obj.put(allocator, "preview_only", .{ .bool = !apply });
@@ -260,6 +271,7 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     try obj.put(allocator, "changed", .{ .bool = !std.mem.eql(u8, source.bytes, content) });
     try obj.put(allocator, "would_write", .{ .bool = !apply and !std.mem.eql(u8, source.bytes, content) });
     try obj.put(allocator, "diff", .{ .string = diff });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -291,7 +303,8 @@ fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.Ed
         }
     }
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", try ownedString(allocator, tool_name));
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "applied", .{ .bool = apply and safe });
@@ -301,6 +314,7 @@ fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.Ed
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "limitations", try ownedString(allocator, limitation));
     try obj.put(allocator, "next_action", try nextToolValue(allocator, "zigar_patch_session_validate", "validate the refactor before treating it as complete"));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -517,7 +531,8 @@ fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const
 
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     const term = result.effectiveTerm();
     try obj.put(allocator, "kind", .{ .string = "command" });
     try obj.put(allocator, "title", try ownedString(allocator, title));
@@ -533,6 +548,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     try obj.put(allocator, "stderr_truncated", .{ .bool = result.stderr_truncated });
     try obj.put(allocator, "output_limit_mode", .{ .string = core_commands.command_output_limit_mode });
     try obj.put(allocator, "output_limit_exceeded", .{ .bool = result.stdout_truncated or result.stderr_truncated });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -551,4 +567,57 @@ fn workspaceRelative(root: []const u8, path: []const u8) []const u8 {
         return rel;
     }
     return path;
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "replacement sessions apply safe changed files through workspace store" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+    defer clock.deinit();
+    const context = app_context.EditingContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_session_file_bytes, .provenance = "editing_workflow_snapshot" }, "const old = true;\n");
+    try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_session_file_bytes, .provenance = "editing_workflow_snapshot" }, "const old = true;\n");
+    try workspace.expectWrite(.{ .path = "src/main.zig", .bytes = "const new = true;\n", .provenance = "zig_test_edit" }, .{ .bytes_written = "const new = true;\n".len });
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const replacements = [_]Replacement{.{ .file = "src/main.zig", .content = "const new = true;\n" }};
+    const value = try replacementSessionValue(arena.allocator(), context, "zig_test_edit", &replacements, true, "replace fixture", "unit test limitation");
+    try std.testing.expect(value.object.get("applied").?.bool);
+    try std.testing.expect(value.object.get("safe_to_apply").?.bool);
+    try workspace.verify();
+    try clock.verify();
+}
+
+test "readSnapshot treats missing files as empty absent snapshots" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+    defer clock.deinit();
+    const context = app_context.EditingContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    try workspace.expectReadError(.{ .path = "missing.zig", .max_bytes = max_session_file_bytes, .provenance = "editing_workflow_snapshot" }, error.FileNotFound);
+    const snapshot = try readSnapshot(std.testing.allocator, context, "missing.zig");
+    defer snapshot.deinit(std.testing.allocator);
+    try std.testing.expect(!snapshot.exists);
+    try std.testing.expectEqualStrings("missing.zig", snapshot.file);
+    try std.testing.expectEqualStrings("", snapshot.bytes);
+    try workspace.verify();
+    try clock.verify();
+}
+
+test "editing range helpers return null for absent declarations and out of range lines" {
+    try std.testing.expect(findDeclarationRange("const present = 1;\n", "missing") == null);
+    try std.testing.expect(lineRange("one\n", 3, 4) == null);
 }

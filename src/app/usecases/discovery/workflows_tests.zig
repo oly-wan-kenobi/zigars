@@ -121,6 +121,89 @@ test "toolchain resolve classifies project Zig version hints through ports" {
     try workspace_fake.verify();
 }
 
+test "toolchain resolve reports mismatched unknown hints unavailable zig and manager probes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try command_fake.expectRunError(.{ .argv = &.{ "zig-bin", "version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.toolchain_resolve.zig" }, error.FileNotFound);
+    try command_fake.expectRun(.{ .argv = &.{ "zls-bin", "--version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.toolchain_resolve.zls" }, .{ .exit_code = 1, .stderr = "zls failed\n" });
+    try workspace_fake.expectRead(.{ .path = ".zigversion", .max_bytes = 64 * 1024, .provenance = "discovery.version_hint" }, "0.16.0\n");
+    try workspace_fake.expectRead(.{ .path = ".tool-versions", .max_bytes = 64 * 1024, .provenance = "discovery.tool_versions_hint" },
+        \\node 22
+        \\zls 0.16.0
+        \\zig 0.17.0
+    );
+    try workspace_fake.expectRead(.{ .path = "mise.toml", .max_bytes = 128 * 1024, .provenance = "discovery.mise_hint" },
+        \\[tools]
+        \\zig = "nightly"
+    );
+    try workspace_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" },
+        \\.{
+        \\    .minimum_zig_version = "0.18.0",
+        \\}
+    );
+    try command_fake.expectRun(.{ .argv = &.{ "mise", "--version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.version_manager_probe" }, .{ .stdout = "mise 1.0\n" });
+    try command_fake.expectRun(.{ .argv = &.{ "asdf", "--version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.version_manager_probe" }, .{ .stderr = "asdf 0.14\n" });
+    try command_fake.expectRunError(.{ .argv = &.{ "zvm", "version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.version_manager_probe" }, error.FileNotFound);
+    try command_fake.expectRun(.{ .argv = &.{ "zigup", "--version" }, .cwd = "/workspace", .timeout_ms = 700, .provenance = "discovery.version_manager_probe" }, .{ .exit_code = 1, .stderr = "zigup missing\n" });
+
+    const value = try workflows.toolchainResolveValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace" },
+        .tool_paths = .{ .zig = "zig-bin", .zls = "zls-bin" },
+        .ports = .{ .command_runner = command_fake.port(), .workspace = workspace_fake.port() },
+    }, true, 700);
+
+    try std.testing.expect(!value.object.get("zig_ok").?.bool);
+    try std.testing.expect(!value.object.get("zls_ok").?.bool);
+    try std.testing.expectEqualStrings("unknown", value.object.get("version_status").?.string);
+    try std.testing.expectEqual(@as(i64, 4), value.object.get("zig_hint_count").?.integer);
+    try std.testing.expect(value.object.get("issues").?.array.items.len >= 2);
+    const managers = value.object.get("managers").?.array.items;
+    try std.testing.expect(managers[0].object.get("available").?.bool);
+    try std.testing.expect(!managers[2].object.get("available").?.bool);
+    try std.testing.expect(!managers[3].object.get("available").?.bool);
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+test "toolchain resolve records active mismatch when backend returns a version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try command_fake.expectRun(.{ .argv = &.{ "zig-bin", "version" }, .cwd = "/workspace", .timeout_ms = 500, .provenance = "discovery.toolchain_resolve.zig" }, .{ .stdout = "0.15.0\n" });
+    try command_fake.expectRun(.{ .argv = &.{ "zls-bin", "--version" }, .cwd = "/workspace", .timeout_ms = 500, .provenance = "discovery.toolchain_resolve.zls" }, .{ .stdout = "0.16.0\n" });
+    try workspace_fake.expectRead(.{ .path = ".zigversion", .max_bytes = 64 * 1024, .provenance = "discovery.version_hint" }, "0.16.0\n");
+    try workspace_fake.expectReadError(.{ .path = ".tool-versions", .max_bytes = 64 * 1024, .provenance = "discovery.tool_versions_hint" }, error.FileNotFound);
+    try workspace_fake.expectReadError(.{ .path = "mise.toml", .max_bytes = 128 * 1024, .provenance = "discovery.mise_hint" }, error.FileNotFound);
+    try workspace_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" },
+        \\.{
+        \\    .minimum_zig_version = "0.16.0",
+        \\}
+    );
+
+    const value = try workflows.toolchainResolveValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace" },
+        .tool_paths = .{ .zig = "zig-bin", .zls = "zls-bin" },
+        .ports = .{ .command_runner = command_fake.port(), .workspace = workspace_fake.port() },
+    }, false, 500);
+
+    try std.testing.expect(!value.object.get("version_match").?.bool);
+    try std.testing.expectEqualStrings("mismatch", value.object.get("version_status").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, value.object.get("issues").?.array.items[0].string, "active zig version") != null);
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
 test "command plan uses typed manifest metadata and workspace resolution" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -159,6 +242,107 @@ test "command plan uses typed manifest metadata and workspace resolution" {
     try std.testing.expectEqualStrings("on", argv[4].string);
     try std.testing.expectEqual(@as(i64, 90_000), value.object.get("timeout_ms").?.integer);
     try workspace_fake.verify();
+}
+
+test "command and tool plans cover argv optional file required path and argument errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+    try workspace_fake.expectResolve(.{ .path = "src/lib.zig", .provenance = "zig_command_plan" }, "/workspace/src/lib.zig");
+    try workspace_fake.expectResolve(.{ .path = "examples", .provenance = "zig_command_plan" }, "/workspace/examples");
+
+    const entries = [_]ports.ToolManifestEntry{
+        .{
+            .name = "zig_build",
+            .description = "build project",
+            .group = "core",
+            .plan_kind = "exact_command",
+            .plan = .{ .exact_command = .{ .argv = &.{"build"} } },
+            .risk = .{ .executes_project_code = true },
+        },
+        .{
+            .name = "zig_check_optional",
+            .description = "optional file check",
+            .group = "core",
+            .plan_kind = "exact_command",
+            .plan = .{ .exact_command = .{ .optional_file = .{ .file_args = &.{"ast-check"}, .fallback_args = &.{"fmt"} } } },
+        },
+        .{
+            .name = "zig_path_tool",
+            .description = "path-backed tool",
+            .group = "core",
+            .plan_kind = "exact_command",
+            .plan = .{ .exact_command = .{ .required_path = &.{"build"} } },
+        },
+        .{
+            .name = "zig_file_tool",
+            .description = "file-backed tool",
+            .group = "core",
+            .plan_kind = "exact_command",
+            .plan = .{ .exact_command = .{ .required_file = &.{"ast-check"} } },
+        },
+    };
+    var manifest = StaticManifest{ .entries = entries[0..] };
+    const context = app_context.Context{
+        .workspace = .{ .root = "/workspace" },
+        .tool_paths = .{ .zig = "zig-bin" },
+        .ports = .{ .workspace = workspace_fake.port(), .tool_manifest = manifest.port() },
+    };
+
+    const argv = try workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_build", .timeout_ms = -5 });
+    try std.testing.expectEqualStrings("build", argv.object.get("argv").?.array.items[1].string);
+    try std.testing.expectEqual(@as(i64, 1), argv.object.get("timeout_ms").?.integer);
+
+    const optional_with_file = try workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_check_optional", .file = "src/lib.zig" });
+    try std.testing.expectEqualStrings("/workspace/src/lib.zig", optional_with_file.object.get("argv").?.array.items[2].string);
+
+    const required_path = try workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_path_tool", .path = "examples" });
+    try std.testing.expectEqualStrings("/workspace/examples", required_path.object.get("argv").?.array.items[2].string);
+
+    const exact_tool = try workflows.toolPlanValue(arena.allocator(), context, .{ .tool = "zig_build" });
+    try std.testing.expect(exact_tool.object.get("argv_exact").?.bool);
+
+    try std.testing.expectError(error.MissingTool, workflows.commandPlanValue(arena.allocator(), context, .{}));
+    try std.testing.expectError(error.UnknownTool, workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "missing" }));
+    try std.testing.expectError(error.MissingFile, workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_file_tool" }));
+    try std.testing.expectError(error.MissingPath, workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_path_tool" }));
+    try std.testing.expectError(error.InvalidExtraArgs, workflows.commandPlanValue(arena.allocator(), context, .{ .tool = "zig_build", .args = "\"unterminated" }));
+    try workspace_fake.verify();
+}
+
+test "doctor covers cached backend probes and probe port errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const ErrorProbe = struct {
+        fn check(_: *anyopaque, _: std.mem.Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
+            if (!std.mem.eql(u8, request.provenance, "discovery.doctor_probe")) return error.StaleArguments;
+            return error.AccessDenied;
+        }
+        const vtable = ports.BackendProbe.VTable{ .check = check };
+    };
+    var token: u8 = 0;
+    const probe = ports.BackendProbe{ .ptr = &token, .vtable = &ErrorProbe.vtable };
+
+    const value = try workflows.doctorValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache", .transport = "stdio" },
+        .tool_paths = .{
+            .zig = "zig-bin",
+            .zls = "zls-bin",
+            .zlint = "zlint-bin",
+            .zwanzig = "zwanzig-bin",
+            .zflame = "zflame-bin",
+            .diff_folded = "diff-bin",
+        },
+        .ports = .{ .backend_probe = probe },
+        .trust_probe_cache = .{ .zig = .{ .probed = true, .ok = null, .status = "cached status", .resolution = "cached resolution" } },
+    }, true, 99);
+
+    const checks = value.object.get("checks").?.array.items;
+    try std.testing.expectEqualStrings("cached status", checks[11].object.get("status").?.string);
+    try std.testing.expectEqualStrings("AccessDenied", checks[12].object.get("status").?.string);
 }
 
 test "status read models expose backend workspace metrics and HTTP fields" {

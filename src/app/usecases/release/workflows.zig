@@ -1,5 +1,6 @@
 const std = @import("std");
 const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 const release_intelligence = @import("release_intelligence.zig");
@@ -1389,4 +1390,328 @@ fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![
 
 fn stripXml(input: []const u8) []const u8 {
     return input;
+}
+
+const PermissiveReleaseWorkspace = struct {
+    read_bytes: []const u8,
+    read_count: usize = 0,
+    write_count: usize = 0,
+    resolve_count: usize = 0,
+
+    fn port(self: *PermissiveReleaseWorkspace) ports.WorkspaceStore {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .resolve = resolve,
+                .read = read,
+                .write = write,
+            },
+        };
+    }
+
+    fn resolve(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        const self: *PermissiveReleaseWorkspace = @ptrCast(@alignCast(ptr));
+        self.resolve_count += 1;
+        return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
+    }
+
+    fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        _ = request;
+        const self: *PermissiveReleaseWorkspace = @ptrCast(@alignCast(ptr));
+        self.read_count += 1;
+        return .{ .bytes = try allocator.dupe(u8, self.read_bytes), .owns_bytes = true };
+    }
+
+    fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        const self: *PermissiveReleaseWorkspace = @ptrCast(@alignCast(ptr));
+        self.write_count += 1;
+        return .{ .bytes_written = request.bytes.len, .replaced_existing = true };
+    }
+};
+
+fn releaseWorkflowTestContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.ReleaseWorkflowContext {
+    return .{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .tool_paths = .{ .zig = "zig", .zls = "zls", .zflame = "zflame", .diff_folded = "diff-folded" },
+        .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
+        .command_runner = command_runner,
+        .workspace_store = workspace_store,
+        .workspace_scanner = workspace_scanner,
+        .tool_manifest = undefined,
+    };
+}
+
+test "release workflows parse CI artifacts and group failures" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const junit = try ciIngestValue(allocator, .{
+        .bytes =
+        \\<testsuite>
+        \\  <testcase classname="unit" name="case">
+        \\    <failure message="boom">src/main.zig:1:1: error: bad</failure>
+        \\  </testcase>
+        \\</testsuite>
+        ,
+        .source_kind = "inline_content",
+    }, "auto", 10);
+    try std.testing.expectEqualStrings("junit", junit.object.get("format").?.string);
+    try std.testing.expectEqual(@as(i64, 1), junit.object.get("failure_count").?.integer);
+
+    const sarif = try ciIngestValue(allocator, .{
+        .bytes =
+        \\{"runs":[{"results":[{"level":"error","message":{"text":"bad thing"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/main.zig"},"region":{"startLine":12}}}]}]}]}
+        ,
+        .source_kind = "inline_content",
+        .path = "results.sarif",
+    }, "auto", 10);
+    try std.testing.expectEqualStrings("sarif", sarif.object.get("format").?.string);
+    const sarif_failure = sarif.object.get("failures").?.array.items[0].object;
+    try std.testing.expectEqualStrings("src/main.zig", sarif_failure.get("path").?.string);
+    try std.testing.expectEqual(@as(i64, 12), sarif_failure.get("line").?.integer);
+
+    const sarif_missing_location = try ciIngestValue(allocator, .{
+        .bytes =
+        \\{"runs":[{"results":[{"level":"warning","message":{"markdown":"missing location"},"locations":[{"physicalLocation":{"artifactLocation":{},"region":{}}}]}]}]}
+        ,
+        .source_kind = "inline_content",
+    }, "auto", 10);
+    const missing_failure = sarif_missing_location.object.get("failures").?.array.items[0].object;
+    try std.testing.expect(missing_failure.get("path").? == .null);
+    try std.testing.expect(missing_failure.get("line").? == .null);
+    try std.testing.expectEqualStrings("log", detectCiFormat("auto", "plain log"));
+
+    var failures = std.json.Array.init(allocator);
+    try failures.append(junit.object.get("failures").?.array.items[0]);
+    try failures.append(junit.object.get("failures").?.array.items[0]);
+    var groups = std.json.Array.init(allocator);
+    try groupFailures(allocator, .{ .array = failures }, "failure_kind", &groups);
+    try std.testing.expectEqual(@as(i64, 2), groups.items[0].object.get("count").?.integer);
+}
+
+test "release workflows cover API diff helper edges" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const snapshot = (try publicDeclSnapshotValue(allocator, "src/api.zig",
+        \\pub fn run() void {}
+        \\pub const Thing = struct {};
+        \\pub var state: usize = 0;
+        \\
+    )).array;
+    try std.testing.expectEqual(@as(usize, 3), snapshot.items.len);
+    try std.testing.expectEqualStrings("run", declName("pub fn run() void {}", "fn").?);
+    try std.testing.expectEqualStrings("Thing", declName("pub const Thing = struct {};", "const").?);
+    try std.testing.expectEqualStrings("state", declName("pub var state: usize = 0;", "var").?);
+    try std.testing.expectEqualStrings("c_api", declName("pub extern c_api", "extern").?);
+    try std.testing.expectEqualStrings("entry", declName("export entry", "export").?);
+    try std.testing.expect(declName("pub usingnamespace Foo;", "namespace") == null);
+
+    var before_obj = std.json.ObjectMap.empty;
+    try before_obj.put(allocator, "name", .{ .string = "run" });
+    try before_obj.put(allocator, "signature", .{ .string = "pub fn run() void {}" });
+    var after_obj = std.json.ObjectMap.empty;
+    try after_obj.put(allocator, "name", .{ .string = "run" });
+    try after_obj.put(allocator, "signature", .{ .string = "pub fn run(value: u8) void {}" });
+    var before = std.json.Array.init(allocator);
+    try before.append(.{ .object = before_obj });
+    var after = std.json.Array.init(allocator);
+    try after.append(.{ .object = after_obj });
+    var added = std.json.Array.init(allocator);
+    var removed = std.json.Array.init(allocator);
+    var changed = std.json.Array.init(allocator);
+    try comparePublicDecls(allocator, before, after, &added, &removed, &changed);
+    try std.testing.expectEqual(@as(usize, 1), changed.items.len);
+    try std.testing.expect(declSignature(.{ .string = "not-object" }) == null);
+
+    const parsed_array = (try parseBaselineText(allocator,
+        \\[{"name":"run","signature":"pub fn run() void {}"}]
+    )).object;
+    try std.testing.expectEqualStrings("zig_api_baseline", parsed_array.get("kind").?.string);
+}
+
+test "release workflows cover dependency projections and classifiers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const deps = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"dependencies":[{"name":"alpha","url":"https://example.invalid/a.tar.gz","hash":"h1"},{"name":"beta","url":"https://example.invalid/b.tar.gz"},{"name":"local","path":"vendor/local"}],"issues":["pin beta hash"]}
+    , .{});
+    const deps_value = deps.value;
+
+    const update = (try dependencyUpdatePlanValue(allocator, deps_value, "alpha", "1.2.3")).object;
+    try std.testing.expectEqual(@as(i64, 1), update.get("plan_count").?.integer);
+    const fetch = (try dependencyFetchCheckValue(allocator, deps_value)).object;
+    try std.testing.expectEqual(@as(i64, 1), fetch.get("missing_hash_count").?.integer);
+    const lock = (try dependencyLockAuditValue(allocator, deps_value, "")).object;
+    try std.testing.expect(lock.get("issue_count").?.integer >= 2);
+    const sbom = (try sbomValue(allocator, deps_value)).object;
+    try std.testing.expectEqualStrings("CycloneDX", sbom.get("bomFormat").?.string);
+    const security = (try dependencySecurityReportValue(allocator, deps_value, "CVE-2026-0001", "vulnerable", "GHSA-test")).object;
+    try std.testing.expectEqualStrings("review_required", security.get("risk").?.string);
+    const provenance = (try dependencyProvenanceValue(allocator, deps_value)).object;
+    try std.testing.expectEqual(@as(i64, 3), provenance.get("dependency_count").?.integer);
+    const licenses = (try dependencyLicenseSummaryValue(allocator, deps_value, "Apache License\n")).object;
+    try std.testing.expectEqual(@as(i64, 3), licenses.get("dependency_license_unknown_count").?.integer);
+    const submit = (try githubDependencySubmitPlanValue(allocator, deps_value, "deps", "refs/heads/main", "abc")).object;
+    try std.testing.expectEqualStrings("deps", submit.get("payload").?.object.get("job").?.string);
+
+    try std.testing.expectEqualStrings("MIT", detectLicenseName("MIT License").?);
+    try std.testing.expectEqualStrings("GPL", detectLicenseName("GNU GENERAL PUBLIC LICENSE").?);
+    try std.testing.expectEqualStrings("BSD", detectLicenseName("BSD 3-Clause").?);
+    try std.testing.expectEqualStrings("unknown", detectLicenseName("Custom terms").?);
+    try std.testing.expect(detectLicenseName("") == null);
+
+    const shortened = try shortString(allocator, "  abcdefgh  ", 3);
+    try std.testing.expectEqualStrings("abc...", shortened);
+}
+
+test "release workflows exercise workspace backed tools scans and artifact writes" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var workspace = PermissiveReleaseWorkspace{ .read_bytes = "old artifact" };
+    var app = App.init(releaseWorkflowTestContext(command.port(), workspace.port(), scanner.port()), allocator);
+
+    const baseline_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"content":"pub fn run() void {}","output":"api.json","apply":true}
+    , .{});
+    const baseline = try zigApiBaselineInit(&app, allocator, baseline_args.value);
+    try std.testing.expect(baseline.value.object.get("applied").?.bool);
+
+    const sbom_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"manifest":".{\n  .dependencies = .{\n    .alpha = .{ .url = \"https://example.invalid/a.tar.gz\", .hash = \"h1\" },\n  },\n}\n","output":"sbom.json","apply":true}
+    , .{});
+    const sbom = try zigSbom(&app, allocator, sbom_args.value);
+    try std.testing.expect(sbom.value.object.get("applied").?.bool);
+
+    workspace.read_bytes = "pub fn run() void {}\n";
+    const api_check_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"file":"src/api.zig","baseline":"[{\"name\":\"run\",\"signature\":\"pub fn run() void {}\"}]"}
+    , .{});
+    const api_check = try zigApiCheck(&app, allocator, api_check_args.value);
+    try std.testing.expect(api_check.value.object.get("ok").?.bool);
+
+    workspace.read_bytes = "run docs";
+    const docs_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"content":"pub fn run() void {}","docs_path":"README.md"}
+    , .{});
+    const docs_diff = try zigApiDocsDiff(&app, allocator, docs_args.value);
+    try std.testing.expectEqual(@as(i64, 0), docs_diff.value.object.get("undocumented_count").?.integer);
+    try std.testing.expectEqual(@as(usize, 1), docs_diff.value.object.get("documented").?.array.items.len);
+
+    workspace.read_bytes = "plain log";
+    const ci_args = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"path":"ci.log","format":"auto"}
+    , .{});
+    const ci_result = try zigCiIngest(&app, allocator, ci_args.value);
+    try std.testing.expectEqualStrings("log", ci_result.value.object.get("format").?.string);
+
+    try scanner.expectScan(.{
+        .path_prefix = "",
+        .max_files = 500,
+        .provenance = "release.collect_public_decls",
+    }, &.{ "src/api.zig", ".zig-cache/generated.zig" });
+    workspace.read_bytes = "pub fn run() void {}\n";
+    const workspace_baseline = try apiBaselineValue(allocator, &app, null, "workspace_snapshot");
+    try std.testing.expectEqual(@as(i64, 1), workspace_baseline.object.get("declaration_count").?.integer);
+
+    workspace.read_bytes = "{\"kind\":\"zig_api_baseline\",\"declarations\":[],\"declaration_count\":0}";
+    const default_baseline = try apiBaselineFromArgs(&app, allocator, null);
+    try std.testing.expectEqualStrings("zig_api_baseline", default_baseline.object.get("kind").?.string);
+
+    try std.testing.expect(workspace.read_count >= 5);
+    try std.testing.expectEqual(@as(usize, 2), workspace.write_count);
+    try std.testing.expect(workspace.resolve_count >= 5);
+    try scanner.verify();
+}
+
+test "release workflows cover evidence and workspace error helpers" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var command = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var app = App.init(releaseWorkflowTestContext(command.port(), workspace.port(), scanner.port()), allocator);
+
+    const path_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"path\":\"ci.log\"}", .{});
+    try workspace.expectReadError(.{
+        .path = "ci.log",
+        .max_bytes = 8 * 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.OutOfMemory);
+    try std.testing.expectError(error.OutOfMemory, readEvidenceInput(&app, allocator, path_args.value, "zig_ci_ingest", true));
+    try workspace.expectReadError(.{
+        .path = "ci.log",
+        .max_bytes = 8 * 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.PathOutsideWorkspace);
+    try std.testing.expectError(error.PathOutsideWorkspace, readEvidenceInput(&app, allocator, path_args.value, "zig_ci_ingest", true));
+    try workspace.expectReadError(.{
+        .path = "ci.log",
+        .max_bytes = 8 * 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+    try std.testing.expectError(error.FileNotFound, readEvidenceInput(&app, allocator, path_args.value, "zig_ci_ingest", true));
+
+    const missing = try evidenceInputError(&app, allocator, "zig_ci_ingest", null, error.MissingEvidence);
+    try std.testing.expect(missing.is_error);
+    const path_error = try evidenceInputError(&app, allocator, "zig_ci_ingest", path_args.value, error.PathOutsideWorkspace);
+    try std.testing.expect(path_error.is_error);
+    const generic = try evidenceInputError(&app, allocator, "zig_ci_ingest", path_args.value, error.FileNotFound);
+    try std.testing.expect(generic.is_error);
+    const api_error = try apiToolError(allocator, "zig_api_check", "read_baseline", error.FileNotFound);
+    try std.testing.expect(api_error.is_error);
+    const dependency_error = try dependencyToolError(allocator, "zig_sbom", "read_manifest", error.FileNotFound);
+    try std.testing.expect(dependency_error.is_error);
+
+    try workspace.expectReadError(.{
+        .path = "secret.json",
+        .max_bytes = 16 * 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.AccessDenied);
+    try std.testing.expectError(error.AccessDenied, preimageIdentityForPath(&app, allocator, "secret.json"));
+
+    try workspace.expectReadError(.{
+        .path = "LICENSE",
+        .max_bytes = 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+    try workspace.expectReadError(.{
+        .path = "LICENSE.md",
+        .max_bytes = 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+    try workspace.expectReadError(.{
+        .path = "COPYING",
+        .max_bytes = 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+    try std.testing.expectEqualStrings("", try readRootLicense(&app, allocator));
+
+    try workspace.expectRead(.{
+        .path = "LICENSE",
+        .max_bytes = 1024 * 1024,
+        .provenance = "arch110-workflow-read",
+    }, "MIT License\n");
+    const license = try readRootLicense(&app, allocator);
+    defer allocator.free(license);
+    try std.testing.expectEqualStrings("MIT License\n", license);
+
+    try workspace.verify();
 }

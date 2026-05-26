@@ -136,3 +136,19 @@ test "reader returns bounded observability snapshots in chronological order" {
     try std.testing.expectEqualStrings("zig build", snapshot_value.command_events[0].title);
     try std.testing.expectEqualStrings("connected", snapshot_value.zls_events[0].status);
 }
+
+test "reader snapshot cleans partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, snapshotWithAllocator, .{});
+}
+
+fn snapshotWithAllocator(allocator: std.mem.Allocator) !void {
+    var state = observability.State{};
+    state.recordToolCall("zig_build", 4, false);
+    state.recordCommand("zig build", &.{"zig"}, 11, true, null);
+    state.recordBackendProbe("zls", true, "ok", "backend command completed");
+    state.recordZlsStatus("connected", null, 0);
+
+    var reader = Reader.init(&state);
+    const snapshot_value = try reader.port().snapshot(allocator);
+    defer snapshot_value.deinit(allocator);
+}

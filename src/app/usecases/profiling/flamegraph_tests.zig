@@ -91,6 +91,32 @@ test "flamegraph use case renders svg through command and workspace ports" {
     try workspace.verify();
 }
 
+test "flamegraph use case rejects missing input and output before ports" {
+    const allocator = std.testing.allocator;
+    var commands = fakes.FakeCommandRunner.init(allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+
+    var missing_input = request();
+    missing_input.input = "";
+    var input_result = try flamegraph.run(allocator, testContext(&commands, &workspace), missing_input);
+    defer input_result.deinit(allocator);
+    const input_failure = input_result.err.workspace_input_read_failed;
+    try std.testing.expectEqual(error.InvalidRequest, input_failure.err);
+    try std.testing.expectEqualStrings("input", input_failure.error_info.field.?);
+
+    var missing_output = request();
+    missing_output.output = "";
+    var output_result = try flamegraph.run(allocator, testContext(&commands, &workspace), missing_output);
+    defer output_result.deinit(allocator);
+    const output_failure = output_result.err.workspace_artifact_write_failed;
+    try std.testing.expectEqual(error.InvalidRequest, output_failure.err);
+    try std.testing.expectEqualStrings("output", output_failure.error_info.field.?);
+    try commands.verify();
+    try workspace.verify();
+}
+
 test "flamegraph use case rejects non-svg backend output before write" {
     const allocator = std.testing.allocator;
     var commands = fakes.FakeCommandRunner.init(allocator);

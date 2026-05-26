@@ -97,12 +97,14 @@ pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, conten
     var declarations: std.ArrayList(Declaration) = .empty;
     var imports: std.ArrayList(Import) = .empty;
     var tests: std.ArrayList(TestDecl) = .empty;
-    errdefer deinitDeclarations(allocator, declarations.items);
-    errdefer declarations.deinit(allocator);
-    errdefer deinitImports(allocator, imports.items);
-    errdefer imports.deinit(allocator);
-    errdefer deinitTests(allocator, tests.items);
-    errdefer tests.deinit(allocator);
+    errdefer {
+        deinitDeclarations(allocator, declarations.items);
+        declarations.deinit(allocator);
+        deinitImports(allocator, imports.items);
+        imports.deinit(allocator);
+        deinitTests(allocator, tests.items);
+        tests.deinit(allocator);
+    }
 
     try appendAstDecls(allocator, &tree, tree.rootDecls(), &declarations, 0);
     try appendAstImports(allocator, file, &tree, &imports);
@@ -118,15 +120,17 @@ pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, conten
 
 pub fn heuristicDeclarations(allocator: std.mem.Allocator, contents: []const u8) !DeclarationList {
     var declarations: std.ArrayList(Declaration) = .empty;
-    errdefer deinitDeclarations(allocator, declarations.items);
-    errdefer declarations.deinit(allocator);
+    errdefer {
+        deinitDeclarations(allocator, declarations.items);
+        declarations.deinit(allocator);
+    }
 
     var lines = std.mem.splitScalar(u8, contents, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
         const trimmed = std.mem.trim(u8, line, " \t");
         const kind = declKind(trimmed) orelse continue;
-        try declarations.append(allocator, try declarationFromLine(allocator, line_no, trimmed, kind, 0, false));
+        try appendOwnedDeclaration(allocator, &declarations, try declarationFromLine(allocator, line_no, trimmed, kind, 0, false));
     }
     return .{ .items = try declarations.toOwnedSlice(allocator) };
 }
@@ -254,15 +258,15 @@ fn appendAstDecl(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: s
     switch (tree.nodeTag(node)) {
         .global_var_decl, .simple_var_decl, .aligned_var_decl => {
             const decl = tree.fullVarDecl(node).?;
-            try declarations.append(allocator, try astVarDecl(allocator, tree.*, node, decl, depth));
+            try appendOwnedDeclaration(allocator, declarations, try astVarDecl(allocator, tree.*, node, decl, depth));
             if (decl.ast.init_node.unwrap()) |init_node| try appendAstContainerOrBlockDecls(allocator, tree, init_node, declarations, depth + 1);
         },
         .fn_decl, .fn_proto, .fn_proto_multi, .fn_proto_one, .fn_proto_simple => {
             var buffer: [1]std.zig.Ast.Node.Index = undefined;
             const proto = tree.fullFnProto(&buffer, node).?;
-            try declarations.append(allocator, try astFnDecl(allocator, tree.*, node, proto, depth));
+            try appendOwnedDeclaration(allocator, declarations, try astFnDecl(allocator, tree.*, node, proto, depth));
         },
-        .test_decl => try declarations.append(allocator, try astTestDecl(allocator, tree.*, node, depth)),
+        .test_decl => try appendOwnedDeclaration(allocator, declarations, try astTestDecl(allocator, tree.*, node, depth)),
         .@"comptime" => try appendAstContainerOrBlockDecls(allocator, tree, tree.nodeData(node).node, declarations, depth + 1),
         else => try appendAstContainerOrBlockDecls(allocator, tree, node, declarations, depth),
     }
@@ -281,38 +285,53 @@ fn appendAstContainerOrBlockDecls(allocator: std.mem.Allocator, tree: *const std
 }
 
 fn astVarDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, decl: std.zig.Ast.full.VarDecl, depth: usize) !Declaration {
+    const kind = try allocator.dupe(u8, tree.tokenSlice(decl.ast.mut_token));
+    errdefer allocator.free(kind);
+    const name = try astOptionalIdentifier(allocator, tree, decl.ast.mut_token + 1);
+    errdefer if (name) |owned| allocator.free(owned);
+    const signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node)));
     return .{
         .line = lineForNode(tree, node),
-        .kind = try allocator.dupe(u8, tree.tokenSlice(decl.ast.mut_token)),
-        .name = try astOptionalIdentifier(allocator, tree, decl.ast.mut_token + 1),
+        .kind = kind,
+        .name = name,
         .public = decl.visib_token != null,
         .is_comptime = decl.comptime_token != null,
         .depth = depth,
-        .signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node))),
+        .signature = signature,
     };
 }
 
 fn astFnDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, proto: std.zig.Ast.full.FnProto, depth: usize) !Declaration {
+    const kind = try allocator.dupe(u8, "fn");
+    errdefer allocator.free(kind);
+    const name = if (proto.name_token) |token| try allocator.dupe(u8, tree.tokenSlice(token)) else null;
+    errdefer if (name) |owned| allocator.free(owned);
+    const signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node)));
     return .{
         .line = lineForNode(tree, node),
-        .kind = try allocator.dupe(u8, "fn"),
-        .name = if (proto.name_token) |token| try allocator.dupe(u8, tree.tokenSlice(token)) else null,
+        .kind = kind,
+        .name = name,
         .public = proto.visib_token != null,
         .is_comptime = false,
         .depth = depth,
-        .signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node))),
+        .signature = signature,
     };
 }
 
 fn astTestDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, depth: usize) !Declaration {
+    const kind = try allocator.dupe(u8, "test");
+    errdefer allocator.free(kind);
+    const name = try astTestName(allocator, tree, node);
+    errdefer if (name) |owned| allocator.free(owned);
+    const signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node)));
     return .{
         .line = lineForNode(tree, node),
-        .kind = try allocator.dupe(u8, "test"),
-        .name = try astTestName(allocator, tree, node),
+        .kind = kind,
+        .name = name,
         .public = false,
         .is_comptime = false,
         .depth = depth,
-        .signature = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node))),
+        .signature = signature,
     };
 }
 
@@ -325,13 +344,7 @@ fn appendAstImports(allocator: std.mem.Allocator, file: []const u8, tree: *const
         if (!std.mem.eql(u8, tree.tokenSlice(tree.nodeMainToken(node)), "@import")) continue;
         const params = tree.builtinCallParams(&buffer, node) orelse continue;
         if (params.len == 0 or tree.nodeTag(params[0]) != .string_literal) continue;
-        try imports.append(allocator, .{
-            .file = try allocator.dupe(u8, file),
-            .line = lineForNode(tree.*, node),
-            .import = try astStringLiteral(allocator, tree.*, params[0]),
-            .alias = try astImportAlias(allocator, tree.*, node),
-            .declaration = try allocator.dupe(u8, tree.getNodeSource(node)),
-        });
+        try appendOwnedImport(allocator, imports, try astImportDecl(allocator, file, tree.*, node, params[0]));
     }
 }
 
@@ -339,14 +352,60 @@ fn appendAstTests(allocator: std.mem.Allocator, file: []const u8, tree: *const s
     for (0..tree.nodes.len) |node_i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
         if (tree.nodeTag(node) != .test_decl) continue;
-        try tests.append(allocator, .{
-            .file = try allocator.dupe(u8, file),
-            .line = lineForNode(tree.*, node),
-            .name = try astTestName(allocator, tree.*, node),
-            .declaration = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node))),
-            .command = try std.fmt.allocPrint(allocator, "zig test {s}", .{file}),
-        });
+        try appendOwnedTestDecl(allocator, tests, try astTestRun(allocator, file, tree.*, node));
     }
+}
+
+fn appendOwnedDeclaration(allocator: std.mem.Allocator, declarations: *std.ArrayList(Declaration), declaration: Declaration) !void {
+    var owned = declaration;
+    errdefer owned.deinit(allocator);
+    try declarations.append(allocator, owned);
+}
+
+fn appendOwnedImport(allocator: std.mem.Allocator, imports: *std.ArrayList(Import), import: Import) !void {
+    var owned = import;
+    errdefer owned.deinit(allocator);
+    try imports.append(allocator, owned);
+}
+
+fn appendOwnedTestDecl(allocator: std.mem.Allocator, tests: *std.ArrayList(TestDecl), test_decl: TestDecl) !void {
+    var owned = test_decl;
+    errdefer owned.deinit(allocator);
+    try tests.append(allocator, owned);
+}
+
+fn astImportDecl(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, import_node: std.zig.Ast.Node.Index) !Import {
+    const file_owned = try allocator.dupe(u8, file);
+    errdefer allocator.free(file_owned);
+    const import_owned = try astStringLiteral(allocator, tree, import_node);
+    errdefer allocator.free(import_owned);
+    const alias = try astImportAlias(allocator, tree, node);
+    errdefer if (alias) |owned| allocator.free(owned);
+    const declaration = try allocator.dupe(u8, tree.getNodeSource(node));
+    return .{
+        .file = file_owned,
+        .line = lineForNode(tree, node),
+        .import = import_owned,
+        .alias = alias,
+        .declaration = declaration,
+    };
+}
+
+fn astTestRun(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !TestDecl {
+    const file_owned = try allocator.dupe(u8, file);
+    errdefer allocator.free(file_owned);
+    const name = try astTestName(allocator, tree, node);
+    errdefer if (name) |owned| allocator.free(owned);
+    const declaration = try allocator.dupe(u8, compactNodeSource(tree.getNodeSource(node)));
+    errdefer allocator.free(declaration);
+    const command = try std.fmt.allocPrint(allocator, "zig test {s}", .{file});
+    return .{
+        .file = file_owned,
+        .line = lineForNode(tree, node),
+        .name = name,
+        .declaration = declaration,
+        .command = command,
+    };
 }
 
 fn astTestName(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !?[]const u8 {
@@ -385,14 +444,19 @@ fn astOptionalIdentifier(allocator: std.mem.Allocator, tree: std.zig.Ast, token:
 }
 
 fn declarationFromLine(allocator: std.mem.Allocator, line_no: usize, trimmed: []const u8, kind: []const u8, depth: usize, comptime_decl: bool) !Declaration {
+    const kind_owned = try allocator.dupe(u8, kind);
+    errdefer allocator.free(kind_owned);
+    const name = if (declName(trimmed, kind)) |name_value| try allocator.dupe(u8, name_value) else null;
+    errdefer if (name) |owned| allocator.free(owned);
+    const signature = try allocator.dupe(u8, trimmed);
     return .{
         .line = line_no,
-        .kind = try allocator.dupe(u8, kind),
-        .name = if (declName(trimmed, kind)) |name| try allocator.dupe(u8, name) else null,
+        .kind = kind_owned,
+        .name = name,
         .public = std.mem.startsWith(u8, trimmed, "pub "),
         .is_comptime = comptime_decl,
         .depth = depth,
-        .signature = try allocator.dupe(u8, trimmed),
+        .signature = signature,
     };
 }
 
@@ -493,6 +557,35 @@ test "parser-backed source summary marks malformed fixtures partial" {
     try std.testing.expect(hasImport(sample.imports, "std", "std"));
 }
 
+test "parser-backed source summary covers comptime and negative helper paths" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const source =
+        \\comptime {
+        \\    const Inside = struct {};
+        \\    _ = @import("builtin");
+        \\}
+        \\test "inline" {}
+    ;
+    const summary = try parseSourceSummary(allocator, "comptime.zig", source);
+    try std.testing.expect(hasDeclaration(summary.declarations, "Inside"));
+    try std.testing.expect(hasImportValue(summary.imports, "builtin"));
+    try std.testing.expect(hasTest(summary.tests, "inline"));
+    try std.testing.expect(!hasDeclaration(summary.declarations, "Missing"));
+    try std.testing.expect(!hasImport(summary.imports, "std", "std"));
+    try std.testing.expect(!hasImportValue(summary.imports, "std"));
+    try std.testing.expect(!hasTest(summary.tests, "missing"));
+
+    var tree = try parseAst(allocator, source);
+    defer {
+        const parsed_source = tree.source;
+        tree.deinit(allocator);
+        allocator.free(parsed_source);
+    }
+    try std.testing.expectEqual(@as(?[]const u8, null), try astOptionalIdentifier(allocator, tree, 0));
+}
+
 test "heuristic summaries preserve advisory source policy" {
     const text =
         \\pub fn main() void {}
@@ -515,6 +608,25 @@ test "workspace skip policy remains cache and artifact oriented" {
     try std.testing.expect(skipWorkspacePath("zig-out/bin/main.zig"));
     try std.testing.expect(skipWorkspacePath("zig-pkg/mcp/src/server.zig"));
     try std.testing.expect(!skipWorkspacePath("src/main.zig"));
+}
+
+test "heuristic analysis builders clean up allocation failures" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, heuristicAnalysisAllocationCase, .{});
+}
+
+fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
+    var decls = try heuristicDeclarations(allocator,
+        \\pub fn main() void {}
+        \\pub const Api = struct {};
+    );
+    defer decls.deinit(allocator);
+
+    const summary = try declarationSummaryText(allocator, "x.zig", "pub fn main() void {}\n");
+    defer allocator.free(summary);
+    const dead = try deadDeclCandidatesText(allocator, "x.zig", "const Hidden = struct {};\n");
+    defer allocator.free(dead);
+    const allocations = try allocationSummaryText(allocator, "x.zig", "var list: std.ArrayList(u8) = .empty;\n");
+    defer allocator.free(allocations);
 }
 
 fn hasDeclaration(items: []const Declaration, name: []const u8) bool {

@@ -366,14 +366,15 @@ pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCom
 
     try builder.appendMany(request.extra_args);
     const owned_mode = try allocator.dupe(u8, mode);
-    errdefer allocator.free(owned_mode);
+    var mode_owned = true;
+    defer if (mode_owned) allocator.free(owned_mode);
     const outcome = try runBuiltCommand(allocator, context, title, try builder.toOwned(), timeoutFor(context, request.timeout_ms));
     return switch (outcome) {
-        .ok => |run_result| .{ .ok = .{ .mode = owned_mode, .command = run_result } },
-        .err => |failure| blk: {
-            allocator.free(owned_mode);
-            break :blk .{ .err = failure };
+        .ok => |run_result| blk: {
+            mode_owned = false;
+            break :blk .{ .ok = .{ .mode = owned_mode, .command = run_result } };
         },
+        .err => |failure| .{ .err = failure },
     };
 }
 

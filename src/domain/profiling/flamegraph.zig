@@ -102,15 +102,18 @@ pub const BuiltArgv = struct {
     }
 
     pub fn appendOwned(self: *BuiltArgv, allocator: std.mem.Allocator, arg: []const u8) !void {
-        errdefer allocator.free(arg);
+        var owned_by_list = false;
+        defer if (!owned_by_list) allocator.free(arg);
         try self.owned_args.append(allocator, arg);
+        owned_by_list = true;
         try self.argv.append(allocator, arg);
     }
 };
 
 pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !BuiltArgv {
     var built: BuiltArgv = .{};
-    errdefer built.deinit(allocator);
+    var built_owned = true;
+    defer if (built_owned) built.deinit(allocator);
     try built.argv.appendSlice(allocator, &.{ spec.executable, spec.format.name() });
     try appendZflameStringOption(allocator, &built, .title, spec.options.title);
     try appendZflameStringOption(allocator, &built, .subtitle, spec.options.subtitle);
@@ -119,15 +122,18 @@ pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !Bu
     try appendZflameIntOption(allocator, &built, .min_width, spec.options.min_width);
     if (spec.options.hash) try built.argv.append(allocator, "--hash");
     try built.argv.append(allocator, spec.input);
+    built_owned = false;
     return built;
 }
 
 pub fn buildDiffFoldedArgv(allocator: std.mem.Allocator, spec: DiffFoldedSpec) !BuiltArgv {
     var built: BuiltArgv = .{};
-    errdefer built.deinit(allocator);
+    var built_owned = true;
+    defer if (built_owned) built.deinit(allocator);
     try built.argv.append(allocator, spec.executable);
     try built.appendOwned(allocator, try std.fmt.allocPrint(allocator, "--output={s}", .{spec.output}));
     try built.argv.appendSlice(allocator, &.{ spec.before, spec.after });
+    built_owned = false;
     return built;
 }
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const app_context = @import("../../context.zig");
+const ports = @import("../../ports.zig");
 const support = @import("../usecase_support.zig");
 const backend_catalog = @import("backend_catalog.zig");
 const project_intelligence = @import("../validation/project_intelligence.zig");
@@ -1539,4 +1540,421 @@ test "environment JSON comparison helpers find nested pin mismatches" {
     try std.testing.expect(!jsonValuesEqual(.{ .string = "same" }, .{ .string = "other" }));
     try std.testing.expectEqualStrings("0.15.0", jsonObjectString(.{ .object = toolchain }, "zig_version").string);
     try std.testing.expect(jsonObjectString(.{ .object = toolchain }, "missing") == .null);
+}
+
+const TestEnvironmentRuntime = struct {
+    writes: usize = 0,
+    command_runs: usize = 0,
+    profile_exists: bool = true,
+    source_dirs_exist: bool = true,
+    write_error: ?ports.PortError = null,
+
+    fn context(self: *TestEnvironmentRuntime) app_context.EnvironmentContext {
+        return .{
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .tool_paths = .{
+                .zig = "/bin/zig",
+                .zls = "/bin/zls",
+                .zlint = "/bin/zlint",
+                .zwanzig = "/bin/zwanzig",
+                .zflame = "/bin/zflame",
+                .diff_folded = "/bin/diff-folded",
+            },
+            .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
+            .command_runner = self.commandPort(),
+            .workspace_store = self.workspacePort(),
+            .workspace_scanner = self.scannerPort(),
+        };
+    }
+
+    fn commandPort(self: *TestEnvironmentRuntime) ports.CommandRunner {
+        return .{ .ptr = self, .vtable = &.{ .run = commandRun } };
+    }
+
+    fn workspacePort(self: *TestEnvironmentRuntime) ports.WorkspaceStore {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .resolve = workspaceResolve,
+                .read = workspaceRead,
+                .write = workspaceWrite,
+                .exists = workspaceExists,
+            },
+        };
+    }
+
+    fn scannerPort(self: *TestEnvironmentRuntime) ports.WorkspaceScanner {
+        return .{ .ptr = self, .vtable = &.{ .scan_zig_files = scanZigFiles } };
+    }
+
+    fn commandRun(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
+        self.command_runs += 1;
+        const exe = if (request.argv.len > 0) request.argv[0] else "";
+        if (std.mem.indexOf(u8, exe, "missing") != null) return error.FileNotFound;
+        const stdout = if (std.mem.indexOf(u8, exe, "zig") != null and request.argv.len > 1 and std.mem.eql(u8, request.argv[1], "version"))
+            "0.16.0\n"
+        else if (std.mem.indexOf(u8, exe, "zls") != null)
+            "0.16.1\n"
+        else if (std.mem.indexOf(u8, exe, "zvm") != null and request.argv.len > 1 and std.mem.eql(u8, request.argv[1], "current"))
+            "0.16.0\n"
+        else if (std.mem.indexOf(u8, exe, "zvm") != null and request.argv.len > 1 and std.mem.eql(u8, request.argv[1], "ls"))
+            "0.15.0\n0.16.0\n"
+        else if (std.mem.indexOf(u8, exe, "zvm") != null and request.argv.len > 1 and std.mem.eql(u8, request.argv[1], "where"))
+            "/opt/zig/0.16.0\n"
+        else if (std.mem.indexOf(u8, exe, "zvm") != null)
+            "zvm 1.0.0\n"
+        else
+            "backend help\n";
+        return .{
+            .exit_code = 0,
+            .term = .{ .exited = 0 },
+            .stdout = try allocator.dupe(u8, stdout),
+            .stderr = try allocator.dupe(u8, ""),
+            .duration_ms = 5,
+            .owns_stdout = true,
+            .owns_stderr = true,
+        };
+    }
+
+    fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        if (request.path.len == 0) return error.EmptyPath;
+        if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
+        if (std.fs.path.isAbsolute(request.path)) return .{ .path = try allocator.dupe(u8, request.path), .owns_path = true };
+        return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
+    }
+
+    fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
+        if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
+        if (std.mem.eql(u8, request.path, ".zigar/denied.json")) return error.AccessDenied;
+        if (!self.profile_exists and std.mem.eql(u8, request.path, ".zigar/profile.json")) return error.FileNotFound;
+        const bytes =
+            if (std.mem.eql(u8, request.path, "build.zig"))
+                "const std = @import(\"std\"); pub fn build(_: *std.Build) void {}\n"
+            else if (std.mem.eql(u8, request.path, "build.zig.zon"))
+                ".{ .name = .fixture, .minimum_zig_version = \"0.16.0\" }\n"
+            else if (std.mem.eql(u8, request.path, ".zigversion"))
+                "0.16.0\n"
+            else if (std.mem.eql(u8, request.path, ".tool-versions"))
+                "zig 0.16.0\nzls 0.16.0\nnode 24\n"
+            else if (std.mem.eql(u8, request.path, "mise.toml"))
+                "zig = \"0.16.0\"\n"
+            else if (std.mem.eql(u8, request.path, ".zigar/profile.json"))
+                completeProfileJson()
+            else if (std.mem.eql(u8, request.path, ".zigar/bad.json"))
+                "{bad"
+            else if (std.mem.eql(u8, request.path, ".zigar/toolchain.json"))
+                "{\"schema_version\":1,\"zig\":{\"version\":\"0.16.0\"},\"zls\":{\"version\":\"0.16.0\"}}\n"
+            else if (std.mem.eql(u8, request.path, ".zigar-cache/backend-conformance/report.json"))
+                "{\"kind\":\"backend_conformance_report\",\"result\":\"pass\",\"source_commit\":\"abc123\"}\n"
+            else if (std.mem.startsWith(u8, request.path, "/bin/"))
+                "fake executable bytes"
+            else
+                return error.FileNotFound;
+        return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
+    }
+
+    fn workspaceWrite(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
+        if (self.write_error) |err| return err;
+        if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
+        self.writes += 1;
+        return .{ .bytes_written = request.bytes.len, .replaced_existing = false };
+    }
+
+    fn workspaceExists(ptr: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
+        const is_dir = self.source_dirs_exist and (std.mem.eql(u8, request.path, "src") or
+            std.mem.eql(u8, request.path, "lib") or
+            std.mem.eql(u8, request.path, "test") or
+            std.mem.eql(u8, request.path, "tests"));
+        const exists = is_dir or
+            std.mem.eql(u8, request.path, "build.zig") or
+            std.mem.eql(u8, request.path, "build.zig.zon") or
+            std.mem.eql(u8, request.path, ".zigversion") or
+            std.mem.eql(u8, request.path, ".tool-versions") or
+            std.mem.eql(u8, request.path, "mise.toml") or
+            (self.profile_exists and std.mem.eql(u8, request.path, ".zigar/profile.json"));
+        return .{ .exists = exists, .kind = if (is_dir) .directory else .file };
+    }
+
+    fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
+        const files = try allocator.alloc(ports.WorkspaceScanFile, 1);
+        files[0] = .{ .path = try allocator.dupe(u8, "src/main.zig") };
+        return .{ .files = files, .owns_memory = true };
+    }
+};
+
+fn completeProfileJson() []const u8 {
+    return
+    \\{
+    \\  "schema_version": 2,
+    \\  "toolchain": {},
+    \\  "source_sets": [],
+    \\  "generated_dirs": [],
+    \\  "targets": [],
+    \\  "tests": {},
+    \\  "backends": {},
+    \\  "verification": [],
+    \\  "unknowns": []
+    \\}
+    ;
+}
+
+fn parseArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
+    return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+}
+
+fn sweepUsecaseAllocationFailures(comptime call: anytype, args: ?std.json.Value) void {
+    for (0..180) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        var runtime = TestEnvironmentRuntime{};
+        var app = App.init(runtime.context(), failing.allocator());
+        _ = call(&app, failing.allocator(), args) catch {};
+        backing.deinit();
+    }
+}
+
+test "environment workflow use cases exercise profile lifecycle and elicitation through ports" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var runtime = TestEnvironmentRuntime{};
+    var app = App.init(runtime.context(), allocator);
+
+    const setup = try zigarSetupElicit(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigar_setup_elicit", setup.value.object.get("kind").?.string);
+    try std.testing.expect(setup.value.object.get("questions").?.array.items.len >= 2);
+
+    const profile_elicit = try zigarProfileElicit(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigar_profile_elicit", profile_elicit.value.object.get("kind").?.string);
+
+    var sparse_runtime = TestEnvironmentRuntime{ .profile_exists = false, .source_dirs_exist = false };
+    var sparse_app = App.init(sparse_runtime.context(), allocator);
+    const sparse_elicit = try zigarProfileElicit(&sparse_app, allocator, null);
+    try std.testing.expect(sparse_elicit.value.object.get("unknowns").?.array.items.len > 0);
+    const sparse_bootstrap = try zigarProfileBootstrap(&sparse_app, allocator, null);
+    try std.testing.expectEqualStrings("build.zig", sparse_bootstrap.value.object.get("profile").?.object.get("source_sets").?.array.items[0].object.get("path").?.string);
+
+    var backend_args = try parseArgs(allocator, "{\"topic\":\"backend\"}");
+    defer backend_args.deinit();
+    const backend = try zigarBackendElicit(&app, allocator, backend_args.value);
+    try std.testing.expectEqualStrings("backend", backend.value.object.get("topic").?.string);
+
+    const profile = try zigarProjectProfileV2(&app, allocator, null);
+    try std.testing.expectEqual(@as(i64, 2), profile.value.object.get("schema_version").?.integer);
+    try std.testing.expectEqualStrings("0.16.0", profile.value.object.get("profile").?.object.get("toolchain").?.object.get("expected_zig_version").?.string);
+
+    var invalid_profile_args = try parseArgs(allocator, "{\"content\":\"{bad\"}");
+    defer invalid_profile_args.deinit();
+    const invalid_profile = try zigarProjectProfileV2(&app, allocator, invalid_profile_args.value);
+    try std.testing.expect(invalid_profile.is_error);
+
+    var apply_args = try parseArgs(allocator, "{\"apply\":true}");
+    defer apply_args.deinit();
+    const generated = try generatedProfileV2Value(allocator, &app);
+    const write = try profileWriteResult(&app, allocator, apply_args.value, "zigar_project_profile_v2", generated);
+    try std.testing.expect(write.value.object.get("applied").?.bool);
+
+    var valid_import_args = try parseArgs(allocator, "{\"content\":\"{\\\"schema_version\\\":2,\\\"toolchain\\\":{},\\\"source_sets\\\":[],\\\"generated_dirs\\\":[],\\\"targets\\\":[],\\\"tests\\\":{},\\\"backends\\\":{},\\\"verification\\\":[],\\\"unknowns\\\":[]}\"}");
+    defer valid_import_args.deinit();
+    const imported = try zigarProfileImport(&app, allocator, valid_import_args.value);
+    try std.testing.expect(!imported.value.object.get("applied").?.bool);
+
+    var missing_import_args = try parseArgs(allocator, "{}");
+    defer missing_import_args.deinit();
+    const missing_import = try zigarProfileImport(&app, allocator, missing_import_args.value);
+    try std.testing.expect(missing_import.is_error);
+
+    var array_content_args = try parseArgs(allocator, "{\"content\":\"[]\"}");
+    defer array_content_args.deinit();
+    const validate_array = try zigarProfileValidate(&app, allocator, array_content_args.value);
+    try std.testing.expect(!validate_array.value.object.get("validation").?.object.get("valid").?.bool);
+
+    const read_profile = try zigarProfileRead(&app, allocator, null);
+    try std.testing.expect(read_profile.value.object.get("exists").?.bool);
+
+    var bad_read_args = try parseArgs(allocator, "{\"path\":\".zigar/bad.json\"}");
+    defer bad_read_args.deinit();
+    const bad_validation = try zigarProfileValidate(&app, allocator, bad_read_args.value);
+    try std.testing.expect(bad_validation.is_error);
+
+    var missing_read_args = try parseArgs(allocator, "{\"path\":\".zigar/missing.json\"}");
+    defer missing_read_args.deinit();
+    const missing_validation = try zigarProfileValidate(&app, allocator, missing_read_args.value);
+    try std.testing.expect(!missing_validation.value.object.get("validation").?.object.get("valid").?.bool);
+    const missing_profile = try zigarProfileRead(&sparse_app, allocator, null);
+    try std.testing.expect(!missing_profile.value.object.get("exists").?.bool);
+
+    var outside_args = try parseArgs(allocator, "{\"path\":\"../profile.json\"}");
+    defer outside_args.deinit();
+    const outside_validation = try zigarProfileValidate(&app, allocator, outside_args.value);
+    try std.testing.expect(outside_validation.is_error);
+    var denied_args = try parseArgs(allocator, "{\"path\":\".zigar/denied.json\"}");
+    defer denied_args.deinit();
+    const denied_validation = try zigarProfileValidate(&app, allocator, denied_args.value);
+    try std.testing.expect(denied_validation.is_error);
+
+    var invalid_diff_args = try parseArgs(allocator, "{\"content\":\"{bad\"}");
+    defer invalid_diff_args.deinit();
+    const invalid_diff = try zigarProfileDiff(&app, allocator, invalid_diff_args.value);
+    try std.testing.expect(invalid_diff.is_error);
+
+    var failed_write_runtime = TestEnvironmentRuntime{ .write_error = error.AccessDenied };
+    var failed_write_app = App.init(failed_write_runtime.context(), allocator);
+    const failed_write_profile = try generatedProfileV2Value(allocator, &failed_write_app);
+    const failed_write = try profileWriteResult(&failed_write_app, allocator, apply_args.value, "zigar_project_profile_v2", failed_write_profile);
+    try std.testing.expect(failed_write.is_error);
+
+    var oom_write_runtime = TestEnvironmentRuntime{ .write_error = error.OutOfMemory };
+    var oom_write_app = App.init(oom_write_runtime.context(), allocator);
+    const oom_write_profile = try generatedProfileV2Value(allocator, &oom_write_app);
+    try std.testing.expectError(error.OutOfMemory, profileWriteResult(&oom_write_app, allocator, apply_args.value, "zigar_project_profile_v2", oom_write_profile));
+
+    const bootstrap = try zigarProfileBootstrap(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigar_profile_bootstrap", bootstrap.value.object.get("kind").?.string);
+
+    const diff = try zigarProfileDiff(&app, allocator, null);
+    try std.testing.expect(diff.value.object.get("current_exists").?.bool);
+}
+
+test "environment workflow use cases exercise environment packs, pins, backends, and artifacts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var runtime = TestEnvironmentRuntime{};
+    var app = App.init(runtime.context(), allocator);
+
+    var probe_args = try parseArgs(allocator, "{\"probe_backends\":true,\"include_hashes\":true,\"timeout_ms\":50}");
+    defer probe_args.deinit();
+    const pack = try zigarEnvPack(&app, allocator, probe_args.value);
+    try std.testing.expectEqualStrings("zigar_env_pack", pack.value.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("available", pack.value.object.get("toolchain").?.object.get("zig").?.object.get("status").?.string);
+
+    var export_args = try parseArgs(allocator, "{\"apply\":true,\"probe_backends\":false,\"include_hashes\":false}");
+    defer export_args.deinit();
+    const exported = try zigarEnvExport(&app, allocator, export_args.value);
+    try std.testing.expect(exported.value.object.get("applied").?.bool);
+
+    var zvm_args = try parseArgs(allocator, "{\"zvm_path\":\"/bin/zvm\",\"timeout_ms\":50}");
+    defer zvm_args.deinit();
+    const zvm = try zigarZvmProbe(&app, allocator, zvm_args.value);
+    try std.testing.expect(zvm.value.object.get("available").?.bool);
+    try std.testing.expectEqual(@as(usize, 4), zvm.value.object.get("commands").?.array.items.len);
+
+    var zvm_install_args = try parseArgs(allocator, "{\"version\":\"0.16.0\",\"zvm_path\":\"zvm\"}");
+    defer zvm_install_args.deinit();
+    const install = try zigarZvmInstallPlan(&app, allocator, zvm_install_args.value);
+    try std.testing.expect(install.value.object.get("plan_only").?.bool);
+    const switch_plan = try zigarZvmSwitchPlan(&app, allocator, zvm_install_args.value);
+    try std.testing.expectEqualStrings("select requested Zig version", switch_plan.value.object.get("description").?.string);
+
+    const zls_match = try zigZlsMatchCheck(&app, allocator, probe_args.value);
+    try std.testing.expect(zls_match.value.object.get("match").?.bool);
+
+    var pin_args = try parseArgs(allocator, "{\"apply\":true,\"zig_version\":\"0.16.0\",\"zls_version\":\"0.16.0\"}");
+    defer pin_args.deinit();
+    const pin = try zigToolchainPin(&app, allocator, pin_args.value);
+    try std.testing.expect(pin.value.object.get("applied").?.bool);
+
+    const pin_check = try zigToolchainPinCheck(&app, allocator, null);
+    try std.testing.expectEqualStrings("zig_toolchain_pin_check", pin_check.value.object.get("kind").?.string);
+
+    var missing_pin_args = try parseArgs(allocator, "{\"input\":\".zigar/missing-toolchain.json\"}");
+    defer missing_pin_args.deinit();
+    const missing_pin = try zigToolchainPinCheck(&app, allocator, missing_pin_args.value);
+    try std.testing.expect(!missing_pin.value.object.get("ok").?.bool);
+
+    var backend_plan_args = try parseArgs(allocator, "{\"backend\":\"zig\",\"manager\":\"mise\"}");
+    defer backend_plan_args.deinit();
+    const backend_plan = try zigarBackendInstallPlan(&app, allocator, backend_plan_args.value);
+    try std.testing.expectEqual(@as(usize, 1), backend_plan.value.object.get("plans").?.array.items.len);
+
+    var backend_verify_args = try parseArgs(allocator, "{\"backend\":\"zls\",\"timeout_ms\":50}");
+    defer backend_verify_args.deinit();
+    const verify = try zigarBackendVerify(&app, allocator, backend_verify_args.value);
+    try std.testing.expectEqualStrings("zls", verify.value.object.get("backend").?.string);
+
+    var missing_backend_context = runtime.context();
+    missing_backend_context.tool_paths.zlint = "/bin/missing-zlint";
+    var missing_backend_app = App.init(missing_backend_context, allocator);
+    var missing_backend_args = try parseArgs(allocator, "{\"backend\":\"zlint\",\"timeout_ms\":50}");
+    defer missing_backend_args.deinit();
+    const missing_backend = try zigarBackendVerify(&missing_backend_app, allocator, missing_backend_args.value);
+    const missing_backend_result = missing_backend.value.object.get("results").?.array.items[0].object;
+    try std.testing.expectEqualStrings("not_found", missing_backend_result.get("status").?.string);
+
+    const conformance = try zigarBackendConformance(&app, allocator, probe_args.value);
+    try std.testing.expectEqualStrings("probe_matrix", conformance.value.object.get("run_state").?.string);
+
+    var evidence_args = try parseArgs(allocator, "{\"apply\":true}");
+    defer evidence_args.deinit();
+    const evidence = try zigarBackendEvidencePack(&app, allocator, evidence_args.value);
+    try std.testing.expect(evidence.value.object.get("applied").?.bool);
+
+    var missing_evidence_args = try parseArgs(allocator, "{\"input\":\".zigar-cache/backend-conformance/missing.json\"}");
+    defer missing_evidence_args.deinit();
+    const missing_evidence = try zigarBackendEvidencePack(&app, allocator, missing_evidence_args.value);
+    try std.testing.expect(!missing_evidence.value.object.get("evidence").?.object.get("available").?.bool);
+
+    var bad_output_args = try parseArgs(allocator, "{\"apply\":true,\"output\":\"../bad.json\"}");
+    defer bad_output_args.deinit();
+    const bad_export = try zigarEnvExport(&app, allocator, bad_output_args.value);
+    try std.testing.expect(bad_export.is_error);
+
+    inline for (.{ "asdf", "nix", "devcontainer", "github-actions", "mise" }) |kind| {
+        const args_text = try std.fmt.allocPrint(allocator, "{{\"kind\":\"{s}\",\"apply\":false}}", .{kind});
+        var args = try parseArgs(allocator, args_text);
+        defer args.deinit();
+        const generated = try zigarDevEnvGenerate(&app, allocator, args.value);
+        try std.testing.expectEqualStrings(kind, generated.value.object.get("artifact_kind").?.string);
+    }
+
+    const scan = try app.context.workspace_scanner.scanZigFiles(allocator, .{});
+    defer scan.deinit(allocator);
+    try std.testing.expectEqualStrings("src/main.zig", scan.files[0].path);
+
+    try std.testing.expect(runtime.writes >= 3);
+    try std.testing.expect(runtime.command_runs >= 8);
+}
+
+test "environment workflow values clean up partially allocated JSON on failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var zvm_args = try parseArgs(allocator, "{\"zvm_path\":\"/bin/zvm\",\"timeout_ms\":50}");
+    defer zvm_args.deinit();
+    var backend_args = try parseArgs(allocator, "{\"backend\":\"zls\",\"timeout_ms\":50}");
+    defer backend_args.deinit();
+    var dev_env_args = try parseArgs(allocator, "{\"kind\":\"github-actions\"}");
+    defer dev_env_args.deinit();
+
+    sweepUsecaseAllocationFailures(zigarSetupElicit, null);
+    sweepUsecaseAllocationFailures(zigarProfileElicit, null);
+    sweepUsecaseAllocationFailures(zigarProjectProfileV2, null);
+    sweepUsecaseAllocationFailures(zigarProfileValidate, null);
+    sweepUsecaseAllocationFailures(zigarProfileRead, null);
+    sweepUsecaseAllocationFailures(zigarProfileBootstrap, null);
+    sweepUsecaseAllocationFailures(zigarProfileDiff, null);
+    sweepUsecaseAllocationFailures(zigarEnvPack, null);
+    sweepUsecaseAllocationFailures(zigarEnvExport, null);
+    sweepUsecaseAllocationFailures(zigarZvmProbe, zvm_args.value);
+    sweepUsecaseAllocationFailures(zigZlsMatchCheck, backend_args.value);
+    sweepUsecaseAllocationFailures(zigToolchainPin, null);
+    sweepUsecaseAllocationFailures(zigToolchainPinCheck, null);
+    sweepUsecaseAllocationFailures(zigarBackendInstallPlan, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarBackendVerify, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarDevEnvGenerate, dev_env_args.value);
+    sweepUsecaseAllocationFailures(zigarBackendConformance, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarBackendEvidencePack, null);
+
+    for (0..8) |fail_index| {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        _ = stringArrayValue(failing.allocator(), &.{ "a", "b" }) catch {};
+        backing.deinit();
+    }
 }

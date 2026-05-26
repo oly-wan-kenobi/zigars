@@ -100,38 +100,64 @@ pub const FakeDocsScanner = struct {
 
     pub fn expectRead(self: *Self, request: ports.DocsReadAbsoluteRequest, bytes: []const u8) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
-        errdefer freeReadRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeReadRequest(self.allocator, owned_request);
+        const owned_bytes = try common.dupString(self.allocator, bytes);
+        var bytes_owned = true;
+        defer if (bytes_owned) self.allocator.free(owned_bytes);
         try self.expected_reads.append(self.allocator, .{
             .request = owned_request,
-            .result = .{ .ok = try common.dupString(self.allocator, bytes) },
+            .result = .{ .ok = owned_bytes },
         });
+        request_owned = false;
+        bytes_owned = false;
     }
 
     pub fn expectReadError(self: *Self, request: ports.DocsReadAbsoluteRequest, err: ports.PortError) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
-        errdefer freeReadRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeReadRequest(self.allocator, owned_request);
         try self.expected_reads.append(self.allocator, .{
             .request = owned_request,
             .result = .{ .err = err },
         });
+        request_owned = false;
     }
 
     pub fn expectAbsoluteScan(self: *Self, request: ports.DocsScanAbsoluteZigPathsRequest, paths: []const []const u8) !void {
         const owned_request = try cloneAbsoluteScanRequest(self.allocator, request);
-        errdefer freeAbsoluteScanRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeAbsoluteScanRequest(self.allocator, owned_request);
+        const owned_paths = try clonePaths(self.allocator, paths);
+        var paths_owned = true;
+        defer if (paths_owned) {
+            const result = ScanResult{ .ok = owned_paths };
+            result.deinit(self.allocator);
+        };
         try self.expected_absolute_scans.append(self.allocator, .{
             .request = owned_request,
-            .result = .{ .ok = try clonePaths(self.allocator, paths) },
+            .result = .{ .ok = owned_paths },
         });
+        request_owned = false;
+        paths_owned = false;
     }
 
     pub fn expectWorkspaceScan(self: *Self, request: ports.DocsScanWorkspacePathsRequest, paths: []const []const u8) !void {
         const owned_request = try cloneWorkspaceScanRequest(self.allocator, request);
-        errdefer freeWorkspaceScanRequest(self.allocator, owned_request);
+        var request_owned = true;
+        defer if (request_owned) freeWorkspaceScanRequest(self.allocator, owned_request);
+        const owned_paths = try clonePaths(self.allocator, paths);
+        var paths_owned = true;
+        defer if (paths_owned) {
+            const result = ScanResult{ .ok = owned_paths };
+            result.deinit(self.allocator);
+        };
         try self.expected_workspace_scans.append(self.allocator, .{
             .request = owned_request,
-            .result = .{ .ok = try clonePaths(self.allocator, paths) },
+            .result = .{ .ok = owned_paths },
         });
+        request_owned = false;
+        paths_owned = false;
     }
 
     pub fn verify(self: *const Self) ports.PortError!void {
@@ -177,10 +203,18 @@ pub const FakeDocsScanner = struct {
     }
 
     fn cloneReadRequest(allocator: Allocator, request: ports.DocsReadAbsoluteRequest) !ports.DocsReadAbsoluteRequest {
+        const path = try common.dupString(allocator, request.path);
+        var path_owned = true;
+        defer if (path_owned) allocator.free(path);
+        const provenance = try common.dupString(allocator, request.provenance);
+        var provenance_owned = true;
+        defer if (provenance_owned) allocator.free(provenance);
+        path_owned = false;
+        provenance_owned = false;
         return .{
-            .path = try common.dupString(allocator, request.path),
+            .path = path,
             .max_bytes = request.max_bytes,
-            .provenance = try common.dupString(allocator, request.provenance),
+            .provenance = provenance,
         };
     }
 
@@ -190,10 +224,18 @@ pub const FakeDocsScanner = struct {
     }
 
     fn cloneAbsoluteScanRequest(allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) !ports.DocsScanAbsoluteZigPathsRequest {
+        const root = try common.dupString(allocator, request.root);
+        var root_owned = true;
+        defer if (root_owned) allocator.free(root);
+        const provenance = try common.dupString(allocator, request.provenance);
+        var provenance_owned = true;
+        defer if (provenance_owned) allocator.free(provenance);
+        root_owned = false;
+        provenance_owned = false;
         return .{
-            .root = try common.dupString(allocator, request.root),
+            .root = root,
             .max_files = request.max_files,
-            .provenance = try common.dupString(allocator, request.provenance),
+            .provenance = provenance,
         };
     }
 
@@ -215,18 +257,28 @@ pub const FakeDocsScanner = struct {
 
     fn clonePaths(allocator: Allocator, raw_paths: []const []const u8) ![]ports.DocsPath {
         const paths = try allocator.alloc(ports.DocsPath, raw_paths.len);
-        errdefer allocator.free(paths);
+        var initialized: usize = 0;
+        errdefer {
+            for (paths[0..initialized]) |path| allocator.free(path.path);
+            allocator.free(paths);
+        }
         for (raw_paths, 0..) |path, index| {
             paths[index] = .{ .path = try common.dupString(allocator, path) };
+            initialized += 1;
         }
         return paths;
     }
 
     fn copyPaths(allocator: Allocator, paths: []ports.DocsPath) ![]ports.DocsPath {
         const copied = try allocator.alloc(ports.DocsPath, paths.len);
-        errdefer allocator.free(copied);
+        var initialized: usize = 0;
+        errdefer {
+            for (copied[0..initialized]) |path| allocator.free(path.path);
+            allocator.free(copied);
+        }
         for (paths, 0..) |path, index| {
             copied[index] = .{ .path = try common.dupString(allocator, path.path) };
+            initialized += 1;
         }
         return copied;
     }
@@ -264,4 +316,18 @@ test "docs scanner fake returns expected paths and reads" {
     defer read.deinit(std.testing.allocator);
     try std.testing.expect(std.mem.indexOf(u8, read.bytes, "Language Reference") != null);
     try fake.verify();
+}
+
+test "docs scanner fake expectations clean partial allocations on failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, expectDocsScannerWithAllocator, .{});
+}
+
+fn expectDocsScannerWithAllocator(allocator: Allocator) !void {
+    var fake = FakeDocsScanner.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectRead(.{ .path = "/zig/doc/langref.html", .max_bytes = 64, .provenance = "read" }, "langref");
+    try fake.expectReadError(.{ .path = "/missing.html", .max_bytes = 64, .provenance = "missing" }, error.FileNotFound);
+    try fake.expectAbsoluteScan(.{ .root = "/zig", .max_files = 2, .provenance = "abs" }, &.{ "lib/std/std.zig", "lib/std/mem.zig" });
+    try fake.expectWorkspaceScan(.{ .max_files = 2, .provenance = "workspace" }, &.{ "README.md", "src/main.zig" });
 }

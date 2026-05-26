@@ -78,7 +78,8 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
     }
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigar_doctor" });
     try obj.put(allocator, "workspace", .{ .string = context.workspace.root });
     try obj.put(allocator, "transport", .{ .string = context.workspace.transport });
@@ -91,12 +92,14 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
     try obj.put(allocator, "timeout_ms", .{ .integer = context.timeouts.command_ms });
     try obj.put(allocator, "zls_timeout_ms", .{ .integer = context.timeouts.zls_ms });
     try obj.put(allocator, "checks", .{ .array = checks });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn workspaceInfoValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "workspace", .{ .string = context.workspace.root });
     try obj.put(allocator, "cache", .{ .string = context.workspace.cache_root });
     try obj.put(allocator, "zig", .{ .string = context.tool_paths.zig });
@@ -117,12 +120,14 @@ pub fn workspaceInfoValue(allocator: std.mem.Allocator, context: app_context.Con
     try obj.put(allocator, "workspace_boundary", .{ .string = "realpath" });
     try obj.put(allocator, "symlink_escapes", .{ .string = "rejected" });
     try obj.put(allocator, "backend_probe_cache", try probeCacheValue(allocator, context.trust_probe_cache));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn metricsValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "command_calls", .{ .integer = if (context.counters.command_calls) |counter| @intCast(counter.*) else 0 });
     try obj.put(allocator, "zls_requests", .{ .integer = if (context.counters.zls_requests) |counter| @intCast(counter.*) else 0 });
     try obj.put(allocator, "tool_errors", .{ .integer = if (context.counters.tool_errors) |counter| @intCast(counter.*) else 0 });
@@ -131,17 +136,20 @@ pub fn metricsValue(allocator: std.mem.Allocator, context: app_context.Context) 
     try obj.put(allocator, "backend_probe_cache", try probeCacheValue(allocator, context.trust_probe_cache));
     try obj.put(allocator, "analysis_cache", try cacheStatusValue(allocator, context.caches.analysis));
     try obj.put(allocator, "semantic_index_cache", try cacheStatusValue(allocator, context.caches.semantic_index));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 pub fn httpStatusValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "configured_transport", .{ .string = context.workspace.transport });
     try obj.put(allocator, "host", .{ .string = context.workspace.host });
     try obj.put(allocator, "port", .{ .integer = context.workspace.port });
     try obj.put(allocator, "http_available", .{ .bool = true });
     try obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigar only supports loopback HTTP by default and stdio remains the safest default for Codex" });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -224,7 +232,8 @@ pub fn toolchainResolveValue(
     }
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_toolchain_resolve" });
     try obj.put(allocator, "workspace", .{ .string = context.workspace.root });
     try obj.put(allocator, "zig_path", .{ .string = context.tool_paths.zig });
@@ -240,6 +249,7 @@ pub fn toolchainResolveValue(
     try obj.put(allocator, "managers", try versionManagersValue(allocator, runner, context.workspace.root, probe_managers, timeout_ms));
     try obj.put(allocator, "issues", .{ .array = issues });
     try obj.put(allocator, "resolution", .{ .string = "Use an existing manager such as mise, asdf, zvm, or zigup to install/select the expected Zig version, then restart zigar with matching --zig-path and --zls-path." });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -307,37 +317,43 @@ fn exactCommandPlanValue(
     try list.appendSlice(allocator, extra);
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try putPlanningBase(allocator, &obj, planner_name, entry, true);
     try obj.put(allocator, "command_backed", .{ .bool = true });
     try obj.put(allocator, "argv_exact", .{ .bool = true });
     try obj.put(allocator, "cwd", .{ .string = context.workspace.root });
     try obj.put(allocator, "argv", try argvValue(allocator, list.items));
     try obj.put(allocator, "timeout_ms", .{ .integer = @max(1, @min(request.timeout_ms, 60 * 60 * 1000)) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn commandPlanUnsupportedValue(allocator: std.mem.Allocator, catalog: ports.ToolManifestCatalog, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try putPlanningBase(allocator, &obj, "zig_command_plan", entry, false);
     try obj.put(allocator, "command_backed", .{ .bool = false });
     try obj.put(allocator, "argv_exact", .{ .bool = false });
     try obj.put(allocator, "reason", .{ .string = "zig_command_plan only returns exact argv/cwd/timeout plans for command-backed tools." });
     try obj.put(allocator, "use", .{ .string = "zig_tool_plan" });
     try obj.put(allocator, "supported_tools", try supportedCommandToolsValue(allocator, catalog));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn toolPlanPolicyValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     const supported = switch (entry.plan) {
         .not_plannable => false,
         else => true,
     };
     try putPlanningBase(allocator, &obj, "zig_tool_plan", entry, supported);
     try putPlanPolicyDetails(allocator, &obj, entry);
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -357,7 +373,7 @@ fn putPlanningBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, plann
 
 fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, entry: ports.ToolManifestEntry) !void {
     switch (entry.plan) {
-        .exact_command => unreachable,
+        .exact_command => return,
         .dynamic_command => |reason| {
             try obj.put(allocator, "command_backed", .{ .bool = true });
             try obj.put(allocator, "argv_exact", .{ .bool = false });
@@ -400,7 +416,8 @@ fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, 
 
 fn supportedCommandToolsValue(allocator: std.mem.Allocator, catalog: ports.ToolManifestCatalog) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (0..catalog.count()) |index| {
         const entry = catalog.entryAt(index) orelse continue;
         switch (entry.plan) {
@@ -408,6 +425,7 @@ fn supportedCommandToolsValue(allocator: std.mem.Allocator, catalog: ports.ToolM
             else => {},
         }
     }
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -500,8 +518,10 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
 
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
-    errdefer allocator.free(arg);
+    var arg_owned = true;
+    defer if (arg_owned) allocator.free(arg);
     try list.append(allocator, arg);
+    arg_owned = false;
 }
 
 pub const ZigVersionHintStatus = enum {
@@ -625,11 +645,13 @@ fn appendProbeCheck(
 
 fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "name", try ownedString(allocator, name));
     try obj.put(allocator, "ok", .{ .bool = ok });
     try obj.put(allocator, "status", try ownedString(allocator, status));
     try obj.put(allocator, "resolution", try ownedString(allocator, resolution));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -651,71 +673,84 @@ fn cachedProbe(context: app_context.Context, id: backend_contracts.BackendId) ?a
 
 fn zlsStatusValue(allocator: std.mem.Allocator, state: app_context.ZlsState) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "status", .{ .string = state.status });
     try obj.put(allocator, "running", .{ .bool = state.running });
     try obj.put(allocator, "restart_attempts", .{ .integer = @intCast(state.restart_attempts) });
     try obj.put(allocator, "initialize_response", if (state.initialize_response) |value| .{ .string = value } else .null);
     try obj.put(allocator, "last_failure", if (state.last_failure) |value| .{ .string = value } else .null);
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn optionalBackendStatusValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "zwanzig", try optionalBackendValue(allocator, context, .zwanzig, context.tool_paths.zwanzig, context.trust_probe_cache.zwanzig));
     try obj.put(allocator, "zflame", try optionalBackendValue(allocator, context, .zflame, context.tool_paths.zflame, context.trust_probe_cache.zflame));
     try obj.put(allocator, "diff_folded", try optionalBackendValue(allocator, context, .diff_folded, context.tool_paths.diff_folded, context.trust_probe_cache.diff_folded));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn optionalBackendValue(allocator: std.mem.Allocator, context: app_context.Context, id: backend_contracts.BackendId, configured_path: []const u8, probe: app_context.CachedBackendProbe) !std.json.Value {
     _ = context;
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "name", .{ .string = id.name() });
     try obj.put(allocator, "configured_path", .{ .string = configured_path });
     try obj.put(allocator, "probe_argv", try configuredProbeArgvValue(allocator, id, configured_path));
     try obj.put(allocator, "capabilities", try backendCapabilitiesValue(allocator, id));
     try obj.put(allocator, "probe", try cachedProbeValue(allocator, probe));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn configuredProbeArgvValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId, configured_path: []const u8) !std.json.Value {
     const probe = backend_contracts.probeArgv(id);
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (probe, 0..) |arg, index| {
         try array.append(.{ .string = if (index == 0) configured_path else arg });
     }
+    array_owned = false;
     return .{ .array = array };
 }
 
 fn backendCapabilitiesValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (backend_contracts.capabilities) |capability| {
         if (capability.backend == id) try array.append(.{ .string = capability.tool });
         if (id == .zflame and std.mem.eql(u8, capability.tool, "zig_flamegraph_diff")) try array.append(.{ .string = capability.tool });
     }
+    array_owned = false;
     return .{ .array = array };
 }
 
 fn probeCacheValue(allocator: std.mem.Allocator, cache: app_context.TrustProbeCache) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "zig", try cachedProbeValue(allocator, cache.zig));
     try obj.put(allocator, "zls", try cachedProbeValue(allocator, cache.zls));
     try obj.put(allocator, "zlint", try cachedProbeValue(allocator, cache.zlint));
     try obj.put(allocator, "zwanzig", try cachedProbeValue(allocator, cache.zwanzig));
     try obj.put(allocator, "zflame", try cachedProbeValue(allocator, cache.zflame));
     try obj.put(allocator, "diff_folded", try cachedProbeValue(allocator, cache.diff_folded));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "probed", .{ .bool = probe.probed });
     if (probe.probed) {
         try obj.put(allocator, "ok", if (probe.ok) |ok| .{ .bool = ok } else .null);
@@ -726,17 +761,20 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBacke
         try obj.put(allocator, "status", .{ .string = "not probed" });
         try obj.put(allocator, "resolution", .{ .string = "call zigar_doctor with probe_backends=true to cache backend availability" });
     }
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn cacheStatusValue(allocator: std.mem.Allocator, cache: app_context.CacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "cached", .{ .bool = cache.cached });
     try obj.put(allocator, "signature", .{ .integer = @intCast(cache.signature) });
     try obj.put(allocator, "hits", .{ .integer = @intCast(cache.hits) });
     try obj.put(allocator, "refreshes", .{ .integer = @intCast(cache.refreshes) });
     try obj.put(allocator, "bytes", .{ .integer = @intCast(cache.bytes) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -837,4 +875,49 @@ fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value 
 test "version prefix accepts Zig dev version strings" {
     try std.testing.expectEqual([3]u64{ 0, 16, 0 }, parseVersionPrefix("0.16.0-dev.123").?);
     try std.testing.expect(versionMeetsMinimum("0.16.1", "0.16.0"));
+}
+
+test "discovery private argument splitting covers shell quoting and cleanup paths" {
+    const args = try splitArgs(std.testing.allocator, "alpha\\ beta \"gamma delta\" 'epsilon' zeta\\\n");
+    defer freeArgList(std.testing.allocator, args);
+    try std.testing.expectEqual(@as(usize, 4), args.len);
+    try std.testing.expectEqualStrings("alpha beta", args[0]);
+    try std.testing.expectEqualStrings("gamma delta", args[1]);
+    try std.testing.expectEqualStrings("epsilon", args[2]);
+    try std.testing.expectEqualStrings("zeta\n", args[3]);
+
+    try std.testing.expectError(error.InvalidArguments, splitArgs(std.testing.allocator, "\"unterminated"));
+    try std.testing.expectError(error.InvalidArguments, splitArgs(std.testing.allocator, "dangling\\"));
+
+    var index: usize = 0;
+    var success_seen = false;
+    while (index < 64) : (index += 1) {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = index });
+        const maybe = splitArgs(failing.allocator(), "one two") catch continue;
+        freeArgList(failing.allocator(), maybe);
+        success_seen = true;
+        break;
+    }
+    try std.testing.expect(success_seen);
+}
+
+test "discovery private helpers cover exact policy details and allocation errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var exact = std.json.ObjectMap.empty;
+    try putPlanPolicyDetails(allocator, &exact, .{
+        .name = "zig_build",
+        .plan = .{ .exact_command = .{ .argv = &.{"build"} } },
+    });
+    try std.testing.expectEqual(@as(usize, 0), exact.count());
+
+    var tiny_buffer: [8]u8 = undefined;
+    var fixed = std.heap.FixedBufferAllocator.init(&tiny_buffer);
+    try std.testing.expectError(error.OutOfMemory, checkValue(fixed.allocator(), "name", true, "status", "resolution"));
+
+    var array = std.json.Array.init(allocator);
+    try std.testing.expectError(error.OutOfMemory, argvValue(fixed.allocator(), &.{"too-large"}));
+    try std.testing.expectError(error.OutOfMemory, appendVersionHint(fixed.allocator(), &array, "source", "zig", "0.16.0"));
 }

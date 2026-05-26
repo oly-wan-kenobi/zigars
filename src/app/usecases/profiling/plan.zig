@@ -14,7 +14,8 @@ pub fn profilePlanValue(allocator: std.mem.Allocator, request: Request) !std.jso
     const svg_output = try std.fmt.allocPrint(allocator, "{s}.svg", .{request.output_prefix});
 
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_profile_plan" });
     try obj.put(allocator, "binary", .{ .string = request.binary });
     try obj.put(allocator, "detected_platform", .{ .string = request.detected_platform });
@@ -29,12 +30,14 @@ pub fn profilePlanValue(allocator: std.mem.Allocator, request: Request) !std.jso
     try obj.put(allocator, "recommended_plan_ids", try recommendedPlanIdsValue(allocator, selected_platform));
     try obj.put(allocator, "plans", try capturePlansValue(allocator, request.binary, request.output_prefix, svg_output));
     try obj.put(allocator, "diff_workflow", try diffWorkflowValue(allocator, request.output_prefix));
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_prefix: []const u8, svg_output: []const u8) !std.json.Value {
     var plans = std.json.Array.init(allocator);
-    errdefer plans.deinit();
+    var plans_owned = true;
+    defer if (plans_owned) plans.deinit();
     try plans.append(try capturePlanValue(allocator, .{
         .id = "linux_perf",
         .platforms = &.{"linux"},
@@ -101,6 +104,7 @@ fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_pr
         .limitations = &.{ "zigar renders folded stacks but does not verify how they were captured or collapsed", flamegraph_model.capture_semantics },
         .svg_output = svg_output,
     }));
+    plans_owned = false;
     return .{ .array = plans };
 }
 
@@ -118,7 +122,8 @@ const CapturePlanSpec = struct {
 
 fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "id", .{ .string = spec.id });
     try obj.put(allocator, "platforms", try stringArrayValue(allocator, spec.platforms));
     try obj.put(allocator, "required_profiler", .{ .string = spec.required_profiler });
@@ -130,17 +135,20 @@ fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.js
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, spec.limitations));
     try obj.put(allocator, "capture_owned_by", .{ .string = "external_profiler" });
     try obj.put(allocator, "capture_semantics", .{ .string = flamegraph_model.capture_semantics });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn nextZigarCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.ZflameFormat, input: []const u8, output: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "tool", .{ .string = "zig_flamegraph" });
     try obj.put(allocator, "format", .{ .string = format.name() });
     try obj.put(allocator, "input", .{ .string = input });
     try obj.put(allocator, "output", .{ .string = output });
     try obj.put(allocator, "command", .{ .string = try std.fmt.allocPrint(allocator, "zig_flamegraph {{\"format\":\"{s}\",\"input\":\"{s}\",\"output\":\"{s}\"}}", .{ format.name(), input, output }) });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
@@ -154,20 +162,24 @@ fn recommendedPlanIdsValue(allocator: std.mem.Allocator, platform: []const u8) !
 
 fn diffWorkflowValue(allocator: std.mem.Allocator, output_prefix: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "tool", .{ .string = "zig_flamegraph_diff" });
     try obj.put(allocator, "required_inputs", try stringArrayValue(allocator, &.{ "before.folded", "after.folded" }));
     try obj.put(allocator, "canonical_diff_backend", .{ .string = "diff-folded" });
     try obj.put(allocator, "canonical_renderer", .{ .string = "zflame recursive" });
     try obj.put(allocator, "suggested_output", .{ .string = try std.fmt.allocPrint(allocator, "{s}-diff.svg", .{output_prefix}) });
     try obj.put(allocator, "capture_semantics", .{ .string = flamegraph_model.capture_semantics });
+    obj_owned = false;
     return .{ .object = obj };
 }
 
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
+    var array_owned = true;
+    defer if (array_owned) array.deinit();
     for (values) |value| try array.append(.{ .string = value });
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -188,4 +200,30 @@ test "profile plan returns structured external capture plans" {
     try std.testing.expectEqual(@as(usize, flamegraph_model.zflame_format_names.len), root.get("supported_zflame_formats").?.array.items.len);
     try std.testing.expectEqualStrings("linux_perf", root.get("recommended_plan_ids").?.array.items[0].string);
     try std.testing.expectEqualStrings("diff-folded", root.get("diff_workflow").?.object.get("canonical_diff_backend").?.string);
+}
+
+test "profile plan recommends platform-specific fallback plan ids" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const cases = [_]struct {
+        platform: []const u8,
+        expected_first: []const u8,
+        expected_len: usize,
+    }{
+        .{ .platform = "freebsd", .expected_first = "dtrace", .expected_len = 2 },
+        .{ .platform = "illumos", .expected_first = "dtrace", .expected_len = 2 },
+        .{ .platform = "windows", .expected_first = "vtune", .expected_len = 2 },
+        .{ .platform = "unknown", .expected_first = "already_folded_recursive", .expected_len = 1 },
+    };
+
+    for (cases) |case| {
+        const value = try profilePlanValue(arena.allocator(), .{
+            .detected_platform = "linux",
+            .platform = case.platform,
+        });
+        const ids = value.object.get("recommended_plan_ids").?.array.items;
+        try std.testing.expectEqual(case.expected_len, ids.len);
+        try std.testing.expectEqualStrings(case.expected_first, ids[0].string);
+    }
 }

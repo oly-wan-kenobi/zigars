@@ -827,9 +827,16 @@ fn parseMetricBefore(text: []const u8, number_context: []const u8, line_context:
     while (lines.next()) |line| {
         if (std.mem.indexOf(u8, line, line_context) == null) continue;
         if (std.mem.indexOf(u8, line, number_context) == null and !std.mem.eql(u8, line_context, "ERROR SUMMARY")) continue;
-        return firstInteger(line);
+        return firstInteger(stripValgrindPrefix(line));
     }
     return null;
+}
+
+fn stripValgrindPrefix(line: []const u8) []const u8 {
+    const trimmed = std.mem.trim(u8, line, " \t");
+    if (!std.mem.startsWith(u8, trimmed, "==")) return line;
+    const end = std.mem.indexOfPos(u8, trimmed, 2, "==") orelse return line;
+    return trimmed[end + 2 ..];
 }
 
 fn firstInteger(line: []const u8) ?i64 {
@@ -1242,3 +1249,813 @@ fn freeArgv(allocator: std.mem.Allocator, argv: []const []const u8) void {
     for (argv) |arg| allocator.free(arg);
     allocator.free(argv);
 }
+
+const fakes = @import("../../../testing/fakes/root.zig");
+const test_ports = @import("../../ports.zig");
+
+test "diagnostics plans cover backend probes previews and unsupported apply gates" {
+    var result_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer result_arena.deinit();
+    const result_allocator = result_arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var probe = fakes.FakeBackendProbe.init(std.testing.allocator);
+    defer probe.deinit();
+
+    try probe.expectCheck(.{
+        .backend = "lldb",
+        .argv = &.{ "/usr/bin/lldb", "--version" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "lldb",
+        .available = true,
+        .version = "lldb-19",
+        .basis = "fake lldb",
+    });
+    try probe.expectCheck(.{
+        .backend = "probe-rs",
+        .argv = &.{ "probe-rs", "--help" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "probe-rs",
+        .available = false,
+        .unavailable_reason = "not installed",
+        .basis = "PATH probe",
+    });
+
+    try workspace.expectResolve(.{
+        .path = "out/heaptrack.gz",
+        .for_output = true,
+        .provenance = "arch110-workflow-resolve-output",
+    }, "/repo/out/heaptrack.gz");
+    try workspace.expectResolve(.{
+        .path = "corpus",
+        .provenance = "arch110-workflow-resolve",
+    }, "/repo/corpus");
+    try workspace.expectResolve(.{
+        .path = "out/afl",
+        .for_output = true,
+        .provenance = "arch110-workflow-resolve-output",
+    }, "/repo/out/afl");
+    try workspace.expectResolve(.{
+        .path = "out/callgrind.out",
+        .for_output = true,
+        .provenance = "arch110-workflow-resolve-output",
+    }, "/repo/out/callgrind.out");
+    try workspace.expectReadError(.{
+        .path = "out/callgrind.out",
+        .max_bytes = max_evidence_bytes,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+
+    var app = diagnosticsTestApp(result_allocator, workspace.port(), scanner.port(), commands.port(), probe.port(), null, .{
+        .os = "macos",
+        .arch = "aarch64",
+        .is_windows = true,
+        .is_linux = false,
+    });
+
+    const debug_args = try parseTestArgs(result_allocator,
+        \\{"probe_backend":true,"lldb_path":"/usr/bin/lldb","binary":"zig-out/bin/app","core":"core.1","command":"zig test","target":"native"}
+    );
+    const debug_plan = try zigDebugPlan(&app, result_allocator, debug_args.value);
+    try expectKind(debug_plan, "zig_debug_plan");
+    try expectNestedString(debug_plan, "backend_status", "status", "ok");
+
+    const flash_args = try parseTestArgs(result_allocator,
+        \\{"probe_backend":true,"flash_tool":"probe-rs","board":"rp2040","image":"zig-out/firmware.uf2"}
+    );
+    const flash_plan = try zigFlashPlan(&app, result_allocator, flash_args.value);
+    try expectKind(flash_plan, "zig_flash_plan");
+    try expectNestedString(flash_plan, "backend_status", "status", "not installed");
+
+    const heap_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"zig build run","output":"out/heaptrack.gz"}
+    );
+    const heaptrack = try zigHeaptrackRun(&app, result_allocator, heap_args.value);
+    try expectBackendError(heaptrack, "heaptrack", "unsupported_platform");
+
+    const valgrind_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"zig build test"}
+    );
+    const memcheck = try zigValgrindMemcheck(&app, result_allocator, valgrind_args.value);
+    try expectBackendError(memcheck, "valgrind", "unsupported_platform");
+
+    const afl_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./fuzz","corpus":"corpus","output":"out/afl"}
+    );
+    const afl = try zigAflRun(&app, result_allocator, afl_args.value);
+    try expectBackendError(afl, "afl-fuzz", "unsupported_platform");
+
+    const qemu_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"target":"x86_64-linux","command":"zig-out/bin/test"}
+    );
+    const qemu = try zigQemuTest(&app, result_allocator, qemu_args.value);
+    try expectBackendError(qemu, "qemu", "unsupported_platform");
+
+    const callgrind_args = try parseTestArgs(result_allocator,
+        \\{"command":"zig build run","output":"out/callgrind.out","target":"native"}
+    );
+    const callgrind = try zigCallgrindReport(&app, result_allocator, callgrind_args.value);
+    try expectKind(callgrind, "zig_callgrind_report");
+    try std.testing.expect(!callgrind.value.object.get("applied").?.bool);
+
+    try workspace.verify();
+    try scanner.verify();
+    try commands.verify();
+    try probe.verify();
+}
+
+test "diagnostics evidence readers cover inline path missing and summary parsers" {
+    var result_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer result_arena.deinit();
+    const result_allocator = result_arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+
+    try workspace.expectRead(.{
+        .path = "asan.log",
+        .max_bytes = max_evidence_bytes,
+        .provenance = "arch110-workflow-read",
+    },
+        \\==1==ERROR: AddressSanitizer: heap-use-after-free
+        \\    #0 0x1 in main src/main.zig:10
+    );
+    try workspace.expectRead(.{
+        .path = "valgrind.txt",
+        .max_bytes = max_evidence_bytes,
+        .provenance = "arch110-workflow-read",
+    },
+        \\==1== 1,024 bytes in 2 blocks are definitely lost
+        \\==1== ERROR SUMMARY: 3 errors from 3 contexts
+        \\allocations: 42 allocs
+    );
+
+    var app = diagnosticsTestApp(result_allocator, workspace.port(), scanner.port(), commands.port(), null, null, .{});
+
+    const frame_args = try parseTestArgs(result_allocator,
+        \\{"text":"frame #0: 0x0001 app`main at src/main.zig:4\nframe #1: start","limit":2}
+    );
+    const frames = try zigDebugFrameSummary(&app, result_allocator, frame_args.value);
+    try expectKind(frames, "zig_debug_frame_summary");
+    try std.testing.expectEqual(@as(i64, 2), frames.value.object.get("frame_count").?.integer);
+
+    const sanitizer_args = try parseTestArgs(result_allocator,
+        \\{"path":"asan.log","command":"zig test"}
+    );
+    const sanitizer = try zigSanitizerFusion(&app, result_allocator, sanitizer_args.value);
+    try expectKind(sanitizer, "zig_sanitizer_fusion");
+    try expectStringField(sanitizer, "source_kind", "workspace_file");
+
+    const missing_args = try parseTestArgs(result_allocator, "{}");
+    const panic_missing = try zigPanicTraceAnalyze(&app, result_allocator, missing_args.value);
+    try std.testing.expect(panic_missing.is_error);
+    try expectKind(panic_missing, "argument_error");
+
+    const repro = try zigCrashReproPlan(&app, result_allocator, missing_args.value);
+    try expectKind(repro, "zig_crash_repro_plan");
+    try expectStringField(repro, "failure_kind", "unknown");
+
+    const heap_summary_args = try parseTestArgs(result_allocator,
+        \\{"text":"valgrind.txt"}
+    );
+    const heap_summary = try zigHeaptrackSummary(&app, result_allocator, heap_summary_args.value);
+    try expectKind(heap_summary, "zig_heaptrack_summary");
+    try std.testing.expectEqual(@as(i64, 1024), heap_summary.value.object.get("findings").?.object.get("definitely_lost_bytes").?.integer);
+
+    const callgrind_args = try parseTestArgs(result_allocator,
+        \\{"content":"events: Ir Dr\nfn=main\n42 100\nfn=worker\n45 8\n"}
+    );
+    const callgrind = try zigCallgrindReport(&app, result_allocator, callgrind_args.value);
+    try expectKind(callgrind, "zig_callgrind_report");
+    try std.testing.expectEqual(@as(usize, 2), callgrind.value.object.get("events").?.array.items.len);
+
+    const minimize_args = try parseTestArgs(result_allocator,
+        \\{"content":"panic: reached unreachable code","command":"./fuzz"}
+    );
+    const minimize = try zigFuzzCrashMinimize(&app, result_allocator, minimize_args.value);
+    try expectKind(minimize, "zig_fuzz_crash_minimize");
+    try std.testing.expect(minimize.value.object.get("crash_identity").? == .string);
+
+    try workspace.verify();
+    try scanner.verify();
+    try commands.verify();
+}
+
+test "diagnostics apply paths write artifacts and parse binary backend output" {
+    var result_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer result_arena.deinit();
+    const result_allocator = result_arena.allocator();
+
+    var workspace = RecordingWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    try workspace.putFixture("bin/app", "\x7fELF.debug_info symbol-bytes");
+    try workspace.putFixture("out/existing.json", "old artifact");
+    try workspace.putScanEntries(&.{ "seed-a", "seed-b", "ignored-large" });
+
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var probe = fakes.FakeBackendProbe.init(std.testing.allocator);
+    defer probe.deinit();
+    var artifact_store = RecordingArtifactStore.init(std.testing.allocator);
+    defer artifact_store.deinit();
+    var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+    defer clock.deinit();
+
+    try commands.expectRun(.{
+        .argv = &.{ "./fuzz", "-runs=1" },
+        .cwd = "/repo",
+        .timeout_ms = 30000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout = "done",
+        .stderr = "",
+        .duration_ms = 11,
+        .provenance = "fake",
+    });
+    try probe.expectCheck(.{
+        .backend = "llvm-objdump",
+        .argv = &.{ "llvm-objdump", "--version" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "llvm-objdump",
+        .available = true,
+        .version = "19.1.0",
+        .basis = "fake objdump",
+    });
+    try commands.expectRun(.{
+        .argv = &.{ "llvm-objdump", "-h", "-t", "/repo/bin/app" },
+        .cwd = "/repo",
+        .timeout_ms = 30000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout =
+        \\Sections:
+        \\  1 .text 0004
+        \\  2 .debug_info 0008
+        \\00000000 g F .text main
+        \\*UND* external
+        ,
+        .stderr = "",
+        .duration_ms = 7,
+        .provenance = "fake",
+    });
+
+    var app = diagnosticsTestApp(result_allocator, workspace.port(), scanner.port(), commands.port(), probe.port(), artifact_store.port(), .{
+        .os = "linux",
+        .arch = "x86_64",
+        .is_linux = true,
+    });
+    app.context.clock_and_ids = clock.port();
+
+    const fuzz_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./fuzz -runs=1","output":"out/existing.json","target":"native"}
+    );
+    const fuzz_run = try zigLibfuzzerRun(&app, result_allocator, fuzz_args.value);
+    try expectKind(fuzz_run, "zig_libfuzzer_run");
+    try std.testing.expect(fuzz_run.value.object.get("applied").?.bool);
+    try std.testing.expect(fuzz_run.value.object.get("preimage_identity").?.object.get("exists").?.bool);
+    try std.testing.expectEqual(@as(usize, 1), workspace.write_records.items.len);
+    try std.testing.expectEqual(@as(usize, 1), artifact_store.records.items.len);
+
+    const objdump_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"path":"bin/app"}
+    );
+    const objdump = try zigObjdumpSummary(&app, result_allocator, objdump_args.value);
+    try expectKind(objdump, "zig_objdump_summary");
+    try expectStringField(objdump, "format", "elf");
+    try expectStringField(objdump, "debug_info_status", "debug_info_seen");
+    try std.testing.expectEqual(@as(i64, 1), objdump.value.object.get("symbols").?.object.get("exported_symbol_count").?.integer);
+
+    const corpus_args = try parseTestArgs(result_allocator,
+        \\{"path":"corpus","limit":2}
+    );
+    const corpus = try zigFuzzCorpusSummary(&app, result_allocator, corpus_args.value);
+    try expectKind(corpus, "zig_fuzz_corpus_summary");
+    try std.testing.expectEqual(@as(i64, 3), corpus.value.object.get("file_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), corpus.value.object.get("sampled_file_count").?.integer);
+
+    try commands.verify();
+    try probe.verify();
+    try scanner.verify();
+}
+
+test "diagnostics backend apply paths cover success unavailable and command errors" {
+    var result_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer result_arena.deinit();
+    const result_allocator = result_arena.allocator();
+
+    var workspace = RecordingWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    try workspace.putFixture("bin/app", "\x7fELF.debug_info");
+
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var probe = fakes.FakeBackendProbe.init(std.testing.allocator);
+    defer probe.deinit();
+    var artifact_store = RecordingArtifactStore.init(std.testing.allocator);
+    defer artifact_store.deinit();
+
+    try std.testing.expectError(error.UnexpectedCall, artifact_store.port().put(std.testing.allocator, .{
+        .namespace = "diagnostics",
+        .name = "unused",
+        .kind = "json",
+        .bytes = "{}",
+    }));
+    try std.testing.expectError(error.UnexpectedCall, artifact_store.port().read(std.testing.allocator, .{ .id = "missing" }));
+
+    try probe.expectCheck(.{
+        .backend = "heaptrack",
+        .argv = &.{ "heaptrack", "--help" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "heaptrack",
+        .available = true,
+        .version = "heaptrack-1",
+        .basis = "fake heaptrack",
+    });
+    try commands.expectRun(.{
+        .argv = &.{ "heaptrack", "-o", "/repo/out/heaptrack.gz", "--", "./app" },
+        .cwd = "/repo",
+        .timeout_ms = 30000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout = "",
+        .stderr =
+        \\==1== 64 bytes in 1 blocks are definitely lost
+        \\==1== ERROR SUMMARY: 0 errors from 0 contexts
+        ,
+        .duration_ms = 12,
+        .provenance = "fake",
+    });
+    try probe.expectCheck(unavailableProbe("valgrind", &.{ "valgrind", "--version" }), .{
+        .backend = "valgrind",
+        .available = false,
+        .unavailable_reason = "missing",
+        .basis = "PATH probe",
+    });
+    try probe.expectCheck(unavailableProbe("valgrind", &.{ "valgrind", "--version" }), .{
+        .backend = "valgrind",
+        .available = false,
+        .unavailable_reason = "missing",
+        .basis = "PATH probe",
+    });
+    try probe.expectCheck(unavailableProbe("afl-fuzz", &.{ "afl-fuzz", "-h" }), .{
+        .backend = "afl-fuzz",
+        .available = false,
+        .unavailable_reason = "missing",
+        .basis = "PATH probe",
+    });
+    try probe.expectCheck(unavailableProbe("qemu", &.{ "qemu-riscv64", "--version" }), .{
+        .backend = "qemu",
+        .available = false,
+        .unavailable_reason = "missing",
+        .basis = "PATH probe",
+    });
+    try probe.expectCheck(.{
+        .backend = "lldb",
+        .argv = &.{ "lldb", "--version" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "lldb",
+        .available = true,
+        .version = "lldb-19",
+        .basis = "fake lldb",
+    });
+    try commands.expectRun(.{
+        .argv = &.{ "lldb", "--batch", "-o", "bt all", "/repo/bin/app" },
+        .cwd = "/repo",
+        .timeout_ms = 30000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, .{
+        .exit_code = 0,
+        .stdout =
+        \\frame #0: 0x0001 app`main at src/main.zig:4
+        ,
+        .stderr = "",
+        .duration_ms = 4,
+        .provenance = "fake",
+    });
+    try probe.expectCheck(.{
+        .backend = "lldb",
+        .argv = &.{ "lldb", "--version" },
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    }, .{
+        .backend = "lldb",
+        .available = false,
+        .unavailable_reason = "not installed",
+        .basis = "PATH probe",
+    });
+    try commands.expectRunError(.{
+        .argv = &.{"./fail"},
+        .cwd = "/repo",
+        .timeout_ms = 30000,
+        .max_stdout_bytes = support.command_output_limit,
+        .max_stderr_bytes = support.command_output_limit,
+        .provenance = "arch110-workflow-command",
+    }, error.AccessDenied);
+
+    var app = diagnosticsTestApp(result_allocator, workspace.port(), scanner.port(), commands.port(), probe.port(), artifact_store.port(), .{
+        .os = "linux",
+        .arch = "x86_64",
+        .is_linux = true,
+    });
+
+    const heaptrack_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./app","output":"out/heaptrack.gz"}
+    );
+    const heaptrack = try zigHeaptrackRun(&app, result_allocator, heaptrack_args.value);
+    try expectKind(heaptrack, "zig_heaptrack_run");
+    try std.testing.expect(heaptrack.value.object.get("applied").?.bool);
+
+    const valgrind_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./app"}
+    );
+    const valgrind = try zigValgrindMemcheck(&app, result_allocator, valgrind_args.value);
+    try expectBackendError(valgrind, "valgrind", "unavailable");
+
+    const callgrind_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./app","output":"out/callgrind.out"}
+    );
+    const callgrind = try zigCallgrindReport(&app, result_allocator, callgrind_args.value);
+    try expectBackendError(callgrind, "valgrind", "unavailable");
+
+    const afl_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./fuzz","corpus":"corpus","output":"out/afl"}
+    );
+    const afl = try zigAflRun(&app, result_allocator, afl_args.value);
+    try expectBackendError(afl, "afl-fuzz", "unavailable");
+
+    const qemu_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"target":"riscv64-linux","command":"guest"}
+    );
+    const qemu = try zigQemuTest(&app, result_allocator, qemu_args.value);
+    try expectBackendError(qemu, "qemu", "unavailable");
+
+    const lldb_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"binary":"bin/app","limit":1}
+    );
+    const lldb = try zigLldbBacktrace(&app, result_allocator, lldb_args.value);
+    try expectKind(lldb, "zig_lldb_backtrace");
+    try std.testing.expect(lldb.value.object.get("applied").?.bool);
+
+    const core_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"core":"core.1"}
+    );
+    const core = try zigCoreInspect(&app, result_allocator, core_args.value);
+    try expectBackendError(core, "lldb", "unavailable");
+
+    const libfuzzer_args = try parseTestArgs(result_allocator,
+        \\{"apply":true,"command":"./fail","output":"out/libfuzzer.json"}
+    );
+    const libfuzzer = try zigLibfuzzerRun(&app, result_allocator, libfuzzer_args.value);
+    try expectKind(libfuzzer, "command_error");
+
+    try std.testing.expectEqual(@as(usize, 1), artifact_store.records.items.len);
+    try commands.verify();
+    try probe.verify();
+    try scanner.verify();
+}
+
+test "diagnostics evidence errors report workspace read failures from path-like text" {
+    var result_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer result_arena.deinit();
+    const result_allocator = result_arena.allocator();
+
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+
+    try workspace.expectReadError(.{
+        .path = "logs/asan.txt",
+        .max_bytes = max_evidence_bytes,
+        .provenance = "arch110-workflow-read",
+    }, error.FileNotFound);
+
+    var app = diagnosticsTestApp(result_allocator, workspace.port(), scanner.port(), commands.port(), null, null, .{});
+    const args = try parseTestArgs(result_allocator,
+        \\{"text":"logs/asan.txt"}
+    );
+    const result = try zigSanitizerFusion(&app, result_allocator, args.value);
+    try std.testing.expect(result.is_error);
+    try expectKind(result, "workspace_path_error");
+
+    try workspace.verify();
+    try scanner.verify();
+    try commands.verify();
+}
+
+test "diagnostics private helpers cover classifier and serializer edge cases" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expect(looksInlineEvidence(" \n"));
+    try std.testing.expect(looksInlineEvidence("{\"panic\":true}"));
+    try std.testing.expect(looksInlineEvidence("==1==ERROR"));
+    try std.testing.expect(!looksInlineEvidence("logs/asan.txt"));
+    try std.testing.expectEqual(@as(?i64, null), firstInteger("no digits here"));
+    try std.testing.expectEqual(@as(?i64, 1234567), firstInteger("bytes 1,234,567 total"));
+    try std.testing.expectEqualStrings(" 1,024 bytes", stripValgrindPrefix("==77== 1,024 bytes"));
+    try std.testing.expectEqualStrings("==unterminated", stripValgrindPrefix("==unterminated"));
+
+    const empty_events = try callgrindEventsValue(allocator, "fn=main\n1 2\n");
+    try std.testing.expectEqual(@as(usize, 0), empty_events.array.items.len);
+    const sections = try sectionSummaryValue(allocator, ".text 0004\nprefix .data 0002\nnot a section\n");
+    try std.testing.expectEqual(@as(usize, 2), sections.array.items.len);
+    const symbols = try symbolSummaryValue(allocator, "0000 g F .text main\n*UND* puts\n.debug_info\n");
+    try std.testing.expectEqual(@as(i64, 1), symbols.object.get("exported_symbol_count").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), symbols.object.get("undefined_symbol_count").?.integer);
+    try std.testing.expect(symbols.object.get("debug_symbol_hint").?.bool);
+
+    try std.testing.expectEqualStrings("host_os_specific", runtimeClass("x86_64-windows"));
+    try std.testing.expectEqualStrings("unknown", runtimeClass("mipsel-custom"));
+    try std.testing.expectEqualStrings("qemu-aarch64", qemuDefaultForTarget("aarch64-linux"));
+    try std.testing.expectEqualStrings("qemu-arm", qemuDefaultForTarget("arm-linux"));
+    try std.testing.expectEqualStrings("qemu-riscv64", qemuDefaultForTarget("riscv64-linux"));
+    try std.testing.expectEqualStrings("qemu-riscv32", qemuDefaultForTarget("riscv32-linux"));
+    try std.testing.expectEqualStrings("qemu-x86_64", qemuDefaultForTarget("x86_64-linux"));
+    try std.testing.expectEqualStrings("qemu-system", qemuDefaultForTarget("native"));
+
+    try std.testing.expectEqualStrings("thumb-freestanding-eabi", boardTarget("stm32f4"));
+    try std.testing.expectEqualStrings("xtensa-freestanding-none", boardTarget("esp32c3"));
+    try std.testing.expectEqualStrings("project_defined", boardTarget("custom-board"));
+    const openocd = try flashCommand(allocator, "openocd", null, "firmware.elf");
+    try std.testing.expect(std.mem.indexOf(u8, openocd, "program firmware.elf") != null);
+    const vendor = try flashCommand(allocator, "vendor-flash", null, null);
+    try std.testing.expect(std.mem.indexOf(u8, vendor, "<board>") != null);
+
+    try std.testing.expectEqualStrings("macho", sniffBinaryFormat("\xcf\xfa\xed\xfepayload"));
+    try std.testing.expectEqualStrings("macho", sniffBinaryFormat("\xca\xfe\xba\xbepayload"));
+    try std.testing.expectEqualStrings("pe", sniffBinaryFormat("MZpayload"));
+    try std.testing.expectEqualStrings("wasm", sniffBinaryFormat("\x00asmpayload"));
+    try std.testing.expectEqualStrings("unknown", sniffBinaryFormat("raw"));
+
+    const pre_missing = try preimageValue(allocator, false, 0, "");
+    try std.testing.expect(pre_missing.object.get("sha256").? == .null);
+    const pre_exists = try preimageValue(allocator, true, 4, "abcd");
+    try std.testing.expectEqualStrings("abcd", pre_exists.object.get("sha256").?.string);
+    const identity = try identityFromText(allocator, "diagnostic text", "diag");
+    try std.testing.expect(std.mem.startsWith(u8, identity.string, "diag:"));
+}
+
+fn diagnosticsTestApp(
+    allocator: std.mem.Allocator,
+    workspace_store: test_ports.WorkspaceStore,
+    workspace_scanner: test_ports.WorkspaceScanner,
+    command_runner: test_ports.CommandRunner,
+    backend_probe: ?test_ports.BackendProbe,
+    artifact_store: ?test_ports.ArtifactStore,
+    platform: app_context.PlatformView,
+) App {
+    return App.init(.{
+        .workspace = .{
+            .root = "/repo",
+            .cache_root = "/repo/.zigar-cache",
+            .transport = "stdio",
+        },
+        .tool_paths = .{
+            .zig = "/bin/zig",
+            .zls = "/bin/zls",
+            .zflame = "/bin/zflame",
+            .diff_folded = "/bin/diff-folded",
+        },
+        .timeouts = .{
+            .command_ms = 30_000,
+            .zls_ms = 30_000,
+        },
+        .platform = platform,
+        .command_runner = command_runner,
+        .workspace_store = workspace_store,
+        .workspace_scanner = workspace_scanner,
+        .backend_probe = backend_probe,
+        .artifact_store = artifact_store,
+    }, allocator);
+}
+
+fn parseTestArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
+    return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
+}
+
+fn expectKind(result: Result, expected: []const u8) !void {
+    try expectStringField(result, "kind", expected);
+}
+
+fn expectStringField(result: Result, field: []const u8, expected: []const u8) !void {
+    try std.testing.expect(result.value == .object);
+    try std.testing.expectEqualStrings(expected, result.value.object.get(field).?.string);
+}
+
+fn expectNestedString(result: Result, object_field: []const u8, field: []const u8, expected: []const u8) !void {
+    try std.testing.expect(result.value == .object);
+    try std.testing.expectEqualStrings(expected, result.value.object.get(object_field).?.object.get(field).?.string);
+}
+
+fn expectBackendError(result: Result, backend: []const u8, error_kind: []const u8) !void {
+    try expectKind(result, "backend_error");
+    try expectStringField(result, "backend", backend);
+    try expectStringField(result, "error_kind", error_kind);
+}
+
+fn unavailableProbe(backend: []const u8, argv: []const []const u8) test_ports.BackendProbeRequest {
+    return .{
+        .backend = backend,
+        .argv = argv,
+        .cwd = "/repo",
+        .timeout_ms = 5000,
+        .provenance = "arch110-workflow-backend-check",
+    };
+}
+
+const RecordingWorkspaceStore = struct {
+    allocator: std.mem.Allocator,
+    files: std.ArrayList(FileRecord) = .empty,
+    scan_entries: std.ArrayList([]u8) = .empty,
+    write_records: std.ArrayList(WriteRecord) = .empty,
+
+    const FileRecord = struct {
+        path: []u8,
+        bytes: []u8,
+    };
+
+    const WriteRecord = struct {
+        path: []u8,
+        bytes: []u8,
+    };
+
+    fn init(allocator: std.mem.Allocator) RecordingWorkspaceStore {
+        return .{ .allocator = allocator };
+    }
+
+    fn deinit(self: *RecordingWorkspaceStore) void {
+        for (self.files.items) |file| {
+            self.allocator.free(file.path);
+            self.allocator.free(file.bytes);
+        }
+        self.files.deinit(self.allocator);
+        for (self.scan_entries.items) |path| self.allocator.free(path);
+        self.scan_entries.deinit(self.allocator);
+        for (self.write_records.items) |record| {
+            self.allocator.free(record.path);
+            self.allocator.free(record.bytes);
+        }
+        self.write_records.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn port(self: *RecordingWorkspaceStore) test_ports.WorkspaceStore {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .resolve = resolve,
+                .read = read,
+                .write = write,
+                .scan_directory = scanDirectory,
+            },
+        };
+    }
+
+    fn putFixture(self: *RecordingWorkspaceStore, path: []const u8, bytes: []const u8) !void {
+        try self.files.append(self.allocator, .{
+            .path = try self.allocator.dupe(u8, path),
+            .bytes = try self.allocator.dupe(u8, bytes),
+        });
+    }
+
+    fn putScanEntries(self: *RecordingWorkspaceStore, entries: []const []const u8) !void {
+        for (entries) |entry| try self.scan_entries.append(self.allocator, try self.allocator.dupe(u8, entry));
+    }
+
+    fn resolve(_: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceResolveRequest) test_ports.PortError!test_ports.WorkspaceResolveResult {
+        const path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path});
+        return .{ .path = path, .owns_path = true };
+    }
+
+    fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceReadRequest) test_ports.PortError!test_ports.WorkspaceReadResult {
+        const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
+        for (self.files.items) |file| {
+            if (std.mem.eql(u8, file.path, request.path)) {
+                const bytes = try allocator.dupe(u8, file.bytes);
+                return .{ .bytes = bytes, .owns_bytes = true };
+            }
+        }
+        return error.FileNotFound;
+    }
+
+    fn write(ptr: *anyopaque, request: test_ports.WorkspaceWriteRequest) test_ports.PortError!test_ports.WorkspaceWriteResult {
+        const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
+        try self.write_records.append(self.allocator, .{
+            .path = try self.allocator.dupe(u8, request.path),
+            .bytes = try self.allocator.dupe(u8, request.bytes),
+        });
+        return .{ .bytes_written = request.bytes.len, .replaced_existing = true };
+    }
+
+    fn scanDirectory(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceDirectoryScanRequest) test_ports.PortError!test_ports.WorkspaceDirectoryScanResult {
+        _ = request;
+        const self: *RecordingWorkspaceStore = @ptrCast(@alignCast(ptr));
+        const entries = try allocator.alloc(test_ports.WorkspaceDirectoryEntry, self.scan_entries.items.len);
+        for (self.scan_entries.items, 0..) |entry, index| entries[index] = .{ .path = try allocator.dupe(u8, entry) };
+        return .{ .entries = entries, .owns_memory = true };
+    }
+};
+
+const RecordingArtifactStore = struct {
+    allocator: std.mem.Allocator,
+    records: std.ArrayList(Record) = .empty,
+
+    const Record = struct {
+        path: []u8,
+        kind: []u8,
+        bytes_len: usize,
+    };
+
+    fn init(allocator: std.mem.Allocator) RecordingArtifactStore {
+        return .{ .allocator = allocator };
+    }
+
+    fn deinit(self: *RecordingArtifactStore) void {
+        for (self.records.items) |record| {
+            self.allocator.free(record.path);
+            self.allocator.free(record.kind);
+        }
+        self.records.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn port(self: *RecordingArtifactStore) test_ports.ArtifactStore {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .put = put,
+                .read = read,
+                .record_workspace = recordWorkspace,
+            },
+        };
+    }
+
+    fn put(_: *anyopaque, _: std.mem.Allocator, _: test_ports.ArtifactWriteRequest) test_ports.PortError!test_ports.ArtifactRef {
+        return error.UnexpectedCall;
+    }
+
+    fn read(_: *anyopaque, _: std.mem.Allocator, _: test_ports.ArtifactReadRequest) test_ports.PortError!test_ports.ArtifactReadResult {
+        return error.UnexpectedCall;
+    }
+
+    fn recordWorkspace(ptr: *anyopaque, allocator: std.mem.Allocator, request: test_ports.WorkspaceArtifactRecordRequest) test_ports.PortError!test_ports.WorkspaceArtifactRef {
+        const self: *RecordingArtifactStore = @ptrCast(@alignCast(ptr));
+        try self.records.append(self.allocator, .{
+            .path = try self.allocator.dupe(u8, request.path),
+            .kind = try self.allocator.dupe(u8, request.artifact_kind),
+            .bytes_len = if (request.bytes) |bytes| bytes.len else 0,
+        });
+        return .{
+            .path = try allocator.dupe(u8, request.path),
+            .abs_path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}),
+            .bytes = if (request.bytes) |bytes| bytes.len else 0,
+            .sha256 = try allocator.dupe(u8, "sha256:fake"),
+            .indexed_at_unix_ms = request.indexed_at_unix_ms,
+            .owns_memory = true,
+        };
+    }
+};

@@ -265,6 +265,25 @@ test "static analysis metadata exposes structured evidence and cross-checks" {
     }
 }
 
+test "static analysis contract lookup and empty verification fallback are explicit" {
+    try std.testing.expect(forTool("missing_tool") == null);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const value = try crossCheckValue(allocator, .{
+        .tool = "test",
+        .analysis_kind = "unit",
+        .tier = .advisory_orientation,
+        .confidence = .medium,
+        .classification = .advisory,
+        .source_coverage = "unit",
+        .limitations = &.{"limited"},
+        .verify_with = &.{},
+    });
+    try std.testing.expect(value.object.get("primary").? == .null);
+}
+
 fn contains(haystack: []const u8, needle: []const u8) bool {
     return std.mem.indexOf(u8, haystack, needle) != null;
 }

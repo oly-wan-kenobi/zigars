@@ -160,17 +160,24 @@ pub const Store = struct {
         var walker = dir.walk(allocator) catch |err| return mapPortError(err);
         defer walker.deinit();
         var entries: std.ArrayList(ports.WorkspaceDirectoryEntry) = .empty;
-        errdefer {
+        var entries_owned = true;
+        defer if (entries_owned) {
             for (entries.items) |entry| allocator.free(entry.path);
             entries.deinit(allocator);
-        }
+        };
         while (walker.next(self.io) catch |err| return mapPortError(err)) |entry| {
             if (request.max_files) |max_files| if (entries.items.len >= max_files) break;
             if (entry.kind != .file) continue;
             if (request.suffix.len > 0 and !std.mem.endsWith(u8, entry.path, request.suffix)) continue;
-            try entries.append(allocator, .{ .path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory });
+            const path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory;
+            var path_owned = true;
+            defer if (path_owned) allocator.free(path);
+            try entries.append(allocator, .{ .path = path });
+            path_owned = false;
         }
-        return .{ .entries = try entries.toOwnedSlice(allocator), .owns_memory = true };
+        const owned_entries = try entries.toOwnedSlice(allocator);
+        entries_owned = false;
+        return .{ .entries = owned_entries, .owns_memory = true };
     }
 };
 
@@ -224,6 +231,19 @@ test "filesystem workspace store resolves reads writes and deletes inside root" 
     try std.testing.expect(delete_result.deleted);
     const missing_delete = try store.port().delete(.{ .path = "zig-out/report.txt", .missing_ok = true });
     try std.testing.expect(!missing_delete.deleted);
+    try std.testing.expectError(error.Unavailable, store.port().delete(.{ .path = "src", .missing_ok = false }));
+
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/skip.txt", .data = "skip" });
+    const scan = try store.port().scanDirectory(allocator, .{ .path = "src", .suffix = ".zig", .for_output = false });
+    defer scan.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), scan.entries.len);
+    try std.testing.expectEqualStrings("main.zig", scan.entries[0].path);
+}
+
+test "filesystem workspace store existence treats non-oom resolve errors as missing" {
+    try std.testing.expectError(error.OutOfMemory, Store.existsResolveError(error.OutOfMemory));
+    const missing = try Store.existsResolveError(error.PathOutsideWorkspace);
+    try std.testing.expect(!missing.exists);
 }
 
 test "filesystem workspace store preserves output parent symlink sandboxing" {
@@ -260,4 +280,34 @@ test "filesystem workspace store preserves output parent symlink sandboxing" {
         .path = "outlink/new/generated.zig",
         .max_bytes = 1024,
     }));
+    const exists = try store.port().exists(allocator, .{
+        .path = "outlink/new/generated.zig",
+        .for_output = true,
+    });
+    try std.testing.expect(!exists.exists);
+}
+
+test "filesystem workspace store scan cleans paths on allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, scanDirectoryWithAllocator, .{});
+}
+
+fn scanDirectoryWithAllocator(allocator: std.mem.Allocator) !void {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const io = std.testing.io;
+
+    try tmp.dir.createDirPath(io, "root/src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/a.zig", .data = "a" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/b.zig", .data = "b" });
+    const base = try std.fs.path.join(std.testing.allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..], "root" });
+    defer std.testing.allocator.free(base);
+    const root = try std.Io.Dir.cwd().realPathFileAlloc(io, base, std.testing.allocator);
+    defer std.testing.allocator.free(root);
+
+    var workspace = try workspace_mod.Workspace.init(std.testing.allocator, io, root, null);
+    defer workspace.deinit();
+    var store = Store.init(&workspace, io, .{});
+    const scan = try store.port().scanDirectory(allocator, .{ .path = "src", .suffix = ".zig", .for_output = false });
+    defer scan.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), scan.entries.len);
 }

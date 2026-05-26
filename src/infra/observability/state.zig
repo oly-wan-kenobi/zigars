@@ -417,3 +417,135 @@ fn firstSequence(count: u64, capacity: u64) u64 {
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % capacity);
 }
+
+test "observability state records rings and renders populated metrics" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var state = State{};
+    state.recordToolCall("zig_version", 10, false);
+    state.recordToolCall("zig_version", 20, true);
+    state.recordToolCall("zig_build", 5, false);
+    state.recordBackendProbe("zig", true, "ok", "backend command completed");
+    state.recordBackendProbe("zls", false, "missing", "install zls");
+    state.recordCommand("zig build", &.{ "zig", "build" }, 15, true, null);
+    state.recordCommand("empty argv", &.{}, -1, false, "Timeout");
+    state.recordZlsStatus("connected", null, 0);
+    state.recordZlsStatus("connected", null, 0);
+    state.recordZlsStatus("failed", "FileNotFound", 1);
+    state.recordZlsStatus("failed", "FileNotFound", 1);
+    state.recordZlsStatus("failed", null, 1);
+
+    const base = BaseMetrics{
+        .workspace = "/workspace",
+        .command_calls = 4,
+        .zls_requests = 5,
+        .tool_errors = 1,
+        .zls_status = "failed",
+        .zls_last_failure = "FileNotFound",
+        .zls_restart_attempts = 2,
+        .backend_probe_cache = .{
+            .zig = .{ .ok = true, .status = "ok", .resolution = "backend command completed" },
+            .zls = .{ .ok = false, .status = "missing", .resolution = "install zls" },
+        },
+        .analysis_cache = .{ .present = true, .hits = 1, .refreshes = 2, .bytes = 3 },
+        .artifacts = .{ .registry_available = true, .registry_entries = 1, .scanned_artifacts = 2, .scan_limit = 3, .status = "ok" },
+    };
+
+    const metrics = try metricsV2Value(allocator, state, base);
+    try std.testing.expectEqualStrings("zigar_metrics_v2", metrics.object.get("kind").?.string);
+    try std.testing.expectEqual(@as(i64, 3), metrics.object.get("observed_tool_calls").?.integer);
+
+    const backend_history = try backendHistoryValue(allocator, state, base);
+    try std.testing.expectEqual(@as(usize, 2), backend_history.object.get("events").?.array.items.len);
+
+    const timeline = try zlsTimelineValue(allocator, state, base);
+    try std.testing.expectEqualStrings("runtime_transition", timeline.object.get("events").?.array.items[0].object.get("source").?.string);
+
+    const latency = try toolLatencyValue(allocator, state);
+    const first_tool = latency.object.get("tools").?.array.items[0].object;
+    try std.testing.expectEqual(@as(i64, 500), first_tool.get("error_rate_per_1000").?.integer);
+
+    const durations = try commandDurationsValue(allocator, state);
+    const second_command = durations.object.get("events").?.array.items[1].object;
+    try std.testing.expectEqualStrings("", second_command.get("argv0").?.string);
+    try std.testing.expectEqualStrings("Timeout", second_command.get("error").?.string);
+}
+
+test "zls timeline falls back to current snapshot when no transitions were observed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const base = BaseMetrics{
+        .workspace = "/workspace",
+        .command_calls = 0,
+        .zls_requests = 0,
+        .tool_errors = 0,
+        .zls_status = "not_started",
+        .zls_last_failure = null,
+        .zls_restart_attempts = 0,
+        .backend_probe_cache = .{},
+        .analysis_cache = .{},
+        .artifacts = .{},
+    };
+
+    const timeline = try zlsTimelineValue(allocator, .{}, base);
+    const event = timeline.object.get("events").?.array.items[0].object;
+    try std.testing.expectEqual(@as(i64, 0), event.get("sequence").?.integer);
+    try std.testing.expectEqualStrings("current_snapshot", event.get("source").?.string);
+    try std.testing.expect(event.get("failure").? == .null);
+}
+
+test "observability metric builders clean up partially allocated JSON" {
+    const Fixture = struct {
+        fn state() State {
+            var s = State{};
+            s.recordToolCall("zig_version", 10, false);
+            s.recordToolCall("zig_version", 20, true);
+            s.recordBackendProbe("zig", true, "ok", "backend command completed");
+            s.recordCommand("zig build", &.{ "zig", "build" }, 15, true, null);
+            s.recordZlsStatus("failed", "FileNotFound", 1);
+            return s;
+        }
+
+        fn base() BaseMetrics {
+            return .{
+                .workspace = "/workspace",
+                .command_calls = 4,
+                .zls_requests = 5,
+                .tool_errors = 1,
+                .zls_status = "failed",
+                .zls_last_failure = "FileNotFound",
+                .zls_restart_attempts = 2,
+                .backend_probe_cache = .{
+                    .zig = .{ .ok = true, .status = "ok", .resolution = "backend command completed" },
+                },
+                .analysis_cache = .{ .present = true, .hits = 1, .refreshes = 2, .bytes = 3 },
+                .artifacts = .{ .registry_available = true, .registry_entries = 1, .scanned_artifacts = 2, .scan_limit = 3, .status = "ok" },
+            };
+        }
+    };
+
+    var fail_index: usize = 0;
+    while (fail_index < 256) : (fail_index += 1) {
+        var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer backing.deinit();
+        var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
+        const allocator = failing.allocator();
+        const state = Fixture.state();
+        const base = Fixture.base();
+
+        if (metricsV2Value(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (backendHistoryValue(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (zlsTimelineValue(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (toolLatencyValue(allocator, state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (commandDurationsValue(allocator, state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (zlsTimelineValue(allocator, .{}, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (backendProbeCacheValue(allocator, base.backend_probe_cache)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (probeSnapshotValue(allocator, base.backend_probe_cache.zig)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (probeSnapshotValue(allocator, null)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (limitationsValue(allocator)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+    }
+}

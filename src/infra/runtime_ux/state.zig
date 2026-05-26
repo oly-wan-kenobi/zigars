@@ -389,3 +389,23 @@ test "runtime subscriptions cancellation roots and rings cover branch behavior" 
     try std.testing.expectEqualStrings("cdef", short.slice());
     try std.testing.expectEqual(@as(usize, 4), short.capacity());
 }
+
+test "runtime rings overwrite oldest jobs and subscriptions" {
+    var state: State = .{};
+
+    var i: usize = 0;
+    while (i < max_jobs + 1) : (i += 1) {
+        _ = state.startJob("job", "zig build", 100);
+    }
+    try std.testing.expectEqual(@as(usize, max_jobs), state.job_count);
+    try std.testing.expectEqualStrings("job-33", state.jobs[0].id.slice());
+
+    i = 0;
+    while (i < max_subscriptions + 1) : (i += 1) {
+        _ = state.subscribe("zigar://jobs");
+    }
+    try std.testing.expectEqual(@as(usize, max_subscriptions), state.subscription_count);
+    var expected_sub_id: [32]u8 = undefined;
+    const expected = try std.fmt.bufPrint(&expected_sub_id, "sub-{d}", .{max_subscriptions + 1});
+    try std.testing.expectEqualStrings(expected, state.subscriptions[0].id.slice());
+}

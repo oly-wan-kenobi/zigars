@@ -103,10 +103,7 @@ test "hover use case checks capability before reporting missing file" {
             .method = "textDocument/hover",
         });
 
-        switch (outcome.err) {
-            .missing_file => {},
-            else => return error.UnexpectedFailure,
-        }
+        try std.testing.expectEqual(@as(std.meta.Tag(code_intel.Failure), .missing_file), std.meta.activeTag(outcome.err));
         try std.testing.expectEqual(@as(usize, 0), fake.syncCalls().len);
         try fake.verify();
     }
@@ -169,5 +166,97 @@ test "hover use case reports request timeout without changing public payload sha
     });
 
     try std.testing.expectEqual(error.RequestTimeout, outcome.err.request_failed.err);
+    try fake.verify();
+}
+
+test "references use case includes declaration context in ZLS payload" {
+    const allocator = std.testing.allocator;
+    var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectCapability(.{ .capability = "referencesProvider" }, .{
+        .capability = "referencesProvider",
+        .supported = true,
+    });
+    try fake.expectSync(.{ .file = "src/main.zig", .provenance = code_intel.provenance }, .{
+        .uri = "file:///repo/src/main.zig",
+    });
+    try fake.expectRequest(.{
+        .method = "textDocument/references",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"position\":{\"line\":1,\"character\":2},\"context\":{\"includeDeclaration\":false}}",
+    }, .{
+        .method = "textDocument/references",
+        .payload = "[]",
+    });
+
+    var outcome = try code_intel.position(allocator, testContext(&fake), .{
+        .method = "textDocument/references",
+        .file = "src/main.zig",
+        .line = 1,
+        .character = 2,
+        .include_declaration = false,
+    });
+    defer outcome.deinit(allocator);
+    try std.testing.expectEqualStrings("[]", outcome.ok.payload);
+    try fake.verify();
+}
+
+test "file-only and workspace symbol use cases send expected ZLS payloads" {
+    const allocator = std.testing.allocator;
+    var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectCapability(.{ .capability = "documentSymbolProvider" }, .{
+        .capability = "documentSymbolProvider",
+        .supported = true,
+    });
+    try fake.expectSync(.{ .file = "src/main.zig", .content = "const x = 1;\n", .provenance = code_intel.provenance }, .{
+        .uri = "file:///repo/src/main.zig",
+    });
+    try fake.expectRequest(.{
+        .method = "textDocument/documentSymbol",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"}}",
+    }, .{
+        .method = "textDocument/documentSymbol",
+        .payload = "[]",
+    });
+    try fake.expectCapability(.{ .capability = "workspaceSymbolProvider" }, .{
+        .capability = "workspaceSymbolProvider",
+        .supported = true,
+    });
+    try fake.expectRequest(.{
+        .method = "workspace/symbol",
+        .payload = "{\"query\":\"Thing\"}",
+    }, .{
+        .method = "workspace/symbol",
+        .payload = "[{\"name\":\"Thing\"}]",
+    });
+
+    var file_outcome = try code_intel.fileOnly(allocator, testContext(&fake), .{
+        .method = "textDocument/documentSymbol",
+        .file = "src/main.zig",
+        .content = "const x = 1;\n",
+    });
+    defer file_outcome.deinit(allocator);
+    try std.testing.expectEqualStrings("[]", file_outcome.ok.payload);
+
+    var workspace_outcome = try code_intel.workspaceSymbols(allocator, testContext(&fake), .{ .query = "Thing" });
+    defer workspace_outcome.deinit(allocator);
+    try std.testing.expect(std.mem.indexOf(u8, workspace_outcome.ok.payload, "Thing") != null);
+    try fake.verify();
+}
+
+test "file-only use case propagates capability allocation failure" {
+    const allocator = std.testing.allocator;
+    var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer fake.deinit();
+    try fake.expectCapabilityError(.{ .capability = "documentSymbolProvider" }, error.OutOfMemory);
+
+    try std.testing.expectError(error.OutOfMemory, code_intel.fileOnly(allocator, testContext(&fake), .{
+        .method = "textDocument/documentSymbol",
+        .file = "src/main.zig",
+    }));
     try fake.verify();
 }

@@ -121,9 +121,9 @@ pub const DocumentState = struct {
             }
             if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
 
+            try self.open_docs.ensureUnusedCapacity(self.allocator, 1);
             const stored_uri = try self.allocator.dupe(u8, file_uri);
-            errdefer self.allocator.free(stored_uri);
-            try self.open_docs.put(self.allocator, stored_uri, .{
+            self.open_docs.putAssumeCapacity(stored_uri, .{
                 .version = 1,
                 .content_hash = std.hash.Wyhash.hash(0, content),
                 .dirty = false,
@@ -202,9 +202,9 @@ pub const DocumentState = struct {
                 if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
                 const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, 0, retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
+                try self.open_docs.ensureUnusedCapacity(self.allocator, 1);
                 const stored_uri = try self.allocator.dupe(u8, file_uri);
-                errdefer self.allocator.free(stored_uri);
-                try self.open_docs.put(self.allocator, stored_uri, .{
+                self.open_docs.putAssumeCapacity(stored_uri, .{
                     .version = 1,
                     .content_hash = std.hash.Wyhash.hash(0, content),
                     .dirty = retain_content,

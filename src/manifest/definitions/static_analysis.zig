@@ -199,3 +199,7 @@ pub const zig_public_api_diff = tool(.{
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
     .static_analysis_tier = .advisory_orientation,
 });
+
+test "static analysis definitions expose import graph metadata" {
+    try @import("std").testing.expect(zig_import_graph.description.len > 0);
+}

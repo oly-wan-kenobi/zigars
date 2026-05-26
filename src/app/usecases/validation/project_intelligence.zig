@@ -2463,3 +2463,299 @@ test "project intelligence routes next action and patch guards generated paths" 
     const plan = (try nextActionPlanValue(allocator, "fix compile error", "src/main.zig", "error: bad")).object;
     try std.testing.expectEqualStrings("zig_compile_error_index", plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
 }
+
+test "project intelligence private helpers cover fallback edge cases" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const no_phase = [_]workflows.PhaseRun{};
+    try std.testing.expect(phaseByName(no_phase[0..], "missing") == null);
+
+    var unique_files = std.json.Array.init(allocator);
+    try unique_files.append(.{ .string = "ignored" });
+    try appendUniqueFileObject(allocator, &unique_files, "src/main.zig", "input_changed_file", "high");
+    try appendUniqueFileObject(allocator, &unique_files, "src/main.zig", "duplicate", "low");
+    try std.testing.expectEqual(@as(usize, 2), unique_files.items.len);
+
+    var test_obj = std.json.ObjectMap.empty;
+    try test_obj.put(allocator, "file", try ownedString(allocator, "tests/foo_test.zig"));
+    try test_obj.put(allocator, "name", try ownedString(allocator, "foo handles edge cases"));
+    var test_items = std.json.Array.init(allocator);
+    try test_items.append(.{ .string = "ignored" });
+    try test_items.append(.{ .object = test_obj });
+    var matched_tests = std.json.Array.init(allocator);
+    try collectTestsForFile(allocator, .{ .array = test_items }, &matched_tests, "src/foo.zig");
+    try std.testing.expectEqual(@as(usize, 1), matched_tests.items.len);
+
+    const non_object_summary = (try failureSummaryValue(allocator, .null, false, &.{ "zig", "build" })).object;
+    try std.testing.expect(non_object_summary.get("primary").? == .null);
+
+    var other_path_primary = std.json.ObjectMap.empty;
+    try other_path_primary.put(allocator, "path", try ownedString(allocator, "README.md"));
+    try std.testing.expectEqualStrings("path:README.md", (try likelyFailureScopeValue(allocator, .{ .object = other_path_primary })).string);
+
+    const lossy = try safeTextAlloc(allocator, "\xffok\xc3");
+    try std.testing.expect(lossy.invalid_utf8);
+    try std.testing.expectEqualStrings("utf-8-lossy", lossy.encoding);
+    try std.testing.expectEqual(@as(usize, 4), lossy.byte_count);
+
+    const backend = (try backendErrorValue(allocator, "zls", "request", error.Timeout, "restart backend")).object;
+    try std.testing.expectEqualStrings("timeout", backend.get("error_kind").?.string);
+
+    var number_object = std.json.ObjectMap.empty;
+    try number_object.put(allocator, "count", .{ .number_string = "42" });
+    try std.testing.expectEqual(@as(?i64, 42), integerField(number_object, "count"));
+
+    const cloned_number = try cloneValue(allocator, .{ .number_string = "99" });
+    try std.testing.expectEqualStrings("99", cloned_number.number_string);
+}
+
+test "project intelligence JSON builders clean up allocation failures" {
+    try sweepAllocationFailures(projectIntelligenceAllocationScenario);
+}
+
+test "project intelligence allocation sweep propagates non allocation errors" {
+    try std.testing.expectError(error.AccessDenied, sweepAllocationFailures(nonAllocationFailureScenario));
+}
+
+fn sweepAllocationFailures(comptime scenario: fn (std.mem.Allocator) anyerror!void) !void {
+    const allocation_count = blk: {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var failing = std.testing.FailingAllocator.init(arena.allocator(), .{});
+        try scenario(failing.allocator());
+        break :blk failing.alloc_index;
+    };
+    try std.testing.expect(allocation_count > 0);
+    for (0..allocation_count) |fail_index| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var failing = std.testing.FailingAllocator.init(arena.allocator(), .{ .fail_index = fail_index });
+        scenario(failing.allocator()) catch |err| switch (err) {
+            error.OutOfMemory => continue,
+            error.WriteFailed => continue,
+            else => return err,
+        };
+    }
+}
+
+fn projectIntelligenceAllocationScenario(allocator: std.mem.Allocator) !void {
+    var runtime = AllocationRuntime{};
+    const context = runtime.context();
+    const run_id = try context.clock_and_ids.nextId(allocator, .{ .prefix = "alloc" });
+    _ = run_id.len;
+    const write = try context.workspace_store.write(.{ .path = "trace.json", .bytes = "{}", .provenance = "allocation_scenario" });
+    _ = write.bytes_written;
+    _ = try contextPackValue(allocator, context, .{ .mode = "standard", .token_budget = 1200 });
+    _ = try agentGuideValue(allocator, "codex", "profile api");
+    _ = try validatePatchValue(allocator, context, .{ .mode = "quick", .changed_files = "src/main.zig", .timeout_ms = 1000 });
+    _ = try impactValue(allocator, context, .{ .files = "src/util.zig", .symbols = "run", .limit = 10 });
+    _ = try projectProfileValue(allocator, context, .{});
+    _ = try patchGuardValue(allocator, context, .{ .files = "src/main.zig zig-out/generated.zig ../secret" });
+    _ = try semanticImpactValue(allocator, context, .{ .files = "src/util.zig", .symbols = "run", .limit = 10 }, "zig_impact_semantic");
+    _ = try testSelectSemanticValue(allocator, context, .{ .files = "src/util.zig", .symbols = "run", .limit = 10 });
+
+    const phase_argv = workflows.OwnedArgv{ .items = &.{ "zig", "build", "test" } };
+    const check_argv = workflows.OwnedArgv{ .items = &.{ "zig", "ast-check", "src/main.zig" } };
+    var phases = [_]workflows.Phase{
+        .{ .id = "build_test", .kind = .command, .tool = "zigar_validation_run", .argv = phase_argv, .reason = "build", .required = true, .risk = "project_code" },
+        .{ .id = "semantic", .kind = .tool_only, .tool = "zig_impact_semantic", .argv = null, .reason = "semantic", .required = false, .risk = "none" },
+    };
+    var skipped = [_]workflows.SkippedPhase{.{ .name = "coverage", .reason = "not requested" }};
+    const facts = workflows.OwnedStringList{ .items = &.{"src/main.zig"} };
+    const unknowns = workflows.OwnedStringList{ .items = &.{"coverage not run"} };
+    const plan = workflows.PlanResult{
+        .plan_id = "plan-1",
+        .mode = "standard",
+        .goal = "fix bug",
+        .facts = facts,
+        .risk = .{ .changed_file_count = 1, .touches_zig_source = true, .touches_build_config = false, .touches_docs = false, .level = "medium" },
+        .phases = phases[0..],
+        .skipped_phases = skipped[0..],
+        .unknowns = unknowns,
+    };
+    _ = try validationPlanValueFromUsecase(allocator, plan);
+    var phase_runs = [_]workflows.PhaseRun{
+        .{
+            .name = "build_test",
+            .ok = false,
+            .argv = phase_argv,
+            .cwd = "/repo",
+            .timeout_ms = 1000,
+            .outcome = .{ .result = .{
+                .exit_code = 1,
+                .term = .{ .exited = 1 },
+                .stdout = "PASS util_test 12ms\n",
+                .stderr = "src/main.zig:1:1: error: bad\n1/1 test.foo...FAIL (TestExpectedEqual)\n",
+                .duration_ms = 12,
+                .timed_out = false,
+                .stdout_truncated = true,
+                .stderr_truncated = false,
+            } },
+        },
+        .{
+            .name = "ast_check",
+            .ok = false,
+            .argv = check_argv,
+            .cwd = "/repo",
+            .timeout_ms = 1000,
+            .outcome = .{ .port_error = error.Timeout },
+        },
+    };
+    var failures = [_]workflows.FailureRecord{.{ .phase = "build_test", .fingerprint = "src/main.zig:error:bad" }};
+    var slow = [_]workflows.SlowPhase{.{ .phase = "build_test", .duration_ms = 1200 }};
+    const record = workflows.HistoryRecord{
+        .recorded_unix_ms = 1_700_000_000_000,
+        .ok = false,
+        .plan_id = "plan-1",
+        .phase_count = 2,
+        .skipped_count = 1,
+        .failures = failures[0..],
+        .slow_phases = slow[0..],
+    };
+    const report = workflows.RunReport{
+        .ok = false,
+        .plan = plan,
+        .phases = phase_runs[0..],
+        .skipped_phases = skipped[0..],
+        .history_record = record,
+        .history_path = workflows.history_path_default,
+        .history_applied = false,
+        .requires_apply_for_history = true,
+        .preimage_identity = .{ .exists = true, .bytes = 3, .sha256 = "abc" },
+    };
+    _ = try validationRunValue(allocator, report);
+
+    var history_failures = [_]workflows.HistoryFailure{.{ .fingerprint = "src/main.zig:error:bad", .sample_json = "{\"phase\":\"build_test\"}" }};
+    var runs = [_]workflows.HistoryRun{
+        .{ .raw_json = "{\"ok\":false}", .ok = false, .failures = history_failures[0..] },
+        .{ .raw_json = "not-json", .ok = true, .failures = history_failures[0..0] },
+        .{ .raw_json = "{\"ok\":true}", .ok = true, .failures = history_failures[0..0] },
+    };
+    var groups = [_]workflows.FailureGroup{.{ .fingerprint = "src/main.zig:error:bad", .count = 2, .sample_json = "not-json" }};
+    var history = workflows.HistoryResult{ .view = .runs, .history_available = true, .runs = runs[0..], .last_run_index = 0, .last_good_index = 2, .failure_groups = groups[0..] };
+    _ = try validationHistoryToolValue(allocator, "zigar_validation_history", history);
+    history.view = .flakes;
+    _ = try validationHistoryToolValue(allocator, "zig_test_flake_history", history);
+    history.view = .failures;
+    _ = try validationHistoryToolValue(allocator, "zig_failure_history", history);
+
+    _ = try testTimingValue(allocator, "PASS util_test 12ms\nslow case 340ms\n");
+    _ = try sessionSnapshotValue(allocator, context, .{ .kind = "zigar_session_snapshot", .goal = "finish", .changed_files = "src/main.zig", .validation = "{\"ok\":false}", .last_error = "error: bad" });
+    _ = try handoffPackValue(allocator, context, .{ .kind = "zigar_handoff_pack", .goal = "resume", .changed_files = "src/main.zig" });
+    _ = try decisionRecordValue(allocator, context, .{ .title = "Decision", .decision = "Use ports", .rationale = "tests", .apply = false });
+    _ = try projectMemoryValue(allocator, context, .{ .query = "ports", .category = "architecture", .limit = 5, .include_builtins = true, .tool_name = "zigar_project_memory" });
+
+    const risk = ToolRisk{ .level = "medium", .mcp_read_only_hint = true, .writes_source = false, .writes_artifacts = false, .writes_require_apply = false, .preview_by_default = true, .mutates_lsp_state = false, .executes_project_code = false, .executes_user_command = false, .executes_backend = false };
+    const entries = [_]CapabilityEntry{.{ .name = "zigar_validate_patch", .description = "validate patch", .group = "validation", .group_keywords = &.{ "validate", "patch" }, .risk = risk, .plan_kind = "read" }};
+    _ = try capabilityMatchValue(allocator, "validate patch", 1, entries[0..]);
+    _ = try toolSequencePlanValue(allocator, "fix failing test", "src/main.zig");
+    _ = try contextWorkspaceValue(allocator, context);
+    _ = try projectTypeValue(allocator, context);
+    _ = try sourceMapValue(allocator, context, 10);
+    _ = try qualityCommandsValue(allocator, context);
+    _ = try contextLimitsValue(allocator);
+    _ = try agentToolAliasesValue(allocator);
+    _ = try nextActionPlanValue(allocator, "compile error", "src/main.zig", "error: bad");
+    var failed_phase = std.json.ObjectMap.empty;
+    try failed_phase.put(allocator, "name", .{ .string = "build_test" });
+    try failed_phase.put(allocator, "ok", .{ .bool = false });
+    var phase_values = std.json.Array.init(allocator);
+    try phase_values.append(.{ .object = failed_phase });
+    _ = try validationNextActionValue(allocator, false, phase_values);
+    _ = try failureFusionValue(allocator, "src/main.zig:1:1: error: bad\n", "PASS util_test 12ms\n", &.{ "zig", "build", "test" }, false);
+    _ = try generatedProjectProfileValue(allocator, context);
+    _ = try commandTermValue(allocator, .signal);
+    _ = try safeTextAlloc(allocator, "\xffok\xc3");
+    _ = try backendErrorValue(allocator, "zig", "run", error.AccessDenied, "fix permissions");
+    _ = try serializeValue(allocator, .{ .string = "json" });
+    const paths = try pathListFromTextAndPatch(allocator, "src/main.zig", "diff --git a/src/util.zig b/src/util.zig\n--- a/src/util.zig\n+++ b/src/util.zig\n");
+    _ = paths.items.len;
+    const changed = try changedPathList(allocator, context, null, 1000);
+    _ = changed.items.len;
+}
+
+fn nonAllocationFailureScenario(allocator: std.mem.Allocator) !void {
+    const bytes = allocator.alloc(u8, 1) catch return error.AccessDenied;
+    defer allocator.free(bytes);
+}
+
+const AllocationRuntime = struct {
+    fn context(self: *AllocationRuntime) app_context.ProjectIntelligenceContext {
+        return .{
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .tool_paths = .{ .zig = "zig" },
+            .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+            .zls_state = .{ .status = "connected", .running = true },
+            .command_runner = .{ .ptr = self, .vtable = &.{ .run = commandRun } },
+            .workspace_store = .{ .ptr = self, .vtable = &.{
+                .resolve = workspaceResolve,
+                .read = workspaceRead,
+                .write = workspaceWrite,
+                .exists = workspaceExists,
+            } },
+            .workspace_scanner = .{ .ptr = self, .vtable = &.{ .scan_zig_files = scanZigFiles } },
+            .clock_and_ids = .{ .ptr = self, .vtable = &.{ .now = now, .nextId = nextId } },
+        };
+    }
+
+    fn commandRun(_: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        const is_git = request.argv.len >= 2 and std.mem.eql(u8, request.argv[0], "git");
+        const stdout = if (is_git) " M src/main.zig\nR  old.zig -> src/util.zig\n" else "PASS util_test 12ms\nStep test succeeded\n";
+        const stderr = if (!is_git and request.argv.len > 1 and std.mem.eql(u8, request.argv[1], "ast-check")) "src/main.zig:1:1: warning: checked\n" else "";
+        return .{ .exit_code = 0, .stdout = try allocator.dupe(u8, stdout), .stderr = try allocator.dupe(u8, stderr), .duration_ms = 12, .owns_stdout = true, .owns_stderr = true };
+    }
+
+    fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
+        return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
+    }
+
+    fn workspaceRead(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        const bytes =
+            if (std.mem.eql(u8, request.path, "build.zig"))
+                "const std = @import(\"std\");\npub fn build(b: *std.Build) void { _ = b.addTest(.{ .root_source_file = b.path(\"tests/util_test.zig\") }); }\n"
+            else if (std.mem.eql(u8, request.path, "build.zig.zon"))
+                ".{ .name = .fixture, .dependencies = .{ .dep = .{ .url = \"https://example.invalid\", .hash = \"abc\" } } }\n"
+            else if (std.mem.eql(u8, request.path, "src/main.zig"))
+                "const util = @import(\"util.zig\");\npub fn main() void { util.run(); }\n"
+            else if (std.mem.eql(u8, request.path, "src/util.zig"))
+                "pub fn run() void {}\npub const Api = struct {};\n"
+            else if (std.mem.eql(u8, request.path, "tests/util_test.zig"))
+                "const util = @import(\"../src/util.zig\");\ntest \"run\" { util.run(); }\n"
+            else if (std.mem.eql(u8, request.path, ".zigar/project-memory.jsonl"))
+                "{\"category\":\"architecture\",\"title\":\"Ports\",\"decision\":\"Use typed ports\",\"rationale\":\"tests\"}\n"
+            else if (std.mem.eql(u8, request.path, ".zigar/profile.json"))
+                "{\"schema_version\":1}\n"
+            else if (std.mem.eql(u8, request.path, ".zigar/profile.v2.json"))
+                "{\"schema_version\":2}\n"
+            else
+                "";
+        return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
+    }
+
+    fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        return .{ .bytes_written = request.bytes.len };
+    }
+
+    fn workspaceExists(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        const exists = std.mem.eql(u8, request.path, "build.zig") or std.mem.eql(u8, request.path, "build.zig.zon") or std.mem.eql(u8, request.path, "src") or std.mem.eql(u8, request.path, "src/main.zig") or std.mem.eql(u8, request.path, "src/util.zig") or std.mem.eql(u8, request.path, "tests/util_test.zig");
+        return .{ .exists = exists, .kind = if (std.mem.eql(u8, request.path, "src")) .directory else .file };
+    }
+
+    fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
+        const names = [_][]const u8{ "src/main.zig", "src/util.zig", "tests/util_test.zig" };
+        const files = try allocator.alloc(ports.WorkspaceScanFile, names.len);
+        for (names, 0..) |name, index| files[index] = .{ .path = try allocator.dupe(u8, name) };
+        return .{ .files = files, .owns_memory = true };
+    }
+
+    fn now(_: *anyopaque) ports.PortError!ports.Instant {
+        return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 1 };
+    }
+
+    fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
+        return std.fmt.allocPrint(allocator, "{s}-1", .{request.prefix});
+    }
+};

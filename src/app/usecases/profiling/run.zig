@@ -75,14 +75,28 @@ fn normalizedTimeout(timeout_ms: i64) u64 {
 
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
     const items = try allocator.alloc([]const u8, argv.len);
+    var items_owned = true;
     var filled: usize = 0;
-    errdefer {
+    defer if (items_owned) {
         for (items[0..filled]) |arg| allocator.free(arg);
         allocator.free(items);
-    }
+    };
     for (argv, 0..) |arg, index| {
         items[index] = try allocator.dupe(u8, arg);
         filled += 1;
     }
+    items_owned = false;
     return .{ .items = items };
+}
+
+test "profiling run argv cloning cleans partial allocations" {
+    for (0..8) |fail_index| {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
+        const cloned = cloneArgv(failing.allocator(), &.{ "zflame", "flamegraph", "profile.folded" }) catch |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+            continue;
+        };
+        var mutable = cloned;
+        mutable.deinit(failing.allocator());
+    }
 }

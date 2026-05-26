@@ -23,6 +23,7 @@ pub const ToolMeta = aggregate.ToolMeta;
 pub const ToolEntry = aggregate.ToolEntry;
 pub const definitions = aggregate.definitions;
 pub const group_specs = groups_mod.group_specs;
+const group_keywords = buildGroupKeywords();
 
 pub const entries = aggregate.entries;
 pub const specs = aggregate.specs;
@@ -54,10 +55,7 @@ pub fn groupName(group: ToolGroup) []const u8 {
 }
 
 pub fn groupKeywords(group: ToolGroup) []const []const u8 {
-    inline for (group_specs) |spec| {
-        if (spec.group == group) return spec.keywords;
-    }
-    unreachable;
+    return group_keywords[@intFromEnum(group)];
 }
 
 pub fn riskFor(id: ToolId) ToolRisk {
@@ -139,6 +137,12 @@ pub fn destructiveHintFor(spec: ToolMeta) bool {
     const risk_value = riskFor(spec.id);
     if (risk_value.writes_require_apply and risk_value.preview_by_default) return false;
     return !spec.read_only;
+}
+
+fn buildGroupKeywords() [std.meta.fields(ToolGroup).len][]const []const u8 {
+    var result: [std.meta.fields(ToolGroup).len][]const []const u8 = undefined;
+    inline for (group_specs) |spec| result[@intFromEnum(spec.group)] = spec.keywords;
+    return result;
 }
 
 test "manifest declares one entry for each tool id" {
@@ -233,4 +237,9 @@ test "risk metadata distinguishes read-only annotations from code execution" {
 
     try std.testing.expect(readOnlyHintFor(find("zig_version").?));
     try std.testing.expect(idempotentHintFor(find("zig_version").?));
+}
+
+test "manifest lookup returns null for unknown tools" {
+    try std.testing.expect(find("missing_tool") == null);
+    try std.testing.expect(findEntry("missing_tool") == null);
 }

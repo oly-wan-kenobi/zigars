@@ -87,15 +87,13 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
     defer scan.deinit(allocator);
 
     var files: std.ArrayList(ImportFile) = .empty;
-    errdefer {
-        for (files.items) |item| item.deinit(allocator);
-        files.deinit(allocator);
-    }
+    var files_owned = true;
+    defer if (files_owned) files.deinit(allocator);
+    defer if (files_owned) for (files.items) |item| item.deinit(allocator);
     var skipped_files: std.ArrayList(SkippedFile) = .empty;
-    errdefer {
-        for (skipped_files.items) |item| item.deinit(allocator);
-        skipped_files.deinit(allocator);
-    }
+    var skipped_owned = true;
+    defer if (skipped_owned) skipped_files.deinit(allocator);
+    defer if (skipped_owned) for (skipped_files.items) |item| item.deinit(allocator);
 
     for (scan.files) |file| {
         const read = context.workspace_store.read(allocator, .{
@@ -112,10 +110,9 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
         defer read.deinit(allocator);
 
         var imports = std.ArrayList(ImportEdge).empty;
-        errdefer {
-            for (imports.items) |item| allocator.free(item.import);
-            imports.deinit(allocator);
-        }
+        var imports_owned = true;
+        defer if (imports_owned) imports.deinit(allocator);
+        defer if (imports_owned) for (imports.items) |item| allocator.free(item.import);
         var pos: usize = 0;
         while (std.mem.indexOfPos(u8, read.bytes, pos, "@import(\"")) |hit| {
             const start = hit + "@import(\"".len;
@@ -124,21 +121,32 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
             pos = end + 1;
         }
 
+        const owned_file = try allocator.dupe(u8, file.path);
+        var file_owned = true;
+        defer if (file_owned) allocator.free(owned_file);
+        const owned_imports = try imports.toOwnedSlice(allocator);
+        imports_owned = false;
         try files.append(allocator, .{
-            .file = try allocator.dupe(u8, file.path),
-            .imports = try imports.toOwnedSlice(allocator),
+            .file = owned_file,
+            .imports = owned_imports,
         });
+        file_owned = false;
     }
 
+    const owned_files = try files.toOwnedSlice(allocator);
+    files_owned = false;
+    const owned_skipped = try skipped_files.toOwnedSlice(allocator);
+    skipped_owned = false;
     return .{
-        .files = try files.toOwnedSlice(allocator),
-        .skipped_files = try skipped_files.toOwnedSlice(allocator),
+        .files = owned_files,
+        .skipped_files = owned_skipped,
     };
 }
 
 pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
+    var out_owned = true;
+    defer if (out_owned) out.deinit(allocator);
     try out.appendSlice(allocator, "# Import graph\n\n");
     try out.appendSlice(allocator, "Capability tier: advisory_orientation. Confidence: medium heuristic string-literal @import scan (orientation_only). Use `zig_ast_imports` or compiler/ZLS checks when precision matters.\n\n");
 
@@ -156,7 +164,9 @@ pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) 
     if (result.skipped_files.len > 0) {
         try out.print(allocator, "\nSkipped unreadable files: {d}\n", .{result.skipped_files.len});
     }
-    return out.toOwnedSlice(allocator);
+    const text = try out.toOwnedSlice(allocator);
+    out_owned = false;
+    return text;
 }
 
 pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestDiscoverRequest) ports.PortError!TestDiscoverResult {
@@ -168,15 +178,13 @@ pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAna
     defer scan.deinit(allocator);
 
     var tests: std.ArrayList(TestDecl) = .empty;
-    errdefer {
-        for (tests.items) |item| item.deinit(allocator);
-        tests.deinit(allocator);
-    }
+    var tests_owned = true;
+    defer if (tests_owned) tests.deinit(allocator);
+    defer if (tests_owned) for (tests.items) |item| item.deinit(allocator);
     var skipped_files: std.ArrayList(SkippedFile) = .empty;
-    errdefer {
-        for (skipped_files.items) |item| item.deinit(allocator);
-        skipped_files.deinit(allocator);
-    }
+    var skipped_owned = true;
+    defer if (skipped_owned) skipped_files.deinit(allocator);
+    defer if (skipped_owned) for (skipped_files.items) |item| item.deinit(allocator);
 
     for (scan.files) |file| {
         if (tests.items.len >= normalized_limit) break;
@@ -208,8 +216,12 @@ pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAna
         }
     }
 
+    const owned_tests = try tests.toOwnedSlice(allocator);
+    tests_owned = false;
+    const owned_skipped = try skipped_files.toOwnedSlice(allocator);
+    skipped_owned = false;
     return .{
-        .tests = try tests.toOwnedSlice(allocator),
-        .skipped_files = try skipped_files.toOwnedSlice(allocator),
+        .tests = owned_tests,
+        .skipped_files = owned_skipped,
     };
 }
