@@ -25,11 +25,15 @@ const cli_error_contract_tokens = release_rules.cli_error_contract_tokens;
 const workflow_permission_rules = release_rules.workflow_permission_rules;
 const pure_zig_roots = release_rules.pure_zig_roots;
 
+// Orchestrates release hygiene gates. Policy data lives in release_rules and
+// domain-specific contract checks so this module stays execution-focused.
+
 pub const fakeZwanzig = fake_backends.fakeZwanzig;
 pub const fakeZlint = fake_backends.fakeZlint;
 pub const fakeZflame = fake_backends.fakeZflame;
 pub const fakeDiffFolded = fake_backends.fakeDiffFolded;
 
+/// Runs all artifact, source hygiene, release-doc, and MCP contract gates.
 pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len != 0) return error.InvalidArguments;
     const generated = [_][]const u8{ "zig-out", ".zig-cache", "zig-pkg", ".zigar-cache", "coverage", "dist" };
