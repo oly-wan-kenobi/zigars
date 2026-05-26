@@ -19,12 +19,3 @@ pub const Catalog = struct {
         return .{ .text = body, .owns_text = true };
     }
 };
-
-test "catalog port renders public tool catalog text" {
-    var catalog_port = Catalog{};
-    const rendered = try catalog_port.port().text(std.testing.allocator);
-    defer rendered.deinit(std.testing.allocator);
-
-    try std.testing.expect(std.mem.indexOf(u8, rendered.text, "\"groups\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered.text, "\"registry_tool_arguments\"") != null);
-}

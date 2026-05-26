@@ -4,4 +4,6 @@ pub const path_policy = @import("path_policy.zig");
 test {
     _ = patch_session;
     _ = path_policy;
+    _ = @import("patch_session_tests.zig");
+    _ = @import("path_policy_tests.zig");
 }

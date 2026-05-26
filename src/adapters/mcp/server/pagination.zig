@@ -43,13 +43,3 @@ pub fn maybePutNextCursor(allocator: std.mem.Allocator, result: *std.json.Object
     const next = page.start + @min(page.limit, total -| page.start);
     if (next < total) try result.put(allocator, "nextCursor", .{ .string = try std.fmt.allocPrint(allocator, "{d}", .{next}) });
 }
-
-test "pagination accepts integer cursors" {
-    var obj = std.json.ObjectMap.empty;
-    defer obj.deinit(std.testing.allocator);
-    try obj.put(std.testing.allocator, "cursor", .{ .integer = 2 });
-
-    const page = fromParams(.{ .object = obj });
-    try std.testing.expectEqual(@as(usize, 2), page.start);
-    try std.testing.expect(page.requested);
-}

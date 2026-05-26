@@ -17,7 +17,3 @@ pub const zig_std_item = tool(.{ .description = "Look up exact Zig stdlib declar
 pub const zig_std_item_json = tool(.{ .description = "Look up exact Zig stdlib declaration-name matches with source-scan provenance, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "name", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
 pub const zig_lang_ref_search = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback; text includes source/completeness metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
 pub const zig_lang_ref_search_json = tool(.{ .description = "Search installed langref HTML or bundled partial langref fallback with source, completeness, query, limit, result-count, no-result, and ranking metadata.", .input_schema = schema(&.{ .{ "query", "string", true }, .{ "limit", "integer", false } }), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
-
-test "docs definitions expose builtin metadata" {
-    try @import("std").testing.expect(zig_builtin_list.description.len > 0);
-}

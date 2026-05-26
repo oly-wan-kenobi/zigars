@@ -56,10 +56,3 @@ fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, 
     }
     return .{ .array = array };
 }
-
-test "backend setup catalog exposes configured executable paths" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const catalog = try value(arena.allocator(), .{ .zflame_path = "/tools/zflame" }, true);
-    try std.testing.expectEqualStrings("backend_setup_catalog", catalog.object.get("kind").?.string);
-}

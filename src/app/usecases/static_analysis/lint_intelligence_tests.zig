@@ -3,6 +3,65 @@ const std = @import("std");
 const lint_intelligence = @import("lint_intelligence.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+test "normalizes findings and compares consensus" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const text = "{\"findings\":[{\"rule\":\"lint.rule\",\"severity\":\"warning\",\"path\":\"src/main.zig\",\"line\":2,\"column\":3,\"message\":\"warn\"}]}";
+    const zlint = try lint_intelligence.normalizeFindingsText(allocator, text, .zlint);
+    const zwanzig = try lint_intelligence.normalizeFindingsText(allocator, text, .zwanzig);
+    try std.testing.expectEqual(@as(usize, 1), zlint.array.items.len);
+    const compared = try lint_intelligence.lintCompareValue(allocator, zlint.array, zwanzig.array);
+    try std.testing.expectEqual(@as(i64, 1), compared.object.get("summary").?.object.get("consensus_count").?.integer);
+}
+
+test "lint gate blocks errors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const findings = try lint_intelligence.normalizeFindingsText(arena.allocator(), "[{\"rule\":\"r\",\"severity\":\"error\",\"path\":\"a.zig\",\"line\":1,\"message\":\"bad\"}]", .zlint);
+    const gate = try lint_intelligence.lintGateValue(arena.allocator(), findings.array, "standard", false, 0);
+    try std.testing.expect(!gate.object.get("passed").?.bool);
+}
+
+test "strict lint profile blocks warnings by default" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const findings = try lint_intelligence.normalizeFindingsText(arena.allocator(), "[{\"rule\":\"r\",\"severity\":\"warning\",\"path\":\"a.zig\",\"line\":1,\"message\":\"warn\"}]", .zlint);
+    const defaults = lint_intelligence.lintProfileDefaults("strict");
+    const gate = try lint_intelligence.lintGateValue(arena.allocator(), findings.array, "strict", defaults.allow_warnings, defaults.max_warnings);
+    try std.testing.expect(!gate.object.get("passed").?.bool);
+}
+
+test "zlint rules fallback reflects help capabilities" {
+    try std.testing.expect(!lint_intelligence.zlintHelpSupportsRules("Usage: zlint [options]\n--fix\n--print-ast <file>\n"));
+    try std.testing.expect(lint_intelligence.zlintHelpSupportsRules("fake\n--rules --format json\n"));
+}
+
+test "zwanzig argv builders use supported typed flags" {
+    const lint_argv = try lint_intelligence.buildZwanzigLintArgv(std.testing.allocator, .{
+        .executable = "zwanzig",
+        .format = .sarif,
+        .path = "/workspace/src",
+        .config = "/workspace/zwanzig.json",
+        .rules_do = "empty-catch-engine",
+        .rules_skip = "style",
+        .extra = &.{"--verbose"},
+    });
+    defer std.testing.allocator.free(lint_argv);
+    const expected = [_][]const u8{ "zwanzig", "--format", "sarif", "--config", "/workspace/zwanzig.json", "--do", "empty-catch-engine", "--skip", "style", "/workspace/src", "--verbose" };
+    try std.testing.expectEqual(expected.len, lint_argv.len);
+    for (expected, lint_argv) |expected_arg, actual_arg| try std.testing.expectEqualStrings(expected_arg, actual_arg);
+
+    const graph_argv = try lint_intelligence.buildZwanzigGraphArgv(std.testing.allocator, .{
+        .executable = "zwanzig",
+        .mode = .cfg,
+        .source_path = "/workspace/src/main.zig",
+        .output_dir = "/workspace/.zigar-cache/graphs",
+    });
+    defer std.testing.allocator.free(graph_argv);
+    try std.testing.expectEqualStrings("--dump-cfg", graph_argv[1]);
+}
+
 test "zlint diagnostics classifies command port timeout without MCP result assertions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

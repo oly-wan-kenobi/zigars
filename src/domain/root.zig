@@ -14,4 +14,6 @@ test {
     _ = performance;
     _ = release;
     _ = trust;
+    _ = @import("evidence_tests.zig");
+    _ = @import("trust_tests.zig");
 }

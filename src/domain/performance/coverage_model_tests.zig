@@ -58,3 +58,31 @@ test "changed coverage only counts named files present in evidence" {
     try std.testing.expectEqual(@as(usize, 2), changed.total);
     try std.testing.expectEqual(@as(usize, 1), changed.covered);
 }
+
+test "coverage model parses nested and array JSON evidence shapes" {
+    const allocator = std.testing.allocator;
+    var nested = try coverage_model.parse(allocator,
+        \\{"baseline":{"coverage":{"files":[{"path":"src/nested.zig","total_lines":4,"covered_lines":2}]}}}
+    , "fixture", "json");
+    defer nested.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 4), nested.total);
+    try std.testing.expectEqual(@as(usize, 2), nested.covered);
+    try std.testing.expectEqualStrings("src/nested.zig", nested.files.items[0].path);
+
+    var array = try coverage_model.parse(allocator,
+        \\[{"file":"src/array.zig","total":3,"covered":5},{"path":"","total":1,"covered":1},{"path":"src/defaults.zig"}]
+    , "fixture", "json");
+    defer array.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), array.total);
+    try std.testing.expectEqual(@as(usize, 3), array.covered);
+    try std.testing.expectEqualStrings("src/array.zig", array.files.items[0].path);
+
+    var fallback_nested = try coverage_model.parse(allocator,
+        \\{"files":[],"coverage":{"files":[{"path":"src/fallback.zig","total":2,"covered":1}]}}
+    , "fixture", "json");
+    defer fallback_nested.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), fallback_nested.total);
+    try std.testing.expectEqualStrings("src/fallback.zig", fallback_nested.files.items[0].path);
+
+    try std.testing.expectError(error.InvalidCoverageEvidence, coverage_model.parse(allocator, "{\"coverage\":true}", "fixture", "json"));
+}

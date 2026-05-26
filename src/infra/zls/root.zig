@@ -10,6 +10,16 @@ pub const transport = @import("transport.zig");
 pub const types = @import("types.zig");
 pub const uri = @import("uri.zig");
 
+const diagnostics_cache_tests = @import("diagnostics_cache_tests.zig");
+const edits_tests = @import("edits_tests.zig");
+const gateway_tests = @import("gateway_tests.zig");
+const json_rpc_tests = @import("json_rpc_tests.zig");
+const process_tests = @import("process_tests.zig");
+const session_tests = @import("session_tests.zig");
+const transport_tests = @import("transport_tests.zig");
+const types_tests = @import("types_tests.zig");
+const uri_tests = @import("uri_tests.zig");
+
 test {
     _ = client;
     _ = diagnostics_cache;
@@ -22,4 +32,13 @@ test {
     _ = transport;
     _ = types;
     _ = uri;
+    _ = diagnostics_cache_tests;
+    _ = edits_tests;
+    _ = gateway_tests;
+    _ = json_rpc_tests;
+    _ = process_tests;
+    _ = session_tests;
+    _ = transport_tests;
+    _ = types_tests;
+    _ = uri_tests;
 }

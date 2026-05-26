@@ -331,31 +331,3 @@ pub fn configuredPath(id: BackendId, config: anytype) []const u8 {
         .diff_folded => config.diff_folded_path,
     };
 }
-
-test "zwanzig graph modes map to supported upstream flags" {
-    try std.testing.expectEqualStrings("--dump-cfg", ZwanzigGraphMode.cfg.flag());
-    try std.testing.expectEqualStrings("--dump-exploded-graph", ZwanzigGraphMode.exploded_graph.flag());
-    try std.testing.expectEqualStrings("--dump-annotated-cfg", ZwanzigGraphMode.annotated_cfg.flag());
-    try std.testing.expectEqualStrings("--dump-path-trace", ZwanzigGraphMode.path_trace.flag());
-    try std.testing.expect(parseZwanzigGraphMode("--dot") == null);
-}
-
-test "zflame contract requires explicit supported formats" {
-    for (zflame_format_names) |name| try std.testing.expect(parseZflameFormat(name) != null);
-    try std.testing.expect(parseZflameFormat("guess") == null);
-}
-
-test "optional backend identities expose stable path flags and probes" {
-    try std.testing.expectEqualStrings("zwanzig", BackendId.zwanzig.name());
-    try std.testing.expectEqualStrings("--diff-folded-path", BackendId.diff_folded.pathFlag());
-    try std.testing.expectEqualStrings("--help", probeArgv(.zflame)[1]);
-}
-
-test "capability contracts cover optional backend handlers" {
-    const expected = [_][]const u8{ "zig_lint", "zig_lint_sarif", "zig_lint_rules", "zig_analysis_graphs", "zig_flamegraph", "zig_flamegraph_diff" };
-    for (expected) |tool_name| {
-        const contract = capabilityFor(tool_name) orelse return error.MissingContract;
-        try std.testing.expect(contract.argv_shape.len > 0);
-    }
-    try std.testing.expect(capabilityFor("missing_backend_tool") == null);
-}

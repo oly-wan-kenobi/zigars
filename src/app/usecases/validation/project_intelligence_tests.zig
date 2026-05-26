@@ -5,6 +5,15 @@ const ports = @import("../../ports.zig");
 const project_intelligence = @import("project_intelligence.zig");
 const validation_workflows = @import("workflows.zig");
 
+test "project intelligence routes next action and patch guards generated paths" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const plan = (try project_intelligence.nextActionPlanValue(allocator, "fix compile error", "src/main.zig", "error: bad")).object;
+    try std.testing.expectEqualStrings("zig_compile_error_index", plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
+}
+
 const StubRuntime = struct {
     command_runs: usize = 0,
     writes: usize = 0,

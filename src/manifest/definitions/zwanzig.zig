@@ -45,7 +45,3 @@ pub const zig_analysis_graphs = tool(.{
     .plan = .{ .workspace_artifact = "Writes an explicit workspace-local artifact path and may use a configured backend; never writes source by default." },
     .static_analysis_tier = .zwanzig_backed,
 });
-
-test "zwanzig definitions expose lint metadata" {
-    try @import("std").testing.expect(zig_lint.description.len > 0);
-}

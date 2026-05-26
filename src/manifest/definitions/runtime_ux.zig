@@ -139,7 +139,3 @@ pub const zigar_prompt_pack = tool(.{
     .group = .runtime_ux,
     .plan = .{ .pure_analysis = "Returns static shipped workflow prompt guidance." },
 });
-
-test "runtime UX definitions expose job metadata" {
-    try @import("std").testing.expect(zigar_job_start.description.len > 0);
-}

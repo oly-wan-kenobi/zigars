@@ -123,7 +123,3 @@ pub const zig_code_action_batch = tool(.{
     .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .apply_gated_mutation = "ZLS-backed code-action batching; returns unavailable or unsupported-state results instead of guessing." },
 });
-
-test "transactional editing definitions expose patch metadata" {
-    try @import("std").testing.expect(zigar_patch_session_create.description.len > 0);
-}

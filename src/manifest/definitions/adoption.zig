@@ -67,7 +67,3 @@ pub const zigar_adoption_pack = tool(.{ .description = "Build a read-only adopti
 pub const zigar_client_config_generate = tool(.{ .description = "Preview or write a provenance-tracked MCP client configuration for zigar.", .input_schema = config_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes generated client config artifacts only with apply=true and workspace-bound output paths." } });
 pub const zigar_smoke_plan = tool(.{ .description = "Return a client, transport, platform, and backend-aware smoke plan for zigar adoption.", .input_schema = smoke_schema, .group = group, .plan = .{ .pure_analysis = "Builds a smoke scenario plan from static catalog and workspace configuration without running checks." } });
 pub const zigar_conformance_report = tool(.{ .description = "Ingest zigar conformance evidence and produce a conservative public-claim report.", .input_schema = report_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Reads supplied conformance evidence and writes a report artifact only with apply=true." } });
-
-test "adoption definitions expose rollout metadata" {
-    try @import("std").testing.expect(zigar_adoption_pack.description.len > 0);
-}
