@@ -74,10 +74,12 @@ pub const Hover = struct {
     range: ?Range = null,
 };
 
+/// Hover contents accepted by LSP: either MarkupContent or a plain string.
 pub const HoverContents = union(enum) {
     markup: MarkupContent,
     string: []const u8,
 
+    /// Parses the two hover content shapes ZLS can return.
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !HoverContents {
         // Hover contents can be a string or a MarkupContent object.
         const token = try source.peekNextTokenType();
@@ -88,6 +90,7 @@ pub const HoverContents = union(enum) {
         };
     }
 
+    /// Writes the original hover content shape back to JSON.
     pub fn jsonStringify(self: HoverContents, jw: anytype) !void {
         switch (self) {
             .markup => |m| try jw.write(m),
@@ -95,6 +98,7 @@ pub const HoverContents = union(enum) {
         }
     }
 
+    /// Returns the displayable hover text regardless of source shape.
     pub fn text(self: HoverContents) []const u8 {
         return switch (self) {
             .markup => |m| m.value,

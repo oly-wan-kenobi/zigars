@@ -1,13 +1,21 @@
 const std = @import("std");
 
+/// Maximum active job snapshots retained in memory.
 pub const max_jobs = 32;
+/// Maximum runtime events retained in the ring.
 pub const max_events = 256;
+/// Maximum subscriptions retained in memory.
 pub const max_subscriptions = 64;
+/// Maximum workspace roots retained in memory.
 pub const max_roots = 16;
+/// Maximum tail bytes retained from command output.
 pub const max_text_tail = 4096;
+/// Maximum event text bytes retained per event.
 pub const max_event_text = 512;
+/// Maximum label bytes retained for job/root/subscription fields.
 pub const max_label = 160;
 
+/// Runtime job lifecycle state exposed through RuntimeSession snapshots.
 pub const JobStatus = enum {
     queued,
     running,
@@ -15,10 +23,12 @@ pub const JobStatus = enum {
     failed,
     cancelled,
 
+    /// Stable text used in runtime event names.
     pub fn text(self: JobStatus) []const u8 {
         return @tagName(self);
     }
 
+    /// True when no further command execution is expected for this job.
     pub fn terminal(self: JobStatus) bool {
         return switch (self) {
             .completed, .failed, .cancelled => true,
@@ -27,6 +37,7 @@ pub const JobStatus = enum {
     }
 };
 
+/// Fixed-size record for one runtime command job.
 pub const JobRecord = struct {
     id: FixedString(32) = .{},
     label: FixedString(max_label) = .{},
@@ -46,11 +57,13 @@ pub const JobRecord = struct {
     cancellation_requested: bool = false,
     cancellation_reason: FixedString(max_label) = .{},
 
+    /// Returns the current job id slice without exposing the backing buffer.
     pub fn idSlice(self: *const JobRecord) []const u8 {
         return self.id.slice();
     }
 };
 
+/// Fixed-size record for one job or runtime event.
 pub const EventRecord = struct {
     sequence: u64 = 0,
     job_id: FixedString(32) = .{},
@@ -61,6 +74,7 @@ pub const EventRecord = struct {
     elapsed_ms: i64 = 0,
 };
 
+/// Fixed-size record for an active or inactive runtime subscription.
 pub const Subscription = struct {
     id: FixedString(32) = .{},
     uri: FixedString(max_label) = .{},
@@ -68,6 +82,7 @@ pub const Subscription = struct {
     created_sequence: u64 = 0,
 };
 
+/// Fixed-size record for a workspace root known to the runtime session.
 pub const WorkspaceRoot = struct {
     id: FixedString(32) = .{},
     path: FixedString(std.fs.max_path_bytes) = .{},
@@ -76,6 +91,7 @@ pub const WorkspaceRoot = struct {
     selected: bool = false,
 };
 
+/// In-memory runtime UX state with bounded job, event, subscription, and root storage.
 pub const State = struct {
     next_job_number: u64 = 1,
     next_subscription_number: u64 = 1,
@@ -90,6 +106,7 @@ pub const State = struct {
     subscriptions: [max_subscriptions]Subscription = [_]Subscription{.{}} ** max_subscriptions,
     roots: [max_roots]WorkspaceRoot = [_]WorkspaceRoot{.{}} ** max_roots,
 
+    /// Ensures at least one selected root exists, using the process workspace root.
     pub fn ensureDefaultRoot(self: *State, workspace_root: []const u8) void {
         if (self.root_count > 0) return;
         _ = self.setRoot(0, "root-1", workspace_root, "default", true);
@@ -97,6 +114,7 @@ pub const State = struct {
         self.selected_root = 0;
     }
 
+    /// Starts a job, assigns a monotonic id, and emits a started event.
     pub fn startJob(self: *State, label: []const u8, command_text: []const u8, timeout_ms: i64) *JobRecord {
         const slot = self.reserveJobSlot();
         const job_number = self.next_job_number;
@@ -116,6 +134,7 @@ pub const State = struct {
         return slot;
     }
 
+    /// Finalizes a job and records bounded stdout/stderr tails as events.
     pub fn finishJob(self: *State, job: *JobRecord, status: JobStatus, ok: bool, duration_ms: i64, term: []const u8, exit_code: ?i64, stdout_tail: []const u8, stderr_tail: []const u8, stdout_truncated: bool, stderr_truncated: bool) void {
         self.sequence += 1;
         job.status = status;
@@ -133,6 +152,7 @@ pub const State = struct {
         if (stderr_tail.len > 0) self.appendEvent(job.id.slice(), "stderr", "stderr", "stderr tail captured", stderr_tail, duration_ms);
     }
 
+    /// Marks a job failed from an infra error name.
     pub fn failJob(self: *State, job: *JobRecord, err_name: []const u8, duration_ms: i64) void {
         self.sequence += 1;
         job.status = .failed;
@@ -144,6 +164,7 @@ pub const State = struct {
         self.appendEvent(job.id.slice(), "failed", "status", "job command failed", err_name, duration_ms);
     }
 
+    /// Records cancellation intent and transitions non-terminal jobs to cancelled.
     pub fn cancelJob(self: *State, id: []const u8, reason: []const u8) ?*JobRecord {
         const job = self.jobById(id) orelse return null;
         job.cancellation_requested = true;
@@ -160,6 +181,7 @@ pub const State = struct {
         return job;
     }
 
+    /// Finds a retained job by id.
     pub fn jobById(self: *State, id: []const u8) ?*JobRecord {
         for (self.jobs[0..self.job_count]) |*job| {
             if (std.mem.eql(u8, job.id.slice(), id)) return job;
@@ -167,6 +189,7 @@ pub const State = struct {
         return null;
     }
 
+    /// Creates a subscription, overwriting the oldest slot after capacity.
     pub fn subscribe(self: *State, uri: []const u8) *Subscription {
         var slot: *Subscription = undefined;
         if (self.subscription_count < self.subscriptions.len) {
@@ -188,6 +211,7 @@ pub const State = struct {
         return slot;
     }
 
+    /// Marks a subscription inactive by id, or by uri when provided.
     pub fn unsubscribe(self: *State, id: []const u8, uri: ?[]const u8) ?*Subscription {
         for (self.subscriptions[0..self.subscription_count]) |*sub| {
             if (std.mem.eql(u8, sub.id.slice(), id) or (uri != null and std.mem.eql(u8, sub.uri.slice(), uri.?))) {
@@ -199,6 +223,7 @@ pub const State = struct {
         return null;
     }
 
+    /// Replaces roots from whitespace-separated paths when `apply` is true.
     pub fn syncRoots(self: *State, workspace_root: []const u8, roots_text: []const u8, apply: bool) void {
         if (!apply) return;
         self.root_count = 0;
@@ -219,6 +244,7 @@ pub const State = struct {
         }
     }
 
+    /// Selects a root by id or path; preview calls return a match without mutation.
     pub fn selectRoot(self: *State, root_id: []const u8, apply: bool) ?*WorkspaceRoot {
         for (self.roots[0..self.root_count], 0..) |*root, index| {
             if (std.mem.eql(u8, root.id.slice(), root_id) or std.mem.eql(u8, root.path.slice(), root_id)) {
@@ -234,6 +260,7 @@ pub const State = struct {
         return null;
     }
 
+    /// Appends an event to the bounded event ring.
     pub fn appendEvent(self: *State, job_id: []const u8, event: []const u8, stream: []const u8, message: []const u8, text: []const u8, elapsed_ms: i64) void {
         const sequence = self.event_count + 1;
         const index = ringIndex(sequence, max_events);
@@ -271,10 +298,12 @@ pub const State = struct {
     }
 };
 
+/// Maps a one-based event sequence to its ring slot.
 pub fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % capacity);
 }
 
+/// Fixed-capacity string that records truncation instead of allocating.
 pub fn FixedString(comptime n: usize) type {
     return struct {
         bytes: [n]u8 = [_]u8{0} ** n,
@@ -283,12 +312,14 @@ pub fn FixedString(comptime n: usize) type {
 
         const Self = @This();
 
+        /// Stores the prefix of `text` up to capacity.
         pub fn set(self: *Self, text: []const u8) void {
             self.len = @min(text.len, n);
             if (self.len > 0) @memcpy(self.bytes[0..self.len], text[0..self.len]);
             self.truncated = text.len > n;
         }
 
+        /// Stores the suffix of `text` up to capacity.
         pub fn setTail(self: *Self, text: []const u8) void {
             if (text.len <= n) {
                 self.set(text);
@@ -299,10 +330,12 @@ pub fn FixedString(comptime n: usize) type {
             self.truncated = true;
         }
 
+        /// Returns the populated portion of the fixed buffer.
         pub fn slice(self: *const Self) []const u8 {
             return self.bytes[0..self.len];
         }
 
+        /// Returns the compile-time byte capacity.
         pub fn capacity(_: Self) usize {
             return n;
         }

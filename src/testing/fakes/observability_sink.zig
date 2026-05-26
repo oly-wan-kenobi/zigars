@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// ObservabilitySink fake that enforces ordered event expectations.
 pub const FakeObservabilitySink = struct {
     allocator: Allocator,
     expected_events: std.ArrayList(ports.ObservationEvent) = .empty,
@@ -13,10 +14,12 @@ pub const FakeObservabilitySink = struct {
 
     const Self = @This();
 
+    /// Creates an empty fake that owns expected and recorded events.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expected and recorded event snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_events.items) |event| freeEvent(self.allocator, event);
         self.expected_events.deinit(self.allocator);
@@ -26,6 +29,7 @@ pub const FakeObservabilitySink = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the ObservabilitySink vtable.
     pub fn port(self: *Self) ports.ObservabilitySink {
         return .{
             .ptr = self,
@@ -35,16 +39,19 @@ pub const FakeObservabilitySink = struct {
         };
     }
 
+    /// Adds an ordered expected observation event.
     pub fn expectEvent(self: *Self, event: ports.ObservationEvent) !void {
         const owned_event = try cloneEvent(self.allocator, event);
         errdefer freeEvent(self.allocator, owned_event);
         try self.expected_events.append(self.allocator, owned_event);
     }
 
+    /// Returns immutable snapshots of emitted events.
     pub fn events(self: *const Self) []const ports.ObservationEvent {
         return self.event_records.items;
     }
 
+    /// Fails if any expected event was not emitted.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_event != self.expected_events.items.len) return error.MissingExpectedCall;
     }

@@ -12,6 +12,7 @@ const Io = @import("std").Io;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+/// Optional storage slots that let runtime composition own ZLS objects.
 pub const Slots = struct {
     process: ?*?ZlsProcess = null,
     client: ?*?LspClient = null,
@@ -32,6 +33,7 @@ const RequiredSlots = struct {
     documents: *?DocumentState,
 };
 
+/// Startup configuration and observers for ZLS sessions.
 pub const Config = struct {
     allocator: Allocator,
     io: Io,
@@ -42,6 +44,7 @@ pub const Config = struct {
     observability: ?*observability.State = null,
 };
 
+/// Current ZLS process/client/document state and last startup response.
 pub const State = struct {
     process: ?*ZlsProcess = null,
     client: ?*LspClient = null,
@@ -51,22 +54,26 @@ pub const State = struct {
     last_failure: ?[]const u8 = null,
     restart_attempts: usize = 0,
 
+    /// Frees the retained initialize response and resets pointers/status.
     pub fn deinit(self: *State, allocator: Allocator) void {
         if (self.initialize_response) |bytes| allocator.free(bytes);
         self.* = .{};
     }
 
+    /// True when a client pointer exists and reports live pipes.
     pub fn running(self: State) bool {
         return if (self.client) |client| client.isRunning() else false;
     }
 };
 
+/// Drops borrowed runtime pointers without deinitializing their owners.
 pub fn clear(state: *State) void {
     state.process = null;
     state.client = null;
     state.documents = null;
 }
 
+/// Starts ZLS, initializes LSP, and creates or replays document state.
 pub fn start(state: *State, slots: Slots, config: Config) !void {
     const required_slots = try slots.require();
     clear(state);
@@ -114,6 +121,7 @@ pub fn start(state: *State, slots: Slots, config: Config) !void {
     }
 }
 
+/// Tears down current process/client and starts a fresh ZLS session.
 pub fn restart(state: *State, slots: Slots, config: Config) !void {
     const required_slots = try slots.require();
 
@@ -134,6 +142,7 @@ pub fn restart(state: *State, slots: Slots, config: Config) !void {
     };
 }
 
+/// Restarts ZLS when the current client is absent or no longer running.
 pub fn ensureReady(state: *State, slots: Slots, config: Config) !void {
     if (state.client) |client| {
         if (client.isRunning()) return;

@@ -1,3 +1,4 @@
+//! Public root module re-exports architecture layers and wires cross-layer integration tests.
 pub const adapters = @import("adapters/root.zig");
 pub const app = @import("app/root.zig");
 pub const bootstrap = @import("bootstrap/root.zig");

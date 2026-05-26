@@ -1,7 +1,10 @@
+//! Runs subprocesses with bounded output capture and timeout enforcement.
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// Default byte cap for stdout and stderr capture.
 pub const output_limit: usize = 1024 * 1024;
+/// Stable label describing output-limit behavior in result contracts.
 pub const output_limit_mode = "truncate_on_limit";
 
 const OwnedOutput = struct {
@@ -9,6 +12,7 @@ const OwnedOutput = struct {
     truncated: bool,
 };
 
+/// Owned result of a subprocess run; caller must deinit captured streams.
 pub const RunResult = struct {
     term: std.process.Child.Term,
     stdout: []u8,
@@ -19,11 +23,13 @@ pub const RunResult = struct {
     stderr_limit: usize = output_limit,
     duration_ms: i64 = 0,
 
+    /// Frees captured stdout and stderr buffers.
     pub fn deinit(self: RunResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
         allocator.free(self.stderr);
     }
 
+    /// True when the process exited with status code zero.
     pub fn succeeded(self: RunResult) bool {
         return switch (self.term) {
             .exited => |code| code == 0,
@@ -32,6 +38,7 @@ pub const RunResult = struct {
     }
 };
 
+/// Runs argv with default stdout/stderr limits.
 pub fn run(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -42,6 +49,7 @@ pub fn run(
     return runWithOutputLimit(allocator, io, cwd, argv, timeout_ms, output_limit, output_limit);
 }
 
+/// Runs argv with explicit stdout/stderr caps and timeout enforcement.
 pub fn runWithOutputLimit(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -51,6 +59,7 @@ pub fn runWithOutputLimit(
     stdout_limit: usize,
     stderr_limit: usize,
 ) !RunResult {
+    // Spawn argv may be rewritten to honor script shebang interpreters on POSIX.
     var spawn_arena = std.heap.ArenaAllocator.init(allocator);
     defer spawn_arena.deinit();
     const spawn_argv = try argvForSpawn(spawn_arena.allocator(), io, cwd, argv);
@@ -92,6 +101,7 @@ pub fn runWithOutputLimit(
         if (stdout_reader.buffered().len > stdout_limit) stdout_truncated = true;
         if (stderr_reader.buffered().len > stderr_limit) stderr_truncated = true;
         if (stdout_truncated or stderr_truncated) {
+            // Stop background reads before killing the child to avoid hanging batch waiters.
             multi_reader.batch.cancel(io);
             child.kill(io);
             child_active = false;
@@ -134,6 +144,7 @@ fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
 }
 
 fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv: []const []const u8) ![]const []const u8 {
+    // Windows command launching differs enough that shebang rewriting is skipped.
     if (argv.len == 0 or builtin.os.tag == .windows) return argv;
 
     const script_path = executablePathForRead(allocator, cwd, argv[0]) catch |err| switch (err) {
@@ -184,12 +195,14 @@ fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.A
         return .{ .bytes = bytes, .truncated = false };
     }
 
+    // Preserve deterministic upper bounds even if read buffers raced past `limit`.
     const trimmed = try allocator.dupe(u8, bytes[0..limit]);
     allocator.free(bytes);
     bytes_owned = false;
     return .{ .bytes = trimmed, .truncated = true };
 }
 
+/// Classifies process errors into stable user-facing categories.
 pub fn errorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.Timeout => "timeout",
@@ -200,14 +213,17 @@ pub fn errorKind(err: anyerror) []const u8 {
     };
 }
 
+/// True when an error came from bounded output capture.
 pub fn isOutputLimitError(err: anyerror) bool {
     return err == error.StreamTooLong;
 }
 
+/// True when an error came from timeout enforcement.
 pub fn isTimeoutError(err: anyerror) bool {
     return err == error.Timeout;
 }
 
+/// Splits shell-like extra arguments into an owned argv list.
 pub fn splitArgs(allocator: std.mem.Allocator, text: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -272,6 +288,7 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
     arg_owned = false;
 }
 
+/// Concatenates two borrowed argv lists into an owned argv slice.
 pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: []const []const u8) ![]const []const u8 {
     var out = try std.ArrayList([]const u8).initCapacity(allocator, base.len + extra.len);
     var out_owned = true;
@@ -283,6 +300,7 @@ pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: [
     return argv;
 }
 
+/// Formats command output and captured stderr/stdout into a caller-owned text block.
 pub fn formatRunResult(allocator: std.mem.Allocator, title: []const u8, result: RunResult) ![]u8 {
     return std.fmt.allocPrint(allocator,
         \\{s}
@@ -304,6 +322,7 @@ pub fn formatRunResult(allocator: std.mem.Allocator, title: []const u8, result: 
     });
 }
 
+/// Converts child termination state to stable text.
 pub fn termText(term: std.process.Child.Term) []const u8 {
     return switch (term) {
         .exited => |code| if (code == 0) "exit 0" else "non-zero exit",

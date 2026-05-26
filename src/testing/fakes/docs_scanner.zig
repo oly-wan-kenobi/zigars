@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// DocsScanner fake with ordered read and path-scan expectations.
 pub const FakeDocsScanner = struct {
     allocator: Allocator,
     expected_reads: std.ArrayList(ExpectedRead) = .empty,
@@ -16,6 +17,7 @@ pub const FakeDocsScanner = struct {
 
     const Self = @This();
 
+    /// Expected absolute read and owned bytes/error.
     const ExpectedRead = struct {
         request: ports.DocsReadAbsoluteRequest,
         result: ReadResult,
@@ -26,6 +28,7 @@ pub const FakeDocsScanner = struct {
         }
     };
 
+    /// Read expectation outcome.
     const ReadResult = union(enum) {
         ok: []const u8,
         err: ports.PortError,
@@ -38,6 +41,7 @@ pub const FakeDocsScanner = struct {
         }
     };
 
+    /// Expected absolute Zig path scan.
     const ExpectedAbsoluteScan = struct {
         request: ports.DocsScanAbsoluteZigPathsRequest,
         result: ScanResult,
@@ -48,6 +52,7 @@ pub const FakeDocsScanner = struct {
         }
     };
 
+    /// Expected workspace docs path scan.
     const ExpectedWorkspaceScan = struct {
         request: ports.DocsScanWorkspacePathsRequest,
         result: ScanResult,
@@ -58,6 +63,7 @@ pub const FakeDocsScanner = struct {
         }
     };
 
+    /// Scan expectation outcome with owned paths.
     const ScanResult = union(enum) {
         ok: []ports.DocsPath,
         err: ports.PortError,
@@ -73,10 +79,12 @@ pub const FakeDocsScanner = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees all expected read and scan results.
     pub fn deinit(self: *Self) void {
         for (self.expected_reads.items) |expected| expected.deinit(self.allocator);
         self.expected_reads.deinit(self.allocator);
@@ -87,6 +95,7 @@ pub const FakeDocsScanner = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the DocsScanner vtable.
     pub fn port(self: *Self) ports.DocsScanner {
         return .{
             .ptr = self,
@@ -98,6 +107,7 @@ pub const FakeDocsScanner = struct {
         };
     }
 
+    /// Adds an ordered successful absolute read expectation.
     pub fn expectRead(self: *Self, request: ports.DocsReadAbsoluteRequest, bytes: []const u8) !void {
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;

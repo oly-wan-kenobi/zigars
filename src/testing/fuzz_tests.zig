@@ -6,6 +6,8 @@ const stacktrace = @import("stacktrace");
 const crash = @import("crash");
 const command = @import("command");
 
+/// Weighted ASCII corpus keeps fuzzing near CLI-ish inputs while still allowing
+/// control bytes that stress parsers.
 const ascii_weights = &.{
     std.testing.Smith.Weight.rangeAtMost(u8, 0x20, 0x7e, 8),
     std.testing.Smith.Weight.value(u8, '\n', 2),
@@ -39,6 +41,8 @@ fn fuzzTextParsers(_: void, smith: *std.testing.Smith) !void {
     const len = smith.sliceWeightedBytes(buffer[0..], ascii_weights);
     const text = buffer[0..len];
 
+    // If random text does not parse as LCOV, fall back to a valid seed so the
+    // rest of the pipeline still gets exercised on every iteration.
     var set = coverage_model.parse(std.testing.allocator, text, "fuzz", "") catch
         try coverage_model.parse(std.testing.allocator, "SF:src/main.zig\nDA:1,1\nend_of_record\n", "seed", "");
     defer set.deinit(std.testing.allocator);

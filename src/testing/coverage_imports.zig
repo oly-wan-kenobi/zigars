@@ -1,3 +1,6 @@
+//! Coverage-only imports for modules that otherwise have no direct unit tests.
+//! Keeping this list explicit prevents coverage regressions when files are moved.
+
 test {
     _ = @import("../app/result_shape.zig");
     _ = @import("../app/usecases/core/command_output.zig");

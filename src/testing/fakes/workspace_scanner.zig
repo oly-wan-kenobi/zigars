@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// WorkspaceScanner fake with ordered scan expectations and call snapshots.
 pub const FakeWorkspaceScanner = struct {
     allocator: Allocator,
     expected_scans: std.ArrayList(ExpectedScan) = .empty,
@@ -13,6 +14,7 @@ pub const FakeWorkspaceScanner = struct {
 
     const Self = @This();
 
+    /// Expected scan request and owned result.
     const ExpectedScan = struct {
         request: ports.WorkspaceScanRequest,
         result: ExpectedScanResult,
@@ -23,6 +25,7 @@ pub const FakeWorkspaceScanner = struct {
         }
     };
 
+    /// Stored scan result for one expected request.
     const ExpectedScanResult = union(enum) {
         ok: []ports.WorkspaceScanFile,
         err: ports.PortError,
@@ -38,10 +41,12 @@ pub const FakeWorkspaceScanner = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_scans.items) |expected| expected.deinit(self.allocator);
         self.expected_scans.deinit(self.allocator);
@@ -51,6 +56,7 @@ pub const FakeWorkspaceScanner = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the WorkspaceScanner vtable.
     pub fn port(self: *Self) ports.WorkspaceScanner {
         return .{
             .ptr = self,
@@ -60,6 +66,7 @@ pub const FakeWorkspaceScanner = struct {
         };
     }
 
+    /// Adds an ordered successful scan expectation and clones returned file paths.
     pub fn expectScan(self: *Self, request: ports.WorkspaceScanRequest, files: []const []const u8) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
@@ -83,6 +90,7 @@ pub const FakeWorkspaceScanner = struct {
         files_owned = false;
     }
 
+    /// Adds an ordered failing scan expectation.
     pub fn expectScanError(self: *Self, request: ports.WorkspaceScanRequest, err: ports.PortError) !void {
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
@@ -94,6 +102,7 @@ pub const FakeWorkspaceScanner = struct {
         request_owned = false;
     }
 
+    /// Fails if any ordered scan expectation was not consumed.
     pub fn verify(self: *const Self) ports.PortError!void {
         if (self.next_scan != self.expected_scans.items.len) return error.MissingExpectedCall;
     }

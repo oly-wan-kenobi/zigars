@@ -5,6 +5,7 @@ const common = @import("common.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// WorkspaceStore fake with ordered expectations for every filesystem operation.
 pub const FakeWorkspaceStore = struct {
     allocator: Allocator,
     expected_resolves: std.ArrayList(ExpectedResolve) = .empty,
@@ -31,6 +32,7 @@ pub const FakeWorkspaceStore = struct {
 
     const Self = @This();
 
+    /// Expected resolve call and owned result.
     const ExpectedResolve = struct {
         request: ports.WorkspaceResolveRequest,
         result: ExpectedResolveResult,
@@ -41,6 +43,7 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    /// Expected read call and owned result.
     const ExpectedRead = struct {
         request: ports.WorkspaceReadRequest,
         result: ExpectedReadResult,
@@ -51,6 +54,7 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    /// Expected write call and result status.
     const ExpectedWrite = struct {
         request: ports.WorkspaceWriteRequest,
         result: ExpectedWriteResult,
@@ -156,10 +160,12 @@ pub const FakeWorkspaceStore = struct {
         }
     };
 
+    /// Creates an empty fake that owns expectations with `allocator`.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees all expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
         for (self.expected_resolves.items) |expected| expected.deinit(self.allocator);
         self.expected_resolves.deinit(self.allocator);
@@ -205,6 +211,7 @@ pub const FakeWorkspaceStore = struct {
         self.* = undefined;
     }
 
+    /// Exposes this fake through the WorkspaceStore vtable.
     pub fn port(self: *Self) ports.WorkspaceStore {
         return .{
             .ptr = self,

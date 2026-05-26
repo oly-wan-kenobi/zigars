@@ -1,3 +1,4 @@
+//! Process entrypoint delegates all composition and runtime ownership to bootstrap runtime.
 const std = @import("std");
 const zigar = @import("zigar");
 const bootstrap_runtime = zigar.bootstrap.runtime;

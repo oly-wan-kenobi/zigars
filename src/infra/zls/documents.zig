@@ -9,8 +9,11 @@ const Mutex = @import("../process/sync.zig").Mutex;
 /// Tracks which documents are open in the LSP session.
 /// Sends didOpen/didClose notifications as needed.
 pub const DocumentState = struct {
+    /// Maximum bytes read or retained for one document.
     pub const default_max_document_bytes: usize = 10 * 1024 * 1024;
+    /// Maximum retained bytes across unsaved in-memory documents.
     pub const default_max_retained_content_bytes: usize = 64 * 1024 * 1024;
+    /// Maximum number of open documents tracked in one LSP session.
     pub const default_max_open_documents: usize = 256;
 
     open_docs: std.StringHashMapUnmanaged(DocInfo),
@@ -25,6 +28,7 @@ pub const DocumentState = struct {
     max_open_documents: usize = default_max_open_documents,
     last_reopen: ReopenSummary = .{},
 
+    /// Metadata retained for a document currently open in ZLS.
     pub const DocInfo = struct {
         version: i64,
         content_hash: u64,
@@ -32,6 +36,7 @@ pub const DocumentState = struct {
         content: ?[]u8 = null,
     };
 
+    /// Detailed status for a single open document.
     pub const DocStatus = struct {
         version: i64,
         content_hash: u64,
@@ -45,6 +50,7 @@ pub const DocumentState = struct {
         last_reopen: ReopenSummary,
     };
 
+    /// Aggregate status for all open documents.
     pub const Summary = struct {
         open_documents: usize,
         dirty_documents: usize,
@@ -55,6 +61,7 @@ pub const DocumentState = struct {
         last_reopen: ReopenSummary,
     };
 
+    /// Counts outcomes from replaying tracked documents into a new ZLS session.
     pub const ReopenSummary = struct {
         attempted: usize = 0,
         succeeded: usize = 0,
@@ -62,6 +69,7 @@ pub const DocumentState = struct {
         failed: usize = 0,
     };
 
+    /// Initializes state without filesystem I/O; disk-backed open calls will fail.
     pub fn init(allocator: std.mem.Allocator, workspace_path: []const u8) DocumentState {
         return .{
             .open_docs = .empty,
@@ -71,6 +79,7 @@ pub const DocumentState = struct {
         };
     }
 
+    /// Initializes state with filesystem I/O for reading disk documents.
     pub fn initWithIo(allocator: std.mem.Allocator, workspace_path: []const u8, io: std.Io) DocumentState {
         return .{
             .open_docs = .empty,
@@ -82,6 +91,7 @@ pub const DocumentState = struct {
         };
     }
 
+    /// Replaces the logger used for best-effort notification failures.
     pub fn setLogger(self: *DocumentState, logger: logging.Logger) void {
         self.logger = logger;
     }
@@ -252,6 +262,7 @@ pub const DocumentState = struct {
         return try ret_allocator.dupe(u8, file_uri);
     }
 
+    /// Returns the tracked LSP document version for an open URI.
     pub fn versionForUri(self: *DocumentState, file_uri: []const u8) ?i64 {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -259,6 +270,7 @@ pub const DocumentState = struct {
         return null;
     }
 
+    /// Returns status for an open URI without transferring ownership.
     pub fn statusForUri(self: *DocumentState, file_uri: []const u8) ?DocStatus {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -277,6 +289,7 @@ pub const DocumentState = struct {
         };
     }
 
+    /// Returns aggregate document counts and byte limits.
     pub fn summary(self: *DocumentState) Summary {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -434,6 +447,7 @@ pub const DocumentState = struct {
         }
     }
 
+    /// Frees all tracked URI keys and retained in-memory document content.
     pub fn deinit(self: *DocumentState) void {
         var it = self.open_docs.iterator();
         while (it.next()) |entry| {

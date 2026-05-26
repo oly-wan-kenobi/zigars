@@ -4,6 +4,7 @@ const ports = @import("../../app/ports.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// StaticCache fake that stores one owned JSON payload in memory.
 pub const FakeStaticCache = struct {
     allocator: Allocator,
     signature: u64 = 0,
@@ -15,21 +16,25 @@ pub const FakeStaticCache = struct {
 
     const Self = @This();
 
+    /// Creates an empty cache fake.
     pub fn init(allocator: Allocator) Self {
         return .{ .allocator = allocator };
     }
 
+    /// Frees the seeded or stored payload.
     pub fn deinit(self: *Self) void {
         if (self.bytes) |bytes| self.allocator.free(bytes);
         self.* = undefined;
     }
 
+    /// Seeds the cache without counting as a store call.
     pub fn seed(self: *Self, signature: u64, bytes: []const u8) !void {
         if (self.bytes) |old| self.allocator.free(old);
         self.bytes = try self.allocator.dupe(u8, bytes);
         self.signature = signature;
     }
 
+    /// Exposes this fake through the StaticCache vtable.
     pub fn port(self: *Self) ports.StaticCache {
         return .{
             .ptr = self,
