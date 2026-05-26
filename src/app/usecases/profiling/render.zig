@@ -6,6 +6,7 @@ const ports = @import("../../ports.zig");
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
 const flamegraph = @import("flamegraph.zig");
 
+/// Carries request data across use case and port boundaries.
 pub const Request = struct {
     tool_name: []const u8 = "zig_flamegraph",
     operation: []const u8 = "render_flamegraph",
@@ -15,18 +16,21 @@ pub const Request = struct {
     options: flamegraph_model.ZflameRenderOptions = .{},
 };
 
+/// Carries path failure data across use case and port boundaries.
 pub const PathFailure = struct {
     err: ports.PortError,
     path: []const u8,
     for_output: bool = false,
 };
 
+/// Carries run failure data across use case and port boundaries.
 pub const RunFailure = struct {
     request: flamegraph.Request,
     input_abs: []const u8,
     output_abs: []const u8,
     failure: flamegraph.Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RunFailure, allocator: std.mem.Allocator) void {
         self.failure.deinit(allocator);
         allocator.free(self.input_abs);
@@ -35,12 +39,14 @@ pub const RunFailure = struct {
     }
 };
 
+/// Carries artifact data across use case and port boundaries.
 pub const Artifact = struct {
     request: flamegraph.Request,
     input_abs: []const u8,
     output_abs: []const u8,
     artifact: flamegraph.Artifact,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Artifact, allocator: std.mem.Allocator) void {
         self.artifact.deinit(allocator);
         allocator.free(self.input_abs);
@@ -49,10 +55,12 @@ pub const Artifact = struct {
     }
 };
 
+/// Represents failure alternatives carried across the workflow boundary.
 pub const Failure = union(enum) {
     workspace_path_failed: PathFailure,
     render_failed: RunFailure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Failure, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .render_failed => |*failure| failure.deinit(allocator),
@@ -62,10 +70,12 @@ pub const Failure = union(enum) {
     }
 };
 
+/// Represents result alternatives carried across the workflow boundary.
 pub const Result = union(enum) {
     ok: Artifact,
     err: Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Result, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .ok => |*artifact| artifact.deinit(allocator),
@@ -75,6 +85,7 @@ pub const Result = union(enum) {
     }
 };
 
+/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     const input_abs = resolvePath(allocator, context, request.input, false) catch |err| return .{ .err = .{ .workspace_path_failed = .{
         .err = err,
@@ -131,6 +142,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
     }
 }
 
+/// Resolves resolve path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext, path: []const u8, for_output: bool) ports.PortError![]const u8 {
     const resolved = try context.workspace_store.resolve(allocator, .{
         .path = path,

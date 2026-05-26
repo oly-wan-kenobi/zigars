@@ -6,6 +6,7 @@ const fakes = @import("../../../testing/fakes/root.zig");
 
 const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture</title></svg>\n";
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(command_runner: anytype, workspace_store: anytype) app_context.ProfilingContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
@@ -16,6 +17,7 @@ fn testContext(command_runner: anytype, workspace_store: anytype) app_context.Pr
     };
 }
 
+/// Implements request workflow logic using caller-owned inputs.
 fn request() flamegraph.Request {
     return .{
         .input = "stacks.folded",
@@ -34,10 +36,12 @@ fn request() flamegraph.Request {
     };
 }
 
+/// Implements expected argv workflow logic using caller-owned inputs.
 fn expectedArgv() []const []const u8 {
     return &.{ "/bin/zflame", "recursive", "--title=fixture", "--subtitle=unit", "--colors=hot", "--width=1200", "--min-width=5", "--hash", "/workspace/stacks.folded" };
 }
 
+/// Implements expected command request workflow logic using caller-owned inputs.
 fn expectedCommandRequest() @import("../../ports.zig").CommandRequest {
     return .{
         .argv = expectedArgv(),

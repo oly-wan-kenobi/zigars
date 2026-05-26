@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Carries input data across use case and port boundaries.
 pub const Input = struct {
     workspace: []const u8,
     cache: []const u8,
@@ -25,14 +26,18 @@ pub const Input = struct {
     diff_folded_probe: ?Probe = null,
 };
 
+/// Carries probe data across use case and port boundaries.
 pub const Probe = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
 };
 
+/// Implements report workflow logic using caller-owned inputs.
 pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     var checks = std.json.Array.init(allocator);
+    // Each check records both observed state and operator-facing resolution text
+    // so the doctor output can be rendered without extra policy lookups.
     try checks.append(try checkValue(allocator, "workspace", true, "configured", input.workspace));
     try checks.append(try checkValue(allocator, "cache", true, "configured", input.cache));
     try checks.append(try checkValue(
@@ -103,6 +108,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes check fields into an allocator-owned JSON value; allocation failures propagate.
 fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -112,6 +118,7 @@ fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: 
     return .{ .object = obj };
 }
 
+/// Serializes probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeValue(allocator: std.mem.Allocator, name: []const u8, probe: Probe) !std.json.Value {
     return checkValue(allocator, name, probe.ok, probe.status, probe.resolution);
 }

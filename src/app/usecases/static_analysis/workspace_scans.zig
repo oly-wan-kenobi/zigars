@@ -4,22 +4,28 @@ const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
+/// Default scan limit used when the caller omits an explicit value.
 pub const default_scan_limit: usize = 200;
+/// Default source read limit used when the caller omits an explicit value.
 pub const default_source_read_limit: usize = 512 * 1024;
 
+/// Carries import graph request data across use case and port boundaries.
 pub const ImportGraphRequest = struct {
     limit: usize = default_scan_limit,
     max_bytes: usize = default_source_read_limit,
 };
 
+/// Carries import edge data across use case and port boundaries.
 pub const ImportEdge = struct {
     import: []const u8,
 };
 
+/// Carries import file data across use case and port boundaries.
 pub const ImportFile = struct {
     file: []const u8,
     imports: []ImportEdge,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: ImportFile, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         for (self.imports) |item| allocator.free(item.import);
@@ -27,20 +33,24 @@ pub const ImportFile = struct {
     }
 };
 
+/// Carries skipped file data across use case and port boundaries.
 pub const SkippedFile = struct {
     path: []const u8,
     error_name: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: SkippedFile, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
         allocator.free(self.error_name);
     }
 };
 
+/// Carries import graph result data across use case and port boundaries.
 pub const ImportGraphResult = struct {
     files: []ImportFile,
     skipped_files: []SkippedFile,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: ImportGraphResult, allocator: std.mem.Allocator) void {
         for (self.files) |file| file.deinit(allocator);
         allocator.free(self.files);
@@ -49,12 +59,14 @@ pub const ImportGraphResult = struct {
     }
 };
 
+/// Carries test decl data across use case and port boundaries.
 pub const TestDecl = struct {
     file: []const u8,
     line: usize,
     declaration: []const u8,
     command: []const u8,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: TestDecl, allocator: std.mem.Allocator) void {
         allocator.free(self.file);
         allocator.free(self.declaration);
@@ -62,15 +74,18 @@ pub const TestDecl = struct {
     }
 };
 
+/// Carries test discover request data across use case and port boundaries.
 pub const TestDiscoverRequest = struct {
     limit: usize = 500,
     max_bytes: usize = default_source_read_limit,
 };
 
+/// Carries test discover result data across use case and port boundaries.
 pub const TestDiscoverResult = struct {
     tests: []TestDecl,
     skipped_files: []SkippedFile,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: TestDiscoverResult, allocator: std.mem.Allocator) void {
         for (self.tests) |item| item.deinit(allocator);
         allocator.free(self.tests);
@@ -79,6 +94,7 @@ pub const TestDiscoverResult = struct {
     }
 };
 
+/// Implements import graph workflow logic using caller-owned inputs.
 pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ImportGraphRequest) ports.PortError!ImportGraphResult {
     const normalized_limit = @max(request.limit, 1);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -144,6 +160,7 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
     };
 }
 
+/// Implements import graph text workflow logic using caller-owned inputs.
 pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
@@ -170,6 +187,7 @@ pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) 
     return text;
 }
 
+/// Implements test discover workflow logic using caller-owned inputs.
 pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestDiscoverRequest) ports.PortError!TestDiscoverResult {
     const normalized_limit = @max(request.limit, 1);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{

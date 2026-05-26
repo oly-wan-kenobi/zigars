@@ -51,6 +51,8 @@ pub fn runtimeFieldConcern(name: []const u8) ?RuntimeFieldConcern {
 
 /// fromRuntime snapshots process/runtime state into app context values and read-only counters.
 pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet) app_context.Context {
+    // Borrow runtime configuration and status fields directly; the returned
+    // context is a short-lived view owned by the active runtime.
     return .{
         .workspace = .{
             .root = runtime.workspace.root,

@@ -6,15 +6,20 @@ const ports = @import("../../ports.zig");
 const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
 const compiler_output = @import("../../../domain/zig/compiler_output.zig");
 
+/// Command output limit applied when collecting workflow evidence.
 pub const command_output_limit: usize = 1024 * 1024;
+/// Command output limit mode applied when collecting workflow evidence.
 pub const command_output_limit_mode = "truncate_on_limit";
 
+/// Error set returned by lint workflow failures.
 pub const LintError = ports.PortError || error{
     MissingCommandRunner,
 };
 
+/// Defines the allowed finding source variants accepted by this workflow.
 pub const FindingSource = enum { zlint, zwanzig };
 
+/// Carries zlint command data across use case and port boundaries.
 pub const ZlintCommand = struct {
     executable: []const u8,
     path: []const u8,
@@ -23,6 +28,7 @@ pub const ZlintCommand = struct {
     extra: []const []const u8 = &.{},
 };
 
+/// Carries zlint diagnostics request data across use case and port boundaries.
 pub const ZlintDiagnosticsRequest = struct {
     tool_name: []const u8,
     path: []const u8 = ".",
@@ -33,10 +39,12 @@ pub const ZlintDiagnosticsRequest = struct {
     sarif: bool = false,
 };
 
+/// Carries zlint rules request data across use case and port boundaries.
 pub const ZlintRulesRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Carries zlint fix request data across use case and port boundaries.
 pub const ZlintFixRequest = struct {
     path: []const u8 = ".",
     config: ?[]const u8 = null,
@@ -47,6 +55,7 @@ pub const ZlintFixRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Carries zwanzig lint command data across use case and port boundaries.
 pub const ZwanzigLintCommand = struct {
     executable: []const u8,
     format: backend_contracts.ZwanzigLintFormat,
@@ -57,6 +66,7 @@ pub const ZwanzigLintCommand = struct {
     extra: []const []const u8 = &.{},
 };
 
+/// Carries zwanzig graph command data across use case and port boundaries.
 pub const ZwanzigGraphCommand = struct {
     executable: []const u8,
     mode: backend_contracts.ZwanzigGraphMode,
@@ -65,6 +75,7 @@ pub const ZwanzigGraphCommand = struct {
     extra: []const []const u8 = &.{},
 };
 
+/// Carries zwanzig lint request data across use case and port boundaries.
 pub const ZwanzigLintRequest = struct {
     tool_name: []const u8,
     format: backend_contracts.ZwanzigLintFormat,
@@ -76,6 +87,7 @@ pub const ZwanzigLintRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Carries zwanzig graph request data across use case and port boundaries.
 pub const ZwanzigGraphRequest = struct {
     mode: backend_contracts.ZwanzigGraphMode,
     path: []const u8,
@@ -84,17 +96,20 @@ pub const ZwanzigGraphRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Represents graph outcome alternatives carried across the workflow boundary.
 pub const GraphOutcome = union(enum) {
     value: std.json.Value,
     error_value: std.json.Value,
 };
 
+/// Carries lint profile data across use case and port boundaries.
 pub const LintProfile = struct {
     allow_warnings: bool,
     max_warnings: i64,
     require_backend: bool,
 };
 
+/// Constructs zlint argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZlintArgv(allocator: std.mem.Allocator, spec: ZlintCommand) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
@@ -106,6 +121,7 @@ pub fn buildZlintArgv(allocator: std.mem.Allocator, spec: ZlintCommand) ![]const
     return list.toOwnedSlice(allocator);
 }
 
+/// Constructs zlint fix argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZlintFixArgv(allocator: std.mem.Allocator, spec: ZlintCommand, dangerous: bool) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
@@ -117,6 +133,7 @@ pub fn buildZlintFixArgv(allocator: std.mem.Allocator, spec: ZlintCommand, dange
     return list.toOwnedSlice(allocator);
 }
 
+/// Constructs zwanzig lint argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZwanzigLintArgv(allocator: std.mem.Allocator, spec: ZwanzigLintCommand) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
@@ -129,6 +146,7 @@ pub fn buildZwanzigLintArgv(allocator: std.mem.Allocator, spec: ZwanzigLintComma
     return list.toOwnedSlice(allocator);
 }
 
+/// Constructs zwanzig graph argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZwanzigGraphArgv(allocator: std.mem.Allocator, spec: ZwanzigGraphCommand) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
@@ -137,6 +155,7 @@ pub fn buildZwanzigGraphArgv(allocator: std.mem.Allocator, spec: ZwanzigGraphCom
     return list.toOwnedSlice(allocator);
 }
 
+/// Invokes run zlint diagnostics with caller-owned inputs; command and allocation failures propagate.
 pub fn runZlintDiagnostics(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintDiagnosticsRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_config" }) else null;
@@ -166,6 +185,7 @@ pub fn runZlintDiagnostics(allocator: std.mem.Allocator, context: app_context.St
     return lintFindingsResultValue(allocator, request.tool_name, "zlint", findings.array);
 }
 
+/// Invokes run zlint rules with caller-owned inputs; command and allocation failures propagate.
 pub fn runZlintRules(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintRulesRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     const help_argv = [_][]const u8{ context.tool_paths.zlint, "--help" };
@@ -198,6 +218,7 @@ pub fn runZlintRules(allocator: std.mem.Allocator, context: app_context.StaticAn
     return .{ .object = obj };
 }
 
+/// Invokes run zlint fix with caller-owned inputs; command and allocation failures propagate.
 pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintFixRequest) LintError!std.json.Value {
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_fix_config" }) else null;
     defer if (resolved_config) |resolved| resolved.deinit(allocator);
@@ -226,6 +247,7 @@ pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnal
     return zlintFixAppliedValue(allocator, argv, request.dangerous, result.stdout, result.stderr, findings.array);
 }
 
+/// Invokes run zwanzig lint with caller-owned inputs; command and allocation failures propagate.
 pub fn runZwanzigLint(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigLintRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zwanzig_config" }) else null;
@@ -245,11 +267,13 @@ pub fn runZwanzigLint(allocator: std.mem.Allocator, context: app_context.StaticA
     return runZwanzigCommand(allocator, context, command_runner, argv, "zwanzig lint", request.tool_name, request.timeout_ms);
 }
 
+/// Invokes run zwanzig rules with caller-owned inputs; command and allocation failures propagate.
 pub fn runZwanzigRules(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, timeout_ms: ?u64) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     return runZwanzigCommand(allocator, context, command_runner, &.{ context.tool_paths.zwanzig, "--help" }, "zwanzig rules/help", "zig_lint_rules", timeout_ms);
 }
 
+/// Invokes run zwanzig command with caller-owned inputs; command and allocation failures propagate.
 fn runZwanzigCommand(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -270,6 +294,7 @@ fn runZwanzigCommand(
     return zwanzigResultWithMetadata(allocator, try commandResultValue(allocator, title, argv, context.workspace.root, timeout_ms, result), tool_name);
 }
 
+/// Implements zwanzig result with metadata workflow logic using caller-owned inputs.
 fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, value: std.json.Value, tool_name: []const u8) !std.json.Value {
     var obj = switch (value) {
         .object => |o| o,
@@ -281,6 +306,7 @@ fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, value: std.json.Value
     return .{ .object = obj };
 }
 
+/// Invokes run zwanzig graph with caller-owned inputs; command and allocation failures propagate.
 pub fn runZwanzigGraph(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigGraphRequest) LintError!GraphOutcome {
     const command_runner = try requireCommandRunner(context);
     const resolved_path = try context.workspace_store.resolve(allocator, .{ .path = request.path, .provenance = "static_analysis.zwanzig_graph_path" });
@@ -325,10 +351,12 @@ pub fn runZwanzigGraph(allocator: std.mem.Allocator, context: app_context.Static
     return .{ .value = .{ .object = obj } };
 }
 
+/// Implements zlint help supports rules workflow logic using caller-owned inputs.
 pub fn zlintHelpSupportsRules(help: []const u8) bool {
     return std.mem.indexOf(u8, help, "--rules") != null;
 }
 
+/// Serializes backend command failed fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendCommandFailedValue(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, stdout: []const u8, stderr: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -343,6 +371,7 @@ fn backendCommandFailedValue(allocator: std.mem.Allocator, tool_name: []const u8
     return .{ .object = obj };
 }
 
+/// Serializes zlint rules unavailable fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintRulesUnavailableValue(allocator: std.mem.Allocator, help: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_rules" });
@@ -357,6 +386,7 @@ fn zlintRulesUnavailableValue(allocator: std.mem.Allocator, help: []const u8) !s
     return .{ .object = obj };
 }
 
+/// Serializes zlint capabilities fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintCapabilitiesValue(allocator: std.mem.Allocator, help: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "format_json", .{ .bool = std.mem.indexOf(u8, help, "--format") != null });
@@ -368,6 +398,7 @@ fn zlintCapabilitiesValue(allocator: std.mem.Allocator, help: []const u8) !std.j
     return .{ .object = obj };
 }
 
+/// Serializes malformed backend output fields into an allocator-owned JSON value; allocation failures propagate.
 fn malformedBackendOutputValue(allocator: std.mem.Allocator, tool_name: []const u8, stdout: []const u8, stderr: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -381,6 +412,7 @@ fn malformedBackendOutputValue(allocator: std.mem.Allocator, tool_name: []const 
     return .{ .object = obj };
 }
 
+/// Serializes lint findings result fields into an allocator-owned JSON value; allocation failures propagate.
 fn lintFindingsResultValue(allocator: std.mem.Allocator, tool_name: []const u8, backend: []const u8, findings: std.json.Array) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -393,6 +425,7 @@ fn lintFindingsResultValue(allocator: std.mem.Allocator, tool_name: []const u8, 
     return .{ .object = obj };
 }
 
+/// Serializes zlint fix preview fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintFixPreviewValue(allocator: std.mem.Allocator, argv: []const []const u8, dangerous: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_fix" });
@@ -407,6 +440,7 @@ fn zlintFixPreviewValue(allocator: std.mem.Allocator, argv: []const []const u8, 
     return .{ .object = obj };
 }
 
+/// Serializes zlint fix applied fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, dangerous: bool, stdout: []const u8, stderr: []const u8, findings: std.json.Array) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_fix" });
@@ -424,6 +458,7 @@ fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, 
     return .{ .object = obj };
 }
 
+/// Normalizes findings text data into the representation consumed by this workflow.
 pub fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source: FindingSource) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = findings };
@@ -433,6 +468,7 @@ pub fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, sou
     return .{ .array = findings };
 }
 
+/// Implements findings array workflow logic using caller-owned inputs.
 fn findingsArray(value: std.json.Value) std.json.Array {
     switch (value) {
         .array => |array| return array,
@@ -446,6 +482,7 @@ fn findingsArray(value: std.json.Value) std.json.Array {
     return std.json.Array.init(std.heap.page_allocator);
 }
 
+/// Serializes normalize finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, source: FindingSource) !std.json.Value {
     const obj = switch (value) {
         .object => |o| o,
@@ -468,6 +505,7 @@ fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, so
     return .{ .object = out };
 }
 
+/// Normalizes rules text data into the representation consumed by this workflow.
 pub fn normalizeRulesText(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var rules = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = rules };
@@ -496,6 +534,7 @@ pub fn normalizeRulesText(allocator: std.mem.Allocator, text: []const u8) !std.j
     return .{ .array = rules };
 }
 
+/// Serializes sarif result fields into an allocator-owned JSON value; allocation failures propagate.
 fn sarifResultValue(allocator: std.mem.Allocator, tool_name: []const u8, findings: std.json.Array) !std.json.Value {
     var results = std.json.Array.init(allocator);
     for (findings.items) |finding| try results.append(try sarifFindingValue(allocator, finding));
@@ -521,6 +560,7 @@ fn sarifResultValue(allocator: std.mem.Allocator, tool_name: []const u8, finding
     return .{ .object = obj };
 }
 
+/// Serializes sarif finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn sarifFindingValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
     const obj = finding.object;
     const loc = if (obj.get("location")) |value| switch (value) {
@@ -549,12 +589,14 @@ fn sarifFindingValue(allocator: std.mem.Allocator, finding: std.json.Value) !std
     return .{ .object = out };
 }
 
+/// Implements sarif level workflow logic using caller-owned inputs.
 fn sarifLevel(severity: []const u8) []const u8 {
     if (std.ascii.eqlIgnoreCase(severity, "error")) return "error";
     if (std.ascii.eqlIgnoreCase(severity, "warning") or std.ascii.eqlIgnoreCase(severity, "warn")) return "warning";
     return "note";
 }
 
+/// Serializes lint compare fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn lintCompareValue(allocator: std.mem.Allocator, zlint: std.json.Array, zwanzig: std.json.Array) !std.json.Value {
     var consensus = std.json.Array.init(allocator);
     var disagreements = std.json.Array.init(allocator);
@@ -585,6 +627,7 @@ pub fn lintCompareValue(allocator: std.mem.Allocator, zlint: std.json.Array, zwa
     return .{ .object = obj };
 }
 
+/// Serializes pair fields into an allocator-owned JSON value; allocation failures propagate.
 fn pairValue(allocator: std.mem.Allocator, left: std.json.Value, right: std.json.Value) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source", .{ .string = "disagreement" });
@@ -594,6 +637,7 @@ fn pairValue(allocator: std.mem.Allocator, left: std.json.Value, right: std.json
     return .{ .object = obj };
 }
 
+/// Serializes compare summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn compareSummaryValue(allocator: std.mem.Allocator, consensus: std.json.Array, disagreements: std.json.Array, zlint_only: std.json.Array, zwanzig_only: std.json.Array) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "consensus_count", .{ .integer = @intCast(consensus.items.len) });
@@ -603,6 +647,7 @@ fn compareSummaryValue(allocator: std.mem.Allocator, consensus: std.json.Array, 
     return .{ .object = obj };
 }
 
+/// Serializes lint profile fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn lintProfileValue(allocator: std.mem.Allocator, selected: []const u8) !std.json.Value {
     var profiles = std.json.Array.init(allocator);
     try profiles.append(try profileValue(allocator, "advisory", true, 9999, false));
@@ -615,6 +660,7 @@ pub fn lintProfileValue(allocator: std.mem.Allocator, selected: []const u8) !std
     return .{ .object = obj };
 }
 
+/// Serializes profile fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileValue(allocator: std.mem.Allocator, name: []const u8, allow_warnings: bool, max_warnings: i64, require_backend: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", try ownedString(allocator, name));
@@ -625,12 +671,14 @@ fn profileValue(allocator: std.mem.Allocator, name: []const u8, allow_warnings: 
     return .{ .object = obj };
 }
 
+/// Implements lint profile defaults workflow logic using caller-owned inputs.
 pub fn lintProfileDefaults(name: []const u8) LintProfile {
     if (std.mem.eql(u8, name, "advisory")) return .{ .allow_warnings = true, .max_warnings = 9999, .require_backend = false };
     if (std.mem.eql(u8, name, "strict")) return .{ .allow_warnings = false, .max_warnings = 0, .require_backend = true };
     return .{ .allow_warnings = false, .max_warnings = 25, .require_backend = true };
 }
 
+/// Serializes lint gate fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, profile: []const u8, allow_warnings: bool, max_warnings: i64) !std.json.Value {
     var blocking = std.json.Array.init(allocator);
     var warning_count: i64 = 0;
@@ -652,6 +700,7 @@ pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, pro
     return .{ .object = obj };
 }
 
+/// Serializes fix plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
     var safe = std.json.Array.init(allocator);
     var risky = std.json.Array.init(allocator);
@@ -671,6 +720,7 @@ pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
     return .{ .object = obj };
 }
 
+/// Implements lint baseline workflow logic using caller-owned inputs.
 pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, findings: std.json.Array, baseline: std.json.Array, apply: bool, output: []const u8) LintError!std.json.Value {
     const value = try baselineValue(allocator, findings, baseline);
     if (apply) {
@@ -685,6 +735,7 @@ pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAna
     return value;
 }
 
+/// Serializes baseline fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, baseline: std.json.Array) !std.json.Value {
     var current = std.json.Array.init(allocator);
     var accepted = std.json.Array.init(allocator);
@@ -700,6 +751,7 @@ pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, bas
     return .{ .object = obj };
 }
 
+/// Serializes suppressions fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array, suppressions_text: []const u8) !std.json.Value {
     const suppressions = normalizeFindingsText(allocator, suppressions_text, .zlint) catch std.json.Value{ .array = std.json.Array.init(allocator) };
     var suppressed = std.json.Array.init(allocator);
@@ -715,6 +767,7 @@ pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array,
     return .{ .object = obj };
 }
 
+/// Serializes trend fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn trendValue(allocator: std.mem.Allocator, before: std.json.Array, after: std.json.Array) !std.json.Value {
     var new_findings = std.json.Array.init(allocator);
     var resolved = std.json.Array.init(allocator);
@@ -731,15 +784,18 @@ pub fn trendValue(allocator: std.mem.Allocator, before: std.json.Array, after: s
     return .{ .object = obj };
 }
 
+/// Implements require command runner workflow logic using caller-owned inputs.
 fn requireCommandRunner(context: app_context.StaticAnalysisContext) LintError!ports.CommandRunner {
     return context.command_runner orelse error.MissingCommandRunner;
 }
 
+/// Converts timing input into the duration unit used by result payloads.
 fn commandTimeout(context: app_context.StaticAnalysisContext, requested_timeout_ms: ?u64) u64 {
     if (requested_timeout_ms) |value| return @max(value, 1);
     return @intCast(@max(context.timeouts.command_ms, 1));
 }
 
+/// Serializes backend error fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -752,6 +808,7 @@ fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, ope
     return .{ .object = obj };
 }
 
+/// Implements backend error kind workflow logic using caller-owned inputs.
 fn backendErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -763,6 +820,7 @@ fn backendErrorKind(err: anyerror) []const u8 {
     };
 }
 
+/// Serializes graph command failed fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphCommandFailedValue(allocator: std.mem.Allocator, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, result: ports.CommandResult) !std.json.Value {
     const command_text = try commandString(allocator, argv);
     const stdout = try safeTextAlloc(allocator, result.stdout);
@@ -797,6 +855,7 @@ fn graphCommandFailedValue(allocator: std.mem.Allocator, argv: []const []const u
     return .{ .object = obj };
 }
 
+/// Serializes graph output inspect error fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphOutputInspectErrorValue(allocator: std.mem.Allocator, output: []const u8, err: anyerror) !std.json.Value {
     var obj = try graphOutputBaseErrorValue(allocator, output, "inspect_output_directory", "backend_output_malformed", "Confirm zwanzig wrote DOT graph files to the requested workspace output directory.");
     try obj.object.put(allocator, "error", .{ .string = @errorName(err) });
@@ -804,10 +863,12 @@ fn graphOutputInspectErrorValue(allocator: std.mem.Allocator, output: []const u8
     return obj;
 }
 
+/// Serializes graph output missing fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphOutputMissingValue(allocator: std.mem.Allocator, output: []const u8) !std.json.Value {
     return graphOutputBaseErrorValue(allocator, output, "inspect_output_directory", "backend_output_malformed", "The zwanzig command completed but no .dot graph files were found in the requested output directory.");
 }
 
+/// Serializes graph output base error fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphOutputBaseErrorValue(allocator: std.mem.Allocator, output: []const u8, phase: []const u8, code: []const u8, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "tool_error" });
@@ -823,6 +884,7 @@ fn graphOutputBaseErrorValue(allocator: std.mem.Allocator, output: []const u8, p
     return .{ .object = obj };
 }
 
+/// Serializes command result fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, result: ports.CommandResult) !std.json.Value {
     const term = result.effectiveTerm();
     const ok = !term.failed() and !result.timed_out;
@@ -854,6 +916,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     return .{ .object = obj };
 }
 
+/// Serializes command error fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, err: ports.PortError) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "command_error" });
@@ -874,6 +937,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []co
     return .{ .object = obj };
 }
 
+/// Serializes command term fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     switch (term) {
@@ -888,6 +952,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
+/// Serializes compiler insights fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
@@ -916,6 +981,7 @@ fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stder
     return .{ .object = obj };
 }
 
+/// Collects compiler lines data into caller-provided output storage without taking ownership of inputs.
 fn collectCompilerLines(allocator: std.mem.Allocator, findings: *std.json.Array, text_value: []const u8, primary: *?compiler_output.CompilerLine, error_count: *i64, warning_count: *i64, note_count: *i64) !void {
     var lines = std.mem.splitScalar(u8, text_value, '\n');
     while (lines.next()) |raw_line| {
@@ -934,6 +1000,7 @@ fn collectCompilerLines(allocator: std.mem.Allocator, findings: *std.json.Array,
     }
 }
 
+/// Serializes compiler line fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: compiler_output.CompilerLine) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "severity", .{ .string = parsed.severity });
@@ -945,6 +1012,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: compiler_output.Compi
     return .{ .object = obj };
 }
 
+/// Implements compiler next command workflow logic using caller-owned inputs.
 fn compilerNextCommand(allocator: std.mem.Allocator, primary: compiler_output.CompilerLine, argv: []const []const u8) !std.json.Value {
     const zig = if (argv.len > 0) argv[0] else "zig";
     const path = primary.path orelse return .{ .string = try commandString(allocator, argv) };
@@ -955,6 +1023,7 @@ fn compilerNextCommand(allocator: std.mem.Allocator, primary: compiler_output.Co
     return .{ .string = try commandString(allocator, argv) };
 }
 
+/// Implements compiler next actions workflow logic using caller-owned inputs.
 fn compilerNextActions(allocator: std.mem.Allocator, primary: compiler_output.CompilerLine, note_count: i64) !std.json.Value {
     var actions = std.json.Array.init(allocator);
     if (primary.path) |path| {
@@ -978,6 +1047,7 @@ fn compilerNextActions(allocator: std.mem.Allocator, primary: compiler_output.Co
     return .{ .array = actions };
 }
 
+/// Serializes failure summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = ok });
@@ -1004,6 +1074,7 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
     return .{ .object = obj };
 }
 
+/// Serializes command error summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -1018,6 +1089,7 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: [
     return .{ .object = obj };
 }
 
+/// Serializes likely failure scope fields into an allocator-owned JSON value; allocation failures propagate.
 fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
     const primary_obj = switch (primary) {
         .object => |o| o,
@@ -1039,6 +1111,7 @@ const SafeText = struct {
     byte_count: usize,
 };
 
+/// Copies bounded text into allocator-owned storage for result payloads.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{ .text = try allocator.dupe(u8, bytes), .invalid_utf8 = false, .encoding = "utf-8", .byte_count = bytes.len };
@@ -1063,6 +1136,7 @@ fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     return .{ .text = try out.toOwnedSlice(allocator), .invalid_utf8 = true, .encoding = "utf-8-lossy", .byte_count = bytes.len };
 }
 
+/// Implements put stream fields workflow logic using caller-owned inputs.
 fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: SafeText) !void {
     try obj.put(allocator, name, .{ .string = safe.text });
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });
@@ -1070,6 +1144,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
+/// Serializes finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn findingValue(allocator: std.mem.Allocator, source: []const u8, rule: []const u8, severity: []const u8, file: []const u8, line: usize, column: usize, message: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source", .{ .string = source });
@@ -1082,6 +1157,7 @@ fn findingValue(allocator: std.mem.Allocator, source: []const u8, rule: []const 
     return .{ .object = obj };
 }
 
+/// Serializes summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
     var errors: usize = 0;
     var warnings: usize = 0;
@@ -1102,6 +1178,7 @@ fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.jso
     return .{ .object = obj };
 }
 
+/// Serializes location fields into an allocator-owned JSON value; allocation failures propagate.
 fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file));
@@ -1110,6 +1187,7 @@ fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, co
     return .{ .object = obj };
 }
 
+/// Serializes fingerprint fields into an allocator-owned JSON value; allocation failures propagate.
 fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
     const obj = switch (finding) {
         .object => |o| o,
@@ -1127,6 +1205,7 @@ fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.
     return .{ .string = try std.fmt.allocPrint(allocator, "{s}:{s}:{s}:{d}:{s}", .{ source, rule, file, line, message }) };
 }
 
+/// Implements comparison key workflow logic using caller-owned inputs.
 fn comparisonKey(value: std.json.Value) []const u8 {
     const obj = switch (value) {
         .object => |o| o,
@@ -1135,6 +1214,7 @@ fn comparisonKey(value: std.json.Value) []const u8 {
     return stringField(obj, "comparison_key") orelse "";
 }
 
+/// Implements severity of workflow logic using caller-owned inputs.
 fn severityOf(value: std.json.Value) []const u8 {
     const obj = switch (value) {
         .object => |o| o,
@@ -1143,11 +1223,13 @@ fn severityOf(value: std.json.Value) []const u8 {
     return stringField(obj, "severity") orelse "";
 }
 
+/// Finds by comparison key data in the provided collection without taking ownership.
 fn findByComparisonKey(array: std.json.Array, key: []const u8) ?std.json.Value {
     for (array.items) |item| if (std.mem.eql(u8, comparisonKey(item), key)) return item;
     return null;
 }
 
+/// Extracts string field data from JSON input without taking ownership of borrowed values.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -1155,6 +1237,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Extracts integer field data from JSON input without taking ownership of borrowed values.
 fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |i| i,
@@ -1163,22 +1246,26 @@ fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     };
 }
 
+/// Copies the provided string into allocator-owned storage.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(try ownedString(allocator, value));
     return .{ .array = array };
 }
 
+/// Serializes argv fields into an allocator-owned JSON value; allocation failures propagate.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (argv) |arg| try array.append(try ownedString(allocator, arg));
     return .{ .array = array };
 }
 
+/// Formats argv entries into display command text.
 fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
@@ -1190,11 +1277,13 @@ fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     return out.toOwnedSlice(allocator);
 }
 
+/// Reads the argv contains argument from JSON input without taking ownership of borrowed strings.
 fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     for (argv) |arg| if (std.mem.eql(u8, arg, needle)) return true;
     return false;
 }
 
+/// Serializes alloc data into allocator-owned JSON text.
 fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -1202,6 +1291,7 @@ fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Serializes serialize fields into an allocator-owned JSON value; allocation failures propagate.
 fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -1234,6 +1324,7 @@ fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: 
     }
 }
 
+/// Serializes string data into allocator-owned JSON text.
 fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
@@ -1722,6 +1813,7 @@ test "lint builders and temporary buffers clean up after allocator failure" {
     try std.testing.expectError(error.OutOfMemory, serializeAlloc(serialize_fba.allocator(), .{ .string = "long" }));
 }
 
+/// Implements test static context workflow logic using caller-owned inputs.
 fn testStaticContext(
     commands: *command_runner_fake.FakeCommandRunner,
     store: *workspace_store_fake.FakeWorkspaceStore,

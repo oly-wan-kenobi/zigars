@@ -20,6 +20,7 @@ test "zlint ast confirms call references from prefixed output" {
     , "helper", true));
 }
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(
     store_fake: *fakes.FakeWorkspaceStore,
     scanner_fake: *fakes.FakeWorkspaceScanner,

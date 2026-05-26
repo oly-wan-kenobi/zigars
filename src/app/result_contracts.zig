@@ -251,6 +251,7 @@ pub fn clampTokenBudget(value: i64) i64 {
     return @max(min_token_budget, @min(value, max_token_budget));
 }
 
+/// Implements allocation workflow logic using caller-owned inputs.
 fn allocation(mode: OutputMode, effective_budget: i64) BudgetAllocation {
     const machine_pct: i64 = switch (mode) {
         .compact => 55,
@@ -276,6 +277,7 @@ fn allocation(mode: OutputMode, effective_budget: i64) BudgetAllocation {
     };
 }
 
+/// Implements stable machine fields workflow logic using caller-owned inputs.
 fn stableMachineFields(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_machine_fields[0..],
@@ -284,6 +286,7 @@ fn stableMachineFields(mode: OutputMode) []const []const u8 {
     };
 }
 
+/// Implements included sections workflow logic using caller-owned inputs.
 fn includedSections(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_included_sections[0..],
@@ -292,6 +295,7 @@ fn includedSections(mode: OutputMode) []const []const u8 {
     };
 }
 
+/// Implements omitted by default workflow logic using caller-owned inputs.
 fn omittedByDefault(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_omitted_by_default[0..],

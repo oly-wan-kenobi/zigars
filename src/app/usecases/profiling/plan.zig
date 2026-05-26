@@ -3,6 +3,7 @@ const std = @import("std");
 
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
 
+/// Carries request data across use case and port boundaries.
 pub const Request = struct {
     binary: []const u8 = "zig-out/bin/<app>",
     detected_platform: []const u8,
@@ -10,6 +11,7 @@ pub const Request = struct {
     output_prefix: []const u8 = ".zigar-cache/profile/profile",
 };
 
+/// Serializes profile plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn profilePlanValue(allocator: std.mem.Allocator, request: Request) !std.json.Value {
     const selected_platform = request.platform orelse request.detected_platform;
     const svg_output = try std.fmt.allocPrint(allocator, "{s}.svg", .{request.output_prefix});
@@ -35,10 +37,13 @@ pub fn profilePlanValue(allocator: std.mem.Allocator, request: Request) !std.jso
     return .{ .object = obj };
 }
 
+/// Serializes capture plans fields into an allocator-owned JSON value; allocation failures propagate.
 fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_prefix: []const u8, svg_output: []const u8) !std.json.Value {
     var plans = std.json.Array.init(allocator);
     var plans_owned = true;
     defer if (plans_owned) plans.deinit();
+    // Capture plans describe external profiler commands only; rendering remains
+    // a separate zflame step using the declared captured output.
     try plans.append(try capturePlanValue(allocator, .{
         .id = "linux_perf",
         .platforms = &.{"linux"},
@@ -109,6 +114,7 @@ fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_pr
     return .{ .array = plans };
 }
 
+/// Carries capture plan spec data across use case and port boundaries.
 const CapturePlanSpec = struct {
     id: []const u8,
     platforms: []const []const u8,
@@ -121,6 +127,7 @@ const CapturePlanSpec = struct {
     svg_output: []const u8,
 };
 
+/// Serializes capture plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -140,6 +147,7 @@ fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.js
     return .{ .object = obj };
 }
 
+/// Serializes next zigar command fields into an allocator-owned JSON value; allocation failures propagate.
 fn nextZigarCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.ZflameFormat, input: []const u8, output: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -153,6 +161,7 @@ fn nextZigarCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.
     return .{ .object = obj };
 }
 
+/// Serializes recommended plan ids fields into an allocator-owned JSON value; allocation failures propagate.
 fn recommendedPlanIdsValue(allocator: std.mem.Allocator, platform: []const u8) !std.json.Value {
     if (std.mem.eql(u8, platform, "linux")) return stringArrayValue(allocator, &.{ "linux_perf", "vtune", "already_folded_recursive" });
     if (std.mem.eql(u8, platform, "macos")) return stringArrayValue(allocator, &.{ "macos_xctrace", "macos_sample", "dtrace", "already_folded_recursive" });
@@ -161,6 +170,7 @@ fn recommendedPlanIdsValue(allocator: std.mem.Allocator, platform: []const u8) !
     return stringArrayValue(allocator, &.{"already_folded_recursive"});
 }
 
+/// Serializes diff workflow fields into an allocator-owned JSON value; allocation failures propagate.
 fn diffWorkflowValue(allocator: std.mem.Allocator, output_prefix: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -175,6 +185,7 @@ fn diffWorkflowValue(allocator: std.mem.Allocator, output_prefix: []const u8) !s
     return .{ .object = obj };
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;

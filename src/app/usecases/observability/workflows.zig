@@ -6,23 +6,31 @@ const app_context = @import("../../context.zig");
 const artifact_registry = @import("../artifacts/registry.zig");
 const ports = @import("../../ports.zig");
 
+/// Maximum tool stats accepted by this workflow module.
 pub const max_tool_stats = ports.max_observability_tool_stats;
+/// Maximum command events accepted by this workflow module.
 pub const max_command_events = ports.max_observability_command_events;
+/// Maximum backend events accepted by this workflow module.
 pub const max_backend_events = ports.max_observability_backend_events;
+/// Maximum zls events accepted by this workflow module.
 pub const max_zls_events = ports.max_observability_zls_events;
 
+/// Artifact scan limit applied when collecting workflow evidence.
 pub const artifact_scan_limit: usize = 500;
 
+/// Error set returned by observability workflow failures.
 pub const ObservabilityError = ports.PortError || error{
     InvalidArtifactRegistryEntry,
 };
 
+/// Carries probe snapshot data across use case and port boundaries.
 pub const ProbeSnapshot = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
 };
 
+/// Carries backend probe cache snapshot data across use case and port boundaries.
 pub const BackendProbeCacheSnapshot = struct {
     zig: ?ProbeSnapshot = null,
     zls: ?ProbeSnapshot = null,
@@ -31,6 +39,7 @@ pub const BackendProbeCacheSnapshot = struct {
     diff_folded: ?ProbeSnapshot = null,
 };
 
+/// Carries analysis cache snapshot data across use case and port boundaries.
 pub const AnalysisCacheSnapshot = struct {
     present: bool = false,
     hits: usize = 0,
@@ -38,6 +47,7 @@ pub const AnalysisCacheSnapshot = struct {
     bytes: usize = 0,
 };
 
+/// Carries artifact metrics data across use case and port boundaries.
 pub const ArtifactMetrics = struct {
     registry_available: bool = false,
     registry_entries: usize = 0,
@@ -46,6 +56,7 @@ pub const ArtifactMetrics = struct {
     status: []const u8 = "not_scanned",
 };
 
+/// Carries base metrics data across use case and port boundaries.
 pub const BaseMetrics = struct {
     workspace: []const u8,
     command_calls: usize,
@@ -59,11 +70,13 @@ pub const BaseMetrics = struct {
     artifacts: ArtifactMetrics,
 };
 
+/// Carries metrics report data across use case and port boundaries.
 pub const MetricsReport = struct {
     base: BaseMetrics,
     observed: ports.ObservabilitySnapshot,
 };
 
+/// Implements metrics report workflow logic using caller-owned inputs.
 pub fn metricsReport(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) ObservabilityError!MetricsReport {
     const observed = try context.observability_reader.snapshot(allocator);
     errdefer observed.deinit(allocator);
@@ -73,6 +86,7 @@ pub fn metricsReport(allocator: std.mem.Allocator, context: app_context.Observab
     };
 }
 
+/// Implements base metrics workflow logic using caller-owned inputs.
 pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) BaseMetrics {
     return .{
         .workspace = context.workspace.root,
@@ -93,6 +107,7 @@ pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
     };
 }
 
+/// Implements artifact metrics workflow logic using caller-owned inputs.
 fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) ArtifactMetrics {
     var out: ArtifactMetrics = .{ .scan_limit = artifact_scan_limit };
     const artifact_context: app_context.ArtifactContext = .{
@@ -115,6 +130,7 @@ fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
     return out;
 }
 
+/// Implements probe cache workflow logic using caller-owned inputs.
 fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
     return .{
         .zig = probeSnapshot(cache.zig),
@@ -125,6 +141,7 @@ fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
     };
 }
 
+/// Implements probe snapshot workflow logic using caller-owned inputs.
 fn probeSnapshot(probe: app_context.CachedBackendProbe) ?ProbeSnapshot {
     if (!probe.probed) return null;
     return .{

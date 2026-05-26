@@ -5,22 +5,28 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 
+/// Shared semantic format version type used by this workflow module.
 pub const semantic_format_version = 1;
+/// Default limit used when the caller omits an explicit value.
 pub const default_limit: usize = 500;
+/// Default source read limit used when the caller omits an explicit value.
 pub const default_source_read_limit: usize = 512 * 1024;
 
+/// Error set returned by semantic workflow failures.
 pub const SemanticError = ports.PortError || error{
     MissingCachePort,
     MissingCommandRunner,
     InvalidCache,
 };
 
+/// Carries index request data across use case and port boundaries.
 pub const IndexRequest = struct {
     limit: usize = default_limit,
     refresh: bool = false,
     tool_name: []const u8 = "zig_semantic_index_build",
 };
 
+/// Carries query request data across use case and port boundaries.
 pub const QueryRequest = struct {
     query: []const u8,
     kind: ?[]const u8 = null,
@@ -29,6 +35,7 @@ pub const QueryRequest = struct {
     refresh: bool = false,
 };
 
+/// Carries decl request data across use case and port boundaries.
 pub const DeclRequest = struct {
     symbol: []const u8,
     index_limit: usize = default_limit,
@@ -36,6 +43,7 @@ pub const DeclRequest = struct {
     refresh: bool = false,
 };
 
+/// Carries source refs request data across use case and port boundaries.
 pub const SourceRefsRequest = struct {
     symbol: []const u8,
     calls_only: bool = false,
@@ -43,6 +51,7 @@ pub const SourceRefsRequest = struct {
     timeout_ms: ?u64 = null,
 };
 
+/// Carries fusion request data across use case and port boundaries.
 pub const FusionRequest = struct {
     query: []const u8,
     index_limit: usize = default_limit,
@@ -51,6 +60,7 @@ pub const FusionRequest = struct {
     zwanzig_findings: ?[]const u8 = null,
 };
 
+/// Carries export request data across use case and port boundaries.
 pub const ExportRequest = struct {
     tool_name: []const u8,
     format: []const u8,
@@ -60,21 +70,25 @@ pub const ExportRequest = struct {
     refresh: bool = false,
 };
 
+/// Carries index result data across use case and port boundaries.
 pub const IndexResult = struct {
     value: std.json.Value,
     cache: ports.StaticCacheStatus,
 };
 
+/// Carries parse stats data across use case and port boundaries.
 const ParseStats = struct {
     partial_result: bool,
     parse_error_count: i64,
 };
 
+/// Implements status workflow logic using caller-owned inputs.
 pub fn status(context: app_context.StaticAnalysisContext) SemanticError!ports.StaticCacheStatus {
     const cache = context.semantic_index_cache orelse return error.MissingCachePort;
     return cache.status();
 }
 
+/// Constructs index data from caller-owned inputs, propagating allocation failures.
 pub fn buildIndex(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: IndexRequest) SemanticError!IndexResult {
     const cache = context.semantic_index_cache orelse return error.MissingCachePort;
     const normalized_limit = @max(request.limit, 1);
@@ -100,6 +114,7 @@ pub fn buildIndex(allocator: std.mem.Allocator, context: app_context.StaticAnaly
     return .{ .value = value, .cache = stored };
 }
 
+/// Implements query workflow logic using caller-owned inputs.
 pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: QueryRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_query" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, request.kind, @max(request.match_limit, 1));
@@ -110,6 +125,7 @@ pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisCo
     return .{ .object = obj };
 }
 
+/// Implements decl workflow logic using caller-owned inputs.
 pub fn decl(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: DeclRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_decl" });
     const matches = try semanticMatchesValue(allocator, index.value, request.symbol, "declaration", @max(request.match_limit, 1));
@@ -120,6 +136,7 @@ pub fn decl(allocator: std.mem.Allocator, context: app_context.StaticAnalysisCon
     return .{ .object = obj };
 }
 
+/// Implements source refs workflow logic using caller-owned inputs.
 pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceRefsRequest) SemanticError!std.json.Value {
     var matches = std.json.Array.init(allocator);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -183,6 +200,7 @@ pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnaly
     return .{ .object = obj };
 }
 
+/// Implements static fusion workflow logic using caller-owned inputs.
 pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: FusionRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .tool_name = "zig_static_fusion" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, null, @max(request.match_limit, 1));
@@ -209,6 +227,7 @@ pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAna
     return .{ .object = obj };
 }
 
+/// Implements export index workflow logic using caller-owned inputs.
 pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ExportRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.limit, .refresh = request.refresh, .tool_name = request.tool_name });
     var export_obj = std.json.ObjectMap.empty;
@@ -237,6 +256,7 @@ pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnal
     return .{ .object = obj };
 }
 
+/// Implements semantic signature workflow logic using caller-owned inputs.
 pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize) SemanticError!u64 {
     var hasher = std.hash.Wyhash.init(semantic_format_version);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -257,6 +277,7 @@ pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.Stat
     return hasher.final();
 }
 
+/// Serializes semantic index fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn semanticIndexValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize, tool_name: []const u8) SemanticError!std.json.Value {
     var files = std.json.Array.init(allocator);
     var declarations = std.json.Array.init(allocator);
@@ -313,6 +334,7 @@ pub fn semanticIndexValue(allocator: std.mem.Allocator, context: app_context.Sta
     return .{ .object = obj };
 }
 
+/// Appends file index data into caller-provided storage, propagating allocation failures.
 fn appendFileIndex(allocator: std.mem.Allocator, file: []const u8, contents: []const u8, files: *std.json.Array, declarations: *std.json.Array, imports: *std.json.Array, tests: *std.json.Array) !ParseStats {
     const summary = zig_analysis.parseSourceSummary(allocator, file, contents) catch null;
     const stats: ParseStats = if (summary) |s| .{ .partial_result = s.parse.partial_result, .parse_error_count = s.parse.parse_error_count } else .{ .partial_result = true, .parse_error_count = 0 };
@@ -360,6 +382,7 @@ fn appendFileIndex(allocator: std.mem.Allocator, file: []const u8, contents: []c
     return stats;
 }
 
+/// Serializes semantic decl fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticDeclValue(allocator: std.mem.Allocator, file: []const u8, line: usize, kind: []const u8, name: ?[]const u8, public: bool, signature: []const u8, source: []const u8) !std.json.Value {
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
@@ -375,6 +398,7 @@ fn semanticDeclValue(allocator: std.mem.Allocator, file: []const u8, line: usize
     return .{ .object = out };
 }
 
+/// Serializes semantic import fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticImportValue(allocator: std.mem.Allocator, file: []const u8, line: usize, import_name: []const u8, alias: ?[]const u8, source: []const u8) !std.json.Value {
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
@@ -387,6 +411,7 @@ fn semanticImportValue(allocator: std.mem.Allocator, file: []const u8, line: usi
     return .{ .object = out };
 }
 
+/// Serializes semantic test fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticTestValue(allocator: std.mem.Allocator, file: []const u8, line: usize, name: ?[]const u8, command: []const u8, source: []const u8) !std.json.Value {
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
@@ -399,6 +424,7 @@ fn semanticTestValue(allocator: std.mem.Allocator, file: []const u8, line: usize
     return .{ .object = out };
 }
 
+/// Implements zlint ast symbol has reference for file workflow logic using caller-owned inputs.
 fn zlintAstSymbolHasReferenceForFile(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceRefsRequest, file: []const u8) SemanticError!bool {
     const command_runner = context.command_runner orelse return error.MissingCommandRunner;
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "static_analysis.zlint_ast" });
@@ -415,6 +441,7 @@ fn zlintAstSymbolHasReferenceForFile(allocator: std.mem.Allocator, context: app_
     return zlintAstSymbolHasReference(allocator, result.stdout, request.symbol, request.calls_only) catch false;
 }
 
+/// Implements zlint ast symbol has reference workflow logic using caller-owned inputs.
 pub fn zlintAstSymbolHasReference(allocator: std.mem.Allocator, text: []const u8, symbol: []const u8, calls_only: bool) !bool {
     const start = std.mem.indexOfScalar(u8, text, '{') orelse return false;
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text[start..], .{});
@@ -444,6 +471,7 @@ pub fn zlintAstSymbolHasReference(allocator: std.mem.Allocator, text: []const u8
     return false;
 }
 
+/// Implements zlint reference has flag workflow logic using caller-owned inputs.
 fn zlintReferenceHasFlag(value: std.json.Value, flag: []const u8) bool {
     const obj = switch (value) {
         .object => |o| o,
@@ -460,6 +488,7 @@ fn zlintReferenceHasFlag(value: std.json.Value, flag: []const u8) bool {
     return false;
 }
 
+/// Serializes semantic matches fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticMatchesValue(allocator: std.mem.Allocator, index: std.json.Value, query_text: []const u8, kind_filter: ?[]const u8, limit: usize) !std.json.Value {
     const lower_query = try std.ascii.allocLowerString(allocator, query_text);
     var matches = std.json.Array.init(allocator);
@@ -473,6 +502,7 @@ fn semanticMatchesValue(allocator: std.mem.Allocator, index: std.json.Value, que
     return .{ .array = matches };
 }
 
+/// Appends matches from array data into caller-provided storage, propagating allocation failures.
 fn appendMatchesFromArray(allocator: std.mem.Allocator, matches: *std.json.Array, value: std.json.Value, lower_query: []const u8, match_kind: []const u8, kind_filter: ?[]const u8, limit: usize) !void {
     if (matches.items.len >= limit) return;
     if (kind_filter) |filter| if (!std.mem.eql(u8, filter, match_kind) and !std.mem.eql(u8, filter, "any")) return;
@@ -492,6 +522,7 @@ fn appendMatchesFromArray(allocator: std.mem.Allocator, matches: *std.json.Array
     }
 }
 
+/// Normalizes findings text data into the representation consumed by this workflow.
 fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source: []const u8) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = findings };
@@ -501,6 +532,7 @@ fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source:
     return .{ .array = findings };
 }
 
+/// Implements findings array workflow logic using caller-owned inputs.
 fn findingsArray(value: std.json.Value) std.json.Array {
     switch (value) {
         .array => |array| return array,
@@ -514,6 +546,7 @@ fn findingsArray(value: std.json.Value) std.json.Array {
     return std.json.Array.init(std.heap.page_allocator);
 }
 
+/// Serializes normalize finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, source: []const u8) !std.json.Value {
     const obj = switch (value) {
         .object => |o| o,
@@ -542,6 +575,7 @@ fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, so
     return .{ .object = out };
 }
 
+/// Implements findings matching query workflow logic using caller-owned inputs.
 fn findingsMatchingQuery(allocator: std.mem.Allocator, findings: std.json.Array, query_text: []const u8) !std.json.Value {
     var matches = std.json.Array.init(allocator);
     const lower_query = try std.ascii.allocLowerString(allocator, query_text);
@@ -553,6 +587,7 @@ fn findingsMatchingQuery(allocator: std.mem.Allocator, findings: std.json.Array,
     return .{ .array = matches };
 }
 
+/// Implements lint searchable text workflow logic using caller-owned inputs.
 fn lintSearchableText(allocator: std.mem.Allocator, finding: std.json.Value) ![]const u8 {
     const obj = switch (finding) {
         .object => |o| o,
@@ -570,6 +605,7 @@ fn lintSearchableText(allocator: std.mem.Allocator, finding: std.json.Value) ![]
     });
 }
 
+/// Serializes lint evidence fields into an allocator-owned JSON value; allocation failures propagate.
 fn lintEvidenceValue(allocator: std.mem.Allocator, zlint_all: std.json.Array, zlint_related: std.json.Array, zwanzig_all: std.json.Array, zwanzig_related: std.json.Array) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "zlint_total_count", .{ .integer = @intCast(zlint_all.items.len) });
@@ -581,6 +617,7 @@ fn lintEvidenceValue(allocator: std.mem.Allocator, zlint_all: std.json.Array, zl
     return .{ .object = obj };
 }
 
+/// Implements searchable text workflow logic using caller-owned inputs.
 fn searchableText(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     const obj = switch (value) {
         .object => |o| o,
@@ -594,6 +631,7 @@ fn searchableText(allocator: std.mem.Allocator, value: std.json.Value) ![]const 
     });
 }
 
+/// Serializes skipped file fields into an allocator-owned JSON value; allocation failures propagate.
 fn skippedFileValue(allocator: std.mem.Allocator, path: []const u8, err: anyerror) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", try ownedString(allocator, path));
@@ -601,6 +639,7 @@ fn skippedFileValue(allocator: std.mem.Allocator, path: []const u8, err: anyerro
     return .{ .object = obj };
 }
 
+/// Serializes location fields into an allocator-owned JSON value; allocation failures propagate.
 fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file));
@@ -609,6 +648,7 @@ fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, co
     return .{ .object = obj };
 }
 
+/// Serializes evidence fields into an allocator-owned JSON value; allocation failures propagate.
 fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, confidence: []const u8, detail: []const u8, verify_with: []const []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source", try ownedString(allocator, source));
@@ -618,6 +658,7 @@ fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, confidence: [
     return .{ .object = obj };
 }
 
+/// Serializes fingerprint fields into an allocator-owned JSON value; allocation failures propagate.
 fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
     const obj = switch (finding) {
         .object => |o| o,
@@ -635,6 +676,7 @@ fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.
     return .{ .string = try std.fmt.allocPrint(allocator, "{s}:{s}:{s}:{d}:{s}", .{ source, rule, file, line, message }) };
 }
 
+/// Extracts string field data from JSON input without taking ownership of borrowed values.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -642,6 +684,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
+/// Extracts integer field data from JSON input without taking ownership of borrowed values.
 fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |i| i,
@@ -650,16 +693,19 @@ fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     };
 }
 
+/// Copies the provided string into allocator-owned storage.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(try ownedString(allocator, value));
     return .{ .array = array };
 }
 
+/// Serializes alloc data into allocator-owned JSON text.
 fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -667,6 +713,7 @@ fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Serializes serialize fields into an allocator-owned JSON value; allocation failures propagate.
 fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -699,6 +746,7 @@ fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: 
     }
 }
 
+/// Serializes string data into allocator-owned JSON text.
 fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');

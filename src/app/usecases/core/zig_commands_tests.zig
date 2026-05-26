@@ -6,6 +6,7 @@ const zig_commands = @import("zig_commands.zig");
 const fake_command = @import("../../../testing/fakes/command_runner.zig");
 const fake_workspace = @import("../../../testing/fakes/workspace_store.zig");
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn context(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },

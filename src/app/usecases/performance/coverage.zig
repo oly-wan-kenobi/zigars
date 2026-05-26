@@ -3,22 +3,26 @@ const std = @import("std");
 
 const coverage_model = @import("../../../domain/performance/coverage_model.zig");
 
+/// Carries evidence request data across use case and port boundaries.
 pub const EvidenceRequest = struct {
     bytes: []const u8,
     source_kind: []const u8,
     format: []const u8 = "auto",
 };
 
+/// Carries merge request data across use case and port boundaries.
 pub const MergeRequest = struct {
     left: EvidenceRequest,
     right: EvidenceRequest,
 };
 
+/// Carries diff request data across use case and port boundaries.
 pub const DiffRequest = struct {
     current: EvidenceRequest,
     baseline: EvidenceRequest,
 };
 
+/// Carries budget request data across use case and port boundaries.
 pub const BudgetRequest = struct {
     coverage: EvidenceRequest,
     changed_files: []const []const u8 = &.{},
@@ -26,11 +30,13 @@ pub const BudgetRequest = struct {
     min_changed_line_rate_bp: usize = 0,
 };
 
+/// Carries coverage diff data across use case and port boundaries.
 pub const CoverageDiff = struct {
     current: coverage_model.CoverageSet,
     baseline: coverage_model.CoverageSet,
     line_rate_delta_bp: i64,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CoverageDiff, allocator: std.mem.Allocator) void {
         // Both snapshots are owned by this result and must be released together.
         self.current.deinit(allocator);
@@ -39,6 +45,7 @@ pub const CoverageDiff = struct {
     }
 };
 
+/// Carries coverage budget data across use case and port boundaries.
 pub const CoverageBudget = struct {
     coverage: coverage_model.CoverageSet,
     changed: coverage_model.ChangedCoverage,
@@ -47,21 +54,25 @@ pub const CoverageBudget = struct {
     min_line_rate_bp: usize,
     min_changed_line_rate_bp: usize,
 
+    /// Implements passed workflow logic using caller-owned inputs.
     pub fn passed(self: CoverageBudget) bool {
         return self.line_rate_bp >= self.min_line_rate_bp and
             (self.min_changed_line_rate_bp == 0 or self.changed_line_rate_bp >= self.min_changed_line_rate_bp);
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *CoverageBudget, allocator: std.mem.Allocator) void {
         self.coverage.deinit(allocator);
         self.* = undefined;
     }
 };
 
+/// Maps map data without taking ownership; allocation failures from nested values are propagated when needed.
 pub fn map(allocator: std.mem.Allocator, request: EvidenceRequest) !coverage_model.CoverageSet {
     return coverage_model.parse(allocator, request.bytes, request.source_kind, request.format);
 }
 
+/// Implements merge workflow logic using caller-owned inputs.
 pub fn merge(allocator: std.mem.Allocator, request: MergeRequest) !coverage_model.CoverageSet {
     var left = try map(allocator, request.left);
     defer left.deinit(allocator);
@@ -70,6 +81,7 @@ pub fn merge(allocator: std.mem.Allocator, request: MergeRequest) !coverage_mode
     return coverage_model.merge(allocator, left, right);
 }
 
+/// Implements diff workflow logic using caller-owned inputs.
 pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
     var current = try map(allocator, request.current);
     var current_owned = true;
@@ -87,6 +99,7 @@ pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
     };
 }
 
+/// Implements budget workflow logic using caller-owned inputs.
 pub fn budget(allocator: std.mem.Allocator, request: BudgetRequest) !CoverageBudget {
     var set = try map(allocator, request.coverage);
     errdefer set.deinit(allocator);

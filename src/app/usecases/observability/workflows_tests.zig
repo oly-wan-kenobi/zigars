@@ -4,6 +4,7 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const workflows = @import("workflows.zig");
 
+/// Artifact scan limit applied when collecting workflow evidence.
 const artifact_scan_limit = workflows.artifact_scan_limit;
 const baseMetrics = workflows.baseMetrics;
 const metricsReport = workflows.metricsReport;
@@ -17,6 +18,7 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
             .{ .sequence = 1, .title = "zig build", .argv0 = "zig", .duration_ms = 11, .ok = true },
         };
 
+        /// Implements snapshot workflow logic using caller-owned inputs.
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{
                 .tool_stats = tool_stats[0..],
@@ -28,14 +30,17 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
             };
         }
 
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return error.FileNotFound;
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Resolves a workspace-relative fixture path.
         fn workspaceResolve(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
             return error.FileNotFound;
         }
@@ -79,14 +84,17 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
 
 test "base metrics reports artifact registry read failures" {
     const Stub = struct {
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return error.AccessDenied;
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Implements snapshot workflow logic using caller-owned inputs.
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{};
         }
@@ -118,23 +126,28 @@ test "base metrics reports artifact scan failures" {
     const Stub = struct {
         var entries = [_]ports.WorkspaceDirectoryEntry{.{ .path = "report.log" }};
 
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return error.FileNotFound;
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Resolves a workspace-relative fixture path.
         fn workspaceResolve(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
             return .{ .path = request.path };
         }
 
+        /// Scans fixture workspace entries and returns matching paths.
         fn scanDirectory(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
             if (request.max_files != artifact_scan_limit) return error.UnexpectedCall;
             return .{ .entries = entries[0..] };
         }
 
+        /// Implements snapshot workflow logic using caller-owned inputs.
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{};
         }

@@ -6,6 +6,7 @@ const support = @import("../usecase_support.zig");
 const ci_evidence = @import("ci_evidence.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+/// Aliases command execution helpers shared by workflow entrypoints.
 const command = support.command;
 
 test "CI XML and matrix projections escape command output" {
@@ -203,6 +204,7 @@ test "CI workflows render command runner errors as structured results" {
     try workspace_fake.verify();
 }
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn releaseWorkflowTestContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.ReleaseWorkflowContext {
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },

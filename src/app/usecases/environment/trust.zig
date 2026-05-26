@@ -5,7 +5,9 @@ const ports = @import("../../ports.zig");
 const trust_domain = @import("../../../domain/trust.zig");
 const support = @import("../usecase_support.zig");
 
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.TrustContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 
 const argBool = support.argBool;
@@ -14,6 +16,7 @@ const invalidArgumentResult = support.invalidArgumentResult;
 const structured = support.structured;
 const toolTimeout = support.toolTimeout;
 
+/// Executes the zigar trust report workflow and returns an allocator-owned structured result.
 pub fn zigarTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const include_clean_tree = argBool(args, "include_clean_tree", false);
     var obj = std.json.ObjectMap.empty;
@@ -40,6 +43,7 @@ pub fn zigarTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return result;
 }
 
+/// Executes the zigar command provenance workflow and returns an allocator-owned structured result.
 pub fn zigarCommandProvenance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const tool = argString(args, "tool");
     const value = commandProvenanceValue(allocator, a, tool) catch |err| switch (err) {
@@ -49,14 +53,17 @@ pub fn zigarCommandProvenance(a: *App, allocator: std.mem.Allocator, args: ?std.
     return structured(allocator, value);
 }
 
+/// Executes the zigar risk audit workflow and returns an allocator-owned structured result.
 pub fn zigarRiskAudit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try riskAuditValue(allocator, a, argBool(args, "include_none", false)));
 }
 
+/// Executes the zigar clean tree gate workflow and returns an allocator-owned structured result.
 pub fn zigarCleanTreeGate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try cleanTreeGateValue(a, allocator, toolTimeout(a, args)));
 }
 
+/// Serializes command provenance fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn commandProvenanceValue(allocator: std.mem.Allocator, a: *App, tool_name: ?[]const u8) !std.json.Value {
     if (tool_name) |name| {
         const entry = a.context.tool_manifest.find(name) orelse return error.UnknownTool;
@@ -84,6 +91,7 @@ pub fn commandProvenanceValue(allocator: std.mem.Allocator, a: *App, tool_name: 
     return .{ .object = obj };
 }
 
+/// Serializes risk audit fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn riskAuditValue(allocator: std.mem.Allocator, a: *App, include_none: bool) !std.json.Value {
     var counts = std.json.ObjectMap.empty;
     var counts_owned = true;
@@ -142,6 +150,7 @@ pub fn riskAuditValue(allocator: std.mem.Allocator, a: *App, include_none: bool)
     return .{ .object = obj };
 }
 
+/// Serializes clean tree gate fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn cleanTreeGateValue(a: *App, allocator: std.mem.Allocator, timeout_ms: i64) !std.json.Value {
     const argv = &.{ "git", "status", "--porcelain" };
     const result = support.runCommand(allocator, a, argv, @min(timeout_ms, 5000)) catch |err| {
@@ -151,6 +160,7 @@ pub fn cleanTreeGateValue(a: *App, allocator: std.mem.Allocator, timeout_ms: i64
     return trust_domain.cleanTreeGateFromStatus(allocator, a.workspace.root, result.stdout, result.succeeded(), "git status --porcelain");
 }
 
+/// Serializes workspace evidence fields into an allocator-owned JSON value; allocation failures propagate.
 fn workspaceEvidenceValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -162,6 +172,7 @@ fn workspaceEvidenceValue(allocator: std.mem.Allocator, a: *App) !std.json.Value
     return .{ .object = obj };
 }
 
+/// Serializes path policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn pathPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -175,6 +186,7 @@ fn pathPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes backend identities fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendIdentitiesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -189,6 +201,7 @@ fn backendIdentitiesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value
     return .{ .object = obj };
 }
 
+/// Serializes backend identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendIdentityValue(allocator: std.mem.Allocator, configured_path: []const u8, probe: app_context.CachedBackendProbe) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -209,6 +222,7 @@ fn backendIdentityValue(allocator: std.mem.Allocator, configured_path: []const u
     return .{ .object = obj };
 }
 
+/// Serializes dependency hashes fields into an allocator-owned JSON value; allocation failures propagate.
 fn dependencyHashesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     const zon = a.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch |err| {
         var obj = std.json.ObjectMap.empty;
@@ -260,6 +274,7 @@ fn dependencyHashesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value 
     return .{ .object = obj };
 }
 
+/// Serializes provenance entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -277,6 +292,7 @@ fn provenanceEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestE
     return .{ .object = obj };
 }
 
+/// Serializes risk entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -290,6 +306,7 @@ fn riskEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) 
     return .{ .object = obj };
 }
 
+/// Serializes plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn planValue(allocator: std.mem.Allocator, plan_kind: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -303,6 +320,7 @@ fn planValue(allocator: std.mem.Allocator, plan_kind: []const u8) !std.json.Valu
     return .{ .object = obj };
 }
 
+/// Serializes risk fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -321,6 +339,7 @@ fn riskValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.
     return .{ .object = obj };
 }
 
+/// Serializes provenance limitations fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceLimitationsValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var out = std.json.Array.init(allocator);
     var out_owned = true;
@@ -342,6 +361,7 @@ fn provenanceLimitationsValue(allocator: std.mem.Allocator, entry: ports.ToolMan
     return .{ .array = out };
 }
 
+/// Serializes clean tree backend error fields into an allocator-owned JSON value; allocation failures propagate.
 fn cleanTreeBackendErrorValue(allocator: std.mem.Allocator, workspace_root: []const u8, err: anyerror) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -358,6 +378,7 @@ fn cleanTreeBackendErrorValue(allocator: std.mem.Allocator, workspace_root: []co
     return .{ .object = obj };
 }
 
+/// Serializes clean tree not run fields into an allocator-owned JSON value; allocation failures propagate.
 fn cleanTreeNotRunValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -371,10 +392,12 @@ fn cleanTreeNotRunValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Implements increment count workflow logic using caller-owned inputs.
 fn incrementCount(counts: *std.json.ObjectMap, level: []const u8) void {
     if (counts.getPtr(level)) |value| value.integer += 1;
 }
 
+/// Implements domain risk workflow logic using caller-owned inputs.
 fn domainRisk(risk: ports.ToolRisk) trust_domain.ToolRisk {
     return .{
         .writes_source = risk.writes_source,
@@ -388,9 +411,11 @@ fn domainRisk(risk: ports.ToolRisk) trust_domain.ToolRisk {
     };
 }
 
+/// Carries test manifest data across use case and port boundaries.
 const TestManifest = struct {
     entries: []const ports.ToolManifestEntry,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *TestManifest) ports.ToolManifestCatalog {
         return .{
             .ptr = self,
@@ -398,17 +423,20 @@ const TestManifest = struct {
         };
     }
 
+    /// Returns the number of entries exposed by this fixture.
     fn count(ptr: *anyopaque) usize {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         return self.entries.len;
     }
 
+    /// Returns the fixture entry at the requested index, or null when out of range.
     fn entryAt(ptr: *anyopaque, index: usize) ?ports.ToolManifestEntry {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         if (index >= self.entries.len) return null;
         return self.entries[index];
     }
 
+    /// Finds find data in the provided collection without taking ownership.
     fn find(ptr: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const self: *TestManifest = @ptrCast(@alignCast(ptr));
         for (self.entries) |entry| {
@@ -418,28 +446,35 @@ const TestManifest = struct {
     }
 };
 
+/// Carries test ports data across use case and port boundaries.
 const TestPorts = struct {
+    /// Implements command runner workflow logic using caller-owned inputs.
     fn commandRunner(self: *TestPorts) ports.CommandRunner {
         return .{ .ptr = self, .vtable = &.{ .run = runCommand } };
     }
 
+    /// Implements workspace store workflow logic using caller-owned inputs.
     fn workspaceStore(self: *TestPorts) ports.WorkspaceStore {
         return .{ .ptr = self, .vtable = &.{ .read = readWorkspace, .write = writeWorkspace } };
     }
 
+    /// Invokes run command with caller-owned inputs; command and allocation failures propagate.
     fn runCommand(_: *anyopaque, _: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
         return error.UnexpectedCall;
     }
 
+    /// Reads workspace data from the provided context without taking ownership of inputs.
     fn readWorkspace(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         return error.UnexpectedCall;
     }
 
+    /// Writes workspace fields to the provided JSON stream and propagates writer failures.
     fn writeWorkspace(_: *anyopaque, _: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         return error.UnexpectedCall;
     }
 };
 
+/// Builds a test app fixture with the ports needed by this workflow.
 fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, test_ports: *TestPorts) App {
     return App.init(.{
         .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigar-cache", .transport = "stdio" },
@@ -451,6 +486,7 @@ fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, te
     }, allocator);
 }
 
+/// Builds a test app fixture with the ports needed by this workflow.
 fn testAppWithPorts(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, probe_cache: app_context.TrustProbeCache) App {
     return App.init(.{
         .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigar-cache", .transport = "stdio" },

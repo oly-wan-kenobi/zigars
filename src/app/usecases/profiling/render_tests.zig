@@ -55,6 +55,7 @@ test "profiling render frees input path when output resolution fails" {
     try command_runner.verify();
 }
 
+/// Implements profiling context workflow logic using caller-owned inputs.
 fn profilingContext(workspace: *fakes.FakeWorkspaceStore, command_runner: *fakes.FakeCommandRunner) app_context.ProfilingContext {
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },

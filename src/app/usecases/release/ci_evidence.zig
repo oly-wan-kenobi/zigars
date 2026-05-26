@@ -3,26 +3,34 @@ const std = @import("std");
 const app_context = @import("../../context.zig");
 const support = @import("../usecase_support.zig");
 
+/// Aliases command execution helpers shared by workflow entrypoints.
 const command = support.command;
 
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.ReleaseWorkflowContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 const structured = support.structured;
 const argString = support.argString;
 const missingArgumentResult = support.missingArgumentResult;
 const workspacePathErrorResult = support.workspacePathErrorResult;
 const toolTimeout = support.toolTimeout;
+/// Aliases the shared command-result serializer for structured payloads.
 const commandResultValue = support.commandResultValue;
+/// Aliases the shared command-error serializer for structured payloads.
 const commandErrorValue = support.commandErrorValue;
 const compilerInsightsValue = support.compilerInsightsValue;
 const failureSummaryValue = support.failureSummaryValue;
+/// Aliases the shared command-error summary serializer for structured payloads.
 const commandErrorSummaryValue = support.commandErrorSummaryValue;
+/// Aliases the shared command-run error result builder.
 const commandRunErrorResult = support.commandRunErrorResult;
 const splitToolArgs = support.splitToolArgs;
 const splitToolArgsErrorResult = support.splitToolArgsErrorResult;
 const freeArgList = support.freeArgList;
 const parseCompilerLine = support.parseCompilerLine;
 const classifyDiagnosticMessage = support.classifyDiagnosticMessage;
+/// Shared command string type used by this workflow module.
 const commandString = support.commandString;
 const argvValue = support.argvValue;
 
@@ -34,6 +42,7 @@ const junit_limitations = "JUnit contains one command-level testcase because Zig
 const matrix_basis = "Each matrix entry is the direct process result for one provided Zig executable path.";
 const matrix_limitations = "Matrix checks execute only the supplied Zig paths and arguments; platform matrix discovery remains a CI concern.";
 
+/// Carries annotation parse summary data across use case and port boundaries.
 pub const AnnotationParseSummary = struct {
     input_lines: i64 = 0,
     annotation_count: i64 = 0,
@@ -41,6 +50,7 @@ pub const AnnotationParseSummary = struct {
     unlocated_diagnostics: i64 = 0,
     detail_lines: i64 = 0,
 
+    /// Implements confidence workflow logic using caller-owned inputs.
     pub fn confidence(self: AnnotationParseSummary) []const u8 {
         if (self.annotation_count == 0) return "low";
         if (self.located_diagnostics == self.annotation_count) return "high";
@@ -49,6 +59,7 @@ pub const AnnotationParseSummary = struct {
     }
 };
 
+/// Executes the zig ci annotations workflow and returns an allocator-owned structured result.
 pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_ci_annotations", "file", "workspace-relative Zig source path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_ci_annotations", file, err);
@@ -89,6 +100,7 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements try parse annotations workflow logic using caller-owned inputs.
 pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.Array, default_file: []const u8, stderr: []const u8) !AnnotationParseSummary {
     var summary: AnnotationParseSummary = .{};
     var last_annotation: ?usize = null;
@@ -114,6 +126,7 @@ pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.
     return summary;
 }
 
+/// Serializes annotation fields into an allocator-owned JSON value; allocation failures propagate.
 fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parsed: support.CompilerLine) !std.json.Value {
     const located = parsed.path != null and parsed.line != null and parsed.column != null;
     const start_column = parsed.column orelse 1;
@@ -140,6 +153,7 @@ fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parse
     return .{ .object = obj };
 }
 
+/// Appends annotation detail data into caller-provided storage, propagating allocation failures.
 fn appendAnnotationDetail(allocator: std.mem.Allocator, annotation: *std.json.Value, detail: []const u8) !void {
     switch (annotation.*) {
         .object => |*obj| {
@@ -153,12 +167,14 @@ fn appendAnnotationDetail(allocator: std.mem.Allocator, annotation: *std.json.Va
     }
 }
 
+/// Implements annotation level workflow logic using caller-owned inputs.
 fn annotationLevel(severity: []const u8) []const u8 {
     if (std.mem.eql(u8, severity, "warning")) return "warning";
     if (std.mem.eql(u8, severity, "note")) return "notice";
     return "failure";
 }
 
+/// Serializes annotation parse summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn annotationParseSummaryValue(allocator: std.mem.Allocator, summary: AnnotationParseSummary) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -173,6 +189,7 @@ fn annotationParseSummaryValue(allocator: std.mem.Allocator, summary: Annotation
     return .{ .object = obj };
 }
 
+/// Escapes text for inclusion in XML output.
 pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
@@ -192,10 +209,12 @@ pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     return bytes;
 }
 
+/// Reports whether xml char matches the caller-provided data.
 fn isXmlChar(c: u8) bool {
     return c == 0x09 or c == 0x0a or c == 0x0d or c >= 0x20;
 }
 
+/// Executes the zig junit workflow and returns an allocator-owned structured result.
 pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
@@ -253,6 +272,7 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !R
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements junit xml for command workflow logic using caller-owned inputs.
 pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8, result: command.RunResult) ![]u8 {
     const command_text = try commandString(allocator, argv);
     defer allocator.free(command_text);
@@ -295,6 +315,7 @@ pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8
     , .{ if (result.succeeded()) @as(i32, 0) else @as(i32, 1), junit_artifact_kind, command_xml, basis_xml, limitations_xml, command_xml, failure_xml, stdout_xml, stderr_xml });
 }
 
+/// Executes the zig matrix check workflow and returns an allocator-owned structured result.
 pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const paths_text = argString(args, "zig_paths") orelse a.config.zig_path;
     var paths = std.mem.tokenizeAny(u8, paths_text, ", \t\r\n");
@@ -342,6 +363,7 @@ pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     return structured(allocator, .{ .object = obj });
 }
 
+/// Serializes matrix run entry fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: command.RunResult) !std.json.Value {
     const insights = try compilerInsightsValue(allocator, result.stdout, result.stderr, argv);
     var item = std.json.ObjectMap.empty;
@@ -358,6 +380,7 @@ pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, a
     return .{ .object = item };
 }
 
+/// Serializes matrix command error entry fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn matrixCommandErrorEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
     var item = std.json.ObjectMap.empty;
     var item_owned = true;

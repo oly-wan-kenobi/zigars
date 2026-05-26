@@ -5,6 +5,7 @@ const ports = @import("../../ports.zig");
 const fake_zls_mod = @import("../../../testing/fakes/zls_gateway.zig");
 const code_intel = @import("code_intel.zig");
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(fake: *fake_zls_mod.FakeZlsGateway) app_context.ZlsContext {
     return .{
         .workspace = .{ .root = "/repo" },

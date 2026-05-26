@@ -18,14 +18,17 @@ test "default context is transport free and has no effect ports" {
 
 test "profiling context requires only the pilot runtime capabilities" {
     const Stub = struct {
+        /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
         fn commandRun(_: *anyopaque, _: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
             return .{ .exit_code = 0, .stdout = "ok" };
         }
 
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return .{ .bytes = "" };
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
@@ -66,22 +69,27 @@ test "profiling context requires only the pilot runtime capabilities" {
 
 test "validation context requires command workspace and clock ports" {
     const Stub = struct {
+        /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
         fn commandRun(_: *anyopaque, _: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
             return .{ .exit_code = 0 };
         }
 
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return .{ .bytes = "" };
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Returns the fixture clock timestamp.
         fn now(_: *anyopaque) ports.PortError!ports.Instant {
             return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 1 };
         }
 
+        /// Allocates the next deterministic fixture identifier.
         fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
             return std.fmt.allocPrint(allocator, "{s}-1", .{request.prefix});
         }
@@ -126,18 +134,22 @@ test "validation context requires command workspace and clock ports" {
 
 test "editing context requires workspace and clock ports" {
     const Stub = struct {
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return .{ .bytes = "" };
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Returns the fixture clock timestamp.
         fn now(_: *anyopaque) ports.PortError!ports.Instant {
             return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 1 };
         }
 
+        /// Allocates the next deterministic fixture identifier.
         fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
             return std.fmt.allocPrint(allocator, "{s}1", .{request.prefix});
         }
@@ -208,34 +220,42 @@ test "cache snapshots expose status without concrete cache ownership" {
 
 test "static analysis context carries optional command and cache ports" {
     const Stub = struct {
+        /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
         fn commandRun(_: *anyopaque, _: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
             return .{ .exit_code = 0 };
         }
 
+        /// Reads workspace fixture bytes for the requested path.
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
             return .{ .bytes = "" };
         }
 
+        /// Stores workspace fixture bytes for the requested path.
         fn workspaceWrite(_: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
             return .{ .bytes_written = request.bytes.len };
         }
 
+        /// Scans fixture workspace entries and returns matching paths.
         fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
             return .{ .files = try allocator.alloc(ports.WorkspaceScanFile, 0), .owns_memory = true };
         }
 
+        /// Implements cache status workflow logic using caller-owned inputs.
         fn cacheStatus(_: *anyopaque) ports.PortError!ports.StaticCacheStatus {
             return .{ .cached = true, .signature = 99, .bytes_len = 2 };
         }
 
+        /// Implements cache load workflow logic using caller-owned inputs.
         fn cacheLoad(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.StaticCacheLoadResult {
             return .{ .status = .{ .cached = true, .signature = 99, .bytes_len = 2 }, .bytes = "{}" };
         }
 
+        /// Implements cache store workflow logic using caller-owned inputs.
         fn cacheStore(_: *anyopaque, _: std.mem.Allocator, request: ports.StaticCacheStoreRequest) ports.PortError!ports.StaticCacheStatus {
             return .{ .cached = true, .signature = request.signature, .bytes_len = request.bytes.len, .refreshes = 1 };
         }
 
+        /// Implements cache hit workflow logic using caller-owned inputs.
         fn cacheHit(_: *anyopaque) ports.PortError!ports.StaticCacheStatus {
             return .{ .cached = true, .signature = 99, .bytes_len = 2, .hits = 1 };
         }

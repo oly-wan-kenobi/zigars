@@ -5,15 +5,19 @@ const support = @import("../usecase_support.zig");
 const backend_catalog = @import("backend_catalog.zig");
 const project_intelligence = @import("../validation/project_intelligence.zig");
 
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.EnvironmentContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 const artifacts = support.artifacts;
+/// Aliases command execution helpers shared by workflow entrypoints.
 const command = support.command;
 
 const argBool = support.argBool;
 const argInt = support.argInt;
 const argString = support.argString;
 const backendErrorResult = support.backendErrorResult;
+/// Aliases the shared command-result serializer for structured payloads.
 const commandResultValue = support.commandResultValue;
 const invalidArgumentResult = support.invalidArgumentResult;
 const missingArgumentResult = support.missingArgumentResult;
@@ -23,24 +27,33 @@ const toolErrorFromError = support.toolErrorFromError;
 const toolTimeout = support.toolTimeout;
 const workspacePathErrorResult = support.workspacePathErrorResult;
 
+/// Default workspace path for profile data.
 const profile_path = ".zigar/profile.json";
+/// Default workspace path for toolchain pin data.
 const toolchain_pin_path = ".zigar/toolchain.json";
+/// Default workspace path for env pack data.
 const env_pack_path = ".zigar-cache/env/pack.json";
+/// Default workspace path for backend evidence data.
 const backend_evidence_path = ".zigar-cache/backend-conformance/evidence-pack.json";
+/// Default workspace path for backend report data.
 const backend_report_path = ".zigar-cache/backend-conformance/report.json";
 
+/// Executes the zigar setup elicit workflow and returns an allocator-owned structured result.
 pub fn zigarSetupElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return elicitationResult(a, allocator, args, "zigar_setup_elicit", "setup");
 }
 
+/// Executes the zigar profile elicit workflow and returns an allocator-owned structured result.
 pub fn zigarProfileElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return elicitationResult(a, allocator, args, "zigar_profile_elicit", "profile");
 }
 
+/// Executes the zigar backend elicit workflow and returns an allocator-owned structured result.
 pub fn zigarBackendElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return elicitationResult(a, allocator, args, "zigar_backend_elicit", "backend");
 }
 
+/// Implements elicitation result workflow logic using caller-owned inputs.
 fn elicitationResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, default_topic: []const u8) !Result {
     const topic = argString(args, "topic") orelse default_topic;
     var questions = std.json.Array.init(allocator);
@@ -76,6 +89,7 @@ fn elicitationResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar project profile 2 workflow and returns an allocator-owned structured result.
 pub fn zigarProjectProfileV2(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const profile = if (argString(args, "content")) |content|
         parseJsonContent(allocator, "zigar_project_profile_v2", "content", content) catch |err| return parseContentError(allocator, "zigar_project_profile_v2", content, err)
@@ -84,6 +98,7 @@ pub fn zigarProjectProfileV2(a: *App, allocator: std.mem.Allocator, args: ?std.j
     return profileWriteResult(a, allocator, args, "zigar_project_profile_v2", profile);
 }
 
+/// Executes the zigar profile validate workflow and returns an allocator-owned structured result.
 pub fn zigarProfileValidate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const loaded = if (argString(args, "content")) |content|
@@ -103,6 +118,7 @@ pub fn zigarProfileValidate(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar profile read workflow and returns an allocator-owned structured result.
 pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const bytes = a.workspace.readFileAlloc(a.io, path, 1024 * 1024) catch |err| switch (err) {
@@ -140,6 +156,7 @@ pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar profile bootstrap workflow and returns an allocator-owned structured result.
 pub fn zigarProfileBootstrap(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) !Result {
     const profile = try generatedProfileV2Value(allocator, a);
     var obj = std.json.ObjectMap.empty;
@@ -155,12 +172,14 @@ pub fn zigarProfileBootstrap(a: *App, allocator: std.mem.Allocator, _: ?std.json
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar profile import workflow and returns an allocator-owned structured result.
 pub fn zigarProfileImport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const content = argString(args, "content") orelse return missingArgumentResult(allocator, "zigar_profile_import", "content", "profile v2 JSON content");
     const profile = parseJsonContent(allocator, "zigar_profile_import", "content", content) catch |err| return parseContentError(allocator, "zigar_profile_import", content, err);
     return profileWriteResult(a, allocator, args, "zigar_profile_import", profile);
 }
 
+/// Executes the zigar profile diff workflow and returns an allocator-owned structured result.
 pub fn zigarProfileDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const current = loadWorkspaceJson(a, allocator, path) catch |err| switch (err) {
@@ -195,6 +214,7 @@ pub fn zigarProfileDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements profile write result workflow logic using caller-owned inputs.
 fn profileWriteResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, profile: std.json.Value) !Result {
     const apply = argBool(args, "apply", false);
     const validation = try validateProfileValue(allocator, profile);
@@ -233,10 +253,12 @@ fn profileWriteResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar env pack workflow and returns an allocator-owned structured result.
 pub fn zigarEnvPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try envPackValue(allocator, a, args));
 }
 
+/// Executes the zigar env export workflow and returns an allocator-owned structured result.
 pub fn zigarEnvExport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const output = argString(args, "output") orelse env_pack_path;
     const apply = argBool(args, "apply", false);
@@ -261,6 +283,7 @@ pub fn zigarEnvExport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     return structured(allocator, .{ .object = obj });
 }
 
+/// Serializes env pack fields into an allocator-owned JSON value; allocation failures propagate.
 fn envPackValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !std.json.Value {
     const probe_backends = argBool(args, "probe_backends", false);
     const include_hashes = argBool(args, "include_hashes", true);
@@ -279,6 +302,7 @@ fn envPackValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !s
     return .{ .object = obj };
 }
 
+/// Executes the zigar zvm probe workflow and returns an allocator-owned structured result.
 pub fn zigarZvmProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
     const timeout_ms = @min(toolTimeout(a, args), 3000);
@@ -310,22 +334,26 @@ pub fn zigarZvmProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar zvm install plan workflow and returns an allocator-owned structured result.
 pub fn zigarZvmInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigar_zvm_install_plan", "version", "Zig version to install");
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
     return structured(allocator, try zvmPlanValue(allocator, "zigar_zvm_install_plan", zvm_path, version, &.{ zvm_path, "install", version }, "install requested Zig version"));
 }
 
+/// Executes the zigar zvm switch plan workflow and returns an allocator-owned structured result.
 pub fn zigarZvmSwitchPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigar_zvm_switch_plan", "version", "Zig version to select");
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
     return structured(allocator, try zvmPlanValue(allocator, "zigar_zvm_switch_plan", zvm_path, version, &.{ zvm_path, "use", version }, "select requested Zig version"));
 }
 
+/// Executes the zig zls match check workflow and returns an allocator-owned structured result.
 pub fn zigZlsMatchCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try compatibilityValueWithKind(allocator, a, args, "zig_zls_match_check"));
 }
 
+/// Executes the zig toolchain pin workflow and returns an allocator-owned structured result.
 pub fn zigToolchainPin(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const output = argString(args, "output") orelse toolchain_pin_path;
     const apply = argBool(args, "apply", false);
@@ -349,6 +377,7 @@ pub fn zigToolchainPin(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zig toolchain pin check workflow and returns an allocator-owned structured result.
 pub fn zigToolchainPinCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const input = argString(args, "input") orelse toolchain_pin_path;
     const loaded = loadWorkspaceJson(a, allocator, input) catch |err| switch (err) {
@@ -371,6 +400,7 @@ pub fn zigToolchainPinCheck(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar backend install plan workflow and returns an allocator-owned structured result.
 pub fn zigarBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const manager = argString(args, "manager") orelse "manual";
@@ -390,6 +420,7 @@ pub fn zigarBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar backend verify workflow and returns an allocator-owned structured result.
 pub fn zigarBackendVerify(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const timeout_ms = toolTimeout(a, args);
@@ -402,6 +433,7 @@ pub fn zigarBackendVerify(a: *App, allocator: std.mem.Allocator, args: ?std.json
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar dev env generate workflow and returns an allocator-owned structured result.
 pub fn zigarDevEnvGenerate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const kind = argString(args, "kind") orelse "mise";
     const output = argString(args, "output") orelse defaultDevEnvOutput(kind);
@@ -426,6 +458,7 @@ pub fn zigarDevEnvGenerate(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar backend conformance workflow and returns an allocator-owned structured result.
 pub fn zigarBackendConformance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const probe_backends = argBool(args, "probe_backends", false);
@@ -444,6 +477,7 @@ pub fn zigarBackendConformance(a: *App, allocator: std.mem.Allocator, args: ?std
     return structured(allocator, .{ .object = obj });
 }
 
+/// Executes the zigar backend evidence pack workflow and returns an allocator-owned structured result.
 pub fn zigarBackendEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const input = argString(args, "input") orelse backend_report_path;
     const output = argString(args, "output") orelse backend_evidence_path;
@@ -469,6 +503,7 @@ pub fn zigarBackendEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?st
     return structured(allocator, .{ .object = obj });
 }
 
+/// Serializes generated profile 2 fields into an allocator-owned JSON value; allocation failures propagate.
 fn generatedProfileV2Value(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -492,6 +527,7 @@ fn generatedProfileV2Value(allocator: std.mem.Allocator, a: *App) !std.json.Valu
     return .{ .object = obj };
 }
 
+/// Serializes profile toolchain fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileToolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -504,6 +540,7 @@ fn profileToolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value 
     return .{ .object = obj };
 }
 
+/// Serializes project type fields into an allocator-owned JSON value; allocation failures propagate.
 fn projectTypeValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -522,6 +559,7 @@ fn projectTypeValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes generated dirs fields into an allocator-owned JSON value; allocation failures propagate.
 fn generatedDirsValue(allocator: std.mem.Allocator) !std.json.Value {
     var dirs = std.json.Array.init(allocator);
     for ([_][]const u8{ ".zig-cache", ".zigar-cache", "zig-out", "zig-pkg", "coverage" }) |dir| {
@@ -530,6 +568,7 @@ fn generatedDirsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = dirs };
 }
 
+/// Serializes source sets fields into an allocator-owned JSON value; allocation failures propagate.
 fn sourceSetsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var sets = std.json.Array.init(allocator);
     const roots = [_][]const u8{ "src", "lib", "test", "tests" };
@@ -553,6 +592,7 @@ fn sourceSetsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .array = sets };
 }
 
+/// Serializes tests fields into an allocator-owned JSON value; allocation failures propagate.
 fn testsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var commands = std.json.Array.init(allocator);
     if (workspacePathExists(a, "build.zig")) {
@@ -566,6 +606,7 @@ fn testsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes command policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandPolicyValue(allocator: std.mem.Allocator, name: []const u8, command_text: []const u8, evidence: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -575,10 +616,12 @@ fn commandPolicyValue(allocator: std.mem.Allocator, name: []const u8, command_te
     return .{ .object = obj };
 }
 
+/// Serializes targets fields into an allocator-owned JSON value; allocation failures propagate.
 fn targetsValue(allocator: std.mem.Allocator) !std.json.Value {
     return stringArrayValue(allocator, &.{"native"});
 }
 
+/// Serializes benchmarks fields into an allocator-owned JSON value; allocation failures propagate.
 fn benchmarksValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "commands", try stringArrayValue(allocator, &.{}));
@@ -586,6 +629,7 @@ fn benchmarksValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes public api policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn publicApiPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "change_check", .{ .string = "zig_public_api_diff" });
@@ -593,6 +637,7 @@ fn publicApiPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes ci policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn ciPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "matrix", try stringArrayValue(allocator, &.{"native"}));
@@ -600,6 +645,7 @@ fn ciPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes lint policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn lintPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "formatter", .{ .string = "zig_format_check" });
@@ -609,6 +655,7 @@ fn lintPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes perf budgets fields into an allocator-owned JSON value; allocation failures propagate.
 fn perfBudgetsValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "configured", .{ .bool = false });
@@ -616,6 +663,7 @@ fn perfBudgetsValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes profile backends fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileBackendsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -628,6 +676,7 @@ fn profileBackendsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes profile backend fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileBackendValue(allocator: std.mem.Allocator, name: []const u8, optional: bool, path: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -637,6 +686,7 @@ fn profileBackendValue(allocator: std.mem.Allocator, name: []const u8, optional:
     return .{ .object = obj };
 }
 
+/// Serializes profile unknowns fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileUnknownsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var unknowns = std.json.Array.init(allocator);
     if (!workspacePathExists(a, ".zigversion") and !workspacePathExists(a, ".tool-versions") and !workspacePathExists(a, "mise.toml")) {
@@ -647,6 +697,7 @@ fn profileUnknownsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .array = unknowns };
 }
 
+/// Serializes unknown fields into an allocator-owned JSON value; allocation failures propagate.
 fn unknownValue(allocator: std.mem.Allocator, key: []const u8, reason: []const u8, verification: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "key", .{ .string = key });
@@ -655,6 +706,7 @@ fn unknownValue(allocator: std.mem.Allocator, key: []const u8, reason: []const u
     return .{ .object = obj };
 }
 
+/// Serializes detected facts fields into an allocator-owned JSON value; allocation failures propagate.
 fn detectedFactsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var facts = std.json.Array.init(allocator);
     if (workspacePathExists(a, "build.zig")) try facts.append(try factValue(allocator, "build_file", "build.zig", "workspace_file", "high"));
@@ -663,6 +715,7 @@ fn detectedFactsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .array = facts };
 }
 
+/// Serializes inferred policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn inferredPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var policies = std.json.Array.init(allocator);
     try policies.append(try factValue(allocator, "default_validation", "zigar_validate_patch", "zigar_policy", "medium"));
@@ -670,6 +723,7 @@ fn inferredPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     return .{ .array = policies };
 }
 
+/// Serializes validate profile fields into an allocator-owned JSON value; allocation failures propagate.
 fn validateProfileValue(allocator: std.mem.Allocator, profile: std.json.Value) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     var valid = true;
@@ -709,6 +763,7 @@ fn validateProfileValue(allocator: std.mem.Allocator, profile: std.json.Value) !
     return .{ .object = out };
 }
 
+/// Serializes finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn findingValue(allocator: std.mem.Allocator, rule: []const u8, severity: []const u8, message: []const u8, recommendation: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source", .{ .string = "zigar_profile_validate" });
@@ -720,6 +775,7 @@ fn findingValue(allocator: std.mem.Allocator, rule: []const u8, severity: []cons
     return .{ .object = obj };
 }
 
+/// Serializes toolchain state fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainStateValue(allocator: std.mem.Allocator, a: *App, probe: bool, include_hashes: bool, timeout_ms: i64) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -728,6 +784,7 @@ fn toolchainStateValue(allocator: std.mem.Allocator, a: *App, probe: bool, inclu
     return .{ .object = obj };
 }
 
+/// Serializes backend states fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendStatesValue(allocator: std.mem.Allocator, a: *App, selected: []const u8, probe: bool, include_hashes: bool, timeout_ms: i64) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (backend_catalog.backends) |entry| {
@@ -744,6 +801,7 @@ fn backendStatesValue(allocator: std.mem.Allocator, a: *App, selected: []const u
     return .{ .array = array };
 }
 
+/// Serializes executable state fields into an allocator-owned JSON value; allocation failures propagate.
 fn executableStateValue(allocator: std.mem.Allocator, a: *App, name: []const u8, path: []const u8, argv: []const []const u8, probe: bool, include_hashes: bool, timeout_ms: i64) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -776,14 +834,17 @@ fn executableStateValue(allocator: std.mem.Allocator, a: *App, name: []const u8,
     return .{ .object = obj };
 }
 
+/// Serializes the Zig/ZLS version match report data into an allocator-owned JSON value; allocation failures propagate.
 fn compatibilityValue(allocator: std.mem.Allocator, a: *App, probe: bool, timeout_ms: i64) !std.json.Value {
     return compatibilityValueWithProbe(allocator, a, probe, timeout_ms, "zig_zls_compatibility");
 }
 
+/// Serializes a named Zig/ZLS version match report data into an allocator-owned JSON value; allocation failures propagate.
 fn compatibilityValueWithKind(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value, kind: []const u8) !std.json.Value {
     return compatibilityValueWithProbe(allocator, a, argBool(args, "probe_backends", true), toolTimeout(a, args), kind);
 }
 
+/// Serializes a probed Zig/ZLS version match report data into an allocator-owned JSON value; allocation failures propagate.
 fn compatibilityValueWithProbe(allocator: std.mem.Allocator, a: *App, probe: bool, timeout_ms: i64, kind: []const u8) !std.json.Value {
     const zig_version = if (probe) probeVersion(allocator, a, &.{ a.config.zig_path, "version" }, timeout_ms) catch null else null;
     defer if (zig_version) |value| allocator.free(value);
@@ -806,6 +867,7 @@ fn compatibilityValueWithProbe(allocator: std.mem.Allocator, a: *App, probe: boo
     return .{ .object = obj };
 }
 
+/// Serializes explicit pin fields into an allocator-owned JSON value; allocation failures propagate.
 fn explicitPinValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -821,6 +883,7 @@ fn explicitPinValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value
     return .{ .object = obj };
 }
 
+/// Serializes pin entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn pinEntryValue(allocator: std.mem.Allocator, name: []const u8, path: []const u8, version: ?[]const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -830,6 +893,7 @@ fn pinEntryValue(allocator: std.mem.Allocator, name: []const u8, path: []const u
     return .{ .object = obj };
 }
 
+/// Serializes backend install plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendInstallPlanValue(allocator: std.mem.Allocator, entry: backend_catalog.Backend, manager: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -843,6 +907,7 @@ fn backendInstallPlanValue(allocator: std.mem.Allocator, entry: backend_catalog.
     return .{ .object = obj };
 }
 
+/// Serializes setup commands fields into an allocator-owned JSON value; allocation failures propagate.
 fn setupCommandsValue(allocator: std.mem.Allocator, backend: []const u8, manager: []const u8) !std.json.Value {
     var commands = std.json.Array.init(allocator);
     if (std.mem.eql(u8, backend, "zig")) {
@@ -861,6 +926,7 @@ fn setupCommandsValue(allocator: std.mem.Allocator, backend: []const u8, manager
     return .{ .array = commands };
 }
 
+/// Serializes conformance scenarios fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceScenariosValue(allocator: std.mem.Allocator, selected: []const u8) !std.json.Value {
     var scenarios = std.json.Array.init(allocator);
     const rows = [_]struct { backend: []const u8, scenario: []const u8, evidence: []const u8 }{
@@ -887,6 +953,7 @@ fn conformanceScenariosValue(allocator: std.mem.Allocator, selected: []const u8)
     return .{ .array = scenarios };
 }
 
+/// Serializes backend evidence pack fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendEvidencePackValue(a: *App, allocator: std.mem.Allocator, input: []const u8) !std.json.Value {
     const loaded = loadWorkspaceJson(a, allocator, input) catch |err| switch (err) {
         error.FileNotFound => return unavailableEvidencePackValue(allocator, input),
@@ -907,6 +974,7 @@ fn backendEvidencePackValue(a: *App, allocator: std.mem.Allocator, input: []cons
     return .{ .object = obj };
 }
 
+/// Serializes unavailable evidence pack fields into an allocator-owned JSON value; allocation failures propagate.
 fn unavailableEvidencePackValue(allocator: std.mem.Allocator, input: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigar_backend_evidence_pack" });
@@ -918,11 +986,13 @@ fn unavailableEvidencePackValue(allocator: std.mem.Allocator, input: []const u8)
     return .{ .object = obj };
 }
 
+/// Carries loaded json data across use case and port boundaries.
 const LoadedJson = struct {
     value: std.json.Value,
     parsed: ?std.json.Parsed(std.json.Value) = null,
     owned: bool = false,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: LoadedJson, allocator: std.mem.Allocator) void {
         if (self.parsed) |parsed| {
             var mutable = parsed;
@@ -933,6 +1003,7 @@ const LoadedJson = struct {
     }
 };
 
+/// Serializes load content fields into an allocator-owned JSON value; allocation failures propagate.
 fn loadContentValue(allocator: std.mem.Allocator, tool_name: []const u8, content: []const u8) !LoadedJson {
     _ = tool_name;
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, content, .{});
@@ -940,6 +1011,7 @@ fn loadContentValue(allocator: std.mem.Allocator, tool_name: []const u8, content
     return .{ .value = parsed.value, .parsed = parsed };
 }
 
+/// Parses json content input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseJsonContent(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, content: []const u8) !std.json.Value {
     _ = field;
     const loaded = try loadContentValue(allocator, tool_name, content);
@@ -947,6 +1019,7 @@ fn parseJsonContent(allocator: std.mem.Allocator, tool_name: []const u8, field: 
     return support.cloneValue(allocator, loaded.value);
 }
 
+/// Reads workspace json data from the provided context without taking ownership of inputs.
 fn loadWorkspaceJson(a: *App, allocator: std.mem.Allocator, path: []const u8) !LoadedJson {
     const bytes = a.workspace.readFileAlloc(a.io, path, 2 * 1024 * 1024) catch |err| switch (err) {
         error.FileNotFound => return error.FileNotFound,
@@ -958,6 +1031,7 @@ fn loadWorkspaceJson(a: *App, allocator: std.mem.Allocator, path: []const u8) !L
     return .{ .value = parsed.value, .parsed = parsed };
 }
 
+/// Extracts json load error result data from JSON input without taking ownership of borrowed values.
 fn jsonLoadErrorResult(a: *App, allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, err: anyerror) !Result {
     return switch (err) {
         error.PathOutsideWorkspace, error.EmptyPath => workspacePathErrorResult(a, allocator, tool_name, path, err),
@@ -974,6 +1048,7 @@ fn jsonLoadErrorResult(a: *App, allocator: std.mem.Allocator, tool_name: []const
     };
 }
 
+/// Implements artifact write error result workflow logic using caller-owned inputs.
 fn artifactWriteErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, err: anyerror) !Result {
     return toolErrorFromError(allocator, .{
         .tool = tool_name,
@@ -986,11 +1061,13 @@ fn artifactWriteErrorResult(allocator: std.mem.Allocator, tool_name: []const u8,
     }, err);
 }
 
+/// Parses content error input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseContentError(allocator: std.mem.Allocator, tool_name: []const u8, content: []const u8, err: anyerror) !Result {
     _ = content;
     return invalidArgumentResult(allocator, tool_name, "content", "valid JSON object", if (err == error.InvalidJson) "invalid_json" else @errorName(err), "Pass a JSON object produced by zigar_profile_bootstrap or zigar_project_profile_v2.");
 }
 
+/// Implements missing profile validation workflow logic using caller-owned inputs.
 fn missingProfileValidation(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8) !Result {
     var validation = std.json.ObjectMap.empty;
     try validation.put(allocator, "valid", .{ .bool = false });
@@ -1002,6 +1079,7 @@ fn missingProfileValidation(allocator: std.mem.Allocator, tool_name: []const u8,
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements missing profile read workflow logic using caller-owned inputs.
 fn missingProfileRead(allocator: std.mem.Allocator, path: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigar_profile_read" });
@@ -1012,12 +1090,14 @@ fn missingProfileRead(allocator: std.mem.Allocator, path: []const u8) !Result {
     return structured(allocator, .{ .object = obj });
 }
 
+/// Implements single finding array workflow logic using caller-owned inputs.
 fn singleFindingArray(allocator: std.mem.Allocator, rule: []const u8, severity: []const u8, message: []const u8, recommendation: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     try array.append(try findingValue(allocator, rule, severity, message, recommendation));
     return .{ .array = array };
 }
 
+/// Implements missing pin check workflow logic using caller-owned inputs.
 fn missingPinCheck(allocator: std.mem.Allocator, input: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_toolchain_pin_check" });
@@ -1028,6 +1108,7 @@ fn missingPinCheck(allocator: std.mem.Allocator, input: []const u8) !Result {
     return structured(allocator, .{ .object = obj });
 }
 
+/// Builds preimage identity metadata for the requested workspace path.
 fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
     const bytes = a.workspace.readFileAlloc(a.io, path, 16 * 1024 * 1024) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
@@ -1039,6 +1120,7 @@ fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const 
     return preimageValue(allocator, true, bytes.len, hash);
 }
 
+/// Serializes preimage fields into an allocator-owned JSON value; allocation failures propagate.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exists", .{ .bool = exists });
@@ -1047,6 +1129,7 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     return .{ .object = obj };
 }
 
+/// Serializes artifact preview identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn artifactPreviewIdentityValue(allocator: std.mem.Allocator, a: *App, path: []const u8, bytes: []const u8) !std.json.Value {
     const resolved = a.workspace.resolveOutput(path) catch path;
     defer if (resolved.ptr != path.ptr) a.workspace.allocator.free(resolved);
@@ -1059,6 +1142,7 @@ fn artifactPreviewIdentityValue(allocator: std.mem.Allocator, a: *App, path: []c
     return .{ .object = obj };
 }
 
+/// Writes and register artifact fields to the provided JSON stream and propagates writer failures.
 fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const u8, bytes: []const u8, producer: []const u8, artifact_kind: []const u8, backend_name: []const u8, notes: []const u8) !void {
     a.workspace.putFile(path, bytes) catch return error.WriteFailed;
     const artifact_abs = try a.workspace.resolveOutput(path);
@@ -1083,6 +1167,7 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
     }, bytes) catch {};
 }
 
+/// Serializes command result probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandResultProbeValue(allocator: std.mem.Allocator, name: []const u8, a: *App, argv: []const []const u8, timeout_ms: i64, result: command.RunResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -1091,6 +1176,7 @@ fn commandResultProbeValue(allocator: std.mem.Allocator, name: []const u8, a: *A
     return .{ .object = obj };
 }
 
+/// Serializes command error probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorProbeValue(allocator: std.mem.Allocator, name: []const u8, argv: []const []const u8, err: anyerror) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", .{ .string = name });
@@ -1101,6 +1187,7 @@ fn commandErrorProbeValue(allocator: std.mem.Allocator, name: []const u8, argv: 
     return .{ .object = obj };
 }
 
+/// Serializes zvm plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn zvmPlanValue(allocator: std.mem.Allocator, kind: []const u8, zvm_path: []const u8, version: []const u8, argv: []const []const u8, description: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = kind });
@@ -1115,6 +1202,7 @@ fn zvmPlanValue(allocator: std.mem.Allocator, kind: []const u8, zvm_path: []cons
     return .{ .object = obj };
 }
 
+/// Implements default dev env output workflow logic using caller-owned inputs.
 fn defaultDevEnvOutput(kind: []const u8) []const u8 {
     if (std.mem.eql(u8, kind, "asdf")) return ".zigar-cache/dev-env/.tool-versions";
     if (std.mem.eql(u8, kind, "nix")) return ".zigar-cache/dev-env/flake.nix";
@@ -1123,6 +1211,7 @@ fn defaultDevEnvOutput(kind: []const u8) []const u8 {
     return ".zigar-cache/dev-env/mise.toml";
 }
 
+/// Implements dev env content workflow logic using caller-owned inputs.
 fn devEnvContent(allocator: std.mem.Allocator, a: *App, kind: []const u8) ![]u8 {
     const version = versionFromHints(a) orelse backend_catalog.supported_zig_version;
     if (std.mem.eql(u8, kind, "asdf")) return std.fmt.allocPrint(allocator, "zig {s}\n", .{version});
@@ -1153,11 +1242,13 @@ fn devEnvContent(allocator: std.mem.Allocator, a: *App, kind: []const u8) ![]u8 
     return std.fmt.allocPrint(allocator, "[tools]\nzig = \"{s}\"\n", .{version});
 }
 
+/// Implements version from hints workflow logic using caller-owned inputs.
 fn versionFromHints(a: *App) ?[]const u8 {
     _ = a;
     return null;
 }
 
+/// Implements first version hint workflow logic using caller-owned inputs.
 fn firstVersionHint(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var hints = std.json.Array.init(allocator);
     tryAppendVersionHint(allocator, &hints, a, ".zigversion", "zig", ".zigversion");
@@ -1169,6 +1260,7 @@ fn firstVersionHint(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return support.cloneValue(allocator, first);
 }
 
+/// Serializes project version hints fields into an allocator-owned JSON value; allocation failures propagate.
 fn projectVersionHintsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var hints = std.json.Array.init(allocator);
     tryAppendVersionHint(allocator, &hints, a, ".zigversion", "zig", ".zigversion");
@@ -1178,6 +1270,7 @@ fn projectVersionHintsValue(allocator: std.mem.Allocator, a: *App) !std.json.Val
     return .{ .array = hints };
 }
 
+/// Implements try append version hint workflow logic using caller-owned inputs.
 fn tryAppendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *App, path: []const u8, tool: []const u8, source: []const u8) void {
     const bytes = a.workspace.readFileAlloc(a.io, path, 128 * 1024) catch return;
     defer allocator.free(bytes);
@@ -1191,6 +1284,7 @@ fn tryAppendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, a:
     hints.append(.{ .object = obj }) catch return;
 }
 
+/// Implements try append tool versions hint workflow logic using caller-owned inputs.
 fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *App) void {
     const bytes = a.workspace.readFileAlloc(a.io, ".tool-versions", 256 * 1024) catch return;
     defer allocator.free(bytes);
@@ -1211,6 +1305,7 @@ fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, hints: *std.json.Arra
     }
 }
 
+/// Implements try append mise hint workflow logic using caller-owned inputs.
 fn tryAppendMiseHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *App) void {
     const bytes = a.workspace.readFileAlloc(a.io, "mise.toml", 256 * 1024) catch return;
     defer allocator.free(bytes);
@@ -1231,6 +1326,7 @@ fn tryAppendMiseHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *A
     }
 }
 
+/// Implements try append build zon minimum hint workflow logic using caller-owned inputs.
 fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *App) void {
     const bytes = a.workspace.readFileAlloc(a.io, "build.zig.zon", 256 * 1024) catch return;
     defer allocator.free(bytes);
@@ -1250,6 +1346,7 @@ fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, hints: *std.json.A
     }
 }
 
+/// Parses version prefix input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseVersionPrefix(value: []const u8) ?[2]u32 {
     var major: u32 = 0;
     var minor: u32 = 0;
@@ -1270,6 +1367,7 @@ fn parseVersionPrefix(value: []const u8) ?[2]u32 {
     return .{ major, minor };
 }
 
+/// Serializes toolchain pins fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainPinsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     const loaded = loadWorkspaceJson(a, allocator, toolchain_pin_path) catch |err| switch (err) {
         error.FileNotFound => return .null,
@@ -1279,6 +1377,7 @@ fn toolchainPinsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return support.cloneValue(allocator, loaded.value);
 }
 
+/// Implements probe version workflow logic using caller-owned inputs.
 fn probeVersion(allocator: std.mem.Allocator, a: *App, argv: []const []const u8, timeout_ms: i64) ![]u8 {
     const result = try support.runCommand(allocator, a, argv, timeout_ms);
     defer result.deinit(allocator);
@@ -1287,6 +1386,7 @@ fn probeVersion(allocator: std.mem.Allocator, a: *App, argv: []const []const u8,
     return allocator.dupe(u8, std.mem.trim(u8, raw, " \t\r\n"));
 }
 
+/// Classifies the Zig and ZLS versions as a match, warning, or unknown status.
 fn compatibilityStatus(zig_version: ?[]const u8, zls_version: ?[]const u8) []const u8 {
     const zig = zig_version orelse return "unknown";
     const zls = zls_version orelse return "unknown";
@@ -1296,6 +1396,7 @@ fn compatibilityStatus(zig_version: ?[]const u8, zls_version: ?[]const u8) []con
     return "mismatch";
 }
 
+/// Serializes executable hash fields into an allocator-owned JSON value; allocation failures propagate.
 fn executableHashValue(allocator: std.mem.Allocator, a: *App, path: []const u8) !std.json.Value {
     if (!std.fs.path.isAbsolute(path)) return .null;
     const bytes = a.workspace.readFileAlloc(a.io, path, 64 * 1024 * 1024) catch return .null;
@@ -1305,6 +1406,7 @@ fn executableHashValue(allocator: std.mem.Allocator, a: *App, path: []const u8) 
     return .{ .string = hash };
 }
 
+/// Serializes trimmed output fields into an allocator-owned JSON value; allocation failures propagate.
 fn trimmedOutputValue(allocator: std.mem.Allocator, result: command.RunResult) !std.json.Value {
     const raw = if (result.stdout.len > 0) result.stdout else result.stderr;
     const trimmed = std.mem.trim(u8, raw, " \t\r\n");
@@ -1312,6 +1414,7 @@ fn trimmedOutputValue(allocator: std.mem.Allocator, result: command.RunResult) !
     return .{ .string = try allocator.dupe(u8, trimmed) };
 }
 
+/// Implements configured backend path workflow logic using caller-owned inputs.
 fn configuredBackendPath(a: *App, name: []const u8) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return a.config.zig_path;
     if (std.mem.eql(u8, name, "zls")) return a.config.zls_path;
@@ -1321,11 +1424,13 @@ fn configuredBackendPath(a: *App, name: []const u8) []const u8 {
     return a.config.diff_folded_path;
 }
 
+/// Normalizes backend name data into the representation consumed by this workflow.
 fn normalizeBackendName(raw: []const u8) []const u8 {
     if (std.mem.eql(u8, raw, "diff-folded")) return "diff_folded";
     return raw;
 }
 
+/// Implements backend selected workflow logic using caller-owned inputs.
 fn backendSelected(selected: []const u8, name: []const u8) bool {
     if (std.mem.eql(u8, selected, "all")) return true;
     if (std.mem.eql(u8, selected, name)) return true;
@@ -1334,6 +1439,7 @@ fn backendSelected(selected: []const u8, name: []const u8) bool {
     return false;
 }
 
+/// Implements compare pin field workflow logic using caller-owned inputs.
 fn comparePinField(allocator: std.mem.Allocator, mismatches: *std.json.Array, pin: std.json.Value, env: std.json.Value, pin_field: []const u8, env_path: []const u8) !void {
     const expected = nestedString(pin, pin_field, "version") orelse return;
     const actual = dottedString(env, env_path) orelse return;
@@ -1345,6 +1451,7 @@ fn comparePinField(allocator: std.mem.Allocator, mismatches: *std.json.Array, pi
     try mismatches.append(.{ .object = obj });
 }
 
+/// Implements nested string workflow logic using caller-owned inputs.
 fn nestedString(value: std.json.Value, object_name: []const u8, field: []const u8) ?[]const u8 {
     if (value != .object) return null;
     const child = value.object.get(object_name) orelse return null;
@@ -1354,6 +1461,7 @@ fn nestedString(value: std.json.Value, object_name: []const u8, field: []const u
     return field_value.string;
 }
 
+/// Implements dotted string workflow logic using caller-owned inputs.
 fn dottedString(value: std.json.Value, path: []const u8) ?[]const u8 {
     var current = value;
     var parts = std.mem.splitScalar(u8, path, '.');
@@ -1365,17 +1473,20 @@ fn dottedString(value: std.json.Value, path: []const u8) ?[]const u8 {
     return current.string;
 }
 
+/// Implements object field workflow logic using caller-owned inputs.
 fn objectField(value: std.json.Value, field: []const u8) ?std.json.Value {
     if (value != .object) return null;
     return value.object.get(field);
 }
 
+/// Serializes json values equal data into an allocator-owned JSON value; allocation failures propagate.
 fn jsonValuesEqual(left: ?std.json.Value, right: ?std.json.Value) bool {
     if (left == null and right == null) return true;
     if (left == null or right == null) return false;
     return std.meta.eql(left.?, right.?);
 }
 
+/// Extracts json object string data from JSON input without taking ownership of borrowed values.
 fn jsonObjectString(value: std.json.Value, key: []const u8) std.json.Value {
     if (value != .object) return .null;
     const field = value.object.get(key) orelse return .null;
@@ -1383,14 +1494,17 @@ fn jsonObjectString(value: std.json.Value, key: []const u8) std.json.Value {
     return .{ .string = field.string };
 }
 
+/// Implements profile exists workflow logic using caller-owned inputs.
 fn profileExists(a: *App) bool {
     return workspacePathExists(a, profile_path);
 }
 
+/// Reports whether the requested workspace path exists.
 fn workspacePathExists(a: *App, path: []const u8) bool {
     return a.workspace.exists(a.allocator, path, false);
 }
 
+/// Serializes fact fields into an allocator-owned JSON value; allocation failures propagate.
 fn factValue(allocator: std.mem.Allocator, key: []const u8, value: []const u8, source: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "key", .{ .string = key });
@@ -1400,6 +1514,7 @@ fn factValue(allocator: std.mem.Allocator, key: []const u8, value: []const u8, s
     return .{ .object = obj };
 }
 
+/// Serializes question fields into an allocator-owned JSON value; allocation failures propagate.
 fn questionValue(allocator: std.mem.Allocator, id: []const u8, prompt: []const u8, next_tool: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = id });
@@ -1409,6 +1524,7 @@ fn questionValue(allocator: std.mem.Allocator, id: []const u8, prompt: []const u
     return .{ .object = obj };
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -1542,6 +1658,7 @@ test "environment JSON comparison helpers find nested pin mismatches" {
     try std.testing.expect(jsonObjectString(.{ .object = toolchain }, "missing") == .null);
 }
 
+/// Carries test environment runtime data across use case and port boundaries.
 const TestEnvironmentRuntime = struct {
     writes: usize = 0,
     command_runs: usize = 0,
@@ -1549,6 +1666,7 @@ const TestEnvironmentRuntime = struct {
     source_dirs_exist: bool = true,
     write_error: ?ports.PortError = null,
 
+    /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *TestEnvironmentRuntime) app_context.EnvironmentContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
@@ -1567,10 +1685,12 @@ const TestEnvironmentRuntime = struct {
         };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn commandPort(self: *TestEnvironmentRuntime) ports.CommandRunner {
         return .{ .ptr = self, .vtable = &.{ .run = commandRun } };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn workspacePort(self: *TestEnvironmentRuntime) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -1583,10 +1703,12 @@ const TestEnvironmentRuntime = struct {
         };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn scannerPort(self: *TestEnvironmentRuntime) ports.WorkspaceScanner {
         return .{ .ptr = self, .vtable = &.{ .scan_zig_files = scanZigFiles } };
     }
 
+    /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
     fn commandRun(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
         self.command_runs += 1;
@@ -1617,6 +1739,7 @@ const TestEnvironmentRuntime = struct {
         };
     }
 
+    /// Resolves a workspace-relative fixture path.
     fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         if (request.path.len == 0) return error.EmptyPath;
         if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
@@ -1624,6 +1747,7 @@ const TestEnvironmentRuntime = struct {
         return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
     }
 
+    /// Reads workspace fixture bytes for the requested path.
     fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
         if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
@@ -1655,6 +1779,7 @@ const TestEnvironmentRuntime = struct {
         return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
     }
 
+    /// Stores workspace fixture bytes for the requested path.
     fn workspaceWrite(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
         if (self.write_error) |err| return err;
@@ -1663,6 +1788,7 @@ const TestEnvironmentRuntime = struct {
         return .{ .bytes_written = request.bytes.len, .replaced_existing = false };
     }
 
+    /// Reports whether the requested workspace path exists.
     fn workspaceExists(ptr: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
         const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
         const is_dir = self.source_dirs_exist and (std.mem.eql(u8, request.path, "src") or
@@ -1679,6 +1805,7 @@ const TestEnvironmentRuntime = struct {
         return .{ .exists = exists, .kind = if (is_dir) .directory else .file };
     }
 
+    /// Scans fixture workspace entries and returns matching paths.
     fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
         const files = try allocator.alloc(ports.WorkspaceScanFile, 1);
         files[0] = .{ .path = try allocator.dupe(u8, "src/main.zig") };
@@ -1686,6 +1813,7 @@ const TestEnvironmentRuntime = struct {
     }
 };
 
+/// Implements complete profile json workflow logic using caller-owned inputs.
 fn completeProfileJson() []const u8 {
     return
     \\{
@@ -1702,10 +1830,12 @@ fn completeProfileJson() []const u8 {
     ;
 }
 
+/// Parses args input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(std.json.Value) {
     return std.json.parseFromSlice(std.json.Value, allocator, text, .{});
 }
 
+/// Implements sweep usecase allocation failures workflow logic using caller-owned inputs.
 fn sweepUsecaseAllocationFailures(comptime call: anytype, args: ?std.json.Value) void {
     for (0..180) |fail_index| {
         var backing = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -7,6 +7,7 @@ const static_cache_fake = @import("../../../testing/fakes/static_cache.zig");
 const workspace_store_fake = @import("../../../testing/fakes/workspace_store.zig");
 const workspace_scanner_fake = @import("../../../testing/fakes/workspace_scanner.zig");
 
+/// Returns a typed context backed by this fixture or runtime state.
 fn testContext(
     store_fake: *workspace_store_fake.FakeWorkspaceStore,
     scanner_fake: *workspace_scanner_fake.FakeWorkspaceScanner,
@@ -627,6 +628,7 @@ test "typed static project value builders release partial objects on allocation 
     }
 }
 
+/// Implements expect build graph reads workflow logic using caller-owned inputs.
 fn expectBuildGraphReads(store_fake: *workspace_store_fake.FakeWorkspaceStore, build_zig: []const u8, build_zon: []const u8) !void {
     try store_fake.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" }, build_zig);
     try store_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" }, build_zon);

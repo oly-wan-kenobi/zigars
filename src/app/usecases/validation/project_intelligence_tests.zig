@@ -14,6 +14,7 @@ test "project intelligence routes next action and patch guards generated paths" 
     try std.testing.expectEqualStrings("zig_compile_error_index", plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
 }
 
+/// Carries stub runtime data across use case and port boundaries.
 const StubRuntime = struct {
     command_runs: usize = 0,
     writes: usize = 0,
@@ -22,6 +23,7 @@ const StubRuntime = struct {
     fail_on: ?[]const u8 = null,
     nonzero_on: ?[]const u8 = null,
 
+    /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *StubRuntime) app_context.ProjectIntelligenceContext {
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
@@ -35,10 +37,12 @@ const StubRuntime = struct {
         };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn commandPort(self: *StubRuntime) ports.CommandRunner {
         return .{ .ptr = self, .vtable = &.{ .run = commandRun } };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn workspacePort(self: *StubRuntime) ports.WorkspaceStore {
         return .{
             .ptr = self,
@@ -51,14 +55,17 @@ const StubRuntime = struct {
         };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn scannerPort(self: *StubRuntime) ports.WorkspaceScanner {
         return .{ .ptr = self, .vtable = &.{ .scan_zig_files = scanZigFiles } };
     }
 
+    /// Returns the fixture port table used by this test context.
     fn clockPort(self: *StubRuntime) ports.ClockAndIds {
         return .{ .ptr = self, .vtable = &.{ .now = now, .nextId = nextId } };
     }
 
+    /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
     fn commandRun(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *StubRuntime = @ptrCast(@alignCast(ptr));
         self.command_runs += 1;
@@ -90,11 +97,13 @@ const StubRuntime = struct {
         };
     }
 
+    /// Resolves a workspace-relative fixture path.
     fn workspaceResolve(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
         return .{ .path = try std.fmt.allocPrint(allocator, "/repo/{s}", .{request.path}), .owns_path = true };
     }
 
+    /// Reads workspace fixture bytes for the requested path.
     fn workspaceRead(_: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const bytes = if (std.mem.eql(u8, request.path, "build.zig"))
             \\const std = @import("std");
@@ -131,12 +140,14 @@ const StubRuntime = struct {
         return .{ .bytes = try allocator.dupe(u8, bytes), .owns_bytes = true };
     }
 
+    /// Stores workspace fixture bytes for the requested path.
     fn workspaceWrite(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *StubRuntime = @ptrCast(@alignCast(ptr));
         self.writes += 1;
         return .{ .bytes_written = request.bytes.len };
     }
 
+    /// Reports whether the requested workspace path exists.
     fn workspaceExists(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
         const exists = std.mem.eql(u8, request.path, "build.zig") or
             std.mem.eql(u8, request.path, "build.zig.zon") or
@@ -147,6 +158,7 @@ const StubRuntime = struct {
         return .{ .exists = exists, .kind = if (std.mem.eql(u8, request.path, "src")) .directory else .file };
     }
 
+    /// Scans fixture workspace entries and returns matching paths.
     fn scanZigFiles(_: *anyopaque, allocator: std.mem.Allocator, _: ports.WorkspaceScanRequest) ports.PortError!ports.WorkspaceScanResult {
         const names = [_][]const u8{ "src/main.zig", "src/util.zig", "tests/util_test.zig" };
         const files = try allocator.alloc(ports.WorkspaceScanFile, names.len);
@@ -155,10 +167,12 @@ const StubRuntime = struct {
         return .{ .files = files, .owns_memory = true };
     }
 
+    /// Returns the fixture clock timestamp.
     fn now(_: *anyopaque) ports.PortError!ports.Instant {
         return .{ .unix_ms = 1_700_000_000_000, .monotonic_ms = 42 };
     }
 
+    /// Allocates the next deterministic fixture identifier.
     fn nextId(_: *anyopaque, allocator: std.mem.Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
         return std.fmt.allocPrint(allocator, "{s}-0001", .{request.prefix});
     }

@@ -5,7 +5,9 @@ const support = @import("../usecase_support.zig");
 const backend_catalog = @import("backend_catalog.zig");
 
 const artifacts = support.artifacts;
+/// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.AdoptionContext);
+/// Aliases the structured result type returned by workflow entrypoints.
 pub const Result = support.Result;
 const argBool = support.argBool;
 const argInt = support.argInt;
@@ -15,12 +17,14 @@ const structured = support.structured;
 const toolErrorFromError = support.toolErrorFromError;
 const workspacePathErrorResult = support.workspacePathErrorResult;
 
+/// Schema version written into this module's structured payloads.
 const schema_version = 1;
 const max_evidence_bytes = 16 * 1024 * 1024;
 const default_config_output = ".zigar-cache/adoption/zigar-mcp.json";
 const default_conformance_input = ".zigar-cache/backend-conformance/report.json";
 const default_conformance_output = ".zigar-cache/adoption/conformance-report.json";
 
+/// Carries source evidence data across use case and port boundaries.
 const SourceEvidence = struct {
     available: bool,
     source_kind: []const u8,
@@ -28,11 +32,13 @@ const SourceEvidence = struct {
     bytes: []const u8 = "",
     owned: ?[]u8 = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: SourceEvidence, allocator: std.mem.Allocator) void {
         if (self.owned) |bytes| allocator.free(bytes);
     }
 };
 
+/// Carries claim data across use case and port boundaries.
 const Claim = struct {
     backend: []const u8,
     status: []const u8,
@@ -41,6 +47,7 @@ const Claim = struct {
     evidence: []const u8,
 };
 
+/// Executes the zigar adoption pack workflow and returns an allocator-owned structured result.
 pub fn zigarAdoptionPack(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
@@ -76,6 +83,7 @@ pub fn zigarAdoptionPack(a: *App, result_allocator: std.mem.Allocator, args: ?st
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Executes the zigar client config generate workflow and returns an allocator-owned structured result.
 pub fn zigarClientConfigGenerate(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
@@ -131,6 +139,7 @@ pub fn zigarClientConfigGenerate(a: *App, result_allocator: std.mem.Allocator, a
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Executes the zigar smoke plan workflow and returns an allocator-owned structured result.
 pub fn zigarSmokePlan(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
@@ -165,6 +174,7 @@ pub fn zigarSmokePlan(a: *App, result_allocator: std.mem.Allocator, args: ?std.j
     return structured(result_allocator, .{ .object = obj });
 }
 
+/// Executes the zigar conformance report workflow and returns an allocator-owned structured result.
 pub fn zigarConformanceReport(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = argString(args, "backend") orelse "all";
     const output = argString(args, "output") orelse default_conformance_output;
@@ -221,6 +231,7 @@ pub fn zigarConformanceReport(a: *App, result_allocator: std.mem.Allocator, args
     return structured(result_allocator, .{ .object = result });
 }
 
+/// Serializes base fields into an allocator-owned JSON value; allocation failures propagate.
 fn baseValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, basis: []const u8, confidence: []const u8) !std.json.ObjectMap {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = kind });
@@ -232,6 +243,7 @@ fn baseValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, basis: []c
     return obj;
 }
 
+/// Serializes client identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn clientIdentityValue(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "client", .{ .string = client });
@@ -244,6 +256,7 @@ fn clientIdentityValue(allocator: std.mem.Allocator, a: *App, client: []const u8
     return .{ .object = obj };
 }
 
+/// Serializes catalog snapshot fields into an allocator-owned JSON value; allocation failures propagate.
 fn catalogSnapshotValue(allocator: std.mem.Allocator, a: *App, backend: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "toolchain", try toolchainValue(allocator, a));
@@ -261,6 +274,7 @@ fn catalogSnapshotValue(allocator: std.mem.Allocator, a: *App, backend: []const 
     return .{ .object = obj };
 }
 
+/// Serializes backend setup status fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendSetupStatusValue(allocator: std.mem.Allocator, a: *App, selected: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (backend_catalog.backends) |backend| {
@@ -278,6 +292,7 @@ fn backendSetupStatusValue(allocator: std.mem.Allocator, a: *App, selected: []co
     return .{ .array = array };
 }
 
+/// Serializes smoke plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn smokePlanValue(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, backend: []const u8, platform: []const u8, timeout_ms: i64) !std.json.ObjectMap {
     var obj = try baseValue(allocator, a, "zigar_smoke_plan", "static manifest, client identity, backend catalog, and workspace configuration", "medium");
     try obj.put(allocator, "client_identity", try clientIdentityValue(allocator, a, client, transport));
@@ -293,6 +308,7 @@ fn smokePlanValue(allocator: std.mem.Allocator, a: *App, client: []const u8, tra
     return obj;
 }
 
+/// Serializes smoke scenarios fields into an allocator-owned JSON value; allocation failures propagate.
 fn smokeScenariosValue(allocator: std.mem.Allocator, backend: []const u8, transport: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     try array.append(try scenarioValue(allocator, "initialize", "Start the zigar MCP server and complete initialize/initialized.", transport, "server_identity"));
@@ -309,6 +325,7 @@ fn smokeScenariosValue(allocator: std.mem.Allocator, backend: []const u8, transp
     return .{ .array = array };
 }
 
+/// Serializes scenario fields into an allocator-owned JSON value; allocation failures propagate.
 fn scenarioValue(allocator: std.mem.Allocator, id: []const u8, description: []const u8, transport: []const u8, evidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = id });
@@ -319,6 +336,7 @@ fn scenarioValue(allocator: std.mem.Allocator, id: []const u8, description: []co
     return .{ .object = obj };
 }
 
+/// Serializes conformance report fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceReportValue(allocator: std.mem.Allocator, a: *App, backend: []const u8, evidence: SourceEvidence, parsed: ?std.json.Value) !std.json.ObjectMap {
     var obj = try baseValue(allocator, a, "zigar_public_conformance_report", if (evidence.available) "ingested zigar evidence JSON" else "no conformance evidence available", if (evidence.available) "medium" else "low");
     try obj.put(allocator, "conformance_report_identity", try identityValue(allocator, "conformance", &.{ a.workspace.root, backend, evidence.bytes }));
@@ -340,6 +358,7 @@ fn conformanceReportValue(allocator: std.mem.Allocator, a: *App, backend: []cons
     return obj;
 }
 
+/// Serializes conformance source fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceSourceValue(allocator: std.mem.Allocator, evidence: SourceEvidence, parsed: ?std.json.Value) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "available", .{ .bool = evidence.available });
@@ -357,6 +376,7 @@ fn conformanceSourceValue(allocator: std.mem.Allocator, evidence: SourceEvidence
     return .{ .object = obj };
 }
 
+/// Serializes claim array fields into an allocator-owned JSON value; allocation failures propagate.
 fn claimArrayValue(allocator: std.mem.Allocator, selected: []const u8, parsed: ?std.json.Value) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (backend_catalog.backends) |backend| {
@@ -374,6 +394,7 @@ fn claimArrayValue(allocator: std.mem.Allocator, selected: []const u8, parsed: ?
     return .{ .array = array };
 }
 
+/// Implements observed claim workflow logic using caller-owned inputs.
 fn observedClaim(parsed: ?std.json.Value, backend_name: []const u8) Claim {
     const root = parsed orelse return notObserved(backend_name);
     if (root != .object) return notObserved(backend_name);
@@ -400,16 +421,19 @@ fn observedClaim(parsed: ?std.json.Value, backend_name: []const u8) Claim {
     return notObserved(backend_name);
 }
 
+/// Implements match object claim workflow logic using caller-owned inputs.
 fn matchObjectClaim(obj: std.json.ObjectMap, backend_name: []const u8) ?Claim {
     if (!objectNamesBackend(obj, backend_name)) return null;
     return statusClaim(backend_name, statusFromObject(obj) orelse "observed", "top_level");
 }
 
+/// Implements object names backend workflow logic using caller-owned inputs.
 fn objectNamesBackend(obj: std.json.ObjectMap, backend_name: []const u8) bool {
     const name = stringField(obj, "backend") orelse stringField(obj, "name") orelse stringField(obj, "backend_name") orelse return false;
     return backendSelected(name, backend_name) or backendSelected(normalizeBackendName(name), backend_name);
 }
 
+/// Implements status from object workflow logic using caller-owned inputs.
 fn statusFromObject(obj: std.json.ObjectMap) ?[]const u8 {
     if (obj.get("ok")) |value| if (value == .bool and value.bool) return "passed";
     if (obj.get("conformant")) |value| if (value == .bool and value.bool) return "passed";
@@ -419,19 +443,23 @@ fn statusFromObject(obj: std.json.ObjectMap) ?[]const u8 {
     return null;
 }
 
+/// Implements status claim workflow logic using caller-owned inputs.
 fn statusClaim(backend_name: []const u8, status: []const u8, evidence: []const u8) Claim {
     const ok = statusAllowsClaim(status);
     return .{ .backend = backend_name, .status = status, .claim_allowed = ok, .confidence = if (ok) "medium" else "low", .evidence = evidence };
 }
 
+/// Implements not observed workflow logic using caller-owned inputs.
 fn notObserved(backend_name: []const u8) Claim {
     return .{ .backend = backend_name, .status = "not_observed", .claim_allowed = false, .confidence = "low", .evidence = "no matching passed conformance record" };
 }
 
+/// Implements status allows claim workflow logic using caller-owned inputs.
 fn statusAllowsClaim(status: []const u8) bool {
     return std.ascii.eqlIgnoreCase(status, "passed") or std.ascii.eqlIgnoreCase(status, "pass") or std.ascii.eqlIgnoreCase(status, "ok") or std.ascii.eqlIgnoreCase(status, "conformant");
 }
 
+/// Reads conformance evidence data from the provided context without taking ownership of inputs.
 fn readConformanceEvidence(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !SourceEvidence {
     _ = allocator;
     if (argString(args, "content")) |content| return .{ .available = true, .source_kind = "inline_content", .bytes = content };
@@ -443,11 +471,13 @@ fn readConformanceEvidence(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     return .{ .available = true, .source_kind = "workspace_file", .source_path = path, .bytes = bytes, .owned = bytes };
 }
 
+/// Implements evidence read error workflow logic using caller-owned inputs.
 fn evidenceReadError(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, err: anyerror) !Result {
     const path = argString(args, "input") orelse default_conformance_input;
     return workspacePathErrorResult(a, allocator, "zigar_conformance_report", path, err);
 }
 
+/// Serializes generated config basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn generatedConfigBasisValue(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, kind: []const u8, output: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "client", .{ .string = client });
@@ -459,6 +489,7 @@ fn generatedConfigBasisValue(allocator: std.mem.Allocator, a: *App, client: []co
     return .{ .object = obj };
 }
 
+/// Serializes conformance basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceBasisValue(allocator: std.mem.Allocator, a: *App, backend: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "backend", .{ .string = backend });
@@ -469,6 +500,7 @@ fn conformanceBasisValue(allocator: std.mem.Allocator, a: *App, backend: []const
     return .{ .object = obj };
 }
 
+/// Serializes public claims fields into an allocator-owned JSON value; allocation failures propagate.
 fn publicClaimsValue(allocator: std.mem.Allocator, backend: []const u8, has_evidence: bool) !std.json.Value {
     var array = std.json.Array.init(allocator);
     try array.append(try claimMappingValue(allocator, "MCP tool contract is shipped", "tool manifest and zigar_schema", true, "high"));
@@ -477,6 +509,7 @@ fn publicClaimsValue(allocator: std.mem.Allocator, backend: []const u8, has_evid
     return .{ .array = array };
 }
 
+/// Serializes claim mapping fields into an allocator-owned JSON value; allocation failures propagate.
 fn claimMappingValue(allocator: std.mem.Allocator, claim: []const u8, evidence: []const u8, allowed: bool, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "claim", .{ .string = claim });
@@ -486,6 +519,7 @@ fn claimMappingValue(allocator: std.mem.Allocator, claim: []const u8, evidence: 
     return .{ .object = obj };
 }
 
+/// Implements config content workflow logic using caller-owned inputs.
 fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, kind: []const u8, server_path: []const u8) ![]u8 {
     const argv = try generatedServerArgv(allocator, a, transport, server_path);
     if (std.mem.eql(u8, kind, "mcp-json") or std.mem.eql(u8, kind, "claude-json") or std.mem.eql(u8, kind, "gemini-json")) {
@@ -507,6 +541,7 @@ fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, tran
     return markdownConfigContent(allocator, a, client, transport, server_path);
 }
 
+/// Implements codex toml content workflow logic using caller-owned inputs.
 fn codexTomlContent(allocator: std.mem.Allocator, a: *App, transport: []const u8, server_path: []const u8) ![]u8 {
     const server = try jsonStringLiteral(allocator, server_path);
     defer allocator.free(server);
@@ -528,6 +563,7 @@ fn codexTomlContent(allocator: std.mem.Allocator, a: *App, transport: []const u8
     , .{ server, workspace });
 }
 
+/// Implements markdown config content workflow logic using caller-owned inputs.
 fn markdownConfigContent(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, server_path: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator,
         \\# zigar client configuration
@@ -544,11 +580,13 @@ fn markdownConfigContent(allocator: std.mem.Allocator, a: *App, client: []const 
     , .{ client, transport, server_path, a.workspace.root });
 }
 
+/// Implements generated server argv workflow logic using caller-owned inputs.
 fn generatedServerArgv(allocator: std.mem.Allocator, a: *App, transport: []const u8, server_path: []const u8) ![]const []const u8 {
     if (std.mem.eql(u8, transport, "http")) return stringArrayLiteral(allocator, &.{ server_path, "--transport", "http", "--host", a.config.host, "--port", try std.fmt.allocPrint(allocator, "{d}", .{a.config.port}), "--workspace", a.workspace.root });
     return stringArrayLiteral(allocator, &.{ server_path, "--transport", "stdio", "--workspace", a.workspace.root });
 }
 
+/// Serializes verification commands fields into an allocator-owned JSON value; allocation failures propagate.
 fn verificationCommandsValue(allocator: std.mem.Allocator) !std.json.Value {
     return stringArrayValue(allocator, &.{
         "zig build smoke stdio-fixtures --summary all",
@@ -558,6 +596,7 @@ fn verificationCommandsValue(allocator: std.mem.Allocator) !std.json.Value {
     });
 }
 
+/// Serializes provenance fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceValue(allocator: std.mem.Allocator, producer: []const u8, artifact_kind: []const u8, argv: []const []const u8, notes: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "producer", .{ .string = producer });
@@ -568,6 +607,7 @@ fn provenanceValue(allocator: std.mem.Allocator, producer: []const u8, artifact_
     return .{ .object = obj };
 }
 
+/// Writes and register artifact fields to the provided JSON stream and propagates writer failures.
 fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const u8, bytes: []const u8, producer: []const u8, artifact_kind: []const u8, argv: []const []const u8, backend: []const u8, backend_version: []const u8, notes: []const u8) !void {
     try a.workspace.putFile(path, bytes);
     const resolved = try a.workspace.resolveOutput(path);
@@ -589,6 +629,7 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
     }, bytes) catch {};
 }
 
+/// Serializes artifact identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn artifactIdentityValue(allocator: std.mem.Allocator, path: []const u8, abs_path: []const u8, bytes: []const u8) !std.json.Value {
     const identity = try artifacts.identityFromBytes(allocator, path, abs_path, bytes);
     var obj = std.json.ObjectMap.empty;
@@ -599,6 +640,7 @@ fn artifactIdentityValue(allocator: std.mem.Allocator, path: []const u8, abs_pat
     return .{ .object = obj };
 }
 
+/// Builds preimage identity metadata for the requested workspace path.
 fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
     const bytes = a.workspace.readFileAlloc(a.io, path, max_evidence_bytes) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
@@ -609,6 +651,7 @@ fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const 
     return preimageValue(allocator, true, bytes.len, hash);
 }
 
+/// Serializes preimage fields into an allocator-owned JSON value; allocation failures propagate.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exists", .{ .bool = exists });
@@ -617,6 +660,7 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     return .{ .object = obj };
 }
 
+/// Serializes toolchain fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "zig_path", .{ .string = a.config.zig_path });
@@ -628,6 +672,7 @@ fn toolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Serializes profile status fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     const exists = workspacePathExists(a, ".zigar/profile.json");
@@ -637,10 +682,12 @@ fn profileStatusValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Reports whether the requested workspace path exists.
 fn workspacePathExists(a: *App, path: []const u8) bool {
     return a.workspace.exists(a.allocator, path, false);
 }
 
+/// Serializes identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn identityValue(allocator: std.mem.Allocator, prefix: []const u8, parts: []const []const u8) !std.json.Value {
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     hasher.update(prefix);
@@ -655,6 +702,7 @@ fn identityValue(allocator: std.mem.Allocator, prefix: []const u8, parts: []cons
     return .{ .string = hash };
 }
 
+/// Implements stringify alloc workflow logic using caller-owned inputs.
 fn stringifyAlloc(allocator: std.mem.Allocator, value: std.json.Value, options: std.json.Stringify.Options) ![]u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
@@ -662,28 +710,33 @@ fn stringifyAlloc(allocator: std.mem.Allocator, value: std.json.Value, options: 
     return try aw.toOwnedSlice();
 }
 
+/// Extracts json string literal data from JSON input without taking ownership of borrowed values.
 fn jsonStringLiteral(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
     return stringifyAlloc(allocator, .{ .string = value }, .{ .whitespace = .minified });
 }
 
+/// Extracts string array literal data from JSON input without taking ownership of borrowed values.
 fn stringArrayLiteral(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
     const owned = try allocator.alloc([]const u8, values.len);
     for (values, 0..) |value, i| owned[i] = value;
     return owned;
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
 }
 
+/// Extracts string field data from JSON input without taking ownership of borrowed values.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     const value = obj.get(field) orelse return null;
     if (value != .string) return null;
     return value.string;
 }
 
+/// Implements report kind workflow logic using caller-owned inputs.
 fn reportKind(value: std.json.Value) []const u8 {
     if (value != .object) return "unknown";
     const kind = stringField(value.object, "kind") orelse return "unknown";
@@ -693,6 +746,7 @@ fn reportKind(value: std.json.Value) []const u8 {
     return "unknown";
 }
 
+/// Implements configured backend path workflow logic using caller-owned inputs.
 fn configuredBackendPath(a: *App, name: []const u8) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return a.config.zig_path;
     if (std.mem.eql(u8, name, "zls")) return a.config.zls_path;
@@ -702,11 +756,13 @@ fn configuredBackendPath(a: *App, name: []const u8) []const u8 {
     return a.config.diff_folded_path;
 }
 
+/// Normalizes backend name data into the representation consumed by this workflow.
 fn normalizeBackendName(raw: []const u8) []const u8 {
     if (std.mem.eql(u8, raw, "diff_folded")) return "diff-folded";
     return raw;
 }
 
+/// Implements backend selected workflow logic using caller-owned inputs.
 fn backendSelected(selected: []const u8, name: []const u8) bool {
     if (std.mem.eql(u8, selected, "all")) return true;
     if (std.mem.eql(u8, selected, name)) return true;
@@ -715,6 +771,7 @@ fn backendSelected(selected: []const u8, name: []const u8) bool {
     return false;
 }
 
+/// Implements transport name workflow logic using caller-owned inputs.
 fn transportName(a: *App) []const u8 {
     return switch (a.config.transport) {
         .stdio => "stdio",
@@ -722,6 +779,7 @@ fn transportName(a: *App) []const u8 {
     };
 }
 
+/// Implements host platform name workflow logic using caller-owned inputs.
 fn hostPlatformName(a: *App) []const u8 {
     const os = a.context.platform.os;
     if (std.mem.eql(u8, os, "linux")) return "linux";
@@ -730,6 +788,7 @@ fn hostPlatformName(a: *App) []const u8 {
     return os;
 }
 
+/// Implements default kind for client workflow logic using caller-owned inputs.
 fn defaultKindForClient(client: []const u8) []const u8 {
     if (std.mem.eql(u8, client, "codex")) return "codex-toml";
     if (std.mem.eql(u8, client, "claude")) return "claude-json";
@@ -738,6 +797,7 @@ fn defaultKindForClient(client: []const u8) []const u8 {
     return "mcp-json";
 }
 
+/// Implements default output for kind workflow logic using caller-owned inputs.
 fn defaultOutputForKind(client: []const u8, kind: []const u8) []const u8 {
     if (std.mem.eql(u8, kind, "codex-toml")) return ".zigar-cache/adoption/codex-mcp.toml";
     if (std.mem.eql(u8, kind, "claude-json")) return ".zigar-cache/adoption/claude-mcp.json";
@@ -747,34 +807,42 @@ fn defaultOutputForKind(client: []const u8, kind: []const u8) []const u8 {
     return default_config_output;
 }
 
+/// Implements valid client workflow logic using caller-owned inputs.
 fn validClient(value: []const u8) bool {
     return std.mem.eql(u8, value, "generic") or std.mem.eql(u8, value, "codex") or std.mem.eql(u8, value, "claude") or std.mem.eql(u8, value, "gemini") or std.mem.eql(u8, value, "hermes");
 }
 
+/// Implements valid transport workflow logic using caller-owned inputs.
 fn validTransport(value: []const u8) bool {
     return std.mem.eql(u8, value, "stdio") or std.mem.eql(u8, value, "http");
 }
 
+/// Implements valid config kind workflow logic using caller-owned inputs.
 fn validConfigKind(value: []const u8) bool {
     return std.mem.eql(u8, value, "mcp-json") or std.mem.eql(u8, value, "codex-toml") or std.mem.eql(u8, value, "claude-json") or std.mem.eql(u8, value, "gemini-json") or std.mem.eql(u8, value, "markdown");
 }
 
+/// Implements valid backend workflow logic using caller-owned inputs.
 fn validBackend(value: []const u8) bool {
     return std.mem.eql(u8, value, "all") or std.mem.eql(u8, value, "zig") or std.mem.eql(u8, value, "zls") or std.mem.eql(u8, value, "zlint") or std.mem.eql(u8, value, "zwanzig") or std.mem.eql(u8, value, "zflame") or std.mem.eql(u8, value, "diff-folded") or std.mem.eql(u8, value, "diff_folded");
 }
 
+/// Implements valid mode workflow logic using caller-owned inputs.
 fn validMode(value: []const u8) bool {
     return std.mem.eql(u8, value, "compact") or std.mem.eql(u8, value, "standard") or std.mem.eql(u8, value, "deep");
 }
 
+/// Implements supported platform workflow logic using caller-owned inputs.
 fn supportedPlatform(value: []const u8) bool {
     return std.mem.eql(u8, value, "native") or std.mem.eql(u8, value, "current") or std.mem.eql(u8, value, "linux") or std.mem.eql(u8, value, "macos") or std.mem.eql(u8, value, "windows") or std.mem.eql(u8, value, "wasm") or std.mem.eql(u8, value, "cross-target");
 }
 
+/// Implements client set workflow logic using caller-owned inputs.
 fn clientSet() []const u8 {
     return "generic, codex, claude, gemini, or hermes";
 }
 
+/// Implements backend set workflow logic using caller-owned inputs.
 fn backendSet() []const u8 {
     return "all, zig, zls, zlint, zwanzig, zflame, diff-folded, or diff_folded";
 }
@@ -786,6 +854,7 @@ const AdoptionHarness = struct {
     workspace: fakes.FakeWorkspaceStore,
     scanner: fakes.FakeWorkspaceScanner,
 
+    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator) AdoptionHarness {
         return .{
             .command_runner = fakes.FakeCommandRunner.init(allocator),
@@ -794,12 +863,14 @@ const AdoptionHarness = struct {
         };
     }
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: *AdoptionHarness) void {
         self.command_runner.deinit();
         self.workspace.deinit();
         self.scanner.deinit();
     }
 
+    /// Builds a test app fixture with the ports needed by this workflow.
     fn app(self: *AdoptionHarness, allocator: std.mem.Allocator) App {
         return App.init(.{
             .workspace = .{ .root = "/work", .cache_root = "/work/.zigar-cache", .transport = "http", .host = "127.0.0.1", .port = 9090 },
@@ -819,6 +890,7 @@ const AdoptionHarness = struct {
         }, allocator);
     }
 
+    /// Implements verify workflow logic using caller-owned inputs.
     fn verify(self: *AdoptionHarness) !void {
         try self.command_runner.verify();
         try self.workspace.verify();
@@ -826,30 +898,37 @@ const AdoptionHarness = struct {
     }
 };
 
+/// Implements put string arg workflow logic using caller-owned inputs.
 fn putStringArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: []const u8) !void {
     try obj.put(allocator, name, .{ .string = value });
 }
 
+/// Implements put bool arg workflow logic using caller-owned inputs.
 fn putBoolArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: bool) !void {
     try obj.put(allocator, name, .{ .bool = value });
 }
 
+/// Implements put int arg workflow logic using caller-owned inputs.
 fn putIntArg(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, value: i64) !void {
     try obj.put(allocator, name, .{ .integer = value });
 }
 
+/// Implements expect resolve output workflow logic using caller-owned inputs.
 fn expectResolveOutput(store: *fakes.FakeWorkspaceStore, path: []const u8, abs_path: []const u8) !void {
     try store.expectResolve(.{ .path = path, .for_output = true, .provenance = "arch110-workflow-resolve-output" }, abs_path);
 }
 
+/// Implements expect read workflow workflow logic using caller-owned inputs.
 fn expectReadWorkflow(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
     try store.expectRead(.{ .path = path, .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, bytes);
 }
 
+/// Implements expect read workflow error workflow logic using caller-owned inputs.
 fn expectReadWorkflowError(store: *fakes.FakeWorkspaceStore, path: []const u8, err: ports.PortError) !void {
     try store.expectReadError(.{ .path = path, .max_bytes = max_evidence_bytes, .provenance = "arch110-workflow-read" }, err);
 }
 
+/// Implements expect workflow write workflow logic using caller-owned inputs.
 fn expectWorkflowWrite(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
     try store.expectWrite(.{
         .path = path,

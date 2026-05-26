@@ -7,15 +7,19 @@ const ports = @import("../../ports.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 const workspace_scans = @import("../static_analysis/workspace_scans.zig");
 
+/// Maximum resource read accepted by this workflow module.
 pub const max_resource_read: usize = 1024 * 1024;
+/// Maximum roots accepted by this workflow module.
 pub const max_roots: usize = 16;
 
+/// Error set returned by runtime ux workflow failures.
 pub const RuntimeUxError = ports.PortError || error{
     InvalidArguments,
     MissingFile,
     MissingCatalog,
 };
 
+/// Carries run job request data across use case and port boundaries.
 pub const RunJobRequest = struct {
     tool_name: []const u8,
     command: []const u8,
@@ -25,6 +29,7 @@ pub const RunJobRequest = struct {
     include_events: bool = false,
 };
 
+/// Carries job result request data across use case and port boundaries.
 pub const JobResultRequest = struct {
     job_id: []const u8,
     cursor: u64 = 0,
@@ -32,12 +37,14 @@ pub const JobResultRequest = struct {
     mode: []const u8 = "standard",
 };
 
+/// Carries events request data across use case and port boundaries.
 pub const EventsRequest = struct {
     job_id: ?[]const u8 = null,
     cursor: u64 = 0,
     limit: usize = 50,
 };
 
+/// Carries resource query request data across use case and port boundaries.
 pub const ResourceQueryRequest = struct {
     uri: []const u8,
     cursor: u64 = 0,
@@ -45,6 +52,7 @@ pub const ResourceQueryRequest = struct {
     mode: []const u8 = "standard",
 };
 
+/// Invokes run job value with caller-owned inputs; command and allocation failures propagate.
 pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!std.json.Value {
     // Jobs are tracked in process-local session state; subprocess lifetime is
     // summarized into immutable tails so clients can poll deterministically.
@@ -99,6 +107,7 @@ pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     return .{ .object = obj };
 }
 
+/// Serializes job status fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobStatusValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: []const u8) RuntimeUxError!std.json.Value {
     const job = try context.runtime_session.jobById(job_id);
     var obj = std.json.ObjectMap.empty;
@@ -112,6 +121,7 @@ pub fn jobStatusValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
+/// Serializes job result fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: JobResultRequest) RuntimeUxError!std.json.Value {
     const job = try context.runtime_session.jobById(request.job_id);
     var obj = std.json.ObjectMap.empty;
@@ -129,6 +139,7 @@ pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
+/// Serializes job cancel fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: []const u8, reason: []const u8) RuntimeUxError!std.json.Value {
     const before = try context.runtime_session.jobById(job_id);
     const job = try context.runtime_session.cancelJob(job_id, reason);
@@ -144,6 +155,7 @@ pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
+/// Serializes cancel status fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn cancelStatusValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: ?[]const u8) RuntimeUxError!std.json.Value {
     var jobs = std.json.Array.init(allocator);
     if (job_id) |id| {
@@ -162,6 +174,7 @@ pub fn cancelStatusValue(allocator: std.mem.Allocator, context: app_context.Runt
     return .{ .object = obj };
 }
 
+/// Invokes run events value with caller-owned inputs; command and allocation failures propagate.
 pub fn runEventsValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: EventsRequest) RuntimeUxError!std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -171,6 +184,7 @@ pub fn runEventsValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
+/// Serializes resource query fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: ResourceQueryRequest) RuntimeUxError!std.json.Value {
     if (std.mem.startsWith(u8, request.uri, "zigar://file/")) return fileResourceQueryValue(allocator, context, request.uri, request.mode);
     if (std.mem.eql(u8, request.uri, "zigar://jobs")) return jobsQueryValue(allocator, context, request.cursor, request.limit, request.mode);
@@ -187,6 +201,7 @@ pub fn resourceQueryValue(allocator: std.mem.Allocator, context: app_context.Run
     return error.InvalidArguments;
 }
 
+/// Serializes resource subscribe fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceSubscribeValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) RuntimeUxError!std.json.Value {
     const sub = try context.runtime_session.subscribe(uri);
     var obj = std.json.ObjectMap.empty;
@@ -199,6 +214,7 @@ pub fn resourceSubscribeValue(allocator: std.mem.Allocator, context: app_context
     return .{ .object = obj };
 }
 
+/// Serializes resource unsubscribe fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, subscription_id: ?[]const u8, uri: ?[]const u8) RuntimeUxError!std.json.Value {
     if (subscription_id == null and uri == null) return error.InvalidArguments;
     const sub = try context.runtime_session.unsubscribe(subscription_id orelse "", uri);
@@ -210,6 +226,7 @@ pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_conte
     return .{ .object = obj };
 }
 
+/// Serializes roots sync fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, roots: []const u8, apply: bool) RuntimeUxError!std.json.Value {
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const before = try context.runtime_session.rootCount();
@@ -227,6 +244,7 @@ pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
+/// Serializes workspace map result fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceMapResultValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, kind: []const u8, uri: ?[]const u8) RuntimeUxError!std.json.Value {
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     var obj = std.json.ObjectMap.empty;
@@ -237,6 +255,7 @@ pub fn workspaceMapResultValue(allocator: std.mem.Allocator, context: app_contex
     return .{ .object = obj };
 }
 
+/// Serializes workspace select fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, workspace_id: []const u8, apply: bool) RuntimeUxError!std.json.Value {
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const root = try context.runtime_session.selectRoot(workspace_id, apply);
@@ -250,6 +269,7 @@ pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.R
     return .{ .object = obj };
 }
 
+/// Serializes agent guide 2 fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -269,6 +289,7 @@ pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task:
     return .{ .object = obj };
 }
 
+/// Serializes client guide fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn clientGuideValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -286,6 +307,7 @@ pub fn clientGuideValue(allocator: std.mem.Allocator, client: []const u8, task: 
     return .{ .object = obj };
 }
 
+/// Serializes prompt pack fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn promptPackValue(allocator: std.mem.Allocator, workflow: ?[]const u8, mode: []const u8) !std.json.Value {
     var workflows = std.json.Array.init(allocator);
     for (workflow_defs) |def| {
@@ -302,6 +324,7 @@ pub fn promptPackValue(allocator: std.mem.Allocator, workflow: ?[]const u8, mode
     return .{ .object = obj };
 }
 
+/// Implements workspace resource text workflow logic using caller-owned inputs.
 pub fn workspaceResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) ![]const u8 {
     return std.fmt.allocPrint(allocator, "workspace={s}\ncache={s}\nzig={s}\nzwanzig={s}\nzflame={s}\ndiff_folded={s}\n", .{
         context.workspace.root,
@@ -313,6 +336,7 @@ pub fn workspaceResourceText(allocator: std.mem.Allocator, context: app_context.
     });
 }
 
+/// Serializes zls status resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn zlsStatusResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -329,6 +353,7 @@ pub fn zlsStatusResourceValue(allocator: std.mem.Allocator, context: app_context
     return .{ .object = obj };
 }
 
+/// Implements catalog resource text workflow logic using caller-owned inputs.
 pub fn catalogResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError![]const u8 {
     const catalog = context.tool_catalog orelse return error.MissingCatalog;
     const rendered = try catalog.text(allocator);
@@ -336,6 +361,7 @@ pub fn catalogResourceText(allocator: std.mem.Allocator, context: app_context.Ru
     return allocator.dupe(u8, rendered.text) catch return error.OutOfMemory;
 }
 
+/// Implements import graph resource text workflow logic using caller-owned inputs.
 pub fn importGraphResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError![]const u8 {
     var graph = try workspace_scans.importGraph(allocator, .{
         .workspace = context.workspace,
@@ -346,6 +372,7 @@ pub fn importGraphResourceText(allocator: std.mem.Allocator, context: app_contex
     return workspace_scans.importGraphText(allocator, graph);
 }
 
+/// Serializes metrics resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn metricsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -363,6 +390,7 @@ pub fn metricsResourceValue(allocator: std.mem.Allocator, context: app_context.R
     return .{ .object = obj };
 }
 
+/// Serializes jobs resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
     var jobs = std.json.Array.init(allocator);
     const count = try context.runtime_session.jobCount();
@@ -377,6 +405,7 @@ pub fn jobsResourceValue(allocator: std.mem.Allocator, context: app_context.Runt
     return .{ .object = obj };
 }
 
+/// Invokes run events resource value with caller-owned inputs; command and allocation failures propagate.
 pub fn runEventsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
     var events = std.json.Array.init(allocator);
     const count = try context.runtime_session.eventCount();
@@ -394,6 +423,7 @@ pub fn runEventsResourceValue(allocator: std.mem.Allocator, context: app_context
     return .{ .object = obj };
 }
 
+/// Serializes workspace roots resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     var roots = std.json.Array.init(allocator);
@@ -412,6 +442,7 @@ pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_co
     return .{ .object = obj };
 }
 
+/// Serializes dynamic resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn dynamicResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) RuntimeUxError!std.json.Value {
     const prefix = "zigar://file/";
     if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
@@ -448,6 +479,7 @@ pub fn dynamicResourceValue(allocator: std.mem.Allocator, context: app_context.R
     return .{ .object = obj };
 }
 
+/// Implements analysis error workflow logic using caller-owned inputs.
 fn analysisError(err: anyerror) RuntimeUxError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
@@ -455,10 +487,12 @@ fn analysisError(err: anyerror) RuntimeUxError {
     };
 }
 
+/// Implements profile prompt text workflow logic using caller-owned inputs.
 pub fn profilePromptText() []const u8 {
     return "Use zigar_workspace_info, zig_profile_plan, zig_profile_run, zig_flamegraph, and zig_flamegraph_diff to build a deterministic Zig profiling workflow. Do not edit source files unless an explicit tool argument requires apply=true.";
 }
 
+/// Implements workflow prompt text workflow logic using caller-owned inputs.
 pub fn workflowPromptText(name: []const u8) []const u8 {
     if (std.mem.eql(u8, name, "zigar_compile_error_workflow")) return "Use zigar_run_stream or zig_check evidence, then zig_compile_error_index, zig_explain_errors, and zigar_failure_fusion before proposing the smallest fix.";
     if (std.mem.eql(u8, name, "zigar_refactor_workflow")) return "Use owner, symbol, import, impact, public API, and changed-file tools before editing; validate with format, check, tests, and patch guard evidence.";
@@ -468,11 +502,13 @@ pub fn workflowPromptText(name: []const u8) []const u8 {
     return "Discover relevant tests, run the narrowest bounded zigar job, triage failures, and broaden only after local evidence is clean.";
 }
 
+/// Groups borrowed command text and allocator-owned argv for a runtime job plan.
 const RunPlan = struct {
     argv: []const []const u8,
     command_text: []const u8,
 };
 
+/// Constructs run plan data from caller-owned inputs, propagating allocation failures.
 fn buildRunPlan(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!RunPlan {
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
@@ -506,12 +542,14 @@ fn buildRunPlan(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
     return .{ .argv = owned_argv, .command_text = try commandString(allocator, owned_argv) };
 }
 
+/// Implements checked relative path workflow logic using caller-owned inputs.
 fn checkedRelativePath(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, path: []const u8) RuntimeUxError![]const u8 {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "runtime_ux.run_plan" });
     defer resolved.deinit(allocator);
     return allocator.dupe(u8, path) catch return error.OutOfMemory;
 }
 
+/// Serializes command error job fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, tool_name: []const u8, job: ports.RuntimeJobSnapshot, argv: []const []const u8, timeout_ms: i64, err: anyerror, include_events: bool) !std.json.Value {
     const failed = context.runtime_session.jobById(job.id) catch job;
     var obj = std.json.ObjectMap.empty;
@@ -530,6 +568,7 @@ fn commandErrorJobValue(allocator: std.mem.Allocator, context: app_context.Runti
     return .{ .object = obj };
 }
 
+/// Serializes file resource query fields into an allocator-owned JSON value; allocation failures propagate.
 fn fileResourceQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8, mode: []const u8) RuntimeUxError!std.json.Value {
     const dynamic = try dynamicResourceValue(allocator, context, uri);
     const obj = dynamic.object;
@@ -544,6 +583,7 @@ fn fileResourceQueryValue(allocator: std.mem.Allocator, context: app_context.Run
     return .{ .object = out };
 }
 
+/// Serializes workspace map fields into an allocator-owned JSON value; allocation failures propagate.
 fn workspaceMapValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
     var roots = std.json.Array.init(allocator);
     const root_count = try context.runtime_session.rootCount();
@@ -568,6 +608,7 @@ fn workspaceMapValue(allocator: std.mem.Allocator, context: app_context.RuntimeU
     return .{ .object = obj };
 }
 
+/// Serializes jobs query fields into an allocator-owned JSON value; allocation failures propagate.
 fn jobsQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, cursor: u64, limit: usize, mode: []const u8) RuntimeUxError!std.json.Value {
     var page = std.json.Array.init(allocator);
     const count = try context.runtime_session.jobCount();
@@ -585,6 +626,7 @@ fn jobsQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxCo
     return .{ .object = obj };
 }
 
+/// Serializes job resource fields into an allocator-owned JSON value; allocation failures propagate.
 fn jobResourceValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -599,6 +641,7 @@ fn jobResourceValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot)
     return .{ .object = obj };
 }
 
+/// Serializes job fields into an allocator-owned JSON value; allocation failures propagate.
 fn jobValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -618,6 +661,7 @@ fn jobValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.js
     return .{ .object = obj };
 }
 
+/// Serializes cancellation fields into an allocator-owned JSON value; allocation failures propagate.
 fn cancellationValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -629,6 +673,7 @@ fn cancellationValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot
     return .{ .object = obj };
 }
 
+/// Serializes events page fields into an allocator-owned JSON value; allocation failures propagate.
 fn eventsPageValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_filter: ?[]const u8, cursor: u64, limit: usize) RuntimeUxError!std.json.Value {
     const count = try context.runtime_session.eventCount();
     var sequence = cursor + 1;
@@ -650,6 +695,7 @@ fn eventsPageValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     return .{ .object = obj };
 }
 
+/// Serializes event fields into an allocator-owned JSON value; allocation failures propagate.
 fn eventValue(allocator: std.mem.Allocator, event: ports.RuntimeEventSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -663,6 +709,7 @@ fn eventValue(allocator: std.mem.Allocator, event: ports.RuntimeEventSnapshot) !
     return .{ .object = obj };
 }
 
+/// Serializes root fields into an allocator-owned JSON value; allocation failures propagate.
 fn rootValue(allocator: std.mem.Allocator, root: ports.RuntimeRootSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -674,6 +721,7 @@ fn rootValue(allocator: std.mem.Allocator, root: ports.RuntimeRootSnapshot) !std
     return .{ .object = obj };
 }
 
+/// Serializes subscription fields into an allocator-owned JSON value; allocation failures propagate.
 fn subscriptionValue(allocator: std.mem.Allocator, sub: ports.RuntimeSubscriptionSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -684,6 +732,7 @@ fn subscriptionValue(allocator: std.mem.Allocator, sub: ports.RuntimeSubscriptio
     return .{ .object = obj };
 }
 
+/// Serializes roots preview fields into an allocator-owned JSON value; allocation failures propagate.
 fn rootsPreviewValue(allocator: std.mem.Allocator, roots_text: []const u8, default_root: []const u8) !std.json.Value {
     var roots = std.json.Array.init(allocator);
     var count: usize = 0;
@@ -711,6 +760,7 @@ fn rootsPreviewValue(allocator: std.mem.Allocator, roots_text: []const u8, defau
     return .{ .array = roots };
 }
 
+/// Carries workflow def data across use case and port boundaries.
 const WorkflowDef = struct {
     name: []const u8,
     title: []const u8,
@@ -727,6 +777,7 @@ const workflow_defs = [_]WorkflowDef{
     .{ .name = "zigar_perf_workflow", .title = "Performance Workflow", .prompt = "Plan a reproducible benchmark, run profiling tools with explicit commands, generate flamegraphs, compare captures, and keep profiler availability explicit.", .tools = &.{ "zig_profile_plan", "zig_profile_run", "zig_flamegraph", "zig_flamegraph_diff", "zigar_backend_verify" } },
 };
 
+/// Serializes workflow fields into an allocator-owned JSON value; allocation failures propagate.
 fn workflowValue(allocator: std.mem.Allocator, def: WorkflowDef) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -737,12 +788,14 @@ fn workflowValue(allocator: std.mem.Allocator, def: WorkflowDef) !std.json.Value
     return .{ .object = obj };
 }
 
+/// Serializes workflow summaries fields into an allocator-owned JSON value; allocation failures propagate.
 fn workflowSummariesValue(allocator: std.mem.Allocator) !std.json.Value {
     var workflows = std.json.Array.init(allocator);
     for (workflow_defs) |def| try workflows.append(try workflowValue(allocator, def));
     return .{ .array = workflows };
 }
 
+/// Serializes workflow contract fields into an allocator-owned JSON value; allocation failures propagate.
 fn workflowContractValue(
     allocator: std.mem.Allocator,
     input_basis: []const u8,
@@ -765,6 +818,7 @@ fn workflowContractValue(
     return .{ .object = obj };
 }
 
+/// Invokes runtime limitations value with caller-owned inputs; command and allocation failures propagate.
 fn runtimeLimitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     return stringArrayValue(allocator, &.{
         "job and event state is process-local and not persisted across server restarts",
@@ -774,6 +828,7 @@ fn runtimeLimitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     });
 }
 
+/// Serializes diagnostics resource fields into an allocator-owned JSON value; allocation failures propagate.
 fn diagnosticsResourceValue(allocator: std.mem.Allocator, file: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -788,6 +843,7 @@ fn diagnosticsResourceValue(allocator: std.mem.Allocator, file: []const u8) !std
     return .{ .object = obj };
 }
 
+/// Implements ast decl summary json workflow logic using caller-owned inputs.
 fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
     var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
     defer summary.deinit(allocator);
@@ -814,6 +870,7 @@ fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: 
     return .{ .object = obj };
 }
 
+/// Implements ast imports json workflow logic using caller-owned inputs.
 fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
     var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
     defer summary.deinit(allocator);
@@ -838,10 +895,12 @@ fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: []co
     return .{ .object = obj };
 }
 
+/// Extracts json string data from JSON input without taking ownership of borrowed values.
 fn jsonString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Implements put parse metadata workflow logic using caller-owned inputs.
 fn putParseMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, parse: zig_analysis.ParseMetadata) !void {
     try obj.put(allocator, "parse_status", .{ .string = switch (parse.status) {
         .ok => "ok",
@@ -853,6 +912,7 @@ fn putParseMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, pars
     try obj.put(allocator, "parse_error_count", .{ .integer = parse.parse_error_count });
 }
 
+/// Serializes backend cache fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendCacheValue(allocator: std.mem.Allocator, snapshot: app_context.BackendProbeCacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -865,6 +925,7 @@ fn backendCacheValue(allocator: std.mem.Allocator, snapshot: app_context.Backend
     return .{ .object = obj };
 }
 
+/// Serializes cached probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn cachedProbeValue(allocator: std.mem.Allocator, probed: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -875,6 +936,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probed: bool) !std.json.Value 
     return .{ .object = obj };
 }
 
+/// Serializes analysis cache status fields into an allocator-owned JSON value; allocation failures propagate.
 fn analysisCacheStatusValue(allocator: std.mem.Allocator, snapshot: app_context.CacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -886,6 +948,7 @@ fn analysisCacheStatusValue(allocator: std.mem.Allocator, snapshot: app_context.
     return .{ .object = obj };
 }
 
+/// Reports whether the requested workspace path exists.
 fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, path: []const u8) RuntimeUxError!bool {
     const exists = context.workspace_store.exists(allocator, .{
         .path = path,
@@ -894,6 +957,7 @@ fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.Runtim
     return exists.exists;
 }
 
+/// Serializes omitted sections fields into an allocator-owned JSON value; allocation failures propagate.
 fn omittedSectionsValue(allocator: std.mem.Allocator, mode: []const u8, sections: []const []const u8) !std.json.Value {
     var arr = std.json.Array.init(allocator);
     if (std.mem.eql(u8, mode, "deep")) return .{ .array = arr };
@@ -901,24 +965,29 @@ fn omittedSectionsValue(allocator: std.mem.Allocator, mode: []const u8, sections
     return .{ .array = arr };
 }
 
+/// Serializes argv fields into an allocator-owned JSON value; allocation failures propagate.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     return stringArrayValue(allocator, argv);
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
 }
 
+/// Formats argv entries into display command text.
 fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
     return std.mem.join(allocator, " ", argv);
 }
 
+/// Implements cursor string workflow logic using caller-owned inputs.
 fn cursorString(allocator: std.mem.Allocator, cursor: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, "{d}", .{cursor});
 }
 
+/// Implements error kind workflow logic using caller-owned inputs.
 fn errorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -932,10 +1001,12 @@ fn errorKind(err: anyerror) []const u8 {
 
 const test_fakes = @import("../../../testing/fakes/root.zig");
 
+/// Carries non owning catalog data across use case and port boundaries.
 const NonOwningCatalog = struct {
     text_value: []const u8,
     calls: usize = 0,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *NonOwningCatalog) ports.ToolCatalog {
         return .{
             .ptr = self,
@@ -943,6 +1014,7 @@ const NonOwningCatalog = struct {
         };
     }
 
+    /// Implements text workflow logic using caller-owned inputs.
     fn text(ptr: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ToolCatalogText {
         const self: *NonOwningCatalog = @ptrCast(@alignCast(ptr));
         self.calls += 1;
@@ -950,6 +1022,7 @@ const NonOwningCatalog = struct {
     }
 };
 
+/// Invokes runtime ux test context with caller-owned inputs; command and allocation failures propagate.
 fn runtimeUxTestContext(
     command_runner: *test_fakes.FakeCommandRunner,
     workspace_store: *test_fakes.FakeWorkspaceStore,
@@ -970,12 +1043,14 @@ fn runtimeUxTestContext(
     };
 }
 
+/// Implements expect runtime workspace map exists workflow logic using caller-owned inputs.
 fn expectRuntimeWorkspaceMapExists(workspace: *test_fakes.FakeWorkspaceStore) !void {
     try workspace.expectExists(.{ .path = "build.zig", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
     try workspace.expectExists(.{ .path = "build.zig.zon", .provenance = "runtime_ux.workspace_map" }, .{ .exists = true, .kind = .file });
     try workspace.expectExists(.{ .path = "src", .provenance = "runtime_ux.workspace_map" }, .{ .exists = false });
 }
 
+/// Implements seed runtime job workflow logic using caller-owned inputs.
 fn seedRuntimeJob(session: *test_fakes.FakeRuntimeSession) !void {
     const port = session.port();
     try port.ensureDefaultRoot("/repo");
@@ -1374,6 +1449,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
     }
 }
 
+/// Implements expect runtime oom workflow logic using caller-owned inputs.
 fn expectRuntimeOom(err: anyerror) !void {
     try std.testing.expectEqual(error.OutOfMemory, err);
 }

@@ -7,15 +7,20 @@ const patch_sessions = @import("patch_sessions.zig");
 const path_policy = @import("../../../domain/editing/path_policy.zig");
 const session_domain = @import("../../../domain/editing/patch_session.zig");
 
+/// Schema version written into this module's structured payloads.
 pub const schema_version = patch_sessions.schema_version;
+/// Maximum session file bytes accepted by this workflow module.
 pub const max_session_file_bytes = patch_sessions.max_session_file_bytes;
+/// Shared replacement result type used by this workflow module.
 pub const Replacement = patch_sessions.Replacement;
 
+/// Carries byte range data across use case and port boundaries.
 const ByteRange = struct {
     start: usize,
     end: usize,
 };
 
+/// Serializes generated file trace fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_file_trace" });
     defer resolved.deinit(allocator);
@@ -34,6 +39,7 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
     return .{ .object = obj };
 }
 
+/// Serializes edit policy check fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const u8) !std.json.Value {
     var checked = std.json.Array.init(allocator);
     var blocked = std.json.Array.init(allocator);
@@ -63,6 +69,7 @@ pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const
     return .{ .object = obj };
 }
 
+/// Serializes generated route fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8, goal: ?[]const u8) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_route" });
     defer resolved.deinit(allocator);
@@ -84,6 +91,7 @@ pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.Ed
     return .{ .object = obj };
 }
 
+/// Serializes organize imports fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn organizeImportsValue(allocator: std.mem.Allocator, context: app_context.EditingContext, file: []const u8, apply: bool) !std.json.Value {
     const snap = try readSnapshot(allocator, context, file);
     defer snap.deinit(allocator);
@@ -93,6 +101,7 @@ pub fn organizeImportsValue(allocator: std.mem.Allocator, context: app_context.E
     return replacementSessionValue(allocator, context, "zig_organize_imports", &replacements, apply, "organize top-level @import declarations", "Only top-level const/pub const @import lines are sorted and deduplicated; scoped imports are left untouched.");
 }
 
+/// Serializes update imports fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn updateImportsValue(allocator: std.mem.Allocator, context: app_context.EditingContext, files: []const []const u8, old_import: []const u8, new_import: []const u8, apply: bool) !std.json.Value {
     var replacements = std.ArrayList(Replacement).empty;
     defer replacements.deinit(allocator);
@@ -107,6 +116,7 @@ pub fn updateImportsValue(allocator: std.mem.Allocator, context: app_context.Edi
     return replacementSessionValue(allocator, context, "zig_update_imports", replacements.items, apply, "update @import paths", "Import updates are exact string replacements inside @import(\"...\") calls; semantic module moves still need validation.");
 }
 
+/// Serializes move decl fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn moveDeclValue(allocator: std.mem.Allocator, context: app_context.EditingContext, source_file: []const u8, target_file: []const u8, name: []const u8, apply: bool) !std.json.Value {
     const source = try readSnapshot(allocator, context, source_file);
     defer source.deinit(allocator);
@@ -125,6 +135,7 @@ pub fn moveDeclValue(allocator: std.mem.Allocator, context: app_context.EditingC
     return replacementSessionValue(allocator, context, "zig_move_decl", &replacements, apply, "move a top-level declaration between files", "Declaration boundaries are syntax-heuristic; run semantic impact and compiler validation after applying.");
 }
 
+/// Serializes extract decl fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn extractDeclValue(allocator: std.mem.Allocator, context: app_context.EditingContext, file: []const u8, target_file: []const u8, start_line: usize, end_line: usize, apply: bool) !std.json.Value {
     if (std.mem.eql(u8, file, target_file) or start_line == 0 or end_line < start_line) return error.InvalidArguments;
     const source = try readSnapshot(allocator, context, file);
@@ -144,6 +155,7 @@ pub fn extractDeclValue(allocator: std.mem.Allocator, context: app_context.Editi
     return replacementSessionValue(allocator, context, "zig_extract_decl", &replacements, apply, "extract selected lines to a target file", "Extraction is text-range based and does not rewrite call sites or imports automatically.");
 }
 
+/// Serializes code action batch unavailable fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -158,6 +170,7 @@ pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.V
     return .{ .object = obj };
 }
 
+/// Serializes format fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, apply: bool, timeout_ms: i64) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.format" });
     defer resolved.deinit(allocator);
@@ -225,6 +238,7 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     return .{ .object = obj };
 }
 
+/// Serializes format check fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn formatCheckValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, path: []const u8, timeout_ms: i64) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "editing.format_check" });
     defer resolved.deinit(allocator);
@@ -241,6 +255,7 @@ pub fn formatCheckValue(allocator: std.mem.Allocator, context: app_context.CoreC
     return commandResultValue(allocator, "zig fmt --check", &argv, context.workspace.root, timeout_ms, result);
 }
 
+/// Serializes patch preview fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: []const u8, apply: bool) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.patch_preview.resolve" });
     defer resolved.deinit(allocator);
@@ -275,6 +290,7 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     return .{ .object = obj };
 }
 
+/// Serializes replacement session fields into an allocator-owned JSON value; allocation failures propagate.
 fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.EditingContext, tool_name: []const u8, replacements: []const Replacement, apply: bool, goal: []const u8, limitation: []const u8) !std.json.Value {
     var files = std.json.Array.init(allocator);
     var safe = true;
@@ -318,17 +334,20 @@ fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.Ed
     return .{ .object = obj };
 }
 
+/// Carries file snapshot data across use case and port boundaries.
 const FileSnapshot = struct {
     file: []const u8,
     bytes: []const u8,
     exists: bool,
     read_result: ?@import("../../ports.zig").WorkspaceReadResult = null,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     fn deinit(self: FileSnapshot, allocator: std.mem.Allocator) void {
         if (self.read_result) |result| result.deinit(allocator);
     }
 };
 
+/// Reads snapshot data from the provided context without taking ownership of inputs.
 fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !FileSnapshot {
     const result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -341,10 +360,12 @@ fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContex
     return .{ .file = path, .bytes = result.bytes, .exists = true, .read_result = result };
 }
 
+/// Implements classify path workflow logic using caller-owned inputs.
 fn classifyPath(path: []const u8) path_policy.PathPolicy {
     return path_policy.classify(path);
 }
 
+/// Serializes policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn policyValue(allocator: std.mem.Allocator, policy: path_policy.PathPolicy) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "classification", try ownedString(allocator, policy.classification));
@@ -357,6 +378,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: path_policy.PathPolicy) !st
     return .{ .object = obj };
 }
 
+/// Serializes identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn identityValue(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) !std.json.Value {
     var identity = try session_domain.identityFromBytes(allocator, exists, bytes);
     defer identity.deinit(allocator);
@@ -367,6 +389,7 @@ fn identityValue(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) 
     return .{ .object = obj };
 }
 
+/// Implements organize imports text workflow logic using caller-owned inputs.
 fn organizeImportsText(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
     var imports = std.ArrayList([]const u8).empty;
     defer imports.deinit(allocator);
@@ -398,11 +421,13 @@ fn organizeImportsText(allocator: std.mem.Allocator, source: []const u8) ![]cons
     return out.toOwnedSlice(allocator);
 }
 
+/// Reports whether top level import line matches the caller-provided data.
 fn isTopLevelImportLine(line: []const u8) bool {
     if (line.len == 0 or line[0] == ' ' or line[0] == '\t') return false;
     return (std.mem.startsWith(u8, line, "const ") or std.mem.startsWith(u8, line, "pub const ")) and std.mem.indexOf(u8, line, "@import(\"") != null;
 }
 
+/// Implements replace import text workflow logic using caller-owned inputs.
 fn replaceImportText(allocator: std.mem.Allocator, source: []const u8, old_import: []const u8, new_import: []const u8) ![]const u8 {
     const needle = try std.fmt.allocPrint(allocator, "@import(\"{s}\")", .{old_import});
     defer allocator.free(needle);
@@ -411,6 +436,7 @@ fn replaceImportText(allocator: std.mem.Allocator, source: []const u8, old_impor
     return replaceAll(allocator, source, needle, replacement);
 }
 
+/// Implements replace all workflow logic using caller-owned inputs.
 fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const u8, replacement: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     var index: usize = 0;
@@ -424,6 +450,7 @@ fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const 
     return out.toOwnedSlice(allocator);
 }
 
+/// Finds declaration range data in the provided collection without taking ownership.
 fn findDeclarationRange(source: []const u8, name: []const u8) ?ByteRange {
     var lines = std.mem.splitScalar(u8, source, '\n');
     var offset: usize = 0;
@@ -443,6 +470,7 @@ fn findDeclarationRange(source: []const u8, name: []const u8) ?ByteRange {
     return null;
 }
 
+/// Reports whether named decl line matches the caller-provided data.
 fn isNamedDeclLine(line: []const u8, name: []const u8) bool {
     if (!isTopLevelDeclLine(line)) return false;
     inline for (.{ "const ", "var ", "fn " }) |needle| {
@@ -451,12 +479,14 @@ fn isNamedDeclLine(line: []const u8, name: []const u8) bool {
     return false;
 }
 
+/// Implements decl line contains name workflow logic using caller-owned inputs.
 fn declLineContainsName(line: []const u8, marker: []const u8, name: []const u8) bool {
     const index = std.mem.indexOf(u8, line, marker) orelse return false;
     const rest = line[index + marker.len ..];
     return std.mem.startsWith(u8, rest, name) and (rest.len == name.len or !isIdentChar(rest[name.len]));
 }
 
+/// Reports whether top level decl line matches the caller-provided data.
 fn isTopLevelDeclLine(line: []const u8) bool {
     if (line.len == 0 or line[0] == ' ' or line[0] == '\t') return false;
     return std.mem.startsWith(u8, line, "pub const ") or std.mem.startsWith(u8, line, "const ") or
@@ -465,10 +495,12 @@ fn isTopLevelDeclLine(line: []const u8) bool {
         std.mem.startsWith(u8, line, "export fn ") or std.mem.startsWith(u8, line, "extern fn ");
 }
 
+/// Reports whether ident char matches the caller-provided data.
 fn isIdentChar(ch: u8) bool {
     return std.ascii.isAlphanumeric(ch) or ch == '_';
 }
 
+/// Implements line range workflow logic using caller-owned inputs.
 fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange {
     var line: usize = 1;
     var offset: usize = 0;
@@ -489,6 +521,7 @@ fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange 
     return null;
 }
 
+/// Appends decl text data into caller-provided storage, propagating allocation failures.
 fn appendDeclText(allocator: std.mem.Allocator, target: []const u8, decl_text: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, target);
@@ -499,6 +532,7 @@ fn appendDeclText(allocator: std.mem.Allocator, target: []const u8, decl_text: [
     return out.toOwnedSlice(allocator);
 }
 
+/// Implements concat 3 workflow logic using caller-owned inputs.
 fn concat3(allocator: std.mem.Allocator, a: []const u8, b: []const u8, c: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, a);
@@ -507,21 +541,25 @@ fn concat3(allocator: std.mem.Allocator, a: []const u8, b: []const u8, c: []cons
     return out.toOwnedSlice(allocator);
 }
 
+/// Extracts string list contains data from JSON input without taking ownership of borrowed values.
 fn stringListContains(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| if (std.mem.eql(u8, value, needle)) return true;
     return false;
 }
 
+/// Extracts string less than data from JSON input without taking ownership of borrowed values.
 fn stringLessThan(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
 
+/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(try ownedString(allocator, value));
     return .{ .array = array };
 }
 
+/// Serializes next tool fields into an allocator-owned JSON value; allocation failures propagate.
 fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "tool", try ownedString(allocator, tool));
@@ -529,6 +567,7 @@ fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const
     return .{ .object = obj };
 }
 
+/// Serializes command result fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -552,14 +591,17 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     return .{ .object = obj };
 }
 
+/// Serializes hash hex fields into an allocator-owned JSON value; allocation failures propagate.
 fn hashHexValue(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Value {
     return .{ .string = try std.fmt.allocPrint(allocator, "{x:0>16}", .{std.hash.Wyhash.hash(0, bytes)}) };
 }
 
+/// Copies the provided string into allocator-owned storage.
 fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, text) };
 }
 
+/// Implements workspace relative workflow logic using caller-owned inputs.
 fn workspaceRelative(root: []const u8, path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, root)) {
         var rel = path[root.len..];

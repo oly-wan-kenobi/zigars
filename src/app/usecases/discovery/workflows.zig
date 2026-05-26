@@ -6,8 +6,10 @@ const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
 const backend_catalog = @import("../environment/backend_catalog.zig");
 const static_project = @import("../static_analysis/project_values.zig");
 
+/// Error set returned by toolchain workflow failures.
 pub const ToolchainError = std.mem.Allocator.Error || ports.PortError || app_context.ContextError;
 
+/// Collects failures surfaced by plan error.
 pub const PlanError = error{
     MissingTool,
     UnknownTool,
@@ -16,6 +18,7 @@ pub const PlanError = error{
     InvalidExtraArgs,
 } || std.mem.Allocator.Error || ports.PortError || app_context.ContextError;
 
+/// Carries plan request data across use case and port boundaries.
 pub const PlanRequest = struct {
     tool: ?[]const u8 = null,
     file: ?[]const u8 = null,
@@ -24,12 +27,14 @@ pub const PlanRequest = struct {
     timeout_ms: i64 = 30_000,
 };
 
+/// Carries probe report data across use case and port boundaries.
 pub const ProbeReport = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
     owns_memory: bool = false,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: ProbeReport, allocator: std.mem.Allocator) void {
         if (!self.owns_memory) return;
         allocator.free(self.status);
@@ -37,6 +42,7 @@ pub const ProbeReport = struct {
     }
 };
 
+/// Implements catalog text workflow logic using caller-owned inputs.
 pub fn catalogText(allocator: std.mem.Allocator, context: app_context.Context) ![]u8 {
     const tool_catalog = try context.requireToolCatalog();
     const rendered = try tool_catalog.text(allocator);
@@ -44,6 +50,7 @@ pub fn catalogText(allocator: std.mem.Allocator, context: app_context.Context) !
     return try allocator.dupe(u8, rendered.text);
 }
 
+/// Serializes backend catalog fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn backendCatalogValue(allocator: std.mem.Allocator, context: app_context.Context, include_configured_paths: bool) !std.json.Value {
     return backend_catalog.value(allocator, .{
         .zig_path = context.tool_paths.zig,
@@ -55,6 +62,7 @@ pub fn backendCatalogValue(allocator: std.mem.Allocator, context: app_context.Co
     }, include_configured_paths);
 }
 
+/// Serializes doctor fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, probe_backends: bool, probe_timeout_ms: i64) !std.json.Value {
     var checks = std.json.Array.init(allocator);
     try checks.append(try checkValue(allocator, "workspace", true, "configured", context.workspace.root));
@@ -96,6 +104,7 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
     return .{ .object = obj };
 }
 
+/// Serializes workspace info fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceInfoValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -124,6 +133,7 @@ pub fn workspaceInfoValue(allocator: std.mem.Allocator, context: app_context.Con
     return .{ .object = obj };
 }
 
+/// Serializes metrics fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn metricsValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -140,6 +150,7 @@ pub fn metricsValue(allocator: std.mem.Allocator, context: app_context.Context) 
     return .{ .object = obj };
 }
 
+/// Serializes http status fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn httpStatusValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -153,6 +164,7 @@ pub fn httpStatusValue(allocator: std.mem.Allocator, context: app_context.Contex
     return .{ .object = obj };
 }
 
+/// Serializes toolchain resolve fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn toolchainResolveValue(
     allocator: std.mem.Allocator,
     context: app_context.Context,
@@ -161,6 +173,8 @@ pub fn toolchainResolveValue(
 ) ToolchainError!std.json.Value {
     const runner = try context.requireCommandRunner();
     const workspace = try context.requireWorkspace();
+    // Version probes are observational: command failures become unknown fields
+    // so project hints can still be reported.
     const zig = runner.run(allocator, .{
         .argv = &.{ context.tool_paths.zig, "version" },
         .cwd = context.workspace.root,
@@ -188,6 +202,8 @@ pub fn toolchainResolveValue(
     var exact_match_found = false;
     var minimum_satisfied = false;
     var unknown_version_hint = false;
+    // Compare active Zig against every discovered hint while preserving the
+    // hint objects for the response payload.
     for (expected.items) |hint| {
         const hint_obj = switch (hint) {
             .object => |o| o,
@@ -253,6 +269,7 @@ pub fn toolchainResolveValue(
     return .{ .object = obj };
 }
 
+/// Serializes command plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn commandPlanValue(allocator: std.mem.Allocator, context: app_context.Context, request: PlanRequest) PlanError!std.json.Value {
     const tool_name = request.tool orelse return error.MissingTool;
     const catalog = try context.requireToolManifest();
@@ -263,6 +280,7 @@ pub fn commandPlanValue(allocator: std.mem.Allocator, context: app_context.Conte
     };
 }
 
+/// Serializes tool plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn toolPlanValue(allocator: std.mem.Allocator, context: app_context.Context, request: PlanRequest) PlanError!std.json.Value {
     const tool_name = request.tool orelse return error.MissingTool;
     const catalog = try context.requireToolManifest();
@@ -273,6 +291,7 @@ pub fn toolPlanValue(allocator: std.mem.Allocator, context: app_context.Context,
     };
 }
 
+/// Serializes exact command plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn exactCommandPlanValue(
     allocator: std.mem.Allocator,
     context: app_context.Context,
@@ -329,6 +348,7 @@ fn exactCommandPlanValue(
     return .{ .object = obj };
 }
 
+/// Serializes command plan unsupported fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandPlanUnsupportedValue(allocator: std.mem.Allocator, catalog: ports.ToolManifestCatalog, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -343,6 +363,7 @@ fn commandPlanUnsupportedValue(allocator: std.mem.Allocator, catalog: ports.Tool
     return .{ .object = obj };
 }
 
+/// Serializes tool plan policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolPlanPolicyValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -357,6 +378,7 @@ fn toolPlanPolicyValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEn
     return .{ .object = obj };
 }
 
+/// Implements put planning base workflow logic using caller-owned inputs.
 fn putPlanningBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, planner_name: []const u8, entry: ports.ToolManifestEntry, supported: bool) !void {
     try obj.put(allocator, "kind", .{ .string = planner_name });
     try obj.put(allocator, "tool", .{ .string = entry.name });
@@ -371,6 +393,7 @@ fn putPlanningBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, plann
     try obj.put(allocator, "writes_source", .{ .bool = entry.risk.writes_source });
 }
 
+/// Implements put plan policy details workflow logic using caller-owned inputs.
 fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, entry: ports.ToolManifestEntry) !void {
     switch (entry.plan) {
         .exact_command => return,
@@ -414,6 +437,7 @@ fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, 
     }
 }
 
+/// Serializes supported command tools fields into an allocator-owned JSON value; allocation failures propagate.
 fn supportedCommandToolsValue(allocator: std.mem.Allocator, catalog: ports.ToolManifestCatalog) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -429,6 +453,7 @@ fn supportedCommandToolsValue(allocator: std.mem.Allocator, catalog: ports.ToolM
     return .{ .array = array };
 }
 
+/// Serializes risk fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskValue(allocator: std.mem.Allocator, risk: ports.ToolRisk) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "level", .{ .string = riskLevel(risk) });
@@ -443,12 +468,14 @@ fn riskValue(allocator: std.mem.Allocator, risk: ports.ToolRisk) !std.json.Value
     return .{ .object = obj };
 }
 
+/// Implements risk level workflow logic using caller-owned inputs.
 fn riskLevel(risk: ports.ToolRisk) []const u8 {
     if (risk.writes_source or risk.writes_require_apply) return "high";
     if (risk.executes_project_code or risk.executes_user_command or risk.writes_artifacts or risk.mutates_lsp_state) return "medium";
     return "low";
 }
 
+/// Serializes argv fields into an allocator-owned JSON value; allocation failures propagate.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -456,11 +483,13 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
     return .{ .array = array };
 }
 
+/// Releases arg list allocations; callers must not reuse freed items.
 fn freeArgList(allocator: std.mem.Allocator, list: []const []const u8) void {
     for (list) |item| allocator.free(item);
     allocator.free(list);
 }
 
+/// Parses shell-like argument text into allocator-owned argument slices.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -516,6 +545,7 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
+/// Parses shell-like argument text into allocator-owned argument slices.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     var arg_owned = true;
@@ -524,6 +554,7 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
     arg_owned = false;
 }
 
+/// Defines the allowed zig version hint status variants accepted by this workflow.
 pub const ZigVersionHintStatus = enum {
     ignored,
     exact_match,
@@ -532,6 +563,7 @@ pub const ZigVersionHintStatus = enum {
     unknown,
 };
 
+/// Executes the zig version hint status workflow and returns an allocator-owned structured result.
 pub fn zigVersionHintStatus(active_zig: []const u8, hint_obj: std.json.ObjectMap) ZigVersionHintStatus {
     const key = switch (hint_obj.get("key") orelse .null) {
         .string => |s| s,
@@ -552,10 +584,12 @@ pub fn zigVersionHintStatus(active_zig: []const u8, hint_obj: std.json.ObjectMap
     return .mismatch;
 }
 
+/// Executes the zig version hint applies to zig workflow and returns an allocator-owned structured result.
 pub fn zigVersionHintAppliesToZig(key: []const u8) bool {
     return !std.mem.eql(u8, key, "zls");
 }
 
+/// Implements version meets minimum workflow logic using caller-owned inputs.
 pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
     const active = parseVersionPrefix(active_zig) orelse return false;
     const minimum = parseVersionPrefix(minimum_zig) orelse return false;
@@ -566,6 +600,7 @@ pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool
     return true;
 }
 
+/// Parses version prefix input using caller-provided storage; malformed input and allocation failures propagate.
 pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
     const trimmed = std.mem.trim(u8, raw, " \t\r\n\"'");
     if (trimmed.len == 0) return null;
@@ -589,6 +624,7 @@ pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
     return parts;
 }
 
+/// Serializes probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeValue(
     allocator: std.mem.Allocator,
     context: app_context.Context,
@@ -629,6 +665,7 @@ fn probeValue(
     };
 }
 
+/// Appends probe check data into caller-provided storage, propagating allocation failures.
 fn appendProbeCheck(
     allocator: std.mem.Allocator,
     checks: *std.json.Array,
@@ -643,6 +680,7 @@ fn appendProbeCheck(
     try checks.append(try probeCheckValue(allocator, name, probe));
 }
 
+/// Serializes check fields into an allocator-owned JSON value; allocation failures propagate.
 fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -655,10 +693,12 @@ fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: 
     return .{ .object = obj };
 }
 
+/// Serializes probe check fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeCheckValue(allocator: std.mem.Allocator, name: []const u8, probe: ProbeReport) !std.json.Value {
     return checkValue(allocator, name, probe.ok, probe.status, probe.resolution);
 }
 
+/// Implements cached probe workflow logic using caller-owned inputs.
 fn cachedProbe(context: app_context.Context, id: backend_contracts.BackendId) ?app_context.CachedBackendProbe {
     const probe = switch (id) {
         .zig => context.trust_probe_cache.zig,
@@ -671,6 +711,7 @@ fn cachedProbe(context: app_context.Context, id: backend_contracts.BackendId) ?a
     return if (probe.probed) probe else null;
 }
 
+/// Serializes zls status fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlsStatusValue(allocator: std.mem.Allocator, state: app_context.ZlsState) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -684,6 +725,7 @@ fn zlsStatusValue(allocator: std.mem.Allocator, state: app_context.ZlsState) !st
     return .{ .object = obj };
 }
 
+/// Serializes optional backend status fields into an allocator-owned JSON value; allocation failures propagate.
 fn optionalBackendStatusValue(allocator: std.mem.Allocator, context: app_context.Context) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -695,6 +737,7 @@ fn optionalBackendStatusValue(allocator: std.mem.Allocator, context: app_context
     return .{ .object = obj };
 }
 
+/// Serializes optional backend fields into an allocator-owned JSON value; allocation failures propagate.
 fn optionalBackendValue(allocator: std.mem.Allocator, context: app_context.Context, id: backend_contracts.BackendId, configured_path: []const u8, probe: app_context.CachedBackendProbe) !std.json.Value {
     _ = context;
     var obj = std.json.ObjectMap.empty;
@@ -709,6 +752,7 @@ fn optionalBackendValue(allocator: std.mem.Allocator, context: app_context.Conte
     return .{ .object = obj };
 }
 
+/// Serializes configured probe argv fields into an allocator-owned JSON value; allocation failures propagate.
 fn configuredProbeArgvValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId, configured_path: []const u8) !std.json.Value {
     const probe = backend_contracts.probeArgv(id);
     var array = std.json.Array.init(allocator);
@@ -721,6 +765,7 @@ fn configuredProbeArgvValue(allocator: std.mem.Allocator, id: backend_contracts.
     return .{ .array = array };
 }
 
+/// Serializes backend capabilities fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendCapabilitiesValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -733,6 +778,7 @@ fn backendCapabilitiesValue(allocator: std.mem.Allocator, id: backend_contracts.
     return .{ .array = array };
 }
 
+/// Serializes probe cache fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeCacheValue(allocator: std.mem.Allocator, cache: app_context.TrustProbeCache) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -747,6 +793,7 @@ fn probeCacheValue(allocator: std.mem.Allocator, cache: app_context.TrustProbeCa
     return .{ .object = obj };
 }
 
+/// Serializes cached probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -765,6 +812,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBacke
     return .{ .object = obj };
 }
 
+/// Serializes cache status fields into an allocator-owned JSON value; allocation failures propagate.
 fn cacheStatusValue(allocator: std.mem.Allocator, cache: app_context.CacheSnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -778,6 +826,7 @@ fn cacheStatusValue(allocator: std.mem.Allocator, cache: app_context.CacheSnapsh
     return .{ .object = obj };
 }
 
+/// Implements try append version hint workflow logic using caller-owned inputs.
 fn tryAppendVersionHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array, path: []const u8, key: []const u8, source: []const u8) void {
     const read = workspace.read(allocator, .{ .path = path, .max_bytes = 64 * 1024, .provenance = "discovery.version_hint" }) catch return;
     defer read.deinit(allocator);
@@ -790,6 +839,7 @@ fn tryAppendVersionHint(allocator: std.mem.Allocator, workspace: ports.Workspace
     }
 }
 
+/// Implements try append tool versions hint workflow logic using caller-owned inputs.
 fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = ".tool-versions", .max_bytes = 64 * 1024, .provenance = "discovery.tool_versions_hint" }) catch return;
     defer read.deinit(allocator);
@@ -803,6 +853,7 @@ fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, workspace: ports.Work
     }
 }
 
+/// Implements try append mise hint workflow logic using caller-owned inputs.
 fn tryAppendMiseHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = "mise.toml", .max_bytes = 128 * 1024, .provenance = "discovery.mise_hint" }) catch return;
     defer read.deinit(allocator);
@@ -815,6 +866,7 @@ fn tryAppendMiseHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceSto
     }
 }
 
+/// Implements try append build zon minimum hint workflow logic using caller-owned inputs.
 fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" }) catch return;
     defer read.deinit(allocator);
@@ -827,6 +879,7 @@ fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, workspace: ports.W
     }
 }
 
+/// Appends version hint data into caller-provided storage, propagating allocation failures.
 pub fn appendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, source: []const u8, key: []const u8, version_value: []const u8) !void {
     const trimmed = std.mem.trim(u8, version_value, " \t\r\n\"'");
     if (trimmed.len == 0) return;
@@ -837,6 +890,7 @@ pub fn appendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, s
     try hints.append(.{ .object = obj });
 }
 
+/// Serializes version managers fields into an allocator-owned JSON value; allocation failures propagate.
 fn versionManagersValue(allocator: std.mem.Allocator, runner: ports.CommandRunner, cwd: []const u8, probe: bool, timeout_ms: i64) !std.json.Value {
     var managers = std.json.Array.init(allocator);
     const names = [_][]const u8{ "mise", "asdf", "zvm", "zigup" };
@@ -868,6 +922,7 @@ fn versionManagersValue(allocator: std.mem.Allocator, runner: ports.CommandRunne
     return .{ .array = managers };
 }
 
+/// Copies the provided string into allocator-owned storage.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
 }

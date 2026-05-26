@@ -4,8 +4,10 @@ const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
+/// Provenance tag attached to workspace reads from this workflow.
 pub const provenance = "zls.code_intel";
 
+/// Carries position request data across use case and port boundaries.
 pub const PositionRequest = struct {
     method: []const u8,
     file: ?[]const u8 = null,
@@ -15,26 +17,31 @@ pub const PositionRequest = struct {
     include_declaration: bool = true,
 };
 
+/// Carries file request data across use case and port boundaries.
 pub const FileRequest = struct {
     method: []const u8,
     file: ?[]const u8 = null,
     content: ?[]const u8 = null,
 };
 
+/// Carries workspace symbol request data across use case and port boundaries.
 pub const WorkspaceSymbolRequest = struct {
     query: []const u8,
 };
 
+/// Carries position response data across use case and port boundaries.
 pub const PositionResponse = struct {
     method: []const u8,
     payload: []const u8,
     owns_payload: bool = false,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: PositionResponse, allocator: std.mem.Allocator) void {
         if (self.owns_payload) allocator.free(self.payload);
     }
 };
 
+/// Represents failure alternatives carried across the workflow boundary.
 pub const Failure = union(enum) {
     unavailable: []const u8,
     unsupported_capability: []const u8,
@@ -43,15 +50,18 @@ pub const Failure = union(enum) {
     request_failed: PortFailure,
 };
 
+/// Carries port failure data across use case and port boundaries.
 pub const PortFailure = struct {
     err: ports.PortError,
     file: ?[]const u8 = null,
 };
 
+/// Represents position outcome alternatives carried across the workflow boundary.
 pub const PositionOutcome = union(enum) {
     ok: PositionResponse,
     err: Failure,
 
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: PositionOutcome, allocator: std.mem.Allocator) void {
         switch (self) {
             .ok => |response| response.deinit(allocator),
@@ -60,6 +70,7 @@ pub const PositionOutcome = union(enum) {
     }
 };
 
+/// Implements position workflow logic using caller-owned inputs.
 pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: PositionRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
@@ -97,6 +108,7 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     } };
 }
 
+/// Implements file only workflow logic using caller-owned inputs.
 pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: FileRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
@@ -127,6 +139,7 @@ pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     } };
 }
 
+/// Implements workspace symbols workflow logic using caller-owned inputs.
 pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: WorkspaceSymbolRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod("workspace/symbol")) |capability| {
@@ -149,6 +162,7 @@ pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsCo
     } };
 }
 
+/// Implements capability for method workflow logic using caller-owned inputs.
 pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, method, "textDocument/hover")) return "hoverProvider";
     if (std.mem.eql(u8, method, "textDocument/definition")) return "definitionProvider";
@@ -163,6 +177,7 @@ pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Implements position payload workflow logic using caller-owned inputs.
 fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -180,6 +195,7 @@ fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, cha
     return bytes;
 }
 
+/// Reports whether payload matches the caller-provided data.
 fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, include_declaration: bool) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -199,6 +215,7 @@ fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, c
     return bytes;
 }
 
+/// Implements file only payload workflow logic using caller-owned inputs.
 fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -212,6 +229,7 @@ fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Alloca
     return bytes;
 }
 
+/// Implements workspace symbol payload workflow logic using caller-owned inputs.
 fn workspaceSymbolPayload(allocator: std.mem.Allocator, query: []const u8) std.mem.Allocator.Error![]u8 {
     const Params = struct { query: []const u8 };
     var aw: std.Io.Writer.Allocating = .init(allocator);

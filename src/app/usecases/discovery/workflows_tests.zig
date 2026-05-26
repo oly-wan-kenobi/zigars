@@ -5,9 +5,11 @@ const ports = @import("../../ports.zig");
 const workflows = @import("workflows.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
 
+/// Carries static manifest data across use case and port boundaries.
 const StaticManifest = struct {
     entries: []const ports.ToolManifestEntry,
 
+    /// Returns the fixture port table used by this test context.
     fn port(self: *StaticManifest) ports.ToolManifestCatalog {
         return .{
             .ptr = self,
@@ -19,17 +21,20 @@ const StaticManifest = struct {
         };
     }
 
+    /// Returns the number of entries exposed by this fixture.
     fn count(ptr: *anyopaque) usize {
         const self: *StaticManifest = @ptrCast(@alignCast(ptr));
         return self.entries.len;
     }
 
+    /// Returns the fixture entry at the requested index, or null when out of range.
     fn entryAt(ptr: *anyopaque, index: usize) ?ports.ToolManifestEntry {
         const self: *StaticManifest = @ptrCast(@alignCast(ptr));
         if (index >= self.entries.len) return null;
         return self.entries[index];
     }
 
+    /// Finds find data in the provided collection without taking ownership.
     fn find(ptr: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const self: *StaticManifest = @ptrCast(@alignCast(ptr));
         for (self.entries) |entry| {
@@ -317,6 +322,7 @@ test "doctor covers cached backend probes and probe port errors" {
     defer arena.deinit();
 
     const ErrorProbe = struct {
+        /// Implements check workflow logic using caller-owned inputs.
         fn check(_: *anyopaque, _: std.mem.Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
             if (!std.mem.eql(u8, request.provenance, "discovery.doctor_probe")) return error.StaleArguments;
             return error.AccessDenied;
