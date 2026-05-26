@@ -59,7 +59,7 @@ transport shape, but they are not the primary place to prove business behavior.
 
 `zig build test` runs four compiled test binaries: `zigar-lib-tests`,
 `zigar-exe-tests`, `zigar-tools-tests`, and `zigar-fuzz-tests`. All four have
-non-zero floors in `tools/coverage_config.zig`, including the executable module
+non-zero floors in `tools/coverage/coverage_config.zig`, including the executable module
 and fuzz corpus smoke, so the release summary cannot pass with an untested
 installed binary entrypoint or missing fuzz smoke coverage. The suites cover CLI
 startup helpers and embedded version wiring, CLI parsing and deinit ownership,
@@ -74,7 +74,7 @@ pure-Zig release helpers.
 `zig build smoke` starts zigar over HTTP and checks `initialize`,
 `tools/list`, `zigar_schema`, `zigar_doctor`, and representative tool calls
 against `tests/fixtures/http-smoke.expect.json`. The helper also enforces a
-minimum scenario floor from `tools/coverage_config.zig` so this integration
+minimum scenario floor from `tools/coverage/coverage_config.zig` so this integration
 gate cannot silently shrink. HTTP smoke also exercises the coverage, benchmark,
 Samply, Tracy, and performance evidence tool surface in parser or preview modes
 so every public performance workflow has a transport-level fixture without
@@ -141,7 +141,7 @@ summary records pass/fail status for the library, executable, tools, and fuzz
 test binaries, per-binary floors, the configured minimum total test count, Zig
 version, measured total/`src`/`tools` line coverage, configured line-coverage
 floors, uncovered lines, missing tracked files, and per-floor pass/fail fields.
-The floors are defined in `tools/coverage_config.zig`: total tests at least
+The floors are defined in `tools/coverage/coverage_config.zig`: total tests at least
 500, library tests at least 480, executable tests at least 1, tools tests at
 least 26, fuzz tests at least 2, and total/`src`/`tools` line coverage at
 100.00%. Use `zig-out/bin/zigar-tools coverage --min-tests <count>` after
@@ -159,7 +159,7 @@ adding a file there should be a conscious coverage decision, not a substitute
 for domain or use-case tests when behavior exists.
 
 Generated and runner outputs are excluded from kcov by
-`tools/coverage_config.zig`, including build caches, release artifacts,
+`tools/coverage/coverage_config.zig`, including build caches, release artifacts,
 coverage output, and the custom fuzz test runner. The runner is harness code for
 Zig's fuzz mode; the fuzz targets themselves live under `src/testing/fuzz_tests.zig`
 and remain part of `zig build test` and coverage accounting.
@@ -176,8 +176,8 @@ Windows to catch path, process, transport, and executable suffix issues.
 
 `zig build public-contracts` is the direct public MCP drift gate, and it is part
 of `zig build release-check`. The authoritative checks live in
-`tools/public_contracts.zig`, `tools/mcp_contracts.zig`, and
-`tools/backend_contract_scenarios.zig`.
+`tools/release/public_contracts.zig`, `tools/release/mcp_contracts.zig`, and
+`tools/release/backend_contract_scenarios.zig`.
 
 The gate checks:
 

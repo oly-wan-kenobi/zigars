@@ -76,7 +76,7 @@ archive when one matches the current host.
 
 ## Public Contracts
 
-`tools/public_contracts.zig` aggregates the MCP contract checks used by
+`tools/release/public_contracts.zig` aggregates the MCP contract checks used by
 `zig build public-contracts` and `zig build release-check`. The current public
 contract practice is:
 
@@ -124,8 +124,8 @@ generated directories such as `.zig-cache/`, `zig-out/`, `zig-pkg/`, `dist/`, or
 `coverage/` are tracked by git.
 
 `artifact-hygiene` is broader than generated-file detection. Its policy tables
-live in `tools/release_rules.zig`, and its checker lives in
-`tools/release_checks.zig`. The hygiene gate also enforces:
+live in `tools/release/release_rules.zig`, and its checker lives in
+`tools/release/release_checks.zig`. The hygiene gate also enforces:
 
 - line budgets and required headroom for large or trust-critical files;
 - pure-Zig project-owned trees by rejecting Python files under `.github`,
@@ -224,7 +224,7 @@ Release assets are named:
   `zig_dependency_license_summary`, and
   `zig_github_dependency_submit_plan` as local evidence helpers. Scanner tools
   ingest supplied ZAT or OSV reports but do not contact external services.
-- Release targets are defined once in `tools/release_targets.zig`; update that
+- Release targets are defined once in `tools/release/release_targets.zig`; update that
   table when adding or removing a published archive target.
 - `zig-pkg/`, `.zig-cache/`, `.zigar-cache/`, and `zig-out/` are local artifacts
   and are not part of the published package.

@@ -1,9 +1,9 @@
 # Integration Test Ownership
 
 This directory owns integration scenario discovery for built-binary MCP behavior.
-The executable harnesses remain under `tools/` during Phase 10 because `zig build`
-already compiles `zigar-tools` once and uses it to run smoke, fixture, coverage,
-release, and architecture helper commands without adding a second helper target.
+The executable harnesses live under `tools/integration/` because `zig build`
+already compiles `zigar-tools` once and uses it to run smoke and fixture commands
+without adding a second helper target.
 
 Default integration gate:
 
@@ -18,7 +18,7 @@ Current delegation:
 - `zig build backend-contract-scenarios` checks fake backend conformance
   scenario discovery against the executable contract harnesses.
 
-Scenario floors remain enforced by `tools/coverage_config.zig`:
+Scenario floors remain enforced by `tools/coverage/coverage_config.zig`:
 
 - HTTP smoke scenarios: at least 154.
 - Stdio fixture tool calls: at least 76.

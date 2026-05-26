@@ -54,7 +54,8 @@ auditable:
   sends should run outside the mutex. Unsaved document content is retained in
   process memory so ZLS restarts reopen the same buffer content clients sent.
 - `tools/zigar_tools.zig` is the pure-Zig helper executable used by build steps.
-  Shared helper concerns live beside it in `tools/*.zig`.
+  Shared helper concerns are grouped under `tools/common`, `tools/coverage`,
+  `tools/integration`, `tools/release`, and `tools/quality`.
 
 The architecture guard is strict by default: its exception allowlist must remain
 empty. New boundary pressure should be resolved by adding app ports, bootstrap
@@ -63,8 +64,8 @@ exceptions.
 
 ## Enforced Hexagonal Rules
 
-The authoritative rule implementations are `tools/architecture_guard.zig`,
-`tools/hex_arch_inventory.zig`, and the build wiring in `build.zig`. This
+The authoritative rule implementations are `tools/quality/architecture_guard.zig`,
+`tools/quality/hex_arch_inventory.zig`, and the build wiring in `build.zig`. This
 section describes the contract those tools enforce.
 
 | Area | Rule |

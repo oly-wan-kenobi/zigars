@@ -48,13 +48,13 @@ There are two supported ways to provide optional backend paths:
 - Repo-pinned release validation: maintainers can run the pinned setup script
   in this repository to provision the optional release-validation backends under
   `.zigar-cache/real-backends/bin`. The pins live in
-  `tools/real_backend_pins.json` and are intended for citable zigar release
+  `tools/release/real_backend_pins.json` and are intended for citable zigar release
   evidence, not for normal CI.
 
 The repo-pinned setup currently provisions zwanzig `v0.11.0` from release
 assets and builds zflame plus diff-folded from zflame `v0.0.2` commit
 `4bb890d891390519bf3eec0ce1d08b8175a175ab`. The zflame source build applies
-`tools/backend-patches/zflame-pin-zbench-archive.patch`, which replaces a
+`tools/release/backend-patches/zflame-pin-zbench-archive.patch`, which replaces a
 moving zBench `main` archive URL with the `v0.13.0` tag archive that matches
 the upstream-declared Zig package hash. The setup script verifies the zflame
 commit and patch checksum before building, and fails if the patch no longer
@@ -321,7 +321,7 @@ zig build
 
 For zigar release validation, prefer the repo-pinned setup script above. It
 uses the zwanzig `v0.11.0` release asset and verifies the archive checksum from
-`tools/real_backend_pins.json`.
+`tools/release/real_backend_pins.json`.
 
 Project-local configuration:
 
@@ -392,7 +392,7 @@ diff-folded --output=delta.folded before.folded after.folded
 
 For zigar release validation, prefer the repo-pinned setup script. It builds
 both binaries from the pinned zflame source commit after applying the guarded
-zBench archive patch documented in `tools/real_backend_pins.json`.
+zBench archive patch documented in `tools/release/real_backend_pins.json`.
 
 `zig_flamegraph` and `zig_flamegraph_diff` return auditable artifact metadata:
 input/output paths, explicit input format, backend executable path, argv shape

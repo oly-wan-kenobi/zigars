@@ -4,10 +4,10 @@ Owner gate: `zig build release-asset-smoke`
 
 Scenario harnesses:
 
-- `tools/release_checks.zig`
-- `tools/release_docs.zig`
-- `tools/release_rules.zig`
-- `tools/release_targets.zig`
+- `tools/release/release_checks.zig`
+- `tools/release/release_docs.zig`
+- `tools/release/release_rules.zig`
+- `tools/release/release_targets.zig`
 - `tools/zigar_tools.zig` command `dist-smoke`
 
 Public behavior covered:

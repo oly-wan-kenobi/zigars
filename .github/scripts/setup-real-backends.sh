@@ -33,8 +33,8 @@ if [[ $# -ne 0 ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-manifest_path="$repo_root/tools/real_backend_pins.json"
-patch_path="$repo_root/tools/backend-patches/zflame-pin-zbench-archive.patch"
+manifest_path="$repo_root/tools/release/real_backend_pins.json"
+patch_path="$repo_root/tools/release/backend-patches/zflame-pin-zbench-archive.patch"
 cache_root="${ZIGAR_REAL_BACKENDS_DIR:-$repo_root/.zigar-cache/real-backends}"
 bin_dir="$cache_root/bin"
 downloads_dir="$cache_root/downloads"
