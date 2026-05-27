@@ -16,14 +16,14 @@ const valueAt = smoke.valueAt;
 // Owns transport-level HTTP assertions; tool-result contract checks live in
 // focused sibling modules so this entrypoint stays readable.
 const HttpSmokeOptions = struct {
-    binary: []const u8 = "zig-out/bin/zigar",
+    binary: []const u8 = "zig-out/bin/zigars",
     workspace: []const u8 = ".",
     expect: []const u8 = "tests/fixtures/http-smoke.expect.json",
     server_kcov_path: []const u8 = "kcov",
     server_kcov_dir: ?[]const u8 = null,
 };
 
-/// Runs the HTTP smoke suite against a short-lived local zigar server.
+/// Runs the HTTP smoke suite against a short-lived local zigars server.
 pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void {
     var options: HttpSmokeOptions = .{};
     var i: usize = 0;
@@ -118,11 +118,11 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     }
     try smoke.assertHttpRpcContains(allocator, io, port, "{ bad json", "\"code\":-32700", &scenarios);
 
-    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 3, "zigar_schema", "{}", expected.value, "schema_paths", &scenarios);
-    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 4, "zigar_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths", &scenarios);
-    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 41, "zigar_backend_catalog", "{}", expected.value, "backend_catalog_paths", &scenarios);
+    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 3, "zigars_schema", "{}", expected.value, "schema_paths", &scenarios);
+    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 4, "zigars_doctor", "{\"probe_backends\":false}", expected.value, "doctor_paths", &scenarios);
+    try http_tool_contract_smoke.assertToolPaths(allocator, io, port, 41, "zigars_backend_catalog", "{}", expected.value, "backend_catalog_paths", &scenarios);
     {
-        const doctor_json = try smoke.callHttpToolJson(allocator, io, port, 40, "zigar_doctor", "{\"probe_backends\":false}");
+        const doctor_json = try smoke.callHttpToolJson(allocator, io, port, 40, "zigars_doctor", "{\"probe_backends\":false}");
         defer allocator.free(doctor_json);
         const parsed = try std.json.parseFromSlice(JsonValue, allocator, doctor_json, .{});
         defer parsed.deinit();
@@ -202,7 +202,7 @@ fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *st
     const deadline = smoke.nowNs(io) + 30 * std.time.ns_per_s;
     while (true) {
         const init_response = smoke.rpc(allocator, io, port,
-            \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"zigar-smoke","version":"0"}}}
+            \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"zigars-smoke","version":"0"}}}
         ) catch |err| {
             if (smoke.nowNs(io) > deadline) {
                 const stderr_file = child.stderr;
@@ -233,7 +233,7 @@ fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *st
         const parsed = try std.json.parseFromSlice(JsonValue, allocator, init_response, .{});
         defer parsed.deinit();
         const name = valueAt(parsed.value, "result.serverInfo.name").?.string;
-        try smoke.expectStringEq(io, name, "zigar", "initialize serverInfo.name");
+        try smoke.expectStringEq(io, name, "zigars", "initialize serverInfo.name");
         return;
     }
 }

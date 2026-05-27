@@ -5,11 +5,11 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// List bundled curated Zig builtin docs; source is partial curated zigar data.
+/// List bundled curated Zig builtin docs; source is partial curated zigars data.
 const docs_plan = "Offline docs lookup; no network, ZLS, or optional backend.";
 
-/// List bundled curated Zig builtin docs; source is partial curated zigar data.
-pub const zig_builtin_list = tool(.{ .description = "List bundled curated Zig builtin docs; source is partial curated zigar data.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
+/// List bundled curated Zig builtin docs; source is partial curated zigars data.
+pub const zig_builtin_list = tool(.{ .description = "List bundled curated Zig builtin docs; source is partial curated zigars data.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
 /// Return bundled curated Zig builtin docs with source, completeness, count, and ranking metadata.
 pub const zig_builtin_list_json = tool(.{ .description = "Return bundled curated Zig builtin docs with source, completeness, count, and ranking metadata.", .input_schema = schema(&.{}), .read_only = true, .group = .docs, .plan = .{ .pure_analysis = docs_plan } });
 /// Search bundled curated Zig builtin docs; text output includes partial-curated source metadata.

@@ -1,25 +1,25 @@
 const std = @import("std");
 const subject = @import("foundation.zig");
-const zigar_artifact_index = subject.zigar_artifact_index;
-const zigar_artifact_read = subject.zigar_artifact_read;
-const zigar_session_view = subject.zigar_session_view;
-const zigar_artifact_prune = subject.zigar_artifact_prune;
-const zigar_metrics_v2 = subject.zigar_metrics_v2;
-const zigar_backend_health_history = subject.zigar_backend_health_history;
-const zigar_zls_timeline = subject.zigar_zls_timeline;
-const zigar_tool_latency = subject.zigar_tool_latency;
-const zigar_trust_report = subject.zigar_trust_report;
-const zigar_command_provenance = subject.zigar_command_provenance;
-const zigar_risk_audit = subject.zigar_risk_audit;
-const zigar_clean_tree_gate = subject.zigar_clean_tree_gate;
-const zigar_result_shape = subject.zigar_result_shape;
-const zigar_output_budget_plan = subject.zigar_output_budget_plan;
-const zigar_docs_drift_check = subject.zigar_docs_drift_check;
-const zigar_release_claim_check = subject.zigar_release_claim_check;
-const zigar_tool_index_check = subject.zigar_tool_index_check;
+const zigars_artifact_index = subject.zigars_artifact_index;
+const zigars_artifact_read = subject.zigars_artifact_read;
+const zigars_session_view = subject.zigars_session_view;
+const zigars_artifact_prune = subject.zigars_artifact_prune;
+const zigars_metrics_v2 = subject.zigars_metrics_v2;
+const zigars_backend_health_history = subject.zigars_backend_health_history;
+const zigars_zls_timeline = subject.zigars_zls_timeline;
+const zigars_tool_latency = subject.zigars_tool_latency;
+const zigars_trust_report = subject.zigars_trust_report;
+const zigars_command_provenance = subject.zigars_command_provenance;
+const zigars_risk_audit = subject.zigars_risk_audit;
+const zigars_clean_tree_gate = subject.zigars_clean_tree_gate;
+const zigars_result_shape = subject.zigars_result_shape;
+const zigars_output_budget_plan = subject.zigars_output_budget_plan;
+const zigars_docs_drift_check = subject.zigars_docs_drift_check;
+const zigars_release_claim_check = subject.zigars_release_claim_check;
+const zigars_tool_index_check = subject.zigars_tool_index_check;
 
 test "foundation definitions expose artifact metadata" {
-    try @import("std").testing.expect(zigar_artifact_index.description.len > 0);
-    try std.testing.expect(zigar_session_view.read_only);
-    try std.testing.expectEqual(.artifact_registry, zigar_session_view.group);
+    try @import("std").testing.expect(zigars_artifact_index.description.len > 0);
+    try std.testing.expect(zigars_session_view.read_only);
+    try std.testing.expectEqual(.artifact_registry, zigars_session_view.group);
 }

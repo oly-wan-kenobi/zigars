@@ -221,7 +221,7 @@ pub const line_budgets = [_]LineBudget{
         .reason = "tool group keyword metadata should remain a compact manifest adjunct",
     },
     .{
-        .path = "tools/zigar_tools.zig",
+        .path = "tools/zigars_tools.zig",
         .max_lines = 220,
         .reason = "tool dispatcher must remain a small command router over focused helpers",
     },
@@ -487,7 +487,7 @@ pub const resource_error_contract_tokens = [_]ToolErrorContractToken{
 };
 
 pub const cli_error_contract_paths = [_][]const u8{
-    "tools/zigar_tools.zig",
+    "tools/zigars_tools.zig",
 };
 
 pub const cli_error_contract_tokens = [_]ToolErrorContractToken{

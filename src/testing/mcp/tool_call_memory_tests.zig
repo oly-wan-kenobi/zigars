@@ -150,19 +150,19 @@ test "mcp resources/read releases repeated owned resource content" {
     server.state = .ready;
 
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://owned-resource",
+        .uri = "zigars://owned-resource",
         .name = "owned resource",
         .handler = ownedResourceHandler,
     }, json_result.deinitResourceContent);
 
     const messages = [_][]const u8{
-        \\{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        \\{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"zigars://owned-resource"}}
         ,
-        \\{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        \\{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"zigars://owned-resource"}}
         ,
-        \\{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        \\{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"zigars://owned-resource"}}
         ,
-        \\{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"zigar://owned-resource"}}
+        \\{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"zigars://owned-resource"}}
         ,
     };
     var transport = CaptureTransport{ .messages = &messages };

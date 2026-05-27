@@ -1,7 +1,7 @@
 const std = @import("std");
 
 /// Default workspace-relative JSONL registry location.
-pub const default_registry_path = ".zigar-cache/artifacts/registry.jsonl";
+pub const default_registry_path = ".zigars-cache/artifacts/registry.jsonl";
 /// Upper bound for reading a single artifact payload through the registry API.
 pub const default_read_limit: usize = 64 * 1024;
 

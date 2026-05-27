@@ -56,12 +56,12 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     if (std.mem.indexOf(u8, langref, "Language reference search source:") == null) return error.AssertionFailed;
     if (std.mem.indexOf(u8, langref, "wasm/main.zig") != null) return error.AssertionFailed;
 
-    const next_action = try client.callTool("zigar_next_action", "{\"goal\":\"fix compile error\",\"changed_files\":\"src/main.zig\"}");
+    const next_action = try client.callTool("zigars_next_action", "{\"goal\":\"fix compile error\",\"changed_files\":\"src/main.zig\"}");
     defer client.allocator.free(next_action);
     try client.expectPathString(next_action, "recommended_steps.0.tool", "zig_compile_error_index");
     try client.expectPathString(next_action, "workflow_contract.confidence", "medium");
 
-    const guard = try client.callTool("zigar_patch_guard", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
+    const guard = try client.callTool("zigars_patch_guard", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
     defer client.allocator.free(guard);
     try client.expectPathJson(guard, "safe", .{ .bool = false });
 

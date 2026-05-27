@@ -41,17 +41,17 @@ jobs:
           sudo apt-get install -y llvm
 
       - name: Install MCPB package dependencies
-        run: npm --prefix packages/zigar-mcpb ci
+        run: npm --prefix packages/zigars-mcpb ci
 
       - name: Build MCPB bundles
-        run: npm --prefix packages/zigar-mcpb run pack
+        run: npm --prefix packages/zigars-mcpb run pack
 
       - name: Attest release archives
         if: ${{ !github.event.repository.private }}
         # actions/attest-build-provenance@v4.1.0
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
         with:
-          subject-checksums: dist/assets/zigar-checksums.txt
+          subject-checksums: dist/assets/zigars-checksums.txt
 
       - name: Upload GitHub release
         # softprops/action-gh-release@v2
@@ -60,5 +60,5 @@ jobs:
           files: |
             dist/assets/*.tar.gz
             dist/assets/*.mcpb
-            dist/assets/zigar-checksums.txt
-            dist/assets/zigar-mcpb-checksums.txt
+            dist/assets/zigars-checksums.txt
+            dist/assets/zigars-mcpb-checksums.txt

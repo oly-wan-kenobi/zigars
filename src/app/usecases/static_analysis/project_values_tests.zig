@@ -13,7 +13,7 @@ fn testContext(
     scanner_fake: *workspace_scanner_fake.FakeWorkspaceScanner,
 ) app_context.StaticAnalysisContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = store_fake.port(),
         .workspace_scanner = scanner_fake.port(),
     };
@@ -251,7 +251,7 @@ test "typed changed file plans cover zig-only status without build files" {
     var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
     defer scanner_fake.deinit();
     const context = app_context.StaticAnalysisContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .command_runner = commands.port(),
         .workspace_store = store_fake.port(),
         .workspace_scanner = scanner_fake.port(),
@@ -321,7 +321,7 @@ test "typed command backed static plans cover status triage symbols and selectio
     try cache.seed(42, "cached-index");
 
     const context = app_context.StaticAnalysisContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .command_runner = commands.port(),
         .workspace_store = store_fake.port(),
         .workspace_scanner = scanner_fake.port(),
@@ -529,7 +529,7 @@ test "typed static project value builders release partial objects on allocation 
             var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
             defer scanner_fake.deinit();
             const context = app_context.StaticAnalysisContext{
-                .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+                .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
                 .command_runner = commands.port(),
                 .workspace_store = store_fake.port(),
                 .workspace_scanner = scanner_fake.port(),
@@ -583,12 +583,12 @@ test "typed static project value builders release partial objects on allocation 
             var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
             defer scanner_fake.deinit();
             const context = app_context.StaticAnalysisContext{
-                .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+                .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
                 .command_runner = commands.port(),
                 .workspace_store = store_fake.port(),
                 .workspace_scanner = scanner_fake.port(),
             };
-            inline for (.{ ".zig-cache", "zig-out", ".zigar-cache", "zig-pkg", "coverage" }) |name| {
+            inline for (.{ ".zig-cache", "zig-out", ".zigars-cache", "zig-pkg", "coverage" }) |name| {
                 try store_fake.expectResolveError(.{ .path = name, .provenance = "static_analysis.cache_path_status" }, error.FileNotFound);
                 try store_fake.expectResolveError(.{ .path = name, .for_output = true, .provenance = "static_analysis.cache_path_status" }, error.FileNotFound);
                 try commands.expectRun(.{

@@ -2,7 +2,7 @@
 
 This directory owns integration scenario discovery for built-binary MCP behavior.
 The executable harnesses live under `tools/integration/` because `zig build`
-already compiles `zigar-tools` once and uses it to run smoke and fixture commands
+already compiles `zigars-tools` once and uses it to run smoke and fixture commands
 without adding a second helper target.
 
 Default integration gate:

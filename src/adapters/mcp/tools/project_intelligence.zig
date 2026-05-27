@@ -14,28 +14,28 @@ const mcp_result = @import("../result.zig");
 const pi = project_intelligence;
 const sampling_failure_fusion_reason = "MCP sampling was not requested or was unavailable; compiler, test, and command evidence summaries are returned directly.";
 
-/// Handles MCP `zigar_context_pack` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarContextPack(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_context_pack", "context_pack", pi.contextPackValue(allocator, context, .{
+/// Handles MCP `zigars_context_pack` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsContextPack(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_context_pack", "context_pack", pi.contextPackValue(allocator, context, .{
         .mode = argString(args, "mode") orelse "standard",
         .token_budget = @max(500, @min(argInt(args, "token_budget", 4000), 50_000)),
     }));
 }
 
-/// Handles MCP `zigar_next_action` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarNextAction(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const goal = argString(args, "goal") orelse return mcp_errors.missingArgument(allocator, "zigar_next_action", "goal", "short task or failure description");
-    return structured(allocator, "zigar_next_action", "plan_next_action", pi.nextActionPlanValue(allocator, goal, argString(args, "changed_files"), argString(args, "last_error")));
+/// Handles MCP `zigars_next_action` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsNextAction(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const goal = argString(args, "goal") orelse return mcp_errors.missingArgument(allocator, "zigars_next_action", "goal", "short task or failure description");
+    return structured(allocator, "zigars_next_action", "plan_next_action", pi.nextActionPlanValue(allocator, goal, argString(args, "changed_files"), argString(args, "last_error")));
 }
 
-/// Handles MCP `zigar_agent_guide` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarAgentGuide(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_agent_guide", "agent_guide", pi.agentGuideValue(allocator, argString(args, "client") orelse "generic", argString(args, "task") orelse "any"));
+/// Handles MCP `zigars_agent_guide` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsAgentGuide(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_agent_guide", "agent_guide", pi.agentGuideValue(allocator, argString(args, "client") orelse "generic", argString(args, "task") orelse "any"));
 }
 
-/// Handles MCP `zigar_validate_patch` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarValidatePatch(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_validate_patch", "validate_patch", pi.validatePatchValue(allocator, context, .{
+/// Handles MCP `zigars_validate_patch` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsValidatePatch(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_validate_patch", "validate_patch", pi.validatePatchValue(allocator, context, .{
         .mode = argString(args, "mode") orelse "standard",
         .changed_files = argString(args, "changed_files"),
         .timeout_ms = timeoutMs(context, args),
@@ -43,9 +43,9 @@ pub fn zigarValidatePatch(allocator: std.mem.Allocator, context: app_context.Pro
     }));
 }
 
-/// Handles MCP `zigar_failure_fusion` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarFailureFusion(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, "zigar_failure_fusion", err);
+/// Handles MCP `zigars_failure_fusion` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsFailureFusion(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, "zigars_failure_fusion", err);
     defer freeStringList(allocator, extra_args);
     var value = pi.failureFusionFromCommandValue(allocator, context, .{
         .text = argString(args, "text"),
@@ -54,32 +54,32 @@ pub fn zigarFailureFusion(allocator: std.mem.Allocator, context: app_context.Pro
         .filter = argString(args, "filter"),
         .extra_args = extra_args,
         .timeout_ms = timeoutMs(context, args),
-    }) catch |err| return workflowError(allocator, "zigar_failure_fusion", "failure_fusion", err);
+    }) catch |err| return workflowError(allocator, "zigars_failure_fusion", "failure_fusion", err);
     defer deinitTopLevel(allocator, &value);
     if (value == .object) try applyFailureFusionSampling(allocator, &value.object, context.protocol_client, argBool(args, "summarize", false), value);
     return mcp_result.structured(allocator, value);
 }
 
-/// Handles MCP `zigar_impact` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarImpact(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_impact", "impact", pi.impactValue(allocator, context, .{
+/// Handles MCP `zigars_impact` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsImpact(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_impact", "impact", pi.impactValue(allocator, context, .{
         .files = argString(args, "files"),
         .symbols = argString(args, "symbols"),
         .limit = @intCast(@max(1, argInt(args, "limit", 300))),
     }));
 }
 
-/// Handles MCP `zigar_project_profile` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarProjectProfile(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_project_profile", "project_profile", pi.projectProfileValue(allocator, context, .{
+/// Handles MCP `zigars_project_profile` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsProjectProfile(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_project_profile", "project_profile", pi.projectProfileValue(allocator, context, .{
         .content = argString(args, "content"),
         .apply = argBool(args, "apply", false),
     }));
 }
 
-/// Handles MCP `zigar_patch_guard` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchGuard(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_patch_guard", "patch_guard", pi.patchGuardValue(allocator, context, .{
+/// Handles MCP `zigars_patch_guard` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchGuard(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_patch_guard", "patch_guard", pi.patchGuardValue(allocator, context, .{
         .files = argString(args, "files"),
         .patch = argString(args, "patch"),
     }));
@@ -110,25 +110,25 @@ fn semanticTool(allocator: std.mem.Allocator, context: app_context.ProjectIntell
     return structured(allocator, tool_name, "semantic_impact", result);
 }
 
-/// Handles MCP `zigar_validation_plan` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarValidationPlan(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_validation_plan` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsValidationPlan(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var parsed = try validationPlanRequestFromArgs(allocator, args);
     defer parsed.deinit(allocator);
-    var result = workflows.plan(allocator, context.validation(), parsed.request) catch |err| return workflowError(allocator, "zigar_validation_plan", "plan", err);
+    var result = workflows.plan(allocator, context.validation(), parsed.request) catch |err| return workflowError(allocator, "zigars_validation_plan", "plan", err);
     defer result.deinit(allocator);
-    return structured(allocator, "zigar_validation_plan", "plan", pi.validationPlanValueFromUsecase(allocator, result));
+    return structured(allocator, "zigars_validation_plan", "plan", pi.validationPlanValueFromUsecase(allocator, result));
 }
 
-/// Handles MCP `zigar_validation_run` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarValidationRun(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_validation_run` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsValidationRun(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var parsed = try validationRunRequestFromArgs(allocator, args, timeoutMs(context, args));
     defer parsed.deinit(allocator);
-    var outcome = workflows.run(allocator, context.validation(), parsed.request) catch |err| return workflowError(allocator, "zigar_validation_run", "run", err);
+    var outcome = workflows.run(allocator, context.validation(), parsed.request) catch |err| return workflowError(allocator, "zigars_validation_run", "run", err);
     defer outcome.deinit(allocator);
     return switch (outcome) {
-        .ok => |report| structured(allocator, "zigar_validation_run", "run", pi.validationRunValue(allocator, report)),
+        .ok => |report| structured(allocator, "zigars_validation_run", "run", pi.validationRunValue(allocator, report)),
         .err => |failure| switch (failure) {
-            .history_write_failed => |details| mcp_errors.workspacePath(allocator, "zigar_validation_run", details.path, context.workspace.root, details.err),
+            .history_write_failed => |details| mcp_errors.workspacePath(allocator, "zigars_validation_run", details.path, context.workspace.root, details.err),
         },
     };
 }
@@ -164,9 +164,9 @@ pub fn zigTestTiming(allocator: std.mem.Allocator, _: app_context.ProjectIntelli
     return structured(allocator, "zig_test_timing", "parse_timing", pi.testTimingValue(allocator, text));
 }
 
-/// Handles MCP `zigar_validation_history` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarValidationHistory(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return historyTool(allocator, context, args, "zigar_validation_history", .runs);
+/// Handles MCP `zigars_validation_history` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsValidationHistory(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return historyTool(allocator, context, args, "zigars_validation_history", .runs);
 }
 
 /// Handles MCP `zig_test_flake_history` requests by delegating to app logic and shaping owned results/errors.
@@ -194,14 +194,14 @@ fn historyTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelli
     };
 }
 
-/// Handles MCP `zigar_session_snapshot` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarSessionSnapshot(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_session_snapshot", "snapshot", pi.sessionSnapshotValue(allocator, context, snapshotRequest(args, "zigar_session_snapshot")));
+/// Handles MCP `zigars_session_snapshot` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsSessionSnapshot(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_session_snapshot", "snapshot", pi.sessionSnapshotValue(allocator, context, snapshotRequest(args, "zigars_session_snapshot")));
 }
 
-/// Handles MCP `zigar_handoff_pack` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarHandoffPack(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return structured(allocator, "zigar_handoff_pack", "handoff", pi.handoffPackValue(allocator, context, snapshotRequest(args, "zigar_handoff_pack")));
+/// Handles MCP `zigars_handoff_pack` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsHandoffPack(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return structured(allocator, "zigars_handoff_pack", "handoff", pi.handoffPackValue(allocator, context, snapshotRequest(args, "zigars_handoff_pack")));
 }
 
 /// Builds the project-intelligence snapshot request from MCP arguments.
@@ -216,11 +216,11 @@ fn snapshotRequest(args: ?std.json.Value, kind: []const u8) pi.SessionSnapshotRe
     };
 }
 
-/// Handles MCP `zigar_decision_record` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarDecisionRecord(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const title = argString(args, "title") orelse return mcp_errors.missingArgument(allocator, "zigar_decision_record", "title", "short decision title");
-    const decision = argString(args, "decision") orelse return mcp_errors.missingArgument(allocator, "zigar_decision_record", "decision", "decision text");
-    return structured(allocator, "zigar_decision_record", "decision_record", pi.decisionRecordValue(allocator, context, .{
+/// Handles MCP `zigars_decision_record` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsDecisionRecord(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const title = argString(args, "title") orelse return mcp_errors.missingArgument(allocator, "zigars_decision_record", "title", "short decision title");
+    const decision = argString(args, "decision") orelse return mcp_errors.missingArgument(allocator, "zigars_decision_record", "decision", "decision text");
+    return structured(allocator, "zigars_decision_record", "decision_record", pi.decisionRecordValue(allocator, context, .{
         .title = title,
         .decision = decision,
         .rationale = argString(args, "rationale"),
@@ -230,14 +230,14 @@ pub fn zigarDecisionRecord(allocator: std.mem.Allocator, context: app_context.Pr
     }));
 }
 
-/// Handles MCP `zigar_project_notes` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarProjectNotes(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return projectMemoryTool(allocator, context, args, "zigar_project_notes", false);
+/// Handles MCP `zigars_project_notes` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsProjectNotes(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return projectMemoryTool(allocator, context, args, "zigars_project_notes", false);
 }
 
-/// Handles MCP `zigar_project_memory` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarProjectMemory(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return projectMemoryTool(allocator, context, args, "zigar_project_memory", true);
+/// Handles MCP `zigars_project_memory` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsProjectMemory(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return projectMemoryTool(allocator, context, args, "zigars_project_memory", true);
 }
 
 /// Invokes the project-intelligence memory workflow.
@@ -253,18 +253,18 @@ fn projectMemoryTool(allocator: std.mem.Allocator, context: app_context.ProjectI
     }));
 }
 
-/// Handles MCP `zigar_capability_match` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarCapabilityMatch(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const goal = argString(args, "goal") orelse argString(args, "error") orelse argString(args, "diff") orelse return mcp_errors.missingArgument(allocator, "zigar_capability_match", "goal", "goal, error, or diff text");
+/// Handles MCP `zigars_capability_match` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsCapabilityMatch(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const goal = argString(args, "goal") orelse argString(args, "error") orelse argString(args, "diff") orelse return mcp_errors.missingArgument(allocator, "zigars_capability_match", "goal", "goal, error, or diff text");
     const entries = capabilityEntries(allocator) catch return error.OutOfMemory;
     defer allocator.free(entries);
-    return structured(allocator, "zigar_capability_match", "capability_match", pi.capabilityMatchValue(allocator, goal, @intCast(@max(1, argInt(args, "limit", 8))), entries));
+    return structured(allocator, "zigars_capability_match", "capability_match", pi.capabilityMatchValue(allocator, goal, @intCast(@max(1, argInt(args, "limit", 8))), entries));
 }
 
-/// Handles MCP `zigar_tool_sequence_plan` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarToolSequencePlan(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const goal = argString(args, "goal") orelse argString(args, "error") orelse argString(args, "diff") orelse return mcp_errors.missingArgument(allocator, "zigar_tool_sequence_plan", "goal", "goal, error, or diff text");
-    return structured(allocator, "zigar_tool_sequence_plan", "sequence_plan", pi.toolSequencePlanValue(allocator, goal, argString(args, "changed_files")));
+/// Handles MCP `zigars_tool_sequence_plan` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsToolSequencePlan(allocator: std.mem.Allocator, _: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const goal = argString(args, "goal") orelse argString(args, "error") orelse argString(args, "diff") orelse return mcp_errors.missingArgument(allocator, "zigars_tool_sequence_plan", "goal", "goal, error, or diff text");
+    return structured(allocator, "zigars_tool_sequence_plan", "sequence_plan", pi.toolSequencePlanValue(allocator, goal, argString(args, "changed_files")));
 }
 
 /// Parsed validation-plan arguments plus owned changed-path storage.
@@ -424,7 +424,7 @@ fn failureFusionSamplingParams(allocator: std.mem.Allocator, value: std.json.Val
 
     var params = std.json.ObjectMap.empty;
     try params.put(allocator, "messages", .{ .array = messages });
-    try params.put(allocator, "systemPrompt", .{ .string = "Summarize zigar failure evidence tersely and cite only facts present in the payload." });
+    try params.put(allocator, "systemPrompt", .{ .string = "Summarize zigars failure evidence tersely and cite only facts present in the payload." });
     try params.put(allocator, "maxTokens", .{ .integer = 256 });
     return .{ .object = params };
 }
@@ -648,7 +648,7 @@ test "project intelligence adapter maps validation workflow failures" {
     try run_args.put(allocator, "changed_files", .{ .string = "src/main.zig" });
     try run_args.put(allocator, "timeout_ms", .{ .integer = 1000 });
     try run_args.put(allocator, "apply", .{ .bool = true });
-    var run_result = try zigarValidationRun(allocator, context, .{ .object = run_args });
+    var run_result = try zigarsValidationRun(allocator, context, .{ .object = run_args });
     defer mcp_result.deinitToolResult(allocator, run_result);
     try std.testing.expect(run_result.is_error);
     try std.testing.expectEqualStrings("AccessDenied", run_result.structuredContent.?.object.get("error").?.string);
@@ -656,7 +656,7 @@ test "project intelligence adapter maps validation workflow failures" {
     var history_runtime = AdapterRuntime{ .history_read_error = error.PermissionDenied };
     var history_args = std.json.ObjectMap.empty;
     try history_args.put(allocator, "path", .{ .string = "history.jsonl" });
-    var history_result = try zigarValidationHistory(allocator, history_runtime.context(), .{ .object = history_args });
+    var history_result = try zigarsValidationHistory(allocator, history_runtime.context(), .{ .object = history_args });
     defer mcp_result.deinitToolResult(allocator, history_result);
     try std.testing.expect(history_result.is_error);
     try std.testing.expectEqualStrings("PermissionDenied", history_result.structuredContent.?.object.get("error").?.string);
@@ -684,27 +684,27 @@ test "project intelligence adapter maps context workflow and split errors" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    try std.testing.expectError(error.OutOfMemory, contextSetupError(allocator, "zigar_context_pack", error.OutOfMemory));
-    const context_error = try contextSetupError(allocator, "zigar_context_pack", error.MissingPort);
+    try std.testing.expectError(error.OutOfMemory, contextSetupError(allocator, "zigars_context_pack", error.OutOfMemory));
+    const context_error = try contextSetupError(allocator, "zigars_context_pack", error.MissingPort);
     defer mcp_result.deinitToolResult(allocator, context_error);
     try std.testing.expect(context_error.is_error);
 
-    var invalid_command = try workflowError(allocator, "zigar_failure_fusion", "run", error.InvalidCommand);
+    var invalid_command = try workflowError(allocator, "zigars_failure_fusion", "run", error.InvalidCommand);
     defer mcp_result.deinitToolResult(allocator, invalid_command);
     try std.testing.expect(invalid_command.is_error);
     try std.testing.expectEqualStrings("command", invalid_command.structuredContent.?.object.get("field").?.string);
 
-    var generic = try workflowError(allocator, "zigar_validation_history", "read_history", error.AccessDenied);
+    var generic = try workflowError(allocator, "zigars_validation_history", "read_history", error.AccessDenied);
     defer mcp_result.deinitToolResult(allocator, generic);
     try std.testing.expect(generic.is_error);
     try std.testing.expectEqualStrings("AccessDenied", generic.structuredContent.?.object.get("error").?.string);
 
-    const split_invalid = try splitArgsError(allocator, "zigar_failure_fusion", error.InvalidArguments);
+    const split_invalid = try splitArgsError(allocator, "zigars_failure_fusion", error.InvalidArguments);
     defer mcp_result.deinitToolResult(allocator, split_invalid);
     try std.testing.expect(split_invalid.is_error);
-    try std.testing.expectError(error.OutOfMemory, splitArgsError(allocator, "zigar_failure_fusion", error.OutOfMemory));
+    try std.testing.expectError(error.OutOfMemory, splitArgsError(allocator, "zigars_failure_fusion", error.OutOfMemory));
 
-    const split_generic = try splitArgsError(allocator, "zigar_failure_fusion", error.AccessDenied);
+    const split_generic = try splitArgsError(allocator, "zigars_failure_fusion", error.AccessDenied);
     defer mcp_result.deinitToolResult(allocator, split_generic);
     try std.testing.expect(split_generic.is_error);
 }
@@ -769,7 +769,7 @@ const AdapterRuntime = struct {
     /// Builds the fake app context exposed by the adapter runtime fixture.
     fn context(self: *AdapterRuntime) app_context.ProjectIntelligenceContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
             .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
             .zls_state = .{ .status = "connected", .running = true },
@@ -807,7 +807,7 @@ const AdapterRuntime = struct {
     fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
         if (self.history_read_error) |err| {
-            if (std.mem.eql(u8, request.provenance, "zigar_validation_history read")) return err;
+            if (std.mem.eql(u8, request.provenance, "zigars_validation_history read")) return err;
         }
         const bytes = if (std.mem.eql(u8, request.path, "src/main.zig"))
             "pub fn main() void {}\n"

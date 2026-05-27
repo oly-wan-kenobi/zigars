@@ -1,6 +1,6 @@
 # npm Shim Change Workflow
 
-Use this workflow for changes to `packages/zigar-mcp-npm/` or npm launcher
+Use this workflow for changes to `packages/zigars-mcp-npm/` or npm launcher
 behavior documented from the root project.
 
 ## Roles
@@ -26,7 +26,7 @@ behavior documented from the root project.
 ## Validation
 
 ```sh
-cd packages/zigar-mcp-npm
+cd packages/zigars-mcp-npm
 npm run build
 npm run test:node
 bun run test:bun

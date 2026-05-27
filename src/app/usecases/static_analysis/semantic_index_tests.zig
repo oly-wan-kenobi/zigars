@@ -27,7 +27,7 @@ fn testContext(
     command_fake: ?*fakes.FakeCommandRunner,
 ) app_context.StaticAnalysisContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zlint = "zlint-bin" },
         .timeouts = .{ .command_ms = 1000 },
         .command_runner = if (command_fake) |fake| fake.port() else null,
@@ -54,7 +54,7 @@ test "semantic index builds declarations imports and tests through static ports"
 
     const value = try semantic_index.semanticIndexValue(arena.allocator(), testContext(&store_fake, &scanner_fake, null), 10, "zig_semantic_index_build");
 
-    try std.testing.expectEqualStrings("zigar.semantic_index", value.object.get("format").?.string);
+    try std.testing.expectEqualStrings("zigars.semantic_index", value.object.get("format").?.string);
     try std.testing.expectEqual(@as(i64, 1), value.object.get("file_count").?.integer);
     try std.testing.expect(value.object.get("declaration_count").?.integer >= 1);
     try std.testing.expectEqual(@as(i64, 1), value.object.get("import_count").?.integer);
@@ -160,7 +160,7 @@ test "semantic export applies a cache-hit index write through the workspace port
         \\{"kind":"zig_semantic_export","format":"json","format_version":1,"index":null}
     ;
     try store_fake.expectWrite(.{
-        .path = ".zigar-cache/semantic.json",
+        .path = ".zigars-cache/semantic.json",
         .bytes = expected,
         .provenance = "static_analysis.semantic_export",
     }, .{ .bytes_written = expected.len });
@@ -170,7 +170,7 @@ test "semantic export applies a cache-hit index write through the workspace port
     const value = try semantic_index.exportIndex(arena.allocator(), context, .{
         .tool_name = "zig_semantic_export",
         .format = "json",
-        .output = ".zigar-cache/semantic.json",
+        .output = ".zigars-cache/semantic.json",
         .limit = 1,
         .apply = true,
     });

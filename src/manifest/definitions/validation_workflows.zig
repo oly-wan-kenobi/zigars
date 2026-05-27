@@ -38,7 +38,7 @@ pub const zig_test_select_semantic = tool(.{
 });
 
 /// Plan risk-aware validation phases from changed files, diff text, goal, mode, and semantic impact needs without mutating the environment.
-pub const zigar_validation_plan = tool(.{
+pub const zigars_validation_plan = tool(.{
     .description = "Plan risk-aware validation phases from changed files, diff text, goal, mode, and semantic impact needs without mutating the environment.",
     .input_schema = schemaWithHints(&.{ .{ "changed_files", "string", false }, .{ "diff", "string", false }, .{ "goal", "string", false }, .{ "mode", "string", false }, .{ "include_semantic", "boolean", false } }, &.{mode_hint}),
     .read_only = true,
@@ -47,7 +47,7 @@ pub const zigar_validation_plan = tool(.{
 });
 
 /// Execute a validation plan's allow-listed Zig command phases and return phase results, events, skipped reasons, history preview, and next action.
-pub const zigar_validation_run = tool(.{
+pub const zigars_validation_run = tool(.{
     .description = "Execute a validation plan's allow-listed Zig command phases and return phase results, events, skipped reasons, history preview, and next action.",
     .input_schema = schemaWithHints(&.{ .{ "changed_files", "string", false }, .{ "diff", "string", false }, .{ "goal", "string", false }, .{ "mode", "string", false }, .{ "include_semantic", "boolean", false }, .{ "stop_on_failure", "boolean", false }, .{ "apply", "boolean", false }, .{ "output", "string", false }, .{ "timeout_ms", "integer", false } }, &.{mode_hint}),
     .read_only = false,
@@ -86,7 +86,7 @@ pub const zig_test_timing = tool(.{
 });
 
 /// Read validation history records and summarize last run, last good run, recurring failures, slow phases, and history limitations.
-pub const zigar_validation_history = tool(.{
+pub const zigars_validation_history = tool(.{
     .description = "Read validation history records and summarize last run, last good run, recurring failures, slow phases, and history limitations.",
     .input_schema = schema(&.{ .{ "history", "string", false }, .{ "path", "string", false }, .{ "limit", "integer", false } }),
     .read_only = true,
@@ -113,7 +113,7 @@ pub const zig_failure_history = tool(.{
 });
 
 /// Capture current goal, changed files, validation status, profile state, workspace metadata, and recommended next action for handoff.
-pub const zigar_session_snapshot = tool(.{
+pub const zigars_session_snapshot = tool(.{
     .description = "Capture current goal, changed files, validation status, profile state, workspace metadata, and recommended next action for handoff.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "changed_files", "string", false }, .{ "diff", "string", false }, .{ "validation", "string", false }, .{ "last_error", "string", false } }),
     .read_only = true,
@@ -121,9 +121,9 @@ pub const zigar_session_snapshot = tool(.{
     .plan = .{ .pure_analysis = workflow_state },
 });
 
-/// Package a portable handoff snapshot with recommended next zigar workflow steps and limitations.
-pub const zigar_handoff_pack = tool(.{
-    .description = "Package a portable handoff snapshot with recommended next zigar workflow steps and limitations.",
+/// Package a portable handoff snapshot with recommended next zigars workflow steps and limitations.
+pub const zigars_handoff_pack = tool(.{
+    .description = "Package a portable handoff snapshot with recommended next zigars workflow steps and limitations.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "changed_files", "string", false }, .{ "diff", "string", false }, .{ "validation", "string", false }, .{ "last_error", "string", false } }),
     .read_only = true,
     .group = .agent_workflows,
@@ -131,7 +131,7 @@ pub const zigar_handoff_pack = tool(.{
 });
 
 /// Preview or append a workspace-local structured decision record for project memory under an explicit apply gate.
-pub const zigar_decision_record = tool(.{
+pub const zigars_decision_record = tool(.{
     .description = "Preview or append a workspace-local structured decision record for project memory under an explicit apply gate.",
     .input_schema = schema(&.{ .{ "title", "string", true }, .{ "decision", "string", true }, .{ "rationale", "string", false }, .{ "category", "string", false }, .{ "path", "string", false }, .{ "apply", "boolean", false } }),
     .read_only = false,
@@ -141,7 +141,7 @@ pub const zigar_decision_record = tool(.{
 });
 
 /// Read workspace-local structured project notes with optional query/category filtering.
-pub const zigar_project_notes = tool(.{
+pub const zigars_project_notes = tool(.{
     .description = "Read workspace-local structured project notes with optional query/category filtering.",
     .input_schema = schema(&.{ .{ "content", "string", false }, .{ "path", "string", false }, .{ "query", "string", false }, .{ "category", "string", false }, .{ "limit", "integer", false } }),
     .read_only = true,
@@ -149,27 +149,27 @@ pub const zigar_project_notes = tool(.{
     .plan = .{ .pure_analysis = workflow_state },
 });
 
-/// Read project memory plus built-in zigar project policies such as generated-path, validation, and apply-gate rules.
-pub const zigar_project_memory = tool(.{
-    .description = "Read project memory plus built-in zigar project policies such as generated-path, validation, and apply-gate rules.",
+/// Read project memory plus built-in zigars project policies such as generated-path, validation, and apply-gate rules.
+pub const zigars_project_memory = tool(.{
+    .description = "Read project memory plus built-in zigars project policies such as generated-path, validation, and apply-gate rules.",
     .input_schema = schema(&.{ .{ "content", "string", false }, .{ "path", "string", false }, .{ "query", "string", false }, .{ "category", "string", false }, .{ "limit", "integer", false } }),
     .read_only = true,
     .group = .agent_workflows,
     .plan = .{ .pure_analysis = workflow_state },
 });
 
-/// Match a goal, error, or diff to zigar tools using manifest capabilities, confidence, risk, and alternatives.
-pub const zigar_capability_match = tool(.{
-    .description = "Match a goal, error, or diff to zigar tools using manifest capabilities, confidence, risk, and alternatives.",
+/// Match a goal, error, or diff to zigars tools using manifest capabilities, confidence, risk, and alternatives.
+pub const zigars_capability_match = tool(.{
+    .description = "Match a goal, error, or diff to zigars tools using manifest capabilities, confidence, risk, and alternatives.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "error", "string", false }, .{ "diff", "string", false }, .{ "limit", "integer", false } }),
     .read_only = true,
     .group = .agent_workflows,
-    .plan = .{ .pure_analysis = "Reads the typed zigar manifest and returns ranked tool matches without executing tools." },
+    .plan = .{ .pure_analysis = "Reads the typed zigars manifest and returns ranked tool matches without executing tools." },
 });
 
-/// Plan a deterministic sequence of zigar tools for a goal, error, diff, or changed files, with stop conditions and execution-risk markers.
-pub const zigar_tool_sequence_plan = tool(.{
-    .description = "Plan a deterministic sequence of zigar tools for a goal, error, diff, or changed files, with stop conditions and execution-risk markers.",
+/// Plan a deterministic sequence of zigars tools for a goal, error, diff, or changed files, with stop conditions and execution-risk markers.
+pub const zigars_tool_sequence_plan = tool(.{
+    .description = "Plan a deterministic sequence of zigars tools for a goal, error, diff, or changed files, with stop conditions and execution-risk markers.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "error", "string", false }, .{ "diff", "string", false }, .{ "changed_files", "string", false } }),
     .read_only = true,
     .group = .agent_workflows,

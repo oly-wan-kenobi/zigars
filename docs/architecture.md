@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Zigar is intentionally a deterministic workbench, not an advice or code-generation
+Zigars is intentionally a deterministic workbench, not an advice or code-generation
 server. The implementation is split around boundaries that keep that contract
 auditable:
 
@@ -8,9 +8,9 @@ auditable:
   source root contains only `src/main.zig` and `src/root.zig`. Public imports
   should go through package owners such as `src/app`, `src/domain`, `src/infra`,
   `src/manifest`, `src/adapters`, and `src/bootstrap`.
-- `src/adapters/mcp/server.zig` is zigar's first-party MCP server adapter. zigar imports
+- `src/adapters/mcp/server.zig` is zigars' first-party MCP server adapter. zigars imports
   protocol types, JSON-RPC helpers, content/resource/prompt types, and transport
-  primitives from the pinned upstream `mcp.zig` dependency, but zigar owns
+  primitives from the pinned upstream `mcp.zig` dependency, but zigars owns
   server-side request routing and the result-lifetime boundary for `tools/call`,
   `resources/read`, and `prompts/get`.
 - `src/adapters/mcp/registration.zig`, `registry.zig`, and `handlers.zig` wire
@@ -53,7 +53,7 @@ auditable:
   Document-state locks should protect state transitions only; file I/O and LSP
   sends should run outside the mutex. Unsaved document content is retained in
   process memory so ZLS restarts reopen the same buffer content clients sent.
-- `tools/zigar_tools.zig` is the pure-Zig helper executable used by build steps.
+- `tools/zigars_tools.zig` is the pure-Zig helper executable used by build steps.
   Shared helper concerns are grouped under `tools/common`, `tools/coverage`,
   `tools/integration`, `tools/release`, and `tools/quality`.
 
@@ -78,7 +78,7 @@ section describes the contract those tools enforce.
 | `src/manifest/**` | Manifest code is metadata-only: tool definitions, schema vocabulary, groups, risk flags, planning metadata, and invariants. It must not import runtime `App`, handlers, adapters, infra, bootstrap, MCP `ToolResult`, or app use cases. |
 | `src/testing/fakes/**` | Fakes are the sanctioned deterministic app-port implementations for use-case tests. They may import app port contracts and domain types, but not MCP, adapters, infra, runtime, retired handlers, or concrete effects. |
 
-Import walls are normalized before checking, including `@import("zigar").<name>`
+Import walls are normalized before checking, including `@import("zigars").<name>`
 aliases. Production target-layer code must not import `src/testing/**`.
 App-layer tests may use `src/testing/fakes/**`; integration scenarios do not
 belong in the fake-port layer.
@@ -166,7 +166,7 @@ raw `InvalidArguments`, `ExecutionFailed`, `ResourceNotFound`, and unchecked
 `splitToolArgs` propagation so new tools keep the same error contract.
 
 `read_only` is the MCP annotation. It does not mean "no side effects at all":
-`zig_build`, `zig_test`, `zigar_validate_patch`, failure-triage tools, and
+`zig_build`, `zig_test`, `zigars_validate_patch`, failure-triage tools, and
 `zig_profile_run` can execute code or create normal build/profile artifacts.
 Use `riskFor` for finer-grained trust decisions. Apply-gated tools advertise
 `writes_require_apply` and `preview_by_default` so clients can distinguish
@@ -176,20 +176,20 @@ preview workflows from default mutations.
 
 The build imports the pinned upstream `mcp` package directly. There is no local
 patched MCP dependency in the build graph. The first-party adapter in
-`src/adapters/mcp/server.zig` keeps zigar's supported MCP surface explicit:
+`src/adapters/mcp/server.zig` keeps zigars' supported MCP surface explicit:
 `initialize`, `ping`, tools, resources, resource subscriptions, prompts,
 completion requests, tasks, logging level, stdio transport, and loopback HTTP
 transport.
 
-The task methods are backed by retained zigar runtime jobs. `tasks/list`,
+The task methods are backed by retained zigars runtime jobs. `tasks/list`,
 `tasks/get`, `tasks/result`, and `tasks/cancel` expose the same bounded
-process-local state returned by `zigar_job_start`, `zigar_run_stream`, and the
+process-local state returned by `zigars_job_start`, `zigars_run_stream`, and the
 job result tools. Resource subscriptions are acknowledged at the MCP protocol
-boundary and mirrored by inspectable zigar subscription tools; zigar does not
+boundary and mirrored by inspectable zigars subscription tools; zigars does not
 claim a filesystem watcher.
 
 `tools/call`, `resources/read`, and `prompts/get` are the lifetime-sensitive
-paths. zigar handlers may return owned `mcp.tools.ToolResult`,
+paths. zigars handlers may return owned `mcp.tools.ToolResult`,
 `mcp.resources.ResourceContent`, or prompt message values whose slices and JSON
 payloads must remain valid through response serialization. Registered tools,
 resources, and prompts carry `ToolResultDeinit`, `ResourceContentDeinit`, or
@@ -199,7 +199,7 @@ deterministic cleanup without carrying a patched upstream server.
 
 The release gate scans `build.zig`, `build.zig.zon`, and the adapter contract so
 future dependency updates keep using upstream `mcp` APIs directly while
-retaining explicit zigar-owned cleanup hooks.
+retaining explicit zigars-owned cleanup hooks.
 
 ## Heuristic Analysis Rules
 

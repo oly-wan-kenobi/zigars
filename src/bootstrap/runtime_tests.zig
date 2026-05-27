@@ -10,5 +10,5 @@ test "bootstrap runtime wires runtime lifecycle types" {
     try std.testing.expect(@sizeOf(LspClient) > 0);
     try std.testing.expect(@sizeOf(DocumentState) > 0);
     try std.testing.expect(@sizeOf(ZlsProcess) > 0);
-    try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigar") != null);
+    try std.testing.expect(std.mem.indexOf(u8, config_mod.usage(), "zigars") != null);
 }

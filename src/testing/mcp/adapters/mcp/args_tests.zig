@@ -39,7 +39,7 @@ test "rejects enum arguments outside schema hints" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const spec = manifest.find("zigar_context_pack").?;
+    const spec = manifest.find("zigars_context_pack").?;
 
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "mode", .{ .string = "sideways" });
@@ -57,8 +57,8 @@ test "validates enum hints in tool context" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const context_spec = manifest.find("zigar_context_pack").?;
-    const validate_spec = manifest.find("zigar_validate_patch").?;
+    const context_spec = manifest.find("zigars_context_pack").?;
+    const validate_spec = manifest.find("zigars_validate_patch").?;
 
     var context_obj = std.json.ObjectMap.empty;
     try context_obj.put(allocator, "mode", .{ .string = "quick" });

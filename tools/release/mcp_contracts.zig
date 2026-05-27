@@ -1,5 +1,5 @@
 const std = @import("std");
-const zigar = @import("zigar");
+const zigars = @import("zigars");
 const backend_contract_scenarios = @import("backend_contract_scenarios.zig");
 const mcp_tool_contracts = @import("mcp_tool_contracts.zig");
 
@@ -9,11 +9,11 @@ const Allocator = std.mem.Allocator;
 // Release gates for MCP adapter invariants that are easiest to audit as token
 // contracts over the source tree.
 
-/// Verifies that zigar uses its first-party MCP adapter without patch shims.
+/// Verifies that zigars uses its first-party MCP adapter without patch shims.
 pub fn checkNoPatchContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for ([_][]const u8{ "build.zig", "build.zig.zon" }) |path| {
-        ok = (try checkAbsent(allocator, io, "MCP no-patch contract", path, &.{ "third_party/mcp_zigar_patch", "mcp_upstream", "addMcpModule" })) and ok;
+        ok = (try checkAbsent(allocator, io, "MCP no-patch contract", path, &.{ "third_party/mcp_zigars_patch", "mcp_upstream", "addMcpModule" })) and ok;
     }
     ok = (try checkPresent(allocator, io, "MCP no-patch contract", "src/adapters/mcp/server.zig", &.{ "First-party MCP server adapter", "pinned upstream MCP dependency", "ToolResultDeinit", "ResourceContentDeinit", "PromptMessagesDeinit", "deinit_result", "addResourceWithDeinit", "addPromptWithDeinit" })) and ok;
     return ok;
@@ -33,19 +33,19 @@ pub fn checkAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
 /// Verifies MCP tool/resource/prompt surface contracts exposed by releases.
 pub fn checkPublicSurfaceContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
-    inline for (zigar.manifest.entries) |entry| {
+    inline for (zigars.manifest.entries) |entry| {
         ok = (try mcp_tool_contracts.checkToolContract(allocator, io, entry)) and ok;
     }
     ok = (try checkPresent(allocator, io, "MCP tool discovery contract", "src/adapters/mcp/registration.zig", &.{ "inline for (manifest.specs)", "registry.addTool", "handlers.handlerFor" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP tool discovery contract", "src/adapters/mcp/registration.zig", &.{ "pub fn registerTools", "registry.addTool", "handlers.handlerFor" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP resource/prompt contract fixture", "tests/fixtures/mcp-contracts.expect.json", &.{ "\"resources\"", "\"resource_templates\"", "\"prompts\"", "\"report_kinds\"" })) and ok;
-    ok = (try checkPresent(allocator, io, "MCP resource contract", "src/adapters/mcp/resources.zig", &.{ "zigar://workspace", "zigar://zls/status", "zigar://tools/capabilities", "zigar://tools/schema", "zigar://workspace/import-graph", "zigar://metrics", "zigar://jobs", "zigar://run/events", "zigar://workspace/roots", "zigar://artifacts/{sha}", "zigar://file/{path}/symbols", "zigar://file/{path}/diagnostics", "zigar://file/{path}/imports" })) and ok;
-    ok = (try checkPresent(allocator, io, "MCP prompt contract", "src/adapters/mcp/prompts.zig", &.{ "zigar_profile_workflow", "zigar_compile_error_workflow", "zigar_release_workflow" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP resource contract", "src/adapters/mcp/resources.zig", &.{ "zigars://workspace", "zigars://zls/status", "zigars://tools/capabilities", "zigars://tools/schema", "zigars://workspace/import-graph", "zigars://metrics", "zigars://jobs", "zigars://run/events", "zigars://workspace/roots", "zigars://artifacts/{sha}", "zigars://file/{path}/symbols", "zigars://file/{path}/diagnostics", "zigars://file/{path}/imports" })) and ok;
+    ok = (try checkPresent(allocator, io, "MCP prompt contract", "src/adapters/mcp/prompts.zig", &.{ "zigars_profile_workflow", "zigars_compile_error_workflow", "zigars_release_workflow" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP resource/prompt routing contract", "src/adapters/mcp/server.zig", &.{ "resources/list", "resources/read", "resources/templates/list", "resources/subscribe", "Resource not found", "prompts/list", "prompts/get", "completion/complete", "tasks/list", "Prompt not found", "createInvalidParams", "deinit_content", "deinit_messages" })) and ok;
-    ok = (try checkPresent(allocator, io, "backend conformance report contract", ".github/scripts/backend-conformance.sh", &.{ "\"kind\": \"zigar_backend_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"claimed_backends\"", "\"compatibility_matrix\"", "\"tool_evidence\"", "\"artifacts\"", "profile.svg", "diff.svg", "validate_svg_artifact", "ET.parse(path).getroot()" })) and ok;
+    ok = (try checkPresent(allocator, io, "backend conformance report contract", ".github/scripts/backend-conformance.sh", &.{ "\"kind\": \"zigars_backend_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"claimed_backends\"", "\"compatibility_matrix\"", "\"tool_evidence\"", "\"artifacts\"", "profile.svg", "diff.svg", "validate_svg_artifact", "ET.parse(path).getroot()" })) and ok;
     ok = (try backend_contract_scenarios.check(allocator, io)) and ok;
-    ok = (try checkPresent(allocator, io, "release-readiness report contract", ".github/scripts/release-readiness.sh", &.{ "\"kind\": \"zigar_release_readiness_report\"", "\"schema_version\": 2", "\"source_tree_clean\"", "\"backend_conformance\"", "\"zls_conformance\"", "\"subreport_commits\"", "\"compatibility_matrix\"" })) and ok;
-    ok = (try checkPresent(allocator, io, "real-ZLS report contract", ".github/scripts/real-zls-conformance.sh", &.{ "\"kind\": \"zigar_real_zls_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"backends\"", "\"scenarios\"", "\"response_count\"" })) and ok;
+    ok = (try checkPresent(allocator, io, "release-readiness report contract", ".github/scripts/release-readiness.sh", &.{ "\"kind\": \"zigars_release_readiness_report\"", "\"schema_version\": 2", "\"source_tree_clean\"", "\"backend_conformance\"", "\"zls_conformance\"", "\"subreport_commits\"", "\"compatibility_matrix\"" })) and ok;
+    ok = (try checkPresent(allocator, io, "real-ZLS report contract", ".github/scripts/real-zls-conformance.sh", &.{ "\"kind\": \"zigars_real_zls_conformance_report\"", "\"schema_version\": 2", "\"source_commit\"", "\"backends\"", "\"scenarios\"", "\"response_count\"" })) and ok;
     return ok;
 }
 

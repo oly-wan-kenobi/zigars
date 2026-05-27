@@ -82,7 +82,7 @@ pub fn argument(
         .phase = "validate_argument",
         .code = code,
         .category = "argument",
-        .resolution = "Inspect the tools/list inputSchema or zigar_schema catalog, then retry with the registered argument names and JSON types.",
+        .resolution = "Inspect the tools/list inputSchema or zigars_schema catalog, then retry with the registered argument names and JSON types.",
         .details = &.{
             .{ .key = "field", .value = if (field) |name| .{ .string = name } else .null },
             .{ .key = "expected", .value = .{ .string = expected } },
@@ -144,7 +144,7 @@ pub fn workspacePath(
         .phase = if (err == error.EmptyPath) "validate_path" else "workspace_boundary",
         .code = if (err == error.EmptyPath) "empty_path" else "path_outside_workspace",
         .category = "workspace_path",
-        .resolution = "Run zigar_workspace_info to confirm the active workspace, then retry with a workspace-relative path inside that root.",
+        .resolution = "Run zigars_workspace_info to confirm the active workspace, then retry with a workspace-relative path inside that root.",
         .details = &.{
             .{ .key = "path", .value = .{ .string = path } },
             .{ .key = "workspace", .value = .{ .string = workspace } },

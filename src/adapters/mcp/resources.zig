@@ -13,15 +13,15 @@ const mcp_result = @import("result.zig");
 pub fn registerResources(server: anytype, context_provider: anytype) !void {
     const Provider = @TypeOf(context_provider);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://workspace",
-        .name = "Zigar Workspace",
-        .description = "Current zigar workspace and backend configuration.",
+        .uri = "zigars://workspace",
+        .name = "Zigars Workspace",
+        .description = "Current zigars workspace and backend configuration.",
         .mimeType = "text/plain",
         .handler = textResourceHandler(Provider, workspaceResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://zls/status",
+        .uri = "zigars://zls/status",
         .name = "ZLS Status",
         .description = "Current ZLS session state and capability summary.",
         .mimeType = "application/json",
@@ -29,23 +29,23 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://tools/capabilities",
-        .name = "Zigar Tool Capabilities",
-        .description = "Deterministic capability summary for zigar tool groups.",
+        .uri = "zigars://tools/capabilities",
+        .name = "Zigars Tool Capabilities",
+        .description = "Deterministic capability summary for zigars tool groups.",
         .mimeType = "application/json",
         .handler = textResourceHandler(Provider, catalogResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://tools/schema",
-        .name = "Zigar Tool Schema",
-        .description = "Compact zigar tool catalog, safety defaults, and discovery hints.",
+        .uri = "zigars://tools/schema",
+        .name = "Zigars Tool Schema",
+        .description = "Compact zigars tool catalog, safety defaults, and discovery hints.",
         .mimeType = "application/json",
         .handler = textResourceHandler(Provider, catalogResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://workspace/import-graph",
+        .uri = "zigars://workspace/import-graph",
         .name = "Workspace Import Graph",
         .description = "Heuristic Zig import graph for the active workspace.",
         .mimeType = "text/plain",
@@ -53,32 +53,32 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://metrics",
-        .name = "Zigar Metrics",
-        .description = "Process-local zigar counters and backend state.",
+        .uri = "zigars://metrics",
+        .name = "Zigars Metrics",
+        .description = "Process-local zigars counters and backend state.",
         .mimeType = "application/json",
         .handler = jsonResourceHandler(Provider, metricsResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://jobs",
-        .name = "Zigar Jobs",
-        .description = "Process-local zigar job status and output tails.",
+        .uri = "zigars://jobs",
+        .name = "Zigars Jobs",
+        .description = "Process-local zigars job status and output tails.",
         .mimeType = "application/json",
         .handler = jsonResourceHandler(Provider, jobsResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://run/events",
-        .name = "Zigar Run Events",
-        .description = "Process-local zigar job event ring.",
+        .uri = "zigars://run/events",
+        .name = "Zigars Run Events",
+        .description = "Process-local zigars job event ring.",
         .mimeType = "application/json",
         .handler = jsonResourceHandler(Provider, runEventsResource),
         .user_data = context_provider,
     }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
-        .uri = "zigar://workspace/roots",
-        .name = "Zigar Workspace Roots",
+        .uri = "zigars://workspace/roots",
+        .name = "Zigars Workspace Roots",
         .description = "Configured and client-synced workspace root guidance.",
         .mimeType = "application/json",
         .handler = jsonResourceHandler(Provider, workspaceRootsResource),
@@ -88,25 +88,25 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
     // resolves concrete URIs at read time so registrations stay bounded.
     server.setDynamicResourceHandler(dynamicResourceHandler(Provider), context_provider, mcp_result.deinitResourceContent);
     try server.addResourceTemplate(.{
-        .uriTemplate = "zigar://artifacts/{sha}",
+        .uriTemplate = "zigars://artifacts/{sha}",
         .name = "Artifact By SHA",
         .description = "Read a registered workspace artifact by sha256 identity.",
         .mimeType = "text/plain",
     });
     try server.addResourceTemplate(.{
-        .uriTemplate = "zigar://file/{path}/symbols",
+        .uriTemplate = "zigars://file/{path}/symbols",
         .name = "File Symbols",
         .description = "Use zig_document_symbols or zig_decl_summary_json for the given workspace file.",
         .mimeType = "application/json",
     });
     try server.addResourceTemplate(.{
-        .uriTemplate = "zigar://file/{path}/diagnostics",
+        .uriTemplate = "zigars://file/{path}/diagnostics",
         .name = "File Diagnostics",
         .description = "Use zig_diagnostics_all for the given workspace file.",
         .mimeType = "application/json",
     });
     try server.addResourceTemplate(.{
-        .uriTemplate = "zigar://file/{path}/imports",
+        .uriTemplate = "zigars://file/{path}/imports",
         .name = "File Imports",
         .description = "Use zig_import_graph_json and filter by path for import data.",
         .mimeType = "application/json",
@@ -121,7 +121,7 @@ fn workspaceResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
         .phase = "build_workspace_resource",
         .code = "workspace_resource_failed",
         .category = "runtime_state",
-        .resolution = "Retry the resource read; report this with the current zigar startup arguments if it persists.",
+        .resolution = "Retry the resource read; report this with the current zigars startup arguments if it persists.",
     }, err);
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
 }
@@ -134,7 +134,7 @@ fn zlsStatusResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
         .phase = "build_status",
         .code = "zls_status_failed",
         .category = "lsp",
-        .resolution = "Run zigar_doctor with probe_backends=false and retry the resource read after checking the ZLS session state.",
+        .resolution = "Run zigars_doctor with probe_backends=false and retry the resource read after checking the ZLS session state.",
     }, err);
     if (context.zls_state.initialize_response) |response| {
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch null;
@@ -149,7 +149,7 @@ fn zlsStatusResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
                 .phase = "serialize_server_capabilities",
                 .code = "zls_capabilities_serialization_failed",
                 .category = "lsp",
-                .resolution = "Retry after restarting the ZLS session; report this with zigar://zls/status output if it persists.",
+                .resolution = "Retry after restarting the ZLS session; report this with zigars://zls/status output if it persists.",
             }, err);
             value.object.put(allocator, "server_capabilities_json", .{ .string = cap_json.toOwnedSlice(allocator) catch return error.OutOfMemory }) catch return error.OutOfMemory;
         }
@@ -178,7 +178,7 @@ fn importGraphResource(allocator: std.mem.Allocator, context: app_context.Runtim
         .phase = "scan_import_graph",
         .code = "import_graph_failed",
         .category = "analysis",
-        .resolution = "Run zig_import_graph_json for structured diagnostics, check workspace readability, then retry zigar://workspace/import-graph.",
+        .resolution = "Run zig_import_graph_json for structured diagnostics, check workspace readability, then retry zigars://workspace/import-graph.",
         .details = &.{.{ .key = "workspace", .value = .{ .string = context.workspace.root } }},
     }, err);
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
@@ -192,7 +192,7 @@ fn metricsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
         .phase = "build_metrics",
         .code = "metrics_failed",
         .category = "runtime_state",
-        .resolution = "Retry the resource read; report this with zigar_workspace_info if metrics cannot be produced.",
+        .resolution = "Retry the resource read; report this with zigars_workspace_info if metrics cannot be produced.",
     }, err);
 }
 
@@ -204,7 +204,7 @@ fn jobsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
         .phase = "build_jobs",
         .code = "jobs_failed",
         .category = "runtime_state",
-        .resolution = "Retry the resource read; report this with zigar_run_events if retained job state cannot be produced.",
+        .resolution = "Retry the resource read; report this with zigars_run_events if retained job state cannot be produced.",
     }, err);
 }
 
@@ -228,29 +228,29 @@ fn workspaceRootsResource(allocator: std.mem.Allocator, context: app_context.Run
         .phase = "build_roots",
         .code = "workspace_roots_failed",
         .category = "runtime_state",
-        .resolution = "Retry the resource read after calling zigar_workspace_map.",
+        .resolution = "Retry the resource read after calling zigars_workspace_map.",
     }, err);
 }
 
-/// Resolves zigar://file/{path}/{symbols|diagnostics|imports} URIs.
+/// Resolves zigars://file/{path}/{symbols|diagnostics|imports} URIs.
 fn dynamicResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
-    if (!std.mem.startsWith(u8, uri, "zigar://file/")) return error.NotFound;
+    if (!std.mem.startsWith(u8, uri, "zigars://file/")) return error.NotFound;
     const value = runtime_ux.dynamicResourceValue(allocator, context, uri) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
-        error.InvalidArguments => return resourceFailure(allocator, uri, dynamicResourceFailure("parse_dynamic_uri", "invalid_dynamic_resource_uri", "path_safety", "Use zigar://file/{path}/{symbols|diagnostics|imports} with a path inside the configured workspace."), err),
+        error.InvalidArguments => return resourceFailure(allocator, uri, dynamicResourceFailure("parse_dynamic_uri", "invalid_dynamic_resource_uri", "path_safety", "Use zigars://file/{path}/{symbols|diagnostics|imports} with a path inside the configured workspace."), err),
         error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, dynamicResourceFailure("read_dynamic_file", "dynamic_resource_unavailable", "filesystem", "Confirm the file exists inside the configured workspace and retry the resource read."), err),
-        else => return resourceFailure(allocator, uri, dynamicResourceFailure("build_dynamic_resource", "dynamic_resource_failed", "analysis", "Retry with zigar_resource_query for a structured tool_error and inspect the requested file."), err),
+        else => return resourceFailure(allocator, uri, dynamicResourceFailure("build_dynamic_resource", "dynamic_resource_failed", "analysis", "Retry with zigars_resource_query for a structured tool_error and inspect the requested file."), err),
     };
     return jsonContent(allocator, uri, value);
 }
 
-/// Resolves zigar://artifacts/{sha} URIs through the workspace artifact registry.
+/// Resolves zigars://artifacts/{sha} URIs through the workspace artifact registry.
 fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
-    const prefix = "zigar://artifacts/";
+    const prefix = "zigars://artifacts/";
     if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
     const sha = uri[prefix.len..];
     if (!isSha256Hex(sha)) {
-        return resourceFailure(allocator, uri, artifactResourceFailure("parse_artifact_uri", "invalid_artifact_resource_uri", "Use zigar://artifacts/{sha} with a lowercase 64-character sha256 hex digest."), error.InvalidArguments);
+        return resourceFailure(allocator, uri, artifactResourceFailure("parse_artifact_uri", "invalid_artifact_resource_uri", "Use zigars://artifacts/{sha} with a lowercase 64-character sha256 hex digest."), error.InvalidArguments);
     }
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -263,7 +263,7 @@ fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactC
     const entry = for (registry.entries) |candidate| {
         if (std.mem.eql(u8, candidate.sha256, sha)) break candidate;
     } else {
-        return resourceFailure(allocator, uri, artifactResourceFailure("lookup_artifact", "artifact_resource_not_found", "Run zigar_artifact_index or regenerate the producing workflow so the artifact is registered."), error.FileNotFound);
+        return resourceFailure(allocator, uri, artifactResourceFailure("lookup_artifact", "artifact_resource_not_found", "Run zigars_artifact_index or regenerate the producing workflow so the artifact is registered."), error.FileNotFound);
     };
     const resolved = context.workspace_store.resolve(scratch, .{
         .path = entry.path,
@@ -272,7 +272,7 @@ fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactC
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
-        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigar_artifact_read for a structured tool error."), err),
+        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigars_artifact_read for a structured tool error."), err),
     };
     resolved.deinit(scratch);
     const read = context.workspace_store.read(allocator, .{
@@ -283,7 +283,7 @@ fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactC
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
-        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigar_artifact_read for a structured tool error."), err),
+        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigars_artifact_read for a structured tool error."), err),
     };
     return .{
         .uri = uri,
@@ -323,7 +323,7 @@ fn jsonResourceHandler(
                     .phase = "build_json",
                     .code = "json_resource_failed",
                     .category = "runtime_state",
-                    .resolution = "Retry the resource read; report this zigar resource URI if it persists.",
+                    .resolution = "Retry the resource read; report this zigars resource URI if it persists.",
                 }, err),
             };
             return jsonContent(allocator, uri, value);
@@ -336,7 +336,7 @@ fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.I
     return struct {
         /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
-            if (std.mem.startsWith(u8, uri, "zigar://artifacts/")) {
+            if (std.mem.startsWith(u8, uri, "zigars://artifacts/")) {
                 const artifact_context = artifactContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
                 return artifactResource(allocator, artifact_context, uri);
             }
@@ -374,7 +374,7 @@ fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, value: std.json.Va
         .phase = "stringify_json",
         .code = "json_serialization_failed",
         .category = "serialization",
-        .resolution = "Report this zigar bug with the resource URI and the operation that produced an unserializable JSON value.",
+        .resolution = "Report this zigars bug with the resource URI and the operation that produced an unserializable JSON value.",
     }, err);
     return .{ .uri = uri, .mimeType = "application/json", .text = aw.toOwnedSlice() catch return error.OutOfMemory };
 }
@@ -489,19 +489,19 @@ fn artifactMimeType(path: []const u8) []const u8 {
 
 /// Contract-token anchor for resource URI coverage tests.
 const _resource_contract_tokens = [_][]const u8{
-    "zigar://workspace",
-    "zigar://zls/status",
-    "zigar://tools/capabilities",
-    "zigar://tools/schema",
-    "zigar://workspace/import-graph",
-    "zigar://metrics",
-    "zigar://jobs",
-    "zigar://run/events",
-    "zigar://workspace/roots",
-    "zigar://artifacts/{sha}",
-    "zigar://file/{path}/symbols",
-    "zigar://file/{path}/diagnostics",
-    "zigar://file/{path}/imports",
+    "zigars://workspace",
+    "zigars://zls/status",
+    "zigars://tools/capabilities",
+    "zigars://tools/schema",
+    "zigars://workspace/import-graph",
+    "zigars://metrics",
+    "zigars://jobs",
+    "zigars://run/events",
+    "zigars://workspace/roots",
+    "zigars://artifacts/{sha}",
+    "zigars://file/{path}/symbols",
+    "zigars://file/{path}/diagnostics",
+    "zigars://file/{path}/imports",
 };
 
 test {
@@ -538,7 +538,7 @@ fn resourceTestContext(
     tool_catalog: ?ports.ToolCatalog,
 ) app_context.RuntimeUxContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 2000 },
         .zls_state = .{
@@ -571,7 +571,7 @@ fn seedResourceJob(session: *test_fakes.FakeRuntimeSession) !void {
         .stdout_truncated = false,
         .stderr_truncated = false,
     });
-    _ = try runtime.subscribe("zigar://jobs");
+    _ = try runtime.subscribe("zigars://jobs");
 }
 
 /// Formats one artifact registry entry for resource tests.
@@ -623,26 +623,26 @@ test "MCP resource adapter renders direct app resource values" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const zls = try zlsStatusResource(allocator, context, "zigar://zls/status");
+    const zls = try zlsStatusResource(allocator, context, "zigars://zls/status");
     try std.testing.expect(zls.object.get("server_capabilities_json") != null);
 
-    const catalog_content = try catalogResource(allocator, context, "zigar://tools/schema");
+    const catalog_content = try catalogResource(allocator, context, "zigars://tools/schema");
     try std.testing.expectEqualStrings("application/json", catalog_content.mimeType.?);
     try std.testing.expectEqualStrings("{\"groups\":[]}", catalog_content.text.?);
 
-    const import_graph = try importGraphResource(allocator, context, "zigar://workspace/import-graph");
+    const import_graph = try importGraphResource(allocator, context, "zigars://workspace/import-graph");
     try std.testing.expect(std.mem.indexOf(u8, import_graph.text.?, "local.zig") != null);
 
-    const metrics = try metricsResource(allocator, context, "zigar://metrics");
+    const metrics = try metricsResource(allocator, context, "zigars://metrics");
     try std.testing.expectEqual(@as(i64, 3), metrics.object.get("command_calls").?.integer);
 
-    const jobs = try jobsResource(allocator, context, "zigar://jobs");
+    const jobs = try jobsResource(allocator, context, "zigars://jobs");
     try std.testing.expectEqual(@as(i64, 1), jobs.object.get("job_count").?.integer);
 
-    const events = try runEventsResource(allocator, context, "zigar://run/events");
+    const events = try runEventsResource(allocator, context, "zigars://run/events");
     try std.testing.expectEqual(@as(i64, 2), events.object.get("event_count").?.integer);
 
-    const roots = try workspaceRootsResource(allocator, context, "zigar://workspace/roots");
+    const roots = try workspaceRootsResource(allocator, context, "zigars://workspace/roots");
     try std.testing.expectEqualStrings("root-1", roots.object.get("selected_root_id").?.string);
 
     try workspace.verify();
@@ -666,22 +666,22 @@ test "MCP resource handlers resolve runtime context and serialize JSON" {
     const allocator = arena.allocator();
 
     const text_handler = textResourceHandler(*ResourceTestProvider, workspaceResource);
-    const workspace_content = try text_handler(&provider, std.testing.io, allocator, "zigar://workspace");
+    const workspace_content = try text_handler(&provider, std.testing.io, allocator, "zigars://workspace");
     try std.testing.expect(std.mem.indexOf(u8, workspace_content.text.?, "workspace=/repo") != null);
 
     const json_handler = jsonResourceHandler(*ResourceTestProvider, metricsResource);
-    const metrics_content = try json_handler(&provider, std.testing.io, allocator, "zigar://metrics");
+    const metrics_content = try json_handler(&provider, std.testing.io, allocator, "zigars://metrics");
     try std.testing.expectEqualStrings("application/json", metrics_content.mimeType.?);
     try std.testing.expect(std.mem.indexOf(u8, metrics_content.text.?, "\"command_calls\"") != null);
 
     const failing_handler = jsonResourceHandler(*ResourceTestProvider, failingJsonResource);
-    const error_content = try failing_handler(&provider, std.testing.io, allocator, "zigar://metrics");
+    const error_content = try failing_handler(&provider, std.testing.io, allocator, "zigars://metrics");
     try std.testing.expect(std.mem.indexOf(u8, error_content.text.?, "json_resource_failed") != null);
 
     const oom_handler = jsonResourceHandler(*ResourceTestProvider, oomJsonResource);
-    try std.testing.expectError(error.OutOfMemory, oom_handler(&provider, std.testing.io, allocator, "zigar://metrics"));
+    try std.testing.expectError(error.OutOfMemory, oom_handler(&provider, std.testing.io, allocator, "zigars://metrics"));
 
-    const missing_context = try text_handler(null, std.testing.io, allocator, "zigar://workspace");
+    const missing_context = try text_handler(null, std.testing.io, allocator, "zigars://workspace");
     try std.testing.expect(std.mem.indexOf(u8, missing_context.text.?, "missing_runtime_context") != null);
 }
 
@@ -716,22 +716,22 @@ test "MCP dynamic resource handler maps success and app-layer errors" {
     const allocator = arena.allocator();
     const handler = dynamicResourceHandler(*ResourceTestProvider);
 
-    const success = try handler(&provider, std.testing.io, allocator, "zigar://file/src/main.zig/imports");
+    const success = try handler(&provider, std.testing.io, allocator, "zigars://file/src/main.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, success.text.?, "\"resource_kind\": \"imports\"") != null);
 
-    try std.testing.expectError(error.NotFound, handler(&provider, std.testing.io, allocator, "zigar://metrics"));
+    try std.testing.expectError(error.NotFound, handler(&provider, std.testing.io, allocator, "zigars://metrics"));
 
-    const invalid_uri = try handler(&provider, std.testing.io, allocator, "zigar://file/no-mode");
+    const invalid_uri = try handler(&provider, std.testing.io, allocator, "zigars://file/no-mode");
     try std.testing.expect(std.mem.indexOf(u8, invalid_uri.text.?, "invalid_dynamic_resource_uri") != null);
 
-    const missing_file = try handler(&provider, std.testing.io, allocator, "zigar://file/missing.zig/imports");
+    const missing_file = try handler(&provider, std.testing.io, allocator, "zigars://file/missing.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, missing_file.text.?, "dynamic_resource_unavailable") != null);
 
-    const analysis_failure = try handler(&provider, std.testing.io, allocator, "zigar://file/unexpected.zig/imports");
+    const analysis_failure = try handler(&provider, std.testing.io, allocator, "zigars://file/unexpected.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, analysis_failure.text.?, "dynamic_resource_failed") != null);
 
     const artifact_hash = try artifact_registry.sha256Hex(allocator, "artifact text");
-    const artifact_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{artifact_hash});
+    const artifact_uri = try std.fmt.allocPrint(allocator, "zigars://artifacts/{s}", .{artifact_hash});
     const registry_line = try resourceArtifactRegistryLine(allocator, "zig-out/artifact.txt", "artifact text");
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, registry_line);
     try workspace.expectResolve(.{ .path = "zig-out/artifact.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, "/repo/zig-out/artifact.txt");
@@ -739,24 +739,24 @@ test "MCP dynamic resource handler maps success and app-layer errors" {
     const artifact = try handler(&provider, std.testing.io, allocator, artifact_uri);
     try std.testing.expectEqualStrings("artifact text", artifact.text.?);
 
-    const invalid_artifact = try handler(&provider, std.testing.io, allocator, "zigar://artifacts/not-a-sha");
+    const invalid_artifact = try handler(&provider, std.testing.io, allocator, "zigars://artifacts/not-a-sha");
     try std.testing.expect(std.mem.indexOf(u8, invalid_artifact.text.?, "invalid_artifact_resource_uri") != null);
 
     const missing_hash = try artifact_registry.sha256Hex(allocator, "missing");
-    const missing_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{missing_hash});
+    const missing_uri = try std.fmt.allocPrint(allocator, "zigars://artifacts/{s}", .{missing_hash});
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, registry_line);
     const missing_artifact = try handler(&provider, std.testing.io, allocator, missing_uri);
     try std.testing.expect(std.mem.indexOf(u8, missing_artifact.text.?, "artifact_resource_not_found") != null);
 
     const outside_hash = try artifact_registry.sha256Hex(allocator, "outside");
-    const outside_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{outside_hash});
+    const outside_uri = try std.fmt.allocPrint(allocator, "zigars://artifacts/{s}", .{outside_hash});
     const outside_registry = try resourceArtifactRegistryLine(allocator, "../secret.txt", "outside");
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, outside_registry);
     try workspace.expectResolveError(.{ .path = "../secret.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, error.PathOutsideWorkspace);
     const outside_artifact = try handler(&provider, std.testing.io, allocator, outside_uri);
     try std.testing.expect(std.mem.indexOf(u8, outside_artifact.text.?, "artifact_resource_unavailable") != null);
 
-    const missing_context = try handler(null, std.testing.io, allocator, "zigar://file/src/main.zig/imports");
+    const missing_context = try handler(null, std.testing.io, allocator, "zigars://file/src/main.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, missing_context.text.?, "missing_runtime_context") != null);
 
     try workspace.verify();
@@ -767,7 +767,7 @@ test "MCP resource helpers produce structured failures and capability views" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const failure = try resourceFailure(allocator, "zigar://x", .{
+    const failure = try resourceFailure(allocator, "zigars://x", .{
         .resource = "workspace",
         .operation = "read",
         .phase = "phase",
@@ -779,7 +779,7 @@ test "MCP resource helpers produce structured failures and capability views" {
     }, error.FileNotFound);
     try std.testing.expect(std.mem.indexOf(u8, failure.text.?, "\"detail\": \"value\"") != null);
 
-    const value_failure = try resourceValueFailure(allocator, "zigar://x", .{
+    const value_failure = try resourceValueFailure(allocator, "zigars://x", .{
         .resource = "workspace",
         .operation = "read",
         .phase = "phase",
@@ -788,7 +788,7 @@ test "MCP resource helpers produce structured failures and capability views" {
         .resolution = "retry",
     }, error.AccessDenied);
     try std.testing.expectEqualStrings("AccessDenied", value_failure.object.get("error").?.string);
-    try std.testing.expectError(error.OutOfMemory, resourceValueFailure(allocator, "zigar://x", .{
+    try std.testing.expectError(error.OutOfMemory, resourceValueFailure(allocator, "zigars://x", .{
         .resource = "workspace",
         .operation = "read",
         .phase = "phase",
@@ -797,7 +797,7 @@ test "MCP resource helpers produce structured failures and capability views" {
         .resolution = "retry",
     }, error.OutOfMemory));
 
-    const context_error = try contextFailure(allocator, "zigar://x", error.MissingRuntime);
+    const context_error = try contextFailure(allocator, "zigars://x", error.MissingRuntime);
     try std.testing.expect(std.mem.indexOf(u8, context_error.text.?, "missing_runtime_context") != null);
 
     const dynamic_spec = dynamicResourceFailure("phase", "code", "category", "resolution");
@@ -824,7 +824,7 @@ test "MCP resource helpers produce structured failures and capability views" {
     try missing_caps_root.put(allocator, "result", .{ .object = missing_caps_result });
     try std.testing.expectEqual(.null, serverCapabilities(.{ .object = missing_caps_root }));
 
-    const json = try jsonContent(allocator, "zigar://json", .{ .bool = true });
+    const json = try jsonContent(allocator, "zigars://json", .{ .bool = true });
     try std.testing.expectEqualStrings("true", std.mem.trim(u8, json.text.?, "\n "));
 }
 
@@ -838,7 +838,7 @@ test "MCP JSON resource content cleans partial buffer on allocation failure" {
 
         var obj = std.json.ObjectMap.empty;
         try obj.put(backing.allocator(), "kind", .{ .string = "value" });
-        if (jsonContent(allocator, "zigar://json", .{ .object = obj })) |content| {
+        if (jsonContent(allocator, "zigars://json", .{ .object = obj })) |content| {
             mcp_result.deinitResourceContent(allocator, content);
         } else |err| {
             try std.testing.expectEqual(error.OutOfMemory, err);
@@ -862,7 +862,7 @@ test "MCP resource adapter maps remaining failure branches" {
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const import_error = try importGraphResource(arena.allocator(), context, "zigar://workspace/import-graph");
+    const import_error = try importGraphResource(arena.allocator(), context, "zigars://workspace/import-graph");
     try std.testing.expect(std.mem.indexOf(u8, import_error.text.?, "\"workspace\": \"/repo\"") != null);
 
     try workspace.expectRead(.{
@@ -874,7 +874,7 @@ test "MCP resource adapter maps remaining failure branches" {
         \\pub fn main() void {}
     );
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    try std.testing.expectError(error.OutOfMemory, dynamicResource(failing.allocator(), context, "zigar://file/src/main.zig/imports"));
+    try std.testing.expectError(error.OutOfMemory, dynamicResource(failing.allocator(), context, "zigars://file/src/main.zig/imports"));
 
     try scanner.verify();
     try workspace.verify();
@@ -888,7 +888,7 @@ test "MCP resource value failure and ZLS status clean up on allocation failure" 
         var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
         const allocator = failing.allocator();
 
-        if (resourceValueFailure(allocator, "zigar://x", .{
+        if (resourceValueFailure(allocator, "zigars://x", .{
             .resource = "workspace",
             .operation = "read",
             .phase = "phase",
@@ -916,6 +916,6 @@ test "MCP resource value failure and ZLS status clean up on allocation failure" 
         var catalog = test_fakes.FakeToolCatalog.init("{}");
         const context = resourceTestContext(&commands, &workspace, &scanner, &session, catalog.port());
 
-        if (zlsStatusResource(allocator, context, "zigar://zls/status")) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (zlsStatusResource(allocator, context, "zigars://zls/status")) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
     }
 }

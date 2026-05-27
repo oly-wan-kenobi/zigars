@@ -15,14 +15,14 @@ or [04-compound-workflows.md](04-compound-workflows.md).
 
 ## 1. Method
 
-Existing zigar tools were grouped by the **agent reasoning question** they
+Existing zigars tools were grouped by the **agent reasoning question** they
 answer (e.g. "what calls X?", "what tests exercise X?", "where should X
 live?"). Each candidate primitive was checked against four filters:
 
 1. **Role-grounded.** Does at least one named role in the SluiceDB-style
    workflow (Orchestrator / Planner / Test Author / Test Reviewer /
    Implementer) need exactly this answer to make its next decision?
-2. **Net-new structural answer.** Today the agent has no zigar tool that
+2. **Net-new structural answer.** Today the agent has no zigars tool that
    returns this fact directly — it must grep, read 3+ files, or compose 4+
    tool calls.
 3. **Grep-inadequate.** A regex over source can return *candidates* but not
@@ -45,7 +45,7 @@ consumer role.
 
 ## 2. Proposals
 
-Zigar's internal hexagonal architecture guard is intentionally not projected as
+Zigars' internal hexagonal architecture guard is intentionally not projected as
 a public `zig_*` tool in this proposal. Public tools below should expose
 architecture-neutral structural facts unless a future project explicitly opts
 into a configured architecture profile.
@@ -361,13 +361,13 @@ individually; the dossier is the orchestration.
 **Why read-many-files is inadequate.** This is the canonical "agent opens
 six files plus runs three commands" pattern. The dossier compresses it to
 one call with stable structure suitable for a Reviewer prompt template.
-Similar in spirit to `zigar_context_pack` but **symbol-scoped** rather
+Similar in spirit to `zigars_context_pack` but **symbol-scoped** rather
 than session-scoped.
 
 **Effort:** **S–M.** Pure composition over existing tools plus #2.1.
 The git-history slice needs the read-only git surface already used by
 `zig_public_api_diff`'s `baseline_ref`. Token budget should follow the
-`mode=compact|standard|deep` contract already standard in zigar.
+`mode=compact|standard|deep` contract already standard in zigars.
 
 ---
 
@@ -416,15 +416,15 @@ high-risk files first."
 centrality, and test coverage — none of which a grep can compute.
 
 **Why read-many-files is inadequate.** Today the Orchestrator runs
-`zigar_impact` (→ importers), `zig_test_select_semantic` (→ tests),
+`zigars_impact` (→ importers), `zig_test_select_semantic` (→ tests),
 `zig_public_api_diff` (→ API delta) separately and merges. The merge logic
 is the value-add — and it's what an Orchestrator should not re-implement
 per workflow.
 
-**Effort:** **M.** Composes `zigar_impact`, `zig_test_select_semantic`,
+**Effort:** **M.** Composes `zigars_impact`, `zig_test_select_semantic`,
 `zig_public_api_diff`, and import-graph centrality. Scoring weights stay
 caller-overridable to avoid hard-coding a policy. Distinct from
-`zigar_validation_plan` (which plans **commands** to run); this scores
+`zigars_validation_plan` (which plans **commands** to run); this scores
 **files** for human/agent attention.
 
 ---
@@ -606,7 +606,7 @@ none writes artifacts unless explicitly opted in via a future `output`
 parameter. This keeps them safe defaults in any Orchestrator's tool list.
 
 **Confidence framing.** Each tool should report `evidence_basis`,
-`confidence`, and `limitations` — the existing zigar contract. Where the
+`confidence`, and `limitations` — the existing zigars contract. Where the
 answer is heuristic (e.g. `zig_insertion_sites` ranking), the limitations
 should name **what would make the answer stronger** (e.g. "could use
 embeddings backend" or "could use compiler-eval"). This keeps the proposals

@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars evidence contract"
+  short_description: "Audit zigars evidence before final claims."
+  default_prompt: "Use $zigars-evidence-contract to audit the evidence behind this claim and name any skipped or missing validation."

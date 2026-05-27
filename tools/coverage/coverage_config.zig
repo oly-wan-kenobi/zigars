@@ -27,35 +27,35 @@ pub const TestBinary = struct {
 
 pub const test_binaries = [_]TestBinary{
     .{
-        .name = "zigar-lib-tests",
-        .unix_path = "zig-out/test-bin/zigar-lib-tests",
-        .windows_path = "zig-out/test-bin/zigar-lib-tests.exe",
+        .name = "zigars-lib-tests",
+        .unix_path = "zig-out/test-bin/zigars-lib-tests",
+        .windows_path = "zig-out/test-bin/zigars-lib-tests.exe",
         .min_tests = 480,
     },
     .{
-        .name = "zigar-exe-tests",
-        .unix_path = "zig-out/test-bin/zigar-exe-tests",
-        .windows_path = "zig-out/test-bin/zigar-exe-tests.exe",
+        .name = "zigars-exe-tests",
+        .unix_path = "zig-out/test-bin/zigars-exe-tests",
+        .windows_path = "zig-out/test-bin/zigars-exe-tests.exe",
         .min_tests = 1,
     },
     .{
-        .name = "zigar-tools-tests",
-        .unix_path = "zig-out/test-bin/zigar-tools-tests",
-        .windows_path = "zig-out/test-bin/zigar-tools-tests.exe",
+        .name = "zigars-tools-tests",
+        .unix_path = "zig-out/test-bin/zigars-tools-tests",
+        .windows_path = "zig-out/test-bin/zigars-tools-tests.exe",
         .min_tests = 26,
     },
     .{
-        .name = "zigar-fuzz-tests",
-        .unix_path = "zig-out/test-bin/zigar-fuzz-tests",
-        .windows_path = "zig-out/test-bin/zigar-fuzz-tests.exe",
+        .name = "zigars-fuzz-tests",
+        .unix_path = "zig-out/test-bin/zigars-fuzz-tests",
+        .windows_path = "zig-out/test-bin/zigars-fuzz-tests.exe",
         .min_tests = 2,
     },
 };
 
 test "test binaries have stable paths" {
     try std.testing.expectEqual(@as(usize, 4), test_binaries.len);
-    try std.testing.expectEqualStrings("zigar-lib-tests", test_binaries[0].name);
-    try std.testing.expect(std.mem.endsWith(u8, test_binaries[0].path(), if (builtin.os.tag == .windows) ".exe" else "zigar-lib-tests"));
+    try std.testing.expectEqualStrings("zigars-lib-tests", test_binaries[0].name);
+    try std.testing.expect(std.mem.endsWith(u8, test_binaries[0].path(), if (builtin.os.tag == .windows) ".exe" else "zigars-lib-tests"));
     for (test_binaries) |binary| {
         try std.testing.expect(binary.min_tests > 0);
         try std.testing.expect(std.mem.startsWith(u8, binary.path(), "zig-out/test-bin/"));

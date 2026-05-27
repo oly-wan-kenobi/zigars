@@ -1,5 +1,5 @@
-//! First-party MCP server adapter for zigar.
-//! Owns routing and zigar result lifetimes over the pinned upstream MCP dependency.
+//! First-party MCP server adapter for zigars.
+//! Owns routing and zigars result lifetimes over the pinned upstream MCP dependency.
 
 const std = @import("std");
 const http = std.http;
@@ -28,7 +28,7 @@ pub const ResourceContentDeinit = *const fn (allocator: std.mem.Allocator, conte
 /// Deinitializer for prompt message slices produced by prompt handlers.
 pub const PromptMessagesDeinit = *const fn (allocator: std.mem.Allocator, messages: []const mcp.prompts.PromptMessage) void;
 
-/// Registered MCP tool metadata plus zigar callback and cleanup contract.
+/// Registered MCP tool metadata plus zigars callback and cleanup contract.
 pub const Tool = struct {
     name: []const u8,
     description: ?[]const u8 = null,
@@ -242,7 +242,7 @@ pub const Server = struct {
         self.capabilities.resources = .{ .listChanged = true, .subscribe = subscribe };
     }
 
-    /// Add a resource whose returned content follows a zigar-owned cleanup contract.
+    /// Add a resource whose returned content follows a zigars-owned cleanup contract.
     pub fn addResourceWithDeinit(self: *Self, resource: resources_mod.Resource, deinit_content: ResourceContentDeinit) !void {
         try self.addResource(resource);
         errdefer _ = self.resources.orderedRemove(resource.uri);
@@ -263,7 +263,7 @@ pub const Server = struct {
         self.capabilities.prompts = .{ .listChanged = true };
     }
 
-    /// Add a prompt whose returned messages follow a zigar-owned cleanup contract.
+    /// Add a prompt whose returned messages follow a zigars-owned cleanup contract.
     pub fn addPromptWithDeinit(self: *Self, prompt: prompts_mod.Prompt, deinit_messages: PromptMessagesDeinit) !void {
         try self.addPrompt(prompt);
         errdefer _ = self.prompts.orderedRemove(prompt.name);
@@ -286,7 +286,7 @@ pub const Server = struct {
         self.capabilities.resources = .{ .listChanged = list_changed, .subscribe = true };
     }
 
-    /// Enable task-augmented tools/call support backed by zigar runtime jobs.
+    /// Enable task-augmented tools/call support backed by zigars runtime jobs.
     pub fn enableTasks(self: *Self, state: anytype) void {
         self.task_state = tasks_ext.State.init(state);
         self.capabilities.tasks = .{
@@ -834,7 +834,7 @@ pub const Server = struct {
             .phase = "tool_handler",
             .code = "unexpected_tool_handler_error",
             .category = "server_state",
-            .resolution = "Inspect zigar stderr logs, fix the tool handler failure, then retry. Expected user errors should return structured tool_error results before this fallback.",
+            .resolution = "Inspect zigars stderr logs, fix the tool handler failure, then retry. Expected user errors should return structured tool_error results before this fallback.",
         }, err);
     }
 
@@ -957,7 +957,7 @@ pub const Server = struct {
             .phase = "resource_handler",
             .code = "unexpected_resource_handler_error",
             .category = "server_state",
-            .resolution = "Inspect zigar stderr logs, fix the resource handler failure, then retry.",
+            .resolution = "Inspect zigars stderr logs, fix the resource handler failure, then retry.",
             .details = &.{.{ .key = "resource_uri", .value = .{ .string = uri } }},
         }, err);
     }
@@ -1128,7 +1128,7 @@ pub const Server = struct {
             .phase = "prompt_handler",
             .code = "unexpected_prompt_handler_error",
             .category = "server_state",
-            .resolution = "Inspect zigar stderr logs, fix the prompt handler failure, then retry.",
+            .resolution = "Inspect zigars stderr logs, fix the prompt handler failure, then retry.",
             .details = &.{.{ .key = "prompt", .value = .{ .string = prompt_name } }},
         }, err);
     }
@@ -1215,7 +1215,7 @@ pub const Server = struct {
         try obj.put(allocator, "feature", .{ .string = feature });
         try obj.put(allocator, "method", .{ .string = method });
         try obj.put(allocator, "supported", .{ .bool = false });
-        try obj.put(allocator, "resolution", .{ .string = "Client did not advertise this optional MCP capability; continue with deterministic zigar arguments and structured tool results." });
+        try obj.put(allocator, "resolution", .{ .string = "Client did not advertise this optional MCP capability; continue with deterministic zigars arguments and structured tool results." });
         return .{ .object = obj };
     }
 

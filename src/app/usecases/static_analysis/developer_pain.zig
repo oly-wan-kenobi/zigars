@@ -232,7 +232,7 @@ pub fn abiLayoutDiffValue(allocator: std.mem.Allocator, context: app_context.Sta
     try obj.put(allocator, "backend_status", .{ .string = "compiler_probe_not_executed" });
     try obj.put(allocator, "probes", .{ .array = probes });
     try obj.put(allocator, "probe_count", .{ .integer = @intCast(probes.items.len) });
-    try obj.put(allocator, "cache_layout", .{ .string = ".zigar-cache/abi-layout/<session-or-artifact-id> when compiler probing is enabled in a later phase" });
+    try obj.put(allocator, "cache_layout", .{ .string = ".zigars-cache/abi-layout/<session-or-artifact-id> when compiler probing is enabled in a later phase" });
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, &.{
         "This Phase 4 implementation does not execute compiler probes.",
         "Actual ABI differences require a concrete target pair and generated @sizeOf/@alignOf/@offsetOf code.",

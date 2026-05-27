@@ -9,7 +9,7 @@ const read_model = @import("../../../app/usecases/observability/workflows.zig");
 const mcp_result = @import("../result.zig");
 
 /// Returns the full metrics v2 object assembled from runtime counters.
-pub fn zigarMetricsV2(
+pub fn zigarsMetricsV2(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
@@ -22,7 +22,7 @@ pub fn zigarMetricsV2(
 }
 
 /// Returns backend probe history recorded by the current server process.
-pub fn zigarBackendHealthHistory(
+pub fn zigarsBackendHealthHistory(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
@@ -35,7 +35,7 @@ pub fn zigarBackendHealthHistory(
 }
 
 /// Returns ZLS lifecycle events recorded by the current server process.
-pub fn zigarZlsTimeline(
+pub fn zigarsZlsTimeline(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
@@ -48,7 +48,7 @@ pub fn zigarZlsTimeline(
 }
 
 /// Returns observed MCP tool latency and error counters.
-pub fn zigarToolLatency(
+pub fn zigarsToolLatency(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
@@ -60,13 +60,13 @@ pub fn zigarToolLatency(
     return mcp_result.structured(allocator, toolLatencyValue(scratch, report.observed) catch return error.OutOfMemory);
 }
 
-/// Builds the top-level zigar_metrics_v2 JSON object.
+/// Builds the top-level zigars_metrics_v2 JSON object.
 fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
     const base = report.base;
     const observed = report.observed;
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_metrics_v2" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_metrics_v2" });
     try obj.put(allocator, "schema_version", .{ .integer = 2 });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "evidence_source", .{ .string = "runtime_counters_and_bounded_observability_rings" });
@@ -94,12 +94,12 @@ fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport
 fn backendHistoryValue(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_health_history" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_health_history" });
     try obj.put(allocator, "history_capacity", .{ .integer = read_model.max_backend_events });
     try obj.put(allocator, "recorded_events", .{ .integer = @intCast(report.observed.backend_event_count) });
     try obj.put(allocator, "events", try backendEventsValue(allocator, report.observed));
     try obj.put(allocator, "current_probe_cache", try backendCacheValue(allocator, report.base.backend_probe_cache));
-    try obj.put(allocator, "resolution", .{ .string = "Call zigar_doctor with probe_backends=true to refresh optional backend health; this history records probes observed in the current server process." });
+    try obj.put(allocator, "resolution", .{ .string = "Call zigars_doctor with probe_backends=true to refresh optional backend health; this history records probes observed in the current server process." });
     return .{ .object = obj };
 }
 
@@ -109,7 +109,7 @@ fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsRepo
     const observed = report.observed;
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_zls_timeline" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_zls_timeline" });
     try obj.put(allocator, "history_capacity", .{ .integer = read_model.max_zls_events });
     try obj.put(allocator, "recorded_events", .{ .integer = @intCast(observed.zls_event_count) });
     try obj.put(allocator, "current_status", .{ .string = base.zls_status });
@@ -124,13 +124,13 @@ fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsRepo
 fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_tool_latency" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_tool_latency" });
     try obj.put(allocator, "observed_tool_calls", .{ .integer = @intCast(snapshot.total_tool_calls) });
     try obj.put(allocator, "observed_tool_errors", .{ .integer = @intCast(snapshot.total_tool_errors) });
     try obj.put(allocator, "tool_count", .{ .integer = @intCast(snapshot.tool_stats.len) });
     try obj.put(allocator, "tools", try toolStatsValue(allocator, snapshot.tool_stats));
     try obj.put(allocator, "units", .{ .string = "milliseconds" });
-    try obj.put(allocator, "resolution", .{ .string = "Latency is measured around MCP schema validation and handler dispatch inside the current zigar process." });
+    try obj.put(allocator, "resolution", .{ .string = "Latency is measured around MCP schema validation and handler dispatch inside the current zigars process." });
     return .{ .object = obj };
 }
 
@@ -138,12 +138,12 @@ fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilityS
 fn commandDurationsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_command_durations" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_command_durations" });
     try obj.put(allocator, "history_capacity", .{ .integer = read_model.max_command_events });
     try obj.put(allocator, "recorded_events", .{ .integer = @intCast(snapshot.command_event_count) });
     try obj.put(allocator, "avg_duration_ms", .{ .integer = @intCast(if (snapshot.command_event_count == 0) 0 else snapshot.total_command_duration_ms / snapshot.command_event_count) });
     try obj.put(allocator, "events", try commandEventsValue(allocator, snapshot.command_events));
-    try obj.put(allocator, "resolution", .{ .string = "Command durations are observed for commands routed through shared zigar command helpers in the current server process." });
+    try obj.put(allocator, "resolution", .{ .string = "Command durations are observed for commands routed through shared zigars command helpers in the current server process." });
     return .{ .object = obj };
 }
 
@@ -167,7 +167,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: read_model.Artifa
     try obj.put(allocator, "scanned_artifacts", .{ .integer = @intCast(metrics.scanned_artifacts) });
     try obj.put(allocator, "scan_limit", .{ .integer = @intCast(metrics.scan_limit) });
     try obj.put(allocator, "status", .{ .string = metrics.status });
-    try obj.put(allocator, "resolution", .{ .string = "Use zigar_artifact_index for artifact paths, hashes, and provenance details." });
+    try obj.put(allocator, "resolution", .{ .string = "Use zigars_artifact_index for artifact paths, hashes, and provenance details." });
     return .{ .object = obj };
 }
 
@@ -293,9 +293,9 @@ fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?read_model.ProbeSnap
 fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
-    try array.append(.{ .string = "In-memory metrics reset when the zigar process restarts." });
+    try array.append(.{ .string = "In-memory metrics reset when the zigars process restarts." });
     try array.append(.{ .string = "Backend history records probes observed through shared probe helpers, not external backend state changes." });
-    try array.append(.{ .string = "Command-duration history covers commands routed through shared zigar helpers; direct external process state is not inferred." });
+    try array.append(.{ .string = "Command-duration history covers commands routed through shared zigars helpers; direct external process state is not inferred." });
     try array.append(.{ .string = "Latency is dispatch duration and does not include client/network serialization time." });
     return .{ .array = array };
 }

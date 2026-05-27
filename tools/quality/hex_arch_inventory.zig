@@ -15,10 +15,10 @@ const forbidden_adapter_root_tokens = [_][]const u8{
     "tool_registry.zig",
     "tool_metadata.zig",
     "tool_manifest.zig",
-    "zigar.tool_handlers",
-    "zigar.tool_registry",
-    "zigar.tool_metadata",
-    "zigar.tool_manifest",
+    "zigars.tool_handlers",
+    "zigars.tool_registry",
+    "zigars.tool_metadata",
+    "zigars.tool_manifest",
 };
 
 const final_root_allowlist = [_][]const u8{

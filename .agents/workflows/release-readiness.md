@@ -33,7 +33,7 @@ zig build release-check
 For npm package readiness:
 
 ```sh
-cd packages/zigar-mcp-npm
+cd packages/zigars-mcp-npm
 npm run build
 npm run test:node
 bun run test:bun

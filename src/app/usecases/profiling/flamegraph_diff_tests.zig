@@ -99,7 +99,7 @@ fn testProfilingContext(
     workspace: *fake_workspace.FakeWorkspaceStore,
 ) app_context.ProfilingContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
         .timeouts = .{ .command_ms = 5000 },
         .command_runner = commands.port(),

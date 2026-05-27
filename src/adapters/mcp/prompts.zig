@@ -5,21 +5,21 @@ const mcp = @import("mcp");
 const runtime_ux = @import("../../app/usecases/runtime_ux/workflows.zig");
 const mcp_result = @import("result.zig");
 
-/// Registers all deterministic zigar workflow prompts with owned message cleanup.
+/// Registers all deterministic zigars workflow prompts with owned message cleanup.
 pub fn registerPrompts(server: anytype, context_provider: anytype) !void {
     const Provider = @TypeOf(context_provider);
     try server.addPromptWithDeinit(.{
-        .name = "zigar_profile_workflow",
-        .description = "Plan a deterministic Zig profiling workflow using zigar tools.",
+        .name = "zigars_profile_workflow",
+        .description = "Plan a deterministic Zig profiling workflow using zigars tools.",
         .title = "Zig Profiling Workflow",
-        .handler = promptHandler(Provider, "zigar_profile_workflow"),
+        .handler = promptHandler(Provider, "zigars_profile_workflow"),
         .user_data = context_provider,
     }, mcp_result.deinitPromptMessages);
-    inline for (.{ "zigar_compile_error_workflow", "zigar_test_workflow", "zigar_refactor_workflow", "zigar_api_change_workflow", "zigar_release_workflow", "zigar_perf_workflow" }) |name| {
+    inline for (.{ "zigars_compile_error_workflow", "zigars_test_workflow", "zigars_refactor_workflow", "zigars_api_change_workflow", "zigars_release_workflow", "zigars_perf_workflow" }) |name| {
         try server.addPromptWithDeinit(.{
             .name = name,
-            .description = "Deterministic zigar workflow prompt.",
-            .title = "Zigar Workflow",
+            .description = "Deterministic zigars workflow prompt.",
+            .title = "Zigars Workflow",
             .handler = promptHandler(Provider, name),
             .user_data = context_provider,
         }, mcp_result.deinitPromptMessages);
@@ -32,7 +32,7 @@ fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (
         /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
             _ = @as(Provider, @ptrCast(@alignCast(user_data orelse return error.GenerationFailed)));
-            const text = if (std.mem.eql(u8, name, "zigar_profile_workflow"))
+            const text = if (std.mem.eql(u8, name, "zigars_profile_workflow"))
                 runtime_ux.profilePromptText()
             else
                 runtime_ux.workflowPromptText(workflowName(name, args));
@@ -59,13 +59,13 @@ fn workflowName(default_name: []const u8, args: ?std.json.Value) []const u8 {
 
 /// Contract-token anchor for prompt registration coverage.
 const _prompt_contract_tokens = [_][]const u8{
-    "zigar_profile_workflow",
-    "zigar_compile_error_workflow",
-    "zigar_test_workflow",
-    "zigar_refactor_workflow",
-    "zigar_api_change_workflow",
-    "zigar_release_workflow",
-    "zigar_perf_workflow",
+    "zigars_profile_workflow",
+    "zigars_compile_error_workflow",
+    "zigars_test_workflow",
+    "zigars_refactor_workflow",
+    "zigars_api_change_workflow",
+    "zigars_release_workflow",
+    "zigars_perf_workflow",
 };
 
 test {

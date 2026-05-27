@@ -27,7 +27,7 @@ test "coverage parser normalizes LCOV and merge totals" {
     try std.testing.expectEqual(@as(usize, 6666), coverage_model.rateBp(merged.covered, merged.total));
 }
 
-test "coverage parser accepts zigar coverage JSON" {
+test "coverage parser accepts zigars coverage JSON" {
     const allocator = std.testing.allocator;
     var set = try coverage_model.parse(allocator,
         \\{"coverage":{"total_lines":2},"files":[{"path":"src/main.zig","total_lines":2,"covered_lines":1}]}

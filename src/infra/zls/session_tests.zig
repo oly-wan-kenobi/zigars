@@ -23,7 +23,7 @@ fn testConfig() Config {
     return .{
         .allocator = testing.allocator,
         .io = testing.io,
-        .workspace_root = "/tmp/zigar-zls-session-test",
+        .workspace_root = "/tmp/zigars-zls-session-test",
         .zls_path = "zls",
         .zls_timeout_ms = 30_000,
     };
@@ -186,5 +186,5 @@ test "start replays an existing document state and restart records startup failu
 }
 
 test "findExecutable reports SkipZigTest when no candidate exists" {
-    try testing.expectError(error.SkipZigTest, findExecutable(testing.io, &.{"/definitely/not/a/zigar-test-binary"}));
+    try testing.expectError(error.SkipZigTest, findExecutable(testing.io, &.{"/definitely/not/a/zigars-test-binary"}));
 }

@@ -216,7 +216,7 @@ fn coreOptions(comptime RuntimePortOptions: type, comptime name: []const u8) Run
 fn runtimeUxOptions(comptime RuntimePortOptions: type, comptime name: []const u8) RuntimePortOptions {
     return .{
         .workspace_read_resolution = .input,
-        .record_command_observability = std.mem.eql(u8, name, "zigarJobStart") or std.mem.eql(u8, name, "zigarRunStream"),
+        .record_command_observability = std.mem.eql(u8, name, "zigarsJobStart") or std.mem.eql(u8, name, "zigarsRunStream"),
     };
 }
 

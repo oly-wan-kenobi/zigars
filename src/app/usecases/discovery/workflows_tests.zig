@@ -70,7 +70,7 @@ test "doctor probes configured backend paths through backend probe port" {
     try backend_fake.expectCheck(.{ .backend = "diff-folded", .argv = &.{ "diff-bin", "--help" }, .cwd = "/workspace", .timeout_ms = 123, .provenance = "discovery.doctor_probe" }, .{ .backend = "diff-folded", .available = true, .basis = "diff-folded help ok" });
 
     const value = try workflows.doctorValue(arena.allocator(), .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache", .transport = "stdio" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{
             .zig = "zig-bin",
             .zls = "zls-bin",
@@ -333,7 +333,7 @@ test "doctor covers cached backend probes and probe port errors" {
     const probe = ports.BackendProbe{ .ptr = &token, .vtable = &ErrorProbe.vtable };
 
     const value = try workflows.doctorValue(arena.allocator(), .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache", .transport = "stdio" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{
             .zig = "zig-bin",
             .zls = "zls-bin",
@@ -362,7 +362,7 @@ test "status read models expose backend workspace metrics and HTTP fields" {
     const context = app_context.Context{
         .workspace = .{
             .root = "/workspace",
-            .cache_root = "/workspace/.zigar-cache",
+            .cache_root = "/workspace/.zigars-cache",
             .transport = "http",
             .host = "127.0.0.1",
             .port = 9898,

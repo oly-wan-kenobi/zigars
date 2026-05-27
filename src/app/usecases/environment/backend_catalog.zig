@@ -15,7 +15,7 @@ pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_path
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_setup_catalog" });
     try obj.put(allocator, "supported_zig_version", .{ .string = supported_zig_version });
-    try obj.put(allocator, "packaging_model", .{ .string = "zigar ships backend metadata and probes; optional backends remain external executables pinned by each project or CI image" });
+    try obj.put(allocator, "packaging_model", .{ .string = "zigars ships backend metadata and probes; optional backends remain external executables pinned by each project or CI image" });
     var array = std.json.Array.init(allocator);
     for (backends) |backend| try array.append(try backendValue(allocator, backend, paths, include_configured_paths));
     try obj.put(allocator, "backends", .{ .array = array });

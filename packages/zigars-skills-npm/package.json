@@ -1,0 +1,49 @@
+{
+  "name": "@zigars/skills",
+  "version": "0.2.0",
+  "description": "Agent skills for zigars-aware Zig development workflows",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oly-wan-kenobi/zigars.git",
+    "directory": "packages/zigars-skills-npm"
+  },
+  "homepage": "https://github.com/oly-wan-kenobi/zigars#readme",
+  "bugs": {
+    "url": "https://github.com/oly-wan-kenobi/zigars/issues"
+  },
+  "keywords": [
+    "zig",
+    "zigars",
+    "mcp",
+    "agent-skills",
+    "codex",
+    "claude",
+    "claude-code",
+    "gemini",
+    "gemini-cli"
+  ],
+  "bin": {
+    "zigars-skills": "bin/zigars-skills.js"
+  },
+  "files": [
+    ".claude-plugin",
+    "bin",
+    "gemini-extension.json",
+    "skills",
+    "test",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

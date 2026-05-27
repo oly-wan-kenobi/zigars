@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars release claim auditor"
+  short_description: "Keep release claims tied to real evidence."
+  default_prompt: "Use $zigars-release-claim-auditor to review these release notes and identify unsupported claims."

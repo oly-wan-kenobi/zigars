@@ -61,13 +61,13 @@ jobs:
 
       - name: Run release readiness
         env:
-          ZIGAR_RELEASE_READINESS_DIR: release-readiness
-          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
-          ZIGAR_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
-          ZIGAR_ZFLAME_PATH: ${{ inputs.zflame_path }}
-          ZIGAR_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
-          ZIGAR_CLAIMED_BACKENDS: ${{ inputs.claimed_backends }}
-          ZIGAR_USE_PINNED_BACKEND_SETUP: ${{ inputs.pinned_backend_setup }}
+          ZIGARS_RELEASE_READINESS_DIR: release-readiness
+          ZIGARS_ZLS_PATH: ${{ inputs.zls_path }}
+          ZIGARS_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
+          ZIGARS_ZFLAME_PATH: ${{ inputs.zflame_path }}
+          ZIGARS_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
+          ZIGARS_CLAIMED_BACKENDS: ${{ inputs.claimed_backends }}
+          ZIGARS_USE_PINNED_BACKEND_SETUP: ${{ inputs.pinned_backend_setup }}
         run: bash .github/scripts/release-readiness.sh
 
       - name: Upload release readiness evidence
@@ -75,5 +75,5 @@ jobs:
         # actions/upload-artifact@v4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: zigar-release-readiness
+          name: zigars-release-readiness
           path: release-readiness

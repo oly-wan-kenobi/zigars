@@ -17,29 +17,29 @@ pub fn build(b: *std.Build) void {
     });
     const mcp_mod = mcp_dep.module("mcp");
 
-    const zigar_mod = addZigarModule(b, "zigar", target, optimize, mcp_mod, build_options);
-    const exe_mod = addZigarExecutableModule(b, target, optimize, zigar_mod, mcp_mod);
+    const zigars_mod = addZigarsModule(b, "zigars", target, optimize, mcp_mod, build_options);
+    const exe_mod = addZigarsExecutableModule(b, target, optimize, zigars_mod, mcp_mod);
     const exe = b.addExecutable(.{
-        .name = "zigar",
+        .name = "zigars",
         .root_module = exe_mod,
         .version = semantic_version,
     });
     b.installArtifact(exe);
 
     const tools_mod = b.createModule(.{
-        .root_source_file = b.path("tools/zigar_tools.zig"),
+        .root_source_file = b.path("tools/zigars_tools.zig"),
         .target = target,
         .optimize = optimize,
     });
     tools_mod.addImport("mcp", mcp_mod);
-    tools_mod.addImport("zigar", zigar_mod);
+    tools_mod.addImport("zigars", zigars_mod);
     tools_mod.addImport("backend_contract_scenarios_manifest", b.createModule(.{
         .root_source_file = b.path("tests/integration/backend-contract/scenarios.zig"),
         .target = target,
         .optimize = optimize,
     }));
     const tools_exe = b.addExecutable(.{
-        .name = "zigar-tools",
+        .name = "zigars-tools",
         .root_module = tools_mod,
     });
 
@@ -80,10 +80,10 @@ pub fn build(b: *std.Build) void {
         .optimize = release_optimize,
     });
     const release_mcp_mod = release_mcp_dep.module("mcp");
-    const release_zigar_mod = addZigarModule(b, "zigar-release-check", target, release_optimize, release_mcp_mod, build_options);
-    const release_exe_mod = addZigarExecutableModule(b, target, release_optimize, release_zigar_mod, release_mcp_mod);
+    const release_zigars_mod = addZigarsModule(b, "zigars-release-check", target, release_optimize, release_mcp_mod, build_options);
+    const release_exe_mod = addZigarsExecutableModule(b, target, release_optimize, release_zigars_mod, release_mcp_mod);
     const release_exe = b.addExecutable(.{
-        .name = "zigar-release-check",
+        .name = "zigars-release-check",
         .root_module = release_exe_mod,
         .version = semantic_version,
     });
@@ -92,20 +92,20 @@ pub fn build(b: *std.Build) void {
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);
 
-    const run_step = b.step("run", "Run zigar");
+    const run_step = b.step("run", "Run zigars");
     run_step.dependOn(&run_cmd.step);
 
-    const lib_tests = b.addTest(.{ .name = "zigar-lib-tests", .root_module = zigar_mod, .use_llvm = true });
+    const lib_tests = b.addTest(.{ .name = "zigars-lib-tests", .root_module = zigars_mod, .use_llvm = true });
     const run_lib_tests = b.addRunArtifact(lib_tests);
 
-    const exe_tests = b.addTest(.{ .name = "zigar-exe-tests", .root_module = exe_mod, .use_llvm = true });
+    const exe_tests = b.addTest(.{ .name = "zigars-exe-tests", .root_module = exe_mod, .use_llvm = true });
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
-    const tools_tests = b.addTest(.{ .name = "zigar-tools-tests", .root_module = tools_mod, .use_llvm = true });
+    const tools_tests = b.addTest(.{ .name = "zigars-tools-tests", .root_module = tools_mod, .use_llvm = true });
     const run_tools_tests = b.addRunArtifact(tools_tests);
 
     const fuzz_tests = b.addTest(.{
-        .name = "zigar-fuzz-tests",
+        .name = "zigars-fuzz-tests",
         .root_module = fuzz_mod,
         .test_runner = .{ .path = b.path("tools/fuzz_test_runner.zig"), .mode = .server },
         .use_llvm = true,
@@ -151,11 +151,11 @@ pub fn build(b: *std.Build) void {
 
     const version_cmd = b.addRunArtifact(tools_exe);
     version_cmd.addArg("version");
-    const version_step = b.step("version", "Print zigar package version");
+    const version_step = b.step("version", "Print zigars package version");
     version_step.dependOn(&version_cmd.step);
 
     const smoke_cmd = addHttpSmokeCommand(b, tools_exe, exe.getEmittedBin());
-    const smoke_step = b.step("smoke", "Run HTTP MCP smoke test against the built zigar artifact");
+    const smoke_step = b.step("smoke", "Run HTTP MCP smoke test against the built zigars artifact");
     smoke_step.dependOn(&smoke_cmd.step);
 
     const stdio_fixtures_cmd = addStdioFixturesCommand(b, tools_exe, exe.getEmittedBin());
@@ -191,7 +191,7 @@ pub fn build(b: *std.Build) void {
     const fmt_check_step = b.step("fmt-check", "Check Zig formatting");
     fmt_check_step.dependOn(&fmt_check_cmd.step);
 
-    const release_safe_step = b.step("release-safe", "Compile zigar with ReleaseSafe optimization");
+    const release_safe_step = b.step("release-safe", "Compile zigars with ReleaseSafe optimization");
     release_safe_step.dependOn(&release_exe.step);
 
     const hygiene_cmd = b.addRunArtifact(tools_exe);
@@ -238,10 +238,10 @@ pub fn build(b: *std.Build) void {
             .optimize = release_optimize,
         });
         const dist_mcp_mod = dist_mcp_dep.module("mcp");
-        const dist_zigar_mod = addZigarModule(b, b.fmt("zigar-dist-{s}", .{release_target.package_name}), dist_target, release_optimize, dist_mcp_mod, build_options);
-        const dist_exe_mod = addZigarExecutableModule(b, dist_target, release_optimize, dist_zigar_mod, dist_mcp_mod);
+        const dist_zigars_mod = addZigarsModule(b, b.fmt("zigars-dist-{s}", .{release_target.package_name}), dist_target, release_optimize, dist_mcp_mod, build_options);
+        const dist_exe_mod = addZigarsExecutableModule(b, dist_target, release_optimize, dist_zigars_mod, dist_mcp_mod);
         const dist_exe = b.addExecutable(.{
-            .name = "zigar",
+            .name = "zigars",
             .root_module = dist_exe_mod,
             .version = semantic_version,
         });
@@ -258,7 +258,7 @@ pub fn build(b: *std.Build) void {
     release_asset_smoke_step.dependOn(&release_asset_smoke_cmd.step);
 }
 
-fn addZigarModule(
+fn addZigarsModule(
     b: *std.Build,
     name: []const u8,
     target: std.Build.ResolvedTarget,
@@ -266,14 +266,14 @@ fn addZigarModule(
     mcp_mod: *std.Build.Module,
     build_options: *std.Build.Step.Options,
 ) *std.Build.Module {
-    const zigar_mod = b.addModule(name, .{
+    const zigars_mod = b.addModule(name, .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
-    zigar_mod.addImport("mcp", mcp_mod);
-    zigar_mod.addOptions("zigar_build_options", build_options);
-    return zigar_mod;
+    zigars_mod.addImport("mcp", mcp_mod);
+    zigars_mod.addOptions("zigars_build_options", build_options);
+    return zigars_mod;
 }
 
 fn addHttpSmokeCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile, binary: std.Build.LazyPath) *std.Build.Step.Run {
@@ -298,11 +298,11 @@ fn addCoverageCommand(b: *std.Build, tools_exe: *std.Build.Step.Compile, binary:
     return cmd;
 }
 
-fn addZigarExecutableModule(
+fn addZigarsExecutableModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    zigar_mod: *std.Build.Module,
+    zigars_mod: *std.Build.Module,
     mcp_mod: *std.Build.Module,
 ) *std.Build.Module {
     const exe_mod = b.createModule(.{
@@ -310,7 +310,7 @@ fn addZigarExecutableModule(
         .target = target,
         .optimize = optimize,
     });
-    exe_mod.addImport("zigar", zigar_mod);
+    exe_mod.addImport("zigars", zigars_mod);
     exe_mod.addImport("mcp", mcp_mod);
     return exe_mod;
 }

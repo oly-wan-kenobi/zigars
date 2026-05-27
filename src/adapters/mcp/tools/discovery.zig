@@ -8,23 +8,23 @@ const discovery = @import("../../../app/usecases/discovery/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
-/// Handles MCP `zigar_capabilities` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarCapabilities(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_capabilities` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsCapabilities(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigar_schema` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarSchema(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_schema` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsSchema(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigar_backend_catalog` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarBackendCatalog(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_backend_catalog` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsBackendCatalog(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.backendCatalogValue(allocator, context, argBool(args, "include_configured_paths", true)) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigar_doctor` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarDoctor(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_doctor` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsDoctor(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const probe_backends = argBool(args, "probe_backends", false);
     const probe_timeout_ms = @max(1, @min(argInt(args, "timeout_ms", 1_000), 10_000));
     return structured(allocator, discovery.doctorValue(allocator, context, probe_backends, probe_timeout_ms) catch return error.OutOfMemory);
@@ -35,13 +35,13 @@ pub fn workspaceInfo(allocator: std.mem.Allocator, context: app_context.Context,
     return structured(allocator, discovery.workspaceInfoValue(allocator, context) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigar_metrics` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarMetrics(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_metrics` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsMetrics(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.metricsValue(allocator, context) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigar_http_status` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarHttpStatus(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_http_status` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsHttpStatus(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structured(allocator, discovery.httpStatusValue(allocator, context) catch return error.OutOfMemory);
 }
 
@@ -96,7 +96,7 @@ fn planRequest(context: app_context.Context, args: ?std.json.Value) discovery.Pl
 fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.MissingTool => mcp_errors.missingArgument(allocator, tool_name, "tool", "registered tool name"),
-        error.UnknownTool => mcp_errors.invalidArgument(allocator, tool_name, "tool", "registered tool name", argString(args, "tool") orelse "", "Call zigar_capabilities or zigar_schema to inspect the registered tool names, then retry with one of those names."),
+        error.UnknownTool => mcp_errors.invalidArgument(allocator, tool_name, "tool", "registered tool name", argString(args, "tool") orelse "", "Call zigars_capabilities or zigars_schema to inspect the registered tool names, then retry with one of those names."),
         error.MissingFile => missingPlanningArgument(allocator, tool_name, "file"),
         error.MissingPath => missingPlanningArgument(allocator, tool_name, "path"),
         error.InvalidExtraArgs => mcp_errors.invalidArgument(allocator, tool_name, "args", "shell-style argument string", argString(args, "args") orelse "", "Quote arguments the same way you would in a shell command, or omit the field when no extra arguments are needed."),
@@ -132,7 +132,7 @@ fn portToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
         .phase = "discovery_usecase",
         .code = "discovery_failed",
         .category = "discovery",
-        .resolution = "Retry after confirming workspace, configured backend paths, and runtime ports with zigar_doctor.",
+        .resolution = "Retry after confirming workspace, configured backend paths, and runtime ports with zigars_doctor.",
     }, err);
 }
 

@@ -64,11 +64,11 @@ pub const Contract = struct {
 /// Returns metadata for the bundled curated builtin docs.
 pub fn curatedBuiltinsSource() Source {
     return .{
-        .id = "curated_zigar_builtins",
-        .label = "Curated Zig builtin documentation bundled with zigar",
-        .provenance = "curated zigar data",
+        .id = "curated_zigars_builtins",
+        .label = "Curated Zig builtin documentation bundled with zigars",
+        .provenance = "curated zigars data",
         .completeness = .partial_curated,
-        .version = "zigar-bundled",
+        .version = "zigars-bundled",
     };
 }
 
@@ -101,9 +101,9 @@ pub fn bundledLangrefSource() Source {
     return .{
         .id = "bundled_langref_index",
         .label = "Bundled Zig language-reference index",
-        .provenance = "curated zigar fallback data",
+        .provenance = "curated zigars fallback data",
         .completeness = .partial_curated,
-        .version = "zigar-bundled",
+        .version = "zigars-bundled",
     };
 }
 
@@ -134,7 +134,7 @@ pub const BuiltinIndexInput = struct {
     owns_active_source_path: bool = false,
 };
 
-/// Curated builtin docs bundled with zigar.
+/// Curated builtin docs bundled with zigars.
 pub const builtins = [_]BuiltinDoc{
     .{ .name = "@import", .signature = "@import(comptime path: []const u8) type", .summary = "Imports a Zig source file or package module at comptime." },
     .{ .name = "@This", .signature = "@This() type", .summary = "Returns the innermost container type." },

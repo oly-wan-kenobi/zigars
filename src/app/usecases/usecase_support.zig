@@ -391,7 +391,7 @@ pub fn workspacePathErrorResult(app: anytype, allocator: std.mem.Allocator, tool
     try obj.put(allocator, "phase", .{ .string = if (err == error.EmptyPath) "validate_path" else "workspace_boundary" });
     try obj.put(allocator, "code", .{ .string = if (err == error.EmptyPath) "empty_path" else "path_outside_workspace" });
     try obj.put(allocator, "category", .{ .string = "workspace_path" });
-    try obj.put(allocator, "resolution", .{ .string = "Run zigar_workspace_info to confirm the active workspace, then retry with a workspace-relative path inside that root." });
+    try obj.put(allocator, "resolution", .{ .string = "Run zigars_workspace_info to confirm the active workspace, then retry with a workspace-relative path inside that root." });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "workspace", .{ .string = app.workspace.root });
     try obj.put(allocator, "error", .{ .string = @errorName(err) });
@@ -404,13 +404,13 @@ pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []cons
     if (err == error.EmptyPath) {
         return std.fmt.allocPrint(
             allocator,
-            "{s}: rejected an empty path.\n\nRun zigar_workspace_info to confirm the active workspace `{s}`. Pass a workspace-relative path, or restart/configure zigar with --workspace set to the Zig project you are editing.",
+            "{s}: rejected an empty path.\n\nRun zigars_workspace_info to confirm the active workspace `{s}`. Pass a workspace-relative path, or restart/configure zigars with --workspace set to the Zig project you are editing.",
             .{ tool_name, root },
         );
     }
     return std.fmt.allocPrint(
         allocator,
-        "{s}: rejected path `{s}` because it is outside the configured zigar workspace `{s}`.\n\nRun zigar_workspace_info to confirm the active workspace. Pass a workspace-relative path, or restart/configure zigar with --workspace set to the Zig project you are editing.",
+        "{s}: rejected path `{s}` because it is outside the configured zigars workspace `{s}`.\n\nRun zigars_workspace_info to confirm the active workspace. Pass a workspace-relative path, or restart/configure zigars with --workspace set to the Zig project you are editing.",
         .{ tool_name, path, root },
     );
 }
@@ -461,7 +461,7 @@ fn argumentValue(allocator: std.mem.Allocator, tool_name: []const u8, code: []co
     try obj.put(allocator, "code", .{ .string = code });
     try obj.put(allocator, "category", .{ .string = "argument" });
     try obj.put(allocator, "retryable", .{ .bool = false });
-    try obj.put(allocator, "resolution", .{ .string = "Inspect the tools/list inputSchema or zigar_schema catalog, then retry with the registered argument names and JSON types." });
+    try obj.put(allocator, "resolution", .{ .string = "Inspect the tools/list inputSchema or zigars_schema catalog, then retry with the registered argument names and JSON types." });
     try obj.put(allocator, "field", .{ .string = field });
     try obj.put(allocator, "expected", .{ .string = expected });
     try obj.put(allocator, "actual", .{ .string = actual });
@@ -652,7 +652,7 @@ pub fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: 
     try obj.put(allocator, "stdout_truncated", .{ .bool = false });
     try obj.put(allocator, "stderr_truncated", .{ .bool = false });
     if (command.isOutputLimitError(err)) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit before zigar could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit before zigars could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
     }
     try obj.put(allocator, "failure_summary", try commandErrorSummaryValue(allocator, err, argv));
     return .{ .object = obj };
@@ -793,8 +793,8 @@ pub fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Valu
     if (!ok) {
         try suggested.append(try ownedString(allocator, "zig_compile_error_index"));
         if (argvContains(argv, "test")) try suggested.append(try ownedString(allocator, "zig_test_failure_triage"));
-        try suggested.append(try ownedString(allocator, "zigar_failure_fusion"));
-        try suggested.append(try ownedString(allocator, "zigar_impact"));
+        try suggested.append(try ownedString(allocator, "zigars_failure_fusion"));
+        try suggested.append(try ownedString(allocator, "zigars_impact"));
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", try likelyFailureScopeValue(allocator, insights_obj.get("primary") orelse .null));
@@ -809,8 +809,8 @@ pub fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, arg
     try obj.put(allocator, "error_class", .{ .string = kindForError(err) });
     try obj.put(allocator, "rerun_command", .{ .string = try commandString(allocator, argv) });
     var suggested = std.json.Array.init(allocator);
-    try suggested.append(try ownedString(allocator, "zigar_doctor"));
-    try suggested.append(try ownedString(allocator, "zigar_context_pack"));
+    try suggested.append(try ownedString(allocator, "zigars_doctor"));
+    try suggested.append(try ownedString(allocator, "zigars_context_pack"));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (command.isTimeoutError(err)) "command_timeout" else "tool_or_backend_configuration" });
     return .{ .object = obj };
@@ -1030,7 +1030,7 @@ pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) voi
 /// Artifact registry JSON helpers shared by evidence-producing use cases.
 pub const artifacts = struct {
     /// Default workspace-relative registry path for artifact records.
-    pub const default_registry_path = ".zigar-cache/artifacts/registry.jsonl";
+    pub const default_registry_path = ".zigars-cache/artifacts/registry.jsonl";
 
     /// Toolchain path metadata stored with artifact provenance.
     pub const Toolchain = struct {
@@ -1237,7 +1237,7 @@ test "workflow support workspace facade delegates through workspace store port" 
         workspace_store: ports.WorkspaceStore,
     };
     const ctx = Context{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = .{ .ptr = &token, .vtable = &Stub.vtable },
     };
     const workspace = Workspace(Context).init(ctx, std.testing.allocator);
@@ -1254,7 +1254,7 @@ test "workflow support command and changed path helpers use command runner port"
         fn run(_: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
             if (!std.mem.eql(u8, "/workspace", request.cwd orelse "")) return error.StaleArguments;
             if (!std.mem.eql(u8, "arch110-workflow-command", request.provenance)) return error.StaleArguments;
-            const stdout = try allocator.dupe(u8, " M src/main.zig\nR  src/old.zig -> src/new.zig\n?? .zigar-cache/tmp\n");
+            const stdout = try allocator.dupe(u8, " M src/main.zig\nR  src/old.zig -> src/new.zig\n?? .zigars-cache/tmp\n");
             errdefer allocator.free(stdout);
             const stderr = try allocator.dupe(u8, "stderr");
             errdefer allocator.free(stderr);

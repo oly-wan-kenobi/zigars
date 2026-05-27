@@ -5,9 +5,9 @@ const smoke = @import("../smoke_support.zig");
 const JsonValue = std.json.Value;
 
 pub fn run(client: anytype, workspace: []const u8) !void {
-    const create = try client.callTool("zigar_patch_session_create", "{\"goal\":\"fixture edit\",\"files\":\"src/main.zig zig-out/generated.zig\"}");
+    const create = try client.callTool("zigars_patch_session_create", "{\"goal\":\"fixture edit\",\"files\":\"src/main.zig zig-out/generated.zig\"}");
     defer client.allocator.free(create);
-    try client.expectPathString(create, "kind", "zigar_patch_session_create");
+    try client.expectPathString(create, "kind", "zigars_patch_session_create");
     try client.expectPathJson(create, "safe_to_edit", .{ .bool = false });
     try client.expectPathString(create, "files.1.policy.classification", "cache");
 
@@ -16,9 +16,9 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     ;
     const preview_args = try argsWithEdits(client.allocator, edits);
     defer client.allocator.free(preview_args);
-    const preview = try client.callTool("zigar_patch_session_preview", preview_args);
+    const preview = try client.callTool("zigars_patch_session_preview", preview_args);
     defer client.allocator.free(preview);
-    try client.expectPathString(preview, "kind", "zigar_patch_session_preview");
+    try client.expectPathString(preview, "kind", "zigars_patch_session_preview");
     try client.expectPathJson(preview, "requires_apply", .{ .bool = true });
 
     const parsed_preview = try std.json.parseFromSlice(JsonValue, client.allocator, preview, .{});
@@ -29,22 +29,22 @@ pub fn run(client: anytype, workspace: []const u8) !void {
 
     const apply_args = try patchApplyArgs(client.allocator, session_id, edits, expected, true);
     defer client.allocator.free(apply_args);
-    const applied = try client.callTool("zigar_patch_session_apply", apply_args);
+    const applied = try client.callTool("zigars_patch_session_apply", apply_args);
     defer client.allocator.free(applied);
-    try client.expectPathString(applied, "kind", "zigar_patch_session_apply");
+    try client.expectPathString(applied, "kind", "zigars_patch_session_apply");
     try client.expectPathJson(applied, "applied", .{ .bool = true });
     try expectFileContains(client, workspace, "src/main.zig", "const x = 3;");
 
-    const validate = try client.callTool("zigar_patch_session_validate", "{\"session_id\":\"fixture\",\"changed_files\":\"notes.txt\",\"mode\":\"quick\",\"apply\":false}");
+    const validate = try client.callTool("zigars_patch_session_validate", "{\"session_id\":\"fixture\",\"changed_files\":\"notes.txt\",\"mode\":\"quick\",\"apply\":false}");
     defer client.allocator.free(validate);
-    try client.expectPathString(validate, "kind", "zigar_patch_session_validate");
-    try client.expectPathString(validate, "validation.kind", "zigar_validation_run");
+    try client.expectPathString(validate, "kind", "zigars_patch_session_validate");
+    try client.expectPathString(validate, "validation.kind", "zigars_validation_run");
 
     const revert_args = try std.fmt.allocPrint(client.allocator, "{{\"session_id\":\"{s}\",\"apply\":true}}", .{session_id});
     defer client.allocator.free(revert_args);
-    const reverted = try client.callTool("zigar_patch_session_revert", revert_args);
+    const reverted = try client.callTool("zigars_patch_session_revert", revert_args);
     defer client.allocator.free(reverted);
-    try client.expectPathString(reverted, "kind", "zigar_patch_session_revert");
+    try client.expectPathString(reverted, "kind", "zigars_patch_session_revert");
     try client.expectPathJson(reverted, "applied", .{ .bool = true });
     try expectFileContains(client, workspace, "src/main.zig", "const x = 1;");
 
@@ -53,14 +53,14 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     try client.expectPathString(trace, "kind", "zig_generated_file_trace");
     try client.expectPathString(trace, "policy.classification", "generated");
 
-    const policy = try client.callTool("zigar_edit_policy_check", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
+    const policy = try client.callTool("zigars_edit_policy_check", "{\"files\":\"src/main.zig zig-out/generated.zig\"}");
     defer client.allocator.free(policy);
-    try client.expectPathString(policy, "kind", "zigar_edit_policy_check");
+    try client.expectPathString(policy, "kind", "zigars_edit_policy_check");
     try client.expectPathJson(policy, "allow_direct_edit", .{ .bool = false });
 
-    const route = try client.callTool("zigar_generated_route", "{\"path\":\"docs/tool-index.generated.md\",\"goal\":\"update tool docs\"}");
+    const route = try client.callTool("zigars_generated_route", "{\"path\":\"docs/tool-index.generated.md\",\"goal\":\"update tool docs\"}");
     defer client.allocator.free(route);
-    try client.expectPathString(route, "kind", "zigar_generated_route");
+    try client.expectPathString(route, "kind", "zigars_generated_route");
     try client.expectPathString(route, "regeneration_commands.0", "zig build tool-index");
 
     const organized = try client.callTool("zig_organize_imports", "{\"file\":\"src/tests.zig\",\"apply\":false}");

@@ -86,7 +86,7 @@ pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.j
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_result_shape" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_result_shape" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "mode", .{ .string = mode.name() });
@@ -96,7 +96,7 @@ pub fn contractValue(allocator: std.mem.Allocator, mode: ResultShapeMode) !std.j
     try obj.put(allocator, "selected_mode_metadata", try modeMetadataValue(allocator, mode));
     try obj.put(allocator, "result_shape", try modeMetadataValue(allocator, mode));
     try obj.put(allocator, "omitted_sections", .{ .array = std.json.Array.init(allocator) });
-    try obj.put(allocator, "evidence_source", .{ .string = "static zigar result-shape contract" });
+    try obj.put(allocator, "evidence_source", .{ .string = "static zigars result-shape contract" });
     try obj.put(allocator, "confidence", .{ .string = "high" });
     try obj.put(allocator, "required_top_level_fields", try stringArrayValue(allocator, &.{
         "kind",
@@ -132,7 +132,7 @@ pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !st
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_output_budget_plan" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_output_budget_plan" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "tool", if (input.tool_name) |tool_name| .{ .string = tool_name } else .null);
     try obj.put(allocator, "mode", .{ .string = input.mode.name() });
@@ -144,7 +144,7 @@ pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !st
     try obj.put(allocator, "clamp_applied", .{ .bool = clamp_applied });
     try obj.put(allocator, "allocation", try allocationValue(allocator, input.mode, effective));
     try obj.put(allocator, "omission_policy", .{ .string = "Prefer stable machine fields first, then evidence, then human detail; record every dropped section in omitted_sections." });
-    try obj.put(allocator, "evidence_source", .{ .string = "static zigar result-shape budget policy" });
+    try obj.put(allocator, "evidence_source", .{ .string = "static zigars result-shape budget policy" });
     try obj.put(allocator, "confidence", .{ .string = "medium" });
     try obj.put(allocator, "limitations", .{ .string = "Token counts are planning budgets, not tokenizer-exact guarantees for every MCP client." });
     try obj.put(allocator, "resolution", .{ .string = "Use mode=compact for routing, mode=standard for normal agent use, and mode=deep when a human or verifier needs fuller evidence." });

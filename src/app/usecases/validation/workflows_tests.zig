@@ -14,7 +14,7 @@ const TestPorts = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: TestPorts) app_context.ValidationContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
             .tool_paths = .{ .zig = "zig" },
             .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
             .command_runner = self.command.port(),
@@ -35,7 +35,7 @@ test "validation plan selects command phases and skipped build gate" {
     try workspace.expectRead(.{
         .path = "src/main.zig",
         .max_bytes = 0,
-        .provenance = "zigar_validation_plan path probe",
+        .provenance = "zigars_validation_plan path probe",
     }, "");
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
@@ -73,7 +73,7 @@ test "validation run previews skipped command phases without history write" {
     try workspace.expectReadError(.{
         .path = validation.history_path_default,
         .max_bytes = validation.history_max_bytes,
-        .provenance = "zigar_validation_run history preimage",
+        .provenance = "zigars_validation_run history preimage",
     }, error.FileNotFound);
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
@@ -107,12 +107,12 @@ test "validation run records command failure and timeout as typed phase outcomes
     try workspace.expectRead(.{
         .path = "src/main.zig",
         .max_bytes = 0,
-        .provenance = "zigar_validation_plan path probe",
+        .provenance = "zigars_validation_plan path probe",
     }, "");
     try workspace.expectReadError(.{
         .path = validation.history_path_default,
         .max_bytes = validation.history_max_bytes,
-        .provenance = "zigar_validation_run history preimage",
+        .provenance = "zigars_validation_run history preimage",
     }, error.FileNotFound);
     try command.expectRun(.{
         .argv = &.{ "zig", "fmt", "--check", "src/main.zig" },
@@ -120,7 +120,7 @@ test "validation run records command failure and timeout as typed phase outcomes
         .timeout_ms = 10,
         .max_stdout_bytes = validation.command_output_limit,
         .max_stderr_bytes = validation.command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }, .{
         .exit_code = 1,
         .term = .{ .exited = 1 },
@@ -134,7 +134,7 @@ test "validation run records command failure and timeout as typed phase outcomes
         .timeout_ms = 10,
         .max_stdout_bytes = validation.command_output_limit,
         .max_stderr_bytes = validation.command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }, error.Timeout);
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
@@ -198,7 +198,7 @@ test "validation run persists command and event details for failing history reco
         .timeout_ms = 10,
         .max_stdout_bytes = validation.command_output_limit,
         .max_stderr_bytes = validation.command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }, .{
         .exit_code = 1,
         .term = .{ .exited = 1 },
@@ -296,12 +296,12 @@ test "validation plan covers build config goals and missing source probes" {
     try workspace.expectRead(.{
         .path = "build.zig",
         .max_bytes = 0,
-        .provenance = "zigar_validation_plan path probe",
+        .provenance = "zigars_validation_plan path probe",
     }, "");
     try workspace.expectReadError(.{
         .path = "src/missing.zig",
         .max_bytes = 0,
-        .provenance = "zigar_validation_plan path probe",
+        .provenance = "zigars_validation_plan path probe",
     }, error.FileNotFound);
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
@@ -367,7 +367,7 @@ test "validation run appends existing history and records slow phases" {
         .timeout_ms = 30_000,
         .max_stdout_bytes = validation.command_output_limit,
         .max_stderr_bytes = validation.command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }, .{
         .stdout = "PASS all\nStep 1/1 test\n",
         .duration_ms = 1501,
@@ -409,7 +409,7 @@ test "validation run serializes port errors into applied history" {
         .timeout_ms = 10,
         .max_stdout_bytes = validation.command_output_limit,
         .max_stderr_bytes = validation.command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }, error.StreamTooLong);
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
@@ -442,7 +442,7 @@ test "validation history handles missing unreadable array and static text source
     try workspace.expectReadError(.{
         .path = "missing.jsonl",
         .max_bytes = validation.history_max_bytes,
-        .provenance = "zigar_validation_history read",
+        .provenance = "zigars_validation_history read",
     }, error.FileNotFound);
     var missing = try validation.history(std.testing.allocator, ctx, .{ .view = .flakes, .path = "missing.jsonl" });
     defer missing.deinit(std.testing.allocator);
@@ -452,7 +452,7 @@ test "validation history handles missing unreadable array and static text source
     try workspace.expectReadError(.{
         .path = "denied.jsonl",
         .max_bytes = validation.history_max_bytes,
-        .provenance = "zigar_validation_history read",
+        .provenance = "zigars_validation_history read",
     }, error.AccessDenied);
     var denied = try validation.history(std.testing.allocator, ctx, .{ .view = .failures, .path = "denied.jsonl" });
     defer denied.deinit(std.testing.allocator);

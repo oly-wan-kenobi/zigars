@@ -28,7 +28,7 @@ pub fn registerTools(
     }
 }
 
-/// Re-export for installing zigar MCP resources on a server.
+/// Re-export for installing zigars MCP resources on a server.
 pub const registerResources = resources.registerResources;
-/// Re-export for installing zigar MCP prompts on a server.
+/// Re-export for installing zigars MCP prompts on a server.
 pub const registerPrompts = prompts.registerPrompts;

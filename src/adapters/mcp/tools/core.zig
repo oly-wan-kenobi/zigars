@@ -391,7 +391,7 @@ fn commandResultValue(allocator: std.mem.Allocator, run: core_usecase.CommandRun
     try obj.put(allocator, "output_limit_mode", .{ .string = output_limit_mode });
     try obj.put(allocator, "output_limit_exceeded", .{ .bool = run.result.stdout_truncated or run.result.stderr_truncated });
     if (run.result.stdout_truncated or run.result.stderr_truncated) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar returned the captured prefix and marked the truncated stream so the result remains inspectable." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit. zigars returned the captured prefix and marked the truncated stream so the result remains inspectable." });
     }
     const insights = try compilerInsightsValue(allocator, stdout.text, stderr.text, run.argv.items);
     try obj.put(allocator, "diagnostics", insights);
@@ -418,7 +418,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, failure: core_usecase.Command
     try obj.put(allocator, "stdout_truncated", .{ .bool = false });
     try obj.put(allocator, "stderr_truncated", .{ .bool = false });
     if (isOutputLimitError(failure.err)) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit before zigar could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit before zigars could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
     }
     try obj.put(allocator, "failure_summary", try commandErrorSummaryValue(allocator, failure.err, failure.argv.items));
     return .{ .object = obj };
@@ -586,8 +586,8 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
     if (!ok) {
         try suggested.append(try ownedString(allocator, "zig_compile_error_index"));
         if (argvContains(argv, "test")) try suggested.append(try ownedString(allocator, "zig_test_failure_triage"));
-        try suggested.append(try ownedString(allocator, "zigar_failure_fusion"));
-        try suggested.append(try ownedString(allocator, "zigar_impact"));
+        try suggested.append(try ownedString(allocator, "zigars_failure_fusion"));
+        try suggested.append(try ownedString(allocator, "zigars_impact"));
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", try likelyFailureScopeValue(allocator, primary));
@@ -603,8 +603,8 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: ports.PortError, 
     try obj.put(allocator, "error_class", .{ .string = portErrorKind(err) });
     try obj.put(allocator, "rerun_command", .{ .string = try commandString(allocator, argv) });
     var suggested = std.json.Array.init(allocator);
-    try suggested.append(try ownedString(allocator, "zigar_doctor"));
-    try suggested.append(try ownedString(allocator, "zigar_context_pack"));
+    try suggested.append(try ownedString(allocator, "zigars_doctor"));
+    try suggested.append(try ownedString(allocator, "zigars_context_pack"));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (isTimeoutError(err)) "command_timeout" else "tool_or_backend_configuration" });
     return .{ .object = obj };

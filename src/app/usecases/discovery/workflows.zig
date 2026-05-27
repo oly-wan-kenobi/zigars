@@ -88,7 +88,7 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_doctor" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_doctor" });
     try obj.put(allocator, "workspace", .{ .string = context.workspace.root });
     try obj.put(allocator, "transport", .{ .string = context.workspace.transport });
     try obj.put(allocator, "zig_path", .{ .string = context.tool_paths.zig });
@@ -159,7 +159,7 @@ pub fn httpStatusValue(allocator: std.mem.Allocator, context: app_context.Contex
     try obj.put(allocator, "host", .{ .string = context.workspace.host });
     try obj.put(allocator, "port", .{ .integer = context.workspace.port });
     try obj.put(allocator, "http_available", .{ .bool = true });
-    try obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigar only supports loopback HTTP by default and stdio remains the safest default for Codex" });
+    try obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigars only supports loopback HTTP by default and stdio remains the safest default for Codex" });
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -264,7 +264,7 @@ pub fn toolchainResolveValue(
     try obj.put(allocator, "version_status", .{ .string = version_status });
     try obj.put(allocator, "managers", try versionManagersValue(allocator, runner, context.workspace.root, probe_managers, timeout_ms));
     try obj.put(allocator, "issues", .{ .array = issues });
-    try obj.put(allocator, "resolution", .{ .string = "Use an existing manager such as mise, asdf, zvm, or zigup to install/select the expected Zig version, then restart zigar with matching --zig-path and --zls-path." });
+    try obj.put(allocator, "resolution", .{ .string = "Use an existing manager such as mise, asdf, zvm, or zigup to install/select the expected Zig version, then restart zigars with matching --zig-path and --zls-path." });
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -806,7 +806,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBacke
     } else {
         try obj.put(allocator, "ok", .null);
         try obj.put(allocator, "status", .{ .string = "not probed" });
-        try obj.put(allocator, "resolution", .{ .string = "call zigar_doctor with probe_backends=true to cache backend availability" });
+        try obj.put(allocator, "resolution", .{ .string = "call zigars_doctor with probe_backends=true to cache backend availability" });
     }
     obj_owned = false;
     return .{ .object = obj };

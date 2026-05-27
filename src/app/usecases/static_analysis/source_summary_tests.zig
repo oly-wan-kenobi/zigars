@@ -49,7 +49,7 @@ test "readParserSummary reads through workspace port and preserves parser eviden
     }, "const std = @import(\"std\");\ntest \"works\" {}\n");
 
     const ctx = app_context.StaticAnalysisContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = fake.port(),
         .workspace_scanner = scanner.port(),
     };
@@ -70,7 +70,7 @@ test "readParserSummary rejects generated cache paths before workspace read" {
     var scanner = scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
     defer scanner.deinit();
     const ctx = app_context.StaticAnalysisContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = fake.port(),
         .workspace_scanner = scanner.port(),
     };

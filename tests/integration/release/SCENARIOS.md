@@ -8,13 +8,13 @@ Scenario harnesses:
 - `tools/release/release_docs.zig`
 - `tools/release/release_rules.zig`
 - `tools/release/release_targets.zig`
-- `tools/zigar_tools.zig` command `dist-smoke`
+- `tools/zigars_tools.zig` command `dist-smoke`
 
 Public behavior covered:
 
 - Release archives are present under `dist/assets`.
 - Checksums and manifests are consistent.
-- The native packaged archive can run as a zigar binary.
+- The native packaged archive can run as a zigars binary.
 
 Default integration status:
 

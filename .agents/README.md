@@ -1,7 +1,7 @@
 # Agent Playbooks
 
 This directory contains reusable role and workflow playbooks for agent-assisted
-work on `zigar`.
+work on `zigars`.
 
 Use roles to frame review ownership. Use workflows to drive repeatable task
 execution. A single task may use more than one role, but prefer the smallest set
@@ -46,5 +46,5 @@ that covers the risk.
   Domain Engineer.
 - Preparing public artifacts or versioned releases: use QA Release, Docs
   Maintainer, and Release Readiness.
-- Editing `packages/zigar-mcp-npm/`: use npm Shim Maintainer and npm Shim
+- Editing `packages/zigars-mcp-npm/`: use npm Shim Maintainer and npm Shim
   Change.

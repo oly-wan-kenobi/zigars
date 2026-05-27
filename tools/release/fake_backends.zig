@@ -1,8 +1,8 @@
 const std = @import("std");
-const zigar = @import("zigar");
+const zigars = @import("zigars");
 
 const Io = std.Io;
-const backend_contracts = zigar.domain.zig.backend_contracts;
+const backend_contracts = zigars.domain.zig.backend_contracts;
 
 pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {

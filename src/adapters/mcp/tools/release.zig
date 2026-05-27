@@ -85,19 +85,19 @@ pub fn zigApiDocsDiff(allocator: std.mem.Allocator, context: app_context.Release
     return invokeWorkflow(allocator, context, args, "zig_api_docs_diff", workflows.zigApiDocsDiff);
 }
 
-/// Handles MCP `zigar_docs_drift_check` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarDocsDriftCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeDrift(allocator, context, args, "zigar_docs_drift_check", release_drift.zigarDocsDriftCheck);
+/// Handles MCP `zigars_docs_drift_check` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsDocsDriftCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invokeDrift(allocator, context, args, "zigars_docs_drift_check", release_drift.zigarsDocsDriftCheck);
 }
 
-/// Handles MCP `zigar_release_claim_check` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarReleaseClaimCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeDrift(allocator, context, args, "zigar_release_claim_check", release_drift.zigarReleaseClaimCheck);
+/// Handles MCP `zigars_release_claim_check` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsReleaseClaimCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invokeDrift(allocator, context, args, "zigars_release_claim_check", release_drift.zigarsReleaseClaimCheck);
 }
 
-/// Handles MCP `zigar_tool_index_check` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarToolIndexCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeDrift(allocator, context, args, "zigar_tool_index_check", release_drift.zigarToolIndexCheck);
+/// Handles MCP `zigars_tool_index_check` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsToolIndexCheck(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invokeDrift(allocator, context, args, "zigars_tool_index_check", release_drift.zigarsToolIndexCheck);
 }
 
 /// Handles MCP `zig_builtin_list` requests by delegating to app logic and shaping owned results/errors.
@@ -393,7 +393,7 @@ fn sourceValue(allocator: std.mem.Allocator, source: docs_domain.Source) !std.js
     try obj.put(allocator, "completeness", .{ .string = source.completeness.text() });
     if (source.version) |version| {
         try obj.put(allocator, "version", .{ .string = version });
-        try obj.put(allocator, "version_status", .{ .string = if (std.mem.eql(u8, version, "zigar-bundled")) "bundled" else "available" });
+        try obj.put(allocator, "version_status", .{ .string = if (std.mem.eql(u8, version, "zigars-bundled")) "bundled" else "available" });
     } else {
         try obj.put(allocator, "version", .{ .string = "unavailable" });
         try obj.put(allocator, "version_status", .{ .string = "unavailable" });
@@ -480,7 +480,7 @@ fn builtinIndexMetadataValue(allocator: std.mem.Allocator, input: docs_domain.Bu
     try obj.put(allocator, "active_extra_count", .{ .integer = @intCast(drift.active_extra_count) });
     try obj.put(allocator, "missing_curated_builtins", try stringArrayValue(allocator, drift.missing_names));
     try obj.put(allocator, "extra_active_builtins_sample", try stringArrayValue(allocator, drift.extra_names_sample));
-    try obj.put(allocator, "drift_check_note", .{ .string = "When std/zig/BuiltinFn.zig is readable from the active Zig installation, zigar compares curated builtin entries against that offline source and reports missing curated names plus extra active names." });
+    try obj.put(allocator, "drift_check_note", .{ .string = "When std/zig/BuiltinFn.zig is readable from the active Zig installation, zigars compares curated builtin entries against that offline source and reports missing curated names plus extra active names." });
     return .{ .object = obj };
 }
 
@@ -661,7 +661,7 @@ fn docsIndexBuildValue(allocator: std.mem.Allocator, result: docs_domain.DocsInd
     try obj.put(allocator, "files_scanned", .{ .integer = @intCast(result.files_scanned) });
     try obj.put(allocator, "skipped_files", .{ .integer = @intCast(result.skipped_files) });
     try obj.put(allocator, "sources", .{ .array = sources });
-    try obj.put(allocator, "index_version", .{ .string = "zigar.docs_index.v1" });
+    try obj.put(allocator, "index_version", .{ .string = "zigars.docs_index.v1" });
     return .{ .object = obj };
 }
 
@@ -770,7 +770,7 @@ fn readmeCommandCheckValue(allocator: std.mem.Allocator, result: docs_domain.Rea
     for (result.commands) |command| try commands.append(try readmeCommandValue(allocator, command));
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, "zig_readme_command_check", "README command extraction without execution", "medium", &.{
-        "Commands are classified text; zigar does not run shell snippets or infer setup side effects.",
+        "Commands are classified text; zigars does not run shell snippets or infer setup side effects.",
     });
     try obj.put(allocator, "raw_reference", try rawReferenceValue(allocator, result.raw_reference));
     try obj.put(allocator, "commands", .{ .array = commands });
@@ -1125,7 +1125,7 @@ test "release workflow adapters and error helpers cover fallback branches" {
     defer workspace_fake.deinit();
 
     const workflow_context = app_context.ReleaseWorkflowContext{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .tool_paths = .{ .zig = "zig" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
         .command_runner = command_fake.port(),
@@ -1172,14 +1172,14 @@ test "release workflow adapters and error helpers cover fallback branches" {
     var bad_claim_args = std.json.ObjectMap.empty;
     defer bad_claim_args.deinit(allocator);
     try bad_claim_args.put(allocator, "mode", .{ .string = "wide" });
-    const claim = try zigarReleaseClaimCheck(allocator, workflow_context, .{ .object = bad_claim_args });
+    const claim = try zigarsReleaseClaimCheck(allocator, workflow_context, .{ .object = bad_claim_args });
     defer mcp_result.deinitToolResult(allocator, claim);
     try std.testing.expect(claim.is_error);
 
     var bad_index_args = std.json.ObjectMap.empty;
     defer bad_index_args.deinit(allocator);
     try bad_index_args.put(allocator, "mode", .{ .string = "wide" });
-    const index = try zigarToolIndexCheck(allocator, workflow_context, .{ .object = bad_index_args });
+    const index = try zigarsToolIndexCheck(allocator, workflow_context, .{ .object = bad_index_args });
     defer mcp_result.deinitToolResult(allocator, index);
     try std.testing.expect(index.is_error);
 

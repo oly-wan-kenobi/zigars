@@ -1,6 +1,6 @@
 # Notices
 
-zigar uses `mcp.zig` 0.0.4 as a Zig package URL dependency.
+zigars uses `mcp.zig` 0.0.4 as a Zig package URL dependency.
 
 - Upstream project: <https://github.com/muhammad-fiaz/mcp.zig>
 - Documentation: <https://muhammad-fiaz.github.io/mcp.zig/>

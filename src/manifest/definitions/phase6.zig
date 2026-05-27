@@ -17,7 +17,7 @@ const docs_plan = "Builds/query local documentation evidence from installed Zig 
 /// CI evidence format.
 const dependency_plan = "Inspects build.zig.zon and caller-supplied dependency evidence to plan maintenance and security checks without fetching packages.";
 /// CI evidence format.
-const optional_security_plan = "Ingests caller-supplied scanner reports or returns an explicit optional-backend unavailable result; zigar does not contact external services.";
+const optional_security_plan = "Ingests caller-supplied scanner reports or returns an explicit optional-backend unavailable result; zigars does not contact external services.";
 /// Dependency lifecycle mutation format.
 const dependency_mutation_plan = "Previews build.zig.zon dependency edits and applies them only when apply=true using patch-session preimage checks.";
 /// Dependency registry provider format.

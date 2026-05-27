@@ -92,7 +92,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_doctor" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_doctor" });
     try obj.put(allocator, "workspace", .{ .string = input.workspace });
     try obj.put(allocator, "transport", .{ .string = input.transport });
     try obj.put(allocator, "zig_path", .{ .string = input.zig_path });

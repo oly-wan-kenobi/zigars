@@ -16,7 +16,7 @@ test "classifies generated cache artifact and vendor paths as blocked" {
         reason: []const u8,
     }{
         .{ .path = ".zig-cache/o/hash/file", .classification = "cache", .reason = "cache_path" },
-        .{ .path = ".zigar-cache/patch-sessions/history.jsonl", .classification = "generated_artifact", .reason = "zigar_artifact_path" },
+        .{ .path = ".zigars-cache/patch-sessions/history.jsonl", .classification = "generated_artifact", .reason = "zigars_artifact_path" },
         .{ .path = "third_party/lib/file.zig", .classification = "vendor", .reason = "vendored_dependency_path" },
         .{ .path = "docs/tool-index.generated.md", .classification = "generated", .reason = "generated_filename" },
         .{ .path = "nested/zig-out/file", .classification = "generated_or_vendored", .reason = "workspace_skip_policy" },

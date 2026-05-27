@@ -109,7 +109,7 @@ const Fixture = struct {
 
     fn context(self: *Fixture) app_context.ReleaseWorkflowContext {
         return .{
-            .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+            .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
             .tool_paths = .{},
             .timeouts = .{},
             .command_runner = self.runner.port(),

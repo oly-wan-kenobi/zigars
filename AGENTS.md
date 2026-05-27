@@ -4,7 +4,7 @@ These instructions apply to the entire repository.
 
 ## Project Shape
 
-`zigar` is a deterministic Zig development MCP server. Keep changes focused on
+`zigars` is a deterministic Zig development MCP server. Keep changes focused on
 tools that inspect, build, test, format, analyze, document, or profile Zig
 projects. Do not add AI code-generation behavior to the server itself.
 
@@ -21,8 +21,8 @@ The project is primarily Zig:
 - Runtime composition belongs under `src/bootstrap/`.
 - Tool behavior belongs in focused modules under `src/app/usecases/`.
 - Pure Zig parsing and domain policy belongs under `src/domain/`.
-- The release and local helper dispatcher is `tools/zigar_tools.zig`.
-- The npm shim is under `packages/zigar-mcp-npm/`.
+- The release and local helper dispatcher is `tools/zigars_tools.zig`.
+- The npm shim is under `packages/zigars-mcp-npm/`.
 
 ## Required Toolchain
 
@@ -44,7 +44,7 @@ The project is primarily Zig:
 - Keep the project pure Zig. Do not add Python helper scripts under source,
   tools, tests, scripts, examples, docs, or CI paths.
 - Keep `src/main.zig` as a small startup/lifecycle entrypoint.
-- Keep `tools/zigar_tools.zig` as a dispatcher; move large helper logic into
+- Keep `tools/zigars_tools.zig` as a dispatcher; move large helper logic into
   focused Zig modules.
 - Add or update tests for path handling, parser behavior, command arguments,
   diagnostics conversion, source-write gating, and generated contract drift when
@@ -102,7 +102,7 @@ representative `tools/call`.
 For npm shim changes:
 
 ```sh
-cd packages/zigar-mcp-npm
+cd packages/zigars-mcp-npm
 npm run build
 npm run test:node
 bun run test:bun

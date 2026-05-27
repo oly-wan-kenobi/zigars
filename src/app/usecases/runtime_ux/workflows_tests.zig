@@ -14,7 +14,7 @@ fn testContext(
     tool_catalog: *fakes.FakeToolCatalog,
 ) app_context.RuntimeUxContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 2000 },
         .zls_state = .{},
@@ -49,7 +49,7 @@ test "runtime UX run job delegates command execution through ports" {
         .argv = &.{ "/bin/zig", "build" },
         .cwd = "/repo",
         .timeout_ms = 1000,
-        .provenance = "zigar_job_start",
+        .provenance = "zigars_job_start",
     }, .{
         .exit_code = 0,
         .term = .{ .exited = 0 },
@@ -61,7 +61,7 @@ test "runtime UX run job delegates command execution through ports" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const value = try workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_job_start",
+        .tool_name = "zigars_job_start",
         .command = "build",
         .timeout_ms = 1000,
     });
@@ -89,7 +89,7 @@ test "runtime UX job lifecycle values come from runtime session port" {
         .argv = &.{ "/bin/zig", "build", "test" },
         .cwd = "/repo",
         .timeout_ms = 500,
-        .provenance = "zigar_run_stream",
+        .provenance = "zigars_run_stream",
     }, .{
         .exit_code = 0,
         .term = .{ .exited = 0 },
@@ -102,7 +102,7 @@ test "runtime UX job lifecycle values come from runtime session port" {
     defer arena.deinit();
 
     _ = try workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_run_stream",
+        .tool_name = "zigars_run_stream",
         .command = "build-test",
         .timeout_ms = 500,
         .include_events = true,
@@ -115,7 +115,7 @@ test "runtime UX job lifecycle values come from runtime session port" {
     try std.testing.expectEqualStrings("tests ok\n", result.object.get("stdout_tail").?.string);
 
     const events = try workflows.runEventsValue(arena.allocator(), context, .{ .job_id = "job-1", .limit = 1 });
-    try std.testing.expectEqualStrings("zigar_run_events", events.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_run_events", events.object.get("kind").?.string);
 
     const jobs_resource = try workflows.jobsResourceValue(arena.allocator(), context);
     try std.testing.expectEqual(@as(i64, 1), jobs_resource.object.get("job_count").?.integer);
@@ -123,11 +123,11 @@ test "runtime UX job lifecycle values come from runtime session port" {
     const run_events_resource = try workflows.runEventsResourceValue(arena.allocator(), context);
     try std.testing.expectEqual(@as(i64, 2), run_events_resource.object.get("event_count").?.integer);
 
-    const jobs_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigar://jobs", .limit = 1 });
+    const jobs_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigars://jobs", .limit = 1 });
     try std.testing.expectEqual(@as(i64, 1), jobs_query.object.get("job_count").?.integer);
 
-    const all_events_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigar://run/events" });
-    try std.testing.expectEqualStrings("zigar://run/events", all_events_query.object.get("uri").?.string);
+    const all_events_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigars://run/events" });
+    try std.testing.expectEqualStrings("zigars://run/events", all_events_query.object.get("uri").?.string);
 
     const cancel = try workflows.jobCancelValue(arena.allocator(), context, "job-1", "done");
     try std.testing.expect(cancel.object.get("ok").?.bool);
@@ -153,7 +153,7 @@ test "runtime UX workspace map and catalog use typed ports" {
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const map_value = try workflows.workspaceMapResultValue(arena.allocator(), context, "zigar_workspace_map", null);
+    const map_value = try workflows.workspaceMapResultValue(arena.allocator(), context, "zigars_workspace_map", null);
     const workspace_value = map_value.object.get("workspace").?.object;
     try std.testing.expectEqual(@as(i64, 1), workspace_value.get("root_count").?.integer);
     try std.testing.expectEqual(@as(usize, 2), workspace_value.get("entry_points").?.array.items.len);
@@ -195,10 +195,10 @@ test "runtime UX roots and subscription values use runtime session port" {
     const selected = try workflows.workspaceSelectValue(arena.allocator(), context, "/tmp/other", true);
     try std.testing.expect(selected.object.get("apply").?.bool);
 
-    const roots_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigar://workspace/roots" });
-    try std.testing.expectEqualStrings("zigar://workspace/roots", roots_query.object.get("uri").?.string);
+    const roots_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigars://workspace/roots" });
+    try std.testing.expectEqualStrings("zigars://workspace/roots", roots_query.object.get("uri").?.string);
 
-    const subscribed = try workflows.resourceSubscribeValue(arena.allocator(), context, "zigar://jobs");
+    const subscribed = try workflows.resourceSubscribeValue(arena.allocator(), context, "zigars://jobs");
     const sub_id = subscribed.object.get("subscription").?.object.get("subscription_id").?.string;
     const unsubscribed = try workflows.resourceUnsubscribeValue(arena.allocator(), context, sub_id, null);
     try std.testing.expect(!unsubscribed.object.get("subscription").?.object.get("active").?.bool);
@@ -228,9 +228,9 @@ test "runtime UX dynamic file resources read through workspace store" {
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const value = try workflows.dynamicResourceValue(arena.allocator(), context, "zigar://file/src/main.zig/imports");
+    const value = try workflows.dynamicResourceValue(arena.allocator(), context, "zigars://file/src/main.zig/imports");
     const obj = value.object;
-    try std.testing.expectEqualStrings("zigar_dynamic_file_resource", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_dynamic_file_resource", obj.get("kind").?.string);
     try std.testing.expectEqualStrings("imports", obj.get("resource_kind").?.string);
     try workspace.verify();
 }
@@ -274,11 +274,11 @@ test "runtime UX guidance, metrics, prompts, and import graph render from app la
     const client = try workflows.clientGuideValue(arena.allocator(), "mcp", "discover");
     try std.testing.expectEqualStrings("mcp", client.object.get("client").?.string);
 
-    const pack = try workflows.promptPackValue(arena.allocator(), "zigar_perf_workflow", "deep");
+    const pack = try workflows.promptPackValue(arena.allocator(), "zigars_perf_workflow", "deep");
     try std.testing.expectEqual(@as(i64, 1), pack.object.get("workflow_count").?.integer);
 
-    const prompt_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigar://prompts", .mode = "deep" });
-    try std.testing.expectEqualStrings("zigar_prompt_pack", prompt_query.object.get("kind").?.string);
+    const prompt_query = try workflows.resourceQueryValue(arena.allocator(), context, .{ .uri = "zigars://prompts", .mode = "deep" });
+    try std.testing.expectEqualStrings("zigars_prompt_pack", prompt_query.object.get("kind").?.string);
 
     const workspace_text = try workflows.workspaceResourceText(arena.allocator(), context);
     try std.testing.expect(std.mem.indexOf(u8, workspace_text, "workspace=/repo") != null);
@@ -292,8 +292,8 @@ test "runtime UX guidance, metrics, prompts, and import graph render from app la
     const graph = try workflows.importGraphResourceText(arena.allocator(), context);
     try std.testing.expect(std.mem.indexOf(u8, graph, "local.zig") != null);
 
-    try std.testing.expect(std.mem.startsWith(u8, workflows.profilePromptText(), "Use zigar_workspace_info"));
-    try std.testing.expect(std.mem.indexOf(u8, workflows.workflowPromptText("zigar_release_workflow"), "release") != null);
+    try std.testing.expect(std.mem.startsWith(u8, workflows.profilePromptText(), "Use zigars_workspace_info"));
+    try std.testing.expect(std.mem.indexOf(u8, workflows.workflowPromptText("zigars_release_workflow"), "release") != null);
     try std.testing.expect(std.mem.indexOf(u8, workflows.workflowPromptText("unknown"), "Discover relevant tests") != null);
     try workspace.verify();
     try scanner.verify();
@@ -316,7 +316,7 @@ test "runtime UX file command planning and command errors stay behind ports" {
         .argv = &.{ "/bin/zig", "fmt", "--check", "src/main.zig", "--color", "off" },
         .cwd = "/repo",
         .timeout_ms = 250,
-        .provenance = "zigar_job_start",
+        .provenance = "zigars_job_start",
     }, .{
         .exit_code = 1,
         .term = .{ .exited = 1 },
@@ -329,14 +329,14 @@ test "runtime UX file command planning and command errors stay behind ports" {
         .argv = &.{ "/bin/zig", "ast-check", "src/bad.zig" },
         .cwd = "/repo",
         .timeout_ms = 300,
-        .provenance = "zigar_run_stream",
+        .provenance = "zigars_run_stream",
     }, error.RequestTimeout);
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
     const failed = try workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_job_start",
+        .tool_name = "zigars_job_start",
         .command = "fmt-check",
         .file = "src/main.zig",
         .extra_args = &.{ "--color", "off" },
@@ -346,7 +346,7 @@ test "runtime UX file command planning and command errors stay behind ports" {
     try std.testing.expectEqualStrings("format drift\n", failed.object.get("stderr_tail").?.string);
 
     const command_error = try workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_run_stream",
+        .tool_name = "zigars_run_stream",
         .command = "check",
         .file = "src/bad.zig",
         .timeout_ms = 300,
@@ -356,12 +356,12 @@ test "runtime UX file command planning and command errors stay behind ports" {
     try std.testing.expectEqualStrings("timeout", command_error.object.get("error_kind").?.string);
 
     try std.testing.expectError(error.MissingFile, workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_job_start",
+        .tool_name = "zigars_job_start",
         .command = "test",
         .timeout_ms = 10,
     }));
     try std.testing.expectError(error.InvalidArguments, workflows.runJobValue(arena.allocator(), context, .{
-        .tool_name = "zigar_job_start",
+        .tool_name = "zigars_job_start",
         .command = "unknown",
         .timeout_ms = 10,
     }));

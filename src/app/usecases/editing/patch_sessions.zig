@@ -9,7 +9,7 @@ const validation_usecase = @import("../validation/workflows.zig");
 /// Schema version written into this module's structured payloads.
 pub const schema_version: i64 = 1;
 /// Default history path used when the caller omits an explicit value.
-pub const history_path_default = ".zigar-cache/patch-sessions/history.jsonl";
+pub const history_path_default = ".zigars-cache/patch-sessions/history.jsonl";
 /// Maximum session file bytes accepted by this workflow module.
 pub const max_session_file_bytes: usize = 10 * 1024 * 1024;
 /// Shared history max bytes result type used by this workflow module.
@@ -103,8 +103,8 @@ pub const ReplacementOperation = enum {
     /// Implements kind workflow logic using caller-owned inputs.
     pub fn kind(self: ReplacementOperation) []const u8 {
         return switch (self) {
-            .preview => "zigar_patch_session_preview",
-            .apply => "zigar_patch_session_apply",
+            .preview => "zigars_patch_session_preview",
+            .apply => "zigars_patch_session_apply",
         };
     }
 };
@@ -913,7 +913,7 @@ fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const 
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
     try out.writer.print(
-        "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":{d},\"session_id\":",
+        "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":{d},\"session_id\":",
         .{schema_version},
     );
     try writeJsonString(&out, record.session_id);

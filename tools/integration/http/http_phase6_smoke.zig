@@ -63,7 +63,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolFields(allocator, io, port, 150, "zig_api_docs_diff", &.{ str("content", "pub fn visible() void {}\n"), str("file", "src/lib.zig"), str("docs_content", "No public API docs here.") }, expected, "phase6_api_docs_diff_paths", scenario_count);
 
     try assertToolFields(allocator, io, port, 151, "zig_docs_index_build", &.{ str("scope", "docs"), intv("limit", 1) }, expected, "phase6_docs_index_build_paths", scenario_count);
-    try assertToolFields(allocator, io, port, 152, "zig_docs_query", &.{ str("query", "zigar"), str("scope", "all"), intv("limit", 1) }, expected, "phase6_docs_query_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 152, "zig_docs_query", &.{ str("query", "zigars"), str("scope", "all"), intv("limit", 1) }, expected, "phase6_docs_query_paths", scenario_count);
     try assertToolFields(allocator, io, port, 153, "zig_std_signature", &.{ str("name", "std.mem.eql"), intv("limit", 1) }, expected, "phase6_std_signature_paths", scenario_count);
     try assertToolFields(allocator, io, port, 154, "zig_langref_item", &.{ str("query", "defer"), intv("limit", 1) }, expected, "phase6_langref_item_paths", scenario_count);
     try assertToolFields(allocator, io, port, 155, "zig_autodoc_ingest", &.{ str("content", autodoc_json), intv("limit", 5) }, expected, "phase6_autodoc_ingest_paths", scenario_count);

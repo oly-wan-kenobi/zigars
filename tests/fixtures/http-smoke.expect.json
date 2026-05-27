@@ -1,26 +1,26 @@
 {
   "required_tools": [
-    "zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_session_view", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check",
-    "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack",
-    "zigar_job_start", "zigar_job_status", "zigar_job_result", "zigar_job_cancel", "zigar_cancel_status", "zigar_run_stream", "zigar_run_events", "zigar_resource_query", "zigar_resource_subscribe", "zigar_resource_unsubscribe", "zigar_roots_sync", "zigar_workspace_map", "zigar_workspace_select", "zigar_agent_guide_v2", "zigar_client_guide", "zigar_prompt_pack",
+    "zigars_schema", "zigars_backend_catalog", "zig_format", "zigars_doctor", "zigars_context_pack", "zigars_next_action", "zigars_validate_patch", "zigars_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigars_artifact_index", "zigars_artifact_read", "zigars_session_view", "zigars_artifact_prune", "zigars_metrics_v2", "zigars_backend_health_history", "zigars_zls_timeline", "zigars_tool_latency", "zigars_trust_report", "zigars_command_provenance", "zigars_risk_audit", "zigars_clean_tree_gate", "zigars_result_shape", "zigars_output_budget_plan", "zigars_docs_drift_check", "zigars_release_claim_check", "zigars_tool_index_check",
+    "zigars_setup_elicit", "zigars_profile_elicit", "zigars_backend_elicit", "zigars_project_profile_v2", "zigars_profile_validate", "zigars_profile_read", "zigars_profile_bootstrap", "zigars_profile_import", "zigars_profile_diff", "zigars_env_pack", "zigars_env_export", "zigars_zvm_probe", "zigars_zvm_install_plan", "zigars_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigars_backend_install_plan", "zigars_backend_verify", "zigars_dev_env_generate", "zigars_backend_conformance", "zigars_backend_evidence_pack",
+    "zigars_job_start", "zigars_job_status", "zigars_job_result", "zigars_job_cancel", "zigars_cancel_status", "zigars_run_stream", "zigars_run_events", "zigars_resource_query", "zigars_resource_subscribe", "zigars_resource_unsubscribe", "zigars_roots_sync", "zigars_workspace_map", "zigars_workspace_select", "zigars_agent_guide_v2", "zigars_client_guide", "zigars_prompt_pack",
     "zig_semantic_index_build", "zig_semantic_index_status", "zig_semantic_index_refresh", "zig_semantic_query", "zig_semantic_refs", "zig_semantic_decl", "zig_semantic_callers", "zig_static_fusion", "zig_code_index_export", "zig_scip_export", "zig_import_cycles", "zig_test_name_resolve", "zig_test_fixture_inventory", "zig_safety_site_catalog", "zig_test_for_symbol", "zig_module_surface", "zig_symbol_dossier", "zig_change_risk_audit", "zig_insertion_sites", "zig_io_migration_scan", "zig_leak_triage", "zig_comptime_diagnose", "zig_memory_layout", "zig_unsafe_operations_audit", "zig_abi_layout_diff", "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix", "zig_lint_compare", "zig_lint_profile", "zig_lint_gate", "zig_lint_fix_plan", "zig_lint_baseline", "zig_lint_suppressions", "zig_lint_trend",
-    "zig_impact_semantic", "zig_test_select_semantic", "zigar_validation_plan", "zigar_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigar_validation_history", "zig_test_flake_history", "zig_failure_history", "zigar_session_snapshot", "zigar_handoff_pack", "zigar_decision_record", "zigar_project_notes", "zigar_project_memory", "zigar_capability_match", "zigar_tool_sequence_plan",
-    "zigar_patch_session_create", "zigar_patch_session_preview", "zigar_patch_session_apply", "zigar_patch_session_validate", "zigar_patch_session_revert", "zig_generated_file_trace", "zigar_edit_policy_check", "zigar_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch",
+    "zig_impact_semantic", "zig_test_select_semantic", "zigars_validation_plan", "zigars_validation_run", "zig_build_events", "zig_test_events", "zig_test_timing", "zigars_validation_history", "zig_test_flake_history", "zig_failure_history", "zigars_session_snapshot", "zigars_handoff_pack", "zigars_decision_record", "zigars_project_notes", "zigars_project_memory", "zigars_capability_match", "zigars_tool_sequence_plan",
+    "zigars_patch_session_create", "zigars_patch_session_preview", "zigars_patch_session_apply", "zigars_patch_session_validate", "zigars_patch_session_revert", "zig_generated_file_trace", "zigars_edit_policy_check", "zigars_generated_route", "zig_move_decl", "zig_extract_decl", "zig_update_imports", "zig_organize_imports", "zig_code_action_batch",
     "zig_ci_ingest", "zig_ci_repro_plan", "zig_ci_failure_map", "zig_release_plan", "zig_semver_suggest", "zig_release_notes_draft", "zig_release_evidence_pack", "zig_api_baseline_init", "zig_api_check", "zig_api_diff_baseline", "zig_api_docs_diff", "zig_docs_index_build", "zig_docs_query", "zig_std_signature", "zig_langref_item", "zig_autodoc_ingest", "zig_project_docs_query", "zig_doc_example_check", "zig_snippet_check", "zig_readme_command_check", "zig_dependency_update_plan", "zig_dependency_fetch_check", "zig_dependency_lock_audit", "zig_dependency_impact", "zig_sbom", "zig_zat_scan", "zig_osv_scan", "zig_dependency_security_report", "zig_dependency_provenance", "zig_dependency_license_summary", "zig_github_dependency_submit_plan", "zig_zon_dep_sync", "zig_deps_add", "zig_deps_remove", "zig_deps_upgrade", "zig_pkg_search", "zig_pkg_info", "zig_pkg_versions", "zig_pkg_readme", "zig_dependency_migrate",
     "zig_coverage_run", "zig_coverage_map", "zig_coverage_merge", "zig_coverage_diff", "zig_coverage_baseline", "zig_coverage_budget_check", "zig_bench_discover", "zig_bench_run", "zig_bench_baseline", "zig_benchmark_history", "zig_bench_compare", "zig_bench_regression_gate", "zig_perf_budget_check", "zig_profile_regression", "zig_samply_record", "zig_samply_summary", "zig_samply_import", "zig_samply_artifact", "zig_profile_open", "zig_tracy_plan", "zig_tracy_probe", "zig_tracy_capture", "zig_tracy_artifacts", "zig_tracy_hints", "zig_perf_evidence_pack",
     "zig_debug_plan", "zig_lldb_backtrace", "zig_core_inspect", "zig_debug_frame_summary", "zig_sanitizer_fusion", "zig_panic_trace_analyze", "zig_crash_repro_plan", "zig_heaptrack_run", "zig_heaptrack_summary", "zig_valgrind_memcheck", "zig_callgrind_report", "zig_fuzz_plan", "zig_afl_run", "zig_libfuzzer_run", "zig_fuzz_crash_minimize", "zig_fuzz_corpus_summary", "zig_binary_size", "zig_binary_size_diff", "zig_objdump_summary", "zig_dwarfdump_check", "zig_symbolize", "zig_qemu_test", "zig_cross_smoke", "zig_target_runtime_plan", "zig_embedded_detect", "zig_microzig_plan", "zig_board_profile", "zig_flash_plan",
-    "zigar_adoption_pack", "zigar_client_config_generate", "zigar_smoke_plan", "zigar_conformance_report"
+    "zigars_adoption_pack", "zigars_client_config_generate", "zigars_smoke_plan", "zigars_conformance_report"
   ],
   "tools_list_schema_paths": {
     "zig_format": {
       "inputSchema.type": "object",
       "inputSchema.properties.file.type": "string",
-      "inputSchema.properties.file.x-zigar-path-kind": "input_file",
+      "inputSchema.properties.file.x-zigars-path-kind": "input_file",
       "inputSchema.properties.apply.type": "boolean",
       "inputSchema.properties.apply.default": false,
       "inputSchema.required.0": "file"
     },
-    "zigar_next_action": {
+    "zigars_next_action": {
       "inputSchema.properties.goal.type": "string",
       "inputSchema.required.0": "goal"
     },
@@ -29,11 +29,11 @@
       "inputSchema.properties.probe_managers.default": false,
       "inputSchema.properties.timeout_ms.minimum": 1
     },
-    "zigar_backend_catalog": {
+    "zigars_backend_catalog": {
       "inputSchema.properties.include_configured_paths.type": "boolean",
       "inputSchema.properties.include_configured_paths.default": true
     },
-    "zigar_agent_guide": {
+    "zigars_agent_guide": {
       "inputSchema.properties.client.enum.2": "gemini",
       "inputSchema.properties.client.enum.3": "hermes"
     },
@@ -47,13 +47,13 @@
       "inputSchema.properties.limit.type": "integer",
       "inputSchema.properties.limit.minimum": 1
     },
-    "zigar_artifact_index": {
+    "zigars_artifact_index": {
       "inputSchema.properties.include_hashes.type": "boolean",
       "inputSchema.properties.include_hashes.default": true,
       "inputSchema.properties.mode.enum.0": "compact",
       "inputSchema.properties.mode.default": "standard"
     },
-    "zigar_artifact_read": {
+    "zigars_artifact_read": {
       "inputSchema.properties.path.type": "string",
       "inputSchema.required.0": "path",
       "outputSchema.type": "object",
@@ -62,58 +62,58 @@
       "outputSchema.required.0": "kind",
       "outputSchema.required.1": "ok"
     },
-    "zigar_session_view": {
+    "zigars_session_view": {
       "inputSchema.properties.kind.type": "string",
       "inputSchema.properties.id.type": "string",
       "inputSchema.required.0": "kind",
       "inputSchema.required.1": "id"
     },
-    "zigar_artifact_prune": {
+    "zigars_artifact_prune": {
       "inputSchema.properties.apply.type": "boolean",
       "inputSchema.properties.apply.default": false,
       "outputSchema.properties.applied.type": "boolean",
       "inputSchema.properties.mode.enum.2": "deep"
     },
-    "zigar_result_shape": {
+    "zigars_result_shape": {
       "inputSchema.properties.mode.type": "string",
       "inputSchema.properties.mode.enum.1": "standard",
       "inputSchema.properties.mode.default": "standard"
     },
-    "zigar_trust_report": {
+    "zigars_trust_report": {
       "inputSchema.properties.include_clean_tree.type": "boolean",
       "inputSchema.properties.include_clean_tree.default": false
     },
-    "zigar_metrics_v2": {
+    "zigars_metrics_v2": {
       "inputSchema.type": "object"
     },
-    "zigar_project_profile_v2": {
+    "zigars_project_profile_v2": {
       "inputSchema.properties.apply.type": "boolean",
       "inputSchema.properties.apply.default": false,
       "inputSchema.properties.content.type": "string"
     },
-    "zigar_env_export": {
-      "inputSchema.properties.output.x-zigar-path-kind": "output_path",
+    "zigars_env_export": {
+      "inputSchema.properties.output.x-zigars-path-kind": "output_path",
       "inputSchema.properties.apply.default": false,
       "inputSchema.properties.probe_backends.type": "boolean"
     },
-    "zigar_zvm_install_plan": {
+    "zigars_zvm_install_plan": {
       "inputSchema.properties.version.type": "string",
       "inputSchema.required.0": "version"
     },
-    "zigar_backend_conformance": {
+    "zigars_backend_conformance": {
       "inputSchema.properties.backend.enum.4": "zflame",
       "inputSchema.properties.probe_backends.type": "boolean"
     },
-    "zigar_job_start": {
+    "zigars_job_start": {
       "inputSchema.properties.command.enum.1": "build-test",
       "inputSchema.properties.timeout_ms.minimum": 1,
       "inputSchema.required.0": "command"
     },
-    "zigar_resource_query": {
+    "zigars_resource_query": {
       "inputSchema.properties.uri.type": "string",
       "inputSchema.required.0": "uri"
     },
-    "zigar_roots_sync": {
+    "zigars_roots_sync": {
       "inputSchema.properties.apply.default": false
     },
     "zig_zlint_fix": {
@@ -172,11 +172,11 @@
       "inputSchema.properties.limit.type": "integer",
       "outputSchema.properties.kind.type": "string"
     },
-    "zigar_validation_plan": {
+    "zigars_validation_plan": {
       "inputSchema.properties.mode.enum.0": "quick",
       "inputSchema.properties.include_semantic.type": "boolean"
     },
-    "zigar_validation_run": {
+    "zigars_validation_run": {
       "inputSchema.properties.apply.type": "boolean",
       "inputSchema.properties.apply.default": false,
       "inputSchema.properties.timeout_ms.minimum": 1
@@ -187,22 +187,22 @@
     "zig_test_timing": {
       "inputSchema.required.0": "text"
     },
-    "zigar_decision_record": {
+    "zigars_decision_record": {
       "inputSchema.properties.apply.default": false,
       "inputSchema.required.0": "title",
       "inputSchema.required.1": "decision"
     },
-    "zigar_patch_session_preview": {
+    "zigars_patch_session_preview": {
       "inputSchema.properties.edits.type": "string",
       "inputSchema.required.0": "edits",
       "outputSchema.properties.session_id.type": "string"
     },
-    "zigar_patch_session_apply": {
+    "zigars_patch_session_apply": {
       "inputSchema.properties.apply.type": "boolean",
       "inputSchema.properties.apply.default": false,
       "inputSchema.properties.expected_preimages.type": "string"
     },
-    "zigar_patch_session_revert": {
+    "zigars_patch_session_revert": {
       "inputSchema.properties.session_id.type": "string",
       "inputSchema.properties.apply.default": false,
       "inputSchema.required.0": "session_id"
@@ -262,7 +262,7 @@
       "inputSchema.properties.probe_backend.default": false
     },
     "zig_perf_evidence_pack": {
-      "inputSchema.properties.output.x-zigar-path-kind": "output_path",
+      "inputSchema.properties.output.x-zigars-path-kind": "output_path",
       "inputSchema.properties.apply.default": false
     },
     "zig_lldb_backtrace": {
@@ -274,7 +274,7 @@
       "inputSchema.properties.apply.default": false
     },
     "zig_afl_run": {
-      "inputSchema.properties.corpus.x-zigar-path-kind": "input_path",
+      "inputSchema.properties.corpus.x-zigars-path-kind": "input_path",
       "inputSchema.properties.apply.default": false
     },
     "zig_binary_size": {
@@ -287,34 +287,34 @@
     "zig_flash_plan": {
       "inputSchema.properties.probe_backend.default": false
     },
-    "zigar_adoption_pack": {
+    "zigars_adoption_pack": {
       "inputSchema.properties.client.enum.1": "codex",
       "inputSchema.properties.transport.default": "stdio",
       "inputSchema.properties.backend.enum.5": "zflame",
       "inputSchema.properties.mode.default": "standard"
     },
-    "zigar_client_config_generate": {
+    "zigars_client_config_generate": {
       "inputSchema.properties.kind.enum.1": "codex-toml",
-      "inputSchema.properties.output.x-zigar-path-kind": "output_path",
+      "inputSchema.properties.output.x-zigars-path-kind": "output_path",
       "inputSchema.properties.apply.default": false
     },
-    "zigar_smoke_plan": {
+    "zigars_smoke_plan": {
       "inputSchema.properties.platform.default": "native",
       "inputSchema.properties.timeout_ms.minimum": 1
     },
-    "zigar_conformance_report": {
-      "inputSchema.properties.input.x-zigar-path-kind": "input_file",
-      "inputSchema.properties.output.x-zigar-path-kind": "output_path",
+    "zigars_conformance_report": {
+      "inputSchema.properties.input.x-zigars-path-kind": "input_file",
+      "inputSchema.properties.output.x-zigars-path-kind": "output_path",
       "inputSchema.properties.apply.default": false
     }
   },
   "schema_paths": {
     "registry_tool_arguments.zig_format.required.file": "string",
     "registry_tool_arguments.zig_format.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_context_pack.optional.mode": "string",
-    "registry_tool_arguments.zigar_next_action.required.goal": "string",
-    "registry_tool_arguments.zigar_validate_patch.optional.mode": "string",
-    "registry_tool_arguments.zigar_backend_catalog.optional.include_configured_paths": "boolean",
+    "registry_tool_arguments.zigars_context_pack.optional.mode": "string",
+    "registry_tool_arguments.zigars_next_action.required.goal": "string",
+    "registry_tool_arguments.zigars_validate_patch.optional.mode": "string",
+    "registry_tool_arguments.zigars_backend_catalog.optional.include_configured_paths": "boolean",
     "backend_setup.kind": "backend_setup_catalog",
     "backend_setup.backends.1.name": "zls",
     "backend_setup.backends.1.path_flag": "--zls-path",
@@ -323,32 +323,32 @@
     "registry_tool_arguments.zig_builtin_doc_json.required.query": "string",
     "registry_tool_arguments.zig_std_item_json.required.name": "string",
     "registry_tool_arguments.zig_lang_ref_search_json.required.query": "string",
-    "registry_tool_arguments.zigar_validate_patch.risk.executes_project_code": true,
-    "registry_tool_arguments.zigar_validate_patch.risk.writes_artifacts": true,
+    "registry_tool_arguments.zigars_validate_patch.risk.executes_project_code": true,
+    "registry_tool_arguments.zigars_validate_patch.risk.writes_artifacts": true,
     "registry_tool_arguments.zig_test_failure_triage.risk.executes_project_code": true,
     "registry_tool_arguments.zig_format.risk.writes_require_apply": true,
     "registry_tool_arguments.zig_format.risk.writes_artifacts": true,
     "registry_tool_arguments.zig_format.risk.preview_by_default": true,
     "registry_tool_arguments.zig_matrix_check.risk.executes_user_command": true,
-    "registry_tool_arguments.zigar_artifact_index.optional.mode": "string",
-    "registry_tool_arguments.zigar_artifact_prune.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_artifact_prune.risk.writes_artifacts": true,
-    "registry_tool_arguments.zigar_artifact_prune.risk.writes_require_apply": true,
-    "registry_tool_arguments.zigar_trust_report.optional.include_clean_tree": "boolean",
-    "registry_tool_arguments.zigar_clean_tree_gate.risk.executes_backend": true,
-    "registry_tool_arguments.zigar_result_shape.optional.mode": "string",
-    "registry_tool_arguments.zigar_docs_drift_check.optional.mode": "string",
-    "registry_tool_arguments.zigar_project_profile_v2.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_project_profile_v2.risk.writes_require_apply": true,
-    "registry_tool_arguments.zigar_env_export.risk.writes_artifacts": true,
-    "registry_tool_arguments.zigar_env_export.risk.executes_backend": true,
-    "registry_tool_arguments.zigar_zvm_install_plan.required.version": "string",
-    "registry_tool_planning.zigar_zvm_install_plan.kind": "pure_analysis",
+    "registry_tool_arguments.zigars_artifact_index.optional.mode": "string",
+    "registry_tool_arguments.zigars_artifact_prune.optional.apply": "boolean",
+    "registry_tool_arguments.zigars_artifact_prune.risk.writes_artifacts": true,
+    "registry_tool_arguments.zigars_artifact_prune.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_trust_report.optional.include_clean_tree": "boolean",
+    "registry_tool_arguments.zigars_clean_tree_gate.risk.executes_backend": true,
+    "registry_tool_arguments.zigars_result_shape.optional.mode": "string",
+    "registry_tool_arguments.zigars_docs_drift_check.optional.mode": "string",
+    "registry_tool_arguments.zigars_project_profile_v2.optional.apply": "boolean",
+    "registry_tool_arguments.zigars_project_profile_v2.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_env_export.risk.writes_artifacts": true,
+    "registry_tool_arguments.zigars_env_export.risk.executes_backend": true,
+    "registry_tool_arguments.zigars_zvm_install_plan.required.version": "string",
+    "registry_tool_planning.zigars_zvm_install_plan.kind": "pure_analysis",
     "registry_tool_arguments.zig_zls_match_check.risk.executes_backend": true,
     "registry_tool_arguments.zig_toolchain_pin.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_dev_env_generate.optional.kind": "string",
-    "registry_tool_arguments.zigar_backend_conformance.optional.backend": "string",
-    "registry_tool_arguments.zigar_backend_evidence_pack.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_dev_env_generate.optional.kind": "string",
+    "registry_tool_arguments.zigars_backend_conformance.optional.backend": "string",
+    "registry_tool_arguments.zigars_backend_evidence_pack.risk.writes_require_apply": true,
     "registry_tool_arguments.zig_semantic_query.required.query": "string",
     "registry_tool_arguments.zig_zlint.risk.executes_backend": true,
     "registry_tool_arguments.zig_zlint_fix.optional.apply": "boolean",
@@ -361,15 +361,15 @@
     "registry_tool_arguments.zig_insertion_sites.required.topic": "string",
     "registry_tool_planning.zig_import_cycles.kind": "pure_analysis",
     "registry_tool_arguments.zig_impact_semantic.optional.files": "string",
-    "registry_tool_arguments.zigar_validation_run.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_validation_run.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_validation_run.optional.apply": "boolean",
+    "registry_tool_arguments.zigars_validation_run.risk.writes_require_apply": true,
     "registry_tool_arguments.zig_build_events.risk.executes_project_code": true,
-    "registry_tool_arguments.zigar_decision_record.required.title": "string",
-    "registry_tool_arguments.zigar_decision_record.risk.writes_require_apply": true,
-    "registry_tool_arguments.zigar_patch_session_apply.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_patch_session_apply.risk.writes_source": true,
-    "registry_tool_arguments.zigar_patch_session_apply.risk.writes_require_apply": true,
-    "registry_tool_arguments.zigar_patch_session_validate.risk.executes_project_code": true,
+    "registry_tool_arguments.zigars_decision_record.required.title": "string",
+    "registry_tool_arguments.zigars_decision_record.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_patch_session_apply.optional.apply": "boolean",
+    "registry_tool_arguments.zigars_patch_session_apply.risk.writes_source": true,
+    "registry_tool_arguments.zigars_patch_session_apply.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_patch_session_validate.risk.executes_project_code": true,
     "registry_tool_arguments.zig_move_decl.risk.preview_by_default": true,
     "registry_tool_arguments.zig_code_action_batch.risk.mutates_lsp_state": true,
     "registry_tool_arguments.zig_ci_ingest.optional.content": "string",
@@ -393,21 +393,21 @@
     "registry_tool_arguments.zig_objdump_summary.risk.executes_backend": true,
     "registry_tool_arguments.zig_qemu_test.risk.executes_project_code": true,
     "registry_tool_arguments.zig_flash_plan.optional.probe_backend": "boolean",
-    "registry_tool_arguments.zigar_adoption_pack.optional.backend": "string",
-    "registry_tool_arguments.zigar_client_config_generate.optional.apply": "boolean",
-    "registry_tool_arguments.zigar_client_config_generate.risk.writes_artifacts": true,
-    "registry_tool_arguments.zigar_client_config_generate.risk.writes_require_apply": true,
-    "registry_tool_arguments.zigar_smoke_plan.optional.platform": "string",
-    "registry_tool_arguments.zigar_conformance_report.optional.content": "string",
-    "registry_tool_arguments.zigar_conformance_report.risk.writes_artifacts": true,
-    "registry_tool_planning.zigar_conformance_report.kind": "apply_gated_mutation",
+    "registry_tool_arguments.zigars_adoption_pack.optional.backend": "string",
+    "registry_tool_arguments.zigars_client_config_generate.optional.apply": "boolean",
+    "registry_tool_arguments.zigars_client_config_generate.risk.writes_artifacts": true,
+    "registry_tool_arguments.zigars_client_config_generate.risk.writes_require_apply": true,
+    "registry_tool_arguments.zigars_smoke_plan.optional.platform": "string",
+    "registry_tool_arguments.zigars_conformance_report.optional.content": "string",
+    "registry_tool_arguments.zigars_conformance_report.risk.writes_artifacts": true,
+    "registry_tool_planning.zigars_conformance_report.kind": "apply_gated_mutation",
     "registry_tool_planning.zig_fuzz_plan.kind": "pure_analysis",
     "registry_tool_arguments.zig_osv_scan.optional.content": "string",
     "registry_tool_planning.zig_sbom.kind": "workspace_artifact",
     "common_intents.0.prefer": "zig_format"
   },
   "doctor_paths": {
-    "kind": "zigar_doctor",
+    "kind": "zigars_doctor",
     "transport": "http"
   },
   "backend_catalog_paths": {
@@ -469,7 +469,7 @@
   },
   "semantic_index_paths": {
     "kind": "zig_semantic_index_build",
-    "format": "zigar.semantic_index",
+    "format": "zigars.semantic_index",
     "capability_tier": "parser_backed"
   },
   "semantic_index_status_paths": {
@@ -479,7 +479,7 @@
   },
   "semantic_index_refresh_paths": {
     "kind": "zig_semantic_index_refresh",
-    "format": "zigar.semantic_index"
+    "format": "zigars.semantic_index"
   },
   "semantic_query_paths": {
     "kind": "zig_semantic_query",
@@ -504,17 +504,17 @@
   "code_index_export_paths": {
     "kind": "zig_code_index_export",
     "wrote": false,
-    "output": ".zigar-cache/code-index.json"
+    "output": ".zigars-cache/code-index.json"
   },
   "scip_export_paths": {
     "kind": "zig_scip_export",
     "wrote": false,
-    "output": ".zigar-cache/code-index.scip.json"
+    "output": ".zigars-cache/code-index.scip.json"
   },
   "import_cycles_paths": {
     "kind": "zig_import_cycles",
     "capability_tier": "advisory_orientation",
-    "policy": "architecture-neutral import-cycle analysis; no zigar layer policy is applied"
+    "policy": "architecture-neutral import-cycle analysis; no zigars layer policy is applied"
   },
   "test_name_resolve_paths": {
     "kind": "zig_test_name_resolve",
@@ -640,11 +640,11 @@
     "selection_basis": "parser-backed semantic impact plus conservative fallback"
   },
   "validation_plan_paths": {
-    "kind": "zigar_validation_plan",
+    "kind": "zigars_validation_plan",
     "mode": "quick"
   },
   "validation_run_paths": {
-    "kind": "zigar_validation_run",
+    "kind": "zigars_validation_run",
     "history_applied": false,
     "requires_apply_for_history": true
   },
@@ -661,7 +661,7 @@
     "timings.0.duration_ms": 12
   },
   "validation_history_paths": {
-    "kind": "zigar_validation_history",
+    "kind": "zigars_validation_history",
     "run_count": 0
   },
   "flake_history_paths": {
@@ -671,57 +671,57 @@
     "kind": "zig_failure_history"
   },
   "session_snapshot_paths": {
-    "kind": "zigar_session_snapshot",
+    "kind": "zigars_session_snapshot",
     "goal": "handoff validation"
   },
   "handoff_pack_paths": {
-    "kind": "zigar_handoff_pack",
+    "kind": "zigars_handoff_pack",
     "portable": true
   },
   "decision_record_paths": {
-    "kind": "zigar_decision_record",
+    "kind": "zigars_decision_record",
     "applied": false,
     "requires_apply": true
   },
   "project_notes_paths": {
-    "kind": "zigar_project_notes",
+    "kind": "zigars_project_notes",
     "note_count": 1
   },
   "project_memory_paths": {
-    "kind": "zigar_project_memory",
+    "kind": "zigars_project_memory",
     "note_count": 1
   },
   "capability_match_paths": {
-    "kind": "zigar_capability_match"
+    "kind": "zigars_capability_match"
   },
   "tool_sequence_plan_paths": {
-    "kind": "zigar_tool_sequence_plan"
+    "kind": "zigars_tool_sequence_plan"
   },
   "patch_session_create_paths": {
-    "kind": "zigar_patch_session_create",
+    "kind": "zigars_patch_session_create",
     "safe_to_edit": false,
     "files.1.policy.classification": "cache",
-    "next_action.tool": "zigar_generated_route"
+    "next_action.tool": "zigars_generated_route"
   },
   "patch_session_preview_paths": {
-    "kind": "zigar_patch_session_preview",
+    "kind": "zigars_patch_session_preview",
     "requires_apply": true,
     "safe_to_apply": true,
     "files.0.file": "tests/fixtures/static-analysis/usingnamespace.zig",
     "files.0.changed": true
   },
   "patch_session_apply_blocked_paths": {
-    "kind": "zigar_patch_session_apply",
+    "kind": "zigars_patch_session_apply",
     "applied": false,
     "safe_to_apply": false,
     "files.0.policy.classification": "cache"
   },
   "patch_session_validate_paths": {
-    "kind": "zigar_patch_session_validate",
-    "validation.kind": "zigar_validation_run"
+    "kind": "zigars_patch_session_validate",
+    "validation.kind": "zigars_validation_run"
   },
   "patch_session_revert_paths": {
-    "kind": "zigar_patch_session_revert",
+    "kind": "zigars_patch_session_revert",
     "session_id": "fixture",
     "applied": false,
     "requires_apply": true,
@@ -733,12 +733,12 @@
     "policy.direct_edit_allowed": false
   },
   "edit_policy_check_paths": {
-    "kind": "zigar_edit_policy_check",
+    "kind": "zigars_edit_policy_check",
     "allow_direct_edit": false,
     "blocked_paths.0": "zig-out/generated.zig"
   },
   "generated_route_paths": {
-    "kind": "zigar_generated_route",
+    "kind": "zigars_generated_route",
     "policy.classification": "generated",
     "regeneration_commands.0": "zig build tool-index"
   },
@@ -828,11 +828,11 @@
   "phase6_docs_index_build_paths": {
     "kind": "zig_docs_index_build",
     "scope": "docs",
-    "index_version": "zigar.docs_index.v1"
+    "index_version": "zigars.docs_index.v1"
   },
   "phase6_docs_query_paths": {
     "kind": "zig_docs_query",
-    "query": "zigar"
+    "query": "zigars"
   },
   "phase6_std_signature_paths": {
     "kind": "zig_std_signature",
@@ -1029,7 +1029,7 @@
     "requires_apply": false
   },
   "session_view_paths": {
-    "kind": "zigar_session_view",
+    "kind": "zigars_session_view",
     "session_kind": "bench_regression_gate",
     "session_id": "smoke-gate",
     "record_count": 1,
@@ -1226,28 +1226,28 @@
     "kind": "zig_package_cache_doctor"
   },
   "context_pack_paths": {
-    "kind": "zigar_context_pack",
+    "kind": "zigars_context_pack",
     "mode": "tiny",
     "workspace.zls_running": false
   },
   "next_action_paths": {
-    "kind": "zigar_next_action",
+    "kind": "zigars_next_action",
     "recommended_steps.0.tool": "zig_test_failure_triage"
   },
   "agent_guide_paths": {
-    "kind": "zigar_agent_guide",
+    "kind": "zigars_agent_guide",
     "client": "codex"
   },
   "patch_guard_paths": {
-    "kind": "zigar_patch_guard",
+    "kind": "zigars_patch_guard",
     "safe": false
   },
   "failure_fusion_paths": {
-    "kind": "zigar_failure_fusion",
+    "kind": "zigars_failure_fusion",
     "ok": false
   },
   "impact_paths": {
-    "kind": "zigar_impact",
+    "kind": "zigars_impact",
     "analysis_kind": "heuristic_import_symbol_test_scan"
   },
   "test_map_paths": {
@@ -1263,11 +1263,11 @@
     "breaking_change_risk": true
   },
   "project_profile_paths": {
-    "kind": "zigar_project_profile",
+    "kind": "zigars_project_profile",
     "applied": false
   },
   "project_profile_v2_paths": {
-    "kind": "zigar_project_profile_v2",
+    "kind": "zigars_project_profile_v2",
     "schema_version": 2,
     "applied": false,
     "requires_apply": true,
@@ -1275,18 +1275,18 @@
     "validation.valid": true
   },
   "profile_bootstrap_paths": {
-    "kind": "zigar_profile_bootstrap",
-    "path": ".zigar/profile.json",
+    "kind": "zigars_profile_bootstrap",
+    "path": ".zigars/profile.json",
     "profile.schema_version": 2
   },
   "env_pack_paths": {
-    "kind": "zigar_env_pack",
+    "kind": "zigars_env_pack",
     "schema_version": 1,
     "toolchain.zig.status": "not_probed",
     "compatibility.status": "unknown"
   },
   "zvm_install_plan_paths": {
-    "kind": "zigar_zvm_install_plan",
+    "kind": "zigars_zvm_install_plan",
     "version": "0.16.0",
     "argv.0": "zvm",
     "argv.1": "install",
@@ -1300,13 +1300,13 @@
   },
   "toolchain_pin_paths": {
     "kind": "zig_toolchain_pin",
-    "path": ".zigar/toolchain.json",
+    "path": ".zigars/toolchain.json",
     "applied": false,
     "requires_apply": true,
     "pin.schema_version": 1
   },
   "backend_install_plan_paths": {
-    "kind": "zigar_backend_install_plan",
+    "kind": "zigars_backend_install_plan",
     "backend": "zflame",
     "manager": "manual",
     "plan_only": true,
@@ -1314,28 +1314,28 @@
     "plans.0.backend": "zflame"
   },
   "dev_env_generate_paths": {
-    "kind": "zigar_dev_env_generate",
+    "kind": "zigars_dev_env_generate",
     "artifact_kind": "mise",
-    "path": ".zigar-cache/dev-env/mise.toml",
+    "path": ".zigars-cache/dev-env/mise.toml",
     "applied": false,
     "requires_apply": true
   },
   "backend_conformance_paths": {
-    "kind": "zigar_backend_conformance",
+    "kind": "zigars_backend_conformance",
     "backend": "zflame",
     "schema_version": 1,
     "run_state": "plan_only",
     "scenarios.0.name": "zflame_recursive_folded_svg"
   },
   "backend_evidence_pack_paths": {
-    "kind": "zigar_backend_evidence_pack",
-    "path": ".zigar-cache/backend-conformance/evidence-pack.json",
+    "kind": "zigars_backend_evidence_pack",
+    "path": ".zigars-cache/backend-conformance/evidence-pack.json",
     "applied": false,
     "requires_apply": true,
     "evidence.available": false
   },
   "adoption_pack_paths": {
-    "kind": "zigar_adoption_pack",
+    "kind": "zigars_adoption_pack",
     "schema_version": 1,
     "client_identity.client": "codex",
     "client_identity.transport": "stdio",
@@ -1343,22 +1343,22 @@
     "backend_setup_status.0.backend": "zflame",
     "backend_setup_status.0.status": "not_probed",
     "generated_config.kind": "codex-toml",
-    "smoke_plan.kind": "zigar_smoke_plan",
-    "conformance_report.tool": "zigar_conformance_report"
+    "smoke_plan.kind": "zigars_smoke_plan",
+    "conformance_report.tool": "zigars_conformance_report"
   },
   "client_config_paths": {
-    "kind": "zigar_client_config_generate",
+    "kind": "zigars_client_config_generate",
     "schema_version": 1,
     "generated_config.kind": "codex-toml",
-    "target_path": ".zigar-cache/adoption/http-codex.toml",
-    "artifact_identity.path": ".zigar-cache/adoption/http-codex.toml",
+    "target_path": ".zigars-cache/adoption/http-codex.toml",
+    "artifact_identity.path": ".zigars-cache/adoption/http-codex.toml",
     "preimage_identity.exists": false,
-    "provenance.producer": "zigar_client_config_generate",
+    "provenance.producer": "zigars_client_config_generate",
     "applied": false,
     "requires_apply": true
   },
   "smoke_plan_paths": {
-    "kind": "zigar_smoke_plan",
+    "kind": "zigars_smoke_plan",
     "schema_version": 1,
     "client_identity.client": "generic",
     "platform": "linux",
@@ -1368,11 +1368,11 @@
     "scenarios.8.id": "backend_verify"
   },
   "conformance_report_paths": {
-    "kind": "zigar_conformance_report",
+    "kind": "zigars_conformance_report",
     "schema_version": 1,
-    "report.kind": "zigar_public_conformance_report",
+    "report.kind": "zigars_public_conformance_report",
     "report.source.available": true,
-    "report.source.report_kind": "zigar_backend_conformance_report",
+    "report.source.report_kind": "zigars_backend_conformance_report",
     "report.backend_support_claims.1.status": "failed",
     "report.backend_support_claims.1.claim_allowed": false,
     "report.backend_support_claims.4.status": "passed",
@@ -1381,120 +1381,120 @@
     "requires_apply": true
   },
   "smoke_plan_unsupported_paths": {
-    "kind": "zigar_smoke_plan",
+    "kind": "zigars_smoke_plan",
     "schema_version": 1,
     "ok": false,
     "status": "unsupported_platform",
     "platform": "plan9"
   },
   "validate_patch_paths": {
-    "kind": "zigar_validate_patch",
+    "kind": "zigars_validate_patch",
     "mode": "quick"
   },
   "result_shape_paths": {
-    "kind": "zigar_result_shape",
+    "kind": "zigars_result_shape",
     "ok": true,
     "mode": "compact",
     "result_shape.mode": "compact",
     "required_top_level_fields.3": "result_shape"
   },
   "output_budget_paths": {
-    "kind": "zigar_output_budget_plan",
+    "kind": "zigars_output_budget_plan",
     "mode": "deep",
     "tool": "zig_check",
     "effective_token_budget": 500,
     "clamp_applied": true
   },
   "metrics_v2_paths": {
-    "kind": "zigar_metrics_v2",
+    "kind": "zigars_metrics_v2",
     "schema_version": 2,
-    "backend_health_history.kind": "zigar_backend_health_history",
-    "zls_timeline.kind": "zigar_zls_timeline",
-    "tool_latency.kind": "zigar_tool_latency",
-    "command_durations.kind": "zigar_command_durations"
+    "backend_health_history.kind": "zigars_backend_health_history",
+    "zls_timeline.kind": "zigars_zls_timeline",
+    "tool_latency.kind": "zigars_tool_latency",
+    "command_durations.kind": "zigars_command_durations"
   },
   "command_provenance_paths": {
-    "kind": "zigar_command_provenance",
-    "tool": "zigar_artifact_prune",
+    "kind": "zigars_command_provenance",
+    "tool": "zigars_artifact_prune",
     "plan.kind": "apply_gated_mutation",
     "risk.writes_artifacts": true,
     "risk.writes_require_apply": true
   },
   "risk_audit_paths": {
-    "kind": "zigar_risk_audit",
+    "kind": "zigars_risk_audit",
     "source.source": "compiled_tool_manifest"
   },
   "docs_drift_paths": {
-    "kind": "zigar_docs_drift_check",
+    "kind": "zigars_docs_drift_check",
     "ok": true,
     "mode": "compact"
   },
   "artifact_index_paths": {
-    "kind": "zigar_artifact_index",
+    "kind": "zigars_artifact_index",
     "ok": true,
     "mode": "compact",
-    "registry_path": ".zigar-cache/artifacts/registry.jsonl",
+    "registry_path": ".zigars-cache/artifacts/registry.jsonl",
     "omitted_sections.0.section": "additional_artifacts",
     "omitted_sections.1.section": "artifact_hashes"
   },
   "workspace_map_paths": {
-    "kind": "zigar_workspace_map",
+    "kind": "zigars_workspace_map",
     "workspace.path_safety": "all file tools resolve paths inside configured_root"
   },
   "roots_sync_paths": {
-    "kind": "zigar_roots_sync",
+    "kind": "zigars_roots_sync",
     "apply": false,
     "workspace.path_safety": "all file tools resolve paths inside configured_root"
   },
   "resource_query_jobs_paths": {
-    "kind": "zigar_resource_query",
-    "uri": "zigar://jobs",
+    "kind": "zigars_resource_query",
+    "uri": "zigars://jobs",
     "job_count": 0
   },
   "prompt_pack_paths": {
-    "kind": "zigar_prompt_pack",
-    "workflow": "zigar_test_workflow",
+    "kind": "zigars_prompt_pack",
+    "workflow": "zigars_test_workflow",
     "workflow_count": 1
   },
   "agent_guide_v2_paths": {
-    "kind": "zigar_agent_guide_v2",
+    "kind": "zigars_agent_guide_v2",
     "client": "codex"
   },
   "client_guide_paths": {
-    "kind": "zigar_client_guide",
+    "kind": "zigars_client_guide",
     "client": "codex"
   },
   "job_start_paths": {
-    "kind": "zigar_job_start",
+    "kind": "zigars_job_start",
     "ok": true,
     "job_id": "job-1",
     "status": "completed",
     "result_available": true
   },
   "job_status_paths": {
-    "kind": "zigar_job_status",
+    "kind": "zigars_job_status",
     "job.job_id": "job-1",
     "job.status": "completed",
     "result_available": true
   },
   "job_result_paths": {
-    "kind": "zigar_job_result",
+    "kind": "zigars_job_result",
     "ok": true,
     "job.job_id": "job-1",
     "job.status": "completed"
   },
   "run_events_paths": {
-    "kind": "zigar_run_events",
+    "kind": "zigars_run_events",
     "job_id": "job-1"
   },
   "job_cancel_paths": {
-    "kind": "zigar_job_cancel",
+    "kind": "zigars_job_cancel",
     "ok": true,
     "cancelled": false,
     "job.cancellation_requested": true
   },
   "cancel_status_paths": {
-    "kind": "zigar_cancel_status",
+    "kind": "zigars_cancel_status",
     "job_count": 1,
     "jobs.0.cancellation_requested": true
   }

@@ -8,7 +8,7 @@ const ports = @import("../../ports.zig");
 /// Schema version written into this module's structured payloads.
 pub const schema_version: i64 = 1;
 /// Default history path used when the caller omits an explicit value.
-pub const history_path_default = ".zigar-cache/validation/history.jsonl";
+pub const history_path_default = ".zigars-cache/validation/history.jsonl";
 /// Shared history max bytes result type used by this workflow module.
 pub const history_max_bytes: usize = 8 * 1024 * 1024;
 /// Command output limit applied when collecting workflow evidence.
@@ -446,7 +446,7 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
     if (request.changed_paths.len > 0) try appendPhase(allocator, &phases, .{
         .id = "patch_guard",
         .kind = .tool_only,
-        .tool = "zigar_patch_guard",
+        .tool = "zigars_patch_guard",
         .reason = "Check workspace boundaries and generated-path policy before validating edits.",
         .required = true,
         .risk = "none",
@@ -612,7 +612,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
             .bytes = bytes.items,
             .create_parent_dirs = true,
             .replace_existing = true,
-            .provenance = "zigar_validation_run history",
+            .provenance = "zigars_validation_run history",
         }) catch |err| {
             const failure = WorkspaceFailure{
                 .error_info = app_errors.toolFailure(
@@ -674,7 +674,7 @@ pub fn history(allocator: std.mem.Allocator, context: app_context.ValidationCont
         const read_result = context.workspace_store.read(allocator, .{
             .path = request.path,
             .max_bytes = history_max_bytes,
-            .provenance = "zigar_validation_history read",
+            .provenance = "zigars_validation_history read",
         }) catch |err| {
             switch (err) {
                 error.FileNotFound, error.NotFound => {
@@ -796,7 +796,7 @@ fn runPhase(allocator: std.mem.Allocator, context: app_context.ValidationContext
         .timeout_ms = timeout_ms,
         .max_stdout_bytes = command_output_limit,
         .max_stderr_bytes = command_output_limit,
-        .provenance = "zigar_validation_run phase",
+        .provenance = "zigars_validation_run phase",
     }) catch |err| return .{
         .name = owned_name,
         .ok = false,
@@ -895,7 +895,7 @@ fn preimageForPath(allocator: std.mem.Allocator, context: app_context.Validation
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = history_max_bytes,
-        .provenance = "zigar_validation_run history preimage",
+        .provenance = "zigars_validation_run history preimage",
     }) catch return .{ .exists = false, .bytes = 0, .sha256 = null };
     defer read_result.deinit(allocator);
     return .{
@@ -910,7 +910,7 @@ fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.Valid
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = history_max_bytes,
-        .provenance = "zigar_validation_run history append",
+        .provenance = "zigars_validation_run history append",
     }) catch return null;
     if (!read_result.owns_bytes) return allocator.dupe(u8, read_result.bytes) catch null;
     return read_result.bytes;
@@ -921,7 +921,7 @@ fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.Valida
     const result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = 0,
-        .provenance = "zigar_validation_plan path probe",
+        .provenance = "zigars_validation_plan path probe",
     }) catch return false;
     result.deinit(allocator);
     return true;
@@ -1146,7 +1146,7 @@ fn writeCommandObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), pha
             try serializeJsonString(allocator, out, "rerun_command");
             try out.append(allocator, ':');
             try writeCommandString(allocator, out, phase_item.argv.items);
-            try jsonFieldStringArray(allocator, out, "suggested_tools", if (phase_item.ok) &.{} else &.{ "zigar_failure_fusion", "zigar_impact" }, false);
+            try jsonFieldStringArray(allocator, out, "suggested_tools", if (phase_item.ok) &.{} else &.{ "zigars_failure_fusion", "zigars_impact" }, false);
             try jsonFieldString(allocator, out, "likely_scope", if (phase_item.ok) "none" else "workspace_or_build", false);
             try out.append(allocator, '}');
         },
@@ -1178,7 +1178,7 @@ fn writeCommandObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), pha
             try serializeJsonString(allocator, out, "rerun_command");
             try out.append(allocator, ':');
             try writeCommandString(allocator, out, phase_item.argv.items);
-            try jsonFieldStringArray(allocator, out, "suggested_tools", &.{ "zigar_doctor", "zigar_context_pack" }, false);
+            try jsonFieldStringArray(allocator, out, "suggested_tools", &.{ "zigars_doctor", "zigars_context_pack" }, false);
             try jsonFieldString(allocator, out, "likely_scope", if (isTimeoutError(err)) "command_timeout" else "tool_or_backend_configuration", false);
             try out.append(allocator, '}');
         },
@@ -1752,7 +1752,7 @@ test "validation workflow consumes owned workspace reads" {
     var clock = fakes.FakeClockAndIds.init(allocator);
     defer clock.deinit();
     const context = app_context.ValidationContext{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "zig" },
         .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
         .command_runner = command.port(),
@@ -1763,7 +1763,7 @@ test "validation workflow consumes owned workspace reads" {
     try workspace.expectRead(.{
         .path = "history.jsonl",
         .max_bytes = history_max_bytes,
-        .provenance = "zigar_validation_history read",
+        .provenance = "zigars_validation_history read",
     }, "{\"ok\":true,\"failures\":[]}\n");
     var from_file = try history(allocator, context, .{ .view = .runs, .path = "history.jsonl" });
     defer from_file.deinit(allocator);
@@ -1773,7 +1773,7 @@ test "validation workflow consumes owned workspace reads" {
     try workspace.expectRead(.{
         .path = "history.jsonl",
         .max_bytes = history_max_bytes,
-        .provenance = "zigar_validation_run history append",
+        .provenance = "zigars_validation_run history append",
     }, "old\n");
     const existing = existingHistoryBytes(allocator, context, "history.jsonl").?;
     defer allocator.free(existing);
@@ -1802,10 +1802,10 @@ test "validation workflow cleans partial allocations across planning running and
             try workspace.expectRead(.{
                 .path = "src/main.zig",
                 .max_bytes = 0,
-                .provenance = "zigar_validation_plan path probe",
+                .provenance = "zigars_validation_plan path probe",
             }, "");
             const context = app_context.ValidationContext{
-                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
                 .tool_paths = .{ .zig = "zig" },
                 .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
                 .command_runner = command.port(),
@@ -1835,7 +1835,7 @@ test "validation workflow cleans partial allocations across planning running and
             var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
             defer clock.deinit();
             const context = app_context.ValidationContext{
-                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
                 .tool_paths = .{ .zig = "zig" },
                 .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
                 .command_runner = command.port(),
@@ -1866,12 +1866,12 @@ test "validation workflow cleans partial allocations across planning running and
             try workspace.expectRead(.{
                 .path = "src/main.zig",
                 .max_bytes = 0,
-                .provenance = "zigar_validation_plan path probe",
+                .provenance = "zigars_validation_plan path probe",
             }, "");
             try workspace.expectRead(.{
                 .path = "history.jsonl",
                 .max_bytes = history_max_bytes,
-                .provenance = "zigar_validation_run history preimage",
+                .provenance = "zigars_validation_run history preimage",
             }, "old\n");
             try command.expectRun(.{
                 .argv = &.{ "zig", "fmt", "--check", "src/main.zig" },
@@ -1879,7 +1879,7 @@ test "validation workflow cleans partial allocations across planning running and
                 .timeout_ms = 10,
                 .max_stdout_bytes = command_output_limit,
                 .max_stderr_bytes = command_output_limit,
-                .provenance = "zigar_validation_run phase",
+                .provenance = "zigars_validation_run phase",
             }, .{ .stdout = "PASS fmt\n", .stderr = "", .duration_ms = 2 });
             try command.expectRun(.{
                 .argv = &.{ "zig", "ast-check", "src/main.zig" },
@@ -1887,10 +1887,10 @@ test "validation workflow cleans partial allocations across planning running and
                 .timeout_ms = 10,
                 .max_stdout_bytes = command_output_limit,
                 .max_stderr_bytes = command_output_limit,
-                .provenance = "zigar_validation_run phase",
+                .provenance = "zigars_validation_run phase",
             }, .{ .stdout = "", .stderr = "src/main.zig:1:1: warning: note\n", .duration_ms = 1201 });
             const context = app_context.ValidationContext{
-                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
                 .tool_paths = .{ .zig = "zig" },
                 .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
                 .command_runner = command.port(),
@@ -1972,10 +1972,10 @@ test "validation workflow cleans partial allocations across planning running and
                 .timeout_ms = 5,
                 .max_stdout_bytes = command_output_limit,
                 .max_stderr_bytes = command_output_limit,
-                .provenance = "zigar_validation_run phase",
+                .provenance = "zigars_validation_run phase",
             }, .{ .stdout = "PASS\n", .stderr = "warning: x\n", .duration_ms = 1500 });
             const context = app_context.ValidationContext{
-                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+                .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
                 .tool_paths = .{ .zig = "zig" },
                 .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
                 .command_runner = command.port(),

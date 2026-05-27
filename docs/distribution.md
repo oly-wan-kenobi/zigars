@@ -1,16 +1,16 @@
 # Distribution Strategy
 
-This document records the public distribution strategy for zigar. It is not a
+This document records the public distribution strategy for zigars. It is not a
 release checklist and does not claim that npm, MCPB, or MCP Registry publication
 already exists. Use [release.md](release.md) as the authority for tagging,
 archive verification, and release-note evidence.
 
 ## Goals
 
-- Keep the primary runtime model local stdio. zigar needs local Zig workspaces,
+- Keep the primary runtime model local stdio. zigars needs local Zig workspaces,
   local toolchains, optional local backends, and workspace-bounded file access.
 - Give most MCP clients the same simple command shape through an npm shim.
-- Ship zigar-aware agent skills as a separate npm package so client guidance can
+- Ship zigars-aware agent skills as a separate npm package so client guidance can
   be refined without changing the MCP server contract.
 - Provide a polished Claude Desktop path with MCPB packages for mainstream
   desktop platforms.
@@ -23,15 +23,15 @@ archive verification, and release-note evidence.
 
 | Surface | Planned name |
 |---|---|
-| Binary command | `zigar` |
-| Display title | `zigar MCP` |
-| MCP Registry server name | `io.github.oly-wan-kenobi/zigar` |
+| Binary command | `zigars` |
+| Display title | `zigars MCP` |
+| MCP Registry server name | `io.github.oly-wan-kenobi/zigars` |
 | npm package | `@zigars/mcp` |
 | skills npm package | `@zigars/skills` |
-| MCPB display title | `zigar MCP` |
-| GitHub release archives | existing `zigar-<target>.tar.gz` names |
+| MCPB display title | `zigars MCP` |
+| GitHub release archives | existing `zigars-<target>.tar.gz` names |
 
-Use descriptive listing text such as `zigar: deterministic Zig MCP server` so
+Use descriptive listing text such as `zigars: deterministic Zig MCP server` so
 community package indexes do not confuse this project with unrelated Zig
 projects that use similar names.
 
@@ -39,13 +39,13 @@ projects that use similar names.
 
 | Channel | Role | Planned artifact | Main users | Main drawback |
 |---|---|---|---|---|
-| GitHub Releases | Verified binary source and fallback install path | Existing platform archives plus `zigar-checksums.txt` | Power users, CI, npm shim downloader | Manual path and MCP config work |
+| GitHub Releases | Verified binary source and fallback install path | Existing platform archives plus `zigars-checksums.txt` | Power users, CI, npm shim downloader | Manual path and MCP config work |
 | npm shim | Broadest MCP client onboarding path | `@zigars/mcp` executable package | Cursor, VS Code, Cline, Codex, Claude Code, Gemini CLI, opencode, Kimi, Antigravity | Requires Bun or Node/npm and wrapper maintenance |
-| npm skills package | Zigar-aware client guidance | `@zigars/skills` static skill package | Codex, Claude Code, and other clients with filesystem-style skills | Skills are client-specific artifacts, not portable MCP server features |
+| npm skills package | Zigars-aware client guidance | `@zigars/skills` static skill package | Codex, Claude Code, and other clients with filesystem-style skills | Skills are client-specific artifacts, not portable MCP server features |
 | MCP Registry | Official MCP discovery surface | `server.json` pointing first at the npm package | MCP-aware clients and directories | Registry metadata must match a public package and verified namespace |
-| MCPB | Polished Claude Desktop install path | `zigar-darwin-universal.mcpb`, `zigar-linux-x64.mcpb`, `zigar-windows-x64.mcpb` | Claude Desktop users | MCPB platform metadata is OS-only, so architecture policy must be clear in filenames and docs |
+| MCPB | Polished Claude Desktop install path | `zigars-darwin-universal.mcpb`, `zigars-linux-x64.mcpb`, `zigars-windows-x64.mcpb` | Claude Desktop users | MCPB platform metadata is OS-only, so architecture policy must be clear in filenames and docs |
 | Zig community indexes | Zig ecosystem discovery | GitHub topics and community submissions | Zig developers | Discovery only; not a standard MCP install mechanism |
-| OCI image | Later optional channel | Multi-arch `ghcr.io/.../zigar` image | CI, devcontainers, enterprise runners | Local workspace mounts and stdio UX are less ergonomic |
+| OCI image | Later optional channel | Multi-arch `ghcr.io/.../zigars` image | CI, devcontainers, enterprise runners | Local workspace mounts and stdio UX are less ergonomic |
 
 The npm shim is the first new channel because it keeps client configuration
 consistent:
@@ -63,16 +63,16 @@ npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 Yarn and pnpm are supported through explicit binary selection:
 
 ```sh
-yarn dlx -p @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
-pnpm dlx --package @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
 The shim should be authored in TypeScript, publish compiled JavaScript for
-Node-compatible npm clients, and forward all zigar arguments after selecting the
-correct binary. The resulting process should still run zigar as a local stdio
+Node-compatible npm clients, and forward all zigars arguments after selecting the
+correct binary. The resulting process should still run zigars as a local stdio
 MCP server. GitHub release assets for the matching `v<version>` tag must be
 uploaded before the npm package can start successfully, because the package
-downloads `zigar-checksums.txt` and the selected platform archive from GitHub
+downloads `zigars-checksums.txt` and the selected platform archive from GitHub
 Releases.
 
 ## npm Shim Contract
@@ -84,7 +84,7 @@ Minimum behavior:
 
 - detect `process.platform` and `process.arch`;
 - map the host to one of the published GitHub release archives;
-- download `zigar-checksums.txt` and the selected archive from the matching tag;
+- download `zigars-checksums.txt` and the selected archive from the matching tag;
 - verify the archive SHA-256 before extraction;
 - cache the extracted binary in a user cache directory keyed by version and
   platform target;
@@ -94,19 +94,24 @@ Minimum behavior:
 - print npm-shim diagnostics to stderr only, preserving stdout for MCP JSON-RPC;
 - fail with a clear platform or checksum error instead of falling back silently.
 
-The shim must not widen zigar's trust boundary. Workspace resolution, apply
-gates, backend execution, and MCP result contracts remain owned by the zigar
+Linux hosts map to the musl archives by default (`zigars-x86_64-linux-musl` and
+`zigars-aarch64-linux-musl`) because Node and Bun do not expose libc ABI
+consistently. The release also publishes GNU Linux archives for direct
+downloads and CI workflows that explicitly need glibc ABI.
+
+The shim must not widen zigars' trust boundary. Workspace resolution, apply
+gates, backend execution, and MCP result contracts remain owned by the zigars
 binary.
 
 ## Skills Package Contract
 
 The skills package is a dogfooding and client-guidance channel, not an MCP
-server channel. It lives under `packages/zigar-skills-npm/`, publishes as
+server channel. It lives under `packages/zigars-skills-npm/`, publishes as
 `@zigars/skills`, and ships static skill folders under `skills/`.
 
 Minimum behavior:
 
-- include zigar-specific skills that route agents to zigar MCP tools and
+- include zigars-specific skills that route agents to zigars MCP tools and
   validation workflows;
 - keep each skill self-contained with `SKILL.md`, optional `agents/` metadata,
   and optional one-level `references/`;
@@ -119,8 +124,8 @@ Minimum behavior:
 - avoid claiming skills are part of base MCP; clients consume them through their
   own skill/plugin mechanisms.
 
-The initial package should ship `zigar-development`, the dogfooding skill used
-while changing zigar itself. See [dogfooding.md](dogfooding.md) for the repo
+The initial package should ship `zigars-development`, the dogfooding skill used
+while changing zigars itself. See [dogfooding.md](dogfooding.md) for the repo
 development strategy.
 
 ## MCPB Contract
@@ -130,9 +135,9 @@ not block the npm shim or MCP Registry publication.
 
 Target bundles:
 
-- `zigar-darwin-universal.mcpb`
-- `zigar-linux-x64.mcpb`
-- `zigar-windows-x64.mcpb`
+- `zigars-darwin-universal.mcpb`
+- `zigars-linux-x64.mcpb`
+- `zigars-windows-x64.mcpb`
 
 Chosen artifact strategy:
 
@@ -146,16 +151,16 @@ Chosen artifact strategy:
   `linux`) and does not provide a CPU architecture selector, so separate
   Linux/Windows architecture bundles would rely on filename/user choice rather
   than client-side compatibility checks.
-- Keep Linux arm64 covered by the npm shim and direct release archive until a
-  separate MCPB package has install smoke evidence and clear user-facing
-  selection guidance.
+- Keep Linux arm64 and Windows arm64 covered by the npm shim and direct release
+  archives until separate MCPB packages have install smoke evidence and clear
+  user-facing selection guidance.
 - Do not ship a Node dispatcher MCPB containing every binary. It would avoid the
   architecture-selector limitation, but it would make MCPB depend on a Node
   runtime and duplicate the npm shim's responsibility inside a desktop bundle.
 
 Each MCPB manifest should:
 
-- run zigar with `--transport stdio`;
+- run zigars with `--transport stdio`;
 - request a required workspace directory from the user;
 - avoid embedding optional backend paths by default;
 - document that Zig is required and ZLS/other backends are optional;
@@ -163,23 +168,23 @@ Each MCPB manifest should:
 - be validated with the MCPB CLI and a real Claude Desktop install smoke before
   publication.
 
-MCPB build tooling lives in `packages/zigar-mcpb/`. It consumes the
-`zig build dist` release archives, stages `manifest.json`, `server/zigar` or
-`server/zigar.exe`, README/LICENSE files, and `.mcpbignore`, then runs:
+MCPB build tooling lives in `packages/zigars-mcpb/`. It consumes the
+`zig build dist` release archives, stages `manifest.json`, `server/zigars` or
+`server/zigars.exe`, README/LICENSE files, and `.mcpbignore`, then runs:
 
 ```sh
-npm --prefix packages/zigar-mcpb ci
-npm --prefix packages/zigar-mcpb run pack
+npm --prefix packages/zigars-mcpb ci
+npm --prefix packages/zigars-mcpb run pack
 ```
 
 The package is TypeScript and supports both npm/Node and Bun. The npm path
 compiles `src/build.ts` to `dist/build.js`; the Bun path runs
-`bun run --cwd packages/zigar-mcpb pack:bun` directly against the TypeScript
+`bun run --cwd packages/zigars-mcpb pack:bun` directly against the TypeScript
 source. The scripts use the current npm-published MCPB CLI package
 `@anthropic-ai/mcpb`; `mcpb` and `@modelcontextprotocol/mcpb` are not published
 npm package names at the time of this plan. The pack step validates each
 manifest, writes the `.mcpb` files under `dist/assets`, runs `mcpb info`, and
-writes `zigar-mcpb-checksums.txt` with SHA-256 hashes for registry
+writes `zigars-mcpb-checksums.txt` with SHA-256 hashes for registry
 `fileSha256` values.
 
 ## Client Matrix
@@ -195,7 +200,7 @@ writes `zigar-mcpb-checksums.txt` with SHA-256 hashes for registry
 | Windsurf | generated `mcp_config.json` using npm shim | marketplace or deeplink when available | Tool limits and workspace policies can vary by installation. |
 | Antigravity | generated MCP config using npm shim | direct binary config | Treat config paths and UI behavior as verification-required because the client is evolving. |
 | Gemini CLI | generated `settings.json` using npm shim | direct binary config | Keep trust/workspace settings explicit. |
-| opencode | generated `opencode.jsonc` using npm shim | direct binary config | MCP tool count affects context and UX; recommend zigar tool discovery flows. |
+| opencode | generated `opencode.jsonc` using npm shim | direct binary config | MCP tool count affects context and UX; recommend zigars tool discovery flows. |
 | Kimi Code | CLI or VS Code MCP config using npm shim | direct binary config | Keep CLI and VS Code guidance separate until both are smoke-tested. |
 | Generic MCP clients | standard `mcpServers` JSON using npm shim | direct binary config | Use absolute workspace paths unless the client reliably starts servers in the project root. |
 
@@ -203,10 +208,10 @@ Every public client profile should include the same validation sequence:
 
 ```text
 tools/list
-zigar_schema
-zigar_workspace_info
-zigar_doctor {"probe_backends":false}
-zigar_smoke_plan
+zigars_schema
+zigars_workspace_info
+zigars_doctor {"probe_backends":false}
+zigars_smoke_plan
 ```
 
 Before a profile is called mature, capture a client-specific smoke transcript
@@ -221,8 +226,8 @@ be added after real Claude Desktop install smoke evidence exists.
 
 Planned server metadata:
 
-- `name`: `io.github.oly-wan-kenobi/zigar`
-- `title`: `zigar MCP`
+- `name`: `io.github.oly-wan-kenobi/zigars`
+- `title`: `zigars MCP`
 - `description`: deterministic local MCP server for Zig development
 - primary package: npm package `@zigars/mcp`
 - later packages: MCPB release assets for `darwin`, `linux`, and `windows`
@@ -234,7 +239,7 @@ Before publishing to the registry:
 - confirm the registry namespace authentication method;
 - confirm the npm package includes the registry ownership metadata expected by
   the MCP Registry;
-- run a clean-tree zigar release gate for the exact version being advertised;
+- run a clean-tree zigars release gate for the exact version being advertised;
 - verify the registry listing after publication.
 
 ## Implementation Checklist
@@ -252,9 +257,9 @@ Completed for the npm shim package:
 Remaining before or after the first npm publish:
 
 1. Confirm the `v0.2.0` GitHub release has all platform archives and
-   `zigar-checksums.txt`.
+   `zigars-checksums.txt`.
 2. Run `bun run test:bun`, `npm run test:node`, and `npm pack --dry-run` in
-   `packages/zigar-mcp-npm`.
+   `packages/zigars-mcp-npm`.
 3. Publish `@zigars/mcp@0.2.0` with public access.
 4. Add an MCP Registry `server.json` that points to the package.
 5. Add client-config generation templates for Cursor, VS Code, Cline,
@@ -262,10 +267,10 @@ Remaining before or after the first npm publish:
 6. Add generated docs examples that use the npm shim as the default command.
 7. Smoke-test npm shim onboarding in at least Codex, Claude Code, Cursor,
    VS Code, Gemini CLI, and one generic MCP JSON client.
-8. Produce `zigar-darwin-universal.mcpb`, `zigar-linux-x64.mcpb`, and
-   `zigar-windows-x64.mcpb` from verified release binaries with
-   `npm --prefix packages/zigar-mcpb ci && npm --prefix packages/zigar-mcpb run pack`.
-9. Inspect `dist/assets/zigar-mcpb-checksums.txt` and copy the final hash of
+8. Produce `zigars-darwin-universal.mcpb`, `zigars-linux-x64.mcpb`, and
+   `zigars-windows-x64.mcpb` from verified release binaries with
+   `npm --prefix packages/zigars-mcpb ci && npm --prefix packages/zigars-mcpb run pack`.
+9. Inspect `dist/assets/zigars-mcpb-checksums.txt` and copy the final hash of
    each published `.mcpb` into MCP Registry `fileSha256` metadata.
 10. Smoke-test MCPB installation in Claude Desktop on each package platform that
     will be published.

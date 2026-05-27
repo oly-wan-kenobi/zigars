@@ -25,7 +25,7 @@ pub fn zigProfilePlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.t
         .binary = argString(args, "binary") orelse "zig-out/bin/<app>",
         .detected_platform = detectedPlatform(),
         .platform = argString(args, "platform"),
-        .output_prefix = argString(args, "output_prefix") orelse ".zigar-cache/profile/profile",
+        .output_prefix = argString(args, "output_prefix") orelse ".zigars-cache/profile/profile",
     });
     return mcp_result.structured(allocator, value);
 }
@@ -198,7 +198,7 @@ fn invalidZflameFormat(allocator: std.mem.Allocator, tool_name: []const u8, actu
         "format",
         flamegraph_model.supportedZflameFormatsText(),
         actual,
-        "Choose an explicit zflame input format from the tools/list schema; zigar does not expose format guessing.",
+        "Choose an explicit zflame input format from the tools/list schema; zigars does not expose format guessing.",
     );
 }
 
@@ -256,7 +256,7 @@ fn diffFailureResult(
             .stderr_truncated = details.stderr_truncated,
             .resolution = "Inspect stdout/stderr, confirm both folded-stack inputs are readable, and retry with a working diff-folded backend.",
         }),
-        .workspace_intermediate_read_failed => |details| workspaceToolError(allocator, "zig_flamegraph_diff", "verify_intermediate_diff", "read_intermediate_diff", "workspace_artifact_read_failed", details.path, details.abs_path, details.err, "Confirm diff-folded wrote the requested --output file inside .zigar-cache/profile and retry."),
+        .workspace_intermediate_read_failed => |details| workspaceToolError(allocator, "zig_flamegraph_diff", "verify_intermediate_diff", "read_intermediate_diff", "workspace_artifact_read_failed", details.path, details.abs_path, details.err, "Confirm diff-folded wrote the requested --output file inside .zigars-cache/profile and retry."),
         .backend_output_malformed => |details| mcp_errors.result(allocator, .{
             .tool = "zig_flamegraph_diff",
             .operation = "verify_intermediate_diff",
@@ -304,7 +304,7 @@ fn flamegraphFailureResult(allocator: std.mem.Allocator, request: flamegraph_use
                 .{ .key = "input", .value = .{ .string = details.input } },
             },
         }),
-        .workspace_artifact_write_failed => |details| workspaceToolError(allocator, request.tool_name, request.operation, "workspace_write", "workspace_artifact_write_failed", details.path, details.abs_path, details.err, "Choose an output path inside the workspace that zigar can create or overwrite."),
+        .workspace_artifact_write_failed => |details| workspaceToolError(allocator, request.tool_name, request.operation, "workspace_write", "workspace_artifact_write_failed", details.path, details.abs_path, details.err, "Choose an output path inside the workspace that zigars can create or overwrite."),
     };
 }
 
@@ -458,7 +458,7 @@ fn renderWarningsValue(allocator: std.mem.Allocator, probe: app_context.CachedBa
     defer if (warnings_owned) warnings.deinit();
     try warnings.append(.{ .string = flamegraph_model.capture_semantics });
     if (!probe.probed) {
-        try warnings.append(.{ .string = "backend probe and version are unknown for this artifact; run zigar_doctor with probe_backends=true to cache probe status" });
+        try warnings.append(.{ .string = "backend probe and version are unknown for this artifact; run zigars_doctor with probe_backends=true to cache probe status" });
     }
     warnings_owned = false;
     return .{ .array = warnings };
@@ -642,8 +642,8 @@ fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []con
     try obj.put(allocator, "rerun_command", if (ok) .null else .{ .string = try commandText(allocator, argv) });
     var suggested = std.json.Array.init(allocator);
     if (!ok) {
-        try suggested.append(.{ .string = "zigar_doctor" });
-        try suggested.append(.{ .string = "zigar_context_pack" });
+        try suggested.append(.{ .string = "zigars_doctor" });
+        try suggested.append(.{ .string = "zigars_context_pack" });
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (ok) "none" else "tool_or_backend_configuration" });
@@ -1290,10 +1290,10 @@ test "profiling diff adapter reports workspace and backend failures" {
         defer workspace.deinit();
         const context = testProfilingContext(&commands, &workspace);
 
-        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", ".zigar-cache/profile/diff.folded", "/workspace/.zigar-cache/profile/diff.folded");
+        try expectDiffResolves(&workspace, "before.folded", "/workspace/before.folded", "after.folded", "/workspace/after.folded", "diff.svg", "/workspace/diff.svg", ".zigars-cache/profile/diff.folded", "/workspace/.zigars-cache/profile/diff.folded");
         try workspace.expectRead(.{ .path = "before.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
         try workspace.expectRead(.{ .path = "after.folded", .max_bytes = 0, .provenance = "zig_flamegraph_diff input readability" }, "");
-        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\".zigar-cache/profile/diff.folded\"}"));
+        const result = try zigFlamegraphDiff(allocator, context, try profilingTestArgs(allocator, "{\"before\":\"before.folded\",\"after\":\"after.folded\",\"output\":\"diff.svg\",\"intermediate\":\".zigars-cache/profile/diff.folded\"}"));
         defer mcp_result.deinitToolResult(allocator, result);
         try expectToolErrorCode(result, "workspace_artifact_write_failed");
         try commands.verify();
@@ -1444,7 +1444,7 @@ const profiling_svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture<
 /// Creates test profiling context from the ports required by the adapter.
 fn testProfilingContext(commands: *fakes.FakeCommandRunner, workspace: *fakes.FakeWorkspaceStore) app_context.ProfilingContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
         .timeouts = .{ .command_ms = 5000 },
         .command_runner = commands.port(),

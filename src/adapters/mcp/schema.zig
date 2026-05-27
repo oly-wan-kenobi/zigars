@@ -68,7 +68,7 @@ pub fn buildOutputSchema(allocator: std.mem.Allocator, spec: tooling.OutputSchem
     };
 }
 
-/// Adds zigar-specific JSON schema hints such as defaults, enums, and path kind.
+/// Adds zigars-specific JSON schema hints such as defaults, enums, and path kind.
 fn applyFieldHint(
     allocator: std.mem.Allocator,
     property: *std.json.ObjectMap,
@@ -80,7 +80,7 @@ fn applyFieldHint(
     if (hint.default_bool) |value| try property.put(allocator, "default", .{ .bool = value });
     if (hint.default_int) |value| try property.put(allocator, "default", .{ .integer = value });
     if (hint.default_string) |value| try property.put(allocator, "default", .{ .string = value });
-    if (hint.path_kind) |value| try property.put(allocator, "x-zigar-path-kind", .{ .string = value });
+    if (hint.path_kind) |value| try property.put(allocator, "x-zigars-path-kind", .{ .string = value });
     if (hint.minimum) |value| try property.put(allocator, "minimum", .{ .integer = value });
     if (hint.maximum) |value| try property.put(allocator, "maximum", .{ .integer = value });
     if (hint.enum_values.len > 0) {
@@ -104,14 +104,14 @@ const OutputField = struct {
 fn outputFields(shape: tooling.OutputSchemaShape) []const OutputField {
     return switch (shape) {
         .error_envelope => &.{
-            .{ .name = "kind", .type = "string", .required = true, .description = "Stable zigar result kind or error envelope kind." },
+            .{ .name = "kind", .type = "string", .required = true, .description = "Stable zigars result kind or error envelope kind." },
             .{ .name = "tool", .type = "string", .required = false, .description = "Tool that produced the error." },
             .{ .name = "code", .type = "string", .required = true, .description = "Stable error code." },
             .{ .name = "error", .type = "string", .required = false, .description = "Underlying Zig or backend error name." },
             .{ .name = "resolution", .type = "string", .required = true, .description = "Deterministic recovery guidance." },
         },
         .command_result => &.{
-            .{ .name = "kind", .type = "string", .required = true, .description = "Stable zigar result kind." },
+            .{ .name = "kind", .type = "string", .required = true, .description = "Stable zigars result kind." },
             .{ .name = "ok", .type = "boolean", .required = true, .description = "Whether the command-backed workflow succeeded." },
             .{ .name = "command", .type = "string", .required = false, .description = "Command or workflow label." },
             .{ .name = "argv", .type = "array", .required = false, .description = "Exact argv when available." },

@@ -1,21 +1,21 @@
 const std = @import("std");
-const zigar = @import("../../root.zig");
+const zigars = @import("../../root.zig");
 
-const analysis = zigar.domain.zig.analysis;
-const catalog = zigar.manifest.tool_catalog_render;
-const command = zigar.infra.process.command;
-const json_result = zigar.adapters.mcp.result;
-const mcp_schema = zigar.adapters.mcp.schema;
-const manifest_metadata = zigar.manifest;
-const tool_registry = zigar.adapters.mcp.registry;
-const tooling = zigar.manifest.tooling;
+const analysis = zigars.domain.zig.analysis;
+const catalog = zigars.manifest.tool_catalog_render;
+const command = zigars.infra.process.command;
+const json_result = zigars.adapters.mcp.result;
+const mcp_schema = zigars.adapters.mcp.schema;
+const manifest_metadata = zigars.manifest;
+const tool_registry = zigars.adapters.mcp.registry;
+const tooling = zigars.manifest.tooling;
 
-const mcp_core = zigar.adapters.mcp.core;
-const mcp_static_source_summary = zigar.adapters.mcp.static_source_summary;
-const usecase_support = zigar.app.usecases.usecase_support;
-const app_context = zigar.app.context;
-const project_values = zigar.app.usecases.static_analysis.project_values;
-const ci_evidence = zigar.app.usecases.release.ci_evidence;
+const mcp_core = zigars.adapters.mcp.core;
+const mcp_static_source_summary = zigars.adapters.mcp.static_source_summary;
+const usecase_support = zigars.app.usecases.usecase_support;
+const app_context = zigars.app.context;
+const project_values = zigars.app.usecases.static_analysis.project_values;
+const ci_evidence = zigars.app.usecases.release.ci_evidence;
 const fake_command = @import("../fakes/command_runner.zig");
 const fake_workspace = @import("../fakes/workspace_store.zig");
 const tool_test_support = @import("../mcp_tool_test_support.zig");
@@ -31,9 +31,9 @@ const stringListContains = usecase_support.stringListContains;
 const failureSummaryValue = usecase_support.failureSummaryValue;
 const compilerInsightsValue = usecase_support.compilerInsightsValue;
 const statusLinePath = usecase_support.statusLinePath;
-const mcp_discovery = zigar.adapters.mcp.discovery;
-const discovery_workflows = zigar.app.usecases.discovery.workflows;
-const zigarSchema = mcp_discovery.zigarSchema;
+const mcp_discovery = zigars.adapters.mcp.discovery;
+const discovery_workflows = zigars.app.usecases.discovery.workflows;
+const zigarsSchema = mcp_discovery.zigarsSchema;
 const zigCommandPlan = mcp_discovery.zigCommandPlan;
 const zigToolPlan = mcp_discovery.zigToolPlan;
 const zigToolchainResolve = mcp_discovery.zigToolchainResolve;
@@ -45,7 +45,7 @@ const compilerErrorIndexValue = mcp_core.compilerErrorIndexValue;
 const testAppForCommandPlanning = tool_test_support.appForCommandPlanning;
 const zigExplainErrors = tool_test_support.zigExplainErrors;
 const zigCompileErrorIndex = tool_test_support.zigCompileErrorIndex;
-const zigarFailureFusion = tool_test_support.zigarFailureFusion;
+const zigarsFailureFusion = tool_test_support.zigarsFailureFusion;
 const zigTargetMatrixPlan = tool_test_support.zigTargetMatrixPlan;
 const zigPublicApiDiff = tool_test_support.zigPublicApiDiff;
 const xmlEscape = ci_evidence.xmlEscape;
@@ -95,8 +95,8 @@ test "capabilities index exposes formatting discovery keywords" {
 
     try std.testing.expect(std.mem.indexOf(u8, body, "\"zig_format\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"zig_format_check\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigar_schema\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigar_doctor\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigars_schema\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "\"zigars_doctor\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"fmt\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"formatter\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"zig fmt\"") != null);
@@ -147,25 +147,25 @@ test "registry catalog arguments can be derived from tool registry" {
     try std.testing.expect(profile_run.get("risk").?.object.get("executes_user_command").?.bool);
     const matrix_check = tool_arguments.get("zig_matrix_check").?.object;
     try std.testing.expect(matrix_check.get("risk").?.object.get("executes_user_command").?.bool);
-    const validate_patch = tool_arguments.get("zigar_validate_patch").?.object;
+    const validate_patch = tool_arguments.get("zigars_validate_patch").?.object;
     try std.testing.expectEqualStrings("medium", validate_patch.get("risk").?.object.get("level").?.string);
     try std.testing.expect(validate_patch.get("risk").?.object.get("executes_project_code").?.bool);
     try std.testing.expect(validate_patch.get("risk").?.object.get("writes_artifacts").?.bool);
 }
 
-test "zigar_schema exposes registry-derived risk metadata" {
+test "zigars_schema exposes registry-derived risk metadata" {
     const allocator = std.testing.allocator;
     var app = try testAppForCommandPlanning(allocator);
     defer app.workspace.deinit();
-    var runtime_ports = zigar.bootstrap.runtime_ports.RuntimePorts.init(&app, .{});
-    const result = try zigarSchema(allocator, runtime_ports.context(), null);
+    var runtime_ports = zigars.bootstrap.runtime_ports.RuntimePorts.init(&app, .{});
+    const result = try zigarsSchema(allocator, runtime_ports.context(), null);
     const body = result.content[0].text.text;
     defer json_result.deinitToolResult(allocator, result);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
     defer parsed.deinit();
     const args = parsed.value.object.get("registry_tool_arguments").?.object;
-    const validate_patch = args.get("zigar_validate_patch").?.object;
+    const validate_patch = args.get("zigars_validate_patch").?.object;
     try std.testing.expect(validate_patch.get("risk").?.object.get("executes_project_code").?.bool);
 }
 
@@ -174,7 +174,7 @@ test "zig_command_plan exposes registry risk metadata" {
     defer arena.deinit();
     const allocator = arena.allocator();
     var app = try testAppForCommandPlanning(allocator);
-    var runtime_ports = zigar.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
+    var runtime_ports = zigars.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
 
     var args = std.json.ObjectMap.empty;
     try args.put(allocator, "tool", .{ .string = "zig_test" });
@@ -200,7 +200,7 @@ test "zig_command_plan reports known non-command tools without invalid argument 
     defer arena.deinit();
     const allocator = arena.allocator();
     var app = try testAppForCommandPlanning(allocator);
-    var runtime_ports = zigar.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
+    var runtime_ports = zigars.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
 
     var args = std.json.ObjectMap.empty;
     try args.put(allocator, "tool", .{ .string = "zig_hover" });
@@ -223,7 +223,7 @@ test "zig_tool_plan exposes broad planning support for ZLS tools" {
     defer arena.deinit();
     const allocator = arena.allocator();
     var app = try testAppForCommandPlanning(allocator);
-    var runtime_ports = zigar.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
+    var runtime_ports = zigars.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
 
     var args = std.json.ObjectMap.empty;
     try args.put(allocator, "tool", .{ .string = "zig_hover" });
@@ -267,7 +267,7 @@ test "explain command setup errors use the calling tool name" {
 
     var args = std.json.ObjectMap.empty;
     try args.put(allocator, "command", .{ .string = "check" });
-    try args.put(allocator, "file", .{ .string = "/zigar-outside-workspace.zig" });
+    try args.put(allocator, "file", .{ .string = "/zigars-outside-workspace.zig" });
 
     const explain = try zigExplainErrors(&app, allocator, .{ .object = args });
     try std.testing.expect(std.mem.indexOf(u8, explain.content[0].text.text, "zig_explain_errors") != null);
@@ -275,8 +275,8 @@ test "explain command setup errors use the calling tool name" {
     const index = try zigCompileErrorIndex(&app, allocator, .{ .object = args });
     try std.testing.expect(std.mem.indexOf(u8, index.content[0].text.text, "zig_compile_error_index") != null);
 
-    const fusion = try zigarFailureFusion(&app, allocator, .{ .object = args });
-    try std.testing.expect(std.mem.indexOf(u8, fusion.content[0].text.text, "zigar_failure_fusion") != null);
+    const fusion = try zigarsFailureFusion(&app, allocator, .{ .object = args });
+    try std.testing.expect(std.mem.indexOf(u8, fusion.content[0].text.text, "zigars_failure_fusion") != null);
 }
 
 test "catalog derives compact argument hints from registry metadata" {
@@ -288,7 +288,7 @@ test "catalog derives compact argument hints from registry metadata" {
     const zig_format = tool_arguments.get("zig_format").?.object;
     try std.testing.expectEqualStrings("string", zig_format.get("required").?.object.get("file").?.string);
     try std.testing.expectEqualStrings("boolean", zig_format.get("optional").?.object.get("apply").?.string);
-    const doctor_args = tool_arguments.get("zigar_doctor").?.object.get("optional").?.object;
+    const doctor_args = tool_arguments.get("zigars_doctor").?.object.get("optional").?.object;
     try std.testing.expectEqualStrings("boolean", doctor_args.get("probe_backends").?.string);
 }
 
@@ -349,7 +349,7 @@ test "toolchain resolver defaults to cheap manager checks" {
     try workspace.expectReadError(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" }, error.FileNotFound);
 
     const context = app_context.Context{
-        .workspace = .{ .root = "/tmp", .cache_root = "/tmp/.zigar-cache" },
+        .workspace = .{ .root = "/tmp", .cache_root = "/tmp/.zigars-cache" },
         .tool_paths = .{ .zig = "zig", .zls = "zls" },
         .timeouts = .{},
         .ports = .{ .command_runner = commands.port(), .workspace = workspace.port() },
@@ -389,7 +389,7 @@ test "backend error value uses stable structured fields" {
 
 test "skipWorkspacePath ignores generated and vendored paths" {
     try std.testing.expect(analysis.skipWorkspacePath(".zig-cache/o/main.zig"));
-    try std.testing.expect(analysis.skipWorkspacePath(".zigar-cache/profile/main.zig"));
+    try std.testing.expect(analysis.skipWorkspacePath(".zigars-cache/profile/main.zig"));
     try std.testing.expect(analysis.skipWorkspacePath("zig-out/bin/main.zig"));
     try std.testing.expect(analysis.skipWorkspacePath("zig-pkg/mcp/src/main.zig"));
     try std.testing.expect(!analysis.skipWorkspacePath("src/main.zig"));
@@ -437,7 +437,7 @@ test "build metadata helpers parse common build.zig patterns" {
     try std.testing.expectEqualStrings("mcp", dependencyNameFromLine(".mcp = .{").?);
     try std.testing.expectEqualStrings("target", optionNameFromLine("const t = b.option([]const u8, \"target\", \"Target\");").?);
     try std.testing.expectEqualStrings("[]const u8", optionTypeFromLine("const t = b.option([]const u8, \"target\", \"Target\");").?);
-    try std.testing.expectEqualStrings("zigar", quotedString(".name = \"zigar\",").?);
+    try std.testing.expectEqualStrings("zigars", quotedString(".name = \"zigars\",").?);
 }
 
 test "relativeImportCandidate resolves beside source file" {
@@ -528,7 +528,7 @@ test "parser-backed static analysis result releases temporary JSON tree" {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const value = try mcp_static_source_summary.astDeclSummaryValue(arena.allocator(), "fixture.zig", summary);
-    const result = try zigar.adapters.mcp.result.structured(allocator, value);
+    const result = try zigars.adapters.mcp.result.structured(allocator, value);
     defer json_result.deinitToolResult(allocator, result);
 
     const structured = result.structuredContent.?.object;

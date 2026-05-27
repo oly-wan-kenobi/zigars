@@ -573,7 +573,7 @@ fn staticSummaryContext(workspace_store: ports.WorkspaceStore, workspace_scanner
     return .{
         .workspace = .{
             .root = "/repo",
-            .cache_root = "/repo/.zigar-cache",
+            .cache_root = "/repo/.zigars-cache",
             .transport = "stdio",
         },
         .workspace_store = workspace_store,

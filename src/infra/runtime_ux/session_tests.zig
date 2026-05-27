@@ -51,10 +51,10 @@ test "runtime UX session port covers roots subscriptions events and failures" {
     try std.testing.expectEqual(@as(usize, 1), try port.selectedRootIndex());
     try std.testing.expectError(error.NotFound, port.selectRoot("missing", true));
 
-    const subscription = try port.subscribe("zigar://jobs");
+    const subscription = try port.subscribe("zigars://jobs");
     try std.testing.expectEqualStrings("sub-1", subscription.id);
     try std.testing.expect(subscription.active);
-    const unsubscribed = try port.unsubscribe("missing", "zigar://jobs");
+    const unsubscribed = try port.unsubscribe("missing", "zigars://jobs");
     try std.testing.expect(!unsubscribed.active);
     try std.testing.expectError(error.NotFound, port.unsubscribe("missing", null));
 

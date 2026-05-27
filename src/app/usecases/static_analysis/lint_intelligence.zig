@@ -913,7 +913,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     try obj.put(allocator, "output_limit_mode", .{ .string = command_output_limit_mode });
     try obj.put(allocator, "output_limit_exceeded", .{ .bool = result.stdout_truncated or result.stderr_truncated });
     if (result.stdout_truncated or result.stderr_truncated) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar returned the captured prefix and marked the truncated stream so the result remains inspectable." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit. zigars returned the captured prefix and marked the truncated stream so the result remains inspectable." });
     }
     const insights = try compilerInsightsValue(allocator, stdout.text, stderr.text, argv);
     try obj.put(allocator, "diagnostics", insights);
@@ -1071,8 +1071,8 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
     if (!ok) {
         try suggested.append(try ownedString(allocator, "zig_compile_error_index"));
         if (argvContains(argv, "test")) try suggested.append(try ownedString(allocator, "zig_test_failure_triage"));
-        try suggested.append(try ownedString(allocator, "zigar_failure_fusion"));
-        try suggested.append(try ownedString(allocator, "zigar_impact"));
+        try suggested.append(try ownedString(allocator, "zigars_failure_fusion"));
+        try suggested.append(try ownedString(allocator, "zigars_impact"));
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", try likelyFailureScopeValue(allocator, primary));
@@ -1087,8 +1087,8 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: [
     try obj.put(allocator, "error_class", .{ .string = backendErrorKind(err) });
     try obj.put(allocator, "rerun_command", .{ .string = try commandString(allocator, argv) });
     var suggested = std.json.Array.init(allocator);
-    try suggested.append(try ownedString(allocator, "zigar_doctor"));
-    try suggested.append(try ownedString(allocator, "zigar_context_pack"));
+    try suggested.append(try ownedString(allocator, "zigars_doctor"));
+    try suggested.append(try ownedString(allocator, "zigars_context_pack"));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (err == error.Timeout or err == error.RequestTimeout) "command_timeout" else "tool_or_backend_configuration" });
     return .{ .object = obj };
@@ -1564,12 +1564,12 @@ test "lint planning values classify baselines suppressions trends and serializat
     defer scanner.deinit();
     const expected_baseline_bytes = try serializeAlloc(allocator, base);
     try store.expectWrite(.{
-        .path = ".zigar-cache/lint-baseline.json",
+        .path = ".zigars-cache/lint-baseline.json",
         .bytes = expected_baseline_bytes,
         .provenance = "static_analysis.lint_baseline",
     }, .{ .bytes_written = 1 });
     const context = testStaticContext(&commands, &store, &scanner);
-    _ = try lintBaseline(allocator, context, findings.array, baseline.array, true, ".zigar-cache/lint-baseline.json");
+    _ = try lintBaseline(allocator, context, findings.array, baseline.array, true, ".zigars-cache/lint-baseline.json");
     try store.verify();
 }
 
@@ -1587,10 +1587,10 @@ test "zwanzig graph errors include command and output metadata" {
     const context = testStaticContext(&commands, &store, &scanner);
 
     try store.expectResolve(.{ .path = "src/main.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/main.zig");
-    try store.expectResolve(.{ .path = ".zigar-cache/graphs", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/graphs");
-    try store.expectEnsureDir(.{ .path = ".zigar-cache/graphs", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try store.expectResolve(.{ .path = ".zigars-cache/graphs", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigars-cache/graphs");
+    try store.expectEnsureDir(.{ .path = ".zigars-cache/graphs", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
     try commands.expectRun(.{
-        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/graphs", "/workspace/src/main.zig", "--trace" },
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigars-cache/graphs", "/workspace/src/main.zig", "--trace" },
         .cwd = "/workspace",
         .timeout_ms = 42,
         .provenance = "static_analysis.zwanzig_graph",
@@ -1605,35 +1605,35 @@ test "zwanzig graph errors include command and output metadata" {
     const failed = try runZwanzigGraph(allocator, context, .{
         .mode = .cfg,
         .path = "src/main.zig",
-        .output = ".zigar-cache/graphs",
+        .output = ".zigars-cache/graphs",
         .extra = &.{"--trace"},
     });
     try std.testing.expect(failed == .error_value);
     const failed_value = failed.error_value;
     try std.testing.expectEqualStrings("zwanzig_graph_command_failed", failed_value.object.get("code").?.string);
-    try std.testing.expectEqualStrings("zwanzig-test --dump-cfg /workspace/.zigar-cache/graphs /workspace/src/main.zig --trace", failed_value.object.get("command").?.string);
+    try std.testing.expectEqualStrings("zwanzig-test --dump-cfg /workspace/.zigars-cache/graphs /workspace/src/main.zig --trace", failed_value.object.get("command").?.string);
     try std.testing.expectEqual(@as(i64, 42), failed_value.object.get("timeout_ms").?.integer);
     try std.testing.expect(failed_value.object.get("stdout_invalid_utf8").?.bool);
     try std.testing.expect(failed_value.object.get("stdout_truncated").?.bool);
 
     try store.expectResolve(.{ .path = "src/scan.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/scan.zig");
-    try store.expectResolve(.{ .path = ".zigar-cache/scan", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/scan");
-    try store.expectEnsureDir(.{ .path = ".zigar-cache/scan", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try store.expectResolve(.{ .path = ".zigars-cache/scan", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigars-cache/scan");
+    try store.expectEnsureDir(.{ .path = ".zigars-cache/scan", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
     try commands.expectRun(.{
-        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/scan", "/workspace/src/scan.zig" },
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigars-cache/scan", "/workspace/src/scan.zig" },
         .cwd = "/workspace",
         .timeout_ms = 7,
         .provenance = "static_analysis.zwanzig_graph",
     }, .{});
     try store.expectScanDirectoryError(.{
-        .path = ".zigar-cache/scan",
+        .path = ".zigars-cache/scan",
         .suffix = ".dot",
         .provenance = "static_analysis.zwanzig_graph_verify",
     }, error.AccessDenied);
     const inspect_failed = try runZwanzigGraph(allocator, context, .{
         .mode = .cfg,
         .path = "src/scan.zig",
-        .output = ".zigar-cache/scan",
+        .output = ".zigars-cache/scan",
         .timeout_ms = 7,
     });
     try std.testing.expect(inspect_failed == .error_value);
@@ -1642,29 +1642,29 @@ test "zwanzig graph errors include command and output metadata" {
     try std.testing.expectEqualStrings("permission", inspect_value.object.get("error_kind").?.string);
 
     try store.expectResolve(.{ .path = "src/empty.zig", .provenance = "static_analysis.zwanzig_graph_path" }, "/workspace/src/empty.zig");
-    try store.expectResolve(.{ .path = ".zigar-cache/empty", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigar-cache/empty");
-    try store.expectEnsureDir(.{ .path = ".zigar-cache/empty", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
+    try store.expectResolve(.{ .path = ".zigars-cache/empty", .for_output = true, .provenance = "static_analysis.zwanzig_graph_output" }, "/workspace/.zigars-cache/empty");
+    try store.expectEnsureDir(.{ .path = ".zigars-cache/empty", .provenance = "static_analysis.zwanzig_graph_output" }, .{});
     try commands.expectRun(.{
-        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigar-cache/empty", "/workspace/src/empty.zig" },
+        .argv = &.{ "zwanzig-test", "--dump-cfg", "/workspace/.zigars-cache/empty", "/workspace/src/empty.zig" },
         .cwd = "/workspace",
         .timeout_ms = 9,
         .provenance = "static_analysis.zwanzig_graph",
     }, .{});
     try store.expectScanDirectory(.{
-        .path = ".zigar-cache/empty",
+        .path = ".zigars-cache/empty",
         .suffix = ".dot",
         .provenance = "static_analysis.zwanzig_graph_verify",
     }, &.{});
     const missing = try runZwanzigGraph(allocator, context, .{
         .mode = .cfg,
         .path = "src/empty.zig",
-        .output = ".zigar-cache/empty",
+        .output = ".zigars-cache/empty",
         .timeout_ms = 9,
     });
     try std.testing.expect(missing == .error_value);
     const missing_value = missing.error_value;
     try std.testing.expectEqualStrings("backend_output_malformed", missing_value.object.get("code").?.string);
-    try std.testing.expectEqualStrings(".zigar-cache/empty", missing_value.object.get("output").?.string);
+    try std.testing.expectEqualStrings(".zigars-cache/empty", missing_value.object.get("output").?.string);
 
     try commands.verify();
     try store.verify();
@@ -1801,7 +1801,7 @@ test "lint builders and temporary buffers clean up after allocator failure" {
         .executable = "zwanzig",
         .mode = .cfg,
         .source_path = "src/main.zig",
-        .output_dir = ".zigar-cache/graphs",
+        .output_dir = ".zigars-cache/graphs",
         .extra = &.{"--extra"},
     }));
 
@@ -1825,7 +1825,7 @@ fn testStaticContext(
     scanner: *workspace_scanner_fake.FakeWorkspaceScanner,
 ) app_context.StaticAnalysisContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
         .timeouts = .{ .command_ms = 42 },
         .command_runner = commands.port(),

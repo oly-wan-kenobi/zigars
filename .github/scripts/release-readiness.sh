@@ -18,58 +18,58 @@ if [[ -n "$git_status_short" ]]; then
   source_tree_clean=false
 fi
 
-export ZIGAR_SOURCE_COMMIT="$source_commit"
-export ZIGAR_SOURCE_TREE_CLEAN="$source_tree_clean"
-export ZIGAR_GIT_STATUS_SHORT="$git_status_short"
+export ZIGARS_SOURCE_COMMIT="$source_commit"
+export ZIGARS_SOURCE_TREE_CLEAN="$source_tree_clean"
+export ZIGARS_GIT_STATUS_SHORT="$git_status_short"
 
-if [[ "$source_tree_clean" != "true" && "${ZIGAR_ALLOW_DIRTY_RELEASE_READINESS:-0}" != "1" ]]; then
+if [[ "$source_tree_clean" != "true" && "${ZIGARS_ALLOW_DIRTY_RELEASE_READINESS:-0}" != "1" ]]; then
   printf 'release-readiness: source tree is dirty; refusing to produce release-citable evidence\n' >&2
   printf '%s\n' "$git_status_short" >&2
-  printf 'release-readiness: rerun from a clean tree or set ZIGAR_ALLOW_DIRTY_RELEASE_READINESS=1 for non-release evidence\n' >&2
+  printf 'release-readiness: rerun from a clean tree or set ZIGARS_ALLOW_DIRTY_RELEASE_READINESS=1 for non-release evidence\n' >&2
   exit 1
 fi
 
-report_dir="${ZIGAR_RELEASE_READINESS_DIR:-release-readiness}"
+report_dir="${ZIGARS_RELEASE_READINESS_DIR:-release-readiness}"
 mkdir -p "$report_dir"
 report_dir="$(cd "$report_dir" && pwd -P)"
-export ZIGAR_RELEASE_READINESS_DIR="$report_dir"
+export ZIGARS_RELEASE_READINESS_DIR="$report_dir"
 
 printf 'release-readiness: report directory %s\n' "$report_dir"
 
-use_pinned_backend_setup="${ZIGAR_USE_PINNED_BACKEND_SETUP:-${ZIGAR_REPO_PINNED_BACKEND_SETUP:-0}}"
+use_pinned_backend_setup="${ZIGARS_USE_PINNED_BACKEND_SETUP:-${ZIGARS_REPO_PINNED_BACKEND_SETUP:-0}}"
 case "$use_pinned_backend_setup" in
   1|true|TRUE|yes|YES)
-    real_backend_dir="${ZIGAR_REAL_BACKENDS_DIR:-$repo_root/.zigar-cache/real-backends}"
-    export ZIGAR_REAL_BACKENDS_DIR="$real_backend_dir"
+    real_backend_dir="${ZIGARS_REAL_BACKENDS_DIR:-$repo_root/.zigars-cache/real-backends}"
+    export ZIGARS_REAL_BACKENDS_DIR="$real_backend_dir"
     printf 'release-readiness: provisioning repo-pinned optional backends under %s\n' "$real_backend_dir"
     bash .github/scripts/setup-real-backends.sh
     # shellcheck disable=SC1090
     source "$real_backend_dir/env.sh"
-    export ZIGAR_ZWANZIG_PATH ZIGAR_ZFLAME_PATH ZIGAR_DIFF_FOLDED_PATH
+    export ZIGARS_ZWANZIG_PATH ZIGARS_ZFLAME_PATH ZIGARS_DIFF_FOLDED_PATH
     backend_setup_evidence_dir="$report_dir/backend-provisioning"
     mkdir -p "$backend_setup_evidence_dir"
     cp "$real_backend_dir/real_backend_pins.json" "$backend_setup_evidence_dir/real_backend_pins.json"
     cp "$real_backend_dir/checksums.sha256" "$backend_setup_evidence_dir/checksums.sha256"
-    export ZIGAR_PINNED_BACKEND_SETUP="true"
-    export ZIGAR_PINNED_BACKEND_SETUP_DIR="$real_backend_dir"
-    export ZIGAR_PINNED_BACKEND_SETUP_EVIDENCE_DIR="$backend_setup_evidence_dir"
+    export ZIGARS_PINNED_BACKEND_SETUP="true"
+    export ZIGARS_PINNED_BACKEND_SETUP_DIR="$real_backend_dir"
+    export ZIGARS_PINNED_BACKEND_SETUP_EVIDENCE_DIR="$backend_setup_evidence_dir"
     ;;
   0|false|FALSE|no|NO|"")
-    export ZIGAR_PINNED_BACKEND_SETUP="false"
+    export ZIGARS_PINNED_BACKEND_SETUP="false"
     ;;
   *)
-    fail "ZIGAR_USE_PINNED_BACKEND_SETUP must be 1/true or 0/false, got: $use_pinned_backend_setup"
+    fail "ZIGARS_USE_PINNED_BACKEND_SETUP must be 1/true or 0/false, got: $use_pinned_backend_setup"
     ;;
 esac
 
 zig build release-check
 zig build dist release-asset-smoke
 
-ZIGAR_CONFORMANCE_REPORT_DIR="$report_dir/backend-conformance" \
-ZIGAR_CLAIMED_BACKENDS="${ZIGAR_CLAIMED_BACKENDS:-zls,zwanzig,zflame,diff_folded}" \
+ZIGARS_CONFORMANCE_REPORT_DIR="$report_dir/backend-conformance" \
+ZIGARS_CLAIMED_BACKENDS="${ZIGARS_CLAIMED_BACKENDS:-zls,zwanzig,zflame,diff_folded}" \
 bash .github/scripts/backend-conformance.sh
 
-ZIGAR_ZLS_CONFORMANCE_REPORT_DIR="$report_dir/zls-conformance" \
+ZIGARS_ZLS_CONFORMANCE_REPORT_DIR="$report_dir/zls-conformance" \
 bash .github/scripts/real-zls-conformance.sh
 
 python3 <<'PY'
@@ -79,7 +79,7 @@ import os
 import pathlib
 import time
 
-root = pathlib.Path(os.environ.get("ZIGAR_RELEASE_READINESS_DIR", "release-readiness")).resolve()
+root = pathlib.Path(os.environ.get("ZIGARS_RELEASE_READINESS_DIR", "release-readiness")).resolve()
 backend = json.loads((root / "backend-conformance" / "report.json").read_text())
 zls = json.loads((root / "zls-conformance" / "report.json").read_text())
 if backend.get("result") != "passed":
@@ -87,7 +87,7 @@ if backend.get("result") != "passed":
 if zls.get("result") != "passed":
     raise SystemExit("ZLS conformance did not pass")
 
-source_commit = os.environ["ZIGAR_SOURCE_COMMIT"]
+source_commit = os.environ["ZIGARS_SOURCE_COMMIT"]
 subreport_commits = {
     "backend_conformance": backend.get("source_commit"),
     "zls_conformance": zls.get("source_commit"),
@@ -100,9 +100,9 @@ for report_name, report_commit in subreport_commits.items():
             f"{report_name} source_commit {report_commit} does not match top-level {source_commit}"
         )
 
-source_tree_clean = os.environ["ZIGAR_SOURCE_TREE_CLEAN"] == "true"
-git_status_short = os.environ.get("ZIGAR_GIT_STATUS_SHORT", "")
-claimed_backends_raw = os.environ.get("ZIGAR_CLAIMED_BACKENDS", "zls,zwanzig,zflame,diff_folded")
+source_tree_clean = os.environ["ZIGARS_SOURCE_TREE_CLEAN"] == "true"
+git_status_short = os.environ.get("ZIGARS_GIT_STATUS_SHORT", "")
+claimed_backends_raw = os.environ.get("ZIGARS_CLAIMED_BACKENDS", "zls,zwanzig,zflame,diff_folded")
 
 
 def optional_env(name):
@@ -138,9 +138,9 @@ workflow_dispatch_inputs = read_workflow_dispatch_inputs()
 setup_command_name = None
 setup_command_value = None
 for candidate in (
-    "ZIGAR_RELEASE_SETUP_COMMAND",
-    "ZIGAR_BACKEND_SETUP_COMMAND",
-    "ZIGAR_SETUP_COMMAND",
+    "ZIGARS_RELEASE_SETUP_COMMAND",
+    "ZIGARS_BACKEND_SETUP_COMMAND",
+    "ZIGARS_SETUP_COMMAND",
     "INPUT_SETUP_COMMAND",
 ):
     value = optional_env(candidate)
@@ -166,8 +166,8 @@ def file_evidence(path):
     }
 
 
-pinned_setup_enabled = os.environ.get("ZIGAR_PINNED_BACKEND_SETUP") == "true"
-pinned_setup_evidence_dir = optional_env("ZIGAR_PINNED_BACKEND_SETUP_EVIDENCE_DIR")
+pinned_setup_enabled = os.environ.get("ZIGARS_PINNED_BACKEND_SETUP") == "true"
+pinned_setup_evidence_dir = optional_env("ZIGARS_PINNED_BACKEND_SETUP_EVIDENCE_DIR")
 pinned_setup_manifest = None
 pinned_setup_checksums = None
 if pinned_setup_evidence_dir is not None:
@@ -182,7 +182,7 @@ setup = {
     "repo_pinned_setup": {
         "enabled": pinned_setup_enabled,
         "setup_script": ".github/scripts/setup-real-backends.sh" if pinned_setup_enabled else None,
-        "cache_dir": optional_env("ZIGAR_PINNED_BACKEND_SETUP_DIR"),
+        "cache_dir": optional_env("ZIGARS_PINNED_BACKEND_SETUP_DIR"),
         "evidence_dir": pinned_setup_evidence_dir,
         "pin_manifest": pinned_setup_manifest,
         "checksums": pinned_setup_checksums,
@@ -190,32 +190,32 @@ setup = {
     "pins": {
         key: value
         for key in (
-            "ZIGAR_ZIG_VERSION",
-            "ZIGAR_ZLS_VERSION",
-            "ZIGAR_ZWANZIG_VERSION",
-            "ZIGAR_ZWANZIG_SOURCE",
-            "ZIGAR_ZWANZIG_COMMIT",
-            "ZIGAR_ZWANZIG_SHA256",
-            "ZIGAR_ZFLAME_VERSION",
-            "ZIGAR_ZFLAME_SOURCE",
-            "ZIGAR_ZFLAME_COMMIT",
-            "ZIGAR_ZFLAME_SHA256",
-            "ZIGAR_DIFF_FOLDED_VERSION",
-            "ZIGAR_DIFF_FOLDED_SOURCE",
-            "ZIGAR_DIFF_FOLDED_COMMIT",
-            "ZIGAR_DIFF_FOLDED_SHA256",
+            "ZIGARS_ZIG_VERSION",
+            "ZIGARS_ZLS_VERSION",
+            "ZIGARS_ZWANZIG_VERSION",
+            "ZIGARS_ZWANZIG_SOURCE",
+            "ZIGARS_ZWANZIG_COMMIT",
+            "ZIGARS_ZWANZIG_SHA256",
+            "ZIGARS_ZFLAME_VERSION",
+            "ZIGARS_ZFLAME_SOURCE",
+            "ZIGARS_ZFLAME_COMMIT",
+            "ZIGARS_ZFLAME_SHA256",
+            "ZIGARS_DIFF_FOLDED_VERSION",
+            "ZIGARS_DIFF_FOLDED_SOURCE",
+            "ZIGARS_DIFF_FOLDED_COMMIT",
+            "ZIGARS_DIFF_FOLDED_SHA256",
         )
         if (value := optional_env(key)) is not None
     },
 }
 
 backend_path_inputs = {
-    "zigar": path_input("ZIGAR_BINARY", "zig-out/bin/zigar"),
-    "zig": path_input("ZIGAR_ZIG_PATH", "zig"),
-    "zls": path_input("ZIGAR_ZLS_PATH", "zls"),
-    "zwanzig": path_input("ZIGAR_ZWANZIG_PATH", "zwanzig"),
-    "zflame": path_input("ZIGAR_ZFLAME_PATH", "zflame"),
-    "diff_folded": path_input("ZIGAR_DIFF_FOLDED_PATH", "diff-folded"),
+    "zigars": path_input("ZIGARS_BINARY", "zig-out/bin/zigars"),
+    "zig": path_input("ZIGARS_ZIG_PATH", "zig"),
+    "zls": path_input("ZIGARS_ZLS_PATH", "zls"),
+    "zwanzig": path_input("ZIGARS_ZWANZIG_PATH", "zwanzig"),
+    "zflame": path_input("ZIGARS_ZFLAME_PATH", "zflame"),
+    "diff_folded": path_input("ZIGARS_DIFF_FOLDED_PATH", "diff-folded"),
 }
 resolved_backends = {
     name: {
@@ -260,14 +260,14 @@ workflow = {
 }
 
 summary = {
-    "kind": "zigar_release_readiness_report",
+    "kind": "zigars_release_readiness_report",
     "schema_version": 2,
     "generated_unix": int(time.time()),
     "result": "passed",
     "source_commit": source_commit,
     "source_tree_clean": source_tree_clean,
     "git_status_short": git_status_short,
-    "dirty_override": os.environ.get("ZIGAR_ALLOW_DIRTY_RELEASE_READINESS") == "1",
+    "dirty_override": os.environ.get("ZIGARS_ALLOW_DIRTY_RELEASE_READINESS") == "1",
     "workflow": workflow,
     "backend_inputs": {
         "path_inputs": backend_path_inputs,
@@ -287,7 +287,7 @@ summary = {
 
 summary_heading = "Release-note-ready Evidence Summary" if source_tree_clean else "Non-release Evidence Summary"
 markdown = [
-    "# Zigar Release Readiness",
+    "# Zigars Release Readiness",
     "",
     "Result: passed",
     f"Source commit: `{source_commit}`",
@@ -305,7 +305,7 @@ if git_status_short:
 if not source_tree_clean:
     markdown.extend([
         "",
-        "This run used `ZIGAR_ALLOW_DIRTY_RELEASE_READINESS=1`. Treat it as non-release evidence and rerun from a clean tree before citing it in release notes.",
+        "This run used `ZIGARS_ALLOW_DIRTY_RELEASE_READINESS=1`. Treat it as non-release evidence and rerun from a clean tree before citing it in release notes.",
     ])
 markdown.extend([
     "",

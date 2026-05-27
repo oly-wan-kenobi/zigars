@@ -46,13 +46,13 @@ const workspacePathErrorResult = support.workspacePathErrorResult;
 /// Schema version written into this module's structured payloads.
 const schema_version = 1;
 const max_evidence_bytes = 16 * 1024 * 1024;
-const default_coverage_baseline = ".zigar-cache/coverage/baseline.json";
-const default_bench_baseline = ".zigar-cache/benchmarks/baseline.json";
-const default_bench_history = ".zigar-cache/benchmarks/history.json";
+const default_coverage_baseline = ".zigars-cache/coverage/baseline.json";
+const default_bench_baseline = ".zigars-cache/benchmarks/baseline.json";
+const default_bench_history = ".zigars-cache/benchmarks/history.json";
 const bench_gate_session_kind = "bench_regression_gate";
-const default_samply_profile = ".zigar-cache/profile/samply/profile.json";
-const default_tracy_profile = ".zigar-cache/profile/tracy/capture.tracy";
-const default_perf_evidence = ".zigar-cache/performance/evidence-pack.json";
+const default_samply_profile = ".zigars-cache/profile/samply/profile.json";
+const default_tracy_profile = ".zigars-cache/profile/tracy/capture.tracy";
+const default_perf_evidence = ".zigars-cache/performance/evidence-pack.json";
 
 /// Carries input data across use case and port boundaries.
 const Input = struct {
@@ -73,7 +73,7 @@ const BenchSet = benchmark_model.BenchSet;
 /// Invokes zig coverage run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigCoverageRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_coverage_run", "command", "non-empty command string");
-    const output = argString(args, "output") orelse ".zigar-cache/coverage/run.json";
+    const output = argString(args, "output") orelse ".zigars-cache/coverage/run.json";
     const apply = argBool(args, "apply", false);
     const timeout_ms = toolTimeout(a, args);
     const argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_coverage_run", "command", command_text, err);
@@ -155,7 +155,7 @@ pub fn zigCoverageMerge(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     defer arena.deinit();
     const scratch = arena.allocator();
     const coverage = coverageMapValue(scratch, a, "zig_coverage_merge", merged, "Merged coverage evidence", "high") catch return error.OutOfMemory;
-    return maybeWriteArtifact(a, allocator, scratch, args, "zig_coverage_merge", coverage, argString(args, "output") orelse ".zigar-cache/coverage/merged.json", "coverage_merged", &.{});
+    return maybeWriteArtifact(a, allocator, scratch, args, "zig_coverage_merge", coverage, argString(args, "output") orelse ".zigars-cache/coverage/merged.json", "coverage_merged", &.{});
 }
 
 /// Executes the zig coverage diff workflow and returns an allocator-owned structured result.
@@ -232,7 +232,7 @@ pub fn zigBenchDiscover(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 /// Invokes zig bench run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigBenchRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_bench_run", "command", "non-empty command string");
-    const output = argString(args, "output") orelse ".zigar-cache/benchmarks/run.json";
+    const output = argString(args, "output") orelse ".zigars-cache/benchmarks/run.json";
     const apply = argBool(args, "apply", false);
     const timeout_ms = toolTimeout(a, args);
     const argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_bench_run", "command", command_text, err);
@@ -461,7 +461,7 @@ pub fn zigProfileRegression(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig samply record workflow and returns an allocator-owned structured result.
 pub fn zigSamplyRecord(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "samply", "record", "Samply recording is not supported by zigar on this platform.");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "samply", "record", "Samply recording is not supported by zigars on this platform.");
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_samply_record", "command", "non-empty command string");
     const samply_path = argString(args, "samply_path") orelse "samply";
     const output = argString(args, "output") orelse default_samply_profile;
@@ -476,7 +476,7 @@ pub fn zigSamplyRecord(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     const argv = try samplyRecordArgv(scratch, samply_path, output_abs, command_argv);
     if (!apply) return backendPreviewResult(a, allocator, scratch, "zig_samply_record", "samply", "record", argv, output, "Samply profile capture preview");
     const probe = checkBackend(a, scratch, "samply", &.{ samply_path, "--help" }, @min(toolTimeout(a, args), 5000));
-    if (!probe.ok) return backendUnavailableResult(allocator, "samply", "record", samply_path, probe.status, "Install samply separately or pass samply_path to an existing executable; zigar never installs it.");
+    if (!probe.ok) return backendUnavailableResult(allocator, "samply", "record", samply_path, probe.status, "Install samply separately or pass samply_path to an existing executable; zigars never installs it.");
     ensureParentDir(a, output_abs) catch |err| return workspacePathErrorResult(a, allocator, "zig_samply_record", output, err);
     const run = runCommand(allocator, a, argv, toolTimeout(a, args)) catch |err| return backendErrorResult(allocator, "samply", "record", err, "Run the shown samply argv directly to inspect profiler-specific failures.");
     defer run.deinit(allocator);
@@ -502,7 +502,7 @@ pub fn zigSamplyImport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     defer arena.deinit();
     const scratch = arena.allocator();
     const value = profileImportValue(scratch, a, input.bytes, input.source_kind) catch |err| return performanceToolError(allocator, "zig_samply_import", "import_profile", err);
-    return maybeWriteArtifact(a, allocator, scratch, args, "zig_samply_import", value, argString(args, "output") orelse ".zigar-cache/profile/samply/imported.json", "samply_import", &.{});
+    return maybeWriteArtifact(a, allocator, scratch, args, "zig_samply_import", value, argString(args, "output") orelse ".zigars-cache/profile/samply/imported.json", "samply_import", &.{});
 }
 
 /// Executes the zig samply artifact workflow and returns an allocator-owned structured result.
@@ -524,13 +524,13 @@ pub fn zigProfileOpen(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     const abs_path = try scratch.dupe(u8, resolved);
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, a, "zig_profile_open", "Profile viewer launch plan", "high", &.{
-        "zigar does not launch GUI viewers; the returned command is informational.",
+        "zigars does not launch GUI viewers; the returned command is informational.",
     });
     try obj.put(scratch, "path", .{ .string = path });
     try obj.put(scratch, "abs_path", .{ .string = abs_path });
     try obj.put(scratch, "viewer", .{ .string = argString(args, "viewer") orelse "system default or profiler UI" });
     try obj.put(scratch, "launches_viewer", .{ .bool = false });
-    try obj.put(scratch, "recommended_action", .{ .string = "Open the artifact with the selected profiler UI outside zigar." });
+    try obj.put(scratch, "recommended_action", .{ .string = "Open the artifact with the selected profiler UI outside zigars." });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -550,7 +550,7 @@ pub fn zigTracyProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     const scratch = arena.allocator();
     var obj = std.json.ObjectMap.empty;
     try putBase(scratch, &obj, a, "zig_tracy_probe", "Tracy capture backend probe", "high", &.{
-        "Tracy is an optional external backend and is never installed by zigar.",
+        "Tracy is an optional external backend and is never installed by zigars.",
     });
     if (!argBool(args, "probe_backend", false)) {
         try obj.put(scratch, "backend_status", try backendStatusValue(scratch, "tracy-capture", false, "not_probed", "pass probe_backend=true to run tracy-capture --help", tracy_path));
@@ -563,7 +563,7 @@ pub fn zigTracyProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Executes the zig tracy capture workflow and returns an allocator-owned structured result.
 pub fn zigTracyCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "tracy-capture", "capture", "Tracy capture is not supported by zigar on this platform.");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "tracy-capture", "capture", "Tracy capture is not supported by zigars on this platform.");
     const tracy_path = argString(args, "tracy_capture_path") orelse "tracy-capture";
     const output = argString(args, "output") orelse default_tracy_profile;
     const output_abs = a.workspace.resolveOutput(output) catch |err| return workspacePathErrorResult(a, allocator, "zig_tracy_capture", output, err);
@@ -880,7 +880,7 @@ fn profileImportValue(allocator: std.mem.Allocator, a: *App, bytes: []const u8, 
     const profile = try cloneValue(allocator, parsed.value);
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, a, "zig_samply_import", "Normalized imported profile artifact", "medium", &.{
-        "Import preserves the source profile JSON and adds zigar summary metadata.",
+        "Import preserves the source profile JSON and adds zigars summary metadata.",
     });
     try obj.put(allocator, "source_kind", .{ .string = source_kind });
     try obj.put(allocator, "summary", summary);
@@ -1272,7 +1272,7 @@ fn performanceToolError(allocator: std.mem.Allocator, tool_name: []const u8, ope
         .phase = "performance_workflow",
         .code = "performance_evidence_failed",
         .category = "analysis",
-        .resolution = "Provide readable LCOV, zigar coverage JSON, benchmark JSON, or simple textual benchmark timing evidence and retry.",
+        .resolution = "Provide readable LCOV, zigars coverage JSON, benchmark JSON, or simple textual benchmark timing evidence and retry.",
     }, err);
 }
 
@@ -1288,7 +1288,7 @@ fn performanceTestContext(
     platform: app_context.PlatformView,
 ) app_context.PerformanceContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "zig", .zls = "zls", .zflame = "zflame", .diff_folded = "diff-folded" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
         .platform = platform,
@@ -1504,7 +1504,7 @@ test "bench regression gate is preview-only unless apply is set" {
     try std.testing.expectEqualStrings("failed", result.value.object.get("status").?.string);
     try std.testing.expect(!result.value.object.get("applied").?.bool);
     try std.testing.expect(result.value.object.get("requires_apply").?.bool);
-    try std.testing.expectEqualStrings(".zigar-cache/sessions/bench_regression_gate/gate-1.jsonl", result.value.object.get("session_path").?.string);
+    try std.testing.expectEqualStrings(".zigars-cache/sessions/bench_regression_gate/gate-1.jsonl", result.value.object.get("session_path").?.string);
     try workspace.verify();
     try commands.verify();
 }

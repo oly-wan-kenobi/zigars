@@ -326,7 +326,7 @@ fn formatError(allocator: std.mem.Allocator, file: []const u8, err: anyerror) mc
         .phase = if (err == error.FileNotFound or err == error.NotFound) "read_source" else "run_workflow",
         .code = if (err == error.FileNotFound or err == error.NotFound) "read_failed" else "format_failed",
         .category = if (err == error.FileNotFound or err == error.NotFound) "filesystem" else "editing",
-        .resolution = "Confirm the file exists inside the zigar workspace and retry.",
+        .resolution = "Confirm the file exists inside the zigars workspace and retry.",
         .details = &.{.{ .key = "file", .value = .{ .string = file } }},
     }, err);
 }
@@ -387,7 +387,7 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
 /// Creates zls adapter test context from the ports required by the adapter.
 fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .tool_paths = .{ .zig = "zig", .zls = "zls-test" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
         .zls_state = .{ .status = "connected", .running = true },

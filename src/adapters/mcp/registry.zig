@@ -67,7 +67,7 @@ fn mcpHandler(
                 .phase = "runtime_lookup",
                 .code = "runtime_unavailable",
                 .category = "server_state",
-                .resolution = "Restart zigar; the MCP server registered this tool without attaching runtime state.",
+                .resolution = "Restart zigars; the MCP server registered this tool without attaching runtime state.",
             })));
             const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
             if (try mcp_args.validateToolArgs(allocator, spec, args)) |validation_error| {

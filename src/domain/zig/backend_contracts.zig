@@ -101,7 +101,7 @@ pub const diff_folded_probe_argv = [_][]const u8{ "diff-folded", "--help" };
 pub const zwanzig_verify = [_][]const u8{
     "zwanzig --help",
     "zwanzig --format json src",
-    "zwanzig --dump-cfg .zigar-cache/zwanzig-graphs src/main.zig",
+    "zwanzig --dump-cfg .zigars-cache/zwanzig-graphs src/main.zig",
 };
 /// Manual verification commands for ZLint-backed features.
 pub const zlint_verify = [_][]const u8{
@@ -123,12 +123,12 @@ pub const diff_folded_verify = [_][]const u8{
     "zig_flamegraph_diff",
 };
 
-/// Minimum zflame CLI behavior zigar expects.
+/// Minimum zflame CLI behavior zigars expects.
 pub const zflame_compatibility_baseline = "zflame CLI with explicit format subcommand, --title=, --subtitle=, --colors=, --width=, --min-width=, --hash, and SVG on stdout";
-/// Minimum diff-folded CLI behavior zigar expects.
+/// Minimum diff-folded CLI behavior zigars expects.
 pub const diff_folded_compatibility_baseline = "diff-folded CLI with --output=<path> before.folded after.folded and non-empty folded-stack output";
 
-/// zflame input format subcommands supported by zigar.
+/// zflame input format subcommands supported by zigars.
 pub const ZflameFormat = enum {
     perf,
     dtrace,
@@ -197,7 +197,7 @@ pub const ZflameOption = enum {
     }
 };
 
-/// ZLint output formats understood by zigar.
+/// ZLint output formats understood by zigars.
 pub const ZlintFormat = enum {
     json,
     sarif,
@@ -208,7 +208,7 @@ pub const ZlintFormat = enum {
     }
 };
 
-/// zwanzig lint output formats understood by zigar.
+/// zwanzig lint output formats understood by zigars.
 pub const ZwanzigLintFormat = enum {
     json,
     sarif,
@@ -280,7 +280,7 @@ pub const capabilities = [_]CapabilityContract{
     .{
         .tool = "zig_zlint_sarif",
         .backend = .zlint,
-        .argv_shape = "zlint --format json [--config <path>] [--rules <rules>] <workspace-path> [args...]; zigar converts normalized findings to SARIF",
+        .argv_shape = "zlint --format json [--config <path>] [--rules <rules>] <workspace-path> [args...]; zigars converts normalized findings to SARIF",
         .input_behavior = .reads_workspace_input,
         .output_behavior = .none,
     },

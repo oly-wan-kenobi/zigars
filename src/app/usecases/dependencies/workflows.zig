@@ -394,7 +394,7 @@ fn registryResult(allocator: std.mem.Allocator, tool_name: []const u8, provider:
             try pkg.put(allocator, "url", .{ .string = query });
             try pkg.put(allocator, "version", .{ .string = refFromUrl(query) orelse "direct-url" });
             try pkg.put(allocator, "confidence", .{ .string = "medium" });
-            try pkg.put(allocator, "trust_basis", .{ .string = "caller supplied direct URL/ref; zigar did not fetch registry metadata" });
+            try pkg.put(allocator, "trust_basis", .{ .string = "caller supplied direct URL/ref; zigars did not fetch registry metadata" });
             try packages.append(.{ .object = pkg });
         }
     } else {

@@ -11,7 +11,7 @@ runtime composition, or cross-cutting behavior.
 - Keep tool behavior in focused `src/app/usecases/` modules.
 - Keep pure parsing, diagnostics, static analysis, performance, and path policy
   under `src/domain/`.
-- Keep `tools/zigar_tools.zig` as a dispatcher rather than a home for large
+- Keep `tools/zigars_tools.zig` as a dispatcher rather than a home for large
   helper logic.
 - Preserve the deterministic MCP server scope. Do not add AI code-generation
   behavior to the server.

@@ -308,7 +308,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
                 "read_intermediate_diff",
                 "workspace_artifact_read_failed",
                 @errorName(err),
-                "Confirm diff-folded wrote the requested --output file inside .zigar-cache/profile and retry.",
+                "Confirm diff-folded wrote the requested --output file inside .zigars-cache/profile and retry.",
             ),
             .err = err,
             .path = resolved.intermediate,
@@ -437,7 +437,7 @@ fn resolveRequest(allocator: std.mem.Allocator, context: app_context.ProfilingCo
 /// Implements generated intermediate path workflow logic using caller-owned inputs.
 fn generatedIntermediatePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext) ![]const u8 {
     const clock = context.clock_and_ids orelse return error.InvalidRequest;
-    const base = try clock.nextId(allocator, .{ .prefix = ".zigar-cache/profile/diff-" });
+    const base = try clock.nextId(allocator, .{ .prefix = ".zigars-cache/profile/diff-" });
     defer allocator.free(base);
     return std.fmt.allocPrint(allocator, "{s}.folded", .{base});
 }
@@ -535,7 +535,7 @@ fn testProfilingContext(
     clock: ?ports.ClockAndIds,
 ) app_context.ProfilingContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
         .timeouts = .{ .command_ms = 5000 },
         .command_runner = commands.port(),
@@ -637,11 +637,11 @@ test "flamegraph diff resolveRequest covers generated paths and path failures" {
         try workspace.expectResolve(.{ .path = "before.folded", .provenance = "profiling input path resolution" }, "/workspace/before.folded");
         try workspace.expectResolve(.{ .path = "after.folded", .provenance = "profiling input path resolution" }, "/workspace/after.folded");
         try workspace.expectResolve(.{ .path = "diff.svg", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/diff.svg");
-        try workspace.expectResolve(.{ .path = ".zigar-cache/profile/diff-case.folded", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/.zigar-cache/profile/diff-case.folded");
+        try workspace.expectResolve(.{ .path = ".zigars-cache/profile/diff-case.folded", .for_output = true, .provenance = "profiling output path resolution" }, "/workspace/.zigars-cache/profile/diff-case.folded");
         var result = try resolveRequest(allocator, context, .{ .before = "before.folded", .after = "after.folded", .output = "diff.svg" });
         defer result.ok.deinit(allocator);
         try std.testing.expectEqual(.ok, std.meta.activeTag(result));
-        try std.testing.expectEqualStrings(".zigar-cache/profile/diff-case.folded", result.ok.intermediate);
+        try std.testing.expectEqualStrings(".zigars-cache/profile/diff-case.folded", result.ok.intermediate);
         try commands.verify();
         try workspace.verify();
     }

@@ -56,7 +56,7 @@ test "metrics v2 adapter exposes observed latency and backend history" {
     var tool_errors: usize = 0;
     var token: u8 = 0;
     const context: app_context.ObservabilityContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .zls_state = .{ .status = "connected" },
         .counters = .{
             .command_calls = &command_calls,
@@ -68,26 +68,26 @@ test "metrics v2 adapter exposes observed latency and backend history" {
         .observability_reader = .{ .ptr = &token, .vtable = &TestContext.observability_vtable },
     };
 
-    const result = try runtime_metrics.zigarMetricsV2(std.testing.allocator, context, null);
+    const result = try runtime_metrics.zigarsMetricsV2(std.testing.allocator, context, null);
     defer mcp_result.deinitToolResult(std.testing.allocator, result);
 
     const root = result.structuredContent.?.object;
-    try std.testing.expectEqualStrings("zigar_metrics_v2", root.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_metrics_v2", root.get("kind").?.string);
     try std.testing.expectEqual(@as(i64, 2), root.get("observed_tool_calls").?.integer);
     try std.testing.expectEqual(@as(i64, 1), root.get("observed_tool_errors").?.integer);
     try std.testing.expect(root.get("tool_latency").?.object.get("tools").?.array.items.len >= 2);
     try std.testing.expectEqual(@as(i64, 1), root.get("backend_health_history").?.object.get("recorded_events").?.integer);
     try std.testing.expectEqual(@as(i64, 1), root.get("zls_timeline").?.object.get("recorded_events").?.integer);
 
-    const history = try runtime_metrics.zigarBackendHealthHistory(std.testing.allocator, context, null);
+    const history = try runtime_metrics.zigarsBackendHealthHistory(std.testing.allocator, context, null);
     defer mcp_result.deinitToolResult(std.testing.allocator, history);
-    try std.testing.expectEqualStrings("zigar_backend_health_history", history.structuredContent.?.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_backend_health_history", history.structuredContent.?.object.get("kind").?.string);
 
-    const latency = try runtime_metrics.zigarToolLatency(std.testing.allocator, context, null);
+    const latency = try runtime_metrics.zigarsToolLatency(std.testing.allocator, context, null);
     defer mcp_result.deinitToolResult(std.testing.allocator, latency);
-    try std.testing.expectEqualStrings("zigar_tool_latency", latency.structuredContent.?.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_tool_latency", latency.structuredContent.?.object.get("kind").?.string);
 
-    const write_result = try context.workspace_store.write(.{ .path = ".zigar-cache/probe", .bytes = "ok", .provenance = "unit" });
+    const write_result = try context.workspace_store.write(.{ .path = ".zigars-cache/probe", .bytes = "ok", .provenance = "unit" });
     try std.testing.expectEqual(@as(usize, 2), write_result.bytes_written);
 }
 
@@ -120,22 +120,22 @@ test "timeline adapter returns current snapshot without recorded transitions" {
 
     var token: u8 = 0;
     const context: app_context.ObservabilityContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .zls_state = .{ .status = "FileNotFound", .last_failure = "FileNotFound", .restart_attempts = 1 },
         .workspace_store = .{ .ptr = &token, .vtable = &TestContext.workspace_vtable },
         .observability_reader = .{ .ptr = &token, .vtable = &TestContext.observability_vtable },
     };
 
-    const result = try runtime_metrics.zigarZlsTimeline(std.testing.allocator, context, null);
+    const result = try runtime_metrics.zigarsZlsTimeline(std.testing.allocator, context, null);
     defer mcp_result.deinitToolResult(std.testing.allocator, result);
 
     const root = result.structuredContent.?.object;
-    try std.testing.expectEqualStrings("zigar_zls_timeline", root.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_zls_timeline", root.get("kind").?.string);
     try std.testing.expectEqual(@as(i64, 0), root.get("recorded_events").?.integer);
     const events = root.get("events").?.array;
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expectEqualStrings("current_snapshot", events.items[0].object.get("source").?.string);
 
-    const write_result = try context.workspace_store.write(.{ .path = ".zigar-cache/probe", .bytes = "", .provenance = "unit" });
+    const write_result = try context.workspace_store.write(.{ .path = ".zigars-cache/probe", .bytes = "", .provenance = "unit" });
     try std.testing.expectEqual(@as(usize, 0), write_result.bytes_written);
 }

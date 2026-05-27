@@ -1,5 +1,5 @@
-{"name":"zigar_schema","arguments":{}}
-{"name":"zigar_doctor","arguments":{"probe_backends":true,"timeout_ms":1000}}
+{"name":"zigars_schema","arguments":{}}
+{"name":"zigars_doctor","arguments":{"probe_backends":true,"timeout_ms":1000}}
 {"name":"zig_format","arguments":{"file":"src/main.zig","apply":false}}
 {"name":"zig_check","arguments":{"file":"src/main.zig"}}
 {"name":"zig_build","arguments":{"args":"test --summary all","timeout_ms":30000}}

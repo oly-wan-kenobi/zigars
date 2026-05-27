@@ -404,7 +404,7 @@ pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCom
             "command",
             "check|test|build|build-test|fmt-check",
             mode,
-            "Use one of the supported command modes, or omit command to let zigar choose build-test/check from the provided arguments.",
+            "Use one of the supported command modes, or omit command to let zigars choose build-test/check from the provided arguments.",
         ) } };
     }
 
@@ -479,7 +479,7 @@ fn resolveWorkspacePath(
             context.workspace.root,
             if (err == error.EmptyPath) "empty_path" else "path_resolution_failed",
             @errorName(err),
-            "Confirm the path exists inside the configured zigar workspace and retry.",
+            "Confirm the path exists inside the configured zigars workspace and retry.",
         ),
         .err = err,
         .path = path,

@@ -5,10 +5,10 @@ Before publishing, run the same gate CI uses and the release-asset gate:
 ```sh
 zig build release-check
 zig build dist release-asset-smoke
-npm --prefix packages/zigar-mcp-npm test
-(cd packages/zigar-mcp-npm && npm pack --dry-run)
-npm --prefix packages/zigar-mcpb ci
-npm --prefix packages/zigar-mcpb run pack
+npm --prefix packages/zigars-mcp-npm test
+(cd packages/zigars-mcp-npm && npm pack --dry-run)
+npm --prefix packages/zigars-mcpb ci
+npm --prefix packages/zigars-mcpb run pack
 ```
 
 For a public release candidate, also run the manual `Release Readiness`
@@ -34,9 +34,9 @@ patched MCP server wrapper, and that the first-party adapter still exposes
 explicit `tools/call`, `resources/read`, and `prompts/get`
 post-serialization cleanup hooks.
 The release drift tools provide the same contract as MCP-facing preflight
-checks: `zigar_docs_drift_check` verifies public documentation markers and
-generated-index coverage, `zigar_release_claim_check` scans public docs for
-conservative overclaim tokens, and `zigar_tool_index_check` compares registered
+checks: `zigars_docs_drift_check` verifies public documentation markers and
+generated-index coverage, `zigars_release_claim_check` scans public docs for
+conservative overclaim tokens, and `zigars_tool_index_check` compares registered
 tools to `docs/tool-index.generated.md`. These tools are read-only convenience
 checks; the release authority remains the build targets above.
 Release-intelligence tools can organize supporting evidence before the gate:
@@ -55,7 +55,7 @@ The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow
 can publish anything. The HTTP JSON-RPC smoke test covers `initialize`,
-`tools/list`, `zigar_schema`, and `zigar_doctor` using
+`tools/list`, `zigars_schema`, and `zigars_doctor` using
 `tests/fixtures/http-smoke.expect.json`, including parser/preview coverage for
 coverage maps, benchmark comparison, Samply profile import/summary, Tracy
 planning/probe/capture preview, and performance evidence bundles. The stdio
@@ -119,11 +119,11 @@ When the `Release Readiness` workflow runs, use its generated
 backend compatibility matrix is generated from executable paths, SHA-256 hashes,
 version/probe output, platform metadata, tested capabilities, and pass/fail
 status. Do not hand-write broader compatibility claims than the generated matrix
-supports. If the script was run with `ZIGAR_ALLOW_DIRTY_RELEASE_READINESS=1`,
+supports. If the script was run with `ZIGARS_ALLOW_DIRTY_RELEASE_READINESS=1`,
 the generated summary is non-release evidence and must not be used as final
 release-note validation until rerun from a clean tree.
 
-CI also uploads a `zigar-coverage` artifact. The artifact includes
+CI also uploads a `zigars-coverage` artifact. The artifact includes
 `coverage/summary.json` with the installed library, executable, and tooling test
 binary results, per-suite floors, measured kcov coverage, configured coverage
 floors, and floor pass/fail fields.
@@ -152,18 +152,18 @@ live in `tools/release/release_rules.zig`, and its checker lives in
   security-policy, and public-claim documentation checks.
 
 `zig build dist` builds all release targets with ReleaseSafe optimization and
-writes archives plus `zigar-checksums.txt` under `dist/assets`.
+writes archives plus `zigars-checksums.txt` under `dist/assets`.
 `zig build release-asset-smoke` verifies every checksum, checks required files in
 each archive, extracts the native archive for the current runner OS/architecture,
-and runs `zigar --version` from it.
+and runs `zigars --version` from it.
 
-`npm --prefix packages/zigar-mcpb run pack` consumes those release archives and
-writes MCPB desktop bundles plus `zigar-mcpb-checksums.txt` under `dist/assets`.
+`npm --prefix packages/zigars-mcpb run pack` consumes those release archives and
+writes MCPB desktop bundles plus `zigars-mcpb-checksums.txt` under `dist/assets`.
 The package is TypeScript; the npm/Node path compiles `src/build.ts` to
-`dist/build.js`, while `bun run --cwd packages/zigar-mcpb pack:bun` runs the
+`dist/build.js`, while `bun run --cwd packages/zigars-mcpb pack:bun` runs the
 same TypeScript source directly. The scripts use `@anthropic-ai/mcpb` to run
 `mcpb validate`, `mcpb pack`, and `mcpb info`. Use
-`npm --prefix packages/zigar-mcpb run sign:dev` for a self-signed development
+`npm --prefix packages/zigars-mcpb run sign:dev` for a self-signed development
 bundle only; production `fileSha256` values must be computed from the exact
 final `.mcpb` files that will be published.
 
@@ -176,30 +176,30 @@ final `.mcpb` files that will be published.
 5. Run npm package checks:
 
 ```sh
-npm --prefix packages/zigar-mcp-npm test
-npm --prefix packages/zigar-mcp-npm run test:node
-(cd packages/zigar-mcp-npm && npm pack --dry-run)
+npm --prefix packages/zigars-mcp-npm test
+npm --prefix packages/zigars-mcp-npm run test:node
+(cd packages/zigars-mcp-npm && npm pack --dry-run)
 ```
 
 6. Build and inspect MCPB artifacts:
 
 ```sh
-npm --prefix packages/zigar-mcpb ci
-npm --prefix packages/zigar-mcpb run pack
-unzip -l dist/assets/zigar-darwin-universal.mcpb
-unzip -l dist/assets/zigar-linux-x64.mcpb
-unzip -l dist/assets/zigar-windows-x64.mcpb
-cat dist/assets/zigar-mcpb-checksums.txt
+npm --prefix packages/zigars-mcpb ci
+npm --prefix packages/zigars-mcpb run pack
+unzip -l dist/assets/zigars-darwin-universal.mcpb
+unzip -l dist/assets/zigars-linux-x64.mcpb
+unzip -l dist/assets/zigars-windows-x64.mcpb
+cat dist/assets/zigars-mcpb-checksums.txt
 ```
 
 The expected MCPB release files are:
 
-- `zigar-darwin-universal.mcpb`
-- `zigar-linux-x64.mcpb`
-- `zigar-windows-x64.mcpb`
-- `zigar-mcpb-checksums.txt`
+- `zigars-darwin-universal.mcpb`
+- `zigars-linux-x64.mcpb`
+- `zigars-windows-x64.mcpb`
+- `zigars-mcpb-checksums.txt`
 
-`zigar-darwin-universal.mcpb` requires `lipo` or `llvm-lipo` to combine the
+`zigars-darwin-universal.mcpb` requires `lipo` or `llvm-lipo` to combine the
 macOS x86_64 and aarch64 release binaries. The Linux and Windows MCPB files
 currently contain x86_64 binaries because MCPB compatibility metadata does not
 provide CPU architecture selectors.
@@ -228,14 +228,14 @@ provide CPU architecture selectors.
 
 ```sh
 version="$(zig build version)"
-git tag -a "v${version}" -m "zigar ${version}"
+git tag -a "v${version}" -m "zigars ${version}"
 git push origin "v${version}"
 ```
 
 The normal tag workflow reruns `zig build release-check`, runs
 `zig build dist release-asset-smoke`, builds MCPB bundles, publishes Linux,
-macOS, and Windows archives, publishes `zigar-checksums.txt`,
-`zigar-mcpb-checksums.txt`, and the `.mcpb` files, and creates GitHub provenance
+macOS, and Windows archives, publishes `zigars-checksums.txt`,
+`zigars-mcpb-checksums.txt`, and the `.mcpb` files, and creates GitHub provenance
 attestations from the checksum file when GitHub supports attestations for the
 repository. User-owned private repositories cannot persist GitHub attestations,
 so the workflow skips that step there and the release notes must not claim
@@ -243,7 +243,7 @@ provenance attestations. GitHub Actions are pinned to commit SHAs in the
 workflow; update the adjacent tag comments when bumping an action.
 
 A workflow-published version is public only after the tag workflow finishes and
-the GitHub release contains all expected archives, `zigar-checksums.txt`, and
+the GitHub release contains all expected archives, `zigars-checksums.txt`, and
 provenance attestations. Do not advertise archive installation for a version
 until that verification is complete.
 
@@ -260,21 +260,24 @@ gh release view "v${version}" --json tagName,assets
 
 Release assets are named:
 
-- `zigar-x86_64-linux-musl.tar.gz`
-- `zigar-aarch64-linux-musl.tar.gz`
-- `zigar-x86_64-macos.tar.gz`
-- `zigar-aarch64-macos.tar.gz`
-- `zigar-x86_64-windows.tar.gz`
-- `zigar-darwin-universal.mcpb`
-- `zigar-linux-x64.mcpb`
-- `zigar-windows-x64.mcpb`
-- `zigar-mcpb-checksums.txt`
+- `zigars-x86_64-linux-gnu.tar.gz`
+- `zigars-aarch64-linux-gnu.tar.gz`
+- `zigars-x86_64-linux-musl.tar.gz`
+- `zigars-aarch64-linux-musl.tar.gz`
+- `zigars-x86_64-macos.tar.gz`
+- `zigars-aarch64-macos.tar.gz`
+- `zigars-x86_64-windows-gnu.tar.gz`
+- `zigars-aarch64-windows-gnu.tar.gz`
+- `zigars-darwin-universal.mcpb`
+- `zigars-linux-x64.mcpb`
+- `zigars-windows-x64.mcpb`
+- `zigars-mcpb-checksums.txt`
 
 ## Package Hygiene
 
 - `build.zig.zon` pins `mcp.zig` by archive URL and package hash; update both
   intentionally when bumping the dependency. Do not add local patches under
-  `third_party` or route `mcp` through a wrapper module; if zigar needs
+  `third_party` or route `mcp` through a wrapper module; if zigars needs
   server-side behavior, keep it in the first-party adapter under `src/`.
 - Dependency review can use `zig_dependency_update_plan`,
   `zig_dependency_fetch_check`, `zig_dependency_lock_audit`, `zig_sbom`,
@@ -284,7 +287,7 @@ Release assets are named:
   ingest supplied ZAT or OSV reports but do not contact external services.
 - Release targets are defined once in `tools/release/release_targets.zig`; update that
   table when adding or removing a published archive target.
-- `zig-pkg/`, `.zig-cache/`, `.zigar-cache/`, and `zig-out/` are local artifacts
+- `zig-pkg/`, `.zig-cache/`, `.zigars-cache/`, and `zig-out/` are local artifacts
   and are not part of the published package.
 - `coverage/` is generated by `zig build coverage` and is not part of the
   published package.
@@ -298,9 +301,9 @@ Release assets are named:
 
 ## Repository Hygiene
 
-- zigar should be published from a standalone repository rooted at this
+- zigars should be published from a standalone repository rooted at this
   directory.
 - Avoid committing parent-workspace changes or generated cache output.
-- Before tagging, run `git status --short` from the standalone zigar repository
+- Before tagging, run `git status --short` from the standalone zigars repository
   root and confirm only intentional source, docs, and workflow changes are
   present.

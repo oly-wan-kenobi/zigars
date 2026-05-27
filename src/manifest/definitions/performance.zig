@@ -141,8 +141,8 @@ const tracy_hints_schema = schema(&.{
 
 /// Run a caller-supplied coverage command and optionally write a coverage run artifact.
 pub const zig_coverage_run = tool(.{ .description = "Run a caller-supplied coverage command and optionally write a coverage run artifact.", .input_schema = schema(&.{ .{ "command", "string", true }, .{ "output", "string", false }, .{ "apply", "boolean", false }, .{ "timeout_ms", "integer", false }, .{ "target", "string", false }, .{ "coverage_backend", "string", false }, .{ "coverage_artifacts", "string", false } }), .read_only = false, .group = group, .risk = command_risk, .plan = .{ .apply_gated_mutation = "Runs a user command and writes a provenance-tracked coverage run artifact only with apply=true." } });
-/// Map LCOV or zigar coverage evidence into normalized file and line-rate records.
-pub const zig_coverage_map = tool(.{ .description = "Map LCOV or zigar coverage evidence into normalized file and line-rate records.", .input_schema = coverage_input_schema, .group = group, .plan = .{ .pure_analysis = "Parses supplied coverage content or a workspace coverage file." } });
+/// Map LCOV or zigars coverage evidence into normalized file and line-rate records.
+pub const zig_coverage_map = tool(.{ .description = "Map LCOV or zigars coverage evidence into normalized file and line-rate records.", .input_schema = coverage_input_schema, .group = group, .plan = .{ .pure_analysis = "Parses supplied coverage content or a workspace coverage file." } });
 /// Merge two coverage evidence maps into one normalized coverage map.
 pub const zig_coverage_merge = tool(.{ .description = "Merge two coverage evidence maps into one normalized coverage map.", .input_schema = coverage_merge_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes merged coverage artifacts only with apply=true." } });
 /// Compare current coverage against a baseline and report rate deltas.

@@ -12,7 +12,7 @@ test "input schema includes discovery hints" {
     defer deinitInputSchema(&s);
     const file = s.properties.?.object.get("file").?.object;
     try std.testing.expectEqualStrings("Workspace-relative source file path.", file.get("description").?.string);
-    try std.testing.expectEqualStrings("input_file", file.get("x-zigar-path-kind").?.string);
+    try std.testing.expectEqualStrings("input_file", file.get("x-zigars-path-kind").?.string);
     const apply = s.properties.?.object.get("apply").?.object;
     try std.testing.expect(!apply.get("default").?.bool);
 }

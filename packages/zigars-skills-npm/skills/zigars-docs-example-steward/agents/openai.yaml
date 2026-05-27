@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars docs example steward"
+  short_description: "Keep Zig docs and examples evidence-based."
+  default_prompt: "Use $zigars-docs-example-steward to review these Zig docs and examples against project evidence."

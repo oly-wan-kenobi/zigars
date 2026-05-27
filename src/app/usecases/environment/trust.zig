@@ -16,13 +16,13 @@ const invalidArgumentResult = support.invalidArgumentResult;
 const structured = support.structured;
 const toolTimeout = support.toolTimeout;
 
-/// Executes the zigar trust report workflow and returns an allocator-owned structured result.
-pub fn zigarTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars trust report workflow and returns an allocator-owned structured result.
+pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const include_clean_tree = argBool(args, "include_clean_tree", false);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_trust_report" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_trust_report" });
     try obj.put(allocator, "workspace", try workspaceEvidenceValue(allocator, a));
     try obj.put(allocator, "path_policy", try pathPolicyValue(allocator));
     try obj.put(allocator, "backend_identities", try backendIdentitiesValue(allocator, a));
@@ -34,32 +34,32 @@ pub fn zigarTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
         try obj.put(allocator, "clean_tree_gate", try cleanTreeNotRunValue(allocator));
     }
     try obj.put(allocator, "limitations", try trust_domain.stringArray(allocator, &.{
-        "Reports zigar-observed configuration, manifest metadata, and optional git status only.",
+        "Reports zigars-observed configuration, manifest metadata, and optional git status only.",
         "Backend paths are configured identities unless a separate probe command has populated probe cache evidence.",
-        "Release decisions should verify with zigar_validate_patch mode=full, project CI, and any required release-check path.",
+        "Release decisions should verify with zigars_validate_patch mode=full, project CI, and any required release-check path.",
     }));
     const result = try structured(allocator, .{ .object = obj });
     obj_owned = false;
     return result;
 }
 
-/// Executes the zigar command provenance workflow and returns an allocator-owned structured result.
-pub fn zigarCommandProvenance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars command provenance workflow and returns an allocator-owned structured result.
+pub fn zigarsCommandProvenance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const tool = argString(args, "tool");
     const value = commandProvenanceValue(allocator, a, tool) catch |err| switch (err) {
-        error.UnknownTool => return invalidArgumentResult(allocator, "zigar_command_provenance", "tool", "registered zigar tool name", tool orelse "", "Call zigar_tool_index or zigar_schema to choose a registered tool name."),
+        error.UnknownTool => return invalidArgumentResult(allocator, "zigars_command_provenance", "tool", "registered zigars tool name", tool orelse "", "Call zigars_tool_index or zigars_schema to choose a registered tool name."),
         else => return err,
     };
     return structured(allocator, value);
 }
 
-/// Executes the zigar risk audit workflow and returns an allocator-owned structured result.
-pub fn zigarRiskAudit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars risk audit workflow and returns an allocator-owned structured result.
+pub fn zigarsRiskAudit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try riskAuditValue(allocator, a, argBool(args, "include_none", false)));
 }
 
-/// Executes the zigar clean tree gate workflow and returns an allocator-owned structured result.
-pub fn zigarCleanTreeGate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars clean tree gate workflow and returns an allocator-owned structured result.
+pub fn zigarsCleanTreeGate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try cleanTreeGateValue(a, allocator, toolTimeout(a, args)));
 }
 
@@ -82,7 +82,7 @@ pub fn commandProvenanceValue(allocator: std.mem.Allocator, a: *App, tool_name: 
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_command_provenance" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_command_provenance" });
     try obj.put(allocator, "scope", .{ .string = "all_tools" });
     try obj.put(allocator, "source", try trust_domain.evidenceValue(allocator, "compiled_tool_manifest", "src/manifest/mod.zig", "high"));
     try obj.put(allocator, "tools", .{ .array = tools });
@@ -134,7 +134,7 @@ pub fn riskAuditValue(allocator: std.mem.Allocator, a: *App, include_none: bool)
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_risk_audit" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_risk_audit" });
     try obj.put(allocator, "source", try trust_domain.evidenceValue(allocator, "compiled_tool_manifest", "src/manifest/mod.zig", "high"));
     try obj.put(allocator, "counts_by_level", .{ .object = counts });
     counts_owned = false;
@@ -216,7 +216,7 @@ fn backendIdentityValue(allocator: std.mem.Allocator, configured_path: []const u
         try obj.put(allocator, "probe_status", .{ .string = "not_probed" });
         try obj.put(allocator, "probe_ok", .null);
         try obj.put(allocator, "confidence", .{ .string = "low" });
-        try obj.put(allocator, "limitation", .{ .string = "configured path only; run zigar_doctor probe_backends=true for availability evidence" });
+        try obj.put(allocator, "limitation", .{ .string = "configured path only; run zigars_doctor probe_backends=true for availability evidence" });
     }
     obj_owned = false;
     return .{ .object = obj };
@@ -279,7 +279,7 @@ fn provenanceEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestE
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_command_provenance" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_command_provenance" });
     try obj.put(allocator, "tool", .{ .string = entry.name });
     try obj.put(allocator, "read_only", .{ .bool = entry.read_only });
     try obj.put(allocator, "mcp_read_only_hint", .{ .bool = entry.mcp_read_only_hint });
@@ -366,7 +366,7 @@ fn cleanTreeBackendErrorValue(allocator: std.mem.Allocator, workspace_root: []co
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_clean_tree_gate" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_clean_tree_gate" });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "clean", .{ .bool = false });
     try obj.put(allocator, "workspace", .{ .string = workspace_root });
@@ -383,11 +383,11 @@ fn cleanTreeNotRunValue(allocator: std.mem.Allocator) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_clean_tree_gate" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_clean_tree_gate" });
     try obj.put(allocator, "ok", .null);
     try obj.put(allocator, "clean", .null);
     try obj.put(allocator, "status", .{ .string = "not_run" });
-    try obj.put(allocator, "resolution", .{ .string = "call zigar_clean_tree_gate or set include_clean_tree=true for git status evidence" });
+    try obj.put(allocator, "resolution", .{ .string = "call zigars_clean_tree_gate or set include_clean_tree=true for git status evidence" });
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -477,7 +477,7 @@ const TestPorts = struct {
 /// Builds a test app fixture with the ports needed by this workflow.
 fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, test_ports: *TestPorts) App {
     return App.init(.{
-        .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigar-cache", .transport = "stdio" },
+        .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{},
         .timeouts = .{},
         .command_runner = test_ports.commandRunner(),
@@ -489,7 +489,7 @@ fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, te
 /// Builds a test app fixture with the ports needed by this workflow.
 fn testAppWithPorts(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, probe_cache: app_context.TrustProbeCache) App {
     return App.init(.{
-        .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigar-cache", .transport = "stdio" },
+        .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{
             .zig = "/bin/zig",
             .zls = "/bin/zls",
@@ -549,16 +549,16 @@ test "trust report wrapper covers dependency hashes backend identities and clean
     });
 
     const preview_args = try std.json.parseFromSlice(std.json.Value, allocator, "{}", .{});
-    const preview = try zigarTrustReport(&app, allocator, preview_args.value);
-    try std.testing.expectEqualStrings("zigar_trust_report", preview.value.object.get("kind").?.string);
+    const preview = try zigarsTrustReport(&app, allocator, preview_args.value);
+    try std.testing.expectEqualStrings("zigars_trust_report", preview.value.object.get("kind").?.string);
     try std.testing.expectEqualStrings("not_run", preview.value.object.get("clean_tree_gate").?.object.get("status").?.string);
     try std.testing.expectEqual(@as(usize, 1), preview.value.object.get("dependency_hashes").?.object.get("hashes").?.array.items.len);
     try std.testing.expectEqualStrings("ok", preview.value.object.get("backend_identities").?.object.get("zig").?.object.get("probe_status").?.string);
     try std.testing.expectEqualStrings("low", preview.value.object.get("backend_identities").?.object.get("zlint").?.object.get("confidence").?.string);
 
     const clean_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"include_clean_tree\":true,\"timeout_ms\":4000}", .{});
-    const clean = try zigarTrustReport(&app, allocator, clean_args.value);
-    try std.testing.expectEqualStrings("zigar_clean_tree_gate", clean.value.object.get("clean_tree_gate").?.object.get("kind").?.string);
+    const clean = try zigarsTrustReport(&app, allocator, clean_args.value);
+    try std.testing.expectEqualStrings("zigars_clean_tree_gate", clean.value.object.get("clean_tree_gate").?.object.get("kind").?.string);
     try std.testing.expect(clean.value.object.get("clean_tree_gate").?.object.get("clean").?.bool);
 
     try workspace.verify();
@@ -591,26 +591,26 @@ test "trust public wrappers handle provenance audit and clean tree errors" {
 
     var app = testAppWithPorts(allocator, manifest.port(), commands.port(), workspace.port(), .{});
 
-    const all_provenance = try zigarCommandProvenance(&app, allocator, null);
-    try std.testing.expectEqualStrings("zigar_command_provenance", all_provenance.value.object.get("kind").?.string);
+    const all_provenance = try zigarsCommandProvenance(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigars_command_provenance", all_provenance.value.object.get("kind").?.string);
     try std.testing.expectEqual(@as(usize, 2), all_provenance.value.object.get("tools").?.array.items.len);
 
     const selected_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"tool\":\"zig_backend\"}", .{});
-    const selected = try zigarCommandProvenance(&app, allocator, selected_args.value);
+    const selected = try zigarsCommandProvenance(&app, allocator, selected_args.value);
     try std.testing.expectEqualStrings("zig_backend", selected.value.object.get("tool").?.string);
 
     const unknown_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"tool\":\"missing\"}", .{});
-    const unknown = try zigarCommandProvenance(&app, allocator, unknown_args.value);
+    const unknown = try zigarsCommandProvenance(&app, allocator, unknown_args.value);
     try std.testing.expect(unknown.is_error);
     try std.testing.expectEqualStrings("argument_error", unknown.value.object.get("kind").?.string);
 
     const audit_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"include_none\":true}", .{});
-    const audit = try zigarRiskAudit(&app, allocator, audit_args.value);
+    const audit = try zigarsRiskAudit(&app, allocator, audit_args.value);
     try std.testing.expectEqual(@as(usize, 2), audit.value.object.get("tools").?.array.items.len);
     try std.testing.expectEqual(@as(i64, 1), audit.value.object.get("summary").?.object.get("backend_bound_tools").?.integer);
 
-    const clean_error = try zigarCleanTreeGate(&app, allocator, null);
-    try std.testing.expectEqualStrings("zigar_clean_tree_gate", clean_error.value.object.get("kind").?.string);
+    const clean_error = try zigarsCleanTreeGate(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigars_clean_tree_gate", clean_error.value.object.get("kind").?.string);
     try std.testing.expectEqualStrings("permission", clean_error.value.object.get("error_kind").?.string);
 
     try commands.verify();
@@ -667,7 +667,7 @@ test "command provenance reports exact command risk metadata" {
 
     const value = try commandProvenanceValue(arena.allocator(), &app, "zig_build");
     const obj = value.object;
-    try std.testing.expectEqualStrings("zigar_command_provenance", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_command_provenance", obj.get("kind").?.string);
     try std.testing.expectEqualStrings("zig_build", obj.get("tool").?.string);
     try std.testing.expectEqualStrings("exact_command", obj.get("plan_kind").?.string);
     try std.testing.expect(obj.get("risk").?.object.get("executes_project_code").?.bool);
@@ -687,7 +687,7 @@ test "risk audit summarizes apply gates and command-backed risk" {
 
     const value = try riskAuditValue(arena.allocator(), &app, false);
     const obj = value.object;
-    try std.testing.expectEqualStrings("zigar_risk_audit", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_risk_audit", obj.get("kind").?.string);
     try std.testing.expectEqual(@as(i64, 1), obj.get("summary").?.object.get("apply_gated_mutations").?.integer);
     try std.testing.expectEqual(@as(i64, 1), obj.get("summary").?.object.get("executes_project_code_tools").?.integer);
     try std.testing.expectEqual(@as(usize, 2), obj.get("tools").?.array.items.len);
@@ -709,5 +709,5 @@ test "command provenance propagates allocation failures" {
     var test_ports = TestPorts{};
     var app = testApp(std.testing.allocator, manifest.port(), &test_ports);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    try std.testing.expectError(error.OutOfMemory, zigarCommandProvenance(&app, failing.allocator(), null));
+    try std.testing.expectError(error.OutOfMemory, zigarsCommandProvenance(&app, failing.allocator(), null));
 }

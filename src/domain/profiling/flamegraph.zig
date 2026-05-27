@@ -1,18 +1,18 @@
 const std = @import("std");
 
-/// Boundary statement: zigar renders profiler data but does not capture it.
-pub const capture_semantics = "zigar does not execute or define profiler capture semantics; external profilers own sampling, permissions, symbols, privilege requirements, and output fidelity.";
+/// Boundary statement: zigars renders profiler data but does not capture it.
+pub const capture_semantics = "zigars does not execute or define profiler capture semantics; external profilers own sampling, permissions, symbols, privilege requirements, and output fidelity.";
 
 /// Documented zflame command shape used by backend capability checks.
 pub const zflame_argv_shape = "zflame <format> [--title=<text>] [--subtitle=<text>] [--colors=<palette>] [--width=<px>] [--min-width=<px>] [--hash] <workspace-input>";
-/// Minimum zflame CLI behavior zigar expects.
+/// Minimum zflame CLI behavior zigars expects.
 pub const zflame_compatibility_baseline = "zflame CLI with explicit format subcommand, --title=, --subtitle=, --colors=, --width=, --min-width=, --hash, and SVG on stdout";
 /// Documented diff-folded command shape used by backend capability checks.
 pub const diff_folded_argv_shape = "diff-folded --output=<path> before.folded after.folded";
-/// Minimum diff-folded CLI behavior zigar expects.
+/// Minimum diff-folded CLI behavior zigars expects.
 pub const diff_folded_compatibility_baseline = "diff-folded CLI with --output=<path> before.folded after.folded and non-empty folded-stack output";
 
-/// zflame input format subcommands supported by zigar.
+/// zflame input format subcommands supported by zigars.
 pub const ZflameFormat = enum {
     perf,
     dtrace,

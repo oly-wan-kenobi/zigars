@@ -6,7 +6,7 @@ const contracts = @import("result_contracts.zig");
 test "result shape contract is typed data independent of renderer payloads" {
     const contract = contracts.describeResultShape(.{ .mode = .deep });
 
-    try std.testing.expectEqualStrings("zigar_result_shape", contract.kind);
+    try std.testing.expectEqualStrings("zigars_result_shape", contract.kind);
     try std.testing.expect(contract.ok);
     try std.testing.expectEqual(contracts.OutputMode.deep, contract.mode);
     try std.testing.expectEqual(contracts.OutputMode.standard, contract.default_mode);
@@ -24,7 +24,7 @@ test "output budget plan clamps typed request budgets" {
         .tool_name = "zig_check",
     });
 
-    try std.testing.expectEqualStrings("zigar_output_budget_plan", plan.kind);
+    try std.testing.expectEqualStrings("zigars_output_budget_plan", plan.kind);
     try std.testing.expectEqual(contracts.OutputMode.compact, plan.mode);
     try std.testing.expectEqual(@as(i64, contracts.min_token_budget), plan.effective_token_budget);
     try std.testing.expect(plan.clamp_applied);

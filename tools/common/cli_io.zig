@@ -12,10 +12,10 @@ pub fn failUsage(
     comptime fmt: []const u8,
     args: anytype,
 ) anyerror {
-    stderrPrint(io, "zigar-tools {s}: ", .{command}) catch |err| return err;
+    stderrPrint(io, "zigars-tools {s}: ", .{command}) catch |err| return err;
     stderrPrint(io, fmt ++ "\n", args) catch |err| return err;
     if (usage_hint.len > 0) {
-        stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch |err| return err;
+        stderrPrint(io, "usage: zigars-tools {s}\n", .{usage_hint}) catch |err| return err;
     }
     return error.InvalidArguments;
 }
@@ -48,9 +48,9 @@ pub fn reportInvalidArguments(
     err: anyerror,
 ) anyerror {
     if (err == error.InvalidArguments) {
-        stderrPrint(io, "zigar-tools {s}: invalid arguments\n", .{command}) catch |print_err| return print_err;
+        stderrPrint(io, "zigars-tools {s}: invalid arguments\n", .{command}) catch |print_err| return print_err;
         if (usage_hint.len > 0) {
-            stderrPrint(io, "usage: zigar-tools {s}\n", .{usage_hint}) catch |print_err| return print_err;
+            stderrPrint(io, "usage: zigars-tools {s}\n", .{usage_hint}) catch |print_err| return print_err;
         }
     }
     return err;
@@ -97,5 +97,5 @@ pub fn parseJsonFile(allocator: Allocator, io: Io, path: []const u8) !std.json.P
 }
 
 test "executableName strips directories and platform suffix" {
-    try std.testing.expectEqualStrings("zigar-tools", executableName("/tmp/zigar-tools"));
+    try std.testing.expectEqualStrings("zigars-tools", executableName("/tmp/zigars-tools"));
 }

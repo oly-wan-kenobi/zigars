@@ -387,10 +387,10 @@ test "runtime subscriptions cancellation roots and rings cover branch behavior" 
     try std.testing.expectEqualStrings("error", failed_job.term.slice());
     try std.testing.expectEqualStrings("Timeout", failed_job.stderr_tail.slice());
 
-    const sub = state.subscribe("zigar://jobs");
+    const sub = state.subscribe("zigars://jobs");
     try std.testing.expectEqualStrings("sub-1", sub.id.slice());
     try std.testing.expect(sub.active);
-    try std.testing.expect(!state.unsubscribe("missing", "zigar://jobs").?.active);
+    try std.testing.expect(!state.unsubscribe("missing", "zigars://jobs").?.active);
     try std.testing.expect(state.unsubscribe("missing", null) == null);
 
     state.syncRoots("/tmp/project", "", true);
@@ -437,7 +437,7 @@ test "runtime rings overwrite oldest jobs and subscriptions" {
 
     i = 0;
     while (i < max_subscriptions + 1) : (i += 1) {
-        _ = state.subscribe("zigar://jobs");
+        _ = state.subscribe("zigars://jobs");
     }
     try std.testing.expectEqual(@as(usize, max_subscriptions), state.subscription_count);
     var expected_sub_id: [32]u8 = undefined;

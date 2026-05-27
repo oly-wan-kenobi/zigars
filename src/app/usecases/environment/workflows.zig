@@ -28,46 +28,46 @@ const toolTimeout = support.toolTimeout;
 const workspacePathErrorResult = support.workspacePathErrorResult;
 
 /// Default workspace path for profile data.
-const profile_path = ".zigar/profile.json";
+const profile_path = ".zigars/profile.json";
 /// Default workspace path for toolchain pin data.
-const toolchain_pin_path = ".zigar/toolchain.json";
+const toolchain_pin_path = ".zigars/toolchain.json";
 /// Default workspace path for env pack data.
-const env_pack_path = ".zigar-cache/env/pack.json";
+const env_pack_path = ".zigars-cache/env/pack.json";
 /// Default workspace path for backend evidence data.
-const backend_evidence_path = ".zigar-cache/backend-conformance/evidence-pack.json";
+const backend_evidence_path = ".zigars-cache/backend-conformance/evidence-pack.json";
 /// Default workspace path for backend report data.
-const backend_report_path = ".zigar-cache/backend-conformance/report.json";
+const backend_report_path = ".zigars-cache/backend-conformance/report.json";
 
 const guidance_elicitation_reason = "Advisory guidance tools do not issue MCP elicitation/create; questions are returned directly for deterministic clients.";
 
-/// Executes the zigar setup guidance workflow and returns an allocator-owned structured result.
-pub fn zigarSetupGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_setup_guidance", "setup");
+/// Executes the zigars setup guidance workflow and returns an allocator-owned structured result.
+pub fn zigarsSetupGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_setup_guidance", "setup");
 }
 
-/// Executes the zigar profile guidance workflow and returns an allocator-owned structured result.
-pub fn zigarProfileGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_profile_guidance", "profile");
+/// Executes the zigars profile guidance workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_profile_guidance", "profile");
 }
 
-/// Executes the zigar backend guidance workflow and returns an allocator-owned structured result.
-pub fn zigarBackendGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_backend_guidance", "backend");
+/// Executes the zigars backend guidance workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_backend_guidance", "backend");
 }
 
-/// Executes the zigar setup elicit compatibility workflow and returns an allocator-owned structured result.
-pub fn zigarSetupElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_setup_elicit", "setup");
+/// Executes the zigars setup elicit compatibility workflow and returns an allocator-owned structured result.
+pub fn zigarsSetupElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_setup_elicit", "setup");
 }
 
-/// Executes the zigar profile elicit compatibility workflow and returns an allocator-owned structured result.
-pub fn zigarProfileElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_profile_elicit", "profile");
+/// Executes the zigars profile elicit compatibility workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_profile_elicit", "profile");
 }
 
-/// Executes the zigar backend elicit compatibility workflow and returns an allocator-owned structured result.
-pub fn zigarBackendElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return guidanceResult(a, allocator, args, "zigar_backend_elicit", "backend");
+/// Executes the zigars backend elicit compatibility workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigars_backend_elicit", "backend");
 }
 
 /// Implements guidance result workflow logic using caller-owned inputs.
@@ -82,12 +82,12 @@ fn guidanceResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, 
         try detected.append(try factValue(allocator, "profile", profile_path, "workspace_file", "high"));
     } else {
         try unknowns.append(try ownedString(allocator, "project profile has not been written"));
-        try questions.append(try questionValue(allocator, "profile_policy", "Which source roots, test commands, target matrix, CI policy, and lint policy should be persisted in .zigar/profile.json?", "zigar_profile_bootstrap then zigar_profile_import apply=true"));
+        try questions.append(try questionValue(allocator, "profile_policy", "Which source roots, test commands, target matrix, CI policy, and lint policy should be persisted in .zigars/profile.json?", "zigars_profile_bootstrap then zigars_profile_import apply=true"));
     }
 
     if (std.mem.eql(u8, default_topic, "backend") or std.mem.eql(u8, topic, "backend") or std.mem.eql(u8, default_topic, "setup")) {
-        try questions.append(try questionValue(allocator, "optional_backends", "Which optional backends should be claimed as supported for this project: zls, zlint, zwanzig, zflame, diff-folded, or none?", "zigar_backend_verify and zigar_backend_conformance"));
-        try questions.append(try questionValue(allocator, "backend_paths", "Are backend paths expected to come from PATH, a dev shell, CI image, or checked-in setup artifacts?", "zigar_backend_install_plan"));
+        try questions.append(try questionValue(allocator, "optional_backends", "Which optional backends should be claimed as supported for this project: zls, zlint, zwanzig, zflame, diff-folded, or none?", "zigars_backend_verify and zigars_backend_conformance"));
+        try questions.append(try questionValue(allocator, "backend_paths", "Are backend paths expected to come from PATH, a dev shell, CI image, or checked-in setup artifacts?", "zigars_backend_install_plan"));
     }
     if (std.mem.eql(u8, default_topic, "profile") or std.mem.eql(u8, topic, "toolchain") or std.mem.eql(u8, default_topic, "setup")) {
         try questions.append(try questionValue(allocator, "toolchain_pin", "Should Zig/ZLS versions be pinned from the currently active tools, explicit versions, or existing project files such as .zigversion and .tool-versions?", "zig_zls_match_check then zig_toolchain_pin"));
@@ -102,47 +102,47 @@ fn guidanceResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, 
     try obj.put(allocator, "unknowns", .{ .array = unknowns });
     try obj.put(allocator, "blocks_noninteractive_flow", .{ .bool = false });
     try support.putElicitationUnavailable(allocator, &obj, guidance_elicitation_reason);
-    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigar_profile_bootstrap", "zig_zls_match_check", "zigar_backend_verify", "zigar_env_pack" }));
-    try obj.put(allocator, "workflow_contract", try project_intelligence.workflowContractValue(allocator, "workspace/profile/backend catalog inspection", "setup questions for unresolved policy only", "medium", "questions do not imply validation passed; skipped checks remain explicit", "run the named next_tools before release decisions", "stop when unknowns are answered or deterministic defaults are acceptable", &.{ "zigar_profile_bootstrap", "zigar_profile_import" }));
+    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigars_profile_bootstrap", "zig_zls_match_check", "zigars_backend_verify", "zigars_env_pack" }));
+    try obj.put(allocator, "workflow_contract", try project_intelligence.workflowContractValue(allocator, "workspace/profile/backend catalog inspection", "setup questions for unresolved policy only", "medium", "questions do not imply validation passed; skipped checks remain explicit", "run the named next_tools before release decisions", "stop when unknowns are answered or deterministic defaults are acceptable", &.{ "zigars_profile_bootstrap", "zigars_profile_import" }));
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar project profile 2 workflow and returns an allocator-owned structured result.
-pub fn zigarProjectProfileV2(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars project profile 2 workflow and returns an allocator-owned structured result.
+pub fn zigarsProjectProfileV2(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const profile = if (argString(args, "content")) |content|
-        parseJsonContent(allocator, "zigar_project_profile_v2", "content", content) catch |err| return parseContentError(allocator, "zigar_project_profile_v2", content, err)
+        parseJsonContent(allocator, "zigars_project_profile_v2", "content", content) catch |err| return parseContentError(allocator, "zigars_project_profile_v2", content, err)
     else
         try generatedProfileV2Value(allocator, a);
-    return profileWriteResult(a, allocator, args, "zigar_project_profile_v2", profile);
+    return profileWriteResult(a, allocator, args, "zigars_project_profile_v2", profile);
 }
 
-/// Executes the zigar profile validate workflow and returns an allocator-owned structured result.
-pub fn zigarProfileValidate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars profile validate workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileValidate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const loaded = if (argString(args, "content")) |content|
-        loadContentValue(allocator, "zigar_profile_validate", content) catch |err| return parseContentError(allocator, "zigar_profile_validate", content, err)
+        loadContentValue(allocator, "zigars_profile_validate", content) catch |err| return parseContentError(allocator, "zigars_profile_validate", content, err)
     else
         loadWorkspaceJson(a, allocator, path) catch |err| switch (err) {
-            error.FileNotFound => return missingProfileValidation(allocator, "zigar_profile_validate", path),
-            else => |e| return jsonLoadErrorResult(a, allocator, "zigar_profile_validate", path, e),
+            error.FileNotFound => return missingProfileValidation(allocator, "zigars_profile_validate", path),
+            else => |e| return jsonLoadErrorResult(a, allocator, "zigars_profile_validate", path, e),
         };
     defer loaded.deinit(allocator);
     const validation = try validateProfileValue(allocator, loaded.value);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_profile_validate" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_profile_validate" });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "validation", validation);
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar profile read workflow and returns an allocator-owned structured result.
-pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars profile read workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const bytes = a.workspace.readFileAlloc(a.io, path, 1024 * 1024) catch |err| switch (err) {
         error.FileNotFound => return missingProfileRead(allocator, path),
         else => return toolErrorFromError(allocator, .{
-            .tool = "zigar_profile_read",
+            .tool = "zigars_profile_read",
             .operation = "read_profile",
             .phase = "workspace_read",
             .code = "read_failed",
@@ -154,7 +154,7 @@ pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     defer allocator.free(bytes);
     const hash = artifacts.sha256Hex(allocator, bytes) catch return error.OutOfMemory;
     defer allocator.free(hash);
-    var parsed = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch return parseContentError(allocator, "zigar_profile_read", bytes, error.InvalidJson);
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch return parseContentError(allocator, "zigars_profile_read", bytes, error.InvalidJson);
     defer parsed.deinit();
     const validation = try validateProfileValue(allocator, parsed.value);
 
@@ -165,7 +165,7 @@ pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_profile_read" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_profile_read" });
     try obj.put(allocator, "exists", .{ .bool = true });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "preimage_identity", .{ .object = preimage });
@@ -174,41 +174,41 @@ pub fn zigarProfileRead(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar profile bootstrap workflow and returns an allocator-owned structured result.
-pub fn zigarProfileBootstrap(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) !Result {
+/// Executes the zigars profile bootstrap workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileBootstrap(a: *App, allocator: std.mem.Allocator, _: ?std.json.Value) !Result {
     const profile = try generatedProfileV2Value(allocator, a);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_profile_bootstrap" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_profile_bootstrap" });
     try obj.put(allocator, "path", .{ .string = profile_path });
     try obj.put(allocator, "profile", profile);
     try obj.put(allocator, "detected_facts", try detectedFactsValue(allocator, a));
     try obj.put(allocator, "inferred_policy", try inferredPolicyValue(allocator));
     try obj.put(allocator, "unknowns", try profileUnknownsValue(allocator, a));
     try obj.put(allocator, "confidence", .{ .string = if (workspacePathExists(a, "build.zig")) "medium" else "low" });
-    try obj.put(allocator, "next_action", .{ .string = "review unknowns, then call zigar_profile_import with apply=true to persist the profile" });
+    try obj.put(allocator, "next_action", .{ .string = "review unknowns, then call zigars_profile_import with apply=true to persist the profile" });
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar profile import workflow and returns an allocator-owned structured result.
-pub fn zigarProfileImport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    const content = argString(args, "content") orelse return missingArgumentResult(allocator, "zigar_profile_import", "content", "profile v2 JSON content");
-    const profile = parseJsonContent(allocator, "zigar_profile_import", "content", content) catch |err| return parseContentError(allocator, "zigar_profile_import", content, err);
-    return profileWriteResult(a, allocator, args, "zigar_profile_import", profile);
+/// Executes the zigars profile import workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileImport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    const content = argString(args, "content") orelse return missingArgumentResult(allocator, "zigars_profile_import", "content", "profile v2 JSON content");
+    const profile = parseJsonContent(allocator, "zigars_profile_import", "content", content) catch |err| return parseContentError(allocator, "zigars_profile_import", content, err);
+    return profileWriteResult(a, allocator, args, "zigars_profile_import", profile);
 }
 
-/// Executes the zigar profile diff workflow and returns an allocator-owned structured result.
-pub fn zigarProfileDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars profile diff workflow and returns an allocator-owned structured result.
+pub fn zigarsProfileDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const path = argString(args, "path") orelse profile_path;
     const current = loadWorkspaceJson(a, allocator, path) catch |err| switch (err) {
         error.FileNotFound => null,
-        else => |e| return jsonLoadErrorResult(a, allocator, "zigar_profile_diff", path, e),
+        else => |e| return jsonLoadErrorResult(a, allocator, "zigars_profile_diff", path, e),
     };
     defer if (current) |*loaded| loaded.deinit(allocator);
     var generated_arena = std.heap.ArenaAllocator.init(allocator);
     defer generated_arena.deinit();
     const candidate = if (argString(args, "content")) |content|
-        loadContentValue(allocator, "zigar_profile_diff", content) catch |err| return parseContentError(allocator, "zigar_profile_diff", content, err)
+        loadContentValue(allocator, "zigars_profile_diff", content) catch |err| return parseContentError(allocator, "zigars_profile_diff", content, err)
     else
         LoadedJson{ .value = try generatedProfileV2Value(generated_arena.allocator(), a) };
     defer candidate.deinit(allocator);
@@ -223,7 +223,7 @@ pub fn zigarProfileDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_profile_diff" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_profile_diff" });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "current_exists", .{ .bool = current != null });
     try obj.put(allocator, "changed_fields", .{ .array = changed });
@@ -252,7 +252,7 @@ fn profileWriteResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
                 .phase = "workspace_write",
                 .code = "write_failed",
                 .category = "filesystem",
-                .resolution = "Confirm .zigar/profile.json can be created or overwritten inside the workspace, then retry with apply=true.",
+                .resolution = "Confirm .zigars/profile.json can be created or overwritten inside the workspace, then retry with apply=true.",
                 .details = &.{.{ .key = "path", .value = .{ .string = profile_path } }},
             }, err),
         };
@@ -271,13 +271,13 @@ fn profileWriteResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar env pack workflow and returns an allocator-owned structured result.
-pub fn zigarEnvPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars env pack workflow and returns an allocator-owned structured result.
+pub fn zigarsEnvPack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     return structured(allocator, try envPackValue(allocator, a, args));
 }
 
-/// Executes the zigar env export workflow and returns an allocator-owned structured result.
-pub fn zigarEnvExport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars env export workflow and returns an allocator-owned structured result.
+pub fn zigarsEnvExport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const output = argString(args, "output") orelse env_pack_path;
     const apply = argBool(args, "apply", false);
     const pack = try envPackValue(allocator, a, args);
@@ -286,12 +286,12 @@ pub fn zigarEnvExport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
     try support.serializeValue(allocator, &serialized, pack);
     const preimage = try preimageIdentityForPath(a, allocator, output);
     if (apply) {
-        writeAndRegisterArtifact(a, allocator, output, serialized.items, "zigar_env_export", "environment_pack", "zigar_env_pack", "reproducible environment pack export") catch |err|
-            return artifactWriteErrorResult(allocator, "zigar_env_export", output, err);
+        writeAndRegisterArtifact(a, allocator, output, serialized.items, "zigars_env_export", "environment_pack", "zigars_env_pack", "reproducible environment pack export") catch |err|
+            return artifactWriteErrorResult(allocator, "zigars_env_export", output, err);
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_env_export" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_env_export" });
     try obj.put(allocator, "path", .{ .string = output });
     try obj.put(allocator, "applied", .{ .bool = apply });
     try obj.put(allocator, "requires_apply", .{ .bool = !apply });
@@ -308,20 +308,20 @@ fn envPackValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value) !s
     const timeout_ms = toolTimeout(a, args);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_env_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_env_pack" });
     try obj.put(allocator, "schema_version", .{ .integer = 1 });
     try obj.put(allocator, "workspace", .{ .string = a.workspace.root });
     try obj.put(allocator, "toolchain", try toolchainStateValue(allocator, a, probe_backends, include_hashes, timeout_ms));
     try obj.put(allocator, "pins", try toolchainPinsValue(allocator, a));
     try obj.put(allocator, "backends", try backendStatesValue(allocator, a, "all", probe_backends, include_hashes, timeout_ms));
     try obj.put(allocator, "compatibility", try compatibilityValue(allocator, a, probe_backends, timeout_ms));
-    try obj.put(allocator, "setup_hints", try stringArrayValue(allocator, &.{ "use zigar_backend_install_plan for explicit setup commands", "use zig_toolchain_pin to persist expected versions", "use zigar_env_export apply=true to register this pack as evidence" }));
+    try obj.put(allocator, "setup_hints", try stringArrayValue(allocator, &.{ "use zigars_backend_install_plan for explicit setup commands", "use zig_toolchain_pin to persist expected versions", "use zigars_env_export apply=true to register this pack as evidence" }));
     try obj.put(allocator, "limitations", .{ .string = if (probe_backends) "Version probes are bounded command observations; they do not prove semantic compatibility." else "Backend versions are omitted unless probe_backends=true." });
     return .{ .object = obj };
 }
 
-/// Executes the zigar zvm probe workflow and returns an allocator-owned structured result.
-pub fn zigarZvmProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars zvm probe workflow and returns an allocator-owned structured result.
+pub fn zigarsZvmProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
     const timeout_ms = @min(toolTimeout(a, args), 3000);
     var commands = std.json.Array.init(allocator);
@@ -343,27 +343,27 @@ pub fn zigarZvmProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_zvm_probe" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_zvm_probe" });
     try obj.put(allocator, "zvm_path", .{ .string = zvm_path });
     try obj.put(allocator, "available", .{ .bool = available });
     try obj.put(allocator, "commands", .{ .array = commands });
     try obj.put(allocator, "mutates_environment", .{ .bool = false });
-    try obj.put(allocator, "resolution", .{ .string = if (available) "Use zigar_zvm_install_plan or zigar_zvm_switch_plan for explicit next commands." else "Install ZVM separately or pass zvm_path to an executable ZVM binary; this tool never installs it." });
+    try obj.put(allocator, "resolution", .{ .string = if (available) "Use zigars_zvm_install_plan or zigars_zvm_switch_plan for explicit next commands." else "Install ZVM separately or pass zvm_path to an executable ZVM binary; this tool never installs it." });
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar zvm install plan workflow and returns an allocator-owned structured result.
-pub fn zigarZvmInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigar_zvm_install_plan", "version", "Zig version to install");
+/// Executes the zigars zvm install plan workflow and returns an allocator-owned structured result.
+pub fn zigarsZvmInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigars_zvm_install_plan", "version", "Zig version to install");
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
-    return structured(allocator, try zvmPlanValue(allocator, "zigar_zvm_install_plan", zvm_path, version, &.{ zvm_path, "install", version }, "install requested Zig version"));
+    return structured(allocator, try zvmPlanValue(allocator, "zigars_zvm_install_plan", zvm_path, version, &.{ zvm_path, "install", version }, "install requested Zig version"));
 }
 
-/// Executes the zigar zvm switch plan workflow and returns an allocator-owned structured result.
-pub fn zigarZvmSwitchPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigar_zvm_switch_plan", "version", "Zig version to select");
+/// Executes the zigars zvm switch plan workflow and returns an allocator-owned structured result.
+pub fn zigarsZvmSwitchPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    const version = argString(args, "version") orelse return missingArgumentResult(allocator, "zigars_zvm_switch_plan", "version", "Zig version to select");
     const zvm_path = argString(args, "zvm_path") orelse "zvm";
-    return structured(allocator, try zvmPlanValue(allocator, "zigar_zvm_switch_plan", zvm_path, version, &.{ zvm_path, "use", version }, "select requested Zig version"));
+    return structured(allocator, try zvmPlanValue(allocator, "zigars_zvm_switch_plan", zvm_path, version, &.{ zvm_path, "use", version }, "select requested Zig version"));
 }
 
 /// Executes the zig zls match check workflow and returns an allocator-owned structured result.
@@ -418,8 +418,8 @@ pub fn zigToolchainPinCheck(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar backend install plan workflow and returns an allocator-owned structured result.
-pub fn zigarBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars backend install plan workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const manager = argString(args, "manager") orelse "manual";
     var plans = std.json.Array.init(allocator);
@@ -429,7 +429,7 @@ pub fn zigarBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_install_plan" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_install_plan" });
     try obj.put(allocator, "backend", .{ .string = backend });
     try obj.put(allocator, "manager", .{ .string = manager });
     try obj.put(allocator, "plan_only", .{ .bool = true });
@@ -438,21 +438,21 @@ pub fn zigarBackendInstallPlan(_: *App, allocator: std.mem.Allocator, args: ?std
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar backend verify workflow and returns an allocator-owned structured result.
-pub fn zigarBackendVerify(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars backend verify workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendVerify(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const timeout_ms = toolTimeout(a, args);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_verify" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_verify" });
     try obj.put(allocator, "backend", .{ .string = backend });
     try obj.put(allocator, "results", try backendStatesValue(allocator, a, backend, true, false, timeout_ms));
     try obj.put(allocator, "limitations", .{ .string = "Probe success only proves the executable answered the configured verification argv." });
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar dev env generate workflow and returns an allocator-owned structured result.
-pub fn zigarDevEnvGenerate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars dev env generate workflow and returns an allocator-owned structured result.
+pub fn zigarsDevEnvGenerate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const kind = argString(args, "kind") orelse "mise";
     const output = argString(args, "output") orelse defaultDevEnvOutput(kind);
     const apply = argBool(args, "apply", false);
@@ -460,43 +460,43 @@ pub fn zigarDevEnvGenerate(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     defer allocator.free(content);
     const preimage = try preimageIdentityForPath(a, allocator, output);
     if (apply) {
-        writeAndRegisterArtifact(a, allocator, output, content, "zigar_dev_env_generate", "dev_environment", "zigar_dev_env_generate", "generated pinned development environment") catch |err|
-            return artifactWriteErrorResult(allocator, "zigar_dev_env_generate", output, err);
+        writeAndRegisterArtifact(a, allocator, output, content, "zigars_dev_env_generate", "dev_environment", "zigars_dev_env_generate", "generated pinned development environment") catch |err|
+            return artifactWriteErrorResult(allocator, "zigars_dev_env_generate", output, err);
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_dev_env_generate" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_dev_env_generate" });
     try obj.put(allocator, "artifact_kind", .{ .string = kind });
     try obj.put(allocator, "path", .{ .string = output });
     try obj.put(allocator, "applied", .{ .bool = apply });
     try obj.put(allocator, "requires_apply", .{ .bool = !apply });
     try obj.put(allocator, "preimage_identity", preimage);
     try obj.put(allocator, "content", .{ .string = content });
-    try obj.put(allocator, "verification", .{ .string = "run zigar_backend_verify and zig_zls_match_check after applying the generated setup in a fresh shell" });
+    try obj.put(allocator, "verification", .{ .string = "run zigars_backend_verify and zig_zls_match_check after applying the generated setup in a fresh shell" });
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar backend conformance workflow and returns an allocator-owned structured result.
-pub fn zigarBackendConformance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars backend conformance workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendConformance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const backend = normalizeBackendName(argString(args, "backend") orelse "all");
     const probe_backends = argBool(args, "probe_backends", false);
     const timeout_ms = toolTimeout(a, args);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_conformance" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_conformance" });
     try obj.put(allocator, "backend", .{ .string = backend });
     try obj.put(allocator, "schema_version", .{ .integer = 1 });
     try obj.put(allocator, "run_state", .{ .string = if (probe_backends) "probe_matrix" else "plan_only" });
     try obj.put(allocator, "scenarios", try conformanceScenariosValue(allocator, backend));
     try obj.put(allocator, "verify_command", .{ .string = ".github/scripts/backend-conformance.sh" });
-    try obj.put(allocator, "evidence_paths", try stringArrayValue(allocator, &.{ backend_report_path, ".zigar-cache/backend-conformance/summary.md", ".zigar-cache/backend-conformance/stdout.jsonl", ".zigar-cache/backend-conformance/stderr.log" }));
+    try obj.put(allocator, "evidence_paths", try stringArrayValue(allocator, &.{ backend_report_path, ".zigars-cache/backend-conformance/summary.md", ".zigars-cache/backend-conformance/stdout.jsonl", ".zigars-cache/backend-conformance/stderr.log" }));
     if (probe_backends) try obj.put(allocator, "probe_results", try backendStatesValue(allocator, a, backend, true, false, timeout_ms));
     try obj.put(allocator, "limitations", .{ .string = "This MCP tool does not run the full conformance script; use the verify_command path for release-grade fake or real backend evidence." });
     return structured(allocator, .{ .object = obj });
 }
 
-/// Executes the zigar backend evidence pack workflow and returns an allocator-owned structured result.
-pub fn zigarBackendEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+/// Executes the zigars backend evidence pack workflow and returns an allocator-owned structured result.
+pub fn zigarsBackendEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const input = argString(args, "input") orelse backend_report_path;
     const output = argString(args, "output") orelse backend_evidence_path;
     const apply = argBool(args, "apply", false);
@@ -506,12 +506,12 @@ pub fn zigarBackendEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?st
     try support.serializeValue(allocator, &serialized, evidence);
     const preimage = try preimageIdentityForPath(a, allocator, output);
     if (apply) {
-        writeAndRegisterArtifact(a, allocator, output, serialized.items, "zigar_backend_evidence_pack", "backend_evidence_pack", "zigar_backend_evidence_pack", "backend conformance evidence pack") catch |err|
-            return artifactWriteErrorResult(allocator, "zigar_backend_evidence_pack", output, err);
+        writeAndRegisterArtifact(a, allocator, output, serialized.items, "zigars_backend_evidence_pack", "backend_evidence_pack", "zigars_backend_evidence_pack", "backend conformance evidence pack") catch |err|
+            return artifactWriteErrorResult(allocator, "zigars_backend_evidence_pack", output, err);
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_evidence_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_evidence_pack" });
     try obj.put(allocator, "input", .{ .string = input });
     try obj.put(allocator, "path", .{ .string = output });
     try obj.put(allocator, "applied", .{ .bool = apply });
@@ -527,7 +527,7 @@ fn generatedProfileV2Value(allocator: std.mem.Allocator, a: *App) !std.json.Valu
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "schema_version", .{ .integer = 2 });
     try obj.put(allocator, "workspace", .{ .string = a.workspace.root });
-    try obj.put(allocator, "generated_by", .{ .string = "zigar_project_profile_v2" });
+    try obj.put(allocator, "generated_by", .{ .string = "zigars_project_profile_v2" });
     try obj.put(allocator, "project_type", try projectTypeValue(allocator, a));
     try obj.put(allocator, "toolchain", try profileToolchainValue(allocator, a));
     try obj.put(allocator, "source_sets", try sourceSetsValue(allocator, a));
@@ -541,7 +541,7 @@ fn generatedProfileV2Value(allocator: std.mem.Allocator, a: *App) !std.json.Valu
     try obj.put(allocator, "perf_budgets", try perfBudgetsValue(allocator));
     try obj.put(allocator, "backends", try profileBackendsValue(allocator, a));
     try obj.put(allocator, "unknowns", try profileUnknownsValue(allocator, a));
-    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zigar_profile_validate", "zig_zls_match_check", "zigar_backend_verify", "zigar_env_pack" }));
+    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zigars_profile_validate", "zig_zls_match_check", "zigars_backend_verify", "zigars_env_pack" }));
     return .{ .object = obj };
 }
 
@@ -580,7 +580,7 @@ fn projectTypeValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
 /// Serializes generated dirs fields into an allocator-owned JSON value; allocation failures propagate.
 fn generatedDirsValue(allocator: std.mem.Allocator) !std.json.Value {
     var dirs = std.json.Array.init(allocator);
-    for ([_][]const u8{ ".zig-cache", ".zigar-cache", "zig-out", "zig-pkg", "coverage" }) |dir| {
+    for ([_][]const u8{ ".zig-cache", ".zigars-cache", "zig-out", "zig-pkg", "coverage" }) |dir| {
         try dirs.append(try ownedString(allocator, dir));
     }
     return .{ .array = dirs };
@@ -616,11 +616,11 @@ fn testsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     if (workspacePathExists(a, "build.zig")) {
         try commands.append(try commandPolicyValue(allocator, "build_test", "zig build test", "build.zig exists", "high"));
     }
-    try commands.append(try commandPolicyValue(allocator, "format_check", "zig fmt --check build.zig build.zig.zon src", "default zigar validation policy", "medium"));
+    try commands.append(try commandPolicyValue(allocator, "format_check", "zig fmt --check build.zig build.zig.zon src", "default zigars validation policy", "medium"));
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "commands", .{ .array = commands });
-    try obj.put(allocator, "default_gate", .{ .string = "zigar_validate_patch" });
+    try obj.put(allocator, "default_gate", .{ .string = "zigars_validate_patch" });
     return .{ .object = obj };
 }
 
@@ -710,7 +710,7 @@ fn profileUnknownsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
     if (!workspacePathExists(a, ".zigversion") and !workspacePathExists(a, ".tool-versions") and !workspacePathExists(a, "mise.toml")) {
         try unknowns.append(try unknownValue(allocator, "toolchain_pin", "no explicit Zig/ZLS pin file was detected", "zig_toolchain_pin"));
     }
-    try unknowns.append(try unknownValue(allocator, "release_backend_claims", "optional backend support claims require project policy", "zigar_backend_conformance"));
+    try unknowns.append(try unknownValue(allocator, "release_backend_claims", "optional backend support claims require project policy", "zigars_backend_conformance"));
     try unknowns.append(try unknownValue(allocator, "performance_budgets", "performance budgets are not inferred from source layout", "zig_profile_plan"));
     return .{ .array = unknowns };
 }
@@ -736,8 +736,8 @@ fn detectedFactsValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
 /// Serializes inferred policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn inferredPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     var policies = std.json.Array.init(allocator);
-    try policies.append(try factValue(allocator, "default_validation", "zigar_validate_patch", "zigar_policy", "medium"));
-    try policies.append(try factValue(allocator, "generated_dirs", ".zig-cache,.zigar-cache,zig-out,coverage", "zigar_policy", "high"));
+    try policies.append(try factValue(allocator, "default_validation", "zigars_validate_patch", "zigars_policy", "medium"));
+    try policies.append(try factValue(allocator, "generated_dirs", ".zig-cache,.zigars-cache,zig-out,coverage", "zigars_policy", "high"));
     return .{ .array = policies };
 }
 
@@ -753,7 +753,7 @@ fn validateProfileValue(allocator: std.mem.Allocator, profile: std.json.Value) !
         const version = obj.get("schema_version") orelse .null;
         if (version != .integer or version.integer != 2) {
             valid = false;
-            try findings.append(try findingValue(allocator, "schema.schema_version", "error", "profile schema_version must be integer 2", "regenerate with zigar_project_profile_v2"));
+            try findings.append(try findingValue(allocator, "schema.schema_version", "error", "profile schema_version must be integer 2", "regenerate with zigars_project_profile_v2"));
         }
         const required = [_][]const u8{ "toolchain", "source_sets", "generated_dirs", "targets", "tests", "backends", "verification" };
         for (required) |field| {
@@ -784,7 +784,7 @@ fn validateProfileValue(allocator: std.mem.Allocator, profile: std.json.Value) !
 /// Serializes finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn findingValue(allocator: std.mem.Allocator, rule: []const u8, severity: []const u8, message: []const u8, recommendation: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "source", .{ .string = "zigar_profile_validate" });
+    try obj.put(allocator, "source", .{ .string = "zigars_profile_validate" });
     try obj.put(allocator, "rule", .{ .string = rule });
     try obj.put(allocator, "severity", .{ .string = severity });
     try obj.put(allocator, "message", .{ .string = message });
@@ -881,7 +881,7 @@ fn compatibilityValueWithProbe(allocator: std.mem.Allocator, a: *App, probe: boo
     try obj.put(allocator, "project_version_hints", try projectVersionHintsValue(allocator, a));
     try obj.put(allocator, "confidence", .{ .string = if (probe and zig_version != null and zls_version != null) "medium" else "low" });
     try obj.put(allocator, "limitations", .{ .string = "ZLS version strings are not standardized; this check compares parsed release prefixes and project hints only." });
-    try obj.put(allocator, "resolution", .{ .string = "Install matching Zig/ZLS release lines or pin both in .zigar/toolchain.json and your dev environment." });
+    try obj.put(allocator, "resolution", .{ .string = "Install matching Zig/ZLS release lines or pin both in .zigars/toolchain.json and your dev environment." });
     return .{ .object = obj };
 }
 
@@ -897,7 +897,7 @@ fn explicitPinValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value
     try obj.put(allocator, "zwanzig", try pinEntryValue(allocator, "zwanzig", a.config.zwanzig_path, argString(args, "zwanzig_version")));
     try obj.put(allocator, "zflame", try pinEntryValue(allocator, "zflame", a.config.zflame_path, argString(args, "zflame_version")));
     try obj.put(allocator, "diff_folded", try pinEntryValue(allocator, "diff-folded", a.config.diff_folded_path, argString(args, "diff_folded_version")));
-    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zig_toolchain_pin_check", "zig_zls_match_check", "zigar_backend_verify" }));
+    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zig_toolchain_pin_check", "zig_zls_match_check", "zigars_backend_verify" }));
     return .{ .object = obj };
 }
 
@@ -938,7 +938,7 @@ fn setupCommandsValue(allocator: std.mem.Allocator, backend: []const u8, manager
             try commands.append(try ownedString(allocator, "install Zig 0.16.0 with your project-approved version manager"));
         }
     } else {
-        const command_text = try std.fmt.allocPrint(allocator, "pin {s} in the project dev shell or CI image, then pass its absolute path to zigar", .{backend});
+        const command_text = try std.fmt.allocPrint(allocator, "pin {s} in the project dev shell or CI image, then pass its absolute path to zigars", .{backend});
         try commands.append(.{ .string = command_text });
     }
     return .{ .array = commands };
@@ -980,7 +980,7 @@ fn backendEvidencePackValue(a: *App, allocator: std.mem.Allocator, input: []cons
     defer loaded.deinit(allocator);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_evidence_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_evidence_pack" });
     try obj.put(allocator, "schema_version", .{ .integer = 1 });
     try obj.put(allocator, "input", .{ .string = input });
     try obj.put(allocator, "available", .{ .bool = true });
@@ -995,7 +995,7 @@ fn backendEvidencePackValue(a: *App, allocator: std.mem.Allocator, input: []cons
 /// Serializes unavailable evidence pack fields into an allocator-owned JSON value; allocation failures propagate.
 fn unavailableEvidencePackValue(allocator: std.mem.Allocator, input: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_backend_evidence_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_backend_evidence_pack" });
     try obj.put(allocator, "schema_version", .{ .integer = 1 });
     try obj.put(allocator, "input", .{ .string = input });
     try obj.put(allocator, "available", .{ .bool = false });
@@ -1060,7 +1060,7 @@ fn jsonLoadErrorResult(a: *App, allocator: std.mem.Allocator, tool_name: []const
             .phase = "workspace_read",
             .code = "read_failed",
             .category = "filesystem",
-            .resolution = "Confirm the JSON file exists inside the workspace and is below zigar's bounded read limit.",
+            .resolution = "Confirm the JSON file exists inside the workspace and is below zigars' bounded read limit.",
             .details = &.{.{ .key = "path", .value = .{ .string = path } }},
         }, err),
     };
@@ -1082,14 +1082,14 @@ fn artifactWriteErrorResult(allocator: std.mem.Allocator, tool_name: []const u8,
 /// Parses content error input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseContentError(allocator: std.mem.Allocator, tool_name: []const u8, content: []const u8, err: anyerror) !Result {
     _ = content;
-    return invalidArgumentResult(allocator, tool_name, "content", "valid JSON object", if (err == error.InvalidJson) "invalid_json" else @errorName(err), "Pass a JSON object produced by zigar_profile_bootstrap or zigar_project_profile_v2.");
+    return invalidArgumentResult(allocator, tool_name, "content", "valid JSON object", if (err == error.InvalidJson) "invalid_json" else @errorName(err), "Pass a JSON object produced by zigars_profile_bootstrap or zigars_project_profile_v2.");
 }
 
 /// Implements missing profile validation workflow logic using caller-owned inputs.
 fn missingProfileValidation(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8) !Result {
     var validation = std.json.ObjectMap.empty;
     try validation.put(allocator, "valid", .{ .bool = false });
-    try validation.put(allocator, "findings", try singleFindingArray(allocator, "schema.profile_file", "error", "profile file is missing", "run zigar_profile_bootstrap then zigar_profile_import"));
+    try validation.put(allocator, "findings", try singleFindingArray(allocator, "schema.profile_file", "error", "profile file is missing", "run zigars_profile_bootstrap then zigars_profile_import"));
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
     try obj.put(allocator, "path", .{ .string = path });
@@ -1100,11 +1100,11 @@ fn missingProfileValidation(allocator: std.mem.Allocator, tool_name: []const u8,
 /// Implements missing profile read workflow logic using caller-owned inputs.
 fn missingProfileRead(allocator: std.mem.Allocator, path: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_profile_read" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_profile_read" });
     try obj.put(allocator, "exists", .{ .bool = false });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "profile", .null);
-    try obj.put(allocator, "resolution", .{ .string = "Run zigar_profile_bootstrap, review unknowns, then zigar_profile_import with apply=true." });
+    try obj.put(allocator, "resolution", .{ .string = "Run zigars_profile_bootstrap, review unknowns, then zigars_profile_import with apply=true." });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -1216,17 +1216,17 @@ fn zvmPlanValue(allocator: std.mem.Allocator, kind: []const u8, zvm_path: []cons
     try obj.put(allocator, "plan_only", .{ .bool = true });
     try obj.put(allocator, "mutates_environment", .{ .bool = false });
     try obj.put(allocator, "requires_user_execution", .{ .bool = true });
-    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zigar_zvm_probe", "zig_zls_match_check", "zig_toolchain_pin_check" }));
+    try obj.put(allocator, "verification", try stringArrayValue(allocator, &.{ "zigars_zvm_probe", "zig_zls_match_check", "zig_toolchain_pin_check" }));
     return .{ .object = obj };
 }
 
 /// Implements default dev env output workflow logic using caller-owned inputs.
 fn defaultDevEnvOutput(kind: []const u8) []const u8 {
-    if (std.mem.eql(u8, kind, "asdf")) return ".zigar-cache/dev-env/.tool-versions";
-    if (std.mem.eql(u8, kind, "nix")) return ".zigar-cache/dev-env/flake.nix";
-    if (std.mem.eql(u8, kind, "devcontainer")) return ".zigar-cache/dev-env/devcontainer.json";
-    if (std.mem.eql(u8, kind, "github-actions")) return ".zigar-cache/dev-env/github-actions.yml";
-    return ".zigar-cache/dev-env/mise.toml";
+    if (std.mem.eql(u8, kind, "asdf")) return ".zigars-cache/dev-env/.tool-versions";
+    if (std.mem.eql(u8, kind, "nix")) return ".zigars-cache/dev-env/flake.nix";
+    if (std.mem.eql(u8, kind, "devcontainer")) return ".zigars-cache/dev-env/devcontainer.json";
+    if (std.mem.eql(u8, kind, "github-actions")) return ".zigars-cache/dev-env/github-actions.yml";
+    return ".zigars-cache/dev-env/mise.toml";
 }
 
 /// Implements dev env content workflow logic using caller-owned inputs.
@@ -1235,17 +1235,17 @@ fn devEnvContent(allocator: std.mem.Allocator, a: *App, kind: []const u8) ![]u8 
     if (std.mem.eql(u8, kind, "asdf")) return std.fmt.allocPrint(allocator, "zig {s}\n", .{version});
     if (std.mem.eql(u8, kind, "nix")) return std.fmt.allocPrint(allocator,
         \\{{
-        \\  description = "zigar pinned Zig environment";
+        \\  description = "zigars pinned Zig environment";
         \\  outputs = {{ self, nixpkgs }}: {{}};
         \\}}
         \\
     , .{});
     if (std.mem.eql(u8, kind, "devcontainer")) return std.fmt.allocPrint(allocator,
-        \\{{"name":"zigar","features":{{}},"customizations":{{"zigar":{{"zig_version":"{s}"}}}}}}
+        \\{{"name":"zigars","features":{{}},"customizations":{{"zigars":{{"zig_version":"{s}"}}}}}}
         \\
     , .{version});
     if (std.mem.eql(u8, kind, "github-actions")) return std.fmt.allocPrint(allocator,
-        \\name: zigar
+        \\name: zigars
         \\on: [push, pull_request]
         \\jobs:
         \\  test:
@@ -1608,19 +1608,19 @@ test "environment zvm and dev environment helpers expose deterministic plans" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const plan = try zvmPlanValue(allocator, "zigar_zvm_install_plan", "zvm", "0.16.0", &.{ "zvm", "install", "0.16.0" }, "install Zig");
-    try std.testing.expectEqualStrings("zigar_zvm_install_plan", plan.object.get("kind").?.string);
+    const plan = try zvmPlanValue(allocator, "zigars_zvm_install_plan", "zvm", "0.16.0", &.{ "zvm", "install", "0.16.0" }, "install Zig");
+    try std.testing.expectEqualStrings("zigars_zvm_install_plan", plan.object.get("kind").?.string);
     try std.testing.expectEqualStrings("zvm", plan.object.get("argv").?.array.items[0].string);
     try std.testing.expect(plan.object.get("plan_only").?.bool);
     try std.testing.expect(!plan.object.get("mutates_environment").?.bool);
     try std.testing.expect(plan.object.get("requires_user_execution").?.bool);
     try std.testing.expectEqual(@as(usize, 3), plan.object.get("verification").?.array.items.len);
 
-    try std.testing.expectEqualStrings(".zigar-cache/dev-env/.tool-versions", defaultDevEnvOutput("asdf"));
-    try std.testing.expectEqualStrings(".zigar-cache/dev-env/flake.nix", defaultDevEnvOutput("nix"));
-    try std.testing.expectEqualStrings(".zigar-cache/dev-env/devcontainer.json", defaultDevEnvOutput("devcontainer"));
-    try std.testing.expectEqualStrings(".zigar-cache/dev-env/github-actions.yml", defaultDevEnvOutput("github-actions"));
-    try std.testing.expectEqualStrings(".zigar-cache/dev-env/mise.toml", defaultDevEnvOutput("mise"));
+    try std.testing.expectEqualStrings(".zigars-cache/dev-env/.tool-versions", defaultDevEnvOutput("asdf"));
+    try std.testing.expectEqualStrings(".zigars-cache/dev-env/flake.nix", defaultDevEnvOutput("nix"));
+    try std.testing.expectEqualStrings(".zigars-cache/dev-env/devcontainer.json", defaultDevEnvOutput("devcontainer"));
+    try std.testing.expectEqualStrings(".zigars-cache/dev-env/github-actions.yml", defaultDevEnvOutput("github-actions"));
+    try std.testing.expectEqualStrings(".zigars-cache/dev-env/mise.toml", defaultDevEnvOutput("mise"));
 }
 
 test "environment version and compatibility helpers classify release lines" {
@@ -1687,7 +1687,7 @@ const TestEnvironmentRuntime = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *TestEnvironmentRuntime) app_context.EnvironmentContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{
                 .zig = "/bin/zig",
                 .zls = "/bin/zls",
@@ -1769,8 +1769,8 @@ const TestEnvironmentRuntime = struct {
     fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *TestEnvironmentRuntime = @ptrCast(@alignCast(ptr));
         if (std.mem.indexOf(u8, request.path, "..") != null) return error.PathOutsideWorkspace;
-        if (std.mem.eql(u8, request.path, ".zigar/denied.json")) return error.AccessDenied;
-        if (!self.profile_exists and std.mem.eql(u8, request.path, ".zigar/profile.json")) return error.FileNotFound;
+        if (std.mem.eql(u8, request.path, ".zigars/denied.json")) return error.AccessDenied;
+        if (!self.profile_exists and std.mem.eql(u8, request.path, ".zigars/profile.json")) return error.FileNotFound;
         const bytes =
             if (std.mem.eql(u8, request.path, "build.zig"))
                 "const std = @import(\"std\"); pub fn build(_: *std.Build) void {}\n"
@@ -1782,13 +1782,13 @@ const TestEnvironmentRuntime = struct {
                 "zig 0.16.0\nzls 0.16.0\nnode 24\n"
             else if (std.mem.eql(u8, request.path, "mise.toml"))
                 "zig = \"0.16.0\"\n"
-            else if (std.mem.eql(u8, request.path, ".zigar/profile.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars/profile.json"))
                 completeProfileJson()
-            else if (std.mem.eql(u8, request.path, ".zigar/bad.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars/bad.json"))
                 "{bad"
-            else if (std.mem.eql(u8, request.path, ".zigar/toolchain.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars/toolchain.json"))
                 "{\"schema_version\":1,\"zig\":{\"version\":\"0.16.0\"},\"zls\":{\"version\":\"0.16.0\"}}\n"
-            else if (std.mem.eql(u8, request.path, ".zigar-cache/backend-conformance/report.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars-cache/backend-conformance/report.json"))
                 "{\"kind\":\"backend_conformance_report\",\"result\":\"pass\",\"source_commit\":\"abc123\"}\n"
             else if (std.mem.startsWith(u8, request.path, "/bin/"))
                 "fake executable bytes"
@@ -1819,7 +1819,7 @@ const TestEnvironmentRuntime = struct {
             std.mem.eql(u8, request.path, ".zigversion") or
             std.mem.eql(u8, request.path, ".tool-versions") or
             std.mem.eql(u8, request.path, "mise.toml") or
-            (self.profile_exists and std.mem.eql(u8, request.path, ".zigar/profile.json"));
+            (self.profile_exists and std.mem.eql(u8, request.path, ".zigars/profile.json"));
         return .{ .exists = exists, .kind = if (is_dir) .directory else .file };
     }
 
@@ -1872,99 +1872,99 @@ test "environment workflow use cases exercise profile lifecycle and elicitation 
     var runtime = TestEnvironmentRuntime{};
     var app = App.init(runtime.context(), allocator);
 
-    const setup = try zigarSetupElicit(&app, allocator, null);
-    try std.testing.expectEqualStrings("zigar_setup_elicit", setup.value.object.get("kind").?.string);
+    const setup = try zigarsSetupElicit(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigars_setup_elicit", setup.value.object.get("kind").?.string);
     try std.testing.expect(setup.value.object.get("questions").?.array.items.len >= 2);
 
-    const profile_elicit = try zigarProfileElicit(&app, allocator, null);
-    try std.testing.expectEqualStrings("zigar_profile_elicit", profile_elicit.value.object.get("kind").?.string);
+    const profile_elicit = try zigarsProfileElicit(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigars_profile_elicit", profile_elicit.value.object.get("kind").?.string);
 
     var sparse_runtime = TestEnvironmentRuntime{ .profile_exists = false, .source_dirs_exist = false };
     var sparse_app = App.init(sparse_runtime.context(), allocator);
-    const sparse_elicit = try zigarProfileElicit(&sparse_app, allocator, null);
+    const sparse_elicit = try zigarsProfileElicit(&sparse_app, allocator, null);
     try std.testing.expect(sparse_elicit.value.object.get("unknowns").?.array.items.len > 0);
-    const sparse_bootstrap = try zigarProfileBootstrap(&sparse_app, allocator, null);
+    const sparse_bootstrap = try zigarsProfileBootstrap(&sparse_app, allocator, null);
     try std.testing.expectEqualStrings("build.zig", sparse_bootstrap.value.object.get("profile").?.object.get("source_sets").?.array.items[0].object.get("path").?.string);
 
     var backend_args = try parseArgs(allocator, "{\"topic\":\"backend\"}");
     defer backend_args.deinit();
-    const backend = try zigarBackendElicit(&app, allocator, backend_args.value);
+    const backend = try zigarsBackendElicit(&app, allocator, backend_args.value);
     try std.testing.expectEqualStrings("backend", backend.value.object.get("topic").?.string);
 
-    const profile = try zigarProjectProfileV2(&app, allocator, null);
+    const profile = try zigarsProjectProfileV2(&app, allocator, null);
     try std.testing.expectEqual(@as(i64, 2), profile.value.object.get("schema_version").?.integer);
     try std.testing.expectEqualStrings("0.16.0", profile.value.object.get("profile").?.object.get("toolchain").?.object.get("expected_zig_version").?.string);
 
     var invalid_profile_args = try parseArgs(allocator, "{\"content\":\"{bad\"}");
     defer invalid_profile_args.deinit();
-    const invalid_profile = try zigarProjectProfileV2(&app, allocator, invalid_profile_args.value);
+    const invalid_profile = try zigarsProjectProfileV2(&app, allocator, invalid_profile_args.value);
     try std.testing.expect(invalid_profile.is_error);
 
     var apply_args = try parseArgs(allocator, "{\"apply\":true}");
     defer apply_args.deinit();
     const generated = try generatedProfileV2Value(allocator, &app);
-    const write = try profileWriteResult(&app, allocator, apply_args.value, "zigar_project_profile_v2", generated);
+    const write = try profileWriteResult(&app, allocator, apply_args.value, "zigars_project_profile_v2", generated);
     try std.testing.expect(write.value.object.get("applied").?.bool);
 
     var valid_import_args = try parseArgs(allocator, "{\"content\":\"{\\\"schema_version\\\":2,\\\"toolchain\\\":{},\\\"source_sets\\\":[],\\\"generated_dirs\\\":[],\\\"targets\\\":[],\\\"tests\\\":{},\\\"backends\\\":{},\\\"verification\\\":[],\\\"unknowns\\\":[]}\"}");
     defer valid_import_args.deinit();
-    const imported = try zigarProfileImport(&app, allocator, valid_import_args.value);
+    const imported = try zigarsProfileImport(&app, allocator, valid_import_args.value);
     try std.testing.expect(!imported.value.object.get("applied").?.bool);
 
     var missing_import_args = try parseArgs(allocator, "{}");
     defer missing_import_args.deinit();
-    const missing_import = try zigarProfileImport(&app, allocator, missing_import_args.value);
+    const missing_import = try zigarsProfileImport(&app, allocator, missing_import_args.value);
     try std.testing.expect(missing_import.is_error);
 
     var array_content_args = try parseArgs(allocator, "{\"content\":\"[]\"}");
     defer array_content_args.deinit();
-    const validate_array = try zigarProfileValidate(&app, allocator, array_content_args.value);
+    const validate_array = try zigarsProfileValidate(&app, allocator, array_content_args.value);
     try std.testing.expect(!validate_array.value.object.get("validation").?.object.get("valid").?.bool);
 
-    const read_profile = try zigarProfileRead(&app, allocator, null);
+    const read_profile = try zigarsProfileRead(&app, allocator, null);
     try std.testing.expect(read_profile.value.object.get("exists").?.bool);
 
-    var bad_read_args = try parseArgs(allocator, "{\"path\":\".zigar/bad.json\"}");
+    var bad_read_args = try parseArgs(allocator, "{\"path\":\".zigars/bad.json\"}");
     defer bad_read_args.deinit();
-    const bad_validation = try zigarProfileValidate(&app, allocator, bad_read_args.value);
+    const bad_validation = try zigarsProfileValidate(&app, allocator, bad_read_args.value);
     try std.testing.expect(bad_validation.is_error);
 
-    var missing_read_args = try parseArgs(allocator, "{\"path\":\".zigar/missing.json\"}");
+    var missing_read_args = try parseArgs(allocator, "{\"path\":\".zigars/missing.json\"}");
     defer missing_read_args.deinit();
-    const missing_validation = try zigarProfileValidate(&app, allocator, missing_read_args.value);
+    const missing_validation = try zigarsProfileValidate(&app, allocator, missing_read_args.value);
     try std.testing.expect(!missing_validation.value.object.get("validation").?.object.get("valid").?.bool);
-    const missing_profile = try zigarProfileRead(&sparse_app, allocator, null);
+    const missing_profile = try zigarsProfileRead(&sparse_app, allocator, null);
     try std.testing.expect(!missing_profile.value.object.get("exists").?.bool);
 
     var outside_args = try parseArgs(allocator, "{\"path\":\"../profile.json\"}");
     defer outside_args.deinit();
-    const outside_validation = try zigarProfileValidate(&app, allocator, outside_args.value);
+    const outside_validation = try zigarsProfileValidate(&app, allocator, outside_args.value);
     try std.testing.expect(outside_validation.is_error);
-    var denied_args = try parseArgs(allocator, "{\"path\":\".zigar/denied.json\"}");
+    var denied_args = try parseArgs(allocator, "{\"path\":\".zigars/denied.json\"}");
     defer denied_args.deinit();
-    const denied_validation = try zigarProfileValidate(&app, allocator, denied_args.value);
+    const denied_validation = try zigarsProfileValidate(&app, allocator, denied_args.value);
     try std.testing.expect(denied_validation.is_error);
 
     var invalid_diff_args = try parseArgs(allocator, "{\"content\":\"{bad\"}");
     defer invalid_diff_args.deinit();
-    const invalid_diff = try zigarProfileDiff(&app, allocator, invalid_diff_args.value);
+    const invalid_diff = try zigarsProfileDiff(&app, allocator, invalid_diff_args.value);
     try std.testing.expect(invalid_diff.is_error);
 
     var failed_write_runtime = TestEnvironmentRuntime{ .write_error = error.AccessDenied };
     var failed_write_app = App.init(failed_write_runtime.context(), allocator);
     const failed_write_profile = try generatedProfileV2Value(allocator, &failed_write_app);
-    const failed_write = try profileWriteResult(&failed_write_app, allocator, apply_args.value, "zigar_project_profile_v2", failed_write_profile);
+    const failed_write = try profileWriteResult(&failed_write_app, allocator, apply_args.value, "zigars_project_profile_v2", failed_write_profile);
     try std.testing.expect(failed_write.is_error);
 
     var oom_write_runtime = TestEnvironmentRuntime{ .write_error = error.OutOfMemory };
     var oom_write_app = App.init(oom_write_runtime.context(), allocator);
     const oom_write_profile = try generatedProfileV2Value(allocator, &oom_write_app);
-    try std.testing.expectError(error.OutOfMemory, profileWriteResult(&oom_write_app, allocator, apply_args.value, "zigar_project_profile_v2", oom_write_profile));
+    try std.testing.expectError(error.OutOfMemory, profileWriteResult(&oom_write_app, allocator, apply_args.value, "zigars_project_profile_v2", oom_write_profile));
 
-    const bootstrap = try zigarProfileBootstrap(&app, allocator, null);
-    try std.testing.expectEqualStrings("zigar_profile_bootstrap", bootstrap.value.object.get("kind").?.string);
+    const bootstrap = try zigarsProfileBootstrap(&app, allocator, null);
+    try std.testing.expectEqualStrings("zigars_profile_bootstrap", bootstrap.value.object.get("kind").?.string);
 
-    const diff = try zigarProfileDiff(&app, allocator, null);
+    const diff = try zigarsProfileDiff(&app, allocator, null);
     try std.testing.expect(diff.value.object.get("current_exists").?.bool);
 }
 
@@ -1977,26 +1977,26 @@ test "environment workflow use cases exercise environment packs, pins, backends,
 
     var probe_args = try parseArgs(allocator, "{\"probe_backends\":true,\"include_hashes\":true,\"timeout_ms\":50}");
     defer probe_args.deinit();
-    const pack = try zigarEnvPack(&app, allocator, probe_args.value);
-    try std.testing.expectEqualStrings("zigar_env_pack", pack.value.object.get("kind").?.string);
+    const pack = try zigarsEnvPack(&app, allocator, probe_args.value);
+    try std.testing.expectEqualStrings("zigars_env_pack", pack.value.object.get("kind").?.string);
     try std.testing.expectEqualStrings("available", pack.value.object.get("toolchain").?.object.get("zig").?.object.get("status").?.string);
 
     var export_args = try parseArgs(allocator, "{\"apply\":true,\"probe_backends\":false,\"include_hashes\":false}");
     defer export_args.deinit();
-    const exported = try zigarEnvExport(&app, allocator, export_args.value);
+    const exported = try zigarsEnvExport(&app, allocator, export_args.value);
     try std.testing.expect(exported.value.object.get("applied").?.bool);
 
     var zvm_args = try parseArgs(allocator, "{\"zvm_path\":\"/bin/zvm\",\"timeout_ms\":50}");
     defer zvm_args.deinit();
-    const zvm = try zigarZvmProbe(&app, allocator, zvm_args.value);
+    const zvm = try zigarsZvmProbe(&app, allocator, zvm_args.value);
     try std.testing.expect(zvm.value.object.get("available").?.bool);
     try std.testing.expectEqual(@as(usize, 4), zvm.value.object.get("commands").?.array.items.len);
 
     var zvm_install_args = try parseArgs(allocator, "{\"version\":\"0.16.0\",\"zvm_path\":\"zvm\"}");
     defer zvm_install_args.deinit();
-    const install = try zigarZvmInstallPlan(&app, allocator, zvm_install_args.value);
+    const install = try zigarsZvmInstallPlan(&app, allocator, zvm_install_args.value);
     try std.testing.expect(install.value.object.get("plan_only").?.bool);
-    const switch_plan = try zigarZvmSwitchPlan(&app, allocator, zvm_install_args.value);
+    const switch_plan = try zigarsZvmSwitchPlan(&app, allocator, zvm_install_args.value);
     try std.testing.expectEqualStrings("select requested Zig version", switch_plan.value.object.get("description").?.string);
 
     const zls_match = try zigZlsMatchCheck(&app, allocator, probe_args.value);
@@ -2010,19 +2010,19 @@ test "environment workflow use cases exercise environment packs, pins, backends,
     const pin_check = try zigToolchainPinCheck(&app, allocator, null);
     try std.testing.expectEqualStrings("zig_toolchain_pin_check", pin_check.value.object.get("kind").?.string);
 
-    var missing_pin_args = try parseArgs(allocator, "{\"input\":\".zigar/missing-toolchain.json\"}");
+    var missing_pin_args = try parseArgs(allocator, "{\"input\":\".zigars/missing-toolchain.json\"}");
     defer missing_pin_args.deinit();
     const missing_pin = try zigToolchainPinCheck(&app, allocator, missing_pin_args.value);
     try std.testing.expect(!missing_pin.value.object.get("ok").?.bool);
 
     var backend_plan_args = try parseArgs(allocator, "{\"backend\":\"zig\",\"manager\":\"mise\"}");
     defer backend_plan_args.deinit();
-    const backend_plan = try zigarBackendInstallPlan(&app, allocator, backend_plan_args.value);
+    const backend_plan = try zigarsBackendInstallPlan(&app, allocator, backend_plan_args.value);
     try std.testing.expectEqual(@as(usize, 1), backend_plan.value.object.get("plans").?.array.items.len);
 
     var backend_verify_args = try parseArgs(allocator, "{\"backend\":\"zls\",\"timeout_ms\":50}");
     defer backend_verify_args.deinit();
-    const verify = try zigarBackendVerify(&app, allocator, backend_verify_args.value);
+    const verify = try zigarsBackendVerify(&app, allocator, backend_verify_args.value);
     try std.testing.expectEqualStrings("zls", verify.value.object.get("backend").?.string);
 
     var missing_backend_context = runtime.context();
@@ -2030,33 +2030,33 @@ test "environment workflow use cases exercise environment packs, pins, backends,
     var missing_backend_app = App.init(missing_backend_context, allocator);
     var missing_backend_args = try parseArgs(allocator, "{\"backend\":\"zlint\",\"timeout_ms\":50}");
     defer missing_backend_args.deinit();
-    const missing_backend = try zigarBackendVerify(&missing_backend_app, allocator, missing_backend_args.value);
+    const missing_backend = try zigarsBackendVerify(&missing_backend_app, allocator, missing_backend_args.value);
     const missing_backend_result = missing_backend.value.object.get("results").?.array.items[0].object;
     try std.testing.expectEqualStrings("not_found", missing_backend_result.get("status").?.string);
 
-    const conformance = try zigarBackendConformance(&app, allocator, probe_args.value);
+    const conformance = try zigarsBackendConformance(&app, allocator, probe_args.value);
     try std.testing.expectEqualStrings("probe_matrix", conformance.value.object.get("run_state").?.string);
 
     var evidence_args = try parseArgs(allocator, "{\"apply\":true}");
     defer evidence_args.deinit();
-    const evidence = try zigarBackendEvidencePack(&app, allocator, evidence_args.value);
+    const evidence = try zigarsBackendEvidencePack(&app, allocator, evidence_args.value);
     try std.testing.expect(evidence.value.object.get("applied").?.bool);
 
-    var missing_evidence_args = try parseArgs(allocator, "{\"input\":\".zigar-cache/backend-conformance/missing.json\"}");
+    var missing_evidence_args = try parseArgs(allocator, "{\"input\":\".zigars-cache/backend-conformance/missing.json\"}");
     defer missing_evidence_args.deinit();
-    const missing_evidence = try zigarBackendEvidencePack(&app, allocator, missing_evidence_args.value);
+    const missing_evidence = try zigarsBackendEvidencePack(&app, allocator, missing_evidence_args.value);
     try std.testing.expect(!missing_evidence.value.object.get("evidence").?.object.get("available").?.bool);
 
     var bad_output_args = try parseArgs(allocator, "{\"apply\":true,\"output\":\"../bad.json\"}");
     defer bad_output_args.deinit();
-    const bad_export = try zigarEnvExport(&app, allocator, bad_output_args.value);
+    const bad_export = try zigarsEnvExport(&app, allocator, bad_output_args.value);
     try std.testing.expect(bad_export.is_error);
 
     inline for (.{ "asdf", "nix", "devcontainer", "github-actions", "mise" }) |kind| {
         const args_text = try std.fmt.allocPrint(allocator, "{{\"kind\":\"{s}\",\"apply\":false}}", .{kind});
         var args = try parseArgs(allocator, args_text);
         defer args.deinit();
-        const generated = try zigarDevEnvGenerate(&app, allocator, args.value);
+        const generated = try zigarsDevEnvGenerate(&app, allocator, args.value);
         try std.testing.expectEqualStrings(kind, generated.value.object.get("artifact_kind").?.string);
     }
 
@@ -2080,24 +2080,24 @@ test "environment workflow values clean up partially allocated JSON on failure" 
     var dev_env_args = try parseArgs(allocator, "{\"kind\":\"github-actions\"}");
     defer dev_env_args.deinit();
 
-    sweepUsecaseAllocationFailures(zigarSetupElicit, null);
-    sweepUsecaseAllocationFailures(zigarProfileElicit, null);
-    sweepUsecaseAllocationFailures(zigarProjectProfileV2, null);
-    sweepUsecaseAllocationFailures(zigarProfileValidate, null);
-    sweepUsecaseAllocationFailures(zigarProfileRead, null);
-    sweepUsecaseAllocationFailures(zigarProfileBootstrap, null);
-    sweepUsecaseAllocationFailures(zigarProfileDiff, null);
-    sweepUsecaseAllocationFailures(zigarEnvPack, null);
-    sweepUsecaseAllocationFailures(zigarEnvExport, null);
-    sweepUsecaseAllocationFailures(zigarZvmProbe, zvm_args.value);
+    sweepUsecaseAllocationFailures(zigarsSetupElicit, null);
+    sweepUsecaseAllocationFailures(zigarsProfileElicit, null);
+    sweepUsecaseAllocationFailures(zigarsProjectProfileV2, null);
+    sweepUsecaseAllocationFailures(zigarsProfileValidate, null);
+    sweepUsecaseAllocationFailures(zigarsProfileRead, null);
+    sweepUsecaseAllocationFailures(zigarsProfileBootstrap, null);
+    sweepUsecaseAllocationFailures(zigarsProfileDiff, null);
+    sweepUsecaseAllocationFailures(zigarsEnvPack, null);
+    sweepUsecaseAllocationFailures(zigarsEnvExport, null);
+    sweepUsecaseAllocationFailures(zigarsZvmProbe, zvm_args.value);
     sweepUsecaseAllocationFailures(zigZlsMatchCheck, backend_args.value);
     sweepUsecaseAllocationFailures(zigToolchainPin, null);
     sweepUsecaseAllocationFailures(zigToolchainPinCheck, null);
-    sweepUsecaseAllocationFailures(zigarBackendInstallPlan, backend_args.value);
-    sweepUsecaseAllocationFailures(zigarBackendVerify, backend_args.value);
-    sweepUsecaseAllocationFailures(zigarDevEnvGenerate, dev_env_args.value);
-    sweepUsecaseAllocationFailures(zigarBackendConformance, backend_args.value);
-    sweepUsecaseAllocationFailures(zigarBackendEvidencePack, null);
+    sweepUsecaseAllocationFailures(zigarsBackendInstallPlan, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarsBackendVerify, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarsDevEnvGenerate, dev_env_args.value);
+    sweepUsecaseAllocationFailures(zigarsBackendConformance, backend_args.value);
+    sweepUsecaseAllocationFailures(zigarsBackendEvidencePack, null);
 
     for (0..8) |fail_index| {
         var backing = std.heap.ArenaAllocator.init(std.testing.allocator);

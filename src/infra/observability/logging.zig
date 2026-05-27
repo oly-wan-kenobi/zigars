@@ -77,7 +77,7 @@ pub const Logger = struct {
 
         var buffer: [4096]u8 = undefined;
         var writer = std.Io.File.stderr().writer(io, &buffer);
-        writer.interface.print("[zigar/{s}] {s}: ", .{ component, level.label() }) catch return;
+        writer.interface.print("[zigars/{s}] {s}: ", .{ component, level.label() }) catch return;
         writer.interface.print(fmt, args) catch return;
         writer.interface.writeByte('\n') catch return;
         writer.interface.flush() catch return;

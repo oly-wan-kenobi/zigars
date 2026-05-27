@@ -9,7 +9,7 @@ const fake_workspace = @import("../../../testing/fakes/workspace_store.zig");
 /// Returns a typed context backed by this fixture or runtime state.
 fn context(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
         .timeouts = .{ .command_ms = 12_000, .zls_ms = 30_000 },
         .zls_state = .{ .status = "connected" },

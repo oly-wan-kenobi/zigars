@@ -16,7 +16,7 @@ const apply_hint = fieldHint("apply", .{ .description = "Write changes only when
 const mode_hint = fieldHint("mode", .{ .description = "Validation depth.", .default_string = "standard", .enum_values = &.{ "quick", "standard", "full" } });
 
 /// Create a patch-session identity with current file preimages, generated-file policy, and next action guidance.
-pub const zigar_patch_session_create = tool(.{
+pub const zigars_patch_session_create = tool(.{
     .description = "Create a patch-session identity with current file preimages, generated-file policy, and next action guidance.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "files", "string", false }, .{ "patch", "string", false }, .{ "edits", "string", false } }),
     .read_only = true,
@@ -25,7 +25,7 @@ pub const zigar_patch_session_create = tool(.{
 });
 
 /// Preview a multi-file replacement patch session with preimage hashes, generated-file policy, and unified diffs.
-pub const zigar_patch_session_preview = tool(.{
+pub const zigars_patch_session_preview = tool(.{
     .description = "Preview a multi-file replacement patch session with preimage hashes, generated-file policy, and unified diffs.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "session_id", "string", false }, .{ "edits", "string", true } }),
     .output_schema = outputSchema(.patch_session),
@@ -35,7 +35,7 @@ pub const zigar_patch_session_preview = tool(.{
 });
 
 /// Apply a previewed multi-file patch session only when expected preimages still match.
-pub const zigar_patch_session_apply = tool(.{
+pub const zigars_patch_session_apply = tool(.{
     .description = "Apply a previewed multi-file patch session only when expected preimages still match.",
     .input_schema = schemaWithHints(&.{ .{ "goal", "string", false }, .{ "session_id", "string", false }, .{ "edits", "string", true }, .{ "expected_preimages", "string", false }, .{ "apply", "boolean", false } }, &.{apply_hint}),
     .read_only = false,
@@ -45,7 +45,7 @@ pub const zigar_patch_session_apply = tool(.{
 });
 
 /// Run validation for a patch session or supplied changed files and return explicit skipped/failed phases.
-pub const zigar_patch_session_validate = tool(.{
+pub const zigars_patch_session_validate = tool(.{
     .description = "Run validation for a patch session or supplied changed files and return explicit skipped/failed phases.",
     .input_schema = schemaWithHints(&.{ .{ "session_id", "string", false }, .{ "changed_files", "string", false }, .{ "diff", "string", false }, .{ "edits", "string", false }, .{ "goal", "string", false }, .{ "mode", "string", false }, .{ "include_semantic", "boolean", false }, .{ "stop_on_failure", "boolean", false }, .{ "apply", "boolean", false }, .{ "output", "string", false }, .{ "timeout_ms", "integer", false } }, &.{ mode_hint, apply_hint }),
     .read_only = false,
@@ -54,9 +54,9 @@ pub const zigar_patch_session_validate = tool(.{
     .plan = .{ .dynamic_command = "Delegates to the validation workflow with session-derived changed files when edits are supplied." },
 });
 
-/// Preview or revert only files from a recorded zigar patch session whose current hashes still match the session output.
-pub const zigar_patch_session_revert = tool(.{
-    .description = "Preview or revert only files from a recorded zigar patch session whose current hashes still match the session output.",
+/// Preview or revert only files from a recorded zigars patch session whose current hashes still match the session output.
+pub const zigars_patch_session_revert = tool(.{
+    .description = "Preview or revert only files from a recorded zigars patch session whose current hashes still match the session output.",
     .input_schema = schemaWithHints(&.{ .{ "session_id", "string", true }, .{ "history", "string", false }, .{ "history_path", "string", false }, .{ "apply", "boolean", false } }, &.{apply_hint}),
     .read_only = false,
     .group = .formatting_and_edits,
@@ -74,7 +74,7 @@ pub const zig_generated_file_trace = tool(.{
 });
 
 /// Check file or patch paths against generated/vendor edit policy before broad edits.
-pub const zigar_edit_policy_check = tool(.{
+pub const zigars_edit_policy_check = tool(.{
     .description = "Check file or patch paths against generated/vendor edit policy before broad edits.",
     .input_schema = schema(&.{ .{ "files", "string", false }, .{ "patch", "string", false } }),
     .read_only = true,
@@ -83,7 +83,7 @@ pub const zigar_edit_policy_check = tool(.{
 });
 
 /// Route a generated, cache, artifact, or vendored path to likely source files and regeneration commands.
-pub const zigar_generated_route = tool(.{
+pub const zigars_generated_route = tool(.{
     .description = "Route a generated, cache, artifact, or vendored path to likely source files and regeneration commands.",
     .input_schema = schema(&.{ .{ "path", "string", true }, .{ "goal", "string", false } }),
     .read_only = true,

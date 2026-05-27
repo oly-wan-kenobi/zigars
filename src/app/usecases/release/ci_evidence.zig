@@ -296,16 +296,16 @@ pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8
     defer allocator.free(failure_xml);
     return std.fmt.allocPrint(allocator,
         \\<?xml version="1.0" encoding="UTF-8"?>
-        \\<testsuite name="zigar.zig_junit" tests="1" failures="{d}" errors="0" skipped="0">
+        \\<testsuite name="zigars.zig_junit" tests="1" failures="{d}" errors="0" skipped="0">
         \\  <properties>
-        \\    <property name="zigar.artifact_kind" value="{s}"/>
-        \\    <property name="zigar.junit_kind" value="command_level"/>
-        \\    <property name="zigar.raw_output_available" value="true"/>
-        \\    <property name="zigar.command" value="{s}"/>
-        \\    <property name="zigar.parsing_basis" value="{s}"/>
-        \\    <property name="zigar.limitations" value="{s}"/>
+        \\    <property name="zigars.artifact_kind" value="{s}"/>
+        \\    <property name="zigars.junit_kind" value="command_level"/>
+        \\    <property name="zigars.raw_output_available" value="true"/>
+        \\    <property name="zigars.command" value="{s}"/>
+        \\    <property name="zigars.parsing_basis" value="{s}"/>
+        \\    <property name="zigars.limitations" value="{s}"/>
         \\  </properties>
-        \\  <testcase classname="zigar.command" name="{s}">
+        \\  <testcase classname="zigars.command" name="{s}">
         \\    {s}
         \\  </testcase>
         \\  <system-out>{s}</system-out>

@@ -22,30 +22,30 @@ resolve_executable() {
   command -v "$value" || fail "$label was not found on PATH: $value"
 }
 
-zigar_binary="${ZIGAR_BINARY:-zig-out/bin/zigar}"
-if [[ "${ZIGAR_SKIP_BUILD:-0}" != "1" ]]; then
+zigars_binary="${ZIGARS_BINARY:-zig-out/bin/zigars}"
+if [[ "${ZIGARS_SKIP_BUILD:-0}" != "1" ]]; then
   zig build -Doptimize=ReleaseSafe
-elif [[ ! -x "$zigar_binary" ]]; then
+elif [[ ! -x "$zigars_binary" ]]; then
   zig build -Doptimize=ReleaseSafe
 fi
 
-zigar_binary="$(resolve_executable "$zigar_binary" zigar)"
-zig_path="$(resolve_executable "${ZIGAR_ZIG_PATH:-zig}" zig)"
-zls_path="${ZIGAR_ZLS_PATH:-zls}"
-zlint_path="${ZIGAR_ZLINT_PATH:-zlint}"
-zwanzig_path="${ZIGAR_ZWANZIG_PATH:-zwanzig}"
-zflame_path="${ZIGAR_ZFLAME_PATH:-zflame}"
-diff_folded_path="${ZIGAR_DIFF_FOLDED_PATH:-diff-folded}"
+zigars_binary="$(resolve_executable "$zigars_binary" zigars)"
+zig_path="$(resolve_executable "${ZIGARS_ZIG_PATH:-zig}" zig)"
+zls_path="${ZIGARS_ZLS_PATH:-zls}"
+zlint_path="${ZIGARS_ZLINT_PATH:-zlint}"
+zwanzig_path="${ZIGARS_ZWANZIG_PATH:-zwanzig}"
+zflame_path="${ZIGARS_ZFLAME_PATH:-zflame}"
+diff_folded_path="${ZIGARS_DIFF_FOLDED_PATH:-diff-folded}"
 
 command -v python3 >/dev/null || fail "python3 is required for response validation"
 
-report_dir="${ZIGAR_CONFORMANCE_REPORT_DIR:-.zigar-cache/backend-conformance}"
+report_dir="${ZIGARS_CONFORMANCE_REPORT_DIR:-.zigars-cache/backend-conformance}"
 mkdir -p "$report_dir"
 report_dir="$(cd "$report_dir" && pwd -P)"
 
-workspace="$(mktemp -d "${TMPDIR:-/tmp}/zigar-backend-conformance.XXXXXX")"
+workspace="$(mktemp -d "${TMPDIR:-/tmp}/zigars-backend-conformance.XXXXXX")"
 cleanup() {
-  if [[ "${ZIGAR_KEEP_CONFORMANCE_WORKSPACE:-0}" != "1" ]]; then
+  if [[ "${ZIGARS_KEEP_CONFORMANCE_WORKSPACE:-0}" != "1" ]]; then
     rm -rf "$workspace"
   else
     printf 'backend-conformance: kept workspace %s\n' "$workspace" >&2
@@ -74,7 +74,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
-        .name = "zigar-conformance-fixture",
+        .name = "zigars-conformance-fixture",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = b.standardTargetOptions(.{}),
@@ -103,30 +103,30 @@ summary_path="$report_dir/summary.md"
 
 printf 'backend-conformance: workspace %s\n' "$workspace"
 printf 'backend-conformance: report %s\n' "$report_path"
-printf 'backend-conformance: zigar %s\n' "$zigar_binary"
+printf 'backend-conformance: zigars %s\n' "$zigars_binary"
 printf 'backend-conformance: zig %s\n' "$zig_path"
 printf 'backend-conformance: zls %s\n' "$zls_path"
 printf 'backend-conformance: zlint %s\n' "$zlint_path"
 printf 'backend-conformance: zwanzig %s\n' "$zwanzig_path"
 printf 'backend-conformance: zflame %s\n' "$zflame_path"
 printf 'backend-conformance: diff-folded %s\n' "$diff_folded_path"
-printf 'backend-conformance: claimed backends %s\n' "${ZIGAR_CLAIMED_BACKENDS:-}"
+printf 'backend-conformance: claimed backends %s\n' "${ZIGARS_CLAIMED_BACKENDS:-}"
 
-ZIGAR_BINARY="$zigar_binary" \
-ZIGAR_WORKSPACE="$workspace" \
-ZIGAR_ZIG_PATH="$zig_path" \
-ZIGAR_ZLS_PATH="$zls_path" \
-ZIGAR_ZLINT_PATH="$zlint_path" \
-ZIGAR_ZWANZIG_PATH="$zwanzig_path" \
-ZIGAR_ZFLAME_PATH="$zflame_path" \
-ZIGAR_DIFF_FOLDED_PATH="$diff_folded_path" \
-ZIGAR_STDOUT_PATH="$stdout_path" \
-ZIGAR_STDERR_PATH="$stderr_path" \
-ZIGAR_REPORT_PATH="$report_path" \
-ZIGAR_SUMMARY_PATH="$summary_path" \
-ZIGAR_CLAIMED_BACKENDS="${ZIGAR_CLAIMED_BACKENDS:-}" \
-ZIGAR_BACKEND_TIMEOUT_MS="${ZIGAR_BACKEND_TIMEOUT_MS:-20000}" \
-ZIGAR_CONFORMANCE_TIMEOUT_SECONDS="${ZIGAR_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
+ZIGARS_BINARY="$zigars_binary" \
+ZIGARS_WORKSPACE="$workspace" \
+ZIGARS_ZIG_PATH="$zig_path" \
+ZIGARS_ZLS_PATH="$zls_path" \
+ZIGARS_ZLINT_PATH="$zlint_path" \
+ZIGARS_ZWANZIG_PATH="$zwanzig_path" \
+ZIGARS_ZFLAME_PATH="$zflame_path" \
+ZIGARS_DIFF_FOLDED_PATH="$diff_folded_path" \
+ZIGARS_STDOUT_PATH="$stdout_path" \
+ZIGARS_STDERR_PATH="$stderr_path" \
+ZIGARS_REPORT_PATH="$report_path" \
+ZIGARS_SUMMARY_PATH="$summary_path" \
+ZIGARS_CLAIMED_BACKENDS="${ZIGARS_CLAIMED_BACKENDS:-}" \
+ZIGARS_BACKEND_TIMEOUT_MS="${ZIGARS_BACKEND_TIMEOUT_MS:-20000}" \
+ZIGARS_CONFORMANCE_TIMEOUT_SECONDS="${ZIGARS_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
 python3 <<'PY'
 import hashlib
 import json
@@ -146,54 +146,54 @@ def fail(message):
     sys.exit(1)
 
 
-workspace = pathlib.Path(os.environ["ZIGAR_WORKSPACE"])
-stdout_path = pathlib.Path(os.environ["ZIGAR_STDOUT_PATH"])
-stderr_path = pathlib.Path(os.environ["ZIGAR_STDERR_PATH"])
-report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
-summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
-backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
-timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
+workspace = pathlib.Path(os.environ["ZIGARS_WORKSPACE"])
+stdout_path = pathlib.Path(os.environ["ZIGARS_STDOUT_PATH"])
+stderr_path = pathlib.Path(os.environ["ZIGARS_STDERR_PATH"])
+report_path = pathlib.Path(os.environ["ZIGARS_REPORT_PATH"])
+summary_path = pathlib.Path(os.environ["ZIGARS_SUMMARY_PATH"])
+backend_timeout_ms = int(os.environ["ZIGARS_BACKEND_TIMEOUT_MS"])
+timeout_seconds = int(os.environ["ZIGARS_CONFORMANCE_TIMEOUT_SECONDS"])
 valid_claimed_backends = {"zls", "zlint", "zwanzig", "zflame", "diff_folded"}
 claimed_backends = [
     item.strip().replace("-", "_")
-    for item in os.environ.get("ZIGAR_CLAIMED_BACKENDS", "").split(",")
+    for item in os.environ.get("ZIGARS_CLAIMED_BACKENDS", "").split(",")
     if item.strip()
 ]
 unknown_claims = sorted(set(claimed_backends) - valid_claimed_backends)
 
 backend_specs = {
-    "zigar": {
-        "path": os.environ["ZIGAR_BINARY"],
+    "zigars": {
+        "path": os.environ["ZIGARS_BINARY"],
         "required": True,
         "version_args": ["--version"],
     },
     "zig": {
-        "path": os.environ["ZIGAR_ZIG_PATH"],
+        "path": os.environ["ZIGARS_ZIG_PATH"],
         "required": True,
         "version_args": ["version"],
     },
     "zls": {
-        "path": os.environ["ZIGAR_ZLS_PATH"],
+        "path": os.environ["ZIGARS_ZLS_PATH"],
         "required": False,
         "version_args": ["--version"],
     },
     "zlint": {
-        "path": os.environ["ZIGAR_ZLINT_PATH"],
+        "path": os.environ["ZIGARS_ZLINT_PATH"],
         "required": False,
         "version_args": ["--help"],
     },
     "zwanzig": {
-        "path": os.environ["ZIGAR_ZWANZIG_PATH"],
+        "path": os.environ["ZIGARS_ZWANZIG_PATH"],
         "required": False,
         "version_args": ["--help"],
     },
     "zflame": {
-        "path": os.environ["ZIGAR_ZFLAME_PATH"],
+        "path": os.environ["ZIGARS_ZFLAME_PATH"],
         "required": False,
         "version_args": ["--help"],
     },
     "diff_folded": {
-        "path": os.environ["ZIGAR_DIFF_FOLDED_PATH"],
+        "path": os.environ["ZIGARS_DIFF_FOLDED_PATH"],
         "required": False,
         "version_args": ["--help"],
     },
@@ -367,7 +367,7 @@ requests = [
         "params": {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
-            "clientInfo": {"name": "zigar-backend-conformance", "version": "0"},
+            "clientInfo": {"name": "zigars-backend-conformance", "version": "0"},
         },
     },
     {"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -377,7 +377,7 @@ requests = [
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "zigar_doctor",
+            "name": "zigars_doctor",
             "arguments": {"probe_backends": True, "timeout_ms": backend_timeout_ms},
         },
     },
@@ -666,13 +666,13 @@ add_tool_scenario(
 stdin = "\n".join(json.dumps(item, separators=(",", ":")) for item in requests) + "\n"
 expected_ids = {item["id"] for item in requests if "id" in item}
 argv = [
-    os.environ["ZIGAR_BINARY"],
+    os.environ["ZIGARS_BINARY"],
     "--workspace",
     str(workspace),
     "--transport",
     "stdio",
     "--zig-path",
-    os.environ["ZIGAR_ZIG_PATH"],
+    os.environ["ZIGARS_ZIG_PATH"],
     "--zls-path",
     backend_arg("zls"),
     "--zlint-path",
@@ -716,7 +716,7 @@ try:
             proc.kill()
             proc.wait(timeout=5)
             stdout_path.write_text("".join(stdout_lines))
-            fail(f"zigar stdio run timed out after {timeout_seconds}s; stdout saved to {stdout_path}, stderr saved to {stderr_path}")
+            fail(f"zigars stdio run timed out after {timeout_seconds}s; stdout saved to {stdout_path}, stderr saved to {stderr_path}")
         events = selector.select(timeout=0.2)
         if not events:
             if proc.poll() is not None:
@@ -775,7 +775,7 @@ for response_id in sorted(expected_ids):
 tools_result = responses[2]["result"]
 tool_names = {tool.get("name") for tool in tools_result.get("tools", [])}
 for tool in (
-    "zigar_doctor",
+    "zigars_doctor",
     "zig_document_symbols",
     "zig_zlint",
     "zig_zlint_sarif",
@@ -813,9 +813,9 @@ def tool_payload(response_id):
 
 
 add_scenario_record({
-    "name": "zigar_initialize",
-    "backend": "zigar",
-    "backends": ["zigar"],
+    "name": "zigars_initialize",
+    "backend": "zigars",
+    "backends": ["zigars"],
     "tool": "initialize",
     "response_id": 1,
     "status": "passed",
@@ -824,9 +824,9 @@ add_scenario_record({
     "evidence_paths": [str(stdout_path), str(stderr_path)],
 })
 add_scenario_record({
-    "name": "zigar_tools_list",
-    "backend": "zigar",
-    "backends": ["zigar"],
+    "name": "zigars_tools_list",
+    "backend": "zigars",
+    "backends": ["zigars"],
     "tool": "tools/list",
     "response_id": 2,
     "status": "passed",
@@ -838,9 +838,9 @@ add_scenario_record({
 
 doctor, _, doctor_error = tool_payload(3)
 if doctor_error:
-    fail("zigar_doctor returned an error response")
-if doctor.get("kind") != "zigar_doctor":
-    fail("zigar_doctor returned an unexpected payload")
+    fail("zigars_doctor returned an error response")
+if doctor.get("kind") != "zigars_doctor":
+    fail("zigars_doctor returned an unexpected payload")
 checks = {check.get("name"): check for check in doctor.get("checks", []) if isinstance(check, dict)}
 for backend, probe in (
     ("zig", "zig_probe"),
@@ -852,7 +852,7 @@ for backend, probe in (
 ):
     check = checks.get(probe)
     if not check:
-        fail(f"zigar_doctor did not report {probe}")
+        fail(f"zigars_doctor did not report {probe}")
     coverage_required = backend == "zig" or backend in claimed_backends
     if check.get("ok") is True:
         status = scenario_status_for_success(coverage_required)
@@ -864,7 +864,7 @@ for backend, probe in (
         "name": probe,
         "backend": backend,
         "backends": [backend],
-        "tool": "zigar_doctor",
+        "tool": "zigars_doctor",
         "response_id": 3,
         "status": status,
         "claim": "required" if backend == "zig" else ("claimed" if backend in claimed_backends else "not_claimed"),
@@ -910,7 +910,7 @@ def backend_matrix_row(backend):
         for scenario in scenario_results
         if backend in scenario.get("backends", [])
     ]
-    required = backend in ("zigar", "zig") or backend in claimed_backends
+    required = backend in ("zigars", "zig") or backend in claimed_backends
     if any(row["coverage_required"] and row["status"] != "passed" for row in rows):
         status = "failed"
     elif any(row["status"] == "passed" for row in rows):
@@ -928,7 +928,7 @@ def backend_matrix_row(backend):
                 evidence_paths.append(path)
     return {
         "backend": backend,
-        "claim": "required" if backend in ("zigar", "zig") else ("claimed" if backend in claimed_backends else "not_claimed"),
+        "claim": "required" if backend in ("zigars", "zig") else ("claimed" if backend in claimed_backends else "not_claimed"),
         "status": status,
         "scenario_names": [row["name"] for row in rows],
         "scenario_statuses": {row["name"]: row["status"] for row in rows},
@@ -939,7 +939,7 @@ def backend_matrix_row(backend):
 
 compatibility_matrix = [
     backend_matrix_row(backend)
-    for backend in ("zigar", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded")
+    for backend in ("zigars", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded")
 ]
 
 coverage_errors = []
@@ -952,7 +952,7 @@ for scenario in scenario_results:
 result = "failed" if coverage_errors else "passed"
 
 report = {
-    "kind": "zigar_backend_conformance_report",
+    "kind": "zigars_backend_conformance_report",
     "schema_version": 2,
     "generated_unix": int(time.time()),
     "source_commit": source_commit,
@@ -982,7 +982,7 @@ report = {
 report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 summary_lines = [
-    "# Zigar Backend Conformance",
+    "# Zigars Backend Conformance",
     "",
     f"Result: {result}",
     f"Source commit: `{source_commit}`",

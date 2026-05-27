@@ -15,11 +15,11 @@ usage() {
 Usage: bash .github/scripts/setup-real-backends.sh
 
 Provision repo-pinned optional release-validation backends into:
-  .zigar-cache/real-backends/bin
+  .zigars-cache/real-backends/bin
 
 Environment:
-  ZIGAR_REAL_BACKENDS_DIR  Override the cache/output directory.
-  ZIGAR_ZIG_PATH           Zig executable used for source builds; must be 0.16.0.
+  ZIGARS_REAL_BACKENDS_DIR  Override the cache/output directory.
+  ZIGARS_ZIG_PATH           Zig executable used for source builds; must be 0.16.0.
 EOF
 }
 
@@ -35,7 +35,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 manifest_path="$repo_root/tools/release/real_backend_pins.json"
 patch_path="$repo_root/tools/release/backend-patches/zflame-pin-zbench-archive.patch"
-cache_root="${ZIGAR_REAL_BACKENDS_DIR:-$repo_root/.zigar-cache/real-backends}"
+cache_root="${ZIGARS_REAL_BACKENDS_DIR:-$repo_root/.zigars-cache/real-backends}"
 bin_dir="$cache_root/bin"
 downloads_dir="$cache_root/downloads"
 extract_dir="$cache_root/extract"
@@ -107,7 +107,7 @@ detect_platform() {
 }
 
 resolve_zig() {
-  local configured="${ZIGAR_ZIG_PATH:-zig}"
+  local configured="${ZIGARS_ZIG_PATH:-zig}"
   local resolved
   resolved="$(command -v "$configured" 2>/dev/null || true)"
   [[ -n "$resolved" ]] || die "could not resolve Zig executable '$configured'"
@@ -192,9 +192,9 @@ build_zflame_suite() {
 write_outputs() {
   cp "$manifest_path" "$cache_root/real_backend_pins.json"
   {
-    printf 'export ZIGAR_ZWANZIG_PATH=%q\n' "$bin_dir/zwanzig"
-    printf 'export ZIGAR_ZFLAME_PATH=%q\n' "$bin_dir/zflame"
-    printf 'export ZIGAR_DIFF_FOLDED_PATH=%q\n' "$bin_dir/diff-folded"
+    printf 'export ZIGARS_ZWANZIG_PATH=%q\n' "$bin_dir/zwanzig"
+    printf 'export ZIGARS_ZFLAME_PATH=%q\n' "$bin_dir/zflame"
+    printf 'export ZIGARS_DIFF_FOLDED_PATH=%q\n' "$bin_dir/diff-folded"
   } >"$cache_root/env.sh"
   {
     printf '%s  %s\n' "$(sha256_file "$bin_dir/zwanzig")" "$bin_dir/zwanzig"
@@ -227,9 +227,9 @@ main() {
 
   note "provisioned real backends under $bin_dir"
   note "source $cache_root/env.sh before release-readiness to use these paths"
-  printf 'ZIGAR_ZWANZIG_PATH=%s\n' "$bin_dir/zwanzig"
-  printf 'ZIGAR_ZFLAME_PATH=%s\n' "$bin_dir/zflame"
-  printf 'ZIGAR_DIFF_FOLDED_PATH=%s\n' "$bin_dir/diff-folded"
+  printf 'ZIGARS_ZWANZIG_PATH=%s\n' "$bin_dir/zwanzig"
+  printf 'ZIGARS_ZFLAME_PATH=%s\n' "$bin_dir/zflame"
+  printf 'ZIGARS_DIFF_FOLDED_PATH=%s\n' "$bin_dir/diff-folded"
 }
 
 main "$@"

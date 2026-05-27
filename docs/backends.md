@@ -1,6 +1,6 @@
 # Optional Backends
 
-zigar starts and serves core Zig tools with only a `zig` executable. ZLS,
+zigars starts and serves core Zig tools with only a `zig` executable. ZLS,
 ZLint, zwanzig, zflame, and diff-folded are optional local executables with
 server configuration paths. Samply, Tracy, LLDB, heaptrack, Valgrind, AFL++,
 LLVM binary tools, QEMU, and flash tools are optional executables configured per
@@ -18,7 +18,7 @@ not a generic MCP failure.
   Valgrind, AFL++, LLVM binary tools, QEMU, flash tools, and platform profilers
   as workspace-local tooling dependencies. Pin them in the project's package
   manager, dev shell, or CI image when reproducibility matters.
-- Put backends on `PATH` or pass absolute paths with zigar's `--*-path` options.
+- Put backends on `PATH` or pass absolute paths with zigars' `--*-path` options.
   For Samply and Tracy capture calls, pass `samply_path` or
   `tracy_capture_path` in the tool arguments when the executable is not on
   `PATH`. Runtime diagnostic calls use per-call paths such as `lldb_path`,
@@ -27,7 +27,7 @@ not a generic MCP failure.
 
 ## Version Pinning And Optional CI
 
-Default CI uses fake backend fixtures so zigar can verify command shapes,
+Default CI uses fake backend fixtures so zigars can verify command shapes,
 structured errors, SARIF/XML/SVG contracts, and artifact metadata without
 requiring every optional executable on every runner. Projects that depend on
 real ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy, debugger,
@@ -47,8 +47,8 @@ There are two supported ways to provide optional backend paths:
   `--diff-folded-path`.
 - Repo-pinned release validation: maintainers can run the pinned setup script
   in this repository to provision the optional release-validation backends under
-  `.zigar-cache/real-backends/bin`. The pins live in
-  `tools/release/real_backend_pins.json` and are intended for citable zigar release
+  `.zigars-cache/real-backends/bin`. The pins live in
+  `tools/release/real_backend_pins.json` and are intended for citable zigars release
   evidence, not for normal CI.
 
 The repo-pinned setup currently provisions zwanzig `v0.11.0` from release
@@ -65,14 +65,14 @@ Run the pinned optional backend setup with Zig `0.16.0` available:
 
 ```sh
 bash .github/scripts/setup-real-backends.sh
-. .zigar-cache/real-backends/env.sh
+. .zigars-cache/real-backends/env.sh
 ```
 
 The script writes `env.sh`, `checksums.sha256`, and a copy of
-`real_backend_pins.json` under `.zigar-cache/real-backends/`. `env.sh` exports
-`ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and `ZIGAR_DIFF_FOLDED_PATH` for the
+`real_backend_pins.json` under `.zigars-cache/real-backends/`. `env.sh` exports
+`ZIGARS_ZWANZIG_PATH`, `ZIGARS_ZFLAME_PATH`, and `ZIGARS_DIFF_FOLDED_PATH` for the
 manual release-readiness flow. Zig, ZLS, and ZLint remain explicit toolchain
-inputs: set `ZIGAR_ZIG_PATH`, `ZIGAR_ZLS_PATH`, and `ZIGAR_ZLINT_PATH` to the
+inputs: set `ZIGARS_ZIG_PATH`, `ZIGARS_ZLS_PATH`, and `ZIGARS_ZLINT_PATH` to the
 binaries being validated when the release intends to claim them. Normal CI must
 remain optional-backend-free unless a workflow intentionally opts into this
 setup.
@@ -97,47 +97,47 @@ locally:
 bash .github/scripts/backend-conformance.sh
 ```
 
-The script builds `zig-out/bin/zigar` when needed, starts zigar over stdio with
-real ZLS, ZLint, zwanzig, zflame, and diff-folded paths, runs `zigar_doctor`
+The script builds `zig-out/bin/zigars` when needed, starts zigars over stdio with
+real ZLS, ZLint, zwanzig, zflame, and diff-folded paths, runs `zigars_doctor`
 with backend probes, exercises `zig_document_symbols`, `zig_zlint_rules`,
 `zig_zlint_fix` preview, `zig_lint_rules`, `zig_flamegraph`, and
 `zig_flamegraph_diff`, and verifies the generated SVG artifacts. Configure
-non-default paths with `ZIGAR_ZLS_PATH`,
-`ZIGAR_ZLINT_PATH`, `ZIGAR_ZWANZIG_PATH`, `ZIGAR_ZFLAME_PATH`, and
-`ZIGAR_DIFF_FOLDED_PATH`. It writes release-citable evidence to
-`.zigar-cache/backend-conformance/` by default: `report.json`, `summary.md`,
+non-default paths with `ZIGARS_ZLS_PATH`,
+`ZIGARS_ZLINT_PATH`, `ZIGARS_ZWANZIG_PATH`, `ZIGARS_ZFLAME_PATH`, and
+`ZIGARS_DIFF_FOLDED_PATH`. It writes release-citable evidence to
+`.zigars-cache/backend-conformance/` by default: `report.json`, `summary.md`,
 `stdout.jsonl`, and `stderr.log`. The manual workflow uploads the same files as
-the `zigar-backend-conformance` artifact. Set `ZIGAR_CONFORMANCE_REPORT_DIR` to
+the `zigars-backend-conformance` artifact. Set `ZIGARS_CONFORMANCE_REPORT_DIR` to
 choose a different output directory.
 
 Run the manual `ZLS Conformance` workflow when only the ZLS-backed tool surface
-needs a fresh release artifact. It starts zigar with a real ZLS binary and
+needs a fresh release artifact. It starts zigars with a real ZLS binary and
 exercises document open, document symbols, hover, diagnostics, formatting,
 rename preview, and workspace symbols against a disposable Zig workspace.
 
 ## Packaged Setup Catalog
 
-zigar ships a structured backend setup catalog in the server binary. Call
-`zigar_backend_catalog` from an MCP client before configuring optional tools. It
+zigars ships a structured backend setup catalog in the server binary. Call
+`zigars_backend_catalog` from an MCP client before configuring optional tools. It
 returns every backend's path flag, default command, current configured path,
-probe argv, compatibility rule, related zigar tools, and install strategy.
+probe argv, compatibility rule, related zigars tools, and install strategy.
 
-The same catalog is embedded in `zigar_schema` under `backend_setup`, so release
+The same catalog is embedded in `zigars_schema` under `backend_setup`, so release
 archives include a machine-readable setup contract instead of only prose setup
 notes. Use it to generate project docs, dev-shell checks, or CI bootstrap output
 without scraping this document.
 
-`zigar_backend_install_plan` is the setup-oriented companion to the catalog. It
+`zigars_backend_install_plan` is the setup-oriented companion to the catalog. It
 returns backend-specific commands, compatibility notes, and verify steps for a
 selected backend and package manager, but it never installs packages or mutates
-the developer environment. `zigar_backend_guidance` reports unresolved backend
+the developer environment. `zigars_backend_guidance` reports unresolved backend
 policy questions such as which optional tools should be release-claimed and how
-they will be pinned. `zigar_backend_elicit` remains available only as a
+they will be pinned. `zigars_backend_elicit` remains available only as a
 compatibility alias for older clients.
 
-`zigar_dev_env_generate` can preview or write pinned setup artifacts for mise,
+`zigars_dev_env_generate` can preview or write pinned setup artifacts for mise,
 asdf, Nix, devcontainer, and GitHub Actions. Generated files are workspace
-artifacts and require `apply=true`; applied artifacts are recorded in the zigar
+artifacts and require `apply=true`; applied artifacts are recorded in the zigars
 artifact registry with provenance.
 
 ## Configuration
@@ -145,7 +145,7 @@ artifact registry with provenance.
 All backend path flags are optional:
 
 ```sh
-zigar \
+zigars \
   --workspace /path/to/project \
   --zig-path "$(command -v zig)" \
   --zls-path "$(command -v zls)" \
@@ -173,9 +173,9 @@ Run cheap local probes before relying on optional tools:
 {"probe_backends": true, "timeout_ms": 1000}
 ```
 
-Send that to `zigar_doctor`. Probe results are cached for the current server
-process and surfaced through `zigar_workspace_info` and `zigar_metrics`. If a
-probe fails, call `zigar_backend_catalog` and compare the configured path and
+Send that to `zigars_doctor`. Probe results are cached for the current server
+process and surfaced through `zigars_workspace_info` and `zigars_metrics`. If a
+probe fails, call `zigars_backend_catalog` and compare the configured path and
 probe argv with the command you run by hand.
 
 Direct shell checks are also useful:
@@ -185,9 +185,9 @@ zig version
 zls --version
 zlint --help
 zwanzig --help
-printf 'main 1\n' > /tmp/zigar.folded
-zflame recursive /tmp/zigar.folded >/tmp/zigar.svg
-diff-folded --output=/tmp/zigar-diff.folded /tmp/zigar.folded /tmp/zigar.folded
+printf 'main 1\n' > /tmp/zigars.folded
+zflame recursive /tmp/zigars.folded >/tmp/zigars.svg
+diff-folded --output=/tmp/zigars-diff.folded /tmp/zigars.folded /tmp/zigars.folded
 samply --help
 tracy-capture --help
 lldb --version
@@ -201,15 +201,15 @@ qemu-aarch64 --version
 probe-rs --help
 ```
 
-If a direct shell check fails, fix the backend before debugging zigar. If the
-shell check passes but zigar reports an error, compare the path in
-`zigar_workspace_info` with the binary you invoked by hand.
+If a direct shell check fails, fix the backend before debugging zigars. If the
+shell check passes but zigars reports an error, compare the path in
+`zigars_workspace_info` with the binary you invoked by hand.
 
-For MCP-visible setup evidence, call `zigar_env_pack` with
-`probe_backends=true` after configuring paths. Use `zigar_backend_verify` for a
+For MCP-visible setup evidence, call `zigars_env_pack` with
+`probe_backends=true` after configuring paths. Use `zigars_backend_verify` for a
 bounded probe of one backend or `all`, and use
-`zigar_backend_conformance` to inspect the conformance scenarios and evidence
-paths expected by the script-backed release flow. `zigar_backend_evidence_pack`
+`zigars_backend_conformance` to inspect the conformance scenarios and evidence
+paths expected by the script-backed release flow. `zigars_backend_evidence_pack`
 reads an existing conformance report and can register a compact evidence pack,
 but consumers still need to inspect scenario statuses before claiming backend
 support.
@@ -228,7 +228,7 @@ Common setup paths:
 - mise: install Zig and ZLS separately, for example `mise use -g zig@0.16.0`
   and `mise use -g zls@0.16.0` when both are available in the mise registry.
 - Source or release archive: follow the ZLS repository's release/build
-  instructions, then point zigar at the resulting `zls` executable.
+  instructions, then point zigars at the resulting `zls` executable.
 
 Recommended checks:
 
@@ -244,7 +244,7 @@ document text, and 256 open documents by default. Cached publish-diagnostics
 notifications are capped at 16 MiB total. Oversized diagnostics are dropped for
 their URI, and aggregate overflow evicts the oldest cached diagnostics until the
 new notification fits. `zig_document_status` exposes per-file document state.
-The ZLS status resource and `zigar_metrics` expose aggregate document-sync
+The ZLS status resource and `zigars_metrics` expose aggregate document-sync
 state, including open and dirty document counts, retained byte counts, replay
 summary, limits, eviction count, and oversized-drop count.
 
@@ -298,7 +298,7 @@ zlint --rules --format json
 
 If the configured binary does not expose a rule-catalog flag, `zig_zlint_rules`
 returns an empty rule list with capability metadata rather than failing the MCP
-call. If diagnostics or fix output use an incompatible JSON dialect, zigar
+call. If diagnostics or fix output use an incompatible JSON dialect, zigars
 returns a structured backend-output error with stdout/stderr previews instead
 of treating the tool call as a generic MCP failure. Use `zig_lint_compare` to
 compare normalized ZLint findings with normalized zwanzig findings, and use
@@ -320,26 +320,26 @@ zig build
 ./zig-out/bin/zwanzig --help
 ```
 
-For zigar release validation, prefer the repo-pinned setup script above. It
+For zigars release validation, prefer the repo-pinned setup script above. It
 uses the zwanzig `v0.11.0` release asset and verifies the archive checksum from
 `tools/release/real_backend_pins.json`.
 
 Project-local configuration:
 
 ```sh
-zigar --workspace /path/to/project --zwanzig-path /path/to/zwanzig/zig-out/bin/zwanzig
+zigars --workspace /path/to/project --zwanzig-path /path/to/zwanzig/zig-out/bin/zwanzig
 ```
 
 Use `zig_lint_rules` after configuring the path. It runs the backend help output
-through zigar and is the fastest end-to-end check. For SARIF, call
+through zigars and is the fastest end-to-end check. For SARIF, call
 `zig_lint_sarif` and upload the returned SARIF in CI if your platform supports
 SARIF ingestion.
 
 `zig_analysis_graphs` is mode-based. Use one of `cfg`, `exploded_graph`,
-`annotated_cfg`, or `path_trace`; zigar maps that to zwanzig's corresponding
+`annotated_cfg`, or `path_trace`; zigars maps that to zwanzig's corresponding
 `--dump-*` flag, creates the requested workspace-local output directory, and
 verifies that the backend wrote DOT files there. Raw graph flags are not part of
-the public zigar schema.
+the public zigars schema.
 
 The current graph mapping is:
 
@@ -351,28 +351,28 @@ The current graph mapping is:
 ## zflame And diff-folded
 
 zflame powers `zig_flamegraph`. diff-folded powers the first stage of
-`zig_flamegraph_diff`. zigar treats capture and rendering separately:
+`zig_flamegraph_diff`. zigars treats capture and rendering separately:
 
 1. Build the target with symbols, usually `zig build -Doptimize=ReleaseFast`.
 2. Call `zig_profile_plan` for structured capture guidance. It lists external
    plans for Linux `perf`, macOS `sample`, macOS `xctrace`, DTrace, VTune, and
    already-folded recursive inputs. The plan names the external command,
    expected capture path, matching zflame format, prerequisites, limitations,
-   and the next zigar rendering call.
-3. Capture with the selected external profiler. zigar does not execute or define
+   and the next zigars rendering call.
+3. Capture with the selected external profiler. zigars does not execute or define
    profiler capture semantics; permissions, sampling mode, symbols, and capture
    fidelity belong to that profiler.
-4. Optionally use `zig_profile_run` for an explicit command you provide. zigar
+4. Optionally use `zig_profile_run` for an explicit command you provide. zigars
    splits the command into argv without a shell and runs it with the workspace as
    cwd; that command can execute project code and create normal build/profile
    artifacts.
 5. Render the captured data with `zig_flamegraph`.
 6. For before/after comparisons, pass two folded stack files to
    `zig_flamegraph_diff`; it writes an intermediate folded diff under
-   `.zigar-cache/profile/` by default, or an explicit workspace-local
+   `.zigars-cache/profile/` by default, or an explicit workspace-local
    `intermediate` path, and then renders the SVG through zflame.
 
-The zflame command shape zigar expects is explicit and does not use format
+The zflame command shape zigars expects is explicit and does not use format
 guessing:
 
 ```sh
@@ -380,18 +380,18 @@ zflame <format> [--title=<title>] [--subtitle=<text>] [--colors=<palette>] [--wi
 ```
 
 Supported zflame formats are `perf`, `dtrace`, `sample`, `vtune`, `xctrace`,
-and `recursive`. zigar captures zflame stdout, verifies it looks like SVG, and
+and `recursive`. zigars captures zflame stdout, verifies it looks like SVG, and
 writes the final artifact through its workspace file helper instead of asking
 zflame to write the SVG directly.
 
-The diff-folded command shape zigar expects writes an intermediate folded diff
+The diff-folded command shape zigars expects writes an intermediate folded diff
 file explicitly:
 
 ```sh
 diff-folded --output=delta.folded before.folded after.folded
 ```
 
-For zigar release validation, prefer the repo-pinned setup script. It builds
+For zigars release validation, prefer the repo-pinned setup script. It builds
 both binaries from the pinned zflame source commit after applying the guarded
 zBench archive patch documented in `tools/release/real_backend_pins.json`.
 
@@ -401,13 +401,13 @@ and argv, output byte count, output SHA-256, cached probe status when available,
 unknown version when no stable version probe is available, compatibility status,
 and warnings. Diff results also include intermediate folded metadata and an
 intermediate folded SHA-256 for the diff-folded stage. All
-zigar-generated SVG, DOT, and folded-diff outputs must use workspace-local
+zigars-generated SVG, DOT, and folded-diff outputs must use workspace-local
 paths. This keeps profiler artifacts inspectable and prevents accidental writes
 outside the active workspace.
 
 ## Samply And Tracy
 
-Samply and Tracy capture workflows are explicit and preview-first. zigar does
+Samply and Tracy capture workflows are explicit and preview-first. zigars does
 not install either profiler, does not mutate developer setup, and does not open
 viewer applications.
 
@@ -442,13 +442,13 @@ registers existing trace files as workspace artifacts only when applied.
 
 - `PermissionDenied`: run the backend directly, then verify executable bits and
   wrapper shebangs.
-- `FileNotFound`: compare `zigar_workspace_info` backend paths with
+- `FileNotFound`: compare `zigars_workspace_info` backend paths with
   `command -v <tool>`.
 - `RequestTimeout`: raise `--zls-timeout-ms` for ZLS operations or per-call
   `timeout_ms` for command-backed tools.
-- Backend starts by hand but fails through zigar: check whether your interactive
+- Backend starts by hand but fails through zigars: check whether your interactive
   shell sets PATH or version-manager environment that the MCP client process does
   not inherit. Use absolute backend paths or wrapper scripts.
-- Backend output is empty or malformed: run `zigar_doctor` with
+- Backend output is empty or malformed: run `zigars_doctor` with
   `probe_backends=true`, then run the backend command by hand with the same input
   file and compare stdout/stderr.

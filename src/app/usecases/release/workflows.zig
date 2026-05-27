@@ -16,9 +16,9 @@ pub const Result = support.Result;
 /// Schema version written into this module's structured payloads.
 const schema_version = 1;
 /// Default api baseline path used when the caller omits an explicit value.
-const default_api_baseline_path = ".zigar-cache/api/baseline.json";
+const default_api_baseline_path = ".zigars-cache/api/baseline.json";
 /// Default sbom path used when the caller omits an explicit value.
-const default_sbom_path = ".zigar-cache/security/sbom.cdx.json";
+const default_sbom_path = ".zigars-cache/security/sbom.cdx.json";
 
 /// Carries evidence input data across use case and port boundaries.
 const EvidenceInput = struct {
@@ -502,7 +502,7 @@ fn ciIngestValue(allocator: std.mem.Allocator, input: EvidenceInput, requested_f
     try obj.put(allocator, "annotations", .{ .array = annotations });
     try obj.put(allocator, "parse_summary", parse_summary);
     try obj.put(allocator, "raw_reference", try rawReferenceValue(allocator, input));
-    try obj.put(allocator, "next_actions", try stringArrayValue(allocator, &.{ "zig_ci_repro_plan", "zig_ci_failure_map", "zigar_validation_run" }));
+    try obj.put(allocator, "next_actions", try stringArrayValue(allocator, &.{ "zig_ci_repro_plan", "zig_ci_failure_map", "zigars_validation_run" }));
     return .{ .object = obj };
 }
 
@@ -745,7 +745,7 @@ fn apiBaselineValue(allocator: std.mem.Allocator, a: *App, args: ?std.json.Value
     });
     try obj.put(allocator, "declarations", .{ .array = declarations });
     try obj.put(allocator, "declaration_count", .{ .integer = @intCast(declarations.items.len) });
-    try obj.put(allocator, "snapshot_format", .{ .string = "zigar.public_api_baseline.v1" });
+    try obj.put(allocator, "snapshot_format", .{ .string = "zigars.public_api_baseline.v1" });
     return .{ .object = obj };
 }
 
@@ -1036,7 +1036,7 @@ fn sbomValue(allocator: std.mem.Allocator, deps: std.json.Value) !std.json.Value
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "bomFormat", .{ .string = "CycloneDX" });
     try obj.put(allocator, "specVersion", .{ .string = "1.5" });
-    try obj.put(allocator, "serialNumber", .{ .string = "urn:uuid:zigar-preview" });
+    try obj.put(allocator, "serialNumber", .{ .string = "urn:uuid:zigars-preview" });
     try obj.put(allocator, "version", .{ .integer = 1 });
     try obj.put(allocator, "metadata", try sbomMetadataValue(allocator));
     try obj.put(allocator, "components", .{ .array = components });
@@ -1047,7 +1047,7 @@ fn sbomValue(allocator: std.mem.Allocator, deps: std.json.Value) !std.json.Value
 fn sbomMetadataValue(allocator: std.mem.Allocator) !std.json.Value {
     var tools = std.json.Array.init(allocator);
     var tool = std.json.ObjectMap.empty;
-    try tool.put(allocator, "vendor", .{ .string = "zigar" });
+    try tool.put(allocator, "vendor", .{ .string = "zigars" });
     try tool.put(allocator, "name", .{ .string = "zig_sbom" });
     try tools.append(.{ .object = tool });
     var metadata = std.json.ObjectMap.empty;
@@ -1093,7 +1093,7 @@ fn scannerIngestTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 fn scannerUnavailableValue(allocator: std.mem.Allocator, tool_name: []const u8, backend: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, tool_name, "Optional external security scanner report ingestion", "low", &.{
-        "No scanner report was supplied and zigar does not contact external services from this tool.",
+        "No scanner report was supplied and zigars does not contact external services from this tool.",
     });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "status", .{ .string = "unavailable" });
@@ -1110,7 +1110,7 @@ fn scannerReportValue(allocator: std.mem.Allocator, tool_name: []const u8, backe
     const vulnerabilities = countOccurrences(lower, "vulnerab") + countOccurrences(lower, "cve-") + countOccurrences(lower, "\"id\"");
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, tool_name, "Caller-supplied scanner report ingestion", "medium", &.{
-        "Scanner result shape and vulnerability semantics belong to the external scanner; zigar records observed text/JSON evidence only.",
+        "Scanner result shape and vulnerability semantics belong to the external scanner; zigars records observed text/JSON evidence only.",
     });
     try obj.put(allocator, "ok", .{ .bool = vulnerabilities == 0 });
     try obj.put(allocator, "status", .{ .string = "ingested" });
@@ -1223,7 +1223,7 @@ fn githubDependencySubmitPlanValue(allocator: std.mem.Allocator, deps: std.json.
     }
     var payload = std.json.ObjectMap.empty;
     try payload.put(allocator, "version", .{ .integer = 0 });
-    try payload.put(allocator, "job", .{ .string = job orelse "zigar-dependency-submit" });
+    try payload.put(allocator, "job", .{ .string = job orelse "zigars-dependency-submit" });
     try payload.put(allocator, "sha", if (sha) |value| try support.ownedString(allocator, value) else .null);
     try payload.put(allocator, "ref", if (ref) |value| try support.ownedString(allocator, value) else .null);
     try payload.put(allocator, "detector", .{ .object = try detectorObject(allocator) });
@@ -1242,8 +1242,8 @@ fn githubDependencySubmitPlanValue(allocator: std.mem.Allocator, deps: std.json.
 /// Implements detector object workflow logic using caller-owned inputs.
 fn detectorObject(allocator: std.mem.Allocator) !std.json.ObjectMap {
     var detector = std.json.ObjectMap.empty;
-    try detector.put(allocator, "name", .{ .string = "zigar" });
-    try detector.put(allocator, "url", .{ .string = "https://github.com/oly-wan-kenobi/zigar" });
+    try detector.put(allocator, "name", .{ .string = "zigars" });
+    try detector.put(allocator, "url", .{ .string = "https://github.com/oly-wan-kenobi/zigars" });
     try detector.put(allocator, "version", .{ .string = "workspace" });
     return detector;
 }
@@ -1544,7 +1544,7 @@ const PermissiveReleaseWorkspace = struct {
 /// Returns a typed context backed by this fixture or runtime state.
 fn releaseWorkflowTestContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.ReleaseWorkflowContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .tool_paths = .{ .zig = "zig", .zls = "zls", .zflame = "zflame", .diff_folded = "diff-folded" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 1000 },
         .command_runner = command_runner,

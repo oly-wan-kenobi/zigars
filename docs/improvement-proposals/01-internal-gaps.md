@@ -98,10 +98,10 @@ the existing `zig_definition` handler in [src/app/usecases/zls/code_intel.zig](.
 ask `zig_definition` (which lands on `bar`). They have no way to jump to
 `MyType` (typeDefinition) or to the implementation behind a function-pointer
 field (implementation). All three are first-class LSP methods that ZLS
-already serves and zigar already has wiring to call.
+already serves and zigars already has wiring to call.
 
 **Why substantial.** Currently zero ways to get typeDefinition or
-implementation from zigar; surfacing them as one grouped call avoids three
+implementation from zigars; surfacing them as one grouped call avoids three
 separate tool round-trips when an agent doesn't know which one it needs.
 
 **Effort:** S–M.
@@ -144,7 +144,7 @@ preview and applying only with `apply=true`.
 **Builds on:** ZLS `workspace/willRenameFiles` for the workspace edit
 proposal; existing `zig_update_imports` handler in
 [src/app/usecases/editing/](../../src/app/usecases/editing/) for the rewrite mechanics; existing
-`zigar_patch_session_*` for transactional apply/rollback; workspace
+`zigars_patch_session_*` for transactional apply/rollback; workspace
 filesystem store at [src/infra/workspace/filesystem.zig](../../src/infra/workspace/filesystem.zig) for the move.
 
 **User story.** Agent renames `src/foo/old_name.zig` → `src/foo/new_name.zig`.
@@ -213,7 +213,7 @@ packing, integer-backed enum width, padding rules. Today the only path is
 hand-reading source and cross-referencing the Zig language reference.
 
 **Why substantial.** Net-new domain capability tightly aligned with two
-audiences zigar already targets (FFI and embedded — `zig_embedded_detect`
+audiences zigars already targets (FFI and embedded — `zig_embedded_detect`
 and `zig_microzig_plan` exist). One call replaces a per-file manual review.
 
 **Effort:** M.

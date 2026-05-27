@@ -73,7 +73,7 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_clean_tree_gate" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_clean_tree_gate" });
     try obj.put(allocator, "ok", .{ .bool = clean });
     try obj.put(allocator, "clean", .{ .bool = clean });
     try obj.put(allocator, "workspace", .{ .string = workspace_root });

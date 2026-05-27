@@ -7,33 +7,33 @@
     "backend_or_artifact": "Backend and artifact tools must have a non-empty plan so release-check can name missing coverage by tool."
   },
   "resources": [
-    "zigar://workspace",
-    "zigar://zls/status",
-    "zigar://tools/capabilities",
-    "zigar://tools/schema",
-    "zigar://workspace/import-graph",
-    "zigar://metrics",
-    "zigar://jobs",
-    "zigar://run/events",
-    "zigar://workspace/roots"
+    "zigars://workspace",
+    "zigars://zls/status",
+    "zigars://tools/capabilities",
+    "zigars://tools/schema",
+    "zigars://workspace/import-graph",
+    "zigars://metrics",
+    "zigars://jobs",
+    "zigars://run/events",
+    "zigars://workspace/roots"
   ],
   "resource_templates": [
-    "zigar://file/{path}/symbols",
-    "zigar://file/{path}/diagnostics",
-    "zigar://file/{path}/imports"
+    "zigars://file/{path}/symbols",
+    "zigars://file/{path}/diagnostics",
+    "zigars://file/{path}/imports"
   ],
   "prompts": [
-    "zigar_profile_workflow",
-    "zigar_compile_error_workflow",
-    "zigar_test_workflow",
-    "zigar_refactor_workflow",
-    "zigar_api_change_workflow",
-    "zigar_release_workflow",
-    "zigar_perf_workflow"
+    "zigars_profile_workflow",
+    "zigars_compile_error_workflow",
+    "zigars_test_workflow",
+    "zigars_refactor_workflow",
+    "zigars_api_change_workflow",
+    "zigars_release_workflow",
+    "zigars_perf_workflow"
   ],
   "report_kinds": [
-    "zigar_backend_conformance_report",
-    "zigar_release_readiness_report",
-    "zigar_real_zls_conformance_report"
+    "zigars_backend_conformance_report",
+    "zigars_release_readiness_report",
+    "zigars_real_zls_conformance_report"
   ]
 }

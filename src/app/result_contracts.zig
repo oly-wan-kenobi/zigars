@@ -78,7 +78,7 @@ pub const ResultShapeRequest = struct {
 
 /// Borrowed typed result-shape contract; no allocator-owned fields.
 pub const ResultShapeContract = struct {
-    kind: []const u8 = "zigar_result_shape",
+    kind: []const u8 = "zigars_result_shape",
     schema_version: u32,
     ok: bool = true,
     mode: OutputMode,
@@ -118,7 +118,7 @@ pub const BudgetAllocation = struct {
 
 /// Borrowed token budget plan; no allocator-owned fields.
 pub const OutputBudgetPlan = struct {
-    kind: []const u8 = "zigar_output_budget_plan",
+    kind: []const u8 = "zigars_output_budget_plan",
     schema_version: u32,
     tool_name: ?[]const u8,
     mode: OutputMode,
@@ -212,7 +212,7 @@ pub fn describeResultShape(request: ResultShapeRequest) ResultShapeContract {
         .selected_mode_metadata = metadata,
         .result_shape = metadata,
         .omitted_sections = empty_omitted_sections[0..],
-        .evidence_source = "static zigar result-shape contract",
+        .evidence_source = "static zigars result-shape contract",
         .confidence = .high,
         .required_top_level_fields = required_top_level_fields[0..],
         .limitations = "This contract standardizes response shape and omissions; it does not prove tool-specific correctness.",
@@ -238,7 +238,7 @@ pub fn planOutputBudget(request: OutputBudgetPlanRequest) OutputBudgetPlan {
         .clamp_applied = requested != effective,
         .allocation = allocation(request.mode, effective),
         .omission_policy = "Prefer stable machine fields first, then evidence, then human detail; record every dropped section in omitted_sections.",
-        .evidence_source = "static zigar result-shape budget policy",
+        .evidence_source = "static zigars result-shape budget policy",
         .confidence = .medium,
         .limitations = "Token counts are planning budgets, not tokenizer-exact guarantees for every MCP client.",
         .resolution = "Use mode=compact for routing, mode=standard for normal agent use, and mode=deep when a human or verifier needs fuller evidence.",

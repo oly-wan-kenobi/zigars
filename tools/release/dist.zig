@@ -1,6 +1,6 @@
 const std = @import("std");
 const release_targets = @import("release_targets.zig");
-const zigar = @import("zigar");
+const zigars = @import("zigars");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -30,7 +30,7 @@ const release_items = [_]ReleaseItem{
 
 const DistOptions = struct {
     out_dir: []const u8 = "dist",
-    version: []const u8 = zigar.manifest.version.string,
+    version: []const u8 = zigars.manifest.version.string,
     packages: std.ArrayList(PackageInput) = .empty,
 
     fn deinit(self: *DistOptions, allocator: Allocator) void {
@@ -39,7 +39,7 @@ const DistOptions = struct {
 };
 
 pub fn printVersion(io: Io) !void {
-    try stdoutPrint(io, "{s}\n", .{zigar.manifest.version.string});
+    try stdoutPrint(io, "{s}\n", .{zigars.manifest.version.string});
 }
 
 pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !void {
@@ -61,12 +61,12 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
         try archivePackage(allocator, io, package_dir, assets_dir, package);
     }
     try writeChecksums(allocator, io, assets_dir, options.packages.items);
-    try stdoutPrint(io, "dist ok: {d} archives for zigar {s}\n", .{ options.packages.items.len, options.version });
+    try stdoutPrint(io, "dist ok: {d} archives for zigars {s}\n", .{ options.packages.items.len, options.version });
 }
 
 pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var assets_dir: []const u8 = "dist/assets";
-    var version: []const u8 = zigar.manifest.version.string;
+    var version: []const u8 = zigars.manifest.version.string;
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
         if (std.mem.eql(u8, args[i], "--assets-dir")) {
@@ -279,13 +279,13 @@ fn writeChecksums(allocator: Allocator, io: Io, assets_dir: []const u8, packages
         const hex = try archiveSha256(allocator, io, archive_path);
         try out.writer.print("{s}  {s}\n", .{ hex[0..], archive_name });
     }
-    const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigar-checksums.txt" });
+    const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigars-checksums.txt" });
     defer allocator.free(checksums_path);
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = checksums_path, .data = out.written() });
 }
 
 fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
-    const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigar-checksums.txt" });
+    const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigars-checksums.txt" });
     defer allocator.free(checksums_path);
     const checksums = try readFileAlloc(allocator, io, checksums_path, 1024 * 1024);
     defer allocator.free(checksums);
@@ -349,7 +349,7 @@ fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, versio
     const archive_path = try std.fs.path.join(allocator, &.{ assets_dir, archive_name });
     defer allocator.free(archive_path);
 
-    const scratch = ".zig-cache/zigar-dist-smoke";
+    const scratch = ".zig-cache/zigars-dist-smoke";
     if (dirExists(io, scratch)) try Io.Dir.cwd().deleteTree(io, scratch);
     try Io.Dir.cwd().createDirPath(io, scratch);
     const extract = try std.process.run(allocator, io, .{ .argv = &.{ "tar", "-xzf", archive_path, "-C", scratch } });
@@ -364,7 +364,7 @@ fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, versio
     defer allocator.free(version_result.stderr);
     if (!termOk(version_result.term)) return error.NativeArchiveRunFailed;
     if (std.mem.trim(u8, version_result.stdout, " \t\r\n").len != 0) return error.NativeArchiveUnexpectedStdout;
-    const expected = try std.fmt.allocPrint(allocator, "zigar {s}", .{version});
+    const expected = try std.fmt.allocPrint(allocator, "zigars {s}", .{version});
     defer allocator.free(expected);
     const stderr = std.mem.trim(u8, version_result.stderr, " \t\r\n");
     if (!std.mem.eql(u8, stderr, expected)) return error.NativeArchiveVersionMismatch;
@@ -452,11 +452,14 @@ test "containsLine matches complete lines only" {
 
 test "dist package validation requires the configured release set" {
     const packages = [_]PackageInput{
-        .{ .name = "zigar-x86_64-linux-musl", .exe_name = "zigar", .binary_path = "bin/linux-x64" },
-        .{ .name = "zigar-aarch64-linux-musl", .exe_name = "zigar", .binary_path = "bin/linux-arm64" },
-        .{ .name = "zigar-x86_64-macos", .exe_name = "zigar", .binary_path = "bin/macos-x64" },
-        .{ .name = "zigar-aarch64-macos", .exe_name = "zigar", .binary_path = "bin/macos-arm64" },
-        .{ .name = "zigar-x86_64-windows", .exe_name = "zigar.exe", .binary_path = "bin/windows-x64" },
+        .{ .name = "zigars-x86_64-linux-gnu", .exe_name = "zigars", .binary_path = "bin/linux-gnu-x64" },
+        .{ .name = "zigars-aarch64-linux-gnu", .exe_name = "zigars", .binary_path = "bin/linux-gnu-arm64" },
+        .{ .name = "zigars-x86_64-linux-musl", .exe_name = "zigars", .binary_path = "bin/linux-x64" },
+        .{ .name = "zigars-aarch64-linux-musl", .exe_name = "zigars", .binary_path = "bin/linux-arm64" },
+        .{ .name = "zigars-x86_64-macos", .exe_name = "zigars", .binary_path = "bin/macos-x64" },
+        .{ .name = "zigars-aarch64-macos", .exe_name = "zigars", .binary_path = "bin/macos-arm64" },
+        .{ .name = "zigars-x86_64-windows-gnu", .exe_name = "zigars.exe", .binary_path = "bin/windows-x64" },
+        .{ .name = "zigars-aarch64-windows-gnu", .exe_name = "zigars.exe", .binary_path = "bin/windows-arm64" },
     };
     try validateReleasePackageInputs(null, &packages);
 
@@ -468,14 +471,14 @@ test "dist package validation requires the configured release set" {
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &duplicate));
 
     var wrong_exe = packages;
-    wrong_exe[4].exe_name = "zigar";
+    wrong_exe[6].exe_name = "zigars";
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(null, &wrong_exe));
 
     var missing_with_io = packages[0 .. packages.len - 1].*;
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &missing_with_io));
 
     var unknown_with_io = packages;
-    unknown_with_io[0].name = "zigar-unknown";
+    unknown_with_io[0].name = "zigars-unknown";
     try std.testing.expectError(error.InvalidArguments, validateReleasePackageInputs(std.testing.io, &unknown_with_io));
 }
 

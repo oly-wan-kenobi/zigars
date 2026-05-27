@@ -45,7 +45,7 @@ test "runtime bridge projects app context without changing runtime ownership" {
             .allocator = std.testing.allocator,
             .io = std.testing.io,
             .root = "/workspace",
-            .cache_root = "/workspace/.zigar-cache",
+            .cache_root = "/workspace/.zigars-cache",
         },
         .zls = .{
             .status = "connected",
@@ -64,7 +64,7 @@ test "runtime bridge projects app context without changing runtime ownership" {
 
     const ctx = fromRuntime(&runtime, .{});
     try std.testing.expectEqualStrings("/workspace", ctx.workspace.root);
-    try std.testing.expectEqualStrings("/workspace/.zigar-cache", ctx.workspace.cache_root);
+    try std.testing.expectEqualStrings("/workspace/.zigars-cache", ctx.workspace.cache_root);
     try std.testing.expectEqualStrings("127.0.0.1", ctx.workspace.host);
     try std.testing.expectEqual(@as(u16, 8080), ctx.workspace.port);
     try std.testing.expectEqualStrings("/bin/zig", ctx.tool_paths.zig);

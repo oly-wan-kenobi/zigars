@@ -98,7 +98,7 @@ test "artifact registry store writes reads and records provenance" {
     });
     defer ref.deinit(allocator);
     try std.testing.expectEqual(@as(usize, 12), ref.bytes_written);
-    try std.testing.expectEqualStrings(".zigar-cache/artifacts/reports/summary.json", ref.id);
+    try std.testing.expectEqualStrings(".zigars-cache/artifacts/reports/summary.json", ref.id);
 
     const read_result = try store.port().read(allocator, .{ .id = ref.id });
     defer read_result.deinit(allocator);
@@ -169,7 +169,7 @@ test "artifact registry store read is scoped to artifact ids" {
     try std.testing.expectEqualStrings("artifact bytes", read_result.bytes);
 
     try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = "src/main.zig" }));
-    try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = ".zigar-cache/artifacts/reports/../escape.txt" }));
+    try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = ".zigars-cache/artifacts/reports/../escape.txt" }));
     try std.testing.expectError(error.InvalidRequest, store.port().read(allocator, .{ .id = "/tmp/escape.txt" }));
 }
 

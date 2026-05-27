@@ -1,5 +1,5 @@
 const std = @import("std");
-const zigar = @import("zigar");
+const zigars = @import("zigars");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -47,7 +47,7 @@ pub fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
     defer allocator.free(bytes);
     var ok = std.mem.indexOf(u8, bytes, "without a shell") != null and
         std.mem.indexOf(u8, bytes, "MCP `readOnlyHint`") != null;
-    for (zigar.manifest.entries) |entry| {
+    for (zigars.manifest.entries) |entry| {
         if (entry.risk.executes_user_command and std.mem.indexOf(u8, bytes, entry.name) == null) {
             try stderrPrint(io, "command-running tool docs check missing `{s}` in {s}\n", .{ entry.name, path });
             ok = false;
@@ -62,10 +62,10 @@ pub fn checkAgentWorkflowDocs(allocator: Allocator, io: Io) !bool {
         "omitted_sections",
         "skipped_phases",
         "heuristic text/import scan",
-        "zigar_setup_guidance",
+        "zigars_setup_guidance",
         "elicitation/create",
         "summarize=true",
-        "zigar_context_pack -> zigar_next_action",
+        "zigars_context_pack -> zigars_next_action",
     });
 }
 
@@ -152,29 +152,29 @@ pub fn checkFoundationContractDocs(allocator: Allocator, io: Io) !bool {
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "Artifact registry and provenance",
-        "zigar_artifact_index",
+        "zigars_artifact_index",
         "result_shape",
         "omitted_sections",
-        "zigar_metrics_v2",
-        "zigar_docs_drift_check",
+        "zigars_metrics_v2",
+        "zigars_docs_drift_check",
     })) and ok;
     ok = (try checkDocNeedles(allocator, io, "docs/trust.md", &.{
-        "zigar_trust_report",
-        "zigar_command_provenance",
-        "zigar_clean_tree_gate",
+        "zigars_trust_report",
+        "zigars_command_provenance",
+        "zigars_clean_tree_gate",
         "clean-tree gate",
     })) and ok;
     ok = (try checkDocNeedles(allocator, io, "docs/release.md", &.{
-        "zigar_docs_drift_check",
-        "zigar_release_claim_check",
-        "zigar_tool_index_check",
+        "zigars_docs_drift_check",
+        "zigars_release_claim_check",
+        "zigars_tool_index_check",
     })) and ok;
     ok = (try checkDocNeedles(allocator, io, "docs/tool-index.generated.md", &.{
-        "zigar_artifact_index",
-        "zigar_metrics_v2",
-        "zigar_trust_report",
-        "zigar_result_shape",
-        "zigar_docs_drift_check",
+        "zigars_artifact_index",
+        "zigars_metrics_v2",
+        "zigars_trust_report",
+        "zigars_result_shape",
+        "zigars_docs_drift_check",
     })) and ok;
     return ok;
 }
@@ -183,18 +183,18 @@ pub fn checkPublicAdoptionDocs(allocator: Allocator, io: Io) !bool {
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "Public Adoption Tools",
-        "zigar_adoption_pack",
-        "zigar_client_config_generate",
-        "zigar_smoke_plan",
-        "zigar_conformance_report",
+        "zigars_adoption_pack",
+        "zigars_client_config_generate",
+        "zigars_smoke_plan",
+        "zigars_conformance_report",
         "missing_evidence",
         "failed rows do not",
     })) and ok;
     ok = (try checkDocNeedles(allocator, io, "docs/agent-clients.md", &.{
-        "zigar_client_config_generate",
-        "zigar_adoption_pack",
-        "zigar_smoke_plan",
-        "zigar_conformance_report",
+        "zigars_client_config_generate",
+        "zigars_adoption_pack",
+        "zigars_smoke_plan",
+        "zigars_conformance_report",
         "Protocol Feature Fallbacks",
         "outputSchema",
         "sampling/createMessage",

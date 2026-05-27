@@ -22,13 +22,13 @@ pub fn classify(path: []const u8) PathPolicy {
         .commands = &.{ "zig build", "zig build test" },
         .confidence = "high",
     };
-    if (isZigarArtifactPath(path)) return .{
+    if (isZigarsArtifactPath(path)) return .{
         .classification = "generated_artifact",
         .direct_edit_allowed = false,
-        .reason = "zigar_artifact_path",
-        .route = "rerun the zigar tool that produced the artifact",
-        .sources = &.{ ".zigar/profile.v2.json", "source files referenced by artifact provenance" },
-        .commands = &.{ "zigar_artifact_index", "zigar_artifact_read" },
+        .reason = "zigars_artifact_path",
+        .route = "rerun the zigars tool that produced the artifact",
+        .sources = &.{ ".zigars/profile.v2.json", "source files referenced by artifact provenance" },
+        .commands = &.{ "zigars_artifact_index", "zigars_artifact_read" },
         .confidence = "high",
     };
     if (isVendorPath(path)) return .{
@@ -37,7 +37,7 @@ pub fn classify(path: []const u8) PathPolicy {
         .reason = "vendored_dependency_path",
         .route = "change dependency source, pin, or patch workflow rather than editing vendored output directly",
         .sources = &.{ "build.zig.zon", "build.zig", "dependency upstream" },
-        .commands = &.{ "zig build", "zigar_patch_guard" },
+        .commands = &.{ "zig build", "zigars_patch_guard" },
         .confidence = "high",
     };
     if (isGeneratedName(path)) return .{
@@ -62,9 +62,9 @@ pub fn classify(path: []const u8) PathPolicy {
         .classification = "source",
         .direct_edit_allowed = true,
         .reason = "workspace_source_path",
-        .route = "direct edit allowed through apply-gated zigar tools",
+        .route = "direct edit allowed through apply-gated zigars tools",
         .sources = &.{"requested workspace path"},
-        .commands = &.{"zigar_patch_session_validate"},
+        .commands = &.{"zigars_patch_session_validate"},
         .confidence = "high",
     };
 }
@@ -74,9 +74,9 @@ fn isCachePath(path: []const u8) bool {
     return startsPath(path, ".zig-cache") or startsPath(path, "zig-out") or startsPath(path, "coverage") or startsPath(path, "dist");
 }
 
-/// Identifies persisted artifact outputs owned by zigar tooling.
-fn isZigarArtifactPath(path: []const u8) bool {
-    return startsPath(path, ".zigar-cache");
+/// Identifies persisted artifact outputs owned by zigars tooling.
+fn isZigarsArtifactPath(path: []const u8) bool {
+    return startsPath(path, ".zigars-cache");
 }
 
 /// Captures common vendored dependency locations that should not be edited in place.
@@ -97,11 +97,11 @@ fn isGeneratedName(path: []const u8) bool {
 /// Workspace-level skip policy shared with analysis for generated dependency trees.
 fn skipWorkspacePath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, ".zig-cache") or
-        std.mem.startsWith(u8, path, ".zigar-cache") or
+        std.mem.startsWith(u8, path, ".zigars-cache") or
         std.mem.startsWith(u8, path, "zig-out") or
         std.mem.startsWith(u8, path, "zig-pkg") or
         std.mem.indexOf(u8, path, "/.zig-cache/") != null or
-        std.mem.indexOf(u8, path, "/.zigar-cache/") != null or
+        std.mem.indexOf(u8, path, "/.zigars-cache/") != null or
         std.mem.indexOf(u8, path, "/zig-out/") != null or
         std.mem.indexOf(u8, path, "/zig-pkg/") != null;
 }

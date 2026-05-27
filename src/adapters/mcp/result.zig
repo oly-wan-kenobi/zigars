@@ -3,7 +3,7 @@
 const std = @import("std");
 const mcp = @import("mcp");
 
-/// Ownership contract for zigar tool results:
+/// Ownership contract for zigars tool results:
 /// - `structured`, `structuredError`, `structuredOwned`, and `jsonTextOnly`
 ///   return content slices owned by the callback allocator.
 /// - Text content payloads in those slices are owned by the same allocator.
@@ -17,7 +17,7 @@ pub fn deinitToolResult(allocator: std.mem.Allocator, result: mcp.tools.ToolResu
     if (result.content.len > 0) allocator.free(result.content);
 }
 
-/// Ownership contract for zigar resource results:
+/// Ownership contract for zigars resource results:
 /// - `uri` and `mimeType` borrow the registered resource/request data.
 /// - `text`, `blob`, and `_meta`, when present, are owned by the callback
 ///   allocator and must stay alive through response serialization.
@@ -27,10 +27,10 @@ pub fn deinitResourceContent(allocator: std.mem.Allocator, content: mcp.resource
     if (content._meta) |meta| deinitOwnedValue(allocator, meta);
 }
 
-/// Ownership contract for zigar prompt results:
+/// Ownership contract for zigars prompt results:
 /// - The message slice is owned by the callback allocator.
 /// - Each content block payload is owned according to `deinitOwnedContentBlock`.
-/// Call this only for prompts that explicitly opt into the zigar-owned contract.
+/// Call this only for prompts that explicitly opt into the zigars-owned contract.
 pub fn deinitPromptMessages(allocator: std.mem.Allocator, messages: []const mcp.prompts.PromptMessage) void {
     for (messages) |message| deinitOwnedContentBlock(allocator, message.content);
     if (messages.len > 0) allocator.free(messages);
@@ -161,7 +161,7 @@ pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) voi
     deinitClonedValue(allocator, value);
 }
 
-/// Frees payloads inside a content block that follows zigar-owned allocation rules.
+/// Frees payloads inside a content block that follows zigars-owned allocation rules.
 pub fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
     switch (content_item) {
         .text => |text| {

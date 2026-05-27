@@ -1041,7 +1041,7 @@ pub fn symbolCacheMatchesValue(allocator: std.mem.Allocator, index: std.json.Val
 /// Serializes package cache doctor fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn packageCacheDoctorValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, timeout_ms: ?u64) StaticProjectError!std.json.Value {
     var paths = std.json.Array.init(allocator);
-    const names = [_][]const u8{ ".zig-cache", "zig-out", ".zigar-cache", "zig-pkg", "coverage" };
+    const names = [_][]const u8{ ".zig-cache", "zig-out", ".zigars-cache", "zig-pkg", "coverage" };
     for (names) |name| try paths.append(try cachePathStatusValue(allocator, context, name));
 
     var issues = std.json.Array.init(allocator);

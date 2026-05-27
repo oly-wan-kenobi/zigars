@@ -14,8 +14,8 @@ const mcp_result = @import("../result.zig");
 
 const elicitation_apply_fallback_reason = "MCP elicitation was unavailable; apply=true and expected_preimages remain the fallback safety contract.";
 
-/// Handles MCP `zigar_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchSessionCreate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchSessionCreate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -24,42 +24,42 @@ pub fn zigarPatchSessionCreate(allocator: std.mem.Allocator, context: app_contex
     try appendPathTokens(scratch, &paths, argString(args, "files"));
     try appendPatchPaths(scratch, &paths, argString(args, "patch"));
     if (argString(args, "edits")) |raw| try appendEditPaths(scratch, &paths, raw);
-    const ctx = context.editing() catch |err| return transactionalError(allocator, "zigar_patch_session_create", "build_app_context", err);
+    const ctx = context.editing() catch |err| return transactionalError(allocator, "zigars_patch_session_create", "build_app_context", err);
     var result = editing.create(scratch, ctx, .{
         .session_id = try sessionId(scratch, "create", argString(args, "goal"), argString(args, "files"), argString(args, "patch"), argString(args, "edits")),
         .goal = argString(args, "goal"),
         .paths = paths.items,
-    }) catch |err| return transactionalError(allocator, "zigar_patch_session_create", "create_session", err);
+    }) catch |err| return transactionalError(allocator, "zigars_patch_session_create", "create_session", err);
     defer result.deinit(scratch);
     return structuredScratch(allocator, scratch, try patchSessionCreateValue(scratch, result));
 }
 
-/// Handles MCP `zigar_patch_session_preview` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchSessionPreview(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return patchSessionReplacementTool(allocator, context, args, "zigar_patch_session_preview", false);
+/// Handles MCP `zigars_patch_session_preview` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchSessionPreview(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return patchSessionReplacementTool(allocator, context, args, "zigars_patch_session_preview", false);
 }
 
-/// Handles MCP `zigar_patch_session_apply` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchSessionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return patchSessionReplacementTool(allocator, context, args, "zigar_patch_session_apply", argBool(args, "apply", false));
+/// Handles MCP `zigars_patch_session_apply` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchSessionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return patchSessionReplacementTool(allocator, context, args, "zigars_patch_session_apply", argBool(args, "apply", false));
 }
 
-/// Handles MCP `zigar_patch_session_validate` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchSessionValidate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_patch_session_validate` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchSessionValidate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
     const validation_args = try validationArgsFromSessionArgs(scratch, args);
-    var parsed = validation_adapter.validationRunRequestFromArgs(scratch, validation_args, timeoutMs(context, args)) catch |err| return transactionalError(allocator, "zigar_patch_session_validate", "parse_validation_request", err);
+    var parsed = validation_adapter.validationRunRequestFromArgs(scratch, validation_args, timeoutMs(context, args)) catch |err| return transactionalError(allocator, "zigars_patch_session_validate", "parse_validation_request", err);
     defer parsed.deinit(scratch);
-    var outcome = editing.validate(scratch, context.validation() catch |err| return transactionalError(allocator, "zigar_patch_session_validate", "build_validation_context", err), parsed.request) catch |err| return transactionalError(allocator, "zigar_patch_session_validate", "run_validation", err);
+    var outcome = editing.validate(scratch, context.validation() catch |err| return transactionalError(allocator, "zigars_patch_session_validate", "build_validation_context", err), parsed.request) catch |err| return transactionalError(allocator, "zigars_patch_session_validate", "run_validation", err);
     defer outcome.deinit(scratch);
     const report = switch (outcome) {
         .ok => |value| value,
-        .err => return transactionalError(allocator, "zigar_patch_session_validate", "run_validation", error.ValidationHistoryWriteFailed),
+        .err => return transactionalError(allocator, "zigars_patch_session_validate", "run_validation", error.ValidationHistoryWriteFailed),
     };
     var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_patch_session_validate" });
+    try obj.put(scratch, "kind", .{ .string = "zigars_patch_session_validate" });
     try obj.put(scratch, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(scratch, "session_id", try optionalStringValue(scratch, argString(args, "session_id")));
     try obj.put(scratch, "ok", .{ .bool = report.ok });
@@ -68,18 +68,18 @@ pub fn zigarPatchSessionValidate(allocator: std.mem.Allocator, context: app_cont
     return structuredScratch(allocator, scratch, .{ .object = obj });
 }
 
-/// Handles MCP `zigar_patch_session_revert` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarPatchSessionRevert(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const session_id = argString(args, "session_id") orelse return mcp_errors.missingArgument(allocator, "zigar_patch_session_revert", "session_id", "recorded patch session id");
+/// Handles MCP `zigars_patch_session_revert` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsPatchSessionRevert(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const session_id = argString(args, "session_id") orelse return mcp_errors.missingArgument(allocator, "zigars_patch_session_revert", "session_id", "recorded patch session id");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    var outcome = editing.revert(scratch, context.editing() catch |err| return transactionalError(allocator, "zigar_patch_session_revert", "build_app_context", err), .{
+    var outcome = editing.revert(scratch, context.editing() catch |err| return transactionalError(allocator, "zigars_patch_session_revert", "build_app_context", err), .{
         .session_id = session_id,
         .apply = argBool(args, "apply", false),
         .history = argString(args, "history"),
         .history_path = argString(args, "history_path") orelse editing.history_path_default,
-    }) catch |err| return transactionalError(allocator, "zigar_patch_session_revert", "revert_session", err);
+    }) catch |err| return transactionalError(allocator, "zigars_patch_session_revert", "revert_session", err);
     defer outcome.deinit(scratch);
     return switch (outcome) {
         .ok => |result| structuredScratch(allocator, scratch, try patchSessionRevertValue(scratch, result)),
@@ -96,8 +96,8 @@ pub fn zigGeneratedFileTrace(allocator: std.mem.Allocator, context: app_context.
     return structuredScratch(allocator, scratch, editing_workflows.generatedFileTraceValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_generated_file_trace", "build_app_context", err), path) catch |err| return transactionalError(allocator, "zig_generated_file_trace", "run_workflow", err));
 }
 
-/// Handles MCP `zigar_edit_policy_check` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_edit_policy_check` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -108,13 +108,13 @@ pub fn zigarEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context
     return structuredScratch(allocator, scratch, try editing_workflows.editPolicyCheckValue(scratch, paths.items));
 }
 
-/// Handles MCP `zigar_generated_route` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarGeneratedRoute(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zigar_generated_route", "path", "workspace-relative generated or vendored path");
+/// Handles MCP `zigars_generated_route` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsGeneratedRoute(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zigars_generated_route", "path", "workspace-relative generated or vendored path");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    return structuredScratch(allocator, scratch, editing_workflows.generatedRouteValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zigar_generated_route", "build_app_context", err), path, argString(args, "goal")) catch |err| return transactionalError(allocator, "zigar_generated_route", "run_workflow", err));
+    return structuredScratch(allocator, scratch, editing_workflows.generatedRouteValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zigars_generated_route", "build_app_context", err), path, argString(args, "goal")) catch |err| return transactionalError(allocator, "zigars_generated_route", "run_workflow", err));
 }
 
 /// Handles MCP `zig_organize_imports` requests by delegating to app logic and shaping owned results/errors.
@@ -217,7 +217,7 @@ fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateR
         });
     }
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_create" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_create" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(allocator, "session_id", try ownedString(allocator, result.session_id));
     try obj.put(allocator, "goal", try optionalStringValue(allocator, result.goal));
@@ -225,7 +225,7 @@ fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateR
     try obj.put(allocator, "safe_to_edit", .{ .bool = result.safe_to_edit });
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "expected_preimages", try expectedPreimagesValue(allocator, result.expected_preimages));
-    try obj.put(allocator, "next_action", try nextToolValue(allocator, if (result.safe_to_edit) "zigar_patch_session_preview" else "zigar_generated_route", if (result.safe_to_edit) "preview replacement content before applying" else "route generated or vendored paths to source/regeneration"));
+    try obj.put(allocator, "next_action", try nextToolValue(allocator, if (result.safe_to_edit) "zigars_patch_session_preview" else "zigars_generated_route", if (result.safe_to_edit) "preview replacement content before applying" else "route generated or vendored paths to source/regeneration"));
     try obj.put(allocator, "limitations", .{ .string = "Session creation captures current file identity and policy only; no source writes or validation commands have run." });
     return .{ .object = obj };
 }
@@ -247,7 +247,7 @@ fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.Re
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "expected_preimages", try expectedPreimagesValue(allocator, result.expected_preimages));
     try obj.put(allocator, "history_path", .{ .string = editing.history_path_default });
-    try obj.put(allocator, "limitations", .{ .string = "Apply requires expected_preimages from preview and refuses generated/vendor paths; validation must be run separately or through zigar_patch_session_validate." });
+    try obj.put(allocator, "limitations", .{ .string = "Apply requires expected_preimages from preview and refuses generated/vendor paths; validation must be run separately or through zigars_patch_session_validate." });
     if (result.operation == .apply) try putElicitationMetadata(allocator, &obj, elicitation_response);
     return .{ .object = obj };
 }
@@ -257,7 +257,7 @@ fn patchSessionRevertValue(allocator: std.mem.Allocator, result: editing.RevertR
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try revertFileValue(allocator, file));
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_revert" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_revert" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(allocator, "session_id", try ownedString(allocator, result.session_id));
     try obj.put(allocator, "applied", .{ .bool = result.applied });
@@ -317,7 +317,7 @@ fn sessionRecordValue(allocator: std.mem.Allocator, record: editing.SessionRecor
         try files.append(.{ .object = item });
     }
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_record" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_record" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(allocator, "session_id", try ownedString(allocator, record.session_id));
     try obj.put(allocator, "goal", try optionalStringValue(allocator, record.goal));
@@ -365,7 +365,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.js
 /// Returns an allocator-owned JSON value for apply blocked.
 fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing.ExpectedPreimage, elicitation_response: ?ports.ProtocolResponse) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_apply" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(allocator, "session_id", try ownedString(allocator, session_id));
     try obj.put(allocator, "applied", .{ .bool = false });
@@ -381,7 +381,7 @@ fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files
 fn applyDeclinedValue(allocator: std.mem.Allocator, session_id: []const u8, expected_preimages: []const editing.ExpectedPreimage, response: ports.ProtocolResponse) !std.json.Value {
     const files = std.json.Array.init(allocator);
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_apply" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
     try obj.put(allocator, "session_id", try ownedString(allocator, session_id));
     try obj.put(allocator, "applied", .{ .bool = false });
@@ -409,7 +409,7 @@ fn requestApplyElicitation(allocator: std.mem.Allocator, client: ?ports.Protocol
         .unavailable_reason = elicitation_apply_fallback_reason,
     };
     var params = std.json.ObjectMap.empty;
-    params.put(allocator, "message", .{ .string = "Apply this zigar patch session to workspace source files?" }) catch return protocolFailureResponse();
+    params.put(allocator, "message", .{ .string = "Apply this zigars patch session to workspace source files?" }) catch return protocolFailureResponse();
     var requested_schema = std.json.ObjectMap.empty;
     requested_schema.put(allocator, "type", .{ .string = "object" }) catch return protocolFailureResponse();
     var properties = std.json.ObjectMap.empty;
@@ -642,11 +642,11 @@ fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const 
 fn sessionNotFound(allocator: std.mem.Allocator, session_id: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_revert" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_revert" });
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "session_id", .{ .string = session_id });
     try obj.put(allocator, "error_kind", .{ .string = "not_found" });
-    try obj.put(allocator, "resolution", .{ .string = "Pass history/history_path containing a zigar_patch_session_record emitted by zigar_patch_session_apply apply=true." });
+    try obj.put(allocator, "resolution", .{ .string = "Pass history/history_path containing a zigars_patch_session_record emitted by zigars_patch_session_apply apply=true." });
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
@@ -795,7 +795,7 @@ test "transactional editing adapter covers create validate revert and code actio
     defer create_args.deinit(allocator);
     try create_args.put(allocator, "files", .{ .string = "src/main.zig src/denied.zig" });
     try create_args.put(allocator, "goal", .{ .string = "cover mixed session creation" });
-    const created = try zigarPatchSessionCreate(allocator, context, .{ .object = create_args });
+    const created = try zigarsPatchSessionCreate(allocator, context, .{ .object = create_args });
     defer mcp_result.deinitToolResult(allocator, created);
     try std.testing.expect(!created.structuredContent.?.object.get("safe_to_edit").?.bool);
 
@@ -803,7 +803,7 @@ test "transactional editing adapter covers create validate revert and code actio
     defer revert_args.deinit(allocator);
     try revert_args.put(allocator, "session_id", .{ .string = "missing-session" });
     try revert_args.put(allocator, "history", .{ .string = "" });
-    const missing_revert = try zigarPatchSessionRevert(allocator, context, .{ .object = revert_args });
+    const missing_revert = try zigarsPatchSessionRevert(allocator, context, .{ .object = revert_args });
     defer mcp_result.deinitToolResult(allocator, missing_revert);
     try std.testing.expectEqualStrings("not_found", missing_revert.structuredContent.?.object.get("error_kind").?.string);
 
@@ -811,7 +811,7 @@ test "transactional editing adapter covers create validate revert and code actio
     try workspace.expectReadError(.{
         .path = "validation.jsonl",
         .max_bytes = validation_workflows.history_max_bytes,
-        .provenance = "zigar_validation_run history preimage",
+        .provenance = "zigars_validation_run history preimage",
     }, error.FileNotFound);
     var validate_args = std.json.ObjectMap.empty;
     defer validate_args.deinit(allocator);
@@ -819,7 +819,7 @@ test "transactional editing adapter covers create validate revert and code actio
     try validate_args.put(allocator, "changed_files", .{ .string = "notes.txt" });
     try validate_args.put(allocator, "output", .{ .string = "validation.jsonl" });
     try validate_args.put(allocator, "apply", .{ .bool = true });
-    const validation_failed = try zigarPatchSessionValidate(allocator, context, .{ .object = validate_args });
+    const validation_failed = try zigarsPatchSessionValidate(allocator, context, .{ .object = validate_args });
     defer mcp_result.deinitToolResult(allocator, validation_failed);
     try std.testing.expectEqualStrings("tool_error", validation_failed.structuredContent.?.object.get("kind").?.string);
     try std.testing.expectEqual(@as(usize, 1), workspace.writeCalls().len);
@@ -863,7 +863,7 @@ test "transactional editing adapter helper parsers and errors are explicit" {
     var policy_args = std.json.ObjectMap.empty;
     defer policy_args.deinit(allocator);
     try policy_args.put(allocator, "patch", .{ .string = "--- a/src/old.zig\n+++ b/src/new.zig\n" });
-    const policy = try zigarEditPolicyCheck(allocator, app_context.Context{}, .{ .object = policy_args });
+    const policy = try zigarsEditPolicyCheck(allocator, app_context.Context{}, .{ .object = policy_args });
     defer mcp_result.deinitToolResult(allocator, policy);
     try std.testing.expectEqual(@as(usize, 2), policy.structuredContent.?.object.get("checked").?.array.items.len);
 
@@ -912,7 +912,7 @@ fn transactionalTestContext(
     clock_and_ids: *fakes.FakeClockAndIds,
 ) app_context.Context {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "zig" },
         .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
         .zls_state = .{},

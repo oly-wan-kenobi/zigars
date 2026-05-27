@@ -77,11 +77,11 @@ pub fn run(init: std.process.Init) !void {
     logZlsSession(runtime.logger, runtime.zls.client != null, runtime.zls.status);
 
     var server = mcp_server.Server.init(allocator, .{
-        .name = "zigar",
+        .name = "zigars",
         .version = version,
-        .title = "Zigar",
+        .title = "Zigars",
         .description = "Comprehensive deterministic MCP server for Zig application development.",
-        .instructions = "Use zigar tools for Zig docs, build/test/check, formatting, static analysis, linting, profiling, and flamegraph workflows. Source writes require apply=true.",
+        .instructions = "Use zigars tools for Zig docs, build/test/check, formatting, static analysis, linting, profiling, and flamegraph workflows. Source writes require apply=true.",
     });
     defer server.deinit();
 
@@ -114,11 +114,11 @@ fn handleConfigParseError(io: std.Io, err: anyerror) !void {
             return;
         },
         error.VersionRequested => {
-            try stderrPrint(io, "zigar " ++ version ++ "\n", .{});
+            try stderrPrint(io, "zigars " ++ version ++ "\n", .{});
             return;
         },
         else => {
-            try stderrPrint(io, "zigar: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
+            try stderrPrint(io, "zigars: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
             return err;
         },
     }
@@ -151,5 +151,5 @@ test "bootstrap runtime zls session logging helper is side-effect safe when disa
 }
 
 test "bootstrap runtime stderr printer flushes formatted text" {
-    try stderrPrint(std.testing.io, "zigar runtime stderr smoke {d}\n", .{@as(u8, 1)});
+    try stderrPrint(std.testing.io, "zigars runtime stderr smoke {d}\n", .{@as(u8, 1)});
 }

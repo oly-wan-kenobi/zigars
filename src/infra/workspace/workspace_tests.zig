@@ -70,7 +70,7 @@ test "workspace relative only trims root at path boundary" {
         .allocator = std.testing.allocator,
         .io = std.testing.io,
         .root = "/tmp/project",
-        .cache_root = "/tmp/project/.zigar-cache",
+        .cache_root = "/tmp/project/.zigars-cache",
     };
 
     try std.testing.expectEqualStrings(".", ws.relative("/tmp/project"));
@@ -161,7 +161,7 @@ test "workspace rejects default cache symlink outside root" {
     defer allocator.free(root);
     const outside_cache = try std.fs.path.join(allocator, &.{ base, "outside-cache" });
     defer allocator.free(outside_cache);
-    const cache_link = try std.fs.path.join(allocator, &.{ root, ".zigar-cache" });
+    const cache_link = try std.fs.path.join(allocator, &.{ root, ".zigars-cache" });
     defer allocator.free(cache_link);
 
     try std.Io.Dir.symLinkAbsolute(io, outside_cache, cache_link, .{ .is_directory = true });

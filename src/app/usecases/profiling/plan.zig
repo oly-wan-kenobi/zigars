@@ -8,7 +8,7 @@ pub const Request = struct {
     binary: []const u8 = "zig-out/bin/<app>",
     detected_platform: []const u8,
     platform: ?[]const u8 = null,
-    output_prefix: []const u8 = ".zigar-cache/profile/profile",
+    output_prefix: []const u8 = ".zigars-cache/profile/profile",
 };
 
 /// Serializes profile plan fields into an allocator-owned JSON value; allocation failures propagate.
@@ -52,7 +52,7 @@ fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_pr
         .zflame_format = .perf,
         .command = try std.fmt.allocPrint(allocator, "perf record -F 997 -g -o {s}.perf.data -- {s}", .{ output_prefix, binary }),
         .prerequisites = &.{ "Linux perf installed", "kernel perf_event permissions allow sampling", "binary built with symbols or usable debug info" },
-        .limitations = &.{ "perf privilege, callchain mode, kernel settings, and symbolization quality are external to zigar", flamegraph_model.capture_semantics },
+        .limitations = &.{ "perf privilege, callchain mode, kernel settings, and symbolization quality are external to zigars", flamegraph_model.capture_semantics },
         .svg_output = svg_output,
     }));
     try plans.append(try capturePlanValue(allocator, .{
@@ -96,7 +96,7 @@ fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_pr
         .zflame_format = .vtune,
         .command = try std.fmt.allocPrint(allocator, "vtune -collect hotspots -result-dir {s}.vtune -- {s}", .{ output_prefix, binary }),
         .prerequisites = &.{ "Intel VTune installed", "project license/environment configured", "VTune can launch or attach to the target" },
-        .limitations = &.{ "VTune collection mode, result schema, and permissions are external to zigar", flamegraph_model.capture_semantics },
+        .limitations = &.{ "VTune collection mode, result schema, and permissions are external to zigars", flamegraph_model.capture_semantics },
         .svg_output = svg_output,
     }));
     try plans.append(try capturePlanValue(allocator, .{
@@ -106,8 +106,8 @@ fn capturePlansValue(allocator: std.mem.Allocator, binary: []const u8, output_pr
         .captured_output = try std.fmt.allocPrint(allocator, "{s}.folded", .{output_prefix}),
         .zflame_format = .recursive,
         .command = try std.fmt.allocPrint(allocator, "<external folded-stack producer> > {s}.folded", .{output_prefix}),
-        .prerequisites = &.{ "input is folded-stack text in recursive format", "capture or stack collapsing happened outside zigar" },
-        .limitations = &.{ "zigar renders folded stacks but does not verify how they were captured or collapsed", flamegraph_model.capture_semantics },
+        .prerequisites = &.{ "input is folded-stack text in recursive format", "capture or stack collapsing happened outside zigars" },
+        .limitations = &.{ "zigars renders folded stacks but does not verify how they were captured or collapsed", flamegraph_model.capture_semantics },
         .svg_output = svg_output,
     }));
     plans_owned = false;
@@ -138,7 +138,7 @@ fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.js
     try obj.put(allocator, "recommended_external_command", .{ .string = spec.command });
     try obj.put(allocator, "expected_captured_output_path", .{ .string = spec.captured_output });
     try obj.put(allocator, "zflame_input_format", .{ .string = spec.zflame_format.name() });
-    try obj.put(allocator, "next_zigar_command", try nextZigarCommandValue(allocator, spec.zflame_format, spec.captured_output, spec.svg_output));
+    try obj.put(allocator, "next_zigars_command", try nextZigarsCommandValue(allocator, spec.zflame_format, spec.captured_output, spec.svg_output));
     try obj.put(allocator, "prerequisites", try stringArrayValue(allocator, spec.prerequisites));
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, spec.limitations));
     try obj.put(allocator, "capture_owned_by", .{ .string = "external_profiler" });
@@ -147,8 +147,8 @@ fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.js
     return .{ .object = obj };
 }
 
-/// Serializes next zigar command fields into an allocator-owned JSON value; allocation failures propagate.
-fn nextZigarCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.ZflameFormat, input: []const u8, output: []const u8) !std.json.Value {
+/// Serializes next zigars command fields into an allocator-owned JSON value; allocation failures propagate.
+fn nextZigarsCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.ZflameFormat, input: []const u8, output: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);

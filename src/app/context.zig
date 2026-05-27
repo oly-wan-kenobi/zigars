@@ -117,7 +117,7 @@ pub const CachedBackendProbe = struct {
     probed: bool = false,
     ok: ?bool = null,
     status: []const u8 = "not probed",
-    resolution: []const u8 = "call zigar_doctor with probe_backends=true to cache backend availability",
+    resolution: []const u8 = "call zigars_doctor with probe_backends=true to cache backend availability",
 };
 
 /// Profiling-specific cached probe snapshots.

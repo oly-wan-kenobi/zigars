@@ -11,7 +11,7 @@ test "profile plan returns structured external capture plans" {
         .binary = "zig-out/bin/demo",
         .detected_platform = "linux",
         .platform = "linux",
-        .output_prefix = ".zigar-cache/profile/demo",
+        .output_prefix = ".zigars-cache/profile/demo",
     });
     const root = value.object;
     try std.testing.expectEqualStrings("zig_profile_plan", root.get("kind").?.string);

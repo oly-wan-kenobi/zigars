@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars memory fuzz forensics"
+  short_description: "Preserve leak and fuzzing evidence."
+  default_prompt: "Use $zigars-memory-fuzz-forensics to analyze this allocator leak or fuzz crash."

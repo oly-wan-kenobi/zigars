@@ -466,7 +466,7 @@ test "artifact store records put and read calls" {
         .bytes = "<svg></svg>",
     }, .{
         .id = "artifact-1",
-        .uri = "zigar://artifact/artifact-1",
+        .uri = "zigars://artifact/artifact-1",
         .checksum = "sha256:test",
         .bytes_written = 11,
     });
@@ -500,7 +500,7 @@ test "artifact store verify catches missing artifact writes" {
         .bytes = "{}",
     }, .{
         .id = "artifact-2",
-        .uri = "zigar://artifact/artifact-2",
+        .uri = "zigars://artifact/artifact-2",
         .bytes_written = 2,
     });
 

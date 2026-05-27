@@ -6,7 +6,7 @@ const artifacts = @import("registry.zig");
 const workspace_mod = @import("../workspace/workspace.zig");
 
 /// Workspace-relative directory where artifact payloads are written.
-const artifact_root = ".zigar-cache/artifacts";
+const artifact_root = ".zigars-cache/artifacts";
 /// Upper bound for hashing workspace artifacts when bytes are not provided.
 const max_workspace_record_bytes = 16 * 1024 * 1024;
 
@@ -73,7 +73,7 @@ pub const Store = struct {
         const id = allocator.dupe(u8, rel_path) catch return error.OutOfMemory;
         var id_owned = true;
         defer if (id_owned) allocator.free(id);
-        const uri = std.fmt.allocPrint(allocator, "zigar://artifact/{s}", .{rel_path}) catch return error.OutOfMemory;
+        const uri = std.fmt.allocPrint(allocator, "zigars://artifact/{s}", .{rel_path}) catch return error.OutOfMemory;
         var uri_owned = true;
         defer if (uri_owned) allocator.free(uri);
         const checksum = allocator.dupe(u8, identity.sha256) catch return error.OutOfMemory;
@@ -203,7 +203,7 @@ fn safeArtifactIdPart(index: usize, part: []const u8) bool {
     if (std.mem.eql(u8, part, ".") or std.mem.eql(u8, part, "..")) return false;
     return switch (index) {
         // Enforce canonical artifact root; callers may only vary namespace/name segments.
-        0 => std.mem.eql(u8, part, ".zigar-cache"),
+        0 => std.mem.eql(u8, part, ".zigars-cache"),
         1 => std.mem.eql(u8, part, "artifacts"),
         else => true,
     };
@@ -272,7 +272,7 @@ test "artifact registry store records existing workspace artifacts and nested co
 
     const nested_path = try artifactPath(allocator, "nested/reports", "summary.json");
     defer allocator.free(nested_path);
-    try std.testing.expectEqualStrings(".zigar-cache/artifacts/nested/reports/summary.json", nested_path);
+    try std.testing.expectEqualStrings(".zigars-cache/artifacts/nested/reports/summary.json", nested_path);
 
     const ref = try store.port().recordWorkspace(allocator, .{
         .path = "zig-out/nested/report.txt",

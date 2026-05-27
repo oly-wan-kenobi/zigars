@@ -12,14 +12,14 @@ Scope:
 
 - Reconcile public docs, package README text, and skill guidance with the
   shipped Phase 1-6 surface.
-- Keep `zigar_setup_guidance`, `zigar_profile_guidance`, and
-  `zigar_backend_guidance` as the primary setup names while preserving
+- Keep `zigars_setup_guidance`, `zigars_profile_guidance`, and
+  `zigars_backend_guidance` as the primary setup names while preserving
   `_elicit` aliases for older clients.
 - Document shipped protocol fallbacks: declared `outputSchema`, artifact
-  `resource_link` blocks, `zigar_patch_session_apply` protocol elicitation, and
-  `zigar_failure_fusion summarize=true` protocol sampling.
+  `resource_link` blocks, `zigars_patch_session_apply` protocol elicitation, and
+  `zigars_failure_fusion summarize=true` protocol sampling.
 - Preserve the existing session file shape under
-  `.zigar-cache/sessions/<kind>/<id>.jsonl`.
+  `.zigars-cache/sessions/<kind>/<id>.jsonl`.
 
 Validation run for this phase:
 
@@ -31,12 +31,12 @@ Validation run for this phase:
 - `zig build smoke stdio-fixtures --summary all` -> passed.
 - `zig build -Doptimize=ReleaseSafe --summary all` -> passed.
 - `git diff --check` -> passed.
-- `npm run build` in `packages/zigar-mcp-npm` -> passed.
-- `npm run test:node` in `packages/zigar-mcp-npm` -> passed, 24/24 tests.
-- `bun run test:bun` in `packages/zigar-mcp-npm` -> passed, 24/24 tests.
-- `npm pack --dry-run` in `packages/zigar-mcp-npm` -> passed.
-- `npm test` in `packages/zigar-skills-npm` -> passed, 4/4 tests.
-- `npm run pack:dry` in `packages/zigar-skills-npm` -> passed.
+- `npm run build` in `packages/zigars-mcp-npm` -> passed.
+- `npm run test:node` in `packages/zigars-mcp-npm` -> passed, 24/24 tests.
+- `bun run test:bun` in `packages/zigars-mcp-npm` -> passed, 24/24 tests.
+- `npm pack --dry-run` in `packages/zigars-mcp-npm` -> passed.
+- `npm test` in `packages/zigars-skills-npm` -> passed, 4/4 tests.
+- `npm run pack:dry` in `packages/zigars-skills-npm` -> passed.
 - `zig build artifact-hygiene --summary all` -> failed on unrelated existing
   line-budget checks in MCP adapter, manifest, and fixture files not changed by
   this phase.

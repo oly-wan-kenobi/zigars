@@ -1,0 +1,57 @@
+{
+    "name": "@zigars/mcp",
+    "version": "0.2.0",
+    "description": "npm shim for the zigars local stdio MCP server",
+    "license": "MIT",
+    "mcpName": "io.github.oly-wan-kenobi/zigars",
+    "main": "dist/src/cli.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/oly-wan-kenobi/zigars.git",
+        "directory": "packages/zigars-mcp-npm"
+    },
+    "homepage": "https://github.com/oly-wan-kenobi/zigars#readme",
+    "bugs": {
+        "url": "https://github.com/oly-wan-kenobi/zigars/issues"
+    },
+    "keywords": [
+        "zig",
+        "mcp",
+        "model-context-protocol",
+        "zigars",
+        "codex",
+        "claude",
+        "cursor",
+        "vscode"
+    ],
+    "bin": {
+        "zigars-mcp": "bin/zigars-mcp.js"
+    },
+    "files": [
+        "bin",
+        "dist/package.json",
+        "dist/src",
+        "src",
+        "tsconfig.json",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "clean": "rm -rf dist",
+        "prepack": "npm run build",
+        "test": "bun run test:bun",
+        "test:bun": "bun run build && bun test test/*.test.ts",
+        "test:node": "npm run build && node --test dist/test/*.test.js"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "devDependencies": {
+        "@types/node": "^24.10.1",
+        "typescript": "^5.9.3"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

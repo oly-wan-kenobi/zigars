@@ -27,7 +27,7 @@ test "missing identity only matches missing expected identity" {
 test "session artifact paths are stable and sanitized" {
     const path = try patch_session.preimageArtifactPath(std.testing.allocator, "session-1234", 1, "src/main file.zig");
     defer std.testing.allocator.free(path);
-    try std.testing.expectEqualStrings(".zigar-cache/patch-sessions/session-1234/1-src_main_file.zig.preimage", path);
+    try std.testing.expectEqualStrings(".zigars-cache/patch-sessions/session-1234/1-src_main_file.zig.preimage", path);
 }
 
 test "unified diff preserves existing public line markers" {

@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "purpose": "Repo-pinned optional backend set for zigar release-validation evidence.",
+  "purpose": "Repo-pinned optional backend set for zigars release-validation evidence.",
   "setup_script": ".github/scripts/setup-real-backends.sh",
-  "cache_root": ".zigar-cache/real-backends",
-  "bin_dir": ".zigar-cache/real-backends/bin",
+  "cache_root": ".zigars-cache/real-backends",
+  "bin_dir": ".zigars-cache/real-backends/bin",
   "required_zig_version": "0.16.0",
   "backends": [
     {
@@ -17,7 +17,7 @@
       "version": "0.11.0",
       "tag": "v0.11.0",
       "commit": "b28819c041f190e5a839f5b9d6580079d1fb2259",
-      "expected_output_binary_path": ".zigar-cache/real-backends/bin/zwanzig",
+      "expected_output_binary_path": ".zigars-cache/real-backends/bin/zwanzig",
       "probe": {
         "version": ["{binary}", "--version"],
         "help": ["{binary}", "--help"]
@@ -58,7 +58,7 @@
       "version": "0.0.2",
       "tag": "v0.0.2",
       "commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
-      "expected_output_binary_path": ".zigar-cache/real-backends/bin/zflame",
+      "expected_output_binary_path": ".zigars-cache/real-backends/bin/zflame",
       "probe": {
         "help": ["{binary}", "--help"]
       },
@@ -105,7 +105,7 @@
       "version": "0.0.2",
       "tag": "v0.0.2",
       "commit": "4bb890d891390519bf3eec0ce1d08b8175a175ab",
-      "expected_output_binary_path": ".zigar-cache/real-backends/bin/diff-folded",
+      "expected_output_binary_path": ".zigars-cache/real-backends/bin/diff-folded",
       "probe": {
         "help": ["{binary}", "--help"]
       },

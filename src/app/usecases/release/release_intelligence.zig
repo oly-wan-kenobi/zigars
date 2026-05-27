@@ -61,7 +61,7 @@ pub const EvidencePointer = release_model.EvidencePointer;
 /// Implements plan workflow logic using caller-owned inputs.
 pub fn plan(allocator: std.mem.Allocator, request: ReleasePlanRequest) !ReleasePlan {
     return release_model.buildReleasePlan(allocator, &.{
-        .{ .name = "validation", .text = request.validation, .verify_with = "zigar_validation_run or zig build test" },
+        .{ .name = "validation", .text = request.validation, .verify_with = "zigars_validation_run or zig build test" },
         .{ .name = "ci", .text = request.ci, .verify_with = "zig_ci_ingest plus local repro plan" },
         .{ .name = "api", .text = request.api, .verify_with = "zig_api_check or zig_api_diff_baseline" },
         .{ .name = "docs", .text = request.docs, .verify_with = "zig build docs-check and snippet checks" },

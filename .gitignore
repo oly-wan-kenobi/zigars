@@ -1,6 +1,7 @@
 /.zig-cache/
 /zig-out/
 /.zigar-cache/
+/.zigars-cache/
 /zig-pkg/
 /dist/
 /coverage/

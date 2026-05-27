@@ -82,7 +82,7 @@ pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]cons
 pub fn preimageArtifactPath(allocator: std.mem.Allocator, session_id: []const u8, index: usize, file: []const u8) ![]const u8 {
     const safe = try sanitizePath(allocator, file);
     defer allocator.free(safe);
-    return std.fmt.allocPrint(allocator, ".zigar-cache/patch-sessions/{s}/{d}-{s}.preimage", .{ session_id, index, safe });
+    return std.fmt.allocPrint(allocator, ".zigars-cache/patch-sessions/{s}/{d}-{s}.preimage", .{ session_id, index, safe });
 }
 
 /// Replaces path separators and shell-hostile characters for cache filenames.

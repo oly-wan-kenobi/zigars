@@ -22,7 +22,7 @@ const writeFile = cli_io.writeFile;
 // sibling modules that share the same StdioClient boundary.
 
 const StdioOptions = struct {
-    binary: []const u8 = "zig-out/bin/zigar",
+    binary: []const u8 = "zig-out/bin/zigars",
     zig_path: []const u8 = "zig",
     server_kcov_path: []const u8 = "kcov",
     server_kcov_dir: ?[]const u8 = null,
@@ -146,7 +146,7 @@ fn termOk(term: std.process.Child.Term) bool {
 
 fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     const ns = smoke.nowNs(io);
-    const path = try std.fmt.allocPrint(allocator, ".zig-cache/zigar-fixtures-{d}", .{ns});
+    const path = try std.fmt.allocPrint(allocator, ".zig-cache/zigars-fixtures-{d}", .{ns});
     errdefer allocator.free(path);
     try Io.Dir.cwd().createDirPath(io, path);
     return path;
@@ -214,12 +214,12 @@ const StdioClient = struct {
     tool_calls: usize,
 
     fn runFixture(self: *StdioClient, workspace: []const u8) !void {
-        const init = try self.request("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"zigar-stdio-fixtures\",\"version\":\"0\"}}");
+        const init = try self.request("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"zigars-stdio-fixtures\",\"version\":\"0\"}}");
         defer self.allocator.free(init);
         {
             const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, init, .{});
             defer parsed.deinit();
-            try smoke.expectStringEq(self.io, valueAt(parsed.value, "serverInfo.name").?.string, "zigar", "stdio initialize serverInfo.name");
+            try smoke.expectStringEq(self.io, valueAt(parsed.value, "serverInfo.name").?.string, "zigars", "stdio initialize serverInfo.name");
         }
         try self.notify("notifications/initialized", null);
 
@@ -229,16 +229,16 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_flamegraph");
         try self.expectTool(tools, "zig_toolchain_resolve");
         try self.expectTool(tools, "zig_patch_preview");
-        try self.expectTool(tools, "zigar_context_pack");
-        try self.expectTool(tools, "zigar_validate_patch");
-        try self.expectTool(tools, "zigar_project_profile_v2");
-        try self.expectTool(tools, "zigar_env_pack");
-        try self.expectTool(tools, "zigar_backend_conformance");
-        try self.expectTool(tools, "zigar_job_start");
-        try self.expectTool(tools, "zigar_run_stream");
-        try self.expectTool(tools, "zigar_resource_query");
-        try self.expectTool(tools, "zigar_workspace_map");
-        try self.expectTool(tools, "zigar_prompt_pack");
+        try self.expectTool(tools, "zigars_context_pack");
+        try self.expectTool(tools, "zigars_validate_patch");
+        try self.expectTool(tools, "zigars_project_profile_v2");
+        try self.expectTool(tools, "zigars_env_pack");
+        try self.expectTool(tools, "zigars_backend_conformance");
+        try self.expectTool(tools, "zigars_job_start");
+        try self.expectTool(tools, "zigars_run_stream");
+        try self.expectTool(tools, "zigars_resource_query");
+        try self.expectTool(tools, "zigars_workspace_map");
+        try self.expectTool(tools, "zigars_prompt_pack");
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
@@ -257,7 +257,7 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_memory_layout");
         try self.expectTool(tools, "zig_unsafe_operations_audit");
         try self.expectTool(tools, "zig_abi_layout_diff");
-        try self.expectTool(tools, "zigar_session_view");
+        try self.expectTool(tools, "zigars_session_view");
         try self.expectTool(tools, "zig_bench_regression_gate");
         try self.expectTool(tools, "zig_zlint");
         try self.expectTool(tools, "zig_zlint_fix");
@@ -268,24 +268,24 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_deps_add");
         try self.expectTool(tools, "zig_pkg_search");
         try self.expectTool(tools, "zig_dependency_migrate");
-        try self.expectTool(tools, "zigar_adoption_pack");
-        try self.expectTool(tools, "zigar_client_config_generate");
-        try self.expectTool(tools, "zigar_smoke_plan");
-        try self.expectTool(tools, "zigar_conformance_report");
+        try self.expectTool(tools, "zigars_adoption_pack");
+        try self.expectTool(tools, "zigars_client_config_generate");
+        try self.expectTool(tools, "zigars_smoke_plan");
+        try self.expectTool(tools, "zigars_conformance_report");
 
         const resources = try self.request("resources/list", null);
         defer self.allocator.free(resources);
-        if (std.mem.indexOf(u8, resources, "zigar://workspace") == null) return error.AssertionFailed;
-        if (std.mem.indexOf(u8, resources, "zigar://tools/schema") == null) return error.AssertionFailed;
+        if (std.mem.indexOf(u8, resources, "zigars://workspace") == null) return error.AssertionFailed;
+        if (std.mem.indexOf(u8, resources, "zigars://tools/schema") == null) return error.AssertionFailed;
 
-        const resource_read = try self.request("resources/read", "{\"uri\":\"zigar://workspace\"}");
+        const resource_read = try self.request("resources/read", "{\"uri\":\"zigars://workspace\"}");
         defer self.allocator.free(resource_read);
         if (std.mem.indexOf(u8, resource_read, workspace) == null) return error.AssertionFailed;
 
         const prompts = try self.request("prompts/list", null);
         defer self.allocator.free(prompts);
-        if (std.mem.indexOf(u8, prompts, "zigar_profile_workflow") == null) return error.AssertionFailed;
-        const prompt = try self.request("prompts/get", "{\"name\":\"zigar_profile_workflow\",\"arguments\":{}}");
+        if (std.mem.indexOf(u8, prompts, "zigars_profile_workflow") == null) return error.AssertionFailed;
+        const prompt = try self.request("prompts/get", "{\"name\":\"zigars_profile_workflow\",\"arguments\":{}}");
         defer self.allocator.free(prompt);
         if (std.mem.indexOf(u8, prompt, "zig_profile_plan") == null) return error.AssertionFailed;
 
@@ -294,7 +294,7 @@ const StdioClient = struct {
         const before = try readFileAlloc(self.allocator, self.io, source, 1024 * 1024);
         defer self.allocator.free(before);
 
-        const workspace_info = try self.callTool("zigar_workspace_info", "{}");
+        const workspace_info = try self.callTool("zigars_workspace_info", "{}");
         defer self.allocator.free(workspace_info);
         if (std.mem.indexOf(u8, workspace_info, "\"diff_folded\"") == null) return error.AssertionFailed;
 
@@ -326,15 +326,15 @@ const StdioClient = struct {
         try self.expectPathJson(patch, "applied", .{ .bool = false });
         if (std.mem.indexOf(u8, patch, "-    const x = 1;") == null) return error.AssertionFailed;
 
-        const context = try self.callTool("zigar_context_pack", "{\"mode\":\"tiny\"}");
+        const context = try self.callTool("zigars_context_pack", "{\"mode\":\"tiny\"}");
         defer self.allocator.free(context);
-        try self.expectPathString(context, "kind", "zigar_context_pack");
+        try self.expectPathString(context, "kind", "zigars_context_pack");
         try self.expectPathJson(context, "workspace.zls_running", .{ .bool = false });
 
-        const validate = try self.callTool("zigar_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
+        const validate = try self.callTool("zigars_validate_patch", "{\"mode\":\"quick\",\"changed_files\":\"src/main.zig\"}");
         defer self.allocator.free(validate);
-        try self.expectPathString(validate, "kind", "zigar_validate_patch");
-        try self.expectPathString(validate, "workflow_contract.verification", "rerun failed phase or run zigar_validate_patch mode=full");
+        try self.expectPathString(validate, "kind", "zigars_validate_patch");
+        try self.expectPathString(validate, "workflow_contract.verification", "rerun failed phase or run zigars_validate_patch mode=full");
         try stdio_validation_workflow_fixtures.run(self);
 
         const import_cycles = try self.callTool("zig_import_cycles", "{\"limit\":20}");
@@ -414,9 +414,9 @@ const StdioClient = struct {
         try self.expectPathString(bench_gate, "tool", "zig_bench_regression_gate");
         try self.expectPathString(bench_gate, "status", "failed");
         try self.expectPathJson(bench_gate, "requires_apply", .{ .bool = false });
-        const session_view = try self.callTool("zigar_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"stdio-gate\"}");
+        const session_view = try self.callTool("zigars_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"stdio-gate\"}");
         defer self.allocator.free(session_view);
-        try self.expectPathString(session_view, "kind", "zigar_session_view");
+        try self.expectPathString(session_view, "kind", "zigars_session_view");
         try self.expectPathString(session_view, "session_kind", "bench_regression_gate");
         try self.expectPathString(session_view, "session.envelope.status", "failed");
         try self.expectPathJson(session_view, "record_count", .{ .integer = 1 });
@@ -529,7 +529,7 @@ const StdioClient = struct {
 
 fn removeFixtureSession(io: Io, session_id: []const u8) !void {
     var path_buf: [256]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buf, ".zigar-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});
+    const path = try std.fmt.bufPrint(&path_buf, ".zigars-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});
     Io.Dir.cwd().deleteFile(io, path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,

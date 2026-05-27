@@ -11,12 +11,12 @@ const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
 /// Lists registered and scanned artifacts; reads registry metadata and workspace files.
-pub fn zigarArtifactIndex(
+pub fn zigarsArtifactIndex(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const mode = parseModeArg(args) catch return modeError(allocator, "zigar_artifact_index", args, "Choose compact, standard, or deep.");
+    const mode = parseModeArg(args) catch return modeError(allocator, "zigars_artifact_index", args, "Choose compact, standard, or deep.");
     const limit: usize = @intCast(@max(1, @min(argInt(args, "limit", 50), 500)));
     const include_hashes = argBool(args, "include_hashes", true);
     const root_arg = argString(args, "path");
@@ -26,12 +26,12 @@ pub fn zigarArtifactIndex(
     const scratch = arena.allocator();
 
     const registry = artifact_registry.readRegistrySnapshot(scratch, context) catch |err| switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_index", artifact_registry.default_registry_path, err),
-        else => return artifactError(allocator, "zigar_artifact_index", "load_registry", artifact_registry.default_registry_path, err, "Confirm zigar can read .zigar-cache artifact registry metadata, then retry."),
+        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_index", artifact_registry.default_registry_path, err),
+        else => return artifactError(allocator, "zigars_artifact_index", "load_registry", artifact_registry.default_registry_path, err, "Confirm zigars can read .zigars-cache artifact registry metadata, then retry."),
     };
     const scan = artifact_registry.scanArtifacts(scratch, context, root_arg, limit, include_hashes) catch |err| switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_index", root_arg orelse artifact_registry.default_registry_path, err),
-        else => return artifactError(allocator, "zigar_artifact_index", "scan_artifacts", root_arg orelse artifact_registry.default_registry_path, err, "Confirm zigar can scan workspace artifact directories, then retry."),
+        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_index", root_arg orelse artifact_registry.default_registry_path, err),
+        else => return artifactError(allocator, "zigars_artifact_index", "scan_artifacts", root_arg orelse artifact_registry.default_registry_path, err, "Confirm zigars can scan workspace artifact directories, then retry."),
     };
 
     var omitted = std.json.Array.init(scratch);
@@ -43,7 +43,7 @@ pub fn zigarArtifactIndex(
     }
 
     var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_artifact_index" });
+    try obj.put(scratch, "kind", .{ .string = "zigars_artifact_index" });
     try obj.put(scratch, "ok", .{ .bool = true });
     try attachMetadata(scratch, &obj, mode, omitted);
     try obj.put(scratch, "workspace", .{ .string = context.workspace.root });
@@ -55,19 +55,19 @@ pub fn zigarArtifactIndex(
     try obj.put(scratch, "scanned_artifacts", try scannedArtifactsValue(scratch, scan.artifacts));
     try obj.put(scratch, "evidence_source", .{ .string = "registry_jsonl_and_workspace_artifact_scan" });
     try obj.put(scratch, "confidence", .{ .string = "medium" });
-    try obj.put(scratch, "limitations", .{ .string = "The registry only contains artifacts explicitly registered by zigar workflows; scan results are bounded by limit and hash-size constraints." });
-    try obj.put(scratch, "resolution", .{ .string = "Use zigar_artifact_read for a specific artifact or zigar_artifact_prune to remove stale registry entries after previewing the preimage identity." });
+    try obj.put(scratch, "limitations", .{ .string = "The registry only contains artifacts explicitly registered by zigars workflows; scan results are bounded by limit and hash-size constraints." });
+    try obj.put(scratch, "resolution", .{ .string = "Use zigars_artifact_read for a specific artifact or zigars_artifact_prune to remove stale registry entries after previewing the preimage identity." });
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
 /// Reads bounded artifact text and identity fields from a workspace-local path.
-pub fn zigarArtifactRead(
+pub fn zigarsArtifactRead(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const mode = parseModeArg(args) catch return modeError(allocator, "zigar_artifact_read", args, "Choose compact, standard, or deep.");
-    const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zigar_artifact_read", "path", "workspace-relative artifact path");
+    const mode = parseModeArg(args) catch return modeError(allocator, "zigars_artifact_read", args, "Choose compact, standard, or deep.");
+    const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zigars_artifact_read", "path", "workspace-relative artifact path");
     const max_bytes: usize = @intCast(@max(1, @min(argInt(args, "max_bytes", artifact_registry.default_read_limit), 4 * 1024 * 1024)));
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -75,8 +75,8 @@ pub fn zigarArtifactRead(
     const scratch = arena.allocator();
 
     const artifact = artifact_registry.readArtifact(scratch, context, path, max_bytes) catch |err| switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_read", path, err),
-        else => return artifactError(allocator, "zigar_artifact_read", "read_artifact", path, err, "Confirm the artifact exists inside the workspace, or raise max_bytes for bounded text reads."),
+        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_read", path, err),
+        else => return artifactError(allocator, "zigars_artifact_read", "read_artifact", path, err, "Confirm the artifact exists inside the workspace, or raise max_bytes for bounded text reads."),
     };
     var omitted = std.json.Array.init(scratch);
     if (mode == .compact) {
@@ -84,7 +84,7 @@ pub fn zigarArtifactRead(
     }
 
     var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_artifact_read" });
+    try obj.put(scratch, "kind", .{ .string = "zigars_artifact_read" });
     try obj.put(scratch, "ok", .{ .bool = true });
     try attachMetadata(scratch, &obj, mode, omitted);
     try obj.put(scratch, "path", .{ .string = artifact.path });
@@ -92,7 +92,7 @@ pub fn zigarArtifactRead(
     try obj.put(scratch, "bytes", .{ .integer = @intCast(artifact.bytes) });
     try obj.put(scratch, "max_bytes", .{ .integer = @intCast(artifact.max_bytes) });
     try obj.put(scratch, "sha256", .{ .string = artifact.sha256 });
-    const resource_uri = try std.fmt.allocPrint(scratch, "zigar://artifacts/{s}", .{artifact.sha256});
+    const resource_uri = try std.fmt.allocPrint(scratch, "zigars://artifacts/{s}", .{artifact.sha256});
     try obj.put(scratch, "resource_uri", .{ .string = resource_uri });
     try obj.put(scratch, "content", .{ .string = artifact.content });
     try obj.put(scratch, "evidence_source", .{ .string = "workspace_file_read" });
@@ -103,19 +103,19 @@ pub fn zigarArtifactRead(
         .name = artifact.path,
         .uri = resource_uri,
         .title = "Artifact by sha256",
-        .description = "Read this artifact through the zigar artifact resource template.",
+        .description = "Read this artifact through the zigars artifact resource template.",
         .mimeType = artifactMimeType(artifact.path),
     });
 }
 
 /// Reads a bounded shared workflow session JSONL file without changing lifecycle state.
-pub fn zigarSessionView(
+pub fn zigarsSessionView(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const session_kind = argString(args, "kind") orelse return mcp_errors.missingArgument(allocator, "zigar_session_view", "kind", "session kind token");
-    const session_id = argString(args, "id") orelse return mcp_errors.missingArgument(allocator, "zigar_session_view", "id", "session id token");
+    const session_kind = argString(args, "kind") orelse return mcp_errors.missingArgument(allocator, "zigars_session_view", "kind", "session kind token");
+    const session_id = argString(args, "id") orelse return mcp_errors.missingArgument(allocator, "zigars_session_view", "id", "session id token");
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -129,12 +129,12 @@ pub fn zigarSessionView(
 }
 
 /// Previews or applies stale artifact-registry pruning; never deletes artifact files.
-pub fn zigarArtifactPrune(
+pub fn zigarsArtifactPrune(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const mode = parseModeArg(args) catch return modeError(allocator, "zigar_artifact_prune", args, "Choose compact, standard, or deep.");
+    const mode = parseModeArg(args) catch return modeError(allocator, "zigars_artifact_prune", args, "Choose compact, standard, or deep.");
     const apply = argBool(args, "apply", false);
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -142,21 +142,21 @@ pub fn zigarArtifactPrune(
     const scratch = arena.allocator();
 
     const preimage = artifact_registry.preimageIdentity(scratch, context) catch |err| switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_prune", artifact_registry.default_registry_path, err),
-        else => return artifactError(allocator, "zigar_artifact_prune", "read_preimage", artifact_registry.default_registry_path, err, "Confirm zigar can inspect the artifact registry preimage before pruning."),
+        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_prune", artifact_registry.default_registry_path, err),
+        else => return artifactError(allocator, "zigars_artifact_prune", "read_preimage", artifact_registry.default_registry_path, err, "Confirm zigars can inspect the artifact registry preimage before pruning."),
     };
     const registry = artifact_registry.readRegistrySnapshot(scratch, context) catch |err| switch (err) {
-        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_prune", artifact_registry.default_registry_path, err),
-        else => return artifactError(allocator, "zigar_artifact_prune", "load_registry", artifact_registry.default_registry_path, err, "Confirm zigar can read the artifact registry before pruning."),
+        error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_prune", artifact_registry.default_registry_path, err),
+        else => return artifactError(allocator, "zigars_artifact_prune", "load_registry", artifact_registry.default_registry_path, err, "Confirm zigars can read the artifact registry before pruning."),
     };
     const before_count = registry.entries.len;
     const pruned = artifact_registry.pruneStale(scratch, context, registry) catch |err| {
-        return artifactError(allocator, "zigar_artifact_prune", "prune_registry", artifact_registry.default_registry_path, err, "Inspect registry entries and rerun after removing unreadable artifact paths.");
+        return artifactError(allocator, "zigars_artifact_prune", "prune_registry", artifact_registry.default_registry_path, err, "Inspect registry entries and rerun after removing unreadable artifact paths.");
     };
     if (apply) {
         artifact_registry.persistRegistrySnapshot(scratch, context, pruned.entries) catch |err| switch (err) {
-            error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigar_artifact_prune", artifact_registry.default_registry_path, err),
-            else => return artifactError(allocator, "zigar_artifact_prune", "write_registry", artifact_registry.default_registry_path, err, "Confirm zigar can write .zigar-cache/artifacts before applying prune."),
+            error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_prune", artifact_registry.default_registry_path, err),
+            else => return artifactError(allocator, "zigars_artifact_prune", "write_registry", artifact_registry.default_registry_path, err, "Confirm zigars can write .zigars-cache/artifacts before applying prune."),
         };
     }
 
@@ -169,7 +169,7 @@ pub fn zigarArtifactPrune(
     }
 
     var obj = std.json.ObjectMap.empty;
-    try obj.put(scratch, "kind", .{ .string = "zigar_artifact_prune" });
+    try obj.put(scratch, "kind", .{ .string = "zigars_artifact_prune" });
     try obj.put(scratch, "ok", .{ .bool = true });
     try attachMetadata(scratch, &obj, mode, omitted);
     try obj.put(scratch, "applied", .{ .bool = apply });
@@ -252,20 +252,20 @@ fn sessionViewError(
     if (err == error.InvalidSessionToken) {
         return mcp_errors.invalidArgument(
             allocator,
-            "zigar_session_view",
+            "zigars_session_view",
             null,
             "non-empty session kind and id tokens containing only letters, digits, underscore, dash, or dot",
             "invalid token",
-            "Retry with the exact kind and id returned by a session-producing zigar workflow.",
+            "Retry with the exact kind and id returned by a session-producing zigars workflow.",
         );
     }
     return mcp_errors.fromError(allocator, .{
-        .tool = "zigar_session_view",
+        .tool = "zigars_session_view",
         .operation = "read_session",
         .phase = "session_jsonl_view",
         .code = if (err == error.FileNotFound or err == error.NotFound) "session_not_found" else "session_view_failed",
         .category = "session",
-        .resolution = "Confirm the workflow persisted a session under .zigar-cache/sessions/<kind>/<id>.jsonl, then retry with that kind and id.",
+        .resolution = "Confirm the workflow persisted a session under .zigars-cache/sessions/<kind>/<id>.jsonl, then retry with that kind and id.",
         .details = &.{
             .{ .key = "session_kind", .value = .{ .string = session_kind } },
             .{ .key = "session_id", .value = .{ .string = session_id } },
@@ -524,7 +524,7 @@ test "artifact MCP adapters index read and prune artifact registry data" {
     try workspace.expectScanDirectory(.{ .path = "artifacts", .max_files = 3, .for_output = false, .provenance = "artifacts.scan.walk" }, &.{ "report.json", "big.log" });
     try workspace.expectReadError(.{ .path = "artifacts/big.log", .max_bytes = artifact_registry.max_hash_bytes, .for_output = false, .provenance = "artifacts.scan.hash" }, error.StreamTooLong);
     try workspace.expectRead(.{ .path = "artifacts/report.json", .max_bytes = artifact_registry.max_hash_bytes, .for_output = false, .provenance = "artifacts.scan.hash" }, "{\"ok\":true}");
-    const index = try zigarArtifactIndex(allocator, context, index_args.value);
+    const index = try zigarsArtifactIndex(allocator, context, index_args.value);
     try std.testing.expect(!index.is_error);
     try std.testing.expectEqual(@as(i64, 3), index.structuredContent.?.object.get("registered_count").?.integer);
     try std.testing.expectEqual(@as(i64, 2), index.structuredContent.?.object.get("scanned_count").?.integer);
@@ -536,7 +536,7 @@ test "artifact MCP adapters index read and prune artifact registry data" {
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, error.FileNotFound);
     try workspace.expectResolve(.{ .path = "artifacts", .for_output = false, .provenance = "artifacts.scan.resolve" }, "/workspace/artifacts");
     try workspace.expectScanDirectory(.{ .path = "artifacts", .max_files = 2, .for_output = false, .provenance = "artifacts.scan.walk" }, &.{ "one.txt", "two.svg" });
-    const compact_index = try zigarArtifactIndex(allocator, context, compact_index_args.value);
+    const compact_index = try zigarsArtifactIndex(allocator, context, compact_index_args.value);
     try std.testing.expectEqual(@as(usize, 2), compact_index.structuredContent.?.object.get("omitted_sections").?.array.items.len);
 
     var read_args = try artifactArgs(allocator,
@@ -545,10 +545,10 @@ test "artifact MCP adapters index read and prune artifact registry data" {
     defer read_args.deinit();
     try workspace.expectResolve(.{ .path = "zig-out/kept.txt", .for_output = false, .provenance = "artifacts.read.resolve" }, "/workspace/zig-out/kept.txt");
     try workspace.expectRead(.{ .path = "zig-out/kept.txt", .max_bytes = 1024, .for_output = false, .provenance = "artifacts.read.content" }, "kept");
-    const read = try zigarArtifactRead(allocator, context, read_args.value);
+    const read = try zigarsArtifactRead(allocator, context, read_args.value);
     try std.testing.expectEqualStrings("zig-out/kept.txt", read.structuredContent.?.object.get("path").?.string);
     try std.testing.expectEqualStrings("resource_link", read.content[1].resource_link.type);
-    try std.testing.expect(std.mem.startsWith(u8, read.content[1].resource_link.uri, "zigar://artifacts/"));
+    try std.testing.expect(std.mem.startsWith(u8, read.content[1].resource_link.uri, "zigars://artifacts/"));
     try std.testing.expectEqual(@as(usize, 1), read.structuredContent.?.object.get("omitted_sections").?.array.items.len);
 
     var prune_preview_args = try artifactArgs(allocator,
@@ -560,7 +560,7 @@ test "artifact MCP adapters index read and prune artifact registry data" {
     try workspace.expectRead(.{ .path = "zig-out/kept.txt", .max_bytes = 5, .for_output = false, .provenance = "artifacts.prune.verify" }, "kept");
     try workspace.expectReadError(.{ .path = "zig-out/missing.txt", .max_bytes = 8, .for_output = false, .provenance = "artifacts.prune.verify" }, error.FileNotFound);
     try workspace.expectRead(.{ .path = "zig-out/changed.txt", .max_bytes = 8, .for_output = false, .provenance = "artifacts.prune.verify" }, "new");
-    const preview = try zigarArtifactPrune(allocator, context, prune_preview_args.value);
+    const preview = try zigarsArtifactPrune(allocator, context, prune_preview_args.value);
     try std.testing.expect(!preview.structuredContent.?.object.get("applied").?.bool);
     try std.testing.expectEqual(@as(i64, 2), preview.structuredContent.?.object.get("summary").?.object.get("pruned").?.integer);
 
@@ -581,7 +581,7 @@ test "artifact MCP adapters index read and prune artifact registry data" {
         .replace_existing = true,
         .provenance = "artifacts.prune.write_registry",
     }, .{ .bytes_written = expected_registry_write.len, .replaced_existing = true });
-    const applied = try zigarArtifactPrune(allocator, context, prune_apply_args.value);
+    const applied = try zigarsArtifactPrune(allocator, context, prune_apply_args.value);
     try std.testing.expect(applied.structuredContent.?.object.get("applied").?.bool);
 
     try workspace.verify();
@@ -600,11 +600,11 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
         \\{"mode":"wide"}
     );
     defer invalid_mode_args.deinit();
-    const invalid_mode = try zigarArtifactIndex(allocator, context, invalid_mode_args.value);
+    const invalid_mode = try zigarsArtifactIndex(allocator, context, invalid_mode_args.value);
     try std.testing.expect(invalid_mode.is_error);
     try std.testing.expectEqualStrings("invalid_argument", invalid_mode.structuredContent.?.object.get("code").?.string);
 
-    const missing_path = try zigarArtifactRead(allocator, context, null);
+    const missing_path = try zigarsArtifactRead(allocator, context, null);
     try std.testing.expect(missing_path.is_error);
     try std.testing.expectEqualStrings("missing_required_argument", missing_path.structuredContent.?.object.get("code").?.string);
 
@@ -613,7 +613,7 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
     );
     defer outside_read_args.deinit();
     try workspace.expectResolveError(.{ .path = "../secret.txt", .for_output = false, .provenance = "artifacts.read.resolve" }, error.PathOutsideWorkspace);
-    const outside_read = try zigarArtifactRead(allocator, context, outside_read_args.value);
+    const outside_read = try zigarsArtifactRead(allocator, context, outside_read_args.value);
     try std.testing.expect(outside_read.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", outside_read.structuredContent.?.object.get("kind").?.string);
 
@@ -623,17 +623,17 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
     defer missing_artifact_args.deinit();
     try workspace.expectResolve(.{ .path = "zig-out/missing.txt", .for_output = false, .provenance = "artifacts.read.resolve" }, "/workspace/zig-out/missing.txt");
     try workspace.expectReadError(.{ .path = "zig-out/missing.txt", .max_bytes = artifact_registry.default_read_limit, .for_output = false, .provenance = "artifacts.read.content" }, error.FileNotFound);
-    const missing_artifact = try zigarArtifactRead(allocator, context, missing_artifact_args.value);
+    const missing_artifact = try zigarsArtifactRead(allocator, context, missing_artifact_args.value);
     try std.testing.expect(missing_artifact.is_error);
     try std.testing.expectEqualStrings("artifact_operation_failed", missing_artifact.structuredContent.?.object.get("code").?.string);
 
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, error.AccessDenied);
-    const denied_index = try zigarArtifactIndex(allocator, context, null);
+    const denied_index = try zigarsArtifactIndex(allocator, context, null);
     try std.testing.expect(denied_index.is_error);
     try std.testing.expectEqualStrings("artifact_operation_failed", denied_index.structuredContent.?.object.get("code").?.string);
 
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, error.PathOutsideWorkspace);
-    const outside_index_registry = try zigarArtifactIndex(allocator, context, null);
+    const outside_index_registry = try zigarsArtifactIndex(allocator, context, null);
     try std.testing.expect(outside_index_registry.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", outside_index_registry.structuredContent.?.object.get("kind").?.string);
 
@@ -643,23 +643,23 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
     defer outside_scan_args.deinit();
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, error.FileNotFound);
     try workspace.expectResolveError(.{ .path = "../artifacts", .for_output = false, .provenance = "artifacts.scan.resolve" }, error.PathOutsideWorkspace);
-    const outside_index_scan = try zigarArtifactIndex(allocator, context, outside_scan_args.value);
+    const outside_index_scan = try zigarsArtifactIndex(allocator, context, outside_scan_args.value);
     try std.testing.expect(outside_index_scan.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", outside_index_scan.structuredContent.?.object.get("kind").?.string);
 
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.prune.preimage" }, error.EmptyPath);
-    const bad_prune = try zigarArtifactPrune(allocator, context, null);
+    const bad_prune = try zigarsArtifactPrune(allocator, context, null);
     try std.testing.expect(bad_prune.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", bad_prune.structuredContent.?.object.get("kind").?.string);
 
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.prune.preimage" }, error.AccessDenied);
-    const denied_prune_preimage = try zigarArtifactPrune(allocator, context, null);
+    const denied_prune_preimage = try zigarsArtifactPrune(allocator, context, null);
     try std.testing.expect(denied_prune_preimage.is_error);
     try std.testing.expectEqualStrings("artifact_operation_failed", denied_prune_preimage.structuredContent.?.object.get("code").?.string);
 
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.prune.preimage" }, "");
     try workspace.expectReadError(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, error.EmptyPath);
-    const bad_prune_registry = try zigarArtifactPrune(allocator, context, null);
+    const bad_prune_registry = try zigarsArtifactPrune(allocator, context, null);
     try std.testing.expect(bad_prune_registry.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", bad_prune_registry.structuredContent.?.object.get("kind").?.string);
 
@@ -676,7 +676,7 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
         .replace_existing = true,
         .provenance = "artifacts.prune.write_registry",
     }, error.PathOutsideWorkspace);
-    const bad_prune_write = try zigarArtifactPrune(allocator, context, apply_args.value);
+    const bad_prune_write = try zigarsArtifactPrune(allocator, context, apply_args.value);
     try std.testing.expect(bad_prune_write.is_error);
     try std.testing.expectEqualStrings("workspace_path_error", bad_prune_write.structuredContent.?.object.get("kind").?.string);
 

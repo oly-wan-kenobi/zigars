@@ -19,7 +19,7 @@ test "runtime ports wire reusable infra adapters into app context" {
             .allocator = std.testing.allocator,
             .io = std.testing.io,
             .root = "/workspace",
-            .cache_root = "/workspace/.zigar-cache",
+            .cache_root = "/workspace/.zigars-cache",
         },
     };
 

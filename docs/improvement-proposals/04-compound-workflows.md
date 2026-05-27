@@ -3,7 +3,7 @@
 **Author:** Claude Opus 4.7 (1M context)
 **Date:** 2026-05-27
 **Status:** Proposal — read-only analysis, no code or doc changes made.
-**Scope:** Identify chains of *existing* zigar tools that agents currently
+**Scope:** Identify chains of *existing* zigars tools that agents currently
 compose by hand and that deserve to be promoted to first-class workflow
 primitives. Excludes anything already on the CLAUDE_ANALYSIS.md P0–P4 list.
 
@@ -11,11 +11,11 @@ primitives. Excludes anything already on the CLAUDE_ANALYSIS.md P0–P4 list.
 
 ## 1. Method
 
-Existing zigar tools were grouped by execution phase (discover / plan / edit /
+Existing zigars tools were grouped by execution phase (discover / plan / edit /
 verify / release) using [docs/tool-index.generated.md](../tool-index.generated.md).
 Each candidate workflow was checked against three filters:
 
-1. **Net-new capability?** A chain that today has no zigar tool at all.
+1. **Net-new capability?** A chain that today has no zigars tool at all.
 2. **Round-trip compression?** Does packaging it reduce the agent's MCP calls
    by more than three, given a typical task?
 3. **State management?** Does the chain require carrying preimages, identities,
@@ -26,11 +26,11 @@ A proposal must clear at least two of the three to be recommended as a tool.
 Workflows that clear only one are recommended as documented playbooks instead.
 
 **Out of scope (already covered):** the patch-session chain
-(`zigar_patch_session_*`), validation chain (`zigar_validate_patch`,
-`zigar_validation_plan`, `zigar_validation_run`), failure fusion
-(`zigar_failure_fusion`), handoff (`zigar_session_snapshot`,
-`zigar_handoff_pack`), routing (`zigar_capability_match`,
-`zigar_tool_sequence_plan`), static fusion (`zig_static_fusion`).
+(`zigars_patch_session_*`), validation chain (`zigars_validate_patch`,
+`zigars_validation_plan`, `zigars_validation_run`), failure fusion
+(`zigars_failure_fusion`), handoff (`zigars_session_snapshot`,
+`zigars_handoff_pack`), routing (`zigars_capability_match`,
+`zigars_tool_sequence_plan`), static fusion (`zig_static_fusion`).
 
 ---
 
@@ -45,17 +45,17 @@ tool-vs-playbook recommendation.
 **Replaces:** Today the only way for an agent to find the commit that
 introduced a build break is to drive `git bisect` from the shell side, calling
 `zig_build` or `zig_test` per ref and recording good/bad outcomes by hand.
-zigar has no concept of a bisect session and no shell access to do it.
+zigars has no concept of a bisect session and no shell access to do it.
 
 **Composes:**
-`zigar_clean_tree_gate` → repeated `zig_build` / `zig_test` / `zig_check`
+`zigars_clean_tree_gate` → repeated `zig_build` / `zig_test` / `zig_check`
 across refs → `zig_test_failure_triage` on the first-bad ref →
-`zigar_failure_fusion` → `zigar_decision_record` (optional).
+`zigars_failure_fusion` → `zigars_decision_record` (optional).
 
 **New state:** A persistent `bisect_session_id` keyed by
 `{good_ref, bad_ref, command}` with per-ref outcome, captured stdout/stderr
 tail, and the current bisect bracket. Persisted under
-`.zigar-cache/bisect/<session>.jsonl`, preview-first writes, apply-gated
+`.zigars-cache/bisect/<session>.jsonl`, preview-first writes, apply-gated
 checkouts (or refusal to mutate the working tree when the user prefers
 worktree-isolated runs).
 
@@ -70,7 +70,7 @@ failures would let the tool dedupe transients automatically.
 contract for "skip" / "untestable" refs.
 
 **Recommendation:** **Tool.** Compresses 10–100+ round trips into one session
-with auditable state. Hits all three filters. The only zigar tool today that
+with auditable state. Hits all three filters. The only zigars tool today that
 crosses git history is `zig_public_api_diff`'s `baseline_ref` argument; a
 bisect tool would extend that pattern coherently. Pair the proposal with a
 `bisect-build-failure` playbook in `.agents/workflows/`.
@@ -88,16 +88,16 @@ state to roll back if a later step fails.
 
 **Composes:**
 `zig_dependency_update_plan` → preview-first edit to `build.zig.zon` (uses
-`zigar_patch_session_create`/`preview`/`apply` semantics) →
+`zigars_patch_session_create`/`preview`/`apply` semantics) →
 `zig_dependency_fetch_check` → `zig_dependency_lock_audit` →
 `zig_dependency_impact` → `zig_dependency_security_report` →
-`zigar_validation_run` (mode=standard).
+`zigars_validation_run` (mode=standard).
 
 **New state:** A `migration_session_id` with: preimage hash of
 `build.zig.zon`, preimage of any lockfile, target dependency + version,
 collected fetch/lock/impact/security/validation outcomes, and rollback
 preimages. Reuses the existing patch-session infrastructure under
-`.zigar-cache/patch-sessions/` so rollback semantics are uniform.
+`.zigars-cache/patch-sessions/` so rollback semantics are uniform.
 
 **Why this is hard to do by hand:** Each tool's output is the next tool's
 input (lock-audit reads from fetch-check output; impact reads from update-plan;
@@ -121,7 +121,7 @@ per inner tool.
 `zig_crash_repro_plan`, then one or more of `zig_sanitizer_fusion` /
 `zig_panic_trace_analyze` / `zig_debug_frame_summary`, then `zig_debug_plan`,
 then `zig_lldb_backtrace` (apply=true), then optionally `zig_fuzz_crash_minimize`
-to narrow the input, then `zigar_decision_record` to capture the bug. The
+to narrow the input, then `zigars_decision_record` to capture the bug. The
 crash repro plan and the sanitizer fusion both return a `crash_identity`, but
 nothing carries that identity across calls — the agent has to copy it
 manually and risk losing the link to the original evidence.
@@ -130,18 +130,18 @@ manually and risk losing the link to the original evidence.
 `zig_crash_repro_plan` → `zig_sanitizer_fusion` / `zig_panic_trace_analyze` /
 `zig_debug_frame_summary` (parse supplied evidence) → optional `zig_debug_plan`
 + `zig_lldb_backtrace` + `zig_core_inspect` (apply-gated capture) → optional
-`zig_fuzz_crash_minimize` → `zigar_decision_record`.
+`zig_fuzz_crash_minimize` → `zigars_decision_record`.
 
 **New state:** A `crash_session_id` keyed by `crash_identity` with: original
 panic/sanitizer text, parsed frames, debugger artifact hashes if captured,
 minimized input file path, repro command, and the linked decision record.
-Persisted under `.zigar-cache/crash-sessions/<crash_identity>/`. Multiple
+Persisted under `.zigars-cache/crash-sessions/<crash_identity>/`. Multiple
 recurrences of the same crash collapse into one session.
 
 **Why this is hard to do by hand:** Crashes recur. Without a session, the
 agent re-parses the same panic for the third time, re-runs lldb against an
 already-captured core, or files a duplicate decision record. The
-`crash_identity` field already exists in zigar's runtime-diagnostic envelope
+`crash_identity` field already exists in zigars' runtime-diagnostic envelope
 — this proposal puts it to work as a session key.
 
 **Effort:** L. Touches multiple optional backends (lldb, sanitizer evidence,
@@ -171,7 +171,7 @@ in tool output until the agent writes it somewhere.
 (report what survived translation) → optional `zig_public_api_diff` against a
 supplied baseline.
 
-**New state:** A translation artifact registered through `zigar_artifact_index`
+**New state:** A translation artifact registered through `zigars_artifact_index`
 with provenance pointing at the source header path, the translate-c argv, and
 the post-format hash. The artifact is the deliverable; no long-lived session
 needed.
@@ -199,13 +199,13 @@ public-API impact) only makes sense if one tool owns the pipeline.
 **Replaces:** `zig_rename` is a single-file ZLS rename. A workspace-scoped
 rename today is: `zig_semantic_refs` / `zig_semantic_callers` → loop over
 hits, calling `zig_rename` per file with `apply=false` → assemble edits →
-`zigar_patch_session_create` → `_preview` → `_apply` → `_validate`. 3–4
+`zigars_patch_session_create` → `_preview` → `_apply` → `_validate`. 3–4
 round trips per file plus session bookkeeping.
 
 **Composes:**
 `zig_semantic_refs` (or ZLS `zig_references`) → enumerate edit sites →
-`zigar_patch_session_create` with all sites → `zigar_patch_session_preview`
-→ `zigar_patch_session_apply` (apply-gated) → `zigar_patch_session_validate`.
+`zigars_patch_session_create` with all sites → `zigars_patch_session_preview`
+→ `zigars_patch_session_apply` (apply-gated) → `zigars_patch_session_validate`.
 
 **New state:** Just a `patch_session_id`. No new persistence layer required
 — the existing patch-session infrastructure already carries preimages,
@@ -244,7 +244,7 @@ against the configured baseline → `zig_perf_budget_check` →
 write on a passing run.
 
 **New state:** A `bench_run_id` linking the run artifact, the comparison
-artifact, and the budget verdict. Stored under `.zigar-cache/bench/<id>/`
+artifact, and the budget verdict. Stored under `.zigars-cache/bench/<id>/`
 with the existing performance-evidence envelope.
 
 **Why this is hard to do by hand:** Most agents conflate "the run completed"
@@ -279,7 +279,7 @@ trips and the per-target failure context is scattered.
 **New state:** A `matrix_run_id` with per-target rows: build status, smoke
 status, qemu status (or "unsupported on this host"), binary size + diff,
 and a stable per-target failure fingerprint. Stored under
-`.zigar-cache/target-matrix/<id>/` and registered as an artifact.
+`.zigars-cache/target-matrix/<id>/` and registered as an artifact.
 
 **Why this is hard to do by hand:** The cross-product is large, individual
 runs are expensive, and partial-success reporting is what makes this useful.
@@ -356,7 +356,7 @@ underlying `zig_allocations` tier moves from `advisory_orientation` to
    reuse existing session/artifact infrastructure.
 3. **Third batch (high value, new state model):** 2.1 (`zig_build_bisect`)
    and 2.3 (`zig_crash_capture_session`). These introduce session shapes
-   zigar does not have today; prototype against one adopter before
+   zigars does not have today; prototype against one adopter before
    generalizing the contract.
 4. **Defer:** 2.7 (`zig_target_matrix_run`) until target-matrix adoption is
    visible; 2.8 (`zig_allocator_audit`) until `zig_allocations` moves up the
@@ -368,7 +368,7 @@ underlying `zig_allocations` tier moves from `advisory_orientation` to
   any inner step that executes project code or writes source. Compounding
   does not relax the existing safety contracts.
 - Each proposed tool returns a **`workflow_contract`** identical in shape to
-  the one used by `zigar_validate_patch` (`inspected_evidence`,
+  the one used by `zigars_validate_patch` (`inspected_evidence`,
   `inferred_conclusion`, `confidence`, `limitations`, `recommended_next_tools`,
   `verification`, `stop_condition`). This keeps the public agent surface
   uniform.
@@ -376,21 +376,21 @@ underlying `zig_allocations` tier moves from `advisory_orientation` to
   covering at least one happy-path call and one structured-failure call, in
   line with the existing tool-change workflow in
   `.agents/workflows/tool-change.md`.
-- Persistent session directories under `.zigar-cache/<kind>/` should reuse
+- Persistent session directories under `.zigars-cache/<kind>/` should reuse
   the existing artifact-registry provenance model so they are inspectable
-  through `zigar_artifact_index` and prunable through `zigar_artifact_prune`.
+  through `zigars_artifact_index` and prunable through `zigars_artifact_prune`.
 
 ---
 
 ## 6. Out-of-scope items considered and dropped
 
-- **`zig_workspace_orient`** (aggregate `zigar_context_pack` +
-  `zigar_doctor` + `zigar_workspace_info` + `zigar_setup_elicit`). Dropped:
-  `zigar_context_pack` already covers most of this and the rest is one-shot
+- **`zig_workspace_orient`** (aggregate `zigars_context_pack` +
+  `zigars_doctor` + `zigars_workspace_info` + `zigars_setup_elicit`). Dropped:
+  `zigars_context_pack` already covers most of this and the rest is one-shot
   setup-time work, not a recurring agent loop.
 - **`zig_test_fix_session`** (pin a failing test, retain attempt history,
   suggest next action each iteration). Dropped: this is an *agent loop*
-  shape, not a tool shape. The existing `zigar_validation_history` +
+  shape, not a tool shape. The existing `zigars_validation_history` +
   `zig_test_flake_history` cover the evidence layer; the loop itself
   belongs in a skill or playbook.
 - **`zig_release_orchestrate`** (single-call wrap of `release-check`).

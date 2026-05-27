@@ -37,8 +37,8 @@ jobs:
 
       - name: Run real ZLS conformance
         env:
-          ZIGAR_ZLS_CONFORMANCE_REPORT_DIR: zls-conformance
-          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
+          ZIGARS_ZLS_CONFORMANCE_REPORT_DIR: zls-conformance
+          ZIGARS_ZLS_PATH: ${{ inputs.zls_path }}
         run: bash .github/scripts/real-zls-conformance.sh
 
       - name: Upload ZLS conformance evidence
@@ -46,5 +46,5 @@ jobs:
         # actions/upload-artifact@v4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: zigar-zls-conformance
+          name: zigars-zls-conformance
           path: zls-conformance

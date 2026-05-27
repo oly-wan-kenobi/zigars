@@ -297,7 +297,7 @@ fn checkImportsInLine(allocator: Allocator, io: Io, scan: *FileScan, line: []con
         const suffix = if (end + 1 <= line.len) line[end + 1 ..] else "";
         const normalized = try normalizeImport(allocator, scan.source_path, raw_import, suffix);
         defer allocator.free(normalized);
-        ok = (try checkZigarRootMemberImport(io, scan.*, line_no, raw_import, suffix)) and ok;
+        ok = (try checkZigarsRootMemberImport(io, scan.*, line_no, raw_import, suffix)) and ok;
         updateCompositionScan(scan, normalized);
         ok = (try checkImport(io, scan.*, line_no, raw_import, normalized)) and ok;
         pos = end + 1;
@@ -354,11 +354,11 @@ fn checkImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, n
     return ok;
 }
 
-fn checkZigarRootMemberImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, suffix: []const u8) !bool {
-    if (!std.mem.eql(u8, raw_import, "zigar")) return true;
-    const member = zigarRootMemberName(suffix) orelse return true;
+fn checkZigarsRootMemberImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, suffix: []const u8) !bool {
+    if (!std.mem.eql(u8, raw_import, "zigars")) return true;
+    const member = zigarsRootMemberName(suffix) orelse return true;
     if (rootPublicAliasAllowed(member)) return true;
-    return reportViolation(io, .root_public_alias, scan.source_path, line_no, member, "Only package-owner roots may be imported through zigar.<name>.");
+    return reportViolation(io, .root_public_alias, scan.source_path, line_no, member, "Only package-owner roots may be imported through zigars.<name>.");
 }
 
 fn checkRootPublicAliasInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
@@ -465,8 +465,8 @@ fn isAllowlisted(rule_id: RuleId, source_path: []const u8, pattern: []const u8) 
 }
 
 fn normalizeImport(allocator: Allocator, source_path: []const u8, raw_import: []const u8, suffix: []const u8) ![]u8 {
-    if (std.mem.eql(u8, raw_import, "zigar")) {
-        return allocator.dupe(u8, zigarMemberPath(suffix) orelse "src/root.zig");
+    if (std.mem.eql(u8, raw_import, "zigars")) {
+        return allocator.dupe(u8, zigarsMemberPath(suffix) orelse "src/root.zig");
     }
     if (!std.mem.endsWith(u8, raw_import, ".zig")) return allocator.dupe(u8, raw_import);
 
@@ -492,8 +492,8 @@ fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     return std.mem.join(allocator, "/", parts.items);
 }
 
-fn zigarMemberPath(suffix: []const u8) ?[]const u8 {
-    const member = zigarRootMemberName(suffix) orelse return null;
+fn zigarsMemberPath(suffix: []const u8) ?[]const u8 {
+    const member = zigarsRootMemberName(suffix) orelse return null;
     if (std.mem.eql(u8, member, "adapters")) return "src/adapters/root.zig";
     if (std.mem.eql(u8, member, "app")) return "src/app/root.zig";
     if (std.mem.eql(u8, member, "bootstrap")) return "src/bootstrap/root.zig";
@@ -503,7 +503,7 @@ fn zigarMemberPath(suffix: []const u8) ?[]const u8 {
     return null;
 }
 
-fn zigarRootMemberName(suffix: []const u8) ?[]const u8 {
+fn zigarsRootMemberName(suffix: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, suffix, ".")) return null;
     var end: usize = 1;
     while (end < suffix.len) : (end += 1) {
@@ -762,12 +762,12 @@ test "normalize relative import path" {
     try std.testing.expectEqualStrings("src/domain/profile.zig", normalized);
 }
 
-test "normalize zigar member imports to package-owner roots only" {
-    const app = try normalizeImport(std.testing.allocator, "src/app/use_case.zig", "zigar", ".app.usecases");
+test "normalize zigars member imports to package-owner roots only" {
+    const app = try normalizeImport(std.testing.allocator, "src/app/use_case.zig", "zigars", ".app.usecases");
     defer std.testing.allocator.free(app);
     try std.testing.expectEqualStrings("src/app/root.zig", app);
 
-    const direct_alias = try normalizeImport(std.testing.allocator, "src/app/use_case.zig", "zigar", ".backend_catalog");
+    const direct_alias = try normalizeImport(std.testing.allocator, "src/app/use_case.zig", "zigars", ".backend_catalog");
     defer std.testing.allocator.free(direct_alias);
     try std.testing.expectEqualStrings("src/root.zig", direct_alias);
 }
@@ -838,8 +838,8 @@ test "root files and root public aliases are fail closed" {
 test "adapter effect-port tokens cover static-analysis orchestration regressions" {
     try std.testing.expect(std.mem.indexOf(u8, "context.workspace_store.readFile(...)", adapter_effect_port_tokens[0].token) != null);
     try std.testing.expect(std.mem.indexOf(u8, "try runner.run(allocator, request)", adapter_effect_port_tokens[6].token) != null);
-    try std.testing.expectEqualStrings("backend_catalog", zigarRootMemberName(".backend_catalog.find").?);
-    try std.testing.expect(zigarRootMemberName("") == null);
+    try std.testing.expectEqualStrings("backend_catalog", zigarsRootMemberName(".backend_catalog.find").?);
+    try std.testing.expect(zigarsRootMemberName("") == null);
 }
 
 test "test-tail and multiline fixture helpers classify guard-only syntax" {

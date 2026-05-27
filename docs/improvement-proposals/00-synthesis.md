@@ -21,7 +21,7 @@ skills-package, and architecture-neutrality assumptions.
 ### 1. Dependency-management cluster (search → mutate → migrate → resync) — **4-session signal**
 
 Four sessions independently identified Zig's dependency story as the biggest
-capability gap. Zigar has rich read-only dependency tooling
+capability gap. Zigars has rich read-only dependency tooling
 (`zig_dependency_inspect`, `_impact`, `_security_report`, `_provenance`,
 `_license_summary`, `_lock_audit`, `_update_plan`) but **cannot search a
 registry, cannot mutate `build.zig.zon`, and cannot run the hash-mismatch
@@ -36,19 +36,19 @@ patch-session and artifact-registry plumbing.
 ### 2. MCP protocol substrate (outputSchema → resource_link → completion → elicitation → sampling)
 
 The 2025-06-18 spec added primitives that multiply across the entire
-~300-tool surface. Zigar already has the data shapes, broad
+~300-tool surface. Zigars already has the data shapes, broad
 `structuredContent`, a basic `completion/complete` route, resource templates
 and subscriptions, tasks, an artifact registry with SHA-256 provenance,
 manifest-driven enum inputs, and a workflow contract with preview/apply
 gates. The missing work is deeper contract projection and richer protocol
 use, not first-time route creation. Declared `outputSchema` (P4) is the
-highest-leverage start because it formalizes contracts zigar already
+highest-leverage start because it formalizes contracts zigars already
 de-facto ships. `resource_link` blocks (P5) cut token cost on every
 heavy-artifact tool. Manifest-backed `completion/complete` (P3) makes
 300-tool slash-command UX usable. `elicitation/create` (P1) complements and
-eventually renames zigar's `_elicit`-named *advisory* tools with real
+eventually renames zigars' `_elicit`-named *advisory* tools with real
 human-in-the-loop dialogs on risky operations. `sampling/createMessage` (P2)
-lets zigar ask the host's LLM for in-loop summarization without leaving the
+lets zigars ask the host's LLM for in-loop summarization without leaving the
 tool call. Impact 5 each, Effort M each, no novel state — pure substrate.
 
 ### 3. Planning / review ergonomics trio — A-9 + A-7 + A-8
@@ -58,7 +58,7 @@ back to grep + multi-file reads for canonical structural questions ("are there
 cycles?", "what's the dossier on this symbol?", "which files in this diff need
 the most attention?"). Landing `zig_import_cycles` (S, pure post-processing)
 first unlocks `zig_symbol_dossier` (composite, S–M) and
-`zig_change_risk_audit` (composite, M). Zigar's own hexagonal architecture
+`zig_change_risk_audit` (composite, M). Zigars' own hexagonal architecture
 guard remains an internal quality gate rather than a default public Zig policy.
 Together these public tools turn the most agent-by-vibes step in the workflow
 into a structured, architecture-neutral query. Cumulative Impact 4, Effort M.
@@ -67,27 +67,27 @@ into a structured, architecture-neutral query. Cumulative Impact 4, Effort M.
 
 Three sessions independently identified Zig's comptime as both the
 language's distinctive feature and a top friction source. **No peer has
-this surface** — and zigar's parser-backed tier is the right home for it.
+this surface** — and zigars' parser-backed tier is the right home for it.
 `zig_comptime_diagnose` (D-3) explains "unable to evaluate comptime
 expression" by walking the AST around the cursor and identifying the
 runtime-tainted operand. `zig_comptime_inspect` / `zig_comptime_view` (A-10
 + P-9) introspects what a comptime expression evaluates to (ship heuristic
 parser-only first, compiler-eval second). `zig_comptime_quota_probe` (D-10)
 finds what's eating the `@setEvalBranchQuota` budget. Together they
-crystallize zigar's positioning vs. peers on the most Zig-distinctive pain
+crystallize zigars' positioning vs. peers on the most Zig-distinctive pain
 surface. Combined Impact 4, Effort L (most cost is in the
 inspect/view backend; diagnose is M).
 
 ### 5. State-managed compound sessions — W-1 + W-3 + P-10
 
 Bisect, crash repro, and revisable debug planning are the canonical
-workflows where state management is the entire job, and where zigar's
+workflows where state management is the entire job, and where zigars'
 existing tool surface technically suffices but is exhausting to drive by
 hand. `zig_build_bisect` (W-1) compresses 10–100+ round trips into one
 session with auditable per-ref outcomes and crash-identity dedupe.
 `zig_crash_capture_session` (W-3) finally puts `crash_identity` to work as a
 session key, so recurring crashes don't re-parse the same panic for the
-third time. `zigar_debug_session_*` (P-10) adds Anthropic's
+third time. `zigars_debug_session_*` (P-10) adds Anthropic's
 sequential-thinking primitive (revisable thoughts + branching) on top, so
 the *reasoning* is recoverable, not just the evidence. Together they land
 the killer-app pattern across debugging workflows. Impact 5, Effort L
@@ -120,7 +120,7 @@ agree it is the largest capability gap. The comptime trilogy is second.
 
 **Scoring.** Impact 1–5 (5 = unlocks new agent loop or net-new capability;
 1 = incremental). Effort S/M/L. Strategic fit ★–★★★ (does it reinforce
-zigar's parser-backed / apply-gated / evidence-labels positioning vs.
+zigars' parser-backed / apply-gated / evidence-labels positioning vs.
 peers?). Dependency risk Low/Med/High (external backends, novel state,
 client adoption uncertainty). Group: **QW** = quick win,
 **SB** = strategic bet, **FI** = fill-in, **DF** = defer.
@@ -236,13 +236,13 @@ features once client adoption is verified.
   bench tools.
 - **A-7** `zig_symbol_dossier` — composition over A-1, A-2, ZLS refs,
   diagnostics, lint, git history.
-- **A-8** `zig_change_risk_audit` — composition over A-2, `zigar_impact`,
+- **A-8** `zig_change_risk_audit` — composition over A-2, `zigars_impact`,
   `zig_test_select_semantic`, `zig_public_api_diff`.
 - **A-3** `zig_module_surface` — directory aggregate over `zig_public_api`
   and `zig_semantic_refs`.
 - **A-4** `zig_insertion_sites` — Planner ergonomics; uses A-2 + semantic
   index + manifest heuristics.
-- **P-1** `elicitation/create` — start with `zigar_patch_session_apply`,
+- **P-1** `elicitation/create` — start with `zigars_patch_session_apply`,
   `zig_libfuzzer_run`, `zig_afl_run` opt-ins; rename existing `_elicit`
   tools to advisory equivalents to free the namespace (see open question
   §5.3).
@@ -309,7 +309,7 @@ The Zig package ecosystem is decentralized (URL + hash in `build.zig.zon`).
 P-6 needs to wrap *something*. Candidates: [zigistry](https://zigistry.dev),
 the [zig.community lists](https://zig.community), GitHub topic search
 (`topic:zig-package`), or a pluggable adapter driven by
-`.zigar/profile.json`. The right answer is probably pluggable with one or
+`.zigars/profile.json`. The right answer is probably pluggable with one or
 two preconfigured registries — but the choice of *which* presets and the
 trust model around them is a real human-call that affects the tool's
 public-facing posture.
@@ -319,7 +319,7 @@ public-facing posture.
 `elicitation/create` and `sampling/createMessage` only deliver value when
 the host client implements them. Claude Desktop and Claude Code adoption
 is in flight per the spec discussions but not universally shipped today.
-Should zigar:
+Should zigars:
 - (a) implement with graceful fallback (zero cost when client lacks
   support, but no value either), or
 - (b) wait until Claude Desktop/Code ship support, then implement, or
@@ -332,7 +332,7 @@ maintain (a) fallback to the existing `apply=true` convention until then.
 
 ### 5.3 Naming collision: existing `_elicit` tools vs. P-1 protocol elicitation
 
-`zigar_setup_elicit`, `zigar_profile_elicit`, `zigar_backend_elicit` are
+`zigars_setup_elicit`, `zigars_profile_elicit`, `zigars_backend_elicit` are
 *advisory tools that return text*. P-1 introduces real protocol
 `elicitation/create`. Three options:
 - Deprecate the existing tools in favor of P-1 wrappers (cleanest, but
@@ -349,7 +349,7 @@ the namespace is harder to clean up.
 
 Wave 4 introduces three new session shapes (`bisect_session_id`,
 `crash_session_id`, `debug_session_id`) and Wave 3 adds
-`migration_session_id`. Today only `patch_session` exists. Should zigar:
+`migration_session_id`. Today only `patch_session` exists. Should zigars:
 - (a) define a uniform `Session` envelope (id, kind, preimage, state
   machine, persistence path, validation hooks) that all four new
   sessions extend; or
@@ -361,19 +361,19 @@ simpler. (b) ships faster per session but accumulates surface area.
 
 ### 5.5 Public architecture policy (resolved for this roadmap)
 
-The public `zig_architecture_layer` direction is removed. Zigar's
+The public `zig_architecture_layer` direction is removed. Zigars'
 `architecture_guard.zig` remains an internal quality gate for this repository,
 not a default policy tool for arbitrary Zig workspaces. Public planner and
 reviewer tools may expose architecture-neutral facts such as import cycles,
 module surfaces, symbol dossiers, insertion sites, and risk audits. If a
 future public architecture-policy surface is needed, it must be an explicit
-opt-in profile with labeled project policy, not zigar's own folder/layer rules.
+opt-in profile with labeled project policy, not zigars' own folder/layer rules.
 
 ### 5.6 Skills package fate (intersects with CLAUDE_ANALYSIS P0 #3)
 
 Several new tools below would benefit from skill packaging. The
-`packages/zigar-skills-npm/` package now has package metadata, a CLI, tests,
-README, and a concrete `zigar-development` skill, so P0 #3 is no longer a
+`packages/zigars-skills-npm/` package now has package metadata, a CLI, tests,
+README, and a concrete `zigars-development` skill, so P0 #3 is no longer a
 "populate or remove the placeholder" decision. The remaining question is
 release readiness and client validation. The Wave 3 ergonomics tools
 (`zig_symbol_dossier`, `zig_change_risk_audit`, `zig_insertion_sites`) and the
@@ -387,12 +387,12 @@ Three sub-tools (`diagnose`, `inspect`/`view`, `quota_probe`) or a unified
 diagnose is parser-only, inspect needs compiler-eval, quota-probe needs
 the command runner. Separate tools keep capability tiers honest; a family
 keeps the agent-facing surface compact. Recommend separate tools but a
-shared `zigar_prompt_pack` entry that orients agents to all three.
+shared `zigars_prompt_pack` entry that orients agents to all three.
 
 ### 5.8 Watch vs. async-job vs. resource-subscribe (P-8 ⇄ P-5)
 
 P-8 `zig_watch` should emit durable event history through the existing
-async-job cursor pattern (`zigar_run_events`) and may additionally use MCP
+async-job cursor pattern (`zigars_run_events`) and may additionally use MCP
 `resources/subscribe` as a notification layer. The Phase 0 decision is that
 jobs plus cursored resources are canonical; resource subscription is optional
 client push, not the only place events live.
@@ -400,7 +400,7 @@ client push, not the only place events live.
 ### 5.9 Bisect mutation policy (W-1)
 
 `zig_build_bisect` needs to check out N refs. Options:
-- (a) refuse to mutate the working tree; require the user to run zigar
+- (a) refuse to mutate the working tree; require the user to run zigars
   inside a dedicated git worktree;
 - (b) clean-tree gate + checkout (current pattern for any apply-true op);
 - (c) shell out to a temp worktree internally per ref.
@@ -413,7 +413,7 @@ W-1's contract solidifies.
 ### 5.10 Comptime-inspect compiler-eval backend (A-10 / P-9)
 
 The "what does this comptime expression evaluate to?" question has two
-backends: synthesize a `@compileLog` probe + sandboxed `zig build` (zigar
+backends: synthesize a `@compileLog` probe + sandboxed `zig build` (zigars
 can do this today), or wait for a future ZLS/`zig` introspection endpoint.
 The probe path works now but is slow and side-effecting. ZLS's
 [zigtools/zls#1872](https://github.com/zigtools/zls) tracks compile-time
@@ -439,7 +439,7 @@ The roadmap collapses to four sequenced bets:
    Compresses what is today the bulk of an agent's multi-tool reasoning.
 4. **Stake the strategic bets (Wave 4)** — comptime trilogy, debug-session
    state, build-bisect, abi/layout, ZLS LSP completions, file-rename,
-   watcher. These are the items that define zigar's distinctive surface
+   watcher. These are the items that define zigars' distinctive surface
    five years out.
 
 Decisions §5.1–§5.10 should be made in roughly the order they will block

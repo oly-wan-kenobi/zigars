@@ -13,9 +13,9 @@ pub const schema_version: i64 = 1;
 /// Default semantic limit used when the caller omits an explicit value.
 pub const semantic_limit_default: usize = 500;
 /// Default memory path used when the caller omits an explicit value.
-pub const memory_path_default = ".zigar/project-memory.jsonl";
+pub const memory_path_default = ".zigars/project-memory.jsonl";
 /// Default profile path used when the caller omits an explicit value.
-pub const profile_path_default = ".zigar/profile.json";
+pub const profile_path_default = ".zigars/profile.json";
 
 /// Carries path list data across use case and port boundaries.
 pub const PathList = struct {
@@ -179,7 +179,7 @@ pub fn contextPackValue(
     const static_context = context.staticAnalysis();
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_context_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_context_pack" });
     try obj.put(allocator, "mode", .{ .string = mode });
     try obj.put(allocator, "token_budget", .{ .integer = token_budget });
     try obj.put(allocator, "workspace", try contextWorkspaceValue(allocator, context));
@@ -195,7 +195,7 @@ pub fn contextPackValue(
     try obj.put(allocator, "recommended_start", try nextActionPlanValue(allocator, "orient", null, null));
     try obj.put(allocator, "included_sections", .{ .array = included });
     try obj.put(allocator, "omitted_sections", .{ .array = omitted });
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace files, build metadata, optional dependency/test summaries, and ZLS status", "orientation pack for routing; not a semantic project proof", if (tiny) "low" else "medium", "mode and token_budget intentionally omit sections; inspect omitted_sections before assuming absence", "zigar_validate_patch", "stop after the selected low-level tool or final validation gate passes", &.{ "zigar_next_action", "zigar_validate_patch" }));
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace files, build metadata, optional dependency/test summaries, and ZLS status", "orientation pack for routing; not a semantic project proof", if (tiny) "low" else "medium", "mode and token_budget intentionally omit sections; inspect omitted_sections before assuming absence", "zigars_validate_patch", "stop after the selected low-level tool or final validation gate passes", &.{ "zigars_next_action", "zigars_validate_patch" }));
     try obj.put(allocator, "limits", try contextLimitsValue(allocator));
     return .{ .object = obj };
 }
@@ -204,7 +204,7 @@ pub fn contextPackValue(
 pub fn agentGuideValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_agent_guide" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_agent_guide" });
     try obj.put(allocator, "client", .{ .string = client });
     try obj.put(allocator, "task", .{ .string = task });
     try obj.put(allocator, "rules", try agentRulesValue(allocator, client, task));
@@ -263,14 +263,14 @@ pub fn validatePatchValue(
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_validate_patch" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_validate_patch" });
     try obj.put(allocator, "ok", .{ .bool = ok });
     try obj.put(allocator, "mode", .{ .string = request.mode });
     try obj.put(allocator, "changed_files", .{ .array = files });
     try obj.put(allocator, "phases", .{ .array = phases });
     try obj.put(allocator, "skipped_phases", .{ .array = skipped_phases });
     try obj.put(allocator, "ran_full_build_test", .{ .bool = ran_full_build });
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "git/status changed files or user-supplied changed_files plus command exit status", "patch readiness from selected validation phases", if (ran_full_build) "high" else "medium", "quick mode and stop_on_failure can skip later phases; inspect skipped_phases", "rerun failed phase or run zigar_validate_patch mode=full", "stop when all selected phases pass", &.{ "zigar_failure_fusion", "zigar_validate_patch" }));
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "git/status changed files or user-supplied changed_files plus command exit status", "patch readiness from selected validation phases", if (ran_full_build) "high" else "medium", "quick mode and stop_on_failure can skip later phases; inspect skipped_phases", "rerun failed phase or run zigars_validate_patch mode=full", "stop when all selected phases pass", &.{ "zigars_failure_fusion", "zigars_validate_patch" }));
     try obj.put(allocator, "next_action", try validationNextActionValue(allocator, ok, phases));
     return .{ .object = obj };
 }
@@ -290,7 +290,7 @@ pub fn failureFusionFromCommandValue(
         .timeout_ms = @intCast(@max(1, request.timeout_ms)),
         .max_stdout_bytes = workflows.command_output_limit,
         .max_stderr_bytes = workflows.command_output_limit,
-        .provenance = "zigar_failure_fusion",
+        .provenance = "zigars_failure_fusion",
     }) catch |err| return backendErrorValue(allocator, "zig", "failure_fusion", err, "pass captured output as text or confirm --zig-path is executable");
     defer result.deinit(allocator);
     const term = result.effectiveTerm();
@@ -359,7 +359,7 @@ pub fn impactValue(
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_impact" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_impact" });
     try obj.put(allocator, "analysis_kind", .{ .string = "heuristic_import_symbol_test_scan" });
     try obj.put(allocator, "confidence", .{ .string = "medium" });
     try obj.put(allocator, "direct_importers", .{ .array = importers });
@@ -368,7 +368,7 @@ pub fn impactValue(
     try obj.put(allocator, "public_api", .{ .array = public_api });
     try obj.put(allocator, "recommended_commands", .{ .array = commands });
     try obj.put(allocator, "limitations", .{ .string = "heuristic text/import scan; not semantic dependency proof" });
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace Zig file scan, import text, symbol text, and public declaration lines", "likely affected files/tests and commands", "medium", "heuristic text matches can over- or under-select; verify with compiler-backed commands", "zigar_validate_patch", "stop after focused commands or zigar_validate_patch pass", &.{ "zig_test_select", "zigar_validate_patch" }));
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace Zig file scan, import text, symbol text, and public declaration lines", "likely affected files/tests and commands", "medium", "heuristic text matches can over- or under-select; verify with compiler-backed commands", "zigars_validate_patch", "stop after focused commands or zigars_validate_patch pass", &.{ "zig_test_select", "zigars_validate_patch" }));
     return .{ .object = obj };
 }
 
@@ -396,7 +396,7 @@ pub fn projectProfileValue(
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_project_profile" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_project_profile" });
     try obj.put(allocator, "path", .{ .string = profile_path_default });
     try obj.put(allocator, "applied", .{ .bool = request.apply });
     try obj.put(allocator, "requires_apply", .{ .bool = !request.apply });
@@ -453,11 +453,11 @@ pub fn patchGuardValue(
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_patch_guard" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_patch_guard" });
     try obj.put(allocator, "safe", .{ .bool = safe });
     try obj.put(allocator, "checked", .{ .array = checked });
     try obj.put(allocator, "violations", .{ .array = violations });
-    try obj.put(allocator, "write_policy", .{ .string = "zigar source writes require the specific mutating tool to receive apply=true" });
+    try obj.put(allocator, "write_policy", .{ .string = "zigars source writes require the specific mutating tool to receive apply=true" });
     return .{ .object = obj };
 }
 
@@ -523,7 +523,7 @@ pub fn semanticImpactValue(
     try inferred.append(try ownedString(allocator, "Affected tests are selected from parser-backed test declarations and file/symbol name matches."));
 
     var inspected = std.json.ObjectMap.empty;
-    try inspected.put(allocator, "semantic_index_format", root.get("format") orelse .{ .string = "zigar.semantic_index" });
+    try inspected.put(allocator, "semantic_index_format", root.get("format") orelse .{ .string = "zigars.semantic_index" });
     try inspected.put(allocator, "file_count", root.get("file_count") orelse .{ .integer = 0 });
     try inspected.put(allocator, "declaration_count", root.get("declaration_count") orelse .{ .integer = 0 });
     try inspected.put(allocator, "import_count", root.get("import_count") orelse .{ .integer = 0 });
@@ -597,7 +597,7 @@ pub fn testSelectSemanticValue(
 pub fn validationPlanValueFromUsecase(allocator: std.mem.Allocator, result: workflows.PlanResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_validation_plan" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_validation_plan" });
     try obj.put(allocator, "schema_version", .{ .integer = result.schema_version });
     try obj.put(allocator, "plan_id", try ownedString(allocator, result.plan_id));
     try obj.put(allocator, "mode", try ownedString(allocator, result.mode));
@@ -609,7 +609,7 @@ pub fn validationPlanValueFromUsecase(allocator: std.mem.Allocator, result: work
     try obj.put(allocator, "unknowns", try stringArrayValue(allocator, result.unknowns.items));
     try obj.put(allocator, "execution_policy", .{ .string = "plan-first; no environment installs or source writes are performed by this planner" });
     try obj.put(allocator, "stop_condition", .{ .string = "Run required phases until they pass or the first blocking failure is understood." });
-    try obj.put(allocator, "next_action", try toolStepValue(allocator, "zigar_validation_run", "execute command phases and retain structured events/history"));
+    try obj.put(allocator, "next_action", try toolStepValue(allocator, "zigars_validation_run", "execute command phases and retain structured events/history"));
     return .{ .object = obj };
 }
 
@@ -619,7 +619,7 @@ pub fn validationRunValue(allocator: std.mem.Allocator, report: workflows.RunRep
     for (report.phases) |phase_run| try phases.append(try validationPhaseRunValue(allocator, phase_run));
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_validation_run" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_validation_run" });
     try obj.put(allocator, "schema_version", .{ .integer = report.schema_version });
     try obj.put(allocator, "ok", .{ .bool = report.ok });
     try obj.put(allocator, "plan", try validationPlanValueFromUsecase(allocator, report.plan));
@@ -660,7 +660,7 @@ fn validationRunsHistoryValue(allocator: std.mem.Allocator, tool_name: []const u
     try obj.put(allocator, "last_good", if (result.last_good_index) |index| try historyRunJsonValue(allocator, result.runs[index]) else .null);
     try obj.put(allocator, "runs", try historyRunsArrayValue(allocator, result.runs));
     try obj.put(allocator, "failure_summary", try failureGroupsValueFromUsecase(allocator, result.failure_groups));
-    try obj.put(allocator, "limitations", .{ .string = "History reflects records supplied to or written by zigar validation tools; it is not a complete CI database." });
+    try obj.put(allocator, "limitations", .{ .string = "History reflects records supplied to or written by zigars validation tools; it is not a complete CI database." });
     return .{ .object = obj };
 }
 
@@ -760,7 +760,7 @@ pub fn handoffPackValue(
     request: SessionSnapshotRequest,
 ) !std.json.Value {
     const snapshot = try sessionSnapshotValue(allocator, context, .{
-        .kind = "zigar_handoff_pack",
+        .kind = "zigars_handoff_pack",
         .goal = request.goal,
         .changed_files = request.changed_files,
         .diff = request.diff,
@@ -768,12 +768,12 @@ pub fn handoffPackValue(
         .last_error = request.last_error,
     });
     var steps = std.json.Array.init(allocator);
-    try steps.append(try toolStepValue(allocator, "zigar_validation_history", "read recent validation state before rerunning expensive checks"));
-    try steps.append(try toolStepValue(allocator, "zigar_capability_match", "route the next goal to a focused tool sequence"));
-    try steps.append(try toolStepValue(allocator, "zigar_validation_plan", "recompute checks after any additional edits"));
+    try steps.append(try toolStepValue(allocator, "zigars_validation_history", "read recent validation state before rerunning expensive checks"));
+    try steps.append(try toolStepValue(allocator, "zigars_capability_match", "route the next goal to a focused tool sequence"));
+    try steps.append(try toolStepValue(allocator, "zigars_validation_plan", "recompute checks after any additional edits"));
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_handoff_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_handoff_pack" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "snapshot", snapshot);
     try obj.put(allocator, "recommended_next_steps", .{ .array = steps });
@@ -816,7 +816,7 @@ pub fn decisionRecordValue(
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_decision_record" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_decision_record" });
     try obj.put(allocator, "record", record);
     try obj.put(allocator, "path", try ownedString(allocator, request.path));
     try obj.put(allocator, "applied", .{ .bool = request.apply });
@@ -841,7 +841,7 @@ pub fn projectMemoryValue(
     try obj.put(allocator, "note_count", .{ .integer = @intCast(filtered.array.items.len) });
     try obj.put(allocator, "memory_available", .{ .bool = notes.array.items.len > 0 });
     if (request.include_builtins) try obj.put(allocator, "built_in_project_policies", try builtInProjectPoliciesValue(allocator));
-    try obj.put(allocator, "write_tool", .{ .string = "zigar_decision_record" });
+    try obj.put(allocator, "write_tool", .{ .string = "zigars_decision_record" });
     return .{ .object = obj };
 }
 
@@ -863,7 +863,7 @@ pub fn capabilityMatchValue(
     while (matches.items.len > limit) _ = matches.pop();
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_capability_match" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_capability_match" });
     try obj.put(allocator, "goal", try ownedString(allocator, goal));
     try obj.put(allocator, "matches", .{ .array = matches });
     try obj.put(allocator, "confidence", .{ .string = if (matches.items.len > 0) "medium" else "low" });
@@ -878,23 +878,23 @@ pub fn toolSequencePlanValue(allocator: std.mem.Allocator, goal: []const u8, cha
     if (std.mem.indexOf(u8, lower, "test") != null or std.mem.indexOf(u8, lower, "fail") != null) {
         try steps.append(try sequenceStepValue(allocator, "zig_test_events", "Parse failing test output or run a focused test command.", false));
         try steps.append(try sequenceStepValue(allocator, "zig_failure_history", "Check whether the failure is recurring.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_validation_plan", "Plan the post-fix validation gate.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_validation_run", "Execute selected command phases.", true));
+        try steps.append(try sequenceStepValue(allocator, "zigars_validation_plan", "Plan the post-fix validation gate.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_validation_run", "Execute selected command phases.", true));
     } else if (std.mem.indexOf(u8, lower, "impact") != null or changed_files != null) {
         try steps.append(try sequenceStepValue(allocator, "zig_impact_semantic", "Map changed files to semantic impact.", false));
         try steps.append(try sequenceStepValue(allocator, "zig_test_select_semantic", "Choose focused tests from semantic evidence.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_validation_plan", "Escalate to risk-aware validation.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_validation_plan", "Escalate to risk-aware validation.", false));
     } else if (std.mem.indexOf(u8, lower, "handoff") != null or std.mem.indexOf(u8, lower, "resume") != null) {
-        try steps.append(try sequenceStepValue(allocator, "zigar_session_snapshot", "Capture current workspace and validation state.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_handoff_pack", "Package recommended next steps.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_session_snapshot", "Capture current workspace and validation state.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_handoff_pack", "Package recommended next steps.", false));
     } else {
-        try steps.append(try sequenceStepValue(allocator, "zigar_capability_match", "Find the strongest zigar tools for the goal.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_validation_plan", "Plan checks before handing work back.", false));
-        try steps.append(try sequenceStepValue(allocator, "zigar_validation_run", "Run selected checks when ready.", true));
+        try steps.append(try sequenceStepValue(allocator, "zigars_capability_match", "Find the strongest zigars tools for the goal.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_validation_plan", "Plan checks before handing work back.", false));
+        try steps.append(try sequenceStepValue(allocator, "zigars_validation_run", "Run selected checks when ready.", true));
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_tool_sequence_plan" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_tool_sequence_plan" });
     try obj.put(allocator, "goal", try ownedString(allocator, goal));
     try obj.put(allocator, "changed_files", if (changed_files) |files| try ownedString(allocator, files) else .null);
     try obj.put(allocator, "sequence", .{ .array = steps });
@@ -990,11 +990,11 @@ pub fn qualityCommandsValue(allocator: std.mem.Allocator, context: app_context.P
     var commands = std.json.Array.init(allocator);
     try appendWorkspaceFormatCheckCommand(allocator, context, &commands);
     try appendUniqueCommand(allocator, &commands, "zig build test");
-    try appendUniqueCommand(allocator, &commands, "zigar_validate_patch");
+    try appendUniqueCommand(allocator, &commands, "zigars_validate_patch");
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "default_commands", .{ .array = commands });
-    try obj.put(allocator, "final_gate", .{ .string = "zigar_validate_patch" });
+    try obj.put(allocator, "final_gate", .{ .string = "zigars_validate_patch" });
     return .{ .object = obj };
 }
 
@@ -1011,15 +1011,15 @@ pub fn contextLimitsValue(allocator: std.mem.Allocator) !std.json.Value {
 /// Serializes agent rules fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentRulesValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var rules = std.json.Array.init(allocator);
-    try rules.append(try ownedString(allocator, "Call zigar_context_pack first when entering an unfamiliar Zig workspace."));
-    try rules.append(try ownedString(allocator, "Use zig_format or zig_format_check for formatting; do not fall back to raw zig fmt unless zigar is unavailable."));
-    try rules.append(try ownedString(allocator, "Use zig_compile_error_index or zigar_failure_fusion before interpreting compiler stderr manually."));
-    try rules.append(try ownedString(allocator, "Use zigar_validate_patch as the final readiness gate before handing work back."));
-    try rules.append(try ownedString(allocator, "Source-writing zigar tools are preview-only unless apply=true is explicit."));
+    try rules.append(try ownedString(allocator, "Call zigars_context_pack first when entering an unfamiliar Zig workspace."));
+    try rules.append(try ownedString(allocator, "Use zig_format or zig_format_check for formatting; do not fall back to raw zig fmt unless zigars is unavailable."));
+    try rules.append(try ownedString(allocator, "Use zig_compile_error_index or zigars_failure_fusion before interpreting compiler stderr manually."));
+    try rules.append(try ownedString(allocator, "Use zigars_validate_patch as the final readiness gate before handing work back."));
+    try rules.append(try ownedString(allocator, "Source-writing zigars tools are preview-only unless apply=true is explicit."));
     if (std.mem.eql(u8, client, "claude")) try rules.append(try ownedString(allocator, "Prefer compact JSON fields over long command output when summarizing to the user."));
-    if (std.mem.eql(u8, client, "codex")) try rules.append(try ownedString(allocator, "Prefer zigar_patch_guard before broad multi-file edits."));
+    if (std.mem.eql(u8, client, "codex")) try rules.append(try ownedString(allocator, "Prefer zigars_patch_guard before broad multi-file edits."));
     if (std.mem.eql(u8, client, "gemini")) try rules.append(try ownedString(allocator, "Use tools/list schemas directly and keep trust/confirmation settings explicit in Gemini CLI."));
-    if (std.mem.eql(u8, client, "hermes")) try rules.append(try ownedString(allocator, "Prefer an MCP integration or thin skill wrapper that passes zigar JSON through without scraping human text."));
+    if (std.mem.eql(u8, client, "hermes")) try rules.append(try ownedString(allocator, "Prefer an MCP integration or thin skill wrapper that passes zigars JSON through without scraping human text."));
     if (std.mem.indexOf(u8, task, "profile") != null) try rules.append(try ownedString(allocator, "Use zig_profile_plan before capture and zflame-backed tools only for rendering existing profiler data."));
     return .{ .array = rules };
 }
@@ -1027,11 +1027,11 @@ pub fn agentRulesValue(allocator: std.mem.Allocator, client: []const u8, task: [
 /// Serializes agent workflow hints fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentWorkflowHintsValue(allocator: std.mem.Allocator, task: []const u8) !std.json.Value {
     var workflows_array = std.json.Array.init(allocator);
-    try workflows_array.append(try workflowHintValue(allocator, "orientation", &.{ "zigar_context_pack", "zigar_next_action" }));
-    try workflows_array.append(try workflowHintValue(allocator, "compile_error", &.{ "zig_compile_error_index", "zigar_failure_fusion", "zigar_impact" }));
-    try workflows_array.append(try workflowHintValue(allocator, "tests", &.{ "zig_test_failure_triage", "zig_test_select", "zigar_validate_patch" }));
-    try workflows_array.append(try workflowHintValue(allocator, "patch_readiness", &.{ "zigar_patch_guard", "zigar_validate_patch", "zig_public_api_diff" }));
-    if (std.mem.indexOf(u8, task, "api") != null) try workflows_array.append(try workflowHintValue(allocator, "api_change", &.{ "zig_public_api_diff", "zigar_impact", "zig_test_select" }));
+    try workflows_array.append(try workflowHintValue(allocator, "orientation", &.{ "zigars_context_pack", "zigars_next_action" }));
+    try workflows_array.append(try workflowHintValue(allocator, "compile_error", &.{ "zig_compile_error_index", "zigars_failure_fusion", "zigars_impact" }));
+    try workflows_array.append(try workflowHintValue(allocator, "tests", &.{ "zig_test_failure_triage", "zig_test_select", "zigars_validate_patch" }));
+    try workflows_array.append(try workflowHintValue(allocator, "patch_readiness", &.{ "zigars_patch_guard", "zigars_validate_patch", "zig_public_api_diff" }));
+    if (std.mem.indexOf(u8, task, "api") != null) try workflows_array.append(try workflowHintValue(allocator, "api_change", &.{ "zig_public_api_diff", "zigars_impact", "zig_test_select" }));
     return .{ .array = workflows_array };
 }
 
@@ -1052,9 +1052,9 @@ pub fn agentToolAliasesValue(allocator: std.mem.Allocator) !std.json.Value {
     try obj.put(allocator, "fmt", .{ .string = "zig_format" });
     try obj.put(allocator, "formatter", .{ .string = "zig_format" });
     try obj.put(allocator, "errors", .{ .string = "zig_compile_error_index" });
-    try obj.put(allocator, "health", .{ .string = "zigar_doctor" });
-    try obj.put(allocator, "done", .{ .string = "zigar_validate_patch" });
-    try obj.put(allocator, "impact", .{ .string = "zigar_impact" });
+    try obj.put(allocator, "health", .{ .string = "zigars_doctor" });
+    try obj.put(allocator, "done", .{ .string = "zigars_validate_patch" });
+    try obj.put(allocator, "impact", .{ .string = "zigars_impact" });
     return .{ .object = obj };
 }
 
@@ -1093,11 +1093,11 @@ pub fn nextActionPlanValue(allocator: std.mem.Allocator, goal: []const u8, chang
     if (std.mem.indexOf(u8, lower, "test") != null) {
         try steps.append(try toolStepValue(allocator, "zig_test_failure_triage", "group failing tests and panic clues"));
         try steps.append(try toolStepValue(allocator, "zig_test_select", "choose focused rerun commands for touched files or symbols"));
-        try steps.append(try toolStepValue(allocator, "zigar_validate_patch", "confirm the fix with the standard validation gate"));
+        try steps.append(try toolStepValue(allocator, "zigars_validate_patch", "confirm the fix with the standard validation gate"));
     } else if (std.mem.indexOf(u8, lower, "compile") != null or std.mem.indexOf(u8, lower, "build") != null or last_error != null) {
         try steps.append(try toolStepValue(allocator, "zig_compile_error_index", "group compiler diagnostics by file"));
-        try steps.append(try toolStepValue(allocator, "zigar_failure_fusion", "extract primary failure, rerun command, and suggested tools"));
-        try steps.append(try toolStepValue(allocator, "zigar_impact", "find affected importers/tests before editing"));
+        try steps.append(try toolStepValue(allocator, "zigars_failure_fusion", "extract primary failure, rerun command, and suggested tools"));
+        try steps.append(try toolStepValue(allocator, "zigars_impact", "find affected importers/tests before editing"));
     } else if (std.mem.indexOf(u8, lower, "format") != null or std.mem.indexOf(u8, lower, "fmt") != null) {
         try steps.append(try toolStepValue(allocator, "zig_format_check", "check formatting without writing"));
         try steps.append(try toolStepValue(allocator, "zig_format", "preview or apply formatting with apply=true"));
@@ -1105,23 +1105,23 @@ pub fn nextActionPlanValue(allocator: std.mem.Allocator, goal: []const u8, chang
         try steps.append(try toolStepValue(allocator, "zig_profile_plan", "choose platform capture workflow"));
         try steps.append(try toolStepValue(allocator, "zig_flamegraph", "render captured profiler output through zflame"));
     } else if (std.mem.indexOf(u8, lower, "pr") != null or std.mem.indexOf(u8, lower, "review") != null or std.mem.indexOf(u8, lower, "done") != null) {
-        try steps.append(try toolStepValue(allocator, "zigar_validate_patch", "run the final readiness gate"));
+        try steps.append(try toolStepValue(allocator, "zigars_validate_patch", "run the final readiness gate"));
         try steps.append(try toolStepValue(allocator, "zig_public_api_diff", "check accidental public API changes"));
     } else {
-        try steps.append(try toolStepValue(allocator, "zigar_context_pack", "orient to project shape and validation policy"));
-        try steps.append(try toolStepValue(allocator, "zigar_impact", "map touched files or symbols to likely tests"));
-        try steps.append(try toolStepValue(allocator, "zigar_validate_patch", "validate before handoff"));
+        try steps.append(try toolStepValue(allocator, "zigars_context_pack", "orient to project shape and validation policy"));
+        try steps.append(try toolStepValue(allocator, "zigars_impact", "map touched files or symbols to likely tests"));
+        try steps.append(try toolStepValue(allocator, "zigars_validate_patch", "validate before handoff"));
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_next_action" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_next_action" });
     try obj.put(allocator, "goal", try ownedString(allocator, goal));
     try obj.put(allocator, "changed_files", if (changed_files) |files| try ownedString(allocator, files) else .null);
     try obj.put(allocator, "last_error", if (last_error) |err| try ownedString(allocator, err) else .null);
     try obj.put(allocator, "recommended_steps", .{ .array = steps });
     try obj.put(allocator, "classification_reasons", .{ .string = "keyword match over user goal, optional changed_files, and optional last_error" });
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "user_supplied_goal plus optional git/status text and last_error", "deterministic routing hint, not semantic proof of correctness", "medium", "keyword classification can miss project-specific intent; run the recommended verification gate", "zigar_validate_patch", "stop when zigar_validate_patch passes or the next tool returns a focused source edit blocker", &.{ "zigar_context_pack", "zigar_validate_patch" }));
-    try obj.put(allocator, "stop_when", .{ .string = "stop when zigar_validate_patch passes or the next tool returns a focused source edit blocker" });
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "user_supplied_goal plus optional git/status text and last_error", "deterministic routing hint, not semantic proof of correctness", "medium", "keyword classification can miss project-specific intent; run the recommended verification gate", "zigars_validate_patch", "stop when zigars_validate_patch passes or the next tool returns a focused source edit blocker", &.{ "zigars_context_pack", "zigars_validate_patch" }));
+    try obj.put(allocator, "stop_when", .{ .string = "stop when zigars_validate_patch passes or the next tool returns a focused source edit blocker" });
     return .{ .object = obj };
 }
 
@@ -1155,12 +1155,12 @@ pub fn validationNextActionValue(allocator: std.mem.Allocator, ok: bool, phases:
         if (phase_ok) continue;
         try obj.put(allocator, "status", .{ .string = "blocked" });
         try obj.put(allocator, "phase", phase.get("name") orelse .null);
-        try obj.put(allocator, "tool", .{ .string = "zigar_failure_fusion" });
+        try obj.put(allocator, "tool", .{ .string = "zigars_failure_fusion" });
         try obj.put(allocator, "reason", .{ .string = "inspect the first failing validation phase and primary diagnostic" });
         return .{ .object = obj };
     }
     try obj.put(allocator, "status", .{ .string = "blocked" });
-    try obj.put(allocator, "tool", .{ .string = "zigar_validate_patch" });
+    try obj.put(allocator, "tool", .{ .string = "zigars_validate_patch" });
     try obj.put(allocator, "reason", .{ .string = "validation failed without a command phase" });
     return .{ .object = obj };
 }
@@ -1170,20 +1170,20 @@ pub fn failureFusionValue(allocator: std.mem.Allocator, stderr: []const u8, stdo
     const compiler = try project_values.compilerErrorIndexValue(allocator, stderr, stdout, argv);
     const tests = try project_values.testFailureTriageValue(allocator, stderr, stdout, argv, ok);
     var suggested = std.json.Array.init(allocator);
-    try suggested.append(try ownedString(allocator, "zigar_impact"));
+    try suggested.append(try ownedString(allocator, "zigars_impact"));
     try suggested.append(try ownedString(allocator, "zig_test_select"));
-    try suggested.append(try ownedString(allocator, "zigar_validate_patch"));
+    try suggested.append(try ownedString(allocator, "zigars_validate_patch"));
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_failure_fusion" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_failure_fusion" });
     try obj.put(allocator, "ok", .{ .bool = ok });
     try obj.put(allocator, "compiler", compiler);
     try obj.put(allocator, "tests", tests);
     try obj.put(allocator, "primary_failure", try primaryFailureValue(allocator, compiler, tests));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "rerun_command", .{ .string = try project_values.commandString(allocator, argv) });
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "compiler stderr/stdout and command exit status", "primary failure is selected from parsed compiler/test output", "medium", "compiler and test parsing is best-effort; raw command output remains the audit source", "rerun_command then zigar_validate_patch", "stop when the primary diagnostic is resolved or validation passes", &.{ "zigar_impact", "zig_test_select", "zigar_validate_patch" }));
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "compiler stderr/stdout and command exit status", "primary failure is selected from parsed compiler/test output", "medium", "compiler and test parsing is best-effort; raw command output remains the audit source", "rerun_command then zigars_validate_patch", "stop when the primary diagnostic is resolved or validation passes", &.{ "zigars_impact", "zig_test_select", "zigars_validate_patch" }));
     return .{ .object = obj };
 }
 
@@ -1263,14 +1263,14 @@ pub fn generatedProjectProfileValue(allocator: std.mem.Allocator, context: app_c
     try obj.put(allocator, "project_type", try projectTypeValue(allocator, context));
     try obj.put(allocator, "quality", try qualityCommandsValue(allocator, context));
     try obj.put(allocator, "generated_dirs", try generatedDirsValue(allocator));
-    try obj.put(allocator, "agent_entrypoint", .{ .string = "zigar_context_pack" });
+    try obj.put(allocator, "agent_entrypoint", .{ .string = "zigars_context_pack" });
     return .{ .object = obj };
 }
 
 /// Serializes generated dirs fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedDirsValue(allocator: std.mem.Allocator) !std.json.Value {
     var dirs = std.json.Array.init(allocator);
-    for ([_][]const u8{ ".zig-cache", ".zigar-cache", "zig-out", "zig-pkg", "coverage" }) |dir| {
+    for ([_][]const u8{ ".zig-cache", ".zigars-cache", "zig-out", "zig-pkg", "coverage" }) |dir| {
         try dirs.append(try ownedString(allocator, dir));
     }
     return .{ .array = dirs };
@@ -1479,7 +1479,7 @@ fn commandResultValue(
     try obj.put(allocator, "output_limit_mode", .{ .string = "truncate_on_limit" });
     try obj.put(allocator, "output_limit_exceeded", .{ .bool = result.stdout_truncated or result.stderr_truncated });
     if (result.stdout_truncated or result.stderr_truncated) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit. zigar returned the captured prefix and marked the truncated stream so the result remains inspectable." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit. zigars returned the captured prefix and marked the truncated stream so the result remains inspectable." });
     }
     const insights = try project_values.compilerInsightsValue(allocator, stdout.text, stderr.text, argv);
     try obj.put(allocator, "diagnostics", insights);
@@ -1506,7 +1506,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []co
     try obj.put(allocator, "stdout_truncated", .{ .bool = false });
     try obj.put(allocator, "stderr_truncated", .{ .bool = false });
     if (isOutputLimitError(err)) {
-        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigar's capture limit before zigar could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
+        try obj.put(allocator, "note", .{ .string = "Command output exceeded zigars' capture limit before zigars could retain a bounded prefix. Narrow the command or run it directly when full output is needed." });
     }
     try obj.put(allocator, "failure_summary", try commandErrorSummaryValue(allocator, err, argv));
     return .{ .object = obj };
@@ -1532,8 +1532,8 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
     if (!ok) {
         try suggested.append(try ownedString(allocator, "zig_compile_error_index"));
         if (project_values.argvContains(argv, "test")) try suggested.append(try ownedString(allocator, "zig_test_failure_triage"));
-        try suggested.append(try ownedString(allocator, "zigar_failure_fusion"));
-        try suggested.append(try ownedString(allocator, "zigar_impact"));
+        try suggested.append(try ownedString(allocator, "zigars_failure_fusion"));
+        try suggested.append(try ownedString(allocator, "zigars_impact"));
     }
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", try likelyFailureScopeValue(allocator, primary));
@@ -1549,8 +1549,8 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: [
     try obj.put(allocator, "error_class", .{ .string = commandErrorKind(err) });
     try obj.put(allocator, "rerun_command", .{ .string = try project_values.commandString(allocator, argv) });
     var suggested = std.json.Array.init(allocator);
-    try suggested.append(try ownedString(allocator, "zigar_doctor"));
-    try suggested.append(try ownedString(allocator, "zigar_context_pack"));
+    try suggested.append(try ownedString(allocator, "zigars_doctor"));
+    try suggested.append(try ownedString(allocator, "zigars_context_pack"));
     try obj.put(allocator, "suggested_tools", .{ .array = suggested });
     try obj.put(allocator, "likely_scope", .{ .string = if (isTimeoutError(err)) "command_timeout" else "tool_or_backend_configuration" });
     return .{ .object = obj };
@@ -1776,7 +1776,7 @@ fn appendValidationPhase(
         .timeout_ms = @intCast(@max(1, timeout_ms)),
         .max_stdout_bytes = workflows.command_output_limit,
         .max_stderr_bytes = workflows.command_output_limit,
-        .provenance = "zigar_validate_patch phase",
+        .provenance = "zigars_validate_patch phase",
     }) catch |err| {
         var phase = std.json.ObjectMap.empty;
         try phase.put(allocator, "name", .{ .string = name });
@@ -2021,8 +2021,8 @@ fn importMatchesTarget(imported: []const u8, target: []const u8) bool {
 fn profileStateValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "profile_v2_path", .{ .string = ".zigar/profile.v2.json" });
-    if (context.workspace_store.read(allocator, .{ .path = ".zigar/profile.v2.json", .max_bytes = 1024 * 1024, .provenance = "project_intelligence.profile_state" }) catch null) |read_result| {
+    try obj.put(allocator, "profile_v2_path", .{ .string = ".zigars/profile.v2.json" });
+    if (context.workspace_store.read(allocator, .{ .path = ".zigars/profile.v2.json", .max_bytes = 1024 * 1024, .provenance = "project_intelligence.profile_state" }) catch null) |read_result| {
         defer read_result.deinit(allocator);
         try obj.put(allocator, "profile_v2_present", .{ .bool = true });
         try obj.put(allocator, "sha256", .{ .string = try sha256Hex(allocator, read_result.bytes) });
@@ -2051,7 +2051,7 @@ fn decisionRecordDataValue(
     try obj.put(allocator, "title", try ownedString(allocator, title));
     try obj.put(allocator, "decision", try ownedString(allocator, decision));
     try obj.put(allocator, "rationale", if (rationale) |value| try ownedString(allocator, value) else .null);
-    try obj.put(allocator, "source", .{ .string = "zigar_decision_record" });
+    try obj.put(allocator, "source", .{ .string = "zigars_decision_record" });
     return .{ .object = obj };
 }
 
@@ -2165,9 +2165,9 @@ fn searchableRecordText(allocator: std.mem.Allocator, obj: std.json.ObjectMap) !
 /// Serializes built in project policies fields into an allocator-owned JSON value; allocation failures propagate.
 fn builtInProjectPoliciesValue(allocator: std.mem.Allocator) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    try array.append(try policyValue(allocator, "generated_paths", "Do not edit generated/cache outputs directly; change source or regeneration steps.", &.{ ".zig-cache", ".zigar-cache", "zig-out", "coverage" }));
-    try array.append(try policyValue(allocator, "validation", "Treat skipped phases as unknown, not passed.", &.{ "zigar_validation_plan", "zigar_validation_run" }));
-    try array.append(try policyValue(allocator, "writes", "Source and project-memory writes require explicit apply=true.", &.{"zigar_decision_record"}));
+    try array.append(try policyValue(allocator, "generated_paths", "Do not edit generated/cache outputs directly; change source or regeneration steps.", &.{ ".zig-cache", ".zigars-cache", "zig-out", "coverage" }));
+    try array.append(try policyValue(allocator, "validation", "Treat skipped phases as unknown, not passed.", &.{ "zigars_validation_plan", "zigars_validation_run" }));
+    try array.append(try policyValue(allocator, "writes", "Source and project-memory writes require explicit apply=true.", &.{"zigars_decision_record"}));
     return .{ .array = array };
 }
 
@@ -2279,8 +2279,8 @@ const semantic_impact_limits = &.{
     "Import matching uses parser-backed import declarations plus path/basename matching and can miss generated, aliased, or comptime-selected dependencies.",
     "Release decisions still require compiler-backed validation such as zig build test or project CI.",
 };
-const semantic_impact_verify_with = &.{ "zig ast-check on impacted files", "zig_test_select_semantic", "zigar_validation_plan", "zig build test" };
-const semantic_select_verify_with = &.{ "zig ast-check on selected test files", "zigar_validation_run", "zig build test", "project CI" };
+const semantic_impact_verify_with = &.{ "zig ast-check on impacted files", "zig_test_select_semantic", "zigars_validation_plan", "zig build test" };
+const semantic_select_verify_with = &.{ "zig ast-check on selected test files", "zigars_validation_run", "zig build test", "project CI" };
 
 /// Serializes semantic evidence basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticEvidenceBasisValue(allocator: std.mem.Allocator, analysis_kind: []const u8) !std.json.Value {
@@ -2331,7 +2331,7 @@ fn changedPathList(allocator: std.mem.Allocator, context: app_context.ProjectInt
         .timeout_ms = @intCast(@max(1, @min(timeout_ms, 5000))),
         .max_stdout_bytes = workflows.command_output_limit,
         .max_stderr_bytes = workflows.command_output_limit,
-        .provenance = "zigar_validate_patch changed paths",
+        .provenance = "zigars_validate_patch changed paths",
     }) catch return .{ .items = try list.toOwnedSlice(allocator) };
     defer result.deinit(allocator);
     var lines = std.mem.splitScalar(u8, result.stdout, '\n');
@@ -2723,7 +2723,7 @@ fn projectIntelligenceAllocationScenario(allocator: std.mem.Allocator) !void {
     const phase_argv = workflows.OwnedArgv{ .items = &.{ "zig", "build", "test" } };
     const check_argv = workflows.OwnedArgv{ .items = &.{ "zig", "ast-check", "src/main.zig" } };
     var phases = [_]workflows.Phase{
-        .{ .id = "build_test", .kind = .command, .tool = "zigar_validation_run", .argv = phase_argv, .reason = "build", .required = true, .risk = "project_code" },
+        .{ .id = "build_test", .kind = .command, .tool = "zigars_validation_run", .argv = phase_argv, .reason = "build", .required = true, .risk = "project_code" },
         .{ .id = "semantic", .kind = .tool_only, .tool = "zig_impact_semantic", .argv = null, .reason = "semantic", .required = false, .risk = "none" },
     };
     var skipped = [_]workflows.SkippedPhase{.{ .name = "coverage", .reason = "not requested" }};
@@ -2800,20 +2800,20 @@ fn projectIntelligenceAllocationScenario(allocator: std.mem.Allocator) !void {
     };
     var groups = [_]workflows.FailureGroup{.{ .fingerprint = "src/main.zig:error:bad", .count = 2, .sample_json = "not-json" }};
     var history = workflows.HistoryResult{ .view = .runs, .history_available = true, .runs = runs[0..], .last_run_index = 0, .last_good_index = 2, .failure_groups = groups[0..] };
-    _ = try validationHistoryToolValue(allocator, "zigar_validation_history", history);
+    _ = try validationHistoryToolValue(allocator, "zigars_validation_history", history);
     history.view = .flakes;
     _ = try validationHistoryToolValue(allocator, "zig_test_flake_history", history);
     history.view = .failures;
     _ = try validationHistoryToolValue(allocator, "zig_failure_history", history);
 
     _ = try testTimingValue(allocator, "PASS util_test 12ms\nslow case 340ms\n");
-    _ = try sessionSnapshotValue(allocator, context, .{ .kind = "zigar_session_snapshot", .goal = "finish", .changed_files = "src/main.zig", .validation = "{\"ok\":false}", .last_error = "error: bad" });
-    _ = try handoffPackValue(allocator, context, .{ .kind = "zigar_handoff_pack", .goal = "resume", .changed_files = "src/main.zig" });
+    _ = try sessionSnapshotValue(allocator, context, .{ .kind = "zigars_session_snapshot", .goal = "finish", .changed_files = "src/main.zig", .validation = "{\"ok\":false}", .last_error = "error: bad" });
+    _ = try handoffPackValue(allocator, context, .{ .kind = "zigars_handoff_pack", .goal = "resume", .changed_files = "src/main.zig" });
     _ = try decisionRecordValue(allocator, context, .{ .title = "Decision", .decision = "Use ports", .rationale = "tests", .apply = false });
-    _ = try projectMemoryValue(allocator, context, .{ .query = "ports", .category = "architecture", .limit = 5, .include_builtins = true, .tool_name = "zigar_project_memory" });
+    _ = try projectMemoryValue(allocator, context, .{ .query = "ports", .category = "architecture", .limit = 5, .include_builtins = true, .tool_name = "zigars_project_memory" });
 
     const risk = ToolRisk{ .level = "medium", .mcp_read_only_hint = true, .writes_source = false, .writes_artifacts = false, .writes_require_apply = false, .preview_by_default = true, .mutates_lsp_state = false, .executes_project_code = false, .executes_user_command = false, .executes_backend = false };
-    const entries = [_]CapabilityEntry{.{ .name = "zigar_validate_patch", .description = "validate patch", .group = "validation", .group_keywords = &.{ "validate", "patch" }, .risk = risk, .plan_kind = "read" }};
+    const entries = [_]CapabilityEntry{.{ .name = "zigars_validate_patch", .description = "validate patch", .group = "validation", .group_keywords = &.{ "validate", "patch" }, .risk = risk, .plan_kind = "read" }};
     _ = try capabilityMatchValue(allocator, "validate patch", 1, entries[0..]);
     _ = try toolSequencePlanValue(allocator, "fix failing test", "src/main.zig");
     _ = try contextWorkspaceValue(allocator, context);
@@ -2852,7 +2852,7 @@ const AllocationRuntime = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *AllocationRuntime) app_context.ProjectIntelligenceContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
             .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
             .zls_state = .{ .status = "connected", .running = true },
@@ -2895,11 +2895,11 @@ const AllocationRuntime = struct {
                 "pub fn run() void {}\npub const Api = struct {};\n"
             else if (std.mem.eql(u8, request.path, "tests/util_test.zig"))
                 "const util = @import(\"../src/util.zig\");\ntest \"run\" { util.run(); }\n"
-            else if (std.mem.eql(u8, request.path, ".zigar/project-memory.jsonl"))
+            else if (std.mem.eql(u8, request.path, ".zigars/project-memory.jsonl"))
                 "{\"category\":\"architecture\",\"title\":\"Ports\",\"decision\":\"Use typed ports\",\"rationale\":\"tests\"}\n"
-            else if (std.mem.eql(u8, request.path, ".zigar/profile.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars/profile.json"))
                 "{\"schema_version\":1}\n"
-            else if (std.mem.eql(u8, request.path, ".zigar/profile.v2.json"))
+            else if (std.mem.eql(u8, request.path, ".zigars/profile.v2.json"))
                 "{\"schema_version\":2}\n"
             else
                 "";

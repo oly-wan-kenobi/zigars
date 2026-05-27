@@ -47,7 +47,7 @@ const semantic_index_coverage = "Readable workspace Zig files up to the requeste
 const semantic_impact_coverage = "Readable workspace Zig files up to the requested limit; changed files, diff paths, symbols, imports, declarations, and tests are matched against the std.zig.Ast parser-backed semantic index; parse_status, partial_result, and parse_error_count are preserved with heuristic fallbacks called out explicitly.";
 const semantic_refs_coverage = "Readable workspace Zig files up to the requested limit; matching lines are confirmed with optional ZLint --print-ast symbol references when the configured backend supports it, with source-scan fallback.";
 const lint_evidence_coverage = "Caller-supplied normalized lint JSON or optional lint backend output, depending on the tool and arguments.";
-const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigar lint findings.";
+const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigars lint findings.";
 const zlint_fix_coverage = "Optional ZLint --fix or --fix-dangerously over a workspace-local path, previewed unless apply=true.";
 
 /// Limit value used by text scans operations.
@@ -95,7 +95,7 @@ const compiler_output_limits = &.{
 
 /// Limit value used by zwanzigs operations.
 const zwanzig_limits = &.{
-    "Requires an optional configured zwanzig executable; zigar does not bundle or require the backend.",
+    "Requires an optional configured zwanzig executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and graph support depend on the installed zwanzig version and configuration.",
 };
 
@@ -129,13 +129,13 @@ const lint_intelligence_limits = &.{
 
 /// Limit value used by zlints operations.
 const zlint_limits = &.{
-    "Requires an optional configured ZLint executable; zigar does not bundle or require the backend.",
+    "Requires an optional configured ZLint executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and output shape depend on the installed ZLint version and configuration.",
 };
 
 /// Limit value used by zlint fixs operations.
 const zlint_fix_limits = &.{
-    "Requires an optional configured ZLint executable with --fix support; zigar does not implement the edits itself.",
+    "Requires an optional configured ZLint executable with --fix support; zigars does not implement the edits itself.",
     "Runs only when apply=true and the selected path resolves inside the workspace.",
     "dangerous=true delegates to ZLint --fix-dangerously and should be followed by git diff review and tests.",
 };
@@ -184,7 +184,7 @@ pub const contracts = [_]Contract{
     .{ .tool = "zig_test_select", .analysis_kind = "heuristic_test_impact_selection", .tier = .advisory_orientation, .confidence = .low, .classification = .advisory, .source_coverage = workspace_text_coverage, .limitations = test_scan_limits, .verify_with = &.{ "zig build test", "project CI" } },
     .{ .tool = "zig_public_api_diff", .analysis_kind = "heuristic_public_decl_diff", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = "Before/after source text or git-show baseline compared by public declaration line.", .limitations = api_diff_limits, .verify_with = &.{ "zig_ast_decl_summary", "release review", "zig build test" } },
     .{ .tool = "zig_semantic_index_build", .analysis_kind = "parser_backed_semantic_workspace_index", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS workspace symbols", "zig build test" } },
-    .{ .tool = "zig_semantic_index_status", .analysis_kind = "semantic_index_cache_status", .tier = .advisory_orientation, .confidence = .medium, .classification = .orientation_only, .source_coverage = "In-memory semantic index cache metadata for the current zigar process.", .limitations = &.{"Status reports cache state only; it does not refresh or validate source semantics."}, .verify_with = &.{"zig_semantic_index_refresh"} },
+    .{ .tool = "zig_semantic_index_status", .analysis_kind = "semantic_index_cache_status", .tier = .advisory_orientation, .confidence = .medium, .classification = .orientation_only, .source_coverage = "In-memory semantic index cache metadata for the current zigars process.", .limitations = &.{"Status reports cache state only; it does not refresh or validate source semantics."}, .verify_with = &.{"zig_semantic_index_refresh"} },
     .{ .tool = "zig_semantic_index_refresh", .analysis_kind = "parser_backed_semantic_workspace_index", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS workspace symbols", "zig build test" } },
     .{ .tool = "zig_semantic_query", .analysis_kind = "parser_backed_semantic_index_query", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS definition/references", "workspace search" } },
     .{ .tool = "zig_semantic_refs", .analysis_kind = "zlint_confirmed_reference_scan", .tier = .advisory_orientation, .confidence = .medium, .classification = .orientation_only, .source_coverage = semantic_refs_coverage, .limitations = semantic_refs_limits, .verify_with = &.{ "ZLS references", "zig build test" } },
@@ -204,8 +204,8 @@ pub const contracts = [_]Contract{
     .{ .tool = "zig_lint_baseline", .analysis_kind = "lint_baseline_comparison", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "zig_lint_gate", "configured linters" } },
     .{ .tool = "zig_lint_suppressions", .analysis_kind = "lint_suppression_filter", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "code review", "configured linters" } },
     .{ .tool = "zig_lint_trend", .analysis_kind = "lint_trend_comparison", .tier = .advisory_orientation, .confidence = .medium, .classification = .advisory, .source_coverage = lint_evidence_coverage, .limitations = lint_intelligence_limits, .verify_with = &.{ "configured linters", "project CI" } },
-    .{ .tool = "zig_impact_semantic", .analysis_kind = "parser_backed_semantic_impact", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on impacted files", "zig_test_select_semantic", "zigar_validation_plan", "zig build test" } },
-    .{ .tool = "zig_test_select_semantic", .analysis_kind = "parser_backed_semantic_test_selection", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on selected test files", "zigar_validation_run", "zig build test", "project CI" } },
+    .{ .tool = "zig_impact_semantic", .analysis_kind = "parser_backed_semantic_impact", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on impacted files", "zig_test_select_semantic", "zigars_validation_plan", "zig build test" } },
+    .{ .tool = "zig_test_select_semantic", .analysis_kind = "parser_backed_semantic_test_selection", .tier = .parser_backed, .confidence = .high, .classification = .advisory, .source_coverage = semantic_impact_coverage, .limitations = semantic_impact_limits, .verify_with = &.{ "zig ast-check on selected test files", "zigars_validation_run", "zig build test", "project CI" } },
     .{ .tool = "zig_lint", .analysis_kind = "optional_zwanzig_lint_json", .tier = .zwanzig_backed, .confidence = .high, .classification = .release_gating_candidate, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },
     .{ .tool = "zig_lint_sarif", .analysis_kind = "optional_zwanzig_lint_sarif", .tier = .zwanzig_backed, .confidence = .high, .classification = .release_gating_candidate, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },
     .{ .tool = "zig_lint_rules", .analysis_kind = "optional_zwanzig_rule_catalog", .tier = .zwanzig_backed, .confidence = .medium, .classification = .advisory, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig --help"} },

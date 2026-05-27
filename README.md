@@ -1,6 +1,6 @@
-# zigar
+# zigars
 
-`zigar` is a deterministic MCP server for Zig development. It gives MCP-capable
+`zigars` is a deterministic MCP server for Zig development. It gives MCP-capable
 agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
 compiler commands, formatting, ZLS code intelligence, local docs lookup, static
 analysis summaries, transactional edit/refactor previews, ZLint/zwanzig linting,
@@ -8,24 +8,24 @@ zflame profiling helpers, and coverage/benchmark performance evidence
 workflows, plus runtime debug, fuzzing, binary, cross-target, and embedded
 diagnostic planning.
 
-`zigar` is intentionally not an AI code generator. It exposes tools that inspect,
+`zigars` is intentionally not an AI code generator. It exposes tools that inspect,
 run, format, and analyze Zig projects. Any source write requires an explicit
 `apply=true` argument.
 
 ## Quickstart with npm
 
-The fastest way to use zigar from an MCP client is the npm shim. Bun is the
+The fastest way to use zigars from an MCP client is the npm shim. Bun is the
 preferred launcher:
 
 ```sh
 bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
 
-The npm package is named `@zigars/mcp`; the project and binary are still named
-`zigar`. The shim is written in TypeScript, publishes compiled JavaScript for
-Node-compatible npm clients, downloads the matching `zigar` release archive from
-GitHub, verifies it against `zigar-checksums.txt`, caches the extracted binary,
-and then runs zigar as a local stdio MCP server. GitHub release assets for the
+The npm package is named `@zigars/mcp`; the project, binary, and MCP server are
+named `zigars`. The shim is written in TypeScript, publishes compiled JavaScript for
+Node-compatible npm clients, downloads the matching `zigars` release archive from
+GitHub, verifies it against `zigars-checksums.txt`, caches the extracted binary,
+and then runs zigars as a local stdio MCP server. GitHub release assets for the
 package version must exist before this command can start the server.
 
 Node/npm remains a supported launcher:
@@ -34,11 +34,11 @@ Node/npm remains a supported launcher:
 npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
 
-Yarn and pnpm also work when the `zigar-mcp` binary is named explicitly:
+Yarn and pnpm also work when the `zigars-mcp` binary is named explicitly:
 
 ```sh
-yarn dlx -p @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
-pnpm dlx --package @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
 Minimum prerequisites for the npm path:
@@ -46,7 +46,7 @@ Minimum prerequisites for the npm path:
 - Bun 1.3 or newer, or Node.js 18 or newer with npm/npx, Yarn dlx, or pnpm dlx
 - Zig `0.16.0` available on `PATH` or passed with `--zig-path`
 - A supported host release asset: Linux x64/arm64, macOS x64/arm64, or Windows
-  x64
+  x64/arm64
 - An MCP client that can launch a stdio server
 
 Common client shapes:
@@ -54,7 +54,7 @@ Common client shapes:
 ```json
 {
   "mcpServers": {
-    "zigar": {
+    "zigars": {
       "command": "bunx",
       "args": [
         "--bun",
@@ -70,7 +70,7 @@ Common client shapes:
 Codex uses TOML:
 
 ```toml
-[mcp_servers.zigar]
+[mcp_servers.zigars]
 command = "bunx"
 args = [
   "--bun",
@@ -84,27 +84,27 @@ startup_timeout_sec = 20.0
 After startup, useful first calls are:
 
 ```text
-zigar_workspace_info
-zigar_doctor {"probe_backends":false}
-zigar_schema
+zigars_workspace_info
+zigars_doctor {"probe_backends":false}
+zigars_schema
 ```
 
 For npm-specific caching, troubleshooting, local publish testing, and Claude
 Desktop/MCPB notes, see
-[packages/zigar-mcp-npm/README.md](packages/zigar-mcp-npm/README.md).
+[packages/zigars-mcp-npm/README.md](packages/zigars-mcp-npm/README.md).
 
-## Optional zigar Skills
+## Optional zigars Skills
 
-Zigar-aware agent skills are shipped separately as `@zigars/skills`. They do not
+Zigars-aware agent skills are shipped separately as `@zigars/skills`. They do not
 start the MCP server or change MCP configuration; they provide client-side
-workflow guidance for using zigar effectively.
+workflow guidance for using zigars effectively.
 
 ```sh
 npx -y @zigars/skills@0.2.0 list
-npx -y @zigars/skills@0.2.0 path zigar-development
+npx -y @zigars/skills@0.2.0 path zigars-development
 ```
 
-The first maintained skill is `zigar-development`, which dogfoods zigar while
+The first maintained skill is `zigars-development`, which dogfoods zigars while
 developing this repo. See [docs/dogfooding.md](docs/dogfooding.md).
 
 ## Quickstart with Claude Desktop MCPB
@@ -114,19 +114,19 @@ workspace directory during installation. Download the bundle for your platform
 from the matching GitHub release:
 
 ```text
-zigar-darwin-universal.mcpb
-zigar-linux-x64.mcpb
-zigar-windows-x64.mcpb
+zigars-darwin-universal.mcpb
+zigars-linux-x64.mcpb
+zigars-windows-x64.mcpb
 ```
 
-The MCPB path bundles the zigar server binary directly and runs it with
+The MCPB path bundles the zigars server binary directly and runs it with
 `--transport stdio --workspace <configured directory>`. It still requires Zig
 `0.16.0` on `PATH`; optional backends such as ZLS can be configured through the
 npm shim or a direct binary setup when needed.
 
 ## Status
 
-`zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
+`zigars` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
 transports. Major feature areas are documented against the clean A rubric in
 [docs/maturity.md](docs/maturity.md), and the release-facing trust checklist is
 kept in [docs/trust.md](docs/trust.md). A release should claim clean A only from
@@ -173,7 +173,7 @@ Known limitations:
 Optional backend setup, verification commands, and failure triage are documented
 in [docs/backends.md](docs/backends.md). Cataloged backend setup for Zig, ZLS,
 ZLint, zwanzig, zflame, and diff-folded is available at runtime through
-`zigar_backend_catalog` and in `zigar_schema` under `backend_setup`; profiler
+`zigars_backend_catalog` and in `zigars_schema` under `backend_setup`; profiler
 and runtime diagnostic backend paths are supplied per tool call.
 Release candidates that claim real optional-backend coverage should also run the
 manual `Release Readiness` workflow with the exact backend versions, clean-tree
@@ -198,8 +198,8 @@ npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 Yarn and pnpm launch forms:
 
 ```sh
-yarn dlx -p @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
-pnpm dlx --package @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
 For repeatable client configuration, pin the package version as shown above.
@@ -208,23 +208,23 @@ If you want a locally installed command instead:
 ```sh
 npm install -g @zigars/mcp@0.2.0
 pnpm add -g @zigars/mcp@0.2.0
-zigar-mcp --workspace /absolute/path/to/zig/project
+zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
 Build from source:
 
 ```sh
-git clone https://github.com/oly-wan-kenobi/zigar.git
-cd zigar
+git clone https://github.com/oly-wan-kenobi/zigars.git
+cd zigars
 zig build -Doptimize=ReleaseSafe
-install -m 0755 zig-out/bin/zigar ~/.local/bin/zigar
-zigar --version
+install -m 0755 zig-out/bin/zigars ~/.local/bin/zigars
+zigars --version
 ```
 
 Published archives are available from
-[GitHub Releases](https://github.com/oly-wan-kenobi/zigar/releases). Download
-the archive for your platform, verify its SHA-256 against `zigar-checksums.txt`,
-and put `zigar` on `PATH`. The initial `v0.1.0` release was built and verified
+[GitHub Releases](https://github.com/oly-wan-kenobi/zigars/releases). Download
+the archive for your platform, verify its SHA-256 against `zigars-checksums.txt`,
+and put `zigars` on `PATH`. The initial `v0.1.0` release was built and verified
 locally while GitHub Actions were unavailable; its release notes list the source
 commit and local gates. Tag-workflow releases attach GitHub provenance
 attestations generated from the checksum file when GitHub supports attestations
@@ -233,31 +233,39 @@ for the repository.
 Published release archives are named:
 
 ```text
-zigar-x86_64-linux-musl.tar.gz
-zigar-aarch64-linux-musl.tar.gz
-zigar-x86_64-macos.tar.gz
-zigar-aarch64-macos.tar.gz
-zigar-x86_64-windows.tar.gz
+zigars-x86_64-linux-gnu.tar.gz
+zigars-aarch64-linux-gnu.tar.gz
+zigars-x86_64-linux-musl.tar.gz
+zigars-aarch64-linux-musl.tar.gz
+zigars-x86_64-macos.tar.gz
+zigars-aarch64-macos.tar.gz
+zigars-x86_64-windows-gnu.tar.gz
+zigars-aarch64-windows-gnu.tar.gz
 ```
 
-The npm shim uses these same archive names for host detection. If a package
-version is published before the matching `v<version>` GitHub release assets and
-`zigar-checksums.txt` are available, startup fails with a download or checksum
+The npm shim uses these same archive names for host detection, with Linux x64
+and arm64 hosts deliberately mapped to the musl archives because Node and Bun do
+not expose libc ABI consistently. GNU Linux archives remain available for direct
+downloads and CI jobs that explicitly need glibc ABI. If a package version is
+published before the matching `v<version>` GitHub release assets and
+`zigars-checksums.txt` are available, startup fails with a download or checksum
 error.
 
 Claude Desktop MCPB bundles are published from those same release binaries:
 
 ```text
-zigar-darwin-universal.mcpb
-zigar-linux-x64.mcpb
-zigar-windows-x64.mcpb
-zigar-mcpb-checksums.txt
+zigars-darwin-universal.mcpb
+zigars-linux-x64.mcpb
+zigars-windows-x64.mcpb
+zigars-mcpb-checksums.txt
 ```
 
 The macOS MCPB contains a universal binary. The Linux and Windows MCPB bundles
 currently contain x86_64 binaries because MCPB compatibility metadata supports
 OS platform selectors but not CPU architecture selectors. Linux arm64 users can
-use the npm shim or direct `zigar-aarch64-linux-musl.tar.gz` archive.
+use the npm shim or direct `zigars-aarch64-linux-musl.tar.gz` archive; Windows
+arm64 users can use the npm shim or direct `zigars-aarch64-windows-gnu.tar.gz`
+archive.
 
 ## Build
 
@@ -269,7 +277,7 @@ zig build -Doptimize=ReleaseSafe
 The binary is written to:
 
 ```text
-zig-out/bin/zigar
+zig-out/bin/zigars
 ```
 
 `zig build release-check` is the adoption gate: it runs formatting, generated
@@ -305,28 +313,28 @@ project source coverage, any tracked `src/` or `tools/` Zig file is missing from
 the report, or total, `src/`, or `tools/` coverage drops below the configured
 floors in `tools/coverage_config.zig`.
 
-`zig build dist` creates ReleaseSafe archives and `zigar-checksums.txt` under
+`zig build dist` creates ReleaseSafe archives and `zigars-checksums.txt` under
 `dist/assets`. `zig build release-asset-smoke` verifies checksums, archive
-contents, and the native archive's `zigar --version` behavior.
+contents, and the native archive's `zigars --version` behavior.
 
 MCPB release bundles are built after `zig build dist`:
 
 ```sh
-npm --prefix packages/zigar-mcpb ci
-npm --prefix packages/zigar-mcpb run pack
+npm --prefix packages/zigars-mcpb ci
+npm --prefix packages/zigars-mcpb run pack
 ```
 
 That TypeScript package supports npm/Node and Bun. The npm path compiles
 `src/build.ts` before running; Bun can run the same source with
-`bun run --cwd packages/zigar-mcpb pack:bun`. The command stages the bundled
+`bun run --cwd packages/zigars-mcpb pack:bun`. The command stages the bundled
 server, validates each `manifest.json` with the MCPB CLI, packs `.mcpb` files,
 runs `mcpb info`, and writes
-`dist/assets/zigar-mcpb-checksums.txt` for registry `fileSha256` values.
+`dist/assets/zigars-mcpb-checksums.txt` for registry `fileSha256` values.
 
 ## Run
 
 ```sh
-zig-out/bin/zigar --workspace /path/to/zig/project --transport stdio
+zig-out/bin/zigars --workspace /path/to/zig/project --transport stdio
 ```
 
 Options:
@@ -352,7 +360,7 @@ only as a loopback endpoint for clients or wrappers that need local HTTP.
 
 ## Agent Client Configuration
 
-Zigar works with any MCP client that can launch a local stdio server. Client
+Zigars works with any MCP client that can launch a local stdio server. Client
 config shapes vary. For the npm path, prefer `bunx --bun` with
 `@zigars/mcp@0.2.0`; `npx -y` remains the Node/npm fallback. For a direct binary
 install, use an absolute `command`. Pin `--workspace` unless the client starts
@@ -362,9 +370,9 @@ automatically unless you pass a transport yourself.
 For Claude, Gemini CLI, Hermes, and generic client guidance, see
 [docs/agent-clients.md](docs/agent-clients.md).
 
-Use `zigar_client_config_generate` when you want zigar to preview a client
+Use `zigars_client_config_generate` when you want zigars to preview a client
 configuration artifact with preimage, hash, and provenance metadata. Use
-`zigar_adoption_pack`, `zigar_smoke_plan`, and `zigar_conformance_report` to
+`zigars_adoption_pack`, `zigars_smoke_plan`, and `zigars_conformance_report` to
 package observed setup evidence, client smoke scenarios, and conservative
 public support claims before recommending a client/backend profile.
 
@@ -373,7 +381,7 @@ public support claims before recommending a client/backend profile.
 Add a server entry to `~/.codex/config.toml` using Bun:
 
 ```toml
-[mcp_servers.zigar]
+[mcp_servers.zigars]
 command = "bunx"
 args = [
   "--bun",
@@ -391,8 +399,8 @@ startup_timeout_sec = 20.0
 Or use a direct binary:
 
 ```toml
-[mcp_servers.zigar]
-command = "/absolute/path/to/zigar"
+[mcp_servers.zigars]
+command = "/absolute/path/to/zigars"
 args = [
   "--transport", "stdio",
   "--workspace", "/absolute/path/to/your/zig/project",
@@ -404,7 +412,7 @@ startup_timeout_sec = 10.0
 
 For a global Codex configuration, omit `--workspace` only if your MCP client
 starts servers with the active project as the process working directory. If a
-tool returns a workspace sandbox error, call `zigar_workspace_info` to confirm
+tool returns a workspace sandbox error, call `zigars_workspace_info` to confirm
 which project the server is actually serving.
 
 For a single global Codex entry that serves the current project, keep the
@@ -412,8 +420,8 @@ workspace argument out of the global config and make sure Codex launches the MCP
 server from the active workspace:
 
 ```toml
-[mcp_servers.zigar]
-command = "/absolute/path/to/zigar"
+[mcp_servers.zigars]
+command = "/absolute/path/to/zigars"
 args = ["--transport", "stdio"]
 startup_timeout_sec = 10.0
 ```
@@ -424,7 +432,7 @@ project, but it should not be reused across unrelated workspaces.
 Useful project instruction:
 
 ```md
-When working on Zig code, prefer the zigar MCP tools for Zig version/env,
+When working on Zig code, prefer the zigars MCP tools for Zig version/env,
 build, check, test, formatting, ZLS diagnostics, symbols, references, docs,
 static analysis, and profiling before falling back to direct shell commands.
 Source writes require apply=true.
@@ -440,21 +448,21 @@ orientation aids, external-backend-backed tools report the backend executable
 and probe metadata, and curated fallback means bundled partial data. Real
 optional-backend support is claimed only from a release evidence artifact.
 
-- Discovery/meta: `zigar_capabilities`, `zigar_tool_index`,
-  `zigar_schema`, `zigar_backend_catalog`, `zigar_doctor`,
-  `zigar_workspace_info`, `zigar_metrics`, `zigar_http_status`,
+- Discovery/meta: `zigars_capabilities`, `zigars_tool_index`,
+  `zigars_schema`, `zigars_backend_catalog`, `zigars_doctor`,
+  `zigars_workspace_info`, `zigars_metrics`, `zigars_http_status`,
   `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
-- Agent workflows: `zigar_context_pack`, `zigar_next_action`,
-  `zigar_agent_guide`, `zigar_validate_patch`, `zigar_failure_fusion`,
-  `zigar_impact`, `zigar_project_profile`, `zigar_patch_guard`,
-  `zigar_validation_plan`, `zigar_validation_run`,
-  `zigar_patch_session_create`, `zigar_patch_session_validate`
+- Agent workflows: `zigars_context_pack`, `zigars_next_action`,
+  `zigars_agent_guide`, `zigars_validate_patch`, `zigars_failure_fusion`,
+  `zigars_impact`, `zigars_project_profile`, `zigars_patch_guard`,
+  `zigars_validation_plan`, `zigars_validation_run`,
+  `zigars_patch_session_create`, `zigars_patch_session_validate`
 - Core Zig: `zig_version`, `zig_env`, `zig_targets`, `zig_build`, `zig_test`,
   `zig_check`, `zig_compile_error_index`, `zig_explain_errors`,
   `zig_translate_c`
 - Formatting and transactional edits: `zig_format`, `zig_format_check`,
-  `zig_patch_preview`, `zigar_patch_session_preview`,
-  `zigar_patch_session_apply`, `zigar_patch_session_revert`, `zig_move_decl`,
+  `zig_patch_preview`, `zigars_patch_session_preview`,
+  `zigars_patch_session_apply`, `zigars_patch_session_revert`, `zig_move_decl`,
   `zig_extract_decl`, `zig_update_imports`, `zig_organize_imports`,
   `zig_code_action_batch`
 - ZLS intelligence: `zig_diagnostics`, `zig_diagnostics_all`,
@@ -501,10 +509,10 @@ optional-backend support is claimed only from a release evidence artifact.
   without a shell, with the workspace as cwd; `zig_flamegraph` and `zig_flamegraph_diff`
   render through zflame and diff-folded with artifact metadata.
   `zig_profile_run` can execute project code and create normal build/profile
-  artifacts. zigar does not own profiler capture semantics.
+  artifacts. zigars does not own profiler capture semantics.
 - Coverage/performance workflows: `zig_coverage_run`, `zig_coverage_map`,
   `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, and
-  `zig_coverage_budget_check` normalize LCOV or zigar JSON evidence and check
+  `zig_coverage_budget_check` normalize LCOV or zigars JSON evidence and check
   line-rate budgets; `zig_bench_discover`, `zig_bench_run`,
   `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`,
   `zig_perf_budget_check`, and `zig_profile_regression` discover benchmark
@@ -531,40 +539,40 @@ optional-backend support is claimed only from a release evidence artifact.
   planning, and embedded/flash workflow guidance. Command-running variants are
   preview-first, run without a shell, and keep external debugger, fuzzer,
   emulator, and flash semantics with the selected backend.
-- Artifact registry: `zigar_artifact_index`, `zigar_artifact_read`, and
-  `zigar_artifact_prune` expose workspace-local generated artifacts, bounded
+- Artifact registry: `zigars_artifact_index`, `zigars_artifact_read`, and
+  `zigars_artifact_prune` expose workspace-local generated artifacts, bounded
   hashes, provenance records, and apply-gated registry cleanup. Pruning removes
   stale registry entries only; it does not delete generated files.
-- Observability: `zigar_metrics_v2`, `zigar_backend_health_history`,
-  `zigar_zls_timeline`, and `zigar_tool_latency` report in-process counters,
+- Observability: `zigars_metrics_v2`, `zigars_backend_health_history`,
+  `zigars_zls_timeline`, and `zigars_tool_latency` report in-process counters,
   backend probe history, ZLS status transitions, artifact counts, command
   durations observed by shared helpers, and per-tool dispatch latency.
-- Trust and safety: `zigar_trust_report`, `zigar_command_provenance`,
-  `zigar_risk_audit`, `zigar_clean_tree_gate`, `zig_generated_file_trace`,
-  `zigar_edit_policy_check`, and `zigar_generated_route` summarize path policy,
+- Trust and safety: `zigars_trust_report`, `zigars_command_provenance`,
+  `zigars_risk_audit`, `zigars_clean_tree_gate`, `zig_generated_file_trace`,
+  `zigars_edit_policy_check`, and `zigars_generated_route` summarize path policy,
   generated/vendor edit routing, backend identities, dependency hashes, manifest
-  risk flags, and clean-tree evidence without broadening zigar's sandbox
+  risk flags, and clean-tree evidence without broadening zigars' sandbox
   boundary.
-- Result contracts and release drift: `zigar_result_shape` and
-  `zigar_output_budget_plan` describe compact, standard, and deep output modes
-  with explicit omissions; `zigar_docs_drift_check`,
-  `zigar_release_claim_check`, and `zigar_tool_index_check` provide fast
+- Result contracts and release drift: `zigars_result_shape` and
+  `zigars_output_budget_plan` describe compact, standard, and deep output modes
+  with explicit omissions; `zigars_docs_drift_check`,
+  `zigars_release_claim_check`, and `zigars_tool_index_check` provide fast
   public-doc and generated-index drift checks before running the full release
   gate.
-- Public adoption: `zigar_adoption_pack`, `zigar_client_config_generate`,
-  `zigar_smoke_plan`, and `zigar_conformance_report` package client setup
+- Public adoption: `zigars_adoption_pack`, `zigars_client_config_generate`,
+  `zigars_smoke_plan`, and `zigars_conformance_report` package client setup
   evidence, preview/apply-gated config artifacts, transport smoke scenarios,
   and conservative conformance claims without installing tools or claiming
   unobserved optional-backend support.
 
 Standard MCP `tools/list` publishes each registered argument schema with
-properties, required fields, defaults, enums, and path hints. `zigar_schema`
+properties, required fields, defaults, enums, and path hints. `zigars_schema`
 complements that with compact grouping, risk, planning, discovery keywords, and
 backend setup metadata.
 
 The server imports the pinned upstream `mcp.zig` package directly for protocol
 types, JSON-RPC helpers, content/resource/prompt types, and transport
-primitives. zigar's first-party MCP adapter owns request routing and releases
+primitives. zigars' first-party MCP adapter owns request routing and releases
 owned `tools/call`, `resources/read`, and `prompts/get` results after JSON-RPC
 responses are serialized, so no patched upstream MCP server is part of the
 build.
@@ -574,9 +582,9 @@ is built from `src/manifest/tool_catalog.json` plus the typed registry metadata 
 checked in CI.
 
 For agent workflows, see [docs/agent-workflows.md](docs/agent-workflows.md).
-The short version is: start with `zigar_context_pack`, ask
-`zigar_agent_guide` for the client profile, route uncertain work through
-`zigar_next_action`, and finish with `zigar_validate_patch`.
+The short version is: start with `zigars_context_pack`, ask
+`zigars_agent_guide` for the client profile, route uncertain work through
+`zigars_next_action`, and finish with `zigars_validate_patch`.
 
 ## Safety Model
 
@@ -593,10 +601,10 @@ The short version is: start with `zigar_context_pack`, ask
   agents can route changes to source inputs or regeneration commands.
 - Build, test, coverage, benchmark, profiling, and runtime diagnostic commands
   run with the workspace as cwd.
-- `zigar_schema` includes finer-grained tool risk metadata for source writes,
+- `zigars_schema` includes finer-grained tool risk metadata for source writes,
   artifact writes, LSP state mutation, backend execution, project-code
   execution, and user-command execution.
-- MCP `readOnlyHint` is a client UI hint; zigar risk fields are the source of
+- MCP `readOnlyHint` is a client UI hint; zigars risk fields are the source of
   truth for command execution and artifact-write behavior.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
@@ -642,17 +650,20 @@ More detail:
 The package downloads from:
 
 ```text
-https://github.com/oly-wan-kenobi/zigar/releases/download/v0.2.0/
+https://github.com/oly-wan-kenobi/zigars/releases/download/v0.2.0/
 ```
 
-Confirm the release has `zigar-checksums.txt` and the archive for your host:
+Confirm the release has `zigars-checksums.txt` and the archive for your host:
 
 ```text
-zigar-x86_64-linux-musl.tar.gz
-zigar-aarch64-linux-musl.tar.gz
-zigar-x86_64-macos.tar.gz
-zigar-aarch64-macos.tar.gz
-zigar-x86_64-windows.tar.gz
+zigars-x86_64-linux-gnu.tar.gz
+zigars-aarch64-linux-gnu.tar.gz
+zigars-x86_64-linux-musl.tar.gz
+zigars-aarch64-linux-musl.tar.gz
+zigars-x86_64-macos.tar.gz
+zigars-aarch64-macos.tar.gz
+zigars-x86_64-windows-gnu.tar.gz
+zigars-aarch64-windows-gnu.tar.gz
 ```
 
 If assets are missing, publish the GitHub release assets first or use a direct
@@ -661,22 +672,23 @@ source build.
 ### Unsupported platform
 
 `@zigars/mcp` currently supports Linux x64/arm64, macOS x64/arm64, and Windows
-x64. Other hosts fail with `Unsupported zigar host target: <platform>/<arch>`.
-Build from source or use a supported machine until a release asset exists for
-that target.
+x64/arm64. Linux hosts use the musl archives by default; choose GNU Linux
+archives manually if you need glibc ABI. Other hosts fail with
+`Unsupported zigars host target: <platform>/<arch>`. Build from source or use a
+supported machine until a release asset exists for that target.
 
 ### Checksum mismatch or missing checksum
 
 Delete the cached install and retry only after confirming the release asset and
-`zigar-checksums.txt` were produced from the same build:
+`zigars-checksums.txt` were produced from the same build:
 
 ```sh
-rm -rf ~/.cache/zigar-mcp/0.2.0
-rm -rf ~/Library/Caches/zigar-mcp/0.2.0
+rm -rf ~/.cache/zigars-mcp/0.2.0
+rm -rf ~/Library/Caches/zigars-mcp/0.2.0
 ```
 
-On Windows, remove `%LOCALAPPDATA%\zigar-mcp\0.2.0`. You can override the cache
-location with `ZIGAR_MCP_CACHE_DIR`.
+On Windows, remove `%LOCALAPPDATA%\zigars-mcp\0.2.0`. You can override the cache
+location with `ZIGARS_MCP_CACHE_DIR`.
 
 ### Bun or Node.js version issues
 
@@ -702,7 +714,7 @@ bunx --bun @zigars/mcp@0.2.0 \
   --zig-path /absolute/path/to/zig
 ```
 
-Inside an MCP client, call `zigar_doctor {"probe_backends":false}`. Optional
+Inside an MCP client, call `zigars_doctor {"probe_backends":false}`. Optional
 backends such as ZLS, ZLint, zwanzig, zflame, and diff-folded can be configured
 with their matching `--*-path` arguments.
 
@@ -711,7 +723,7 @@ with their matching `--*-path` arguments.
 Run:
 
 ```text
-zigar_workspace_info
+zigars_workspace_info
 ```
 
 If the reported workspace is not the project you are editing, restart/configure
@@ -722,13 +734,13 @@ the MCP server with the correct `--workspace` or pass workspace-relative paths.
 Restart the MCP client so it refreshes `tools/list`, then search for:
 
 ```text
-zigar formatter
-zigar format
+zigars formatter
+zigars format
 zig_format
 zig_format_check
 ```
 
-`zigar_capabilities` and `zigar_tool_index` include these discovery keywords.
+`zigars_capabilities` and `zigars_tool_index` include these discovery keywords.
 
 ### ZLS tools are unavailable
 
@@ -747,12 +759,12 @@ advertised capabilities omitted the requested LSP method.
 For install paths, wrapper-script configuration, and ZLint, zwanzig, zflame,
 and diff-folded checks, see [docs/backends.md](docs/backends.md).
 
-Run `zigar_doctor` for a compact health report that includes workspace,
+Run `zigars_doctor` for a compact health report that includes workspace,
 dependency, transport, timeout, ZLS status, and optional backend paths. Pass
 `probe_backends=true` to execute short backend probes for Zig, ZLS, ZLint,
 zwanzig, zflame, and diff-folded. Probe results are cached in the server
-process and are also visible through `zigar_workspace_info` and
-`zigar_metrics`.
+process and are also visible through `zigars_workspace_info` and
+`zigars_metrics`.
 
 ## Development
 

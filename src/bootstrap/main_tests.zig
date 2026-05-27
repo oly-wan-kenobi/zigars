@@ -1,5 +1,5 @@
 const std = @import("std");
-const version = @import("zigar").manifest.version.string;
+const version = @import("zigars").manifest.version.string;
 
 test "executable embeds package version" {
     try std.testing.expect(version.len > 0);

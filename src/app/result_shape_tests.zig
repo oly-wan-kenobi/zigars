@@ -16,7 +16,7 @@ test "result shape contract exposes stable fields and omissions" {
 
     const value = try result_shape.contractValue(allocator, .compact);
     const obj = value.object;
-    try std.testing.expectEqualStrings("zigar_result_shape", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_result_shape", obj.get("kind").?.string);
     try std.testing.expectEqualStrings("compact", obj.get("selected_mode").?.string);
     try std.testing.expectEqual(@as(usize, 3), obj.get("supported_modes").?.array.items.len);
     const selected = obj.get("selected_mode_metadata").?.object;

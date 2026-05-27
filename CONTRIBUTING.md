@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for improving zigar.
+Thanks for improving zigars.
 
 ## Scope
 
-zigar is a deterministic Zig development MCP server. Keep changes focused on
+zigars is a deterministic Zig development MCP server. Keep changes focused on
 tools that inspect, build, test, format, analyze, document, or profile Zig
 projects. Do not add AI code-generation behavior to the server itself.
 
@@ -46,7 +46,7 @@ Optional runtime backends:
 - Keep the project pure Zig. Do not add Python helper scripts under source,
   tools, tests, scripts, examples, docs, or CI paths.
 - Keep `src/main.zig` as a small startup/lifecycle entrypoint and keep
-  `tools/zigar_tools.zig` as a dispatcher; move large helper logic into focused
+  `tools/zigars_tools.zig` as a dispatcher; move large helper logic into focused
   Zig modules.
 - Keep MCP protocol work in `src/adapters/mcp/**` and runtime composition in
   `src/bootstrap/**`. Tool behavior belongs under focused

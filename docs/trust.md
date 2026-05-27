@@ -1,13 +1,13 @@
 # Public Trust Checklist
 
-This page is the short answer to "why should a developer trust zigar in a real
+This page is the short answer to "why should a developer trust zigars in a real
 Zig project?" It lists the release-facing quality guarantees, the checks that
 enforce them, and the product boundaries that should stay visible.
 
 ## Runtime Correctness
 
 1. MCP result ownership is explicit. `tools/call`, `resources/read`, and
-   `prompts/get` keep zigar-owned results alive through JSON-RPC serialization
+   `prompts/get` keep zigars-owned results alive through JSON-RPC serialization
    and release those allocations immediately after the response is sent.
 2. Command-backed tools execute argv vectors directly, without a shell. Command
    output is bounded, truncation is reported in structured fields, and command
@@ -22,7 +22,7 @@ enforce them, and the product boundaries that should stay visible.
 4. The configured workspace is the primary safety boundary. User paths are
    resolved under `--workspace`, symlink escapes are rejected, and writes use the
    workspace file helper.
-5. zigar is not an OS sandbox. `zig build`, `zig test`, profilers, build
+5. zigars is not an OS sandbox. `zig build`, `zig test`, profilers, build
    scripts, and optional backends run with the user's local privileges.
 6. HTTP transport is loopback-only and unauthenticated by design. stdio remains
    the default MCP transport for agent clients.
@@ -31,8 +31,8 @@ enforce them, and the product boundaries that should stay visible.
 
 7. Tool names, schemas, grouping, discovery keywords, risk flags, planning
    metadata, and static-analysis tiers are generated from the typed manifest.
-8. `tools/list`, `zigar_schema`, `zigar_tool_index`, and
-   `zigar://tools/schema` expose the public contract. Compatibility-sensitive
+8. `tools/list`, `zigars_schema`, `zigars_tool_index`, and
+   `zigars://tools/schema` expose the public contract. Compatibility-sensitive
    changes should be called out in the changelog before a tag.
 9. Release notes must include a clean-tree validation evidence block before a
    public tag. This prevents maturity docs from claiming readiness without the
@@ -40,22 +40,22 @@ enforce them, and the product boundaries that should stay visible.
 
 ## Trust Tools
 
-`zigar_trust_report` is the machine-readable trust summary for the current
+`zigars_trust_report` is the machine-readable trust summary for the current
 server process. It reports the configured workspace/cache roots, path policy,
 backend identities, dependency hash references from `build.zig.zon`, manifest
 risk audit, and optional clean-tree evidence. By default it does not run git;
 pass `include_clean_tree=true` to include the same clean-tree gate used by
-`zigar_clean_tree_gate`.
+`zigars_clean_tree_gate`.
 
-`zigar_command_provenance` reports how registered tools are planned: exact Zig
+`zigars_command_provenance` reports how registered tools are planned: exact Zig
 argv, dynamic command, ZLS request, apply-gated mutation, workspace artifact,
-pure analysis, or explicitly unsupported. `zigar_risk_audit` summarizes source
+pure analysis, or explicitly unsupported. `zigars_risk_audit` summarizes source
 writes, artifact writes, apply gates, backend execution, project-code
 execution, and arbitrary user-command execution from the typed manifest.
-`zigar_clean_tree_gate` runs `git status --porcelain` with a bounded timeout and
+`zigars_clean_tree_gate` runs `git status --porcelain` with a bounded timeout and
 classifies changed paths, including generated or vendored paths.
-`zig_generated_file_trace`, `zigar_edit_policy_check`, and
-`zigar_generated_route` expose the same generated/vendor policy for individual
+`zig_generated_file_trace`, `zigars_edit_policy_check`, and
+`zigars_generated_route` expose the same generated/vendor policy for individual
 edit decisions and route derived paths back to likely source inputs or
 regeneration commands.
 
@@ -104,8 +104,8 @@ error-contract scans, least-privilege GitHub Actions permissions, security and
 maturity docs, artifact hygiene, and line-budget headroom.
 
 `release-asset-smoke` builds ReleaseSafe archives for all published targets,
-checks `zigar-checksums.txt`, verifies archive shape, extracts the native
-archive, and runs `zigar --version`.
+checks `zigars-checksums.txt`, verifies archive shape, extracts the native
+archive, and runs `zigars --version`.
 
 ## External Validation
 
@@ -125,7 +125,7 @@ Some quality signals cannot be forced by the local repository alone:
   matrix and the `ZLS Conformance` report for real ZLS behavior. A run with
   `source_tree_clean: false` is useful for debugging but is not citable release
   evidence.
-- Agent-client behavior varies by client. zigar documents Codex, Claude, Gemini,
+- Agent-client behavior varies by client. zigars documents Codex, Claude, Gemini,
   Hermes, and generic stdio setup, but clients still own launch environment and
   workspace selection.
 

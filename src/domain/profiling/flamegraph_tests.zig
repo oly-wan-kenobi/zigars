@@ -41,12 +41,12 @@ test "zflame argv covers every advertised input format without guessing" {
 test "diff-folded argv writes explicit output file" {
     var argv = try flamegraph.buildDiffFoldedArgv(std.testing.allocator, .{
         .executable = "diff-folded",
-        .output = "/workspace/.zigar-cache/profile/diff-0.folded",
+        .output = "/workspace/.zigars-cache/profile/diff-0.folded",
         .before = "/workspace/before.folded",
         .after = "/workspace/after.folded",
     });
     defer argv.deinit(std.testing.allocator);
-    const expected = [_][]const u8{ "diff-folded", "--output=/workspace/.zigar-cache/profile/diff-0.folded", "/workspace/before.folded", "/workspace/after.folded" };
+    const expected = [_][]const u8{ "diff-folded", "--output=/workspace/.zigars-cache/profile/diff-0.folded", "/workspace/before.folded", "/workspace/after.folded" };
     try std.testing.expectEqual(expected.len, argv.argv.items.len);
     for (expected, argv.argv.items) |expected_arg, actual_arg| try std.testing.expectEqualStrings(expected_arg, actual_arg);
 }

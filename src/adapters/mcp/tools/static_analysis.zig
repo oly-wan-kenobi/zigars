@@ -543,7 +543,7 @@ pub fn zigLintBaseline(
     const scratch = arena.allocator();
     const findings = lint_intelligence.normalizeFindingsText(scratch, text, .zlint) catch return mcp_errors.missingArgument(allocator, "zig_lint_baseline", "findings", "valid JSON findings");
     const baseline = lint_intelligence.normalizeFindingsText(scratch, argString(args, "baseline") orelse "[]", .zlint) catch std.json.Value{ .array = std.json.Array.init(scratch) };
-    const output = argString(args, "output") orelse ".zigar-cache/lint-baseline.json";
+    const output = argString(args, "output") orelse ".zigars-cache/lint-baseline.json";
     const value = lint_intelligence.lintBaseline(scratch, context, findings.array, baseline.array, argBool(args, "apply", false), output) catch |err| return lintToolError(allocator, context, "zig_lint_baseline", output, "write_lint_baseline", "workspace_store", err);
     return structuredLintValue(allocator, scratch, "zig_lint_baseline", value);
 }
@@ -624,7 +624,7 @@ pub fn zigAnalysisGraphs(
         "mode",
         backend_contracts.supportedZwanzigGraphModesText(),
         mode_raw,
-        "Choose one of the graph modes published in tools/list; raw zwanzig graph flags are not accepted as public zigar API.",
+        "Choose one of the graph modes published in tools/list; raw zwanzig graph flags are not accepted as public zigars API.",
     );
     const path = argString(args, "path") orelse return mcp_errors.missingArgument(allocator, "zig_analysis_graphs", "path", "workspace-relative Zig source path");
     const output = argString(args, "output") orelse return mcp_errors.missingArgument(allocator, "zig_analysis_graphs", "output", "workspace-relative graph output directory");
@@ -779,7 +779,7 @@ pub fn zigCodeIndexExport(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return exportIndexResult(allocator, context, args, "zig_code_index_export", "zigar.code_index", ".zigar-cache/code-index.json");
+    return exportIndexResult(allocator, context, args, "zig_code_index_export", "zigars.code_index", ".zigars-cache/code-index.json");
 }
 
 /// Handles MCP `zig_scip_export` requests by delegating to app logic and shaping owned results/errors.
@@ -788,7 +788,7 @@ pub fn zigScipExport(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return exportIndexResult(allocator, context, args, "zig_scip_export", "scip-like-json", ".zigar-cache/code-index.scip.json");
+    return exportIndexResult(allocator, context, args, "zig_scip_export", "scip-like-json", ".zigars-cache/code-index.scip.json");
 }
 
 /// Returns the MCP tool result for semantic index.
@@ -1226,7 +1226,7 @@ fn lintToolError(
             "path",
             "workspace-relative path inside the configured workspace",
             path,
-            "Retry with a workspace-relative path that can be resolved by the active zigar workspace.",
+            "Retry with a workspace-relative path that can be resolved by the active zigars workspace.",
         ),
         else => mcp_errors.fromError(allocator, .{
             .tool = tool_name,
@@ -1542,7 +1542,7 @@ const lint_fusion_coverage = "Semantic index and optional normalized linter evid
 /// Evidence coverage statement for caller-provided lint contract metadata.
 const lint_evidence_coverage = "Caller-supplied normalized lint JSON or optional lint backend output, depending on the tool and arguments.";
 /// Evidence coverage statement for ZLint output contract metadata.
-const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigar lint findings.";
+const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigars lint findings.";
 /// Evidence coverage statement for ZLint fix contract metadata.
 const zlint_fix_coverage = "Optional ZLint --fix or --fix-dangerously over a workspace-local path, previewed unless apply=true.";
 /// Evidence coverage statement for zwanzig output contract metadata.
@@ -1567,18 +1567,18 @@ const lint_intelligence_limits = &.{
 };
 /// Shared ZLint output limitations surfaced in structured result metadata.
 const zlint_limits = &.{
-    "Requires an optional configured ZLint executable; zigar does not bundle or require the backend.",
+    "Requires an optional configured ZLint executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and output shape depend on the installed ZLint version and configuration.",
 };
 /// Shared ZLint fix limitations surfaced in structured result metadata.
 const zlint_fix_limits = &.{
-    "Requires an optional configured ZLint executable with --fix support; zigar does not implement the edits itself.",
+    "Requires an optional configured ZLint executable with --fix support; zigars does not implement the edits itself.",
     "Runs only when apply=true and the selected path resolves inside the workspace.",
     "dangerous=true delegates to ZLint --fix-dangerously and should be followed by git diff review and tests.",
 };
 /// Shared zwanzig output limitations surfaced in structured result metadata.
 const zwanzig_limits = &.{
-    "Requires an optional configured zwanzig executable; zigar does not bundle or require the backend.",
+    "Requires an optional configured zwanzig executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and graph support depend on the installed zwanzig version and configuration.",
 };
 
@@ -1617,7 +1617,7 @@ const contracts = [_]Contract{
     .{ .tool = "zig_test_select", .analysis_kind = "heuristic_test_selection", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Caller-supplied changed files/symbols and heuristic workspace test map.", .limitations = &.{"Command recommendations are conservative and may over-select."}, .verify_with = &.{"zig build test"} },
     .{ .tool = "zig_public_api_diff", .analysis_kind = "heuristic_public_api_diff", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Caller-supplied before/after source text or git baseline plus workspace file.", .limitations = &.{"Public declaration scan is textual and does not prove ABI compatibility."}, .verify_with = &.{ "zig build test", "code review" } },
     .{ .tool = "zig_semantic_index_build", .analysis_kind = "parser_backed_semantic_workspace_index", .capability_tier = "parser_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS workspace symbols", "zig build test" } },
-    .{ .tool = "zig_semantic_index_status", .analysis_kind = "semantic_index_cache_status", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "In-memory semantic index cache metadata for the current zigar process.", .limitations = &.{"Status reports cache state only; it does not refresh or validate source semantics."}, .verify_with = &.{"zig_semantic_index_refresh"} },
+    .{ .tool = "zig_semantic_index_status", .analysis_kind = "semantic_index_cache_status", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "In-memory semantic index cache metadata for the current zigars process.", .limitations = &.{"Status reports cache state only; it does not refresh or validate source semantics."}, .verify_with = &.{"zig_semantic_index_refresh"} },
     .{ .tool = "zig_semantic_index_refresh", .analysis_kind = "parser_backed_semantic_workspace_index", .capability_tier = "parser_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS workspace symbols", "zig build test" } },
     .{ .tool = "zig_semantic_query", .analysis_kind = "parser_backed_semantic_index_query", .capability_tier = "parser_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = semantic_index_coverage, .limitations = semantic_index_limits, .verify_with = &.{ "zig ast-check", "ZLS definition/references", "workspace search" } },
     .{ .tool = "zig_semantic_refs", .analysis_kind = "zlint_confirmed_reference_scan", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = semantic_refs_coverage, .limitations = semantic_refs_limits, .verify_with = &.{ "ZLS references", "zig build test" } },
@@ -2231,7 +2231,7 @@ fn testStaticAdapterContext(
     cache: *static_cache_fake.FakeStaticCache,
 ) app_context.StaticAnalysisContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "zig-test", .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
         .timeouts = .{ .command_ms = 42 },
         .command_runner = commands.port(),

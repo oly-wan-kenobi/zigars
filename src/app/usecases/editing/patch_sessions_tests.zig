@@ -15,7 +15,7 @@ const EditingPorts = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: EditingPorts) app_context.EditingContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
             .workspace_store = self.workspace.port(),
             .clock_and_ids = self.clock.port(),
         };
@@ -31,7 +31,7 @@ const ValidationPorts = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: ValidationPorts) app_context.ValidationContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
             .tool_paths = .{ .zig = "zig" },
             .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
             .command_runner = self.command.port(),
@@ -151,7 +151,7 @@ test "patch session apply records rollback history and revert restores own chang
     const expected = [_]patch_sessions.ExpectedPreimage{.{ .file = "src/main.zig", .identity = before_identity }};
     const expected_history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-apply\",\"goal\":\"test rollback\",\"recorded_unix_ms\":1700000000010,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/session-apply/0-src_main.zig.preimage\"}}]}}\n",
+        "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-apply\",\"goal\":\"test rollback\",\"recorded_unix_ms\":1700000000010,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/session-apply/0-src_main.zig.preimage\"}}]}}\n",
         .{ before.len, before_identity.sha256.?, after.len, after_identity.sha256.? },
     );
     defer std.testing.allocator.free(expected_history);
@@ -168,7 +168,7 @@ test "patch session apply records rollback history and revert restores own chang
         .provenance = "patch_session_snapshot",
     }, before);
     try workspace.expectWrite(.{
-        .path = ".zigar-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
         .bytes = before,
         .provenance = "patch_session_preimage",
     }, .{ .bytes_written = before.len });
@@ -201,7 +201,7 @@ test "patch session apply records rollback history and revert restores own chang
     try std.testing.expect(apply_result.applied);
     try std.testing.expectEqual(@as(usize, 3), workspace.writeCalls().len);
     const history_line = workspace.writeCalls()[2].bytes;
-    try std.testing.expect(std.mem.indexOf(u8, history_line, "\"kind\":\"zigar_patch_session_record\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, history_line, "\"kind\":\"zigars_patch_session_record\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, history_line, "\"recorded_unix_ms\":1700000000010") != null);
 
     try workspace.expectRead(.{
@@ -210,12 +210,12 @@ test "patch session apply records rollback history and revert restores own chang
         .provenance = "patch_session_snapshot",
     }, after);
     try workspace.expectRead(.{
-        .path = ".zigar-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
         .max_bytes = patch_sessions.max_session_file_bytes,
         .provenance = "patch_session_revert_preimage",
     }, before);
     try workspace.expectRead(.{
-        .path = ".zigar-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/session-apply/0-src_main.zig.preimage",
         .max_bytes = patch_sessions.max_session_file_bytes,
         .provenance = "patch_session_revert_preimage",
     }, before);
@@ -260,7 +260,7 @@ test "patch session apply records unchanged and created file identity shapes" {
     };
     const expected_history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "prior\n{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-shapes\",\"goal\":null,\"recorded_unix_ms\":1700000000030,\"files\":[{{\"file\":\"src/same.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/session-shapes/1-src_new.zig.preimage\"}}]}}\n",
+        "prior\n{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-shapes\",\"goal\":null,\"recorded_unix_ms\":1700000000030,\"files\":[{{\"file\":\"src/same.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/session-shapes/1-src_new.zig.preimage\"}}]}}\n",
         .{ same.len, same_identity.sha256.?, same.len, same_identity.sha256.?, created.len, created_identity.sha256.? },
     );
     defer std.testing.allocator.free(expected_history);
@@ -287,7 +287,7 @@ test "patch session apply records unchanged and created file identity shapes" {
         .provenance = "patch_session_snapshot",
     }, error.FileNotFound);
     try workspace.expectWrite(.{
-        .path = ".zigar-cache/patch-sessions/session-shapes/1-src_new.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/session-shapes/1-src_new.zig.preimage",
         .bytes = "",
         .provenance = "patch_session_preimage",
     }, .{ .bytes_written = 0 });
@@ -351,7 +351,7 @@ test "patch session apply propagates history read failures after staged writes" 
         .provenance = "patch_session_snapshot",
     }, before);
     try workspace.expectWrite(.{
-        .path = ".zigar-cache/patch-sessions/session-history-error/0-src_main.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/session-history-error/0-src_main.zig.preimage",
         .bytes = before,
         .provenance = "patch_session_preimage",
     }, .{ .bytes_written = before.len });
@@ -389,7 +389,7 @@ test "patch session revert deletes files created by the session" {
     defer created_identity.deinit(std.testing.allocator);
     const history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-created\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/session-created/0-src_new.zig.preimage\"}}]}}\n",
+        "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"session-created\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/session-created/0-src_new.zig.preimage\"}}]}}\n",
         .{ created.len, created_identity.sha256.? },
     );
     defer std.testing.allocator.free(history);
@@ -429,7 +429,7 @@ test "patch session revert reads array history and reports missing jsonl session
     defer created_identity.deinit(std.testing.allocator);
     const array_history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "[{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"other\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[]}},{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"array-session\",\"goal\":null,\"recorded_unix_ms\":2,\"files\":[{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/array-session/0-src_new.zig.preimage\"}}]}}]",
+        "[{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"other\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[]}},{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"array-session\",\"goal\":null,\"recorded_unix_ms\":2,\"files\":[{{\"file\":\"src/new.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/array-session/0-src_new.zig.preimage\"}}]}}]",
         .{ created.len, created_identity.sha256.? },
     );
     defer std.testing.allocator.free(array_history);
@@ -450,7 +450,7 @@ test "patch session revert reads array history and reports missing jsonl session
 
     var missing = try patch_sessions.revert(std.testing.allocator, (EditingPorts{ .workspace = &workspace, .clock = &clock }).context(), .{
         .session_id = "missing-session",
-        .history = "{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"other\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[]}\n",
+        .history = "{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"other\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[]}\n",
     });
     defer missing.deinit(std.testing.allocator);
     try std.testing.expectEqual(patch_sessions.RevertFailure.not_found, missing.err);
@@ -469,7 +469,7 @@ test "patch session revert cleans parsed records on malformed history files" {
     defer updated_identity.deinit(std.testing.allocator);
     const bad_history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"bad-history\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/ok.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/bad.zig\",\"preimage_identity\":null,\"updated_identity\":{{\"exists\":true,\"bytes\":0,\"sha256\":null}},\"preimage_content_path\":null}}]}}\n",
+        "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"bad-history\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/ok.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/bad.zig\",\"preimage_identity\":null,\"updated_identity\":{{\"exists\":true,\"bytes\":0,\"sha256\":null}},\"preimage_content_path\":null}}]}}\n",
         .{ updated_identity.bytes, updated_identity.sha256.? },
     );
     defer std.testing.allocator.free(bad_history);
@@ -498,7 +498,7 @@ test "patch session revert releases previews when later preimage reads fail" {
     defer after_identity.deinit(std.testing.allocator);
     const history = try std.fmt.allocPrint(
         std.testing.allocator,
-        "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"revert-read-error\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/a.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/b.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/revert-read-error/1-src_b.zig.preimage\"}}]}}\n",
+        "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"revert-read-error\",\"goal\":null,\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/a.zig\",\"preimage_identity\":{{\"exists\":false,\"bytes\":0,\"sha256\":null}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":null}},{{\"file\":\"src/b.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/revert-read-error/1-src_b.zig.preimage\"}}]}}\n",
         .{ after.len, after_identity.sha256.?, before.len, before_identity.sha256.?, after.len, after_identity.sha256.? },
     );
     defer std.testing.allocator.free(history);
@@ -514,7 +514,7 @@ test "patch session revert releases previews when later preimage reads fail" {
         .provenance = "patch_session_snapshot",
     }, after);
     try workspace.expectReadError(.{
-        .path = ".zigar-cache/patch-sessions/revert-read-error/1-src_b.zig.preimage",
+        .path = ".zigars-cache/patch-sessions/revert-read-error/1-src_b.zig.preimage",
         .max_bytes = patch_sessions.max_session_file_bytes,
         .provenance = "patch_session_revert_preimage",
     }, error.AccessDenied);
@@ -539,7 +539,7 @@ test "patch session validate composes typed validation result" {
     try workspace.expectReadError(.{
         .path = validation.history_path_default,
         .max_bytes = validation.history_max_bytes,
-        .provenance = "zigar_validation_run history preimage",
+        .provenance = "zigars_validation_run history preimage",
     }, error.FileNotFound);
 
     var outcome = try patch_sessions.validate(std.testing.allocator, (ValidationPorts{ .command = &command, .workspace = &workspace, .clock = &clock }).context(), .{
@@ -611,7 +611,7 @@ test "patch session create and replacement paths tolerate allocation failures" {
             const expected = [_]patch_sessions.ExpectedPreimage{.{ .file = "src/main.zig", .identity = before_identity }};
             const expected_history = try std.fmt.allocPrint(
                 std.testing.allocator,
-                "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"oom-replace\",\"goal\":\"replace\",\"recorded_unix_ms\":1700000000050,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/oom-replace/0-src_main.zig.preimage\"}}]}}\n",
+                "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"oom-replace\",\"goal\":\"replace\",\"recorded_unix_ms\":1700000000050,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/oom-replace/0-src_main.zig.preimage\"}}]}}\n",
                 .{ before.len, before_identity.sha256.?, after.len, after_identity.sha256.? },
             );
             defer std.testing.allocator.free(expected_history);
@@ -628,7 +628,7 @@ test "patch session create and replacement paths tolerate allocation failures" {
                 .provenance = "patch_session_snapshot",
             }, before);
             try workspace.expectWrite(.{
-                .path = ".zigar-cache/patch-sessions/oom-replace/0-src_main.zig.preimage",
+                .path = ".zigars-cache/patch-sessions/oom-replace/0-src_main.zig.preimage",
                 .bytes = before,
                 .provenance = "patch_session_preimage",
             }, .{ .bytes_written = before.len });
@@ -683,7 +683,7 @@ test "patch session revert tolerates allocation failures" {
         defer after_identity.deinit(std.testing.allocator);
         const history = try std.fmt.allocPrint(
             std.testing.allocator,
-            "{{\"kind\":\"zigar_patch_session_record\",\"schema_version\":1,\"session_id\":\"oom-revert\",\"goal\":\"revert\",\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigar-cache/patch-sessions/oom-revert/0-src_main.zig.preimage\"}}]}}\n",
+            "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":1,\"session_id\":\"oom-revert\",\"goal\":\"revert\",\"recorded_unix_ms\":1,\"files\":[{{\"file\":\"src/main.zig\",\"preimage_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"updated_identity\":{{\"exists\":true,\"bytes\":{d},\"sha256\":\"{s}\"}},\"preimage_content_path\":\".zigars-cache/patch-sessions/oom-revert/0-src_main.zig.preimage\"}}]}}\n",
             .{ before.len, before_identity.sha256.?, after.len, after_identity.sha256.? },
         );
         defer std.testing.allocator.free(history);
@@ -694,7 +694,7 @@ test "patch session revert tolerates allocation failures" {
             .provenance = "patch_session_snapshot",
         }, after);
         try workspace.expectRead(.{
-            .path = ".zigar-cache/patch-sessions/oom-revert/0-src_main.zig.preimage",
+            .path = ".zigars-cache/patch-sessions/oom-revert/0-src_main.zig.preimage",
             .max_bytes = patch_sessions.max_session_file_bytes,
             .provenance = "patch_session_revert_preimage",
         }, before);

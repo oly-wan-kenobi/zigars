@@ -14,7 +14,7 @@ Scenario harnesses:
 
 Generated fixture workspace:
 
-- `tools/integration/stdio/stdio_fixtures.zig` creates a temporary `.zig-cache/zigar-fixtures-*`
+- `tools/integration/stdio/stdio_fixtures.zig` creates a temporary `.zig-cache/zigars-fixtures-*`
   workspace containing Zig source files, malformed source, folded-stack inputs,
   and fake backend launchers.
 
@@ -40,6 +40,6 @@ Public behavior covered:
 Transition note:
 
 The stdio executable helpers remain under `tools/integration/stdio/` because
-they need to spawn the built `zigar` binary, install fake backend launchers that
-delegate to `zigar-tools`, and share JSON/path assertions with the HTTP smoke
+they need to spawn the built `zigars` binary, install fake backend launchers that
+delegate to `zigars-tools`, and share JSON/path assertions with the HTTP smoke
 helpers.

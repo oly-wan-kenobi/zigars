@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars FFI ABI guardian"
+  short_description: "Review Zig ABI and C interop boundaries."
+  default_prompt: "Use $zigars-ffi-abi-guardian to review this Zig FFI or ABI boundary with layout evidence."

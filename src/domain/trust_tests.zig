@@ -15,7 +15,7 @@ test "clean tree gate parses porcelain status with generated path evidence" {
 
     const value = try trust.cleanTreeGateFromStatus(arena.allocator(), "/tmp/work", " M src/main.zig\n?? zig-out/bin/app\n", true, "fixture");
     const obj = value.object;
-    try std.testing.expectEqualStrings("zigar_clean_tree_gate", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_clean_tree_gate", obj.get("kind").?.string);
     try std.testing.expect(!obj.get("clean").?.bool);
     try std.testing.expectEqual(@as(i64, 2), obj.get("changed_count").?.integer);
     try std.testing.expectEqual(@as(i64, 1), obj.get("untracked_count").?.integer);

@@ -6,9 +6,9 @@
 report in 2025–2026 on ziggit.dev, the ziglang/zig issue tracker, Andrew
 Kelley and Loris Cro's blogs, the Zig 0.16 release cycle, and popular Zig
 project migration logs.
-**Goal:** Identify recurring manual workflows that an AI agent driving zigar
+**Goal:** Identify recurring manual workflows that an AI agent driving zigars
 could compress into a single tool call, or net-new capabilities that no
-existing zigar tool provides.
+existing zigars tool provides.
 
 This is the complement to [01-internal-gaps.md](01-internal-gaps.md):
 proposal 01 asks "what infra is wired but unexposed?"; this proposal asks
@@ -31,13 +31,13 @@ For each candidate friction area I:
    thread, blog post, official release note) showing the friction exists and
    is not idiosyncratic.
 2. Reduced the manual workflow to its bare steps.
-3. Sketched a zigar tool that compresses or eliminates those steps,
-   constrained to zigar's deterministic, no-AI-generation contract from
+3. Sketched a zigars tool that compresses or eliminates those steps,
+   constrained to zigars' deterministic, no-AI-generation contract from
    [../../AGENTS.md](../../AGENTS.md).
 4. Assigned a verdict — clear-win, needs-validation, or probably-not — and
-   noted any backend integration zigar does not already have.
+   noted any backend integration zigars does not already have.
 
-Backends already wired in zigar (per [../backends.md](../backends.md)):
+Backends already wired in zigars (per [../backends.md](../backends.md)):
 `zig` itself, ZLS, ZLint, zwanzig, zflame, diff-folded, Samply, Tracy,
 LLDB, heaptrack, Valgrind, AFL++, LLVM binary tools, QEMU, flash tools,
 and `std.zig.Ast` parser-backed analysis. Anything beyond this counts as a
@@ -70,9 +70,9 @@ even when nothing changed locally
   `fetched_hash`, `match`, `replacement_zon_fragment`,
   `preimage_identity`), `unified_diff`, list of unresolved deps, exact
   `zig fetch` argv used.
-- Backend: `zig fetch --save=false <url>` driven by zigar's existing
+- Backend: `zig fetch --save=false <url>` driven by zigars' existing
   command runner; preview/apply gate inherits the `zig_format` /
-  `zigar_patch_session_apply` pattern.
+  `zigars_patch_session_apply` pattern.
 
 **Why net-new.** Existing `zig_dependency_update_plan` is plan-only and
 `zig_dependency_fetch_check` only verifies the current manifest — neither
@@ -114,7 +114,7 @@ sites need touching.
   (textual, from a curated 0.15→0.16 mapping table), `mapping_confidence`
   (`exact` | `likely` | `manual_review`), and a per-file rollup of
   unmigrated call counts. Companion `_json` variant for agents.
-- Backend: zigar's existing `std.zig.Ast` walker (already used by
+- Backend: zigars' existing `std.zig.Ast` walker (already used by
   `zig_ast_imports` / `zig_ast_decl_summary`) plus a static mapping table
   shipped in `src/manifest/definitions/`.
 
@@ -200,14 +200,14 @@ or runtime crashes that are very hard to bisect.
   backing type", "alignment differs across libc choice"), `confidence`,
   `limitations`, `verify_with` (e.g. "build a tiny `@offsetOf`/`@sizeOf`
   probe with `-target <triple>`").
-- Backend: zigar's AST walker for Zig-side declarations, optional
+- Backend: zigars' AST walker for Zig-side declarations, optional
   command-backed `zig build-obj` step that compiles a probe like
   `comptime { assert(@offsetOf(T, "x") == N); }` for verification.
   Existing `zig_translate_c` provides the C side. No new backend
   dependency.
 
 **Why net-new.** `zig_public_api` / `zig_api_check` snapshot
-public-declaration *names* but not *layout*. zigar has nothing that
+public-declaration *names* but not *layout*. zigars has nothing that
 inspects struct geometry today.
 
 **Verdict:** clear-win. **Effort:** L (correct layout computation across
@@ -246,7 +246,7 @@ folklore.
   run on any glibc≥2.17 host; switch to `-fno-pie` if linking with
   ancient toolchains"), `unsupported_combinations[]`, `cross_check`
   (suggested `zig_qemu_test` or `zig_cross_smoke` call).
-- Backend: zigar's existing `zig env` and `zig targets --json` outputs
+- Backend: zigars' existing `zig env` and `zig targets --json` outputs
   plus a curated mapping. No new backend.
 
 **Why net-new.** `zig_targets` lists every triple Zig knows; this is
@@ -283,7 +283,7 @@ describe the same manual triage workflow over and over.
   Windows; rerun under Linux/macOS for full symbolic context"),
   `next_actions` (e.g. "inspect `Allocator.alloc` callers at <file:line>"
   with cross-checks via `zig_valgrind_memcheck` or `zig_heaptrack_run`).
-- Backend: log parser + zigar's existing `llvm-symbolizer` integration
+- Backend: log parser + zigars' existing `llvm-symbolizer` integration
   for return-trace resolution. No new backend.
 
 **Why net-new.** `zig_heaptrack_run` and `zig_valgrind_memcheck` invoke
@@ -315,7 +315,7 @@ grep for the matching name, then re-run with that exact filter.
   `is_unnamed` (true for `test_NN` blocks), `line`, `recommended_argv`
   (the exact `--test-filter` value the test runner expects), and a
   consolidated `zig_test_argv` ready for the existing `zig_test` tool.
-- Backend: zigar's `std.zig.Ast` walker (already used by `zig_ast_tests`)
+- Backend: zigars' `std.zig.Ast` walker (already used by `zig_ast_tests`)
   with name-resolution rules matching `test_runner.zig`'s naming policy.
   No new backend.
 
@@ -392,12 +392,12 @@ form, then `@cInclude` that. This is mechanical but tedious.
   optional `failing_identifiers[]`, `apply: boolean`.
 - Outputs: `wrappers[]` with `original_identifier`, `wrapper_name`,
   `wrapper_kind` (`inline_fn`, `static_const`, `type_alias`),
-  `generated_header_path` (under `.zigar-cache/cimport-wrappers/`),
+  `generated_header_path` (under `.zigars-cache/cimport-wrappers/`),
   `generated_header_content`, `recommended_zig_usage`,
   `preimage_identity`, `limitations`.
 - Backend: classify the macro syntactically (the failing identifiers and
   the original C tokens are known), then template a wrapper. Uses
-  zigar's existing artifact-registry path; no new backend.
+  zigars' existing artifact-registry path; no new backend.
 
 **Why net-new.** `zig_translate_c` only runs translate-c; nothing
 generates the recovery wrapper.
@@ -430,11 +430,11 @@ quota-tuning is by trial and error. There is no tooling today that says
   fn`, `@Type`), `recommended_setEvalBranchQuota_value`, `limitations`
   ("budget attribution is heuristic; this is a search, not a profiler"),
   `cross_check`.
-- Backend: zigar's existing command runner with the apply gate already
+- Backend: zigars' existing command runner with the apply gate already
   used by `zig_bench_baseline`. Each probe is a fresh `zig build`
   invocation with an injected `@setEvalBranchQuota`. No new backend.
 
-**Why net-new.** No existing zigar tool probes the comptime budget;
+**Why net-new.** No existing zigars tool probes the comptime budget;
 `zig_explain_errors` only echoes the failure message.
 
 **Verdict:** needs-validation. Binary-search adds wall-clock cost, and
@@ -447,7 +447,7 @@ as "find a quota that works, identify likely culprits" rather than
 
 ## Backend Integrations Required
 
-Each proposal above was scoped to reuse zigar's existing backend
+Each proposal above was scoped to reuse zigars' existing backend
 catalog. Summary:
 
 | Proposal | Backend used | New integration? |
@@ -463,7 +463,7 @@ catalog. Summary:
 | 9. `zig_cimport_macro_wrap` | template generator + workspace artifact registry | No |
 | 10. `zig_comptime_quota_probe` | `zig build` command runner | No |
 
-**None of the ten proposals require a backend integration that zigar
+**None of the ten proposals require a backend integration that zigars
 does not already ship.** That keeps the marginal cost of adding any
 single tool low — most of the work is in the manifest schema, the use-
 case module, the apply-gate plumbing, and the curated mapping tables
@@ -472,8 +472,8 @@ for the catalog-driven proposals (#5, #8, #9).
 The highest-leverage proposals are #1 (`zon_dep_sync`), #2
 (`io_migration_scan`), and #3 (`comptime_diagnose`) — each compresses a
 workflow that essentially every Zig developer hits this year, and each
-maps cleanly onto an existing zigar tier (apply-gated source edit,
+maps cleanly onto an existing zigars tier (apply-gated source edit,
 parser-backed audit, parser-backed diagnostic). The remaining proposals
 are individually smaller wins but collectively close most of the gap
-between zigar's current capability set and the friction Zig developers
+between zigars' current capability set and the friction Zig developers
 describe today.

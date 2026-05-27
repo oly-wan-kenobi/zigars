@@ -40,7 +40,7 @@ feature below A.
 | ZLint optional backend | A | B+ | Optional diagnostics/SARIF/rules/fix command contracts, normalized finding fields, rule-catalog capability fallback, apply-gated fix preview, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and conformance-script scenario hooks when a real ZLint path is claimed. Public claims must name the actual backend evidence. |
 | zwanzig optional backend | A | B+ | Repo-pinned provisioning, JSON/SARIF/rules/CFG graph real scenarios, fake-backend deterministic smoke coverage, explicit optional-unavailable behavior, and generated scenario evidence in the compatibility matrix. Public claims must name the actual backend evidence. |
 | Profiling/zflame | A | B+ | Explicit `zig_profile_run` argv contract, external-capture docs, zflame recursive SVG validation, XML-prologue SVG acceptance, rendered and intermediate artifact hashes, diff-folded metadata checks, and release-check docs guards. Capture correctness remains the profiler's responsibility. |
-| Coverage/performance workflows | A | B+ | LCOV and zigar JSON coverage parsing, coverage merge/diff/budget contracts, benchmark discovery and result normalization, baseline and evidence-pack artifacts with provenance, preview/apply gates for command-backed runs, HTTP smoke coverage for every public performance tool, and explicit Samply/Tracy unavailable or unsupported-platform states. Coverage merge and benchmark parsing remain evidence-normalization helpers rather than proof of workload representativeness. |
+| Coverage/performance workflows | A | B+ | LCOV and zigars JSON coverage parsing, coverage merge/diff/budget contracts, benchmark discovery and result normalization, baseline and evidence-pack artifacts with provenance, preview/apply gates for command-backed runs, HTTP smoke coverage for every public performance tool, and explicit Samply/Tracy unavailable or unsupported-platform states. Coverage merge and benchmark parsing remain evidence-normalization helpers rather than proof of workload representativeness. |
 | Agent workflows | A- | B+ | `workflow_contract`, `included_sections`, `omitted_sections`, `skipped_phases`, risk-aware validation plans/runs, build/test event parsing, validation history summaries, handoff packs, project memory, capability matching, focused tests, and HTTP/stdio coverage for agent routing/validation output. Workflow output helps route validation; it does not prove code correctness. |
 | CI artifact tools | A- | B+ | Annotation parser confidence and basis, command-level JUnit metadata, direct matrix entry status fields, XML escaping tests, matrix failure tests, docs examples, and stdio annotation coverage. `zig_junit` remains command-level JUnit. |
 | HTTP/MCP substrate | A | A- | First-party MCP adapter without upstream patches, explicit tool/resource/prompt result ownership and deinit tests, HTTP/stdio smoke fixtures, loopback-only HTTP docs, deterministic discovery-order coverage, trust-doc guards, and release checks preventing patched MCP reintroduction. |
@@ -64,7 +64,7 @@ marketed as scoped capabilities rather than full semantic or backend proof.
   making release decisions from advisory output.
 - `zig_junit` is command-level JUnit. It does not infer per-test cases from Zig
   output because Zig does not expose a stable event stream for every invocation.
-- HTTP transport is local-only. zigar does not provide authenticated remote MCP
+- HTTP transport is local-only. zigars does not provide authenticated remote MCP
   serving.
 - External repository policy is not inferred from local files. GitHub branch
   protection, release permissions, and real optional-backend CI runs must be
@@ -77,7 +77,7 @@ Before publishing, the releaser must run:
 ```sh
 zig build release-check
 zig build dist release-asset-smoke
-ZIGAR_USE_PINNED_BACKEND_SETUP=1 bash .github/scripts/release-readiness.sh
+ZIGARS_USE_PINNED_BACKEND_SETUP=1 bash .github/scripts/release-readiness.sh
 ```
 
 `release-check` validates this maturity document, generated docs/JSON, unit and

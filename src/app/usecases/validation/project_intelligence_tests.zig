@@ -26,7 +26,7 @@ const StubRuntime = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *StubRuntime) app_context.ProjectIntelligenceContext {
         return .{
-            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+            .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
             .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
             .zls_state = .{ .status = "connected", .running = true },
@@ -129,11 +129,11 @@ const StubRuntime = struct {
         else if (std.mem.eql(u8, request.path, "tests/util_test.zig"))
             \\const util = @import("../src/util.zig");
             \\test "run" { util.run(); }
-        else if (std.mem.eql(u8, request.path, ".zigar/profile.v2.json"))
+        else if (std.mem.eql(u8, request.path, ".zigars/profile.v2.json"))
             \\{"schema_version":2}
-        else if (std.mem.eql(u8, request.path, ".zigar/profile.json"))
+        else if (std.mem.eql(u8, request.path, ".zigars/profile.json"))
             \\{"schema_version":1,"existing":true}
-        else if (std.mem.eql(u8, request.path, ".zigar/project-memory.jsonl"))
+        else if (std.mem.eql(u8, request.path, ".zigars/project-memory.jsonl"))
             \\{"category":"architecture","title":"Existing","decision":"Keep hex ports","rationale":"testing"}
         else
             return error.FileNotFound;
@@ -191,7 +191,7 @@ test "project intelligence routes pure planning, events, memory, and capabilitie
     try std.testing.expectEqualStrings("project-0001", generated_id);
 
     const guide = (try project_intelligence.agentGuideValue(allocator, "codex", "fix failing test")).object;
-    try std.testing.expectEqualStrings("zigar_agent_guide", guide.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_agent_guide", guide.get("kind").?.string);
 
     const build_plan = (try project_intelligence.nextActionPlanValue(allocator, "fix compile error", "src/main.zig", null)).object;
     try std.testing.expectEqualStrings("zig_compile_error_index", build_plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
@@ -215,7 +215,7 @@ test "project intelligence routes pure planning, events, memory, and capabilitie
         .query = "typed",
         .category = "architecture",
         .include_builtins = true,
-        .tool_name = "zigar_project_memory",
+        .tool_name = "zigars_project_memory",
     })).object;
     try std.testing.expectEqual(@as(i64, 1), memory.get("note_count").?.integer);
     try std.testing.expect(memory.get("built_in_project_policies").?.array.items.len >= 1);
@@ -321,7 +321,7 @@ test "project intelligence snapshots handoff and decision records with preimage 
     const context = runtime.context();
 
     const snapshot = (try project_intelligence.sessionSnapshotValue(allocator, context, .{
-        .kind = "zigar_session_snapshot",
+        .kind = "zigars_session_snapshot",
         .goal = "finish ARCH-109",
         .changed_files = "src/app/usecases/validation/project_intelligence.zig",
         .diff =
@@ -332,7 +332,7 @@ test "project intelligence snapshots handoff and decision records with preimage 
         .validation = "{\"ok\":true}",
         .last_error = null,
     })).object;
-    try std.testing.expectEqualStrings("zigar_session_snapshot", snapshot.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_session_snapshot", snapshot.get("kind").?.string);
     try std.testing.expect(snapshot.get("profile_state").?.object.get("profile_v2_present").?.bool);
 
     const handoff = (try project_intelligence.handoffPackValue(allocator, context, .{
@@ -340,7 +340,7 @@ test "project intelligence snapshots handoff and decision records with preimage 
         .goal = "finish ARCH-109",
         .changed_files = "src/app/usecases/validation/project_intelligence.zig",
     })).object;
-    try std.testing.expectEqualStrings("zigar_handoff_pack", handoff.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_handoff_pack", handoff.get("kind").?.string);
 
     const decision = (try project_intelligence.decisionRecordValue(allocator, context, .{
         .title = "Move project intelligence",
@@ -364,7 +364,7 @@ test "project intelligence covers command, path, and validation projection edge 
         .changed_files = null,
         .timeout_ms = 1000,
     })).object;
-    try std.testing.expectEqualStrings("zigar_validate_patch", auto_validation.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_validate_patch", auto_validation.get("kind").?.string);
     try std.testing.expect(auto_validation.get("phases").?.array.items.len >= 2);
     try std.testing.expect(!auto_validation.get("ran_full_build_test").?.bool);
 
@@ -379,7 +379,7 @@ test "project intelligence covers command, path, and validation projection edge 
         .file = "src/main.zig",
         .timeout_ms = 1000,
     })).object;
-    try std.testing.expectEqualStrings("zigar_failure_fusion", fusion.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_failure_fusion", fusion.get("kind").?.string);
     try std.testing.expect(fusion.get("compiler") != null);
     try std.testing.expect(fusion.get("suggested_tools").?.array.items.len >= 3);
 
@@ -406,14 +406,14 @@ test "project intelligence covers command, path, and validation projection edge 
         .category = "architecture",
         .limit = 2,
         .include_builtins = false,
-        .tool_name = "zigar_project_memory",
+        .tool_name = "zigars_project_memory",
     })).object;
     try std.testing.expect(memory_from_file.get("memory_available").?.bool);
 
     const handoff_sequence = (try project_intelligence.toolSequencePlanValue(allocator, "resume handoff", null)).object;
-    try std.testing.expectEqualStrings("zigar_session_snapshot", handoff_sequence.get("sequence").?.array.items[0].object.get("tool").?.string);
+    try std.testing.expectEqualStrings("zigars_session_snapshot", handoff_sequence.get("sequence").?.array.items[0].object.get("tool").?.string);
     const default_sequence = (try project_intelligence.toolSequencePlanValue(allocator, "orient workspace", null)).object;
-    try std.testing.expectEqualStrings("zigar_capability_match", default_sequence.get("sequence").?.array.items[0].object.get("tool").?.string);
+    try std.testing.expectEqualStrings("zigars_capability_match", default_sequence.get("sequence").?.array.items[0].object.get("tool").?.string);
 }
 
 test "project intelligence renders validation plans, runs, and history records" {
@@ -444,7 +444,7 @@ test "project intelligence renders validation plans, runs, and history records" 
     };
 
     const plan_value = (try project_intelligence.validationPlanValueFromUsecase(allocator, plan)).object;
-    try std.testing.expectEqualStrings("zigar_validation_plan", plan_value.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_validation_plan", plan_value.get("kind").?.string);
     try std.testing.expectEqual(@as(usize, 2), plan_value.get("phases").?.array.items.len);
 
     var phase_runs = [_]validation_workflows.PhaseRun{
@@ -495,13 +495,13 @@ test "project intelligence renders validation plans, runs, and history records" 
         .phases = phase_runs[0..],
         .skipped_phases = skipped[0..],
         .history_record = record,
-        .history_path = ".zigar-cache/validation/history.jsonl",
+        .history_path = ".zigars-cache/validation/history.jsonl",
         .history_applied = false,
         .requires_apply_for_history = true,
         .preimage_identity = .{ .exists = true, .bytes = 12, .sha256 = "abc" },
     };
     const run = (try project_intelligence.validationRunValue(allocator, report)).object;
-    try std.testing.expectEqualStrings("zigar_validation_run", run.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_validation_run", run.get("kind").?.string);
     try std.testing.expect(!run.get("ok").?.bool);
     try std.testing.expectEqual(@as(usize, 2), run.get("phases").?.array.items.len);
 
@@ -522,17 +522,17 @@ test "project intelligence renders validation plans, runs, and history records" 
         .last_good_index = 1,
         .failure_groups = groups[0..],
     };
-    const runs_value = (try project_intelligence.validationHistoryToolValue(allocator, "zigar_validation_history", history)).object;
+    const runs_value = (try project_intelligence.validationHistoryToolValue(allocator, "zigars_validation_history", history)).object;
     try std.testing.expectEqual(@as(i64, 2), runs_value.get("run_count").?.integer);
 
     var flakes_history = history;
     flakes_history.view = .flakes;
-    const flakes = (try project_intelligence.validationHistoryToolValue(allocator, "zigar_validation_flakes", flakes_history)).object;
-    try std.testing.expectEqualStrings("zigar_validation_flakes", flakes.get("kind").?.string);
+    const flakes = (try project_intelligence.validationHistoryToolValue(allocator, "zigars_validation_flakes", flakes_history)).object;
+    try std.testing.expectEqualStrings("zigars_validation_flakes", flakes.get("kind").?.string);
 
     var failures_history = history;
     failures_history.view = .failures;
-    const recurring = (try project_intelligence.validationHistoryToolValue(allocator, "zigar_validation_failures", failures_history)).object;
+    const recurring = (try project_intelligence.validationHistoryToolValue(allocator, "zigars_validation_failures", failures_history)).object;
     try std.testing.expectEqual(@as(i64, 2), recurring.get("run_count").?.integer);
 }
 
@@ -547,7 +547,7 @@ test "project intelligence covers context packs and routing fallbacks" {
         .mode = "deep",
         .token_budget = 100_000,
     })).object;
-    try std.testing.expectEqualStrings("zigar_context_pack", pack.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_context_pack", pack.get("kind").?.string);
     try std.testing.expectEqual(@as(i64, 50_000), pack.get("token_budget").?.integer);
     try std.testing.expect(pack.get("tests") != null);
     try std.testing.expect(pack.get("deps") != null);
@@ -555,13 +555,13 @@ test "project intelligence covers context packs and routing fallbacks" {
     const format_plan = (try project_intelligence.nextActionPlanValue(allocator, "format touched files", null, null)).object;
     try std.testing.expectEqualStrings("zig_format_check", format_plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
     const review_plan = (try project_intelligence.nextActionPlanValue(allocator, "review PR done", null, null)).object;
-    try std.testing.expectEqualStrings("zigar_validate_patch", review_plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
+    try std.testing.expectEqualStrings("zigars_validate_patch", review_plan.get("recommended_steps").?.array.items[0].object.get("tool").?.string);
     const test_sequence = (try project_intelligence.toolSequencePlanValue(allocator, "fix failing tests", null)).object;
     try std.testing.expectEqualStrings("zig_test_events", test_sequence.get("sequence").?.array.items[0].object.get("tool").?.string);
 
     const phases = std.json.Array.init(allocator);
     const blocked = (try project_intelligence.validationNextActionValue(allocator, false, phases)).object;
-    try std.testing.expectEqualStrings("zigar_validate_patch", blocked.get("tool").?.string);
+    try std.testing.expectEqualStrings("zigars_validate_patch", blocked.get("tool").?.string);
 
     var compiler_summary = std.json.ObjectMap.empty;
     try compiler_summary.put(allocator, "primary", .{ .string = "compile-primary" });
@@ -640,12 +640,12 @@ test "project intelligence covers command construction and fallback data paths" 
         .command = "build",
         .timeout_ms = 1000,
     })).object;
-    try std.testing.expectEqualStrings("zigar_failure_fusion", build_fusion.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_failure_fusion", build_fusion.get("kind").?.string);
 
     const default_fusion = (try project_intelligence.failureFusionFromCommandValue(allocator, context, .{
         .timeout_ms = 1000,
     })).object;
-    try std.testing.expectEqualStrings("zigar_failure_fusion", default_fusion.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_failure_fusion", default_fusion.get("kind").?.string);
 
     const fmt_events = (try project_intelligence.commandEventsValue(allocator, context, "zig_build_events", .{
         .command = "fmt-check",
@@ -666,14 +666,14 @@ test "project intelligence covers command construction and fallback data paths" 
         ,
         .category = "architecture",
         .limit = 1,
-        .tool_name = "zigar_project_memory",
+        .tool_name = "zigars_project_memory",
     })).object;
     try std.testing.expectEqual(@as(i64, 1), memory_array.get("note_count").?.integer);
 
     const missing_memory = (try project_intelligence.projectMemoryValue(allocator, context, .{
-        .path = ".zigar/missing.jsonl",
+        .path = ".zigars/missing.jsonl",
         .limit = 10,
-        .tool_name = "zigar_project_memory",
+        .tool_name = "zigars_project_memory",
     })).object;
     try std.testing.expect(!missing_memory.get("memory_available").?.bool);
     try std.testing.expectEqual(@as(i64, 0), missing_memory.get("note_count").?.integer);

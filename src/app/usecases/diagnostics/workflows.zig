@@ -98,14 +98,14 @@ pub fn zigDebugPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 
 /// Executes the zig lldb backtrace workflow and returns an allocator-owned structured result.
 pub fn zigLldbBacktrace(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "backtrace", "LLDB backtrace capture is not supported by zigar on Windows.");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "backtrace", "LLDB backtrace capture is not supported by zigars on Windows.");
     const binary = argString(args, "binary") orelse return missingArgumentResult(allocator, "zig_lldb_backtrace", "binary", "workspace executable path");
     return lldbCapture(a, allocator, args, "zig_lldb_backtrace", binary, argString(args, "core"), "bt all", "LLDB backtrace preview");
 }
 
 /// Executes the zig core inspect workflow and returns an allocator-owned structured result.
 pub fn zigCoreInspect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "core_inspect", "Core dump inspection is not supported by zigar on Windows.");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "lldb", "core_inspect", "Core dump inspection is not supported by zigars on Windows.");
     const core = argString(args, "core") orelse return missingArgumentResult(allocator, "zig_core_inspect", "core", "workspace core dump path");
     const binary = argString(args, "binary") orelse core;
     return lldbCapture(a, allocator, args, "zig_core_inspect", binary, core, "thread backtrace all", "LLDB core inspection preview");
@@ -216,7 +216,7 @@ pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 pub fn zigHeaptrackRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_heaptrack_run", "command", "non-empty command string");
     const heaptrack_path = argString(args, "heaptrack_path") orelse "heaptrack";
-    const output = argString(args, "output") orelse ".zigar-cache/memory/heaptrack.gz";
+    const output = argString(args, "output") orelse ".zigars-cache/memory/heaptrack.gz";
     const command_argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_heaptrack_run", "command", command_text, err);
     defer freeArgv(allocator, command_argv);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -226,7 +226,7 @@ pub fn zigHeaptrackRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     defer a.workspace.allocator.free(output_abs);
     const argv = try concatArgv(scratch, &.{ heaptrack_path, "-o", output_abs, "--" }, command_argv);
     if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_heaptrack_run", "heaptrack", heaptrack_path, argv, "heaptrack capture", argString(args, "target"), output);
-    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "heaptrack", "run", "heaptrack capture is supported by zigar only on Linux.");
+    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "heaptrack", "run", "heaptrack capture is supported by zigars only on Linux.");
     return applyGatedBackendCommand(a, allocator, scratch, args, .{
         .tool_name = "zig_heaptrack_run",
         .backend_name = "heaptrack",
@@ -252,7 +252,7 @@ pub fn zigHeaptrackSummary(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_valgrind_memcheck", "command", "non-empty command string");
     const valgrind_path = argString(args, "valgrind_path") orelse "valgrind";
-    const output = argString(args, "output") orelse ".zigar-cache/memory/valgrind-memcheck.json";
+    const output = argString(args, "output") orelse ".zigars-cache/memory/valgrind-memcheck.json";
     const command_argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_valgrind_memcheck", "command", command_text, err);
     defer freeArgv(allocator, command_argv);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -260,7 +260,7 @@ pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     const scratch = arena.allocator();
     const argv = try concatArgv(scratch, &.{ valgrind_path, "--tool=memcheck", "--leak-check=full", "--error-exitcode=99" }, command_argv);
     if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_valgrind_memcheck", "valgrind", valgrind_path, argv, "Valgrind memcheck run", argString(args, "target"), output);
-    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "valgrind", "memcheck", "Valgrind memcheck is supported by zigar only on Linux.");
+    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "valgrind", "memcheck", "Valgrind memcheck is supported by zigars only on Linux.");
     return applyGatedBackendCommand(a, allocator, scratch, args, .{
         .tool_name = "zig_valgrind_memcheck",
         .backend_name = "valgrind",
@@ -284,7 +284,7 @@ pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json
     }
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_callgrind_report", "command", "command string or callgrind content/path");
     const valgrind_path = argString(args, "valgrind_path") orelse "valgrind";
-    const output = argString(args, "output") orelse ".zigar-cache/memory/callgrind.out";
+    const output = argString(args, "output") orelse ".zigars-cache/memory/callgrind.out";
     const command_argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_callgrind_report", "command", command_text, err);
     defer freeArgv(allocator, command_argv);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -295,7 +295,7 @@ pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json
     const out_arg = try std.fmt.allocPrint(scratch, "--callgrind-out-file={s}", .{output_abs});
     const argv = try concatArgv(scratch, &.{ valgrind_path, "--tool=callgrind", out_arg }, command_argv);
     if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_callgrind_report", "valgrind", valgrind_path, argv, "Valgrind callgrind run", argString(args, "target"), output);
-    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "valgrind", "callgrind", "Valgrind callgrind is supported by zigar only on Linux.");
+    if (!a.context.platform.is_linux) return unsupportedBackendResult(a, allocator, "valgrind", "callgrind", "Valgrind callgrind is supported by zigars only on Linux.");
     return applyGatedBackendCommand(a, allocator, scratch, args, .{
         .tool_name = "zig_callgrind_report",
         .backend_name = "valgrind",
@@ -335,7 +335,7 @@ pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_afl_run", "command", "fuzz target command string");
     const afl_path = argString(args, "afl_path") orelse "afl-fuzz";
     const corpus = argString(args, "corpus") orelse "corpus";
-    const output = argString(args, "output") orelse ".zigar-cache/fuzz/afl";
+    const output = argString(args, "output") orelse ".zigars-cache/fuzz/afl";
     const command_argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_afl_run", "command", command_text, err);
     defer freeArgv(allocator, command_argv);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -347,7 +347,7 @@ pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !
     defer a.workspace.allocator.free(output_abs);
     const argv = try concatArgv(scratch, &.{ afl_path, "-i", corpus_abs, "-o", output_abs, "--" }, command_argv);
     if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_afl_run", "afl-fuzz", afl_path, argv, "AFL++ fuzz run", argString(args, "target"), output);
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "afl-fuzz", "run", "AFL++ execution is not supported by zigar on Windows.");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "afl-fuzz", "run", "AFL++ execution is not supported by zigars on Windows.");
     return applyGatedBackendCommand(a, allocator, scratch, args, .{
         .tool_name = "zig_afl_run",
         .backend_name = "afl-fuzz",
@@ -365,7 +365,7 @@ pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !
 /// Invokes zig libfuzzer run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigLibfuzzerRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_libfuzzer_run", "command", "libFuzzer command string");
-    const output = argString(args, "output") orelse ".zigar-cache/fuzz/libfuzzer-run.json";
+    const output = argString(args, "output") orelse ".zigars-cache/fuzz/libfuzzer-run.json";
     const argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_libfuzzer_run", "command", command_text, err);
     defer freeArgv(allocator, argv);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -489,8 +489,8 @@ pub fn zigQemuTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
     defer arena.deinit();
     const scratch = arena.allocator();
     const argv = try concatArgv(scratch, &.{qemu_path}, command_argv);
-    if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_qemu_test", "qemu", qemu_path, argv, "QEMU cross-target smoke run", target, ".zigar-cache/cross-target/qemu-test.json");
-    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "qemu", "test", "QEMU execution is not supported by zigar on Windows.");
+    if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, "zig_qemu_test", "qemu", qemu_path, argv, "QEMU cross-target smoke run", target, ".zigars-cache/cross-target/qemu-test.json");
+    if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "qemu", "test", "QEMU execution is not supported by zigars on Windows.");
     return applyGatedBackendCommand(a, allocator, scratch, args, .{
         .tool_name = "zig_qemu_test",
         .backend_name = "qemu",
@@ -498,7 +498,7 @@ pub fn zigQemuTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
         .configured_path = qemu_path,
         .probe_argv = &.{ qemu_path, "--version" },
         .argv = argv,
-        .output = ".zigar-cache/cross-target/qemu-test.json",
+        .output = ".zigars-cache/cross-target/qemu-test.json",
         .artifact_kind = "qemu_test",
         .basis = "QEMU cross-target smoke run",
         .notes = "QEMU target runtime evidence",
@@ -576,20 +576,20 @@ pub fn zigFlashPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
     const scratch = arena.allocator();
     const flash_tool = argString(args, "flash_tool") orelse "probe-rs";
     var obj = try baseValue(scratch, a, "zig_flash_plan", "Firmware flash plan", "medium", &.{
-        "zigar never flashes hardware; returned commands are plans and optional probes only.",
+        "zigars never flashes hardware; returned commands are plans and optional probes only.",
     });
     if (argBool(args, "probe_backend", false)) {
         const probe = checkBackend(a, scratch, flash_tool, &.{ flash_tool, "--help" }, @min(toolTimeout(a, args), 5000));
         try obj.put(scratch, "backend_status", try backendStatusValue(scratch, flash_tool, probe.ok, probe.status, probe.resolution, flash_tool));
     } else {
-        try obj.put(scratch, "backend_status", try backendStatusValue(scratch, flash_tool, false, "not_probed", "Pass probe_backend=true to run the flash tool with --help; zigar will not flash hardware.", flash_tool));
+        try obj.put(scratch, "backend_status", try backendStatusValue(scratch, flash_tool, false, "not_probed", "Pass probe_backend=true to run the flash tool with --help; zigars will not flash hardware.", flash_tool));
     }
     try obj.put(scratch, "board", stringOrNull(argString(args, "board")));
     try obj.put(scratch, "target", stringOrNull(argString(args, "target")));
     try obj.put(scratch, "image", stringOrNull(argString(args, "image")));
     try obj.put(scratch, "repro_command", .{ .string = try flashCommand(scratch, flash_tool, argString(args, "board"), argString(args, "image")) });
     try obj.put(scratch, "mutates_hardware", .{ .bool = false });
-    try obj.put(scratch, "stop_condition", .{ .string = "Only run the flash command manually after confirming board, probe, power, image hash, and target voltage outside zigar." });
+    try obj.put(scratch, "stop_condition", .{ .string = "Only run the flash command manually after confirming board, probe, power, image hash, and target voltage outside zigars." });
     return structured(allocator, .{ .object = obj });
 }
 
@@ -627,7 +627,7 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
     const argv = argv_list.items;
     if (!argBool(args, "apply", false)) return previewResult(a, allocator, scratch, tool_name, "lldb", lldb_path, argv, basis, argString(args, "target"), null);
     const probe = checkBackend(a, scratch, "lldb", &.{ lldb_path, "--version" }, @min(toolTimeout(a, args), 5000));
-    if (!probe.ok) return backendUnavailableResult(allocator, "lldb", "debug_capture", lldb_path, probe.status, "Install LLDB separately or pass lldb_path to an existing executable; zigar never installs debugger tools.");
+    if (!probe.ok) return backendUnavailableResult(allocator, "lldb", "debug_capture", lldb_path, probe.status, "Install LLDB separately or pass lldb_path to an existing executable; zigars never installs debugger tools.");
     const result = runCommand(allocator, a, argv, toolTimeout(a, args)) catch |err| return backendErrorResult(allocator, "lldb", "debug_capture", err, "Run the shown LLDB argv directly to inspect debugger-specific failures.");
     defer result.deinit(allocator);
     var obj = try baseValue(scratch, a, tool_name, "LLDB debugger capture", "medium", &.{
@@ -649,7 +649,7 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
 fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, spec: BackendCommandSpec) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, spec.tool_name, spec.backend_name, spec.configured_path, spec.argv, spec.basis, if (spec.target.len > 0) spec.target else argString(args, "target"), spec.output);
     const probe = checkBackend(a, scratch, spec.backend_name, spec.probe_argv, @min(toolTimeout(a, args), 5000));
-    if (!probe.ok) return backendUnavailableResult(result_allocator, spec.backend_name, spec.operation, spec.configured_path, probe.status, "Install or configure the optional backend outside zigar, then retry with the path argument; zigar never installs external tools.");
+    if (!probe.ok) return backendUnavailableResult(result_allocator, spec.backend_name, spec.operation, spec.configured_path, probe.status, "Install or configure the optional backend outside zigars, then retry with the path argument; zigars never installs external tools.");
     const run = runCommand(result_allocator, a, spec.argv, toolTimeout(a, args)) catch |err| return backendErrorResult(result_allocator, spec.backend_name, spec.operation, err, "Run the shown backend argv directly to inspect backend-specific failures.");
     defer run.deinit(result_allocator);
     var obj = try baseValue(scratch, a, spec.tool_name, spec.basis, "medium", &.{
@@ -726,7 +726,7 @@ fn binaryBackendTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 fn binaryApplyGatedCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, backend_name: []const u8, operation: []const u8, configured_path: []const u8, argv: []const []const u8, path: []const u8, basis: []const u8) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, backend_name, configured_path, argv, basis, argString(args, "target"), null);
     const probe = checkBackend(a, scratch, backend_name, &.{ configured_path, "--version" }, @min(toolTimeout(a, args), 5000));
-    if (!probe.ok) return backendUnavailableResult(result_allocator, backend_name, operation, configured_path, probe.status, "Install the LLVM binary tools separately or pass the per-call backend path; zigar never installs them.");
+    if (!probe.ok) return backendUnavailableResult(result_allocator, backend_name, operation, configured_path, probe.status, "Install the LLVM binary tools separately or pass the per-call backend path; zigars never installs them.");
     const run = runCommand(result_allocator, a, argv, toolTimeout(a, args)) catch |err| return backendErrorResult(result_allocator, backend_name, operation, err, "Run the shown backend argv directly to inspect binary-tool-specific failures.");
     defer run.deinit(result_allocator);
     const info = binaryInfo(a, scratch, path) catch |err| return workspacePathErrorResult(a, result_allocator, tool_name, path, err);
@@ -1947,7 +1947,7 @@ fn diagnosticsTestApp(
     return App.init(.{
         .workspace = .{
             .root = "/repo",
-            .cache_root = "/repo/.zigar-cache",
+            .cache_root = "/repo/.zigars-cache",
             .transport = "stdio",
         },
         .tool_paths = .{

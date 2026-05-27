@@ -102,7 +102,7 @@ pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     try obj.put(allocator, "stdout_truncated", .{ .bool = finished.stdout_truncated });
     try obj.put(allocator, "stderr_truncated", .{ .bool = finished.stderr_truncated });
     if (request.include_events) try obj.put(allocator, "events", try eventsPageValue(allocator, context, finished.id, 0, 50));
-    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigar_job_status", "zigar_job_result", "zigar_run_events" }));
+    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigars_job_status", "zigars_job_result", "zigars_run_events" }));
     try obj.put(allocator, "limitations", try runtimeLimitationsValue(allocator));
     return .{ .object = obj };
 }
@@ -112,7 +112,7 @@ pub fn jobStatusValue(allocator: std.mem.Allocator, context: app_context.Runtime
     const job = try context.runtime_session.jobById(job_id);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_job_status" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_job_status" });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "job", try jobValue(allocator, job));
     try obj.put(allocator, "result_available", .{ .bool = job.status.terminal() });
@@ -126,7 +126,7 @@ pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.Runtime
     const job = try context.runtime_session.jobById(request.job_id);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_job_result" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_job_result" });
     try obj.put(allocator, "ok", .{ .bool = job.ok });
     try obj.put(allocator, "job", try jobValue(allocator, job));
     try obj.put(allocator, "stdout_tail", .{ .string = job.stdout_tail });
@@ -145,7 +145,7 @@ pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.Runtime
     const job = try context.runtime_session.cancelJob(job_id, reason);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_job_cancel" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_job_cancel" });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "cancelled", .{ .bool = !before.status.terminal() });
     try obj.put(allocator, "status", .{ .string = job.status.text() });
@@ -168,7 +168,7 @@ pub fn cancelStatusValue(allocator: std.mem.Allocator, context: app_context.Runt
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_cancel_status" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_cancel_status" });
     try obj.put(allocator, "jobs", .{ .array = jobs });
     try obj.put(allocator, "job_count", .{ .integer = @intCast(jobs.items.len) });
     return .{ .object = obj };
@@ -178,7 +178,7 @@ pub fn cancelStatusValue(allocator: std.mem.Allocator, context: app_context.Runt
 pub fn runEventsValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: EventsRequest) RuntimeUxError!std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_run_events" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_run_events" });
     if (request.job_id) |id| try obj.put(allocator, "job_id", .{ .string = id }) else try obj.put(allocator, "job_id", .null);
     try obj.put(allocator, "events", try eventsPageValue(allocator, context, request.job_id, request.cursor, request.limit));
     return .{ .object = obj };
@@ -186,18 +186,18 @@ pub fn runEventsValue(allocator: std.mem.Allocator, context: app_context.Runtime
 
 /// Serializes resource query fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: ResourceQueryRequest) RuntimeUxError!std.json.Value {
-    if (std.mem.startsWith(u8, request.uri, "zigar://file/")) return fileResourceQueryValue(allocator, context, request.uri, request.mode);
-    if (std.mem.eql(u8, request.uri, "zigar://jobs")) return jobsQueryValue(allocator, context, request.cursor, request.limit, request.mode);
-    if (std.mem.eql(u8, request.uri, "zigar://run/events")) {
+    if (std.mem.startsWith(u8, request.uri, "zigars://file/")) return fileResourceQueryValue(allocator, context, request.uri, request.mode);
+    if (std.mem.eql(u8, request.uri, "zigars://jobs")) return jobsQueryValue(allocator, context, request.cursor, request.limit, request.mode);
+    if (std.mem.eql(u8, request.uri, "zigars://run/events")) {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
-        try obj.put(allocator, "kind", .{ .string = "zigar_resource_query" });
+        try obj.put(allocator, "kind", .{ .string = "zigars_resource_query" });
         try obj.put(allocator, "uri", .{ .string = request.uri });
         try obj.put(allocator, "resource", try eventsPageValue(allocator, context, null, request.cursor, request.limit));
         return .{ .object = obj };
     }
-    if (std.mem.eql(u8, request.uri, "zigar://workspace/roots")) return workspaceMapResultValue(allocator, context, "zigar_resource_query", request.uri);
-    if (std.mem.eql(u8, request.uri, "zigar://prompts")) return promptPackValue(allocator, null, request.mode);
+    if (std.mem.eql(u8, request.uri, "zigars://workspace/roots")) return workspaceMapResultValue(allocator, context, "zigars_resource_query", request.uri);
+    if (std.mem.eql(u8, request.uri, "zigars://prompts")) return promptPackValue(allocator, null, request.mode);
     return error.InvalidArguments;
 }
 
@@ -206,7 +206,7 @@ pub fn resourceSubscribeValue(allocator: std.mem.Allocator, context: app_context
     const sub = try context.runtime_session.subscribe(uri);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_resource_subscribe" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_resource_subscribe" });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "subscription", try subscriptionValue(allocator, sub));
     try obj.put(allocator, "notification_method", .{ .string = "notifications/resources/updated" });
@@ -220,7 +220,7 @@ pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_conte
     const sub = try context.runtime_session.unsubscribe(subscription_id orelse "", uri);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_resource_unsubscribe" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_resource_unsubscribe" });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "subscription", try subscriptionValue(allocator, sub));
     return .{ .object = obj };
@@ -235,12 +235,12 @@ pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.Runtime
     const after = try context.runtime_session.rootCount();
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_roots_sync" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_roots_sync" });
     try obj.put(allocator, "apply", .{ .bool = apply });
     try obj.put(allocator, "changed", .{ .bool = apply and before != after });
     try obj.put(allocator, "preview_roots", preview);
     try obj.put(allocator, "workspace", try workspaceMapValue(allocator, context));
-    try obj.put(allocator, "note", .{ .string = "workspace roots are process-local guidance; file tools continue enforcing the configured zigar workspace path policy" });
+    try obj.put(allocator, "note", .{ .string = "workspace roots are process-local guidance; file tools continue enforcing the configured zigars workspace path policy" });
     return .{ .object = obj };
 }
 
@@ -261,11 +261,11 @@ pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.R
     const root = try context.runtime_session.selectRoot(workspace_id, apply);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_workspace_select" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_workspace_select" });
     try obj.put(allocator, "apply", .{ .bool = apply });
     try obj.put(allocator, "selected", try rootValue(allocator, root));
     try obj.put(allocator, "workspace", try workspaceMapValue(allocator, context));
-    try obj.put(allocator, "note", .{ .string = "selection is process-local guidance; file access remains constrained to the configured zigar workspace" });
+    try obj.put(allocator, "note", .{ .string = "selection is process-local guidance; file access remains constrained to the configured zigars workspace" });
     return .{ .object = obj };
 }
 
@@ -273,19 +273,19 @@ pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.R
 pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_agent_guide_v2" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_agent_guide_v2" });
     try obj.put(allocator, "client", .{ .string = client });
     try obj.put(allocator, "task", .{ .string = task });
     try obj.put(allocator, "principles", try stringArrayValue(allocator, &.{
-        "discover with zigar_capabilities, zigar_tool_index, and zigar_workspace_map before choosing tools",
+        "discover with zigars_capabilities, zigars_tool_index, and zigars_workspace_map before choosing tools",
         "use profile, backend, and toolchain setup tools before claiming an environment is ready",
-        "prefer zigar_job_start or zigar_run_stream for bounded build and test evidence",
-        "use zigar_resource_query and MCP resources for symbols, imports, diagnostics, jobs, events, and roots",
+        "prefer zigars_job_start or zigars_run_stream for bounded build and test evidence",
+        "use zigars_resource_query and MCP resources for symbols, imports, diagnostics, jobs, events, and roots",
         "treat apply=true as the only write gate for generated setup, profile, artifact, and edit operations",
     }));
     try obj.put(allocator, "core_sequences", try workflowSummariesValue(allocator));
-    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigar_workspace_map", "zigar_prompt_pack", "zigar_client_guide", "zigar_run_stream" }));
-    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace/tool/profile/runtime discovery", "deterministic tool sequence guidance", "medium", "guidance is not evidence that commands passed", "collect job or tool evidence before reporting success", "stop when requested evidence exists or a structured tool_error blocks progress", &.{ "zigar_job_result", "zigar_run_events" }));
+    try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigars_workspace_map", "zigars_prompt_pack", "zigars_client_guide", "zigars_run_stream" }));
+    try obj.put(allocator, "workflow_contract", try workflowContractValue(allocator, "workspace/tool/profile/runtime discovery", "deterministic tool sequence guidance", "medium", "guidance is not evidence that commands passed", "collect job or tool evidence before reporting success", "stop when requested evidence exists or a structured tool_error blocks progress", &.{ "zigars_job_result", "zigars_run_events" }));
     return .{ .object = obj };
 }
 
@@ -293,16 +293,16 @@ pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task:
 pub fn clientGuideValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_client_guide" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_client_guide" });
     try obj.put(allocator, "client", .{ .string = client });
     try obj.put(allocator, "task", .{ .string = task });
     try obj.put(allocator, "supported_surfaces", try stringArrayValue(allocator, &.{ "tools", "resources", "resource templates", "resource subscriptions", "prompts", "completion", "tasks", "roots guidance" }));
-    try obj.put(allocator, "recommended_startup", try stringArrayValue(allocator, &.{ "initialize and inspect capabilities", "call tools/list with pagination when needed", "call resources/list and resources/templates/list", "call prompts/list", "call zigar_workspace_map" }));
+    try obj.put(allocator, "recommended_startup", try stringArrayValue(allocator, &.{ "initialize and inspect capabilities", "call tools/list with pagination when needed", "call resources/list and resources/templates/list", "call prompts/list", "call zigars_workspace_map" }));
     try obj.put(allocator, "runtime_notes", try stringArrayValue(allocator, &.{
         "tasks and jobs are process-local and retained in bounded rings",
-        "resources/subscribe acknowledges subscriptions and zigar_resource_subscribe exposes inspectable subscription ids",
-        "completion/complete returns values for zigar resource URIs, prompt names, workflow names, clients, and allow-listed command names",
-        "roots tools guide zigar responses but do not expand workspace path access",
+        "resources/subscribe acknowledges subscriptions and zigars_resource_subscribe exposes inspectable subscription ids",
+        "completion/complete returns values for zigars resource URIs, prompt names, workflow names, clients, and allow-listed command names",
+        "roots tools guide zigars responses but do not expand workspace path access",
     }));
     return .{ .object = obj };
 }
@@ -316,7 +316,7 @@ pub fn promptPackValue(allocator: std.mem.Allocator, workflow: ?[]const u8, mode
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_prompt_pack" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_prompt_pack" });
     if (workflow) |wanted| try obj.put(allocator, "workflow", .{ .string = wanted }) else try obj.put(allocator, "workflow", .null);
     try obj.put(allocator, "workflows", .{ .array = workflows });
     try obj.put(allocator, "workflow_count", .{ .integer = @intCast(workflows.items.len) });
@@ -398,7 +398,7 @@ pub fn jobsResourceValue(allocator: std.mem.Allocator, context: app_context.Runt
     while (index < count) : (index += 1) try jobs.append(try jobResourceValue(allocator, try context.runtime_session.jobAt(index)));
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_jobs_resource" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_jobs_resource" });
     try obj.put(allocator, "jobs", .{ .array = jobs });
     try obj.put(allocator, "job_count", .{ .integer = @intCast(count) });
     try obj.put(allocator, "retention", .{ .string = "process_local_bounded_ring" });
@@ -416,7 +416,7 @@ pub fn runEventsResourceValue(allocator: std.mem.Allocator, context: app_context
     }
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_run_events_resource" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_run_events_resource" });
     try obj.put(allocator, "events", .{ .array = events });
     try obj.put(allocator, "event_count", .{ .integer = @intCast(count) });
     try obj.put(allocator, "retention", .{ .string = "process_local_bounded_ring" });
@@ -434,7 +434,7 @@ pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_co
     const selected_root = try context.runtime_session.rootAt(selected);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_workspace_roots_resource" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_workspace_roots_resource" });
     try obj.put(allocator, "configured_root", .{ .string = context.workspace.root });
     try obj.put(allocator, "roots", .{ .array = roots });
     try obj.put(allocator, "selected_root_id", .{ .string = selected_root.id });
@@ -444,7 +444,7 @@ pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_co
 
 /// Serializes dynamic resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn dynamicResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) RuntimeUxError!std.json.Value {
-    const prefix = "zigar://file/";
+    const prefix = "zigars://file/";
     if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
     const rest = uri[prefix.len..];
     const slash = std.mem.lastIndexOfScalar(u8, rest, '/') orelse return error.InvalidArguments;
@@ -460,7 +460,7 @@ pub fn dynamicResourceValue(allocator: std.mem.Allocator, context: app_context.R
 
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_dynamic_file_resource" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_dynamic_file_resource" });
     try obj.put(allocator, "uri", .{ .string = uri });
     try obj.put(allocator, "path", .{ .string = path });
     try obj.put(allocator, "resource_kind", .{ .string = kind });
@@ -489,17 +489,17 @@ fn analysisError(err: anyerror) RuntimeUxError {
 
 /// Implements profile prompt text workflow logic using caller-owned inputs.
 pub fn profilePromptText() []const u8 {
-    return "Use zigar_workspace_info, zig_profile_plan, zig_profile_run, zig_flamegraph, and zig_flamegraph_diff to build a deterministic Zig profiling workflow. Do not edit source files unless an explicit tool argument requires apply=true.";
+    return "Use zigars_workspace_info, zig_profile_plan, zig_profile_run, zig_flamegraph, and zig_flamegraph_diff to build a deterministic Zig profiling workflow. Do not edit source files unless an explicit tool argument requires apply=true.";
 }
 
 /// Implements workflow prompt text workflow logic using caller-owned inputs.
 pub fn workflowPromptText(name: []const u8) []const u8 {
-    if (std.mem.eql(u8, name, "zigar_compile_error_workflow")) return "Use zigar_run_stream or zig_check evidence, then zig_compile_error_index, zig_explain_errors, and zigar_failure_fusion before proposing the smallest fix.";
-    if (std.mem.eql(u8, name, "zigar_refactor_workflow")) return "Use owner, symbol, import, impact, public API, and changed-file tools before editing; validate with format, check, tests, and patch guard evidence.";
-    if (std.mem.eql(u8, name, "zigar_api_change_workflow")) return "Snapshot public API, compare API changes, inspect references and import edges, then validate with bounded build and test evidence.";
-    if (std.mem.eql(u8, name, "zigar_release_workflow")) return "Check profile, toolchain, backend conformance, docs drift, release claims, JSON fixtures, smoke fixtures, and release-check evidence before reporting release readiness.";
-    if (std.mem.eql(u8, name, "zigar_perf_workflow")) return "Use profiling plan, run, flamegraph, and flamegraph diff tools while keeping profiler backend availability explicit.";
-    return "Discover relevant tests, run the narrowest bounded zigar job, triage failures, and broaden only after local evidence is clean.";
+    if (std.mem.eql(u8, name, "zigars_compile_error_workflow")) return "Use zigars_run_stream or zig_check evidence, then zig_compile_error_index, zig_explain_errors, and zigars_failure_fusion before proposing the smallest fix.";
+    if (std.mem.eql(u8, name, "zigars_refactor_workflow")) return "Use owner, symbol, import, impact, public API, and changed-file tools before editing; validate with format, check, tests, and patch guard evidence.";
+    if (std.mem.eql(u8, name, "zigars_api_change_workflow")) return "Snapshot public API, compare API changes, inspect references and import edges, then validate with bounded build and test evidence.";
+    if (std.mem.eql(u8, name, "zigars_release_workflow")) return "Check profile, toolchain, backend conformance, docs drift, release claims, JSON fixtures, smoke fixtures, and release-check evidence before reporting release readiness.";
+    if (std.mem.eql(u8, name, "zigars_perf_workflow")) return "Use profiling plan, run, flamegraph, and flamegraph diff tools while keeping profiler backend availability explicit.";
+    return "Discover relevant tests, run the narrowest bounded zigars job, triage failures, and broaden only after local evidence is clean.";
 }
 
 /// Groups borrowed command text and allocator-owned argv for a runtime job plan.
@@ -574,7 +574,7 @@ fn fileResourceQueryValue(allocator: std.mem.Allocator, context: app_context.Run
     const obj = dynamic.object;
     var out = std.json.ObjectMap.empty;
     errdefer out.deinit(allocator);
-    try out.put(allocator, "kind", .{ .string = "zigar_resource_query" });
+    try out.put(allocator, "kind", .{ .string = "zigars_resource_query" });
     try out.put(allocator, "uri", .{ .string = uri });
     try out.put(allocator, "resource_kind", obj.get("resource_kind") orelse .null);
     try out.put(allocator, "path", obj.get("path") orelse .null);
@@ -617,8 +617,8 @@ fn jobsQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxCo
     while (index < end) : (index += 1) try page.append(try jobValue(allocator, try context.runtime_session.jobAt(index)));
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_resource_query" });
-    try obj.put(allocator, "uri", .{ .string = "zigar://jobs" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_resource_query" });
+    try obj.put(allocator, "uri", .{ .string = "zigars://jobs" });
     try obj.put(allocator, "jobs", .{ .array = page });
     try obj.put(allocator, "job_count", .{ .integer = @intCast(count) });
     if (end < count) try obj.put(allocator, "nextCursor", .{ .string = try cursorString(allocator, end) });
@@ -769,13 +769,13 @@ const WorkflowDef = struct {
 };
 
 const workflow_defs = [_]WorkflowDef{
-    .{ .name = "zigar_compile_error_workflow", .title = "Compile Error Workflow", .prompt = "Use build or check evidence, index compiler errors, inspect context around the primary diagnostic, then validate the smallest fix with a bounded rerun.", .tools = &.{ "zigar_run_stream", "zig_compile_error_index", "zig_explain_errors", "zigar_failure_fusion", "zigar_job_result" } },
-    .{ .name = "zigar_test_workflow", .title = "Test Workflow", .prompt = "Discover relevant tests, run the narrowest bounded test command, triage failures, and broaden only after local evidence is clean.", .tools = &.{ "zig_test_map", "zig_test_select", "zigar_run_stream", "zig_test_failure_triage", "zigar_job_result" } },
-    .{ .name = "zigar_refactor_workflow", .title = "Refactor Workflow", .prompt = "Map owners, imports, symbols, public API, and changed files before editing; validate with format, check, tests, and patch guard evidence.", .tools = &.{ "zig_file_owner", "zigar_resource_query", "zig_changed_files_plan", "zig_public_api_diff", "zigar_validate_patch" } },
-    .{ .name = "zigar_structure_planning_workflow", .title = "Structure Planning Workflow", .prompt = "Inspect cycles, module surfaces, symbol dossiers, safety sites, test candidates, and insertion-site rankings before broad structural edits; keep all findings architecture-neutral and advisory until validation passes.", .tools = &.{ "zig_import_cycles", "zig_module_surface", "zig_symbol_dossier", "zig_change_risk_audit", "zig_insertion_sites", "zig_test_for_symbol", "zig_safety_site_catalog" } },
-    .{ .name = "zigar_api_change_workflow", .title = "API Change Workflow", .prompt = "Snapshot public declarations, compare impact, inspect references/imports, and produce compatibility evidence before claiming an API change is safe.", .tools = &.{ "zig_public_api", "zig_public_api_diff", "zig_references", "zigar_impact", "zigar_run_stream" } },
-    .{ .name = "zigar_release_workflow", .title = "Release Workflow", .prompt = "Check profile, toolchain, backend conformance, docs drift, release claims, JSON fixtures, smoke fixtures, and final build/test evidence.", .tools = &.{ "zigar_profile_validate", "zig_toolchain_pin_check", "zigar_backend_conformance", "zigar_docs_drift_check", "zigar_release_claim_check" } },
-    .{ .name = "zigar_perf_workflow", .title = "Performance Workflow", .prompt = "Plan a reproducible benchmark, run profiling tools with explicit commands, generate flamegraphs, compare captures, and keep profiler availability explicit.", .tools = &.{ "zig_profile_plan", "zig_profile_run", "zig_flamegraph", "zig_flamegraph_diff", "zigar_backend_verify" } },
+    .{ .name = "zigars_compile_error_workflow", .title = "Compile Error Workflow", .prompt = "Use build or check evidence, index compiler errors, inspect context around the primary diagnostic, then validate the smallest fix with a bounded rerun.", .tools = &.{ "zigars_run_stream", "zig_compile_error_index", "zig_explain_errors", "zigars_failure_fusion", "zigars_job_result" } },
+    .{ .name = "zigars_test_workflow", .title = "Test Workflow", .prompt = "Discover relevant tests, run the narrowest bounded test command, triage failures, and broaden only after local evidence is clean.", .tools = &.{ "zig_test_map", "zig_test_select", "zigars_run_stream", "zig_test_failure_triage", "zigars_job_result" } },
+    .{ .name = "zigars_refactor_workflow", .title = "Refactor Workflow", .prompt = "Map owners, imports, symbols, public API, and changed files before editing; validate with format, check, tests, and patch guard evidence.", .tools = &.{ "zig_file_owner", "zigars_resource_query", "zig_changed_files_plan", "zig_public_api_diff", "zigars_validate_patch" } },
+    .{ .name = "zigars_structure_planning_workflow", .title = "Structure Planning Workflow", .prompt = "Inspect cycles, module surfaces, symbol dossiers, safety sites, test candidates, and insertion-site rankings before broad structural edits; keep all findings architecture-neutral and advisory until validation passes.", .tools = &.{ "zig_import_cycles", "zig_module_surface", "zig_symbol_dossier", "zig_change_risk_audit", "zig_insertion_sites", "zig_test_for_symbol", "zig_safety_site_catalog" } },
+    .{ .name = "zigars_api_change_workflow", .title = "API Change Workflow", .prompt = "Snapshot public declarations, compare impact, inspect references/imports, and produce compatibility evidence before claiming an API change is safe.", .tools = &.{ "zig_public_api", "zig_public_api_diff", "zig_references", "zigars_impact", "zigars_run_stream" } },
+    .{ .name = "zigars_release_workflow", .title = "Release Workflow", .prompt = "Check profile, toolchain, backend conformance, docs drift, release claims, JSON fixtures, smoke fixtures, and final build/test evidence.", .tools = &.{ "zigars_profile_validate", "zig_toolchain_pin_check", "zigars_backend_conformance", "zigars_docs_drift_check", "zigars_release_claim_check" } },
+    .{ .name = "zigars_perf_workflow", .title = "Performance Workflow", .prompt = "Plan a reproducible benchmark, run profiling tools with explicit commands, generate flamegraphs, compare captures, and keep profiler availability explicit.", .tools = &.{ "zig_profile_plan", "zig_profile_run", "zig_flamegraph", "zig_flamegraph_diff", "zigars_backend_verify" } },
 };
 
 /// Serializes workflow fields into an allocator-owned JSON value; allocation failures propagate.
@@ -833,13 +833,13 @@ fn runtimeLimitationsValue(allocator: std.mem.Allocator) !std.json.Value {
 fn diagnosticsResourceValue(allocator: std.mem.Allocator, file: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_file_diagnostics_resource" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_file_diagnostics_resource" });
     try obj.put(allocator, "file", .{ .string = file });
     try obj.put(allocator, "source", .{ .string = "static_resource_query" });
     try obj.put(allocator, "diagnostics", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "diagnostic_count", .{ .integer = 0 });
     try obj.put(allocator, "confidence", .{ .string = "low" });
-    try obj.put(allocator, "recommended_cross_check", try stringArrayValue(allocator, &.{ "zig_diagnostics_all", "zig_check", "zigar_run_stream" }));
+    try obj.put(allocator, "recommended_cross_check", try stringArrayValue(allocator, &.{ "zig_diagnostics_all", "zig_check", "zigars_run_stream" }));
     try obj.put(allocator, "note", .{ .string = "dynamic diagnostics resource is read-only and does not execute Zig or require ZLS; use compiler or ZLS tools for authoritative diagnostics" });
     return .{ .object = obj };
 }
@@ -933,7 +933,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probed: bool) !std.json.Value 
     try obj.put(allocator, "probed", .{ .bool = probed });
     try obj.put(allocator, "ok", .null);
     try obj.put(allocator, "status", .{ .string = if (probed) "cached" else "not probed" });
-    try obj.put(allocator, "resolution", .{ .string = "call zigar_doctor with probe_backends=true to cache backend availability" });
+    try obj.put(allocator, "resolution", .{ .string = "call zigars_doctor with probe_backends=true to cache backend availability" });
     return .{ .object = obj };
 }
 
@@ -1032,7 +1032,7 @@ fn runtimeUxTestContext(
     tool_catalog: ?ports.ToolCatalog,
 ) app_context.RuntimeUxContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls", .zwanzig = "/bin/zwanzig", .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
         .timeouts = .{ .command_ms = 1000, .zls_ms = 2000 },
         .zls_state = .{ .status = "connected", .initialize_response = "{}", .last_failure = "old failure", .restart_attempts = 2 },
@@ -1086,7 +1086,7 @@ test "runtime UX covers resource variants and non owning catalog text" {
         .argv = &.{ "/bin/zig", "test", "src/main.zig", "--summary", "all" },
         .cwd = "/repo",
         .timeout_ms = 123,
-        .provenance = "zigar_job_start",
+        .provenance = "zigars_job_start",
     }, .{ .exit_code = 0, .term = .{ .exited = 0 }, .stdout = "test ok\n", .stderr = "", .duration_ms = 5 });
 
     try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
@@ -1104,7 +1104,7 @@ test "runtime UX covers resource variants and non owning catalog text" {
     const allocator = arena.allocator();
 
     const run = try runJobValue(allocator, context, .{
-        .tool_name = "zigar_job_start",
+        .tool_name = "zigars_job_start",
         .command = "test",
         .file = "src/main.zig",
         .extra_args = &.{ "--summary", "all" },
@@ -1112,23 +1112,23 @@ test "runtime UX covers resource variants and non owning catalog text" {
     });
     try std.testing.expect(run.object.get("ok").?.bool);
 
-    const symbols = try dynamicResourceValue(allocator, context, "zigar://file/src/main.zig/symbols");
+    const symbols = try dynamicResourceValue(allocator, context, "zigars://file/src/main.zig/symbols");
     try std.testing.expectEqualStrings("symbols", symbols.object.get("resource_kind").?.string);
 
-    const diagnostics = try resourceQueryValue(allocator, context, .{ .uri = "zigar://file/src/main.zig/diagnostics" });
+    const diagnostics = try resourceQueryValue(allocator, context, .{ .uri = "zigars://file/src/main.zig/diagnostics" });
     try std.testing.expectEqualStrings("diagnostics", diagnostics.object.get("resource_kind").?.string);
 
     const empty_roots = try rootsSyncValue(allocator, context, "", false);
     try std.testing.expectEqual(@as(usize, 1), empty_roots.object.get("preview_roots").?.array.items.len);
 
-    const map = try workspaceMapResultValue(allocator, context, "zigar_workspace_map", "zigar://workspace/roots");
-    try std.testing.expectEqualStrings("zigar://workspace/roots", map.object.get("uri").?.string);
+    const map = try workspaceMapResultValue(allocator, context, "zigars_workspace_map", "zigars://workspace/roots");
+    try std.testing.expectEqualStrings("zigars://workspace/roots", map.object.get("uri").?.string);
 
     const catalog_text = try catalogResourceText(allocator, context);
     try std.testing.expectEqualStrings("catalog text", catalog_text);
     try std.testing.expectEqual(@as(usize, 1), catalog.calls);
 
-    const subscribed = try resourceSubscribeValue(allocator, context, "zigar://jobs");
+    const subscribed = try resourceSubscribeValue(allocator, context, "zigars://jobs");
     const sub_uri = subscribed.object.get("subscription").?.object.get("uri").?.string;
     const unsubscribed = try resourceUnsubscribeValue(allocator, context, null, sub_uri);
     try std.testing.expect(!unsubscribed.object.get("subscription").?.object.get("active").?.bool);
@@ -1214,19 +1214,19 @@ test "runtime UX context values clean partial objects on allocation failure" {
         context.caches.analysis = .{ .cached = true, .signature = 0x123, .hits = 2, .refreshes = 1 };
 
         try seedRuntimeJob(&session);
-        _ = try context.runtime_session.subscribe("zigar://jobs");
+        _ = try context.runtime_session.subscribe("zigars://jobs");
 
         try commands.expectRun(.{
             .argv = &.{ "/bin/zig", "build" },
             .cwd = "/repo",
             .timeout_ms = 1000,
-            .provenance = "zigar_job_start",
+            .provenance = "zigars_job_start",
         }, .{ .exit_code = 0, .term = .{ .exited = 0 }, .stdout = "ok\n", .stderr = "", .duration_ms = 4 });
         try commands.expectRunError(.{
             .argv = &.{ "/bin/zig", "build" },
             .cwd = "/repo",
             .timeout_ms = 1000,
-            .provenance = "zigar_run_stream",
+            .provenance = "zigars_run_stream",
         }, error.RequestTimeout);
         try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" },
             \\const std = @import("std");
@@ -1240,27 +1240,27 @@ test "runtime UX context values clean partial objects on allocation failure" {
         try expectRuntimeWorkspaceMapExists(&workspace);
         try expectRuntimeWorkspaceMapExists(&workspace);
 
-        if (runJobValue(allocator, context, .{ .tool_name = "zigar_job_start", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
-        if (runJobValue(allocator, context, .{ .tool_name = "zigar_run_stream", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
+        if (runJobValue(allocator, context, .{ .tool_name = "zigars_job_start", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
+        if (runJobValue(allocator, context, .{ .tool_name = "zigars_run_stream", .command = "build", .timeout_ms = 1000, .include_events = true })) |_| {} else |err| try expectRuntimeOom(err);
         if (jobStatusValue(allocator, context, "job-1")) |_| {} else |err| try expectRuntimeOom(err);
         if (jobResultValue(allocator, context, .{ .job_id = "job-1", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
         if (jobCancelValue(allocator, context, "job-1", "stop")) |_| {} else |err| try expectRuntimeOom(err);
         if (cancelStatusValue(allocator, context, null)) |_| {} else |err| try expectRuntimeOom(err);
         if (runEventsValue(allocator, context, .{ .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
-        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://run/events", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
-        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
-        if (resourceSubscribeValue(allocator, context, "zigar://run/events")) |_| {} else |err| try expectRuntimeOom(err);
-        if (resourceUnsubscribeValue(allocator, context, null, "zigar://jobs")) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigars://run/events", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigars://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceSubscribeValue(allocator, context, "zigars://run/events")) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceUnsubscribeValue(allocator, context, null, "zigars://jobs")) |_| {} else |err| try expectRuntimeOom(err);
         if (rootsSyncValue(allocator, context, "file:///repo\n/tmp/alt", false)) |_| {} else |err| try expectRuntimeOom(err);
-        if (workspaceMapResultValue(allocator, context, "zigar_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
+        if (workspaceMapResultValue(allocator, context, "zigars_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
         if (workspaceSelectValue(allocator, context, "/repo", true)) |_| {} else |err| try expectRuntimeOom(err);
         if (zlsStatusResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
         if (metricsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
         if (jobsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
         if (runEventsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
         if (workspaceRootsResourceValue(allocator, context)) |_| {} else |err| try expectRuntimeOom(err);
-        if (dynamicResourceValue(allocator, context, "zigar://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
-        if (resourceQueryValue(allocator, context, .{ .uri = "zigar://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
+        if (dynamicResourceValue(allocator, context, "zigars://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
+        if (resourceQueryValue(allocator, context, .{ .uri = "zigars://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
     }
 
     var commands = test_fakes.FakeCommandRunner.init(std.testing.allocator);
@@ -1273,7 +1273,7 @@ test "runtime UX context values clean partial objects on allocation failure" {
     defer session.deinit(std.testing.allocator);
     var catalog = NonOwningCatalog{ .text_value = "catalog" };
     const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
-    try std.testing.expectError(error.InvalidArguments, resourceQueryValue(std.testing.allocator, context, .{ .uri = "zigar://unknown" }));
+    try std.testing.expectError(error.InvalidArguments, resourceQueryValue(std.testing.allocator, context, .{ .uri = "zigars://unknown" }));
 }
 
 test "runtime UX remaining builders cover late allocation cleanup" {
@@ -1378,7 +1378,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
             var catalog = NonOwningCatalog{ .text_value = "catalog" };
             const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
             try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" }, source);
-            if (dynamicResourceValue(failing.allocator(), context, "zigar://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
+            if (dynamicResourceValue(failing.allocator(), context, "zigars://file/src/main.zig/imports")) |_| {} else |err| try expectRuntimeOom(err);
         }
         {
             var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1395,7 +1395,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
             var catalog = NonOwningCatalog{ .text_value = "catalog" };
             const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
             try workspace.expectRead(.{ .path = "src/main.zig", .max_bytes = max_resource_read, .provenance = "runtime_ux.dynamic_resource" }, source);
-            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigar://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
+            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigars://file/src/main.zig/symbols" })) |_| {} else |err| try expectRuntimeOom(err);
         }
         {
             var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1412,7 +1412,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
             var catalog = NonOwningCatalog{ .text_value = "catalog" };
             const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
             try expectRuntimeWorkspaceMapExists(&workspace);
-            if (workspaceMapResultValue(failing.allocator(), context, "zigar_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
+            if (workspaceMapResultValue(failing.allocator(), context, "zigars_workspace_map", null)) |_| {} else |err| try expectRuntimeOom(err);
         }
         {
             var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1429,7 +1429,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
             var catalog = NonOwningCatalog{ .text_value = "catalog" };
             const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
             try seedRuntimeJob(&session);
-            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigar://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
+            if (resourceQueryValue(failing.allocator(), context, .{ .uri = "zigars://jobs", .limit = 1 })) |_| {} else |err| try expectRuntimeOom(err);
         }
         {
             var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1445,7 +1445,7 @@ test "runtime UX remaining builders cover late allocation cleanup" {
             defer session.deinit(std.testing.allocator);
             var catalog = NonOwningCatalog{ .text_value = "catalog" };
             const context = runtimeUxTestContext(&commands, &workspace, &scanner, &session, catalog.port());
-            if (resourceSubscribeValue(failing.allocator(), context, "zigar://jobs")) |_| {} else |err| try expectRuntimeOom(err);
+            if (resourceSubscribeValue(failing.allocator(), context, "zigars://jobs")) |_| {} else |err| try expectRuntimeOom(err);
         }
     }
 }

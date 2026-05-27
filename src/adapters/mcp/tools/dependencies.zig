@@ -178,7 +178,7 @@ test "dependency adapter maps structured and thrown usecase failures" {
     defer scanner.deinit();
     var catalog = manifest_catalog.Catalog{};
     const context: app_context.ReleaseWorkflowContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{},
         .timeouts = .{},
         .command_runner = runner.port(),

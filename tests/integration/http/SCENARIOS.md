@@ -17,7 +17,7 @@ Scenario harnesses:
 Fixture ownership:
 
 - `tests/fixtures/http-smoke.expect.json` remains at its historical path so
-  `zig build smoke`, direct `zigar-tools http-smoke`, and `zig build json-check`
+  `zig build smoke`, direct `zigars-tools http-smoke`, and `zig build json-check`
   continue to work without aliases.
 
 Current floor:
@@ -36,6 +36,6 @@ Public behavior covered:
 Transition note:
 
 The HTTP executable helpers stay under `tools/integration/http/` because they
-are compiled into the existing `zigar-tools` build helper and share process,
+are compiled into the existing `zigars-tools` build helper and share process,
 HTTP, JSON, and assertion utilities with the other integration gates. This file
 is the scenario ownership record under `tests/integration`.

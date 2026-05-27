@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars CI forensics"
+  short_description: "Triage CI artifacts without overclaiming."
+  default_prompt: "Use $zigars-ci-forensics to interpret this CI failure and produce a reproducible local plan."

@@ -33,7 +33,7 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "path", try ownedString(allocator, rel));
     try obj.put(allocator, "policy", try policyValue(allocator, policy));
-    try obj.put(allocator, "evidence_source", .{ .string = "workspace_path_heuristics_and_zigar_generated_path_policy" });
+    try obj.put(allocator, "evidence_source", .{ .string = "workspace_path_heuristics_and_zigars_generated_path_policy" });
     try obj.put(allocator, "confidence", try ownedString(allocator, policy.confidence));
     obj_owned = false;
     return .{ .object = obj };
@@ -59,7 +59,7 @@ pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_edit_policy_check" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_edit_policy_check" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "allow_direct_edit", .{ .bool = allow });
     try obj.put(allocator, "checked", .{ .array = checked });
@@ -78,7 +78,7 @@ pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.Ed
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigar_generated_route" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_generated_route" });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
     try obj.put(allocator, "path", try ownedString(allocator, rel));
     try obj.put(allocator, "goal", if (goal) |text| try ownedString(allocator, text) else .null);
@@ -195,7 +195,7 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
         .provenance = "editing.format.preview.read_source",
     });
     defer input.deinit(allocator);
-    const preview_path = try std.fs.path.join(allocator, &.{ ".zigar-cache", "format-preview", rel });
+    const preview_path = try std.fs.path.join(allocator, &.{ ".zigars-cache", "format-preview", rel });
     defer allocator.free(preview_path);
     _ = try context.workspace_store.write(.{
         .path = preview_path,
@@ -329,7 +329,7 @@ fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.Ed
     try obj.put(allocator, "goal", try ownedString(allocator, goal));
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "limitations", try ownedString(allocator, limitation));
-    try obj.put(allocator, "next_action", try nextToolValue(allocator, "zigar_patch_session_validate", "validate the refactor before treating it as complete"));
+    try obj.put(allocator, "next_action", try nextToolValue(allocator, "zigars_patch_session_validate", "validate the refactor before treating it as complete"));
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -619,7 +619,7 @@ test "replacement sessions apply safe changed files through workspace store" {
     var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
     defer clock.deinit();
     const context = app_context.EditingContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = workspace.port(),
         .clock_and_ids = clock.port(),
     };
@@ -644,7 +644,7 @@ test "readSnapshot treats missing files as empty absent snapshots" {
     var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
     defer clock.deinit();
     const context = app_context.EditingContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = workspace.port(),
         .clock_and_ids = clock.port(),
     };

@@ -48,7 +48,7 @@ Initial `0.1.0` package baseline.
   checks, SHA-256 checksums, and GitHub provenance attestations.
 - Compact capability/tool-index surface for MCP tool discovery.
 - `mcp.zig` 0.0.4 URL dependency with HTTP transport enabled.
-- `zigar_schema` and `zigar_doctor` discovery/health surfaces.
+- `zigars_schema` and `zigars_doctor` discovery/health surfaces.
 - Package version sourced from `build.zig.zon` for CLI, MCP server metadata,
   release checks, generated catalogs, and CI smoke tests.
 - Optional `--strict-workspace` realpath checks and dedicated

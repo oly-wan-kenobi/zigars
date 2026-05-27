@@ -7,7 +7,7 @@ test "doctor report includes checks" {
     defer arena.deinit();
     const value = try doctor.report(arena.allocator(), .{
         .workspace = "/tmp/project",
-        .cache = "/tmp/project/.zigar-cache",
+        .cache = "/tmp/project/.zigars-cache",
         .transport = "stdio",
         .zig_path = "zig",
         .zls_path = "zls",
@@ -47,7 +47,7 @@ test "doctor report uses default ZLS resolution when disconnected without failur
     defer arena.deinit();
     const value = try doctor.report(arena.allocator(), .{
         .workspace = "/tmp/project",
-        .cache = "/tmp/project/.zigar-cache",
+        .cache = "/tmp/project/.zigars-cache",
         .transport = "stdio",
         .zig_path = "zig",
         .zls_path = "zls",

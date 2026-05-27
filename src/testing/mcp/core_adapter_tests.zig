@@ -15,7 +15,7 @@ test "core adapter renders compile error index text shape" {
     try args.put(allocator, "text", .{ .string = "src/main.zig:1:2: error: bad\nsrc/main.zig:1:2: note: detail\n" });
 
     const context = app_context.CoreCommandContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "zig" },
         .timeouts = .{},
         .zls_state = .{},
@@ -421,7 +421,7 @@ test "core adapter renders command-backed compile index and explain failures" {
 /// Builds the adapter test context with fake ports and allocator ownership.
 fn testCoreContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
         .timeouts = .{ .command_ms = 12_000, .zls_ms = 30_000 },
         .zls_state = .{ .status = "connected" },

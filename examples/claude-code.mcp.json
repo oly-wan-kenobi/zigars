@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "zigar": {
+    "zigars": {
       "type": "stdio",
-      "command": "/absolute/path/to/zigar",
+      "command": "/absolute/path/to/zigars",
       "args": [
         "--transport",
         "stdio",

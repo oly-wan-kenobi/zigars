@@ -1,5 +1,5 @@
 const std = @import("std");
-const zigar = @import("zigar");
+const zigars = @import("zigars");
 const release_docs = @import("release_docs.zig");
 const mcp_contracts = @import("mcp_contracts.zig");
 const public_claims = @import("public_claims.zig");
@@ -36,7 +36,7 @@ pub const fakeDiffFolded = fake_backends.fakeDiffFolded;
 /// Runs all artifact, source hygiene, release-doc, and MCP contract gates.
 pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len != 0) return error.InvalidArguments;
-    const generated = [_][]const u8{ "zig-out", ".zig-cache", "zig-pkg", ".zigar-cache", "coverage", "dist" };
+    const generated = [_][]const u8{ "zig-out", ".zig-cache", "zig-pkg", ".zigars-cache", "coverage", "dist" };
     var ok = true;
     for (generated) |path| {
         const tracked = isGitTracked(io, path) catch |err| blk: {
@@ -282,20 +282,20 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
 
 fn checkStaticAnalysisContracts(io: Io) !bool {
     var ok = true;
-    for (zigar.manifest.entries) |entry| {
+    for (zigars.manifest.entries) |entry| {
         if (entry.group != .static_analysis and entry.group != .zwanzig) continue;
         const tier = entry.static_analysis_tier orelse {
             try stderrPrint(io, "static-analysis capability tier missing for tool: {s}\n", .{entry.name});
             ok = false;
             continue;
         };
-        const contract = zigar.domain.zig.static_analysis_contracts.forTool(entry.name) orelse {
+        const contract = zigars.domain.zig.static_analysis_contracts.forTool(entry.name) orelse {
             try stderrPrint(io, "static-analysis contract missing for tool: {s}\n", .{entry.name});
             ok = false;
             continue;
         };
         const tier_name = @tagName(tier);
-        if (!std.mem.eql(u8, tier_name, zigar.domain.zig.static_analysis_contracts.capabilityTierName(contract.tier))) {
+        if (!std.mem.eql(u8, tier_name, zigars.domain.zig.static_analysis_contracts.capabilityTierName(contract.tier))) {
             try stderrPrint(io, "static-analysis manifest tier disagrees with contract for tool: {s}\n", .{entry.name});
             ok = false;
         }
@@ -346,7 +346,7 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     defer allocator.free(bytes);
     var ok = true;
     const required = [_][]const u8{
-        "https://github.com/oly-wan-kenobi/zigar/security/advisories/new",
+        "https://github.com/oly-wan-kenobi/zigars/security/advisories/new",
         "oliver.guenthardt@digitecgalaxus.ch",
         "acknowledge a private vulnerability report within 7 days",
         "initial triage assessment within 14 days",

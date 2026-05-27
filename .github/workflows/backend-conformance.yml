@@ -49,11 +49,11 @@ jobs:
 
       - name: Run backend conformance
         env:
-          ZIGAR_CONFORMANCE_REPORT_DIR: backend-conformance
-          ZIGAR_ZLS_PATH: ${{ inputs.zls_path }}
-          ZIGAR_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
-          ZIGAR_ZFLAME_PATH: ${{ inputs.zflame_path }}
-          ZIGAR_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
+          ZIGARS_CONFORMANCE_REPORT_DIR: backend-conformance
+          ZIGARS_ZLS_PATH: ${{ inputs.zls_path }}
+          ZIGARS_ZWANZIG_PATH: ${{ inputs.zwanzig_path }}
+          ZIGARS_ZFLAME_PATH: ${{ inputs.zflame_path }}
+          ZIGARS_DIFF_FOLDED_PATH: ${{ inputs.diff_folded_path }}
         run: bash .github/scripts/backend-conformance.sh
 
       - name: Upload conformance evidence
@@ -61,5 +61,5 @@ jobs:
         # actions/upload-artifact@v4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: zigar-backend-conformance
+          name: zigars-backend-conformance
           path: backend-conformance

@@ -24,24 +24,24 @@ resolve_executable() {
 
 command -v python3 >/dev/null || fail "python3 is required for response validation"
 
-zigar_binary="${ZIGAR_BINARY:-zig-out/bin/zigar}"
-if [[ "${ZIGAR_SKIP_BUILD:-0}" != "1" ]]; then
+zigars_binary="${ZIGARS_BINARY:-zig-out/bin/zigars}"
+if [[ "${ZIGARS_SKIP_BUILD:-0}" != "1" ]]; then
   zig build -Doptimize=ReleaseSafe
-elif [[ ! -x "$zigar_binary" ]]; then
+elif [[ ! -x "$zigars_binary" ]]; then
   zig build -Doptimize=ReleaseSafe
 fi
 
-zigar_binary="$(resolve_executable "$zigar_binary" zigar)"
-zig_path="$(resolve_executable "${ZIGAR_ZIG_PATH:-zig}" zig)"
-zls_path="$(resolve_executable "${ZIGAR_ZLS_PATH:-zls}" zls)"
+zigars_binary="$(resolve_executable "$zigars_binary" zigars)"
+zig_path="$(resolve_executable "${ZIGARS_ZIG_PATH:-zig}" zig)"
+zls_path="$(resolve_executable "${ZIGARS_ZLS_PATH:-zls}" zls)"
 
-report_dir="${ZIGAR_ZLS_CONFORMANCE_REPORT_DIR:-.zigar-cache/zls-conformance}"
+report_dir="${ZIGARS_ZLS_CONFORMANCE_REPORT_DIR:-.zigars-cache/zls-conformance}"
 mkdir -p "$report_dir"
 report_dir="$(cd "$report_dir" && pwd -P)"
 
-workspace="$(mktemp -d "${TMPDIR:-/tmp}/zigar-zls-conformance.XXXXXX")"
+workspace="$(mktemp -d "${TMPDIR:-/tmp}/zigars-zls-conformance.XXXXXX")"
 cleanup() {
-  if [[ "${ZIGAR_KEEP_CONFORMANCE_WORKSPACE:-0}" != "1" ]]; then
+  if [[ "${ZIGARS_KEEP_CONFORMANCE_WORKSPACE:-0}" != "1" ]]; then
     rm -rf "$workspace"
   else
     printf 'real-zls-conformance: kept workspace %s\n' "$workspace" >&2
@@ -72,7 +72,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
-        .name = "zigar-zls-conformance-fixture",
+        .name = "zigars-zls-conformance-fixture",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = b.standardTargetOptions(.{}),
@@ -88,16 +88,16 @@ stderr_path="$report_dir/stderr.log"
 report_path="$report_dir/report.json"
 summary_path="$report_dir/summary.md"
 
-ZIGAR_BINARY="$zigar_binary" \
-ZIGAR_WORKSPACE="$workspace" \
-ZIGAR_ZIG_PATH="$zig_path" \
-ZIGAR_ZLS_PATH="$zls_path" \
-ZIGAR_STDOUT_PATH="$stdout_path" \
-ZIGAR_STDERR_PATH="$stderr_path" \
-ZIGAR_REPORT_PATH="$report_path" \
-ZIGAR_SUMMARY_PATH="$summary_path" \
-ZIGAR_BACKEND_TIMEOUT_MS="${ZIGAR_BACKEND_TIMEOUT_MS:-20000}" \
-ZIGAR_CONFORMANCE_TIMEOUT_SECONDS="${ZIGAR_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
+ZIGARS_BINARY="$zigars_binary" \
+ZIGARS_WORKSPACE="$workspace" \
+ZIGARS_ZIG_PATH="$zig_path" \
+ZIGARS_ZLS_PATH="$zls_path" \
+ZIGARS_STDOUT_PATH="$stdout_path" \
+ZIGARS_STDERR_PATH="$stderr_path" \
+ZIGARS_REPORT_PATH="$report_path" \
+ZIGARS_SUMMARY_PATH="$summary_path" \
+ZIGARS_BACKEND_TIMEOUT_MS="${ZIGARS_BACKEND_TIMEOUT_MS:-20000}" \
+ZIGARS_CONFORMANCE_TIMEOUT_SECONDS="${ZIGARS_CONFORMANCE_TIMEOUT_SECONDS:-90}" \
 python3 <<'PY'
 import hashlib
 import json
@@ -115,13 +115,13 @@ def fail(message):
     sys.exit(1)
 
 
-workspace = pathlib.Path(os.environ["ZIGAR_WORKSPACE"])
-stdout_path = pathlib.Path(os.environ["ZIGAR_STDOUT_PATH"])
-stderr_path = pathlib.Path(os.environ["ZIGAR_STDERR_PATH"])
-report_path = pathlib.Path(os.environ["ZIGAR_REPORT_PATH"])
-summary_path = pathlib.Path(os.environ["ZIGAR_SUMMARY_PATH"])
-backend_timeout_ms = int(os.environ["ZIGAR_BACKEND_TIMEOUT_MS"])
-timeout_seconds = int(os.environ["ZIGAR_CONFORMANCE_TIMEOUT_SECONDS"])
+workspace = pathlib.Path(os.environ["ZIGARS_WORKSPACE"])
+stdout_path = pathlib.Path(os.environ["ZIGARS_STDOUT_PATH"])
+stderr_path = pathlib.Path(os.environ["ZIGARS_STDERR_PATH"])
+report_path = pathlib.Path(os.environ["ZIGARS_REPORT_PATH"])
+summary_path = pathlib.Path(os.environ["ZIGARS_SUMMARY_PATH"])
+backend_timeout_ms = int(os.environ["ZIGARS_BACKEND_TIMEOUT_MS"])
+timeout_seconds = int(os.environ["ZIGARS_CONFORMANCE_TIMEOUT_SECONDS"])
 
 
 def sha256_file(path):
@@ -153,7 +153,7 @@ source_metadata = {
 }
 
 main_source = (workspace / "src/main.zig").read_text()
-formatted_source = subprocess.check_output([os.environ["ZIGAR_ZIG_PATH"], "fmt", "--stdin"], input=main_source, text=True)
+formatted_source = subprocess.check_output([os.environ["ZIGARS_ZIG_PATH"], "fmt", "--stdin"], input=main_source, text=True)
 
 requests = [
     {
@@ -163,7 +163,7 @@ requests = [
         "params": {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
-            "clientInfo": {"name": "zigar-real-zls-conformance", "version": "0"},
+            "clientInfo": {"name": "zigars-real-zls-conformance", "version": "0"},
         },
     },
     {"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -226,15 +226,15 @@ requests = [
 
 stdin = "\n".join(json.dumps(item, separators=(",", ":")) for item in requests) + "\n"
 argv = [
-    os.environ["ZIGAR_BINARY"],
+    os.environ["ZIGARS_BINARY"],
     "--workspace",
     str(workspace),
     "--transport",
     "stdio",
     "--zig-path",
-    os.environ["ZIGAR_ZIG_PATH"],
+    os.environ["ZIGARS_ZIG_PATH"],
     "--zls-path",
-    os.environ["ZIGAR_ZLS_PATH"],
+    os.environ["ZIGARS_ZLS_PATH"],
     "--timeout-ms",
     str(backend_timeout_ms),
     "--zls-timeout-ms",
@@ -261,7 +261,7 @@ try:
             proc.kill()
             proc.wait(timeout=5)
             stdout_path.write_text("".join(stdout_lines))
-            fail(f"zigar stdio run timed out after {timeout_seconds}s; stdout saved to {stdout_path}, stderr saved to {stderr_path}")
+            fail(f"zigars stdio run timed out after {timeout_seconds}s; stdout saved to {stdout_path}, stderr saved to {stderr_path}")
         events = selector.select(timeout=0.2)
         if not events:
             if proc.poll() is not None:
@@ -373,7 +373,7 @@ if applied_source != formatted_source:
     fail("zig_format apply did not leave the fixture with the expected formatted content")
 
 report = {
-    "kind": "zigar_real_zls_conformance_report",
+    "kind": "zigars_real_zls_conformance_report",
     "schema_version": 2,
     "result": "passed",
     "source_commit": source_commit,
@@ -388,20 +388,20 @@ report = {
     "workspace": str(workspace),
     "timeout_ms": backend_timeout_ms,
     "backends": {
-        "zigar": {
-            "path": os.environ["ZIGAR_BINARY"],
-            "sha256": sha256_file(os.environ["ZIGAR_BINARY"]),
-            "version_probe": probe([os.environ["ZIGAR_BINARY"], "--version"]),
+        "zigars": {
+            "path": os.environ["ZIGARS_BINARY"],
+            "sha256": sha256_file(os.environ["ZIGARS_BINARY"]),
+            "version_probe": probe([os.environ["ZIGARS_BINARY"], "--version"]),
         },
         "zig": {
-            "path": os.environ["ZIGAR_ZIG_PATH"],
-            "sha256": sha256_file(os.environ["ZIGAR_ZIG_PATH"]),
-            "version_probe": probe([os.environ["ZIGAR_ZIG_PATH"], "version"]),
+            "path": os.environ["ZIGARS_ZIG_PATH"],
+            "sha256": sha256_file(os.environ["ZIGARS_ZIG_PATH"]),
+            "version_probe": probe([os.environ["ZIGARS_ZIG_PATH"], "version"]),
         },
         "zls": {
-            "path": os.environ["ZIGAR_ZLS_PATH"],
-            "sha256": sha256_file(os.environ["ZIGAR_ZLS_PATH"]),
-            "version_probe": probe([os.environ["ZIGAR_ZLS_PATH"], "--version"]),
+            "path": os.environ["ZIGARS_ZLS_PATH"],
+            "sha256": sha256_file(os.environ["ZIGARS_ZLS_PATH"]),
+            "version_probe": probe([os.environ["ZIGARS_ZLS_PATH"], "--version"]),
         },
     },
     "stdio": {
@@ -414,7 +414,7 @@ report = {
 report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 summary = [
-    "# Zigar Real ZLS Conformance",
+    "# Zigars Real ZLS Conformance",
     "",
     "Result: passed",
     f"Source commit: `{source_commit}`",

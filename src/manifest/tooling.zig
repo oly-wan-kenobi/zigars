@@ -83,14 +83,14 @@ fn defaultHintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "from")) return .{ .description = "Workspace-relative source file used to resolve a relative import.", .path_kind = "input_file" };
     if (std.mem.eql(u8, name, "content")) return .{ .description = "Complete source text to preview, analyze, or sync in memory." };
     if (std.mem.eql(u8, name, "apply")) return .{ .description = "Must be true before a tool writes source or workspace artifacts.", .default_bool = false };
-    if (std.mem.eql(u8, name, "timeout_ms")) return .{ .description = "Per-call timeout in milliseconds; values must be positive and may be clamped by zigar.", .minimum = 1 };
+    if (std.mem.eql(u8, name, "timeout_ms")) return .{ .description = "Per-call timeout in milliseconds; values must be positive and may be clamped by zigars.", .minimum = 1 };
     if (std.mem.eql(u8, name, "max_bytes")) return .{ .description = "Maximum bytes to read from a bounded artifact or document.", .default_int = 65536, .minimum = 1 };
     if (std.mem.eql(u8, name, "token_budget")) return .{ .description = "Approximate output token budget for result-shape planning.", .minimum = 1 };
     if (std.mem.eql(u8, name, "wait_ms")) return .{ .description = "How long to wait for asynchronous ZLS diagnostics.", .default_int = 500, .minimum = 0 };
     if (std.mem.eql(u8, name, "limit")) return .{ .description = "Maximum number of records to return.", .minimum = 1 };
     if (std.mem.eql(u8, name, "line") or std.mem.eql(u8, name, "start_line") or std.mem.eql(u8, name, "end_line")) return .{ .description = "Zero-based line number.", .minimum = 0 };
     if (std.mem.eql(u8, name, "character") or std.mem.eql(u8, name, "start_char") or std.mem.eql(u8, name, "end_char")) return .{ .description = "Zero-based UTF-16 character offset.", .minimum = 0 };
-    if (std.mem.eql(u8, name, "args")) return .{ .description = "Extra whitespace-split argv fragments. zigar does not invoke a shell." };
+    if (std.mem.eql(u8, name, "args")) return .{ .description = "Extra whitespace-split argv fragments. zigars does not invoke a shell." };
     if (std.mem.eql(u8, name, "command")) return .{ .description = "Command name or argv text accepted by the specific tool." };
     if (std.mem.eql(u8, name, "query")) return .{ .description = "Search query." };
     if (std.mem.eql(u8, name, "mode")) return .{ .description = "Tool-specific mode selector." };

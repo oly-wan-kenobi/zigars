@@ -231,8 +231,8 @@ fn isDigits(text: []const u8) bool {
 test "renderCoverageSummary includes suite floors and coverage details" {
     const results = [_]TestResult{
         .{
-            .name = "zigar-lib-tests",
-            .path = "zig-out/test-bin/zigar-lib-tests",
+            .name = "zigars-lib-tests",
+            .path = "zig-out/test-bin/zigars-lib-tests",
             .ok = true,
             .exit_code = 0,
             .tests = 380,
@@ -242,8 +242,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .stderr_bytes = 0,
         },
         .{
-            .name = "zigar-exe-tests",
-            .path = "zig-out/test-bin/zigar-exe-tests",
+            .name = "zigars-exe-tests",
+            .path = "zig-out/test-bin/zigars-exe-tests",
             .ok = true,
             .exit_code = 0,
             .tests = 121,
@@ -253,8 +253,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .stderr_bytes = 0,
         },
         .{
-            .name = "zigar-tools-tests",
-            .path = "zig-out/test-bin/zigar-tools-tests",
+            .name = "zigars-tools-tests",
+            .path = "zig-out/test-bin/zigars-tools-tests",
             .ok = true,
             .exit_code = 0,
             .tests = 21,
@@ -264,8 +264,8 @@ test "renderCoverageSummary includes suite floors and coverage details" {
             .stderr_bytes = 0,
         },
         .{
-            .name = "zigar-no-count-tests",
-            .path = "zig-out/test-bin/zigar-no-count-tests",
+            .name = "zigars-no-count-tests",
+            .path = "zig-out/test-bin/zigars-no-count-tests",
             .ok = true,
             .exit_code = 0,
             .tests = null,

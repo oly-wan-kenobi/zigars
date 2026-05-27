@@ -1,6 +1,6 @@
 # Security Model
 
-zigar is a deterministic development workbench, not an operating-system
+zigars is a deterministic development workbench, not an operating-system
 sandbox.
 
 The primary boundary is the configured workspace:
@@ -27,8 +27,8 @@ Command-backed tools run with the user's privileges. Running `zig build`,
 
 Optional backends such as ZLS, ZLint, zwanzig, zflame, Samply, Tracy, and
 platform profilers are local processes. Configure their paths explicitly when
-using zigar in sensitive workspaces. ZLint automatic fixes are delegated to the
-configured binary and still require zigar's `apply=true` source-write gate.
+using zigars in sensitive workspaces. ZLint automatic fixes are delegated to the
+configured binary and still require zigars' `apply=true` source-write gate.
 
 HTTP transport is local-only by default. `--transport http` must bind a loopback
 host such as `127.0.0.1`, `localhost`, or `::1`; non-loopback hosts are rejected
@@ -36,10 +36,10 @@ rather than exposed as an unauthenticated remote endpoint. HTTP remains
 unauthenticated by design because its supported use is local integration; stdio
 is the default transport for agent clients.
 
-zigar uses the pinned upstream MCP package for protocol types, JSON-RPC helpers,
+zigars uses the pinned upstream MCP package for protocol types, JSON-RPC helpers,
 and transport primitives, but the server adapter is first-party code under
 `src/adapters/mcp/server.zig`. There is no patched upstream MCP server in the build. That
-keeps the local security boundary auditable: zigar owns request routing,
+keeps the local security boundary auditable: zigars owns request routing,
 workspace/tool validation before handler execution, and post-serialization
 cleanup of owned tool, resource, and prompt results.
 

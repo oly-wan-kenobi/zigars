@@ -1,0 +1,35 @@
+{
+  "name": "zigars-mcpb-release",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Release tooling for zigars MCPB desktop bundles",
+  "type": "module",
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "run:node": "npm run compile --silent && node dist/build.js",
+    "run:bun": "bun run src/build.ts",
+    "build": "npm run run:node -- --target all --pack --info --sha256",
+    "build:bun": "bun run src/build.ts --target all --pack --info --sha256",
+    "build:darwin": "npm run run:node -- --target darwin-universal --pack --info --sha256",
+    "build:darwin:bun": "bun run src/build.ts --target darwin-universal --pack --info --sha256",
+    "build:linux": "npm run run:node -- --target linux-x64 --pack --info --sha256",
+    "build:linux:bun": "bun run src/build.ts --target linux-x64 --pack --info --sha256",
+    "build:windows": "npm run run:node -- --target win32-x64 --pack --info --sha256",
+    "build:windows:bun": "bun run src/build.ts --target win32-x64 --pack --info --sha256",
+    "stage": "npm run run:node -- --target all --stage-only",
+    "stage:bun": "bun run src/build.ts --target all --stage-only",
+    "validate": "npm run run:node -- --target all --validate-only",
+    "validate:bun": "bun run src/build.ts --target all --validate-only",
+    "pack": "npm run run:node -- --target all --pack --info --sha256",
+    "pack:bun": "bun run src/build.ts --target all --pack --info --sha256",
+    "sign:dev": "npm run run:node -- --target all --pack --sign-dev --info --sha256",
+    "sign:dev:bun": "bun run src/build.ts --target all --pack --sign-dev --info --sha256"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

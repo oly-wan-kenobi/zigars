@@ -31,7 +31,7 @@ test "docs query uses scanner paths and workspace reads through ports" {
     defer scanner.deinit();
 
     try scanner.expectWorkspaceScan(.{ .max_files = docs_domain.default_path_scan_limit, .provenance = "release_docs.workspace_docs_scan" }, &.{"README.md"});
-    try workspace.expectRead(.{ .path = "README.md", .max_bytes = docs_domain.std_source_read_limit, .provenance = "release_docs.workspace_docs_read" }, "# zigar\nFixtureSymbol docs\n");
+    try workspace.expectRead(.{ .path = "README.md", .max_bytes = docs_domain.std_source_read_limit, .provenance = "release_docs.workspace_docs_read" }, "# zigars\nFixtureSymbol docs\n");
 
     const ctx = app_context.ReleaseDocsContext{
         .workspace = .{ .root = "/workspace" },

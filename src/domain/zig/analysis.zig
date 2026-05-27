@@ -558,11 +558,11 @@ pub fn declName(line: []const u8, kind: []const u8) ?[]const u8 {
 /// Shared generated/cache path filter for workspace source scans.
 pub fn skipWorkspacePath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, ".zig-cache") or
-        std.mem.startsWith(u8, path, ".zigar-cache") or
+        std.mem.startsWith(u8, path, ".zigars-cache") or
         std.mem.startsWith(u8, path, "zig-out") or
         std.mem.startsWith(u8, path, "zig-pkg") or
         std.mem.indexOf(u8, path, "/.zig-cache/") != null or
-        std.mem.indexOf(u8, path, "/.zigar-cache/") != null or
+        std.mem.indexOf(u8, path, "/.zigars-cache/") != null or
         std.mem.indexOf(u8, path, "/zig-out/") != null or
         std.mem.indexOf(u8, path, "/zig-pkg/") != null;
 }

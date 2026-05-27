@@ -27,7 +27,7 @@ test "cloneValue owns nested strings" {
     const allocator = std.testing.allocator;
     var source_obj = std.json.ObjectMap.empty;
     defer source_obj.deinit(allocator);
-    try source_obj.put(allocator, "name", .{ .string = "zigar" });
+    try source_obj.put(allocator, "name", .{ .string = "zigars" });
     var source_array = std.json.Array.init(allocator);
     defer source_array.deinit();
     try source_array.append(.{ .string = "fmt" });
@@ -37,7 +37,7 @@ test "cloneValue owns nested strings" {
     defer result_mod.deinitOwnedValue(allocator, cloned);
 
     const cloned_obj = cloned.object;
-    try std.testing.expectEqualStrings("zigar", cloned_obj.get("name").?.string);
+    try std.testing.expectEqualStrings("zigars", cloned_obj.get("name").?.string);
     try std.testing.expectEqualStrings("fmt", cloned_obj.get("keywords").?.array.items[0].string);
 }
 
@@ -65,7 +65,7 @@ test "cloneValue cleans up partial array clones on allocation failure" {
 test "deinitToolResult releases nested structured result allocations" {
     const allocator = std.testing.allocator;
     var obj = std.json.ObjectMap.empty;
-    try putOwnedString(allocator, &obj, "name", "zigar");
+    try putOwnedString(allocator, &obj, "name", "zigars");
     try putOwnedNumberString(allocator, &obj, "ratio", "1.25");
 
     var nested = std.json.ObjectMap.empty;
@@ -88,7 +88,7 @@ test "deinitToolResult releases nested structured result allocations" {
     defer result_mod.deinitToolResult(allocator, result);
 
     const structured_content = result.structuredContent.?.object;
-    try std.testing.expectEqualStrings("zigar", structured_content.get("name").?.string);
+    try std.testing.expectEqualStrings("zigars", structured_content.get("name").?.string);
     try std.testing.expectEqualStrings("1.25", structured_content.get("ratio").?.number_string);
     try std.testing.expectEqualStrings("first", structured_content.get("nested").?.object.get("items").?.array.items[0].string);
     try std.testing.expectEqualStrings("42.5", structured_content.get("nested").?.object.get("items").?.array.items[1].number_string);
@@ -97,12 +97,12 @@ test "deinitToolResult releases nested structured result allocations" {
 test "structuredOwned releases input value after cloning result" {
     const allocator = std.testing.allocator;
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, try allocator.dupe(u8, "name"), .{ .string = try allocator.dupe(u8, "zigar") });
+    try obj.put(allocator, try allocator.dupe(u8, "name"), .{ .string = try allocator.dupe(u8, "zigars") });
 
     const result = try result_mod.structuredOwned(allocator, .{ .object = obj });
     defer result_mod.deinitToolResult(allocator, result);
 
-    try std.testing.expectEqualStrings("zigar", result.structuredContent.?.object.get("name").?.string);
+    try std.testing.expectEqualStrings("zigars", result.structuredContent.?.object.get("name").?.string);
 }
 
 test "structuredWithResourceLink emits text fallback and resource link" {
@@ -113,7 +113,7 @@ test "structuredWithResourceLink emits text fallback and resource link" {
 
     const result = try result_mod.structuredWithResourceLink(allocator, .{ .object = obj }, .{
         .name = "artifact.txt",
-        .uri = "zigar://artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .uri = "zigars://artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         .title = "Artifact",
         .description = "desc",
         .mimeType = "text/plain",
@@ -145,7 +145,7 @@ test "deinit helpers release all owned content block variants" {
     const embedded_meta = try result_mod.cloneValue(allocator, .{ .string = "embedded-meta" });
     result_mod.deinitOwnedContentBlock(allocator, .{ .resource = .{
         .resource = .{
-            .uri = "zigar://resource",
+            .uri = "zigars://resource",
             .text = try allocator.dupe(u8, "resource text"),
             .blob = try allocator.dupe(u8, "YmxvYg=="),
             ._meta = resource_meta,
@@ -157,7 +157,7 @@ test "deinit helpers release all owned content block variants" {
     result_mod.deinitOwnedContentBlock(allocator, .{ .resource_link = .{
         .name = try allocator.dupe(u8, "artifact"),
         .title = try allocator.dupe(u8, "Artifact"),
-        .uri = try allocator.dupe(u8, "zigar://artifact/1"),
+        .uri = try allocator.dupe(u8, "zigars://artifact/1"),
         .description = try allocator.dupe(u8, "desc"),
         .mimeType = try allocator.dupe(u8, "application/json"),
         ._meta = link_meta,
@@ -168,7 +168,7 @@ test "resource and prompt deinit helpers accept empty and populated payloads" {
     const allocator = std.testing.allocator;
 
     result_mod.deinitResourceContent(allocator, .{
-        .uri = "zigar://resource",
+        .uri = "zigars://resource",
         .text = try allocator.dupe(u8, "text"),
         .blob = try allocator.dupe(u8, "YmxvYg=="),
         ._meta = try result_mod.cloneValue(allocator, .{ .string = "resource-meta" }),
@@ -196,7 +196,7 @@ test "owned JSON helper rollbacks handle allocation failure" {
         const allocator = failing.allocator();
 
         var obj = std.json.ObjectMap.empty;
-        if (putOwnedString(allocator, &obj, "name", "zigar")) |_| {
+        if (putOwnedString(allocator, &obj, "name", "zigars")) |_| {
             result_mod.deinitOwnedValue(allocator, .{ .object = obj });
         } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
 

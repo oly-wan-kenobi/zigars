@@ -214,7 +214,7 @@ test "diagnostics adapter maps structured and thrown usecase failures" {
     var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
     defer scanner.deinit();
     const context: app_context.DiagnosticsContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{},
         .timeouts = .{},
         .command_runner = runner.port(),

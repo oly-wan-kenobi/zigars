@@ -91,7 +91,7 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expect(!readOnlyHintFor(find("zig_build").?));
     try std.testing.expect(!idempotentHintFor(find("zig_build").?));
 
-    const validation_risk = riskFor(.zigar_validate_patch);
+    const validation_risk = riskFor(.zigars_validate_patch);
     try std.testing.expect(validation_risk.executes_project_code);
     try std.testing.expect(validation_risk.writes_artifacts);
 

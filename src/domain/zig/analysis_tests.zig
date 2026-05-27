@@ -56,7 +56,7 @@ test "heuristic summaries preserve advisory source policy" {
 
 test "workspace skip policy remains cache and artifact oriented" {
     try std.testing.expect(analysis.skipWorkspacePath(".zig-cache/o/file.zig"));
-    try std.testing.expect(analysis.skipWorkspacePath(".zigar-cache/profile/out.zig"));
+    try std.testing.expect(analysis.skipWorkspacePath(".zigars-cache/profile/out.zig"));
     try std.testing.expect(analysis.skipWorkspacePath("zig-out/bin/main.zig"));
     try std.testing.expect(analysis.skipWorkspacePath("zig-pkg/mcp/src/server.zig"));
     try std.testing.expect(!analysis.skipWorkspacePath("src/main.zig"));

@@ -4,7 +4,7 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
 /// Default registry path used when the caller omits an explicit value.
-pub const default_registry_path = ".zigar-cache/artifacts/registry.jsonl";
+pub const default_registry_path = ".zigars-cache/artifacts/registry.jsonl";
 /// Default read limit used when the caller omits an explicit value.
 pub const default_read_limit: usize = 64 * 1024;
 /// Maximum registry bytes accepted by this workflow module.
@@ -12,7 +12,7 @@ pub const max_registry_bytes: usize = 16 * 1024 * 1024;
 /// Maximum hash bytes accepted by this workflow module.
 pub const max_hash_bytes: usize = 32 * 1024 * 1024;
 /// Default scan roots used when the caller omits an explicit value.
-pub const default_scan_roots = [_][]const u8{ ".zigar-cache", "zig-out", "coverage", "dist" };
+pub const default_scan_roots = [_][]const u8{ ".zigars-cache", "zig-out", "coverage", "dist" };
 
 /// Error set returned by artifact workflow failures.
 pub const ArtifactError = ports.PortError || error{
@@ -510,8 +510,8 @@ const fakes = @import("../../../testing/fakes/root.zig");
 
 test "artifact kind classifies common generated outputs" {
     try std.testing.expectEqualStrings("svg", artifactKind("zig-out/profile.svg"));
-    try std.testing.expectEqualStrings("json", artifactKind(".zigar-cache/report.json"));
-    try std.testing.expectEqualStrings("release_archive", artifactKind("dist/assets/zigar.tar.gz"));
+    try std.testing.expectEqualStrings("json", artifactKind(".zigars-cache/report.json"));
+    try std.testing.expectEqualStrings("release_archive", artifactKind("dist/assets/zigars.tar.gz"));
 }
 
 test "artifact registry handles missing preimages and stream-too-long prune checks" {
@@ -620,7 +620,7 @@ test "artifact registry JSON helpers and write error mapping cover rollback edge
 /// Implements test artifact context workflow logic using caller-owned inputs.
 fn testArtifactContext(workspace_store: ports.WorkspaceStore) app_context.ArtifactContext {
     return .{
-        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigar-cache", .transport = "test" },
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .workspace_store = workspace_store,
     };
 }

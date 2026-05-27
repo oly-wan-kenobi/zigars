@@ -14,17 +14,17 @@ public issue first.
 Preferred channel:
 
 - Use GitHub private vulnerability reporting for this repository:
-  <https://github.com/oly-wan-kenobi/zigar/security/advisories/new>
+  <https://github.com/oly-wan-kenobi/zigars/security/advisories/new>
 
 Fallback channel:
 
 - If GitHub private reporting is unavailable because of repository visibility or
   account settings, email `oliver.guenthardt@digitecgalaxus.ch` with the subject
-  prefix `[zigar security]`.
+  prefix `[zigars security]`.
 
 Include:
 
-- Affected zigar version or commit.
+- Affected zigars version or commit.
 - Operating system and Zig/ZLS versions.
 - MCP client and server configuration.
 - Minimal reproduction steps.
@@ -45,7 +45,7 @@ versions without exposing unnecessary exploit detail.
 
 ## Security Boundaries
 
-zigar's primary boundary is the configured workspace:
+zigars' primary boundary is the configured workspace:
 
 - User-provided paths must resolve under `--workspace`.
 - Existing input paths, existing output paths, and the nearest existing output
@@ -59,5 +59,5 @@ zigar's primary boundary is the configured workspace:
 - Optional backends such as ZLS, zwanzig, zflame, and platform profilers run as
   local tools with the user's privileges.
 
-zigar is not a sandbox for arbitrary untrusted code. Running `zig build`,
+zigars is not a sandbox for arbitrary untrusted code. Running `zig build`,
 `zig test`, profilers, or project-provided build scripts can execute local code.

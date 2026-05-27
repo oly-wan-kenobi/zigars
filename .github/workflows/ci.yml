@@ -40,12 +40,12 @@ jobs:
         run: |
           zig build -Doptimize=ReleaseSafe
           expected_version="$(zig build version)"
-          zig-out/bin/zigar --help >/tmp/zigar-help.out 2>/tmp/zigar-help.err
-          test ! -s /tmp/zigar-help.out
-          grep -q "deterministic Zig development MCP server" /tmp/zigar-help.err
-          zig-out/bin/zigar --version >/tmp/zigar-version.out 2>/tmp/zigar-version.err
-          test ! -s /tmp/zigar-version.out
-          grep -q "zigar ${expected_version}" /tmp/zigar-version.err
+          zig-out/bin/zigars --help >/tmp/zigars-help.out 2>/tmp/zigars-help.err
+          test ! -s /tmp/zigars-help.out
+          grep -q "deterministic Zig development MCP server" /tmp/zigars-help.err
+          zig-out/bin/zigars --version >/tmp/zigars-version.out 2>/tmp/zigars-version.err
+          test ! -s /tmp/zigars-version.out
+          grep -q "zigars ${expected_version}" /tmp/zigars-version.err
 
   coverage:
     name: Test quality summary
@@ -73,7 +73,7 @@ jobs:
         # actions/upload-artifact@v4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: zigar-coverage
+          name: zigars-coverage
           path: coverage
 
   cross-platform:

@@ -198,7 +198,7 @@ pub fn importCyclesValue(allocator: std.mem.Allocator, context: app_context.Stat
     try obj.put(allocator, "topological_depths", .{ .array = depths });
     try obj.put(allocator, "severity", .{ .string = cycleSeverity(largest_scc, cycle_node_count) });
     try obj.put(allocator, "confidence", .{ .string = if (graph.skipped_files.len == 0) "medium" else "low" });
-    try obj.put(allocator, "policy", .{ .string = "architecture-neutral import-cycle analysis; no zigar layer policy is applied" });
+    try obj.put(allocator, "policy", .{ .string = "architecture-neutral import-cycle analysis; no zigars layer policy is applied" });
     try obj.put(allocator, "skipped_file_count", .{ .integer = @intCast(graph.skipped_files.len) });
     try obj.put(allocator, "omitted_sections", try stringArrayValue(allocator, &.{}));
     return .{ .object = obj };

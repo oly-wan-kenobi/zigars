@@ -1,5 +1,5 @@
-[mcp_servers.zigar]
-command = "/absolute/path/to/zigar"
+[mcp_servers.zigars]
+command = "/absolute/path/to/zigars"
 args = [
   "--transport", "stdio",
   "--workspace", "/absolute/path/to/your/zig/project",

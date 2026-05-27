@@ -18,7 +18,7 @@ pub fn viewValue(
 ) !std.json.Value {
     const session = try envelope.view(allocator, context.workspace_store, request.kind, request.id, "sessions.view");
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "kind", .{ .string = "zigar_session_view" });
+    try obj.put(allocator, "kind", .{ .string = "zigars_session_view" });
     try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "read_only", .{ .bool = true });
     try obj.put(allocator, "lifecycle_scope", .{ .string = "inspect_only" });
@@ -54,17 +54,17 @@ test "public session view reads bounded shared JSONL without lifecycle mutation"
         \\
     ;
     try workspace.expectRead(.{
-        .path = ".zigar-cache/sessions/bench_regression_gate/gate-1.jsonl",
+        .path = ".zigars-cache/sessions/bench_regression_gate/gate-1.jsonl",
         .max_bytes = envelope.max_session_bytes,
         .provenance = "sessions.view",
     }, jsonl);
 
     const context = app_context.ArtifactContext{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = workspace.port(),
     };
     const viewed = try viewValue(allocator, context, .{ .kind = "bench_regression_gate", .id = "gate-1" });
-    try std.testing.expectEqualStrings("zigar_session_view", viewed.object.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_session_view", viewed.object.get("kind").?.string);
     try std.testing.expectEqualStrings("inspect_only", viewed.object.get("lifecycle_scope").?.string);
     try std.testing.expectEqualStrings("bench_regression_gate", viewed.object.get("session_kind").?.string);
     try std.testing.expectEqual(@as(i64, 1), viewed.object.get("record_count").?.integer);

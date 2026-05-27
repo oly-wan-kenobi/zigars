@@ -56,7 +56,7 @@ test "zwanzig argv builders use supported typed flags" {
         .executable = "zwanzig",
         .mode = .cfg,
         .source_path = "/workspace/src/main.zig",
-        .output_dir = "/workspace/.zigar-cache/graphs",
+        .output_dir = "/workspace/.zigars-cache/graphs",
     });
     defer std.testing.allocator.free(graph_argv);
     try std.testing.expectEqualStrings("--dump-cfg", graph_argv[1]);

@@ -10,7 +10,7 @@ const usage = subject.usage;
 test "parse defaults to cwd workspace" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const cfg = try parse(arena.allocator(), std.testing.io, &.{"zigar"});
+    const cfg = try parse(arena.allocator(), std.testing.io, &.{"zigars"});
     try std.testing.expect(cfg.workspace.len > 0);
     try std.testing.expectEqual(Transport.stdio, cfg.transport);
 }
@@ -18,7 +18,7 @@ test "parse explicit options" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const cfg = try parse(arena.allocator(), std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--workspace",
         "/tmp/project",
         "--transport",
@@ -38,24 +38,24 @@ test "parse explicit options" {
 }
 test "parse result can be deinitialized with general allocator" {
     var cfg = try parse(std.testing.allocator, std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--workspace",
         "/tmp/project",
         "--zig-path",
         "/opt/zig",
         "--cache-dir",
-        ".zigar-cache",
+        ".zigars-cache",
     });
     defer cfg.deinit(std.testing.allocator);
 
     try std.testing.expectEqualStrings("/opt/zig", cfg.zig_path);
-    try std.testing.expectEqualStrings(".zigar-cache", cfg.cache_dir.?);
+    try std.testing.expectEqualStrings(".zigars-cache", cfg.cache_dir.?);
 }
 test "parse rejects removed strict workspace flag" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try std.testing.expectError(ParseError.UnknownArgument, parse(arena.allocator(), std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--strict-workspace",
     }));
 }
@@ -65,7 +65,7 @@ test "parse accepts loopback http hosts" {
     const hosts = [_][]const u8{ "127.0.0.1", "localhost", "::1", "[::1]" };
     for (hosts) |host| {
         const cfg = try parse(arena.allocator(), std.testing.io, &.{
-            "zigar",
+            "zigars",
             "--transport",
             "http",
             "--host",
@@ -79,14 +79,14 @@ test "parse rejects non-loopback http hosts" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try std.testing.expectError(ParseError.UnsafeHttpHost, parse(arena.allocator(), std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--transport",
         "http",
         "--host",
         "0.0.0.0",
     }));
     try std.testing.expectError(ParseError.UnsafeHttpHost, parse(arena.allocator(), std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--host",
         "192.168.1.20",
         "--transport",
@@ -97,7 +97,7 @@ test "parse allows unused non-loopback host for stdio" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const cfg = try parse(arena.allocator(), std.testing.io, &.{
-        "zigar",
+        "zigars",
         "--transport",
         "stdio",
         "--host",
@@ -112,6 +112,6 @@ test "parse defaults clean partial allocations on failure" {
 
 /// Parses defaults with allocator input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseDefaultsWithAllocator(allocator: std.mem.Allocator) !void {
-    var cfg = try parse(allocator, std.testing.io, &.{"zigar"});
+    var cfg = try parse(allocator, std.testing.io, &.{"zigars"});
     defer cfg.deinit(allocator);
 }

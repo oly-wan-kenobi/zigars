@@ -7,7 +7,7 @@ const support = @import("../usecase_support.zig");
 /// Current schema version for persisted session snapshots.
 pub const schema_version: i64 = 1;
 /// Workspace-relative root used by persistent workflow sessions.
-pub const session_root = ".zigar-cache/sessions";
+pub const session_root = ".zigars-cache/sessions";
 /// Bounded maximum session JSONL bytes read or rewritten by the shared store.
 pub const max_session_bytes: usize = 512 * 1024;
 /// Bounded maximum JSONL records returned by a session view.
@@ -38,13 +38,13 @@ pub fn validateToken(token: []const u8) !void {
     };
 }
 
-/// Returns `.zigar-cache/sessions/<kind>`.
+/// Returns `.zigars-cache/sessions/<kind>`.
 pub fn kindDir(allocator: std.mem.Allocator, kind: []const u8) ![]u8 {
     try validateToken(kind);
     return std.fmt.allocPrint(allocator, "{s}/{s}", .{ session_root, kind });
 }
 
-/// Returns `.zigar-cache/sessions/<kind>/<id>.jsonl`.
+/// Returns `.zigars-cache/sessions/<kind>/<id>.jsonl`.
 pub fn sessionPath(allocator: std.mem.Allocator, kind: []const u8, id: []const u8) ![]u8 {
     try validateToken(kind);
     try validateToken(id);
@@ -211,7 +211,7 @@ test "session path rejects path traversal tokens" {
     try std.testing.expectError(error.InvalidSessionToken, sessionPath(std.testing.allocator, "kind", "../id"));
     const path = try sessionPath(std.testing.allocator, "bench_regression_gate", "session-1");
     defer std.testing.allocator.free(path);
-    try std.testing.expectEqualStrings(".zigar-cache/sessions/bench_regression_gate/session-1.jsonl", path);
+    try std.testing.expectEqualStrings(".zigars-cache/sessions/bench_regression_gate/session-1.jsonl", path);
 }
 
 test "session JSONL append and view are workspace bounded" {
@@ -237,14 +237,14 @@ test "session JSONL append and view are workspace bounded" {
     try support.serializeValue(std.testing.allocator, &serialized, envelope);
     try serialized.append(std.testing.allocator, '\n');
 
-    try workspace.expectEnsureDir(.{ .path = ".zigar-cache/sessions/bench_regression_gate", .provenance = "test.session" }, .{});
-    try workspace.expectReadError(.{ .path = ".zigar-cache/sessions/bench_regression_gate/session-1.jsonl", .max_bytes = max_session_bytes, .provenance = "test.session" }, error.FileNotFound);
-    try workspace.expectWrite(.{ .path = ".zigar-cache/sessions/bench_regression_gate/session-1.jsonl", .bytes = serialized.items, .provenance = "test.session" }, .{ .bytes_written = serialized.items.len });
+    try workspace.expectEnsureDir(.{ .path = ".zigars-cache/sessions/bench_regression_gate", .provenance = "test.session" }, .{});
+    try workspace.expectReadError(.{ .path = ".zigars-cache/sessions/bench_regression_gate/session-1.jsonl", .max_bytes = max_session_bytes, .provenance = "test.session" }, error.FileNotFound);
+    try workspace.expectWrite(.{ .path = ".zigars-cache/sessions/bench_regression_gate/session-1.jsonl", .bytes = serialized.items, .provenance = "test.session" }, .{ .bytes_written = serialized.items.len });
     const path = try appendSnapshot(std.testing.allocator, workspace.port(), "bench_regression_gate", "session-1", envelope, "test.session");
     defer std.testing.allocator.free(path);
-    try std.testing.expectEqualStrings(".zigar-cache/sessions/bench_regression_gate/session-1.jsonl", path);
+    try std.testing.expectEqualStrings(".zigars-cache/sessions/bench_regression_gate/session-1.jsonl", path);
 
-    try workspace.expectRead(.{ .path = ".zigar-cache/sessions/bench_regression_gate/session-1.jsonl", .max_bytes = max_session_bytes, .provenance = "test.view" }, serialized.items);
+    try workspace.expectRead(.{ .path = ".zigars-cache/sessions/bench_regression_gate/session-1.jsonl", .max_bytes = max_session_bytes, .provenance = "test.view" }, serialized.items);
     const viewed = try view(scratch, workspace.port(), "bench_regression_gate", "session-1", "test.view");
     try std.testing.expectEqual(@as(i64, 1), viewed.object.get("record_count").?.integer);
     try std.testing.expectEqualStrings("created", viewed.object.get("envelope").?.object.get("status").?.string);
@@ -261,7 +261,7 @@ test "session view reports malformed and unsupported records" {
         "{\"schema_version\":99,\"id\":\"s\",\"kind\":\"k\",\"status\":\"old\"}\n" ++
         "{not json}\n" ++
         "{\"schema_version\":1,\"id\":\"s\",\"kind\":\"k\",\"status\":\"ok\"}\n";
-    try workspace.expectRead(.{ .path = ".zigar-cache/sessions/k/s.jsonl", .max_bytes = max_session_bytes, .provenance = "test.view" }, mixed);
+    try workspace.expectRead(.{ .path = ".zigars-cache/sessions/k/s.jsonl", .max_bytes = max_session_bytes, .provenance = "test.view" }, mixed);
     const viewed = try view(scratch, workspace.port(), "k", "s", "test.view");
     try std.testing.expectEqual(@as(i64, 3), viewed.object.get("record_count").?.integer);
     try std.testing.expectEqual(@as(i64, 1), viewed.object.get("malformed_records").?.integer);

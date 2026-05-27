@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars dependency steward"
+  short_description: "Audit and update Zig dependencies safely."
+  default_prompt: "Use $zigars-dependency-steward to review this build.zig.zon dependency change with fetch, provenance, and validation evidence."

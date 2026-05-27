@@ -30,7 +30,7 @@ pub const Workspace = struct {
         const cache_root = if (cache_input) |cache|
             try resolveOutputInsideRoot(allocator, io, root, cache)
         else
-            try resolveOutputInsideRoot(allocator, io, root, ".zigar-cache");
+            try resolveOutputInsideRoot(allocator, io, root, ".zigars-cache");
 
         return .{
             .allocator = allocator,
@@ -196,7 +196,7 @@ pub fn isInside(root: []const u8, path: []const u8) bool {
 test "resolve keeps paths inside workspace" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const root = try std.fs.path.resolve(arena.allocator(), &.{"/tmp/zigar-root"});
+    const root = try std.fs.path.resolve(arena.allocator(), &.{"/tmp/zigars-root"});
     const child = try resolveInsideRoot(arena.allocator(), std.testing.io, root, "src/main.zig");
     try std.testing.expect(isInside(root, child));
     try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, resolveInsideRoot(arena.allocator(), std.testing.io, root, "../outside.zig"));

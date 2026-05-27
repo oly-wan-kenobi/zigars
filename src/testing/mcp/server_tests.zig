@@ -328,7 +328,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         "{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/resource\"},\"argument\":{\"name\":\"uri\",\"value\":\"file\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"client\",\"value\":\"co\"}}}",
-        "{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"workflow\",\"value\":\"zigar_\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"workflow\",\"value\":\"zigars_\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"uri\",\"value\":\"file\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":27,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"mode\",\"value\":\"comp\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"unknown/method\"}",
@@ -371,7 +371,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"completion\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "zigar_compile_error_workflow") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "zigars_compile_error_workflow") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "compact") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Method not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/tools/list_changed") != null);

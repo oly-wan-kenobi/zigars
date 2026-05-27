@@ -9,7 +9,7 @@ const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture</title></s
 /// Returns a typed context backed by this fixture or runtime state.
 fn testContext(command_runner: anytype, workspace_store: anytype) app_context.ProfilingContext {
     return .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame" },
         .timeouts = .{ .command_ms = 5000 },
         .command_runner = command_runner.port(),

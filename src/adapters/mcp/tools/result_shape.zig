@@ -7,13 +7,13 @@ const result_contracts = @import("../../../app/result_contracts.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
-/// Handles MCP `zigar_result_shape` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_result_shape` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
         return mcp_errors.invalidArgument(
             allocator,
-            "zigar_result_shape",
+            "zigars_result_shape",
             "mode",
             result_contracts.supportedModesText(),
             actual,
@@ -29,13 +29,13 @@ pub fn zigarResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp
     return mcp_result.structured(allocator, value);
 }
 
-/// Handles MCP `zigar_output_budget_plan` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+/// Handles MCP `zigars_output_budget_plan` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigarsOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
         return mcp_errors.invalidArgument(
             allocator,
-            "zigar_output_budget_plan",
+            "zigars_output_budget_plan",
             "mode",
             result_contracts.supportedModesText(),
             actual,
@@ -214,14 +214,14 @@ test "result shape adapter renders selected mode contract" {
     defer args.deinit(allocator);
     try args.put(allocator, "mode", .{ .string = "deep" });
 
-    const result = try zigarResultShape(allocator, .{ .object = args });
+    const result = try zigarsResultShape(allocator, .{ .object = args });
     defer mcp_result.deinitToolResult(allocator, result);
 
     try std.testing.expect(!result.is_error);
     const obj = result.structuredContent.?.object;
     // Deep mode and supported_modes cardinality are routing invariants for
     // clients that switch between compact/standard/deep contracts.
-    try std.testing.expectEqualStrings("zigar_result_shape", obj.get("kind").?.string);
+    try std.testing.expectEqualStrings("zigars_result_shape", obj.get("kind").?.string);
     try std.testing.expectEqualStrings("deep", obj.get("selected_mode").?.string);
     try std.testing.expectEqual(@as(usize, 3), obj.get("supported_modes").?.array.items.len);
 

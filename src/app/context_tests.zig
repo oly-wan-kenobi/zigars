@@ -42,7 +42,7 @@ test "profiling context requires only the pilot runtime capabilities" {
 
     var token: u8 = 0;
     const ctx = Context{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
         .timeouts = .{ .command_ms = 5_000, .zls_ms = 7_000 },
         .ports = .{
@@ -166,7 +166,7 @@ test "editing context requires workspace and clock ports" {
 
     var token: u8 = 0;
     const ctx = Context{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .ports = .{
             .workspace = .{ .ptr = &token, .vtable = &Stub.workspace_vtable },
             .clock_and_ids = .{ .ptr = &token, .vtable = &Stub.clock_vtable },
@@ -276,7 +276,7 @@ test "static analysis context carries optional command and cache ports" {
 
     var token: u8 = 0;
     const ctx = Context{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zlint = "/bin/zlint" },
         .ports = .{
             .command_runner = .{ .ptr = &token, .vtable = &Stub.command_vtable },

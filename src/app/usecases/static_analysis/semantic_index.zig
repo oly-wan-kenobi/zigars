@@ -312,7 +312,7 @@ pub fn semanticIndexValue(allocator: std.mem.Allocator, context: app_context.Sta
 
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
-    try obj.put(allocator, "format", .{ .string = "zigar.semantic_index" });
+    try obj.put(allocator, "format", .{ .string = "zigars.semantic_index" });
     try obj.put(allocator, "format_version", .{ .integer = semantic_format_version });
     try obj.put(allocator, "parse_status", .{ .string = if (parse_error_count > 0) "syntax_errors" else if (partial_result) "partial" else "ok" });
     try obj.put(allocator, "partial_result", .{ .bool = partial_result });

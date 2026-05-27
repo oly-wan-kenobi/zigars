@@ -13,7 +13,7 @@ test "registry arguments include risk metadata" {
 
     const catalog = try parsed(arena.allocator());
     const args = catalog.value.object.get("registry_tool_arguments").?.object;
-    const validate_patch = args.get("zigar_validate_patch").?.object;
+    const validate_patch = args.get("zigars_validate_patch").?.object;
     try std.testing.expect(validate_patch.get("risk").?.object.get("executes_project_code").?.bool);
     const format = args.get("zig_format").?.object;
     try std.testing.expect(format.get("risk").?.object.get("writes_require_apply").?.bool);
@@ -83,8 +83,8 @@ test "catalog lookup helpers return null for unknown tools" {
 
     const parsed_catalog = try parsed(arena.allocator());
     const groups = parsed_catalog.value.object.get("groups").?.array;
-    try std.testing.expect(find("__zigar_unknown_tool__") == null);
-    try std.testing.expect(catalogGroupForTool(groups, "__zigar_unknown_tool__") == null);
+    try std.testing.expect(find("__zigars_unknown_tool__") == null);
+    try std.testing.expect(catalogGroupForTool(groups, "__zigars_unknown_tool__") == null);
 }
 
 const aggregate = @import("aggregate.zig");

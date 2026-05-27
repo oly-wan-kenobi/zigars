@@ -58,7 +58,7 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
     var tool_errors: usize = 5;
     var token: u8 = 0;
     const context: app_context.ObservabilityContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .zls_state = .{ .status = "connected", .restart_attempts = 1 },
         .counters = .{
             .command_calls = &command_calls,
@@ -78,7 +78,7 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
     try std.testing.expectEqualStrings("zig_build", report.observed.tool_stats[0].name);
     try std.testing.expectEqualStrings("ok", report.base.backend_probe_cache.zls.?.status);
     try std.testing.expectEqualStrings("ok", report.base.artifacts.status);
-    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigar-cache/probe", .bytes = "ok" });
+    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigars-cache/probe", .bytes = "ok" });
     try std.testing.expectEqual(@as(usize, 2), write_result.bytes_written);
 }
 
@@ -107,7 +107,7 @@ test "base metrics reports artifact registry read failures" {
     };
     var token: u8 = 0;
     const context: app_context.ObservabilityContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .zls_state = .{},
         .workspace_store = .{ .ptr = &token, .vtable = &Stub.workspace_vtable },
         .observability_reader = .{ .ptr = &token, .vtable = &Stub.observability_vtable },
@@ -116,7 +116,7 @@ test "base metrics reports artifact registry read failures" {
     const base = baseMetrics(std.testing.allocator, context);
     try std.testing.expectEqualStrings("AccessDenied", base.artifacts.status);
 
-    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigar-cache/probe", .bytes = "ok" });
+    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigars-cache/probe", .bytes = "ok" });
     try std.testing.expectEqual(@as(usize, 2), write_result.bytes_written);
     const observed = try Stub.snapshot(&token, std.testing.allocator);
     try std.testing.expectEqual(@as(u64, 0), observed.total_tool_calls);
@@ -162,7 +162,7 @@ test "base metrics reports artifact scan failures" {
     };
     var token: u8 = 0;
     const context: app_context.ObservabilityContext = .{
-        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigar-cache" },
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .zls_state = .{},
         .workspace_store = .{ .ptr = &token, .vtable = &Stub.workspace_vtable },
         .observability_reader = .{ .ptr = &token, .vtable = &Stub.observability_vtable },
@@ -181,7 +181,7 @@ test "base metrics reports artifact scan failures" {
     }
     try std.testing.expect(saw_scan_failure);
 
-    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigar-cache/scan", .bytes = "ok" });
+    const write_result = try Stub.workspaceWrite(&token, .{ .path = ".zigars-cache/scan", .bytes = "ok" });
     try std.testing.expectEqual(@as(usize, 2), write_result.bytes_written);
     const observed = try Stub.snapshot(&token, std.testing.allocator);
     try std.testing.expectEqual(@as(u64, 0), observed.total_tool_calls);

@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$repo_root"
 
-binary="${ZIGAR_BINARY:-zig-out/bin/zigar}"
+binary="${ZIGARS_BINARY:-zig-out/bin/zigars}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --binary)
@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/zigar-conformance-contract.XXXXXX")"
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/zigars-conformance-contract.XXXXXX")"
 cleanup() {
   rm -rf "$tmpdir"
 }
@@ -177,15 +177,15 @@ SH
 chmod +x "$tmpdir/zls" "$tmpdir/zlint" "$tmpdir/zwanzig" "$tmpdir/zflame" "$tmpdir/diff-folded"
 
 report_dir="$tmpdir/report"
-ZIGAR_BINARY="$binary" \
-ZIGAR_ZLS_PATH="$tmpdir/zls" \
-ZIGAR_ZLINT_PATH="$tmpdir/zlint" \
-ZIGAR_ZWANZIG_PATH="$tmpdir/zwanzig" \
-ZIGAR_ZFLAME_PATH="$tmpdir/zflame" \
-ZIGAR_DIFF_FOLDED_PATH="$tmpdir/diff-folded" \
-ZIGAR_CONFORMANCE_REPORT_DIR="$report_dir" \
-ZIGAR_CLAIMED_BACKENDS="zls,zlint,zwanzig,zflame,diff_folded" \
-ZIGAR_CONFORMANCE_TIMEOUT_SECONDS=20 \
+ZIGARS_BINARY="$binary" \
+ZIGARS_ZLS_PATH="$tmpdir/zls" \
+ZIGARS_ZLINT_PATH="$tmpdir/zlint" \
+ZIGARS_ZWANZIG_PATH="$tmpdir/zwanzig" \
+ZIGARS_ZFLAME_PATH="$tmpdir/zflame" \
+ZIGARS_DIFF_FOLDED_PATH="$tmpdir/diff-folded" \
+ZIGARS_CONFORMANCE_REPORT_DIR="$report_dir" \
+ZIGARS_CLAIMED_BACKENDS="zls,zlint,zwanzig,zflame,diff_folded" \
+ZIGARS_CONFORMANCE_TIMEOUT_SECONDS=20 \
 bash .github/scripts/backend-conformance.sh >/dev/null
 
 REPORT_DIR="$report_dir" python3 <<'PY'
@@ -196,7 +196,7 @@ import sys
 
 report_dir = pathlib.Path(os.environ["REPORT_DIR"])
 report = json.loads((report_dir / "report.json").read_text())
-if report.get("kind") != "zigar_backend_conformance_report":
+if report.get("kind") != "zigars_backend_conformance_report":
     sys.exit("unexpected report kind")
 if report.get("schema_version") != 2:
     sys.exit("unexpected report schema version")
@@ -204,7 +204,7 @@ if report.get("result") != "passed":
     sys.exit("conformance report did not pass")
 if not report.get("source_commit") or report.get("source", {}).get("commit") != report.get("source_commit"):
     sys.exit("missing source commit metadata")
-for backend in ("zigar", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded"):
+for backend in ("zigars", "zig", "zls", "zlint", "zwanzig", "zflame", "diff_folded"):
     entry = report["backends"][backend]
     if len(entry.get("sha256", "")) != 64:
         sys.exit(f"missing sha256 for {backend}")

@@ -4,5 +4,5 @@ const definitions = subject.definitions;
 
 test "all definitions expose core tool metadata" {
     try @import("std").testing.expect(definitions.zig_version.description.len > 0);
-    try @import("std").testing.expect(definitions.zigar_capabilities.read_only);
+    try @import("std").testing.expect(definitions.zigars_capabilities.read_only);
 }

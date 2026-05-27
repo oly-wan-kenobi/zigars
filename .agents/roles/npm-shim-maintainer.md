@@ -1,6 +1,6 @@
 # npm Shim Maintainer
 
-Use this role for changes under `packages/zigar-mcp-npm/` or anything affecting
+Use this role for changes under `packages/zigars-mcp-npm/` or anything affecting
 published npm launcher behavior.
 
 ## Responsibilities
@@ -19,14 +19,14 @@ published npm launcher behavior.
 - Package version expectations align with GitHub release asset lookup.
 - Errors for missing releases, checksum mismatches, and unsupported platforms
   are explicit.
-- `bin/zigar-mcp.js`, `dist/package.json`, package metadata, and README examples
+- `bin/zigars-mcp.js`, `dist/package.json`, package metadata, and README examples
   remain publish-safe.
 - Tests cover both Node and Bun behavior where feasible.
 
 ## Validation
 
 ```sh
-cd packages/zigar-mcp-npm
+cd packages/zigars-mcp-npm
 npm run build
 npm run test:node
 bun run test:bun

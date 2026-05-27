@@ -174,10 +174,10 @@ fn dupeNext(allocator: std.mem.Allocator, args: []const []const u8, index: *usiz
 /// Static CLI help text; stdout remains reserved for MCP JSON-RPC.
 pub fn usage() []const u8 {
     return
-    \\zigar - deterministic Zig development MCP server
+    \\zigars - deterministic Zig development MCP server
     \\
     \\Usage:
-    \\  zigar [--workspace <path>] [--zig-path <path>] [--zls-path <path>]
+    \\  zigars [--workspace <path>] [--zig-path <path>] [--zls-path <path>]
     \\        [--zlint-path <path>] [--zwanzig-path <path>] [--zflame-path <path>]
     \\        [--diff-folded-path <path>]
     \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
