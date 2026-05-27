@@ -1,6 +1,6 @@
 {
   "required_tools": [
-    "zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check",
+    "zigar_schema", "zigar_backend_catalog", "zig_format", "zigar_doctor", "zigar_context_pack", "zigar_next_action", "zigar_validate_patch", "zigar_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigar_artifact_index", "zigar_artifact_read", "zigar_session_view", "zigar_artifact_prune", "zigar_metrics_v2", "zigar_backend_health_history", "zigar_zls_timeline", "zigar_tool_latency", "zigar_trust_report", "zigar_command_provenance", "zigar_risk_audit", "zigar_clean_tree_gate", "zigar_result_shape", "zigar_output_budget_plan", "zigar_docs_drift_check", "zigar_release_claim_check", "zigar_tool_index_check",
     "zigar_setup_elicit", "zigar_profile_elicit", "zigar_backend_elicit", "zigar_project_profile_v2", "zigar_profile_validate", "zigar_profile_read", "zigar_profile_bootstrap", "zigar_profile_import", "zigar_profile_diff", "zigar_env_pack", "zigar_env_export", "zigar_zvm_probe", "zigar_zvm_install_plan", "zigar_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigar_backend_install_plan", "zigar_backend_verify", "zigar_dev_env_generate", "zigar_backend_conformance", "zigar_backend_evidence_pack",
     "zigar_job_start", "zigar_job_status", "zigar_job_result", "zigar_job_cancel", "zigar_cancel_status", "zigar_run_stream", "zigar_run_events", "zigar_resource_query", "zigar_resource_subscribe", "zigar_resource_unsubscribe", "zigar_roots_sync", "zigar_workspace_map", "zigar_workspace_select", "zigar_agent_guide_v2", "zigar_client_guide", "zigar_prompt_pack",
     "zig_semantic_index_build", "zig_semantic_index_status", "zig_semantic_index_refresh", "zig_semantic_query", "zig_semantic_refs", "zig_semantic_decl", "zig_semantic_callers", "zig_static_fusion", "zig_code_index_export", "zig_scip_export", "zig_import_cycles", "zig_test_name_resolve", "zig_test_fixture_inventory", "zig_safety_site_catalog", "zig_test_for_symbol", "zig_module_surface", "zig_symbol_dossier", "zig_change_risk_audit", "zig_insertion_sites", "zig_io_migration_scan", "zig_leak_triage", "zig_comptime_diagnose", "zig_memory_layout", "zig_unsafe_operations_audit", "zig_abi_layout_diff", "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix", "zig_lint_compare", "zig_lint_profile", "zig_lint_gate", "zig_lint_fix_plan", "zig_lint_baseline", "zig_lint_suppressions", "zig_lint_trend",
@@ -61,6 +61,12 @@
       "outputSchema.properties.resource_uri.type": "string",
       "outputSchema.required.0": "kind",
       "outputSchema.required.1": "ok"
+    },
+    "zigar_session_view": {
+      "inputSchema.properties.kind.type": "string",
+      "inputSchema.properties.id.type": "string",
+      "inputSchema.required.0": "kind",
+      "inputSchema.required.1": "id"
     },
     "zigar_artifact_prune": {
       "inputSchema.properties.apply.type": "boolean",
@@ -952,7 +958,8 @@
     "offline": true
   },
   "phase6_dependency_migrate_paths": {
-    "kind": "zig_dependency_migrate",
+    "kind": "dependency_migration",
+    "tool": "zig_dependency_migrate",
     "session_kind": "dependency_migration",
     "state": "planned",
     "requires_apply": true
@@ -1018,8 +1025,17 @@
     "kind": "bench_regression_gate",
     "status": "failed",
     "validation.passed": false,
-    "applied": false,
-    "requires_apply": true
+    "applied": true,
+    "requires_apply": false
+  },
+  "session_view_paths": {
+    "kind": "zigar_session_view",
+    "session_kind": "bench_regression_gate",
+    "session_id": "smoke-gate",
+    "record_count": 1,
+    "session.envelope.status": "failed",
+    "lifecycle_scope": "inspect_only",
+    "read_only": true
   },
   "perf_budget_paths": {
     "kind": "zig_perf_budget_check",

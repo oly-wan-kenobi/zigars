@@ -14,7 +14,7 @@ pub const group_specs = [_]GroupSpec{
     .{ .group = .ci_artifacts, .keywords = &.{ "ci", "annotations", "junit", "matrix", "multiple zig versions", "test report" } },
     .{ .group = .zwanzig, .keywords = &.{ "zwanzig", "lint", "linter", "static analysis", "sarif", "rules", "dot graph" } },
     .{ .group = .profiling, .keywords = &.{ "profile", "profiling", "profile plan", "external capture", "perf", "dtrace", "sample", "xctrace", "vtune", "zflame", "flamegraph", "diff flamegraph" } },
-    .{ .group = .artifact_registry, .keywords = &.{ "artifact", "registry", "provenance", "sha256", "evidence", "generated files", "profile", "coverage", "release artifact" } },
+    .{ .group = .artifact_registry, .keywords = &.{ "artifact", "registry", "provenance", "sha256", "evidence", "generated files", "profile", "coverage", "release artifact", "session", "jsonl", "workflow session" } },
     .{ .group = .observability, .keywords = &.{ "metrics", "observability", "latency", "backend health", "zls timeline", "tool errors", "runtime counters" } },
     .{ .group = .trust_safety, .keywords = &.{ "trust", "safety", "risk", "clean tree", "command provenance", "apply gate", "path policy", "generated files", "vendor", "regeneration route", "backend identity" } },
     .{ .group = .result_contracts, .keywords = &.{ "result shape", "compact", "standard", "deep", "output budget", "omitted sections", "token budget" } },

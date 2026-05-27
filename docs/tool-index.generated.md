@@ -70,9 +70,9 @@ Keywords: `profile`, `profiling`, `profile plan`, `external capture`, `perf`, `d
 
 ### artifact_registry
 
-Tools: `zigar_artifact_index`, `zigar_artifact_read`, `zigar_artifact_prune`
+Tools: `zigar_artifact_index`, `zigar_artifact_read`, `zigar_session_view`, `zigar_artifact_prune`
 
-Keywords: `artifact`, `registry`, `provenance`, `sha256`, `evidence`, `generated files`, `profile`, `coverage`, `release artifact`
+Keywords: `artifact`, `registry`, `provenance`, `sha256`, `evidence`, `generated files`, `profile`, `coverage`, `release artifact`, `session`, `jsonl`, `workflow session`
 
 ### observability
 
@@ -198,6 +198,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - inspect binary and cross-target runtime artifacts: prefer `zig_binary_size, zig_binary_size_diff, zig_objdump_summary, zig_dwarfdump_check, zig_symbolize, zig_qemu_test, zig_cross_smoke`
 - plan embedded and flash workflows: prefer `zig_embedded_detect, zig_microzig_plan, zig_board_profile, zig_flash_plan`
 - inspect generated evidence artifacts: prefer `zigar_artifact_index, zigar_artifact_read`
+- inspect persisted workflow sessions: prefer `zigar_session_view`
 - inspect zigar runtime health: prefer `zigar_metrics_v2, zigar_tool_latency`
 - explain zigar safety posture: prefer `zigar_trust_report, zigar_risk_audit`
 - choose compact or deep output: prefer `zigar_result_shape, zigar_output_budget_plan`
@@ -484,6 +485,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_run_events`: optional `job_id: string`, `cursor: string`, `limit: integer`
 - `zigar_run_stream`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
 - `zigar_session_snapshot`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
+- `zigar_session_view`: required `kind: string`, `id: string`
 - `zigar_setup_elicit`: optional `topic: string`, `mode: string`
 - `zigar_smoke_plan`: optional `client: string`, `transport: string`, `backend: string`, `platform: string`, `timeout_ms: integer`
 - `zigar_tool_index_check`: optional `mode: string`
@@ -794,6 +796,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_run_stream`: `dynamic_command` runtime-dependent backend plan
 - `zigar_schema`: `pure_analysis` read-only analysis
 - `zigar_session_snapshot`: `pure_analysis` read-only analysis
+- `zigar_session_view`: `pure_analysis` read-only analysis
 - `zigar_setup_elicit`: `pure_analysis` read-only analysis
 - `zigar_smoke_plan`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis

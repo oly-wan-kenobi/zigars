@@ -61,6 +61,7 @@
     {"intent": "inspect binary and cross-target runtime artifacts", "prefer": "zig_binary_size, zig_binary_size_diff, zig_objdump_summary, zig_dwarfdump_check, zig_symbolize, zig_qemu_test, zig_cross_smoke", "keywords": ["binary size", "objdump", "dwarf", "symbolize", "qemu", "cross target"]},
     {"intent": "plan embedded and flash workflows", "prefer": "zig_embedded_detect, zig_microzig_plan, zig_board_profile, zig_flash_plan", "keywords": ["embedded", "microzig", "board", "firmware", "flash", "probe-rs", "openocd"]},
     {"intent": "inspect generated evidence artifacts", "prefer": "zigar_artifact_index, zigar_artifact_read", "keywords": ["artifact", "registry", "provenance", "sha256", "evidence"]},
+    {"intent": "inspect persisted workflow sessions", "prefer": "zigar_session_view", "keywords": ["session", "jsonl", "workflow session", "dependency migration", "bench regression gate", "inspect only"]},
     {"intent": "inspect zigar runtime health", "prefer": "zigar_metrics_v2, zigar_tool_latency", "keywords": ["metrics", "observability", "latency", "backend health", "zls timeline"]},
     {"intent": "explain zigar safety posture", "prefer": "zigar_trust_report, zigar_risk_audit", "keywords": ["trust", "safety", "risk", "command provenance", "clean tree"]},
     {"intent": "choose compact or deep output", "prefer": "zigar_result_shape, zigar_output_budget_plan", "keywords": ["result shape", "compact", "deep", "omitted sections", "token budget"]},

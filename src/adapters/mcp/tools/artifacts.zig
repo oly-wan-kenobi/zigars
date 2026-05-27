@@ -6,6 +6,7 @@ const mcp = @import("mcp");
 const app_context = @import("../../../app/context.zig");
 const result_contracts = @import("../../../app/result_contracts.zig");
 const artifact_registry = @import("../../../app/usecases/artifacts/registry.zig");
+const session_viewer = @import("../../../app/usecases/sessions/viewer.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
@@ -105,6 +106,26 @@ pub fn zigarArtifactRead(
         .description = "Read this artifact through the zigar artifact resource template.",
         .mimeType = artifactMimeType(artifact.path),
     });
+}
+
+/// Reads a bounded shared workflow session JSONL file without changing lifecycle state.
+pub fn zigarSessionView(
+    allocator: std.mem.Allocator,
+    context: app_context.ArtifactContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const session_kind = argString(args, "kind") orelse return mcp_errors.missingArgument(allocator, "zigar_session_view", "kind", "session kind token");
+    const session_id = argString(args, "id") orelse return mcp_errors.missingArgument(allocator, "zigar_session_view", "id", "session id token");
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+
+    const value = session_viewer.viewValue(scratch, context, .{
+        .kind = session_kind,
+        .id = session_id,
+    }) catch |err| return sessionViewError(allocator, session_kind, session_id, err);
+    return mcp_result.structured(allocator, value);
 }
 
 /// Previews or applies stale artifact-registry pruning; never deletes artifact files.
@@ -218,6 +239,37 @@ fn artifactError(
         .category = "artifact",
         .resolution = resolution,
         .details = &.{.{ .key = "path", .value = .{ .string = path } }},
+    }, err);
+}
+
+/// Maps shared session view failures to stable public MCP errors.
+fn sessionViewError(
+    allocator: std.mem.Allocator,
+    session_kind: []const u8,
+    session_id: []const u8,
+    err: anyerror,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    if (err == error.InvalidSessionToken) {
+        return mcp_errors.invalidArgument(
+            allocator,
+            "zigar_session_view",
+            null,
+            "non-empty session kind and id tokens containing only letters, digits, underscore, dash, or dot",
+            "invalid token",
+            "Retry with the exact kind and id returned by a session-producing zigar workflow.",
+        );
+    }
+    return mcp_errors.fromError(allocator, .{
+        .tool = "zigar_session_view",
+        .operation = "read_session",
+        .phase = "session_jsonl_view",
+        .code = if (err == error.FileNotFound or err == error.NotFound) "session_not_found" else "session_view_failed",
+        .category = "session",
+        .resolution = "Confirm the workflow persisted a session under .zigar-cache/sessions/<kind>/<id>.jsonl, then retry with that kind and id.",
+        .details = &.{
+            .{ .key = "session_kind", .value = .{ .string = session_kind } },
+            .{ .key = "session_id", .value = .{ .string = session_id } },
+        },
     }, err);
 }
 

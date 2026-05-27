@@ -257,6 +257,7 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_memory_layout");
         try self.expectTool(tools, "zig_unsafe_operations_audit");
         try self.expectTool(tools, "zig_abi_layout_diff");
+        try self.expectTool(tools, "zigar_session_view");
         try self.expectTool(tools, "zig_bench_regression_gate");
         try self.expectTool(tools, "zig_zlint");
         try self.expectTool(tools, "zig_zlint_fix");
@@ -382,7 +383,7 @@ const StdioClient = struct {
         const memory_layout = try self.callTool("zig_memory_layout", "{\"path\":\"src/pain.zig\",\"limit\":10}");
         defer self.allocator.free(memory_layout);
         try self.expectPathString(memory_layout, "kind", "zig_memory_layout");
-        try self.expectPathJson(memory_layout, "candidate_count", .{ .integer = 1 });
+        try self.expectPathJson(memory_layout, "candidate_count", .{ .integer = 3 });
         const unsafe_audit = try self.callTool("zig_unsafe_operations_audit", "{\"path\":\"src/pain.zig\",\"limit\":10}");
         defer self.allocator.free(unsafe_audit);
         try self.expectPathString(unsafe_audit, "kind", "zig_unsafe_operations_audit");
@@ -407,11 +408,17 @@ const StdioClient = struct {
         defer self.allocator.free(migrate);
         try self.expectPathString(migrate, "session_kind", "dependency_migration");
         try self.expectPathJson(migrate, "requires_apply", .{ .bool = true });
-        const bench_gate = try self.callTool("zig_bench_regression_gate", "{\"current\":\"parse 120 ns\\n\",\"baseline\":\"parse 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"stdio-gate\",\"apply\":false}");
+        const bench_gate = try self.callTool("zig_bench_regression_gate", "{\"current\":\"parse 120 ns\\n\",\"baseline\":\"parse 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"stdio-gate\",\"apply\":true}");
         defer self.allocator.free(bench_gate);
         try self.expectPathString(bench_gate, "tool", "zig_bench_regression_gate");
         try self.expectPathString(bench_gate, "status", "failed");
-        try self.expectPathJson(bench_gate, "requires_apply", .{ .bool = true });
+        try self.expectPathJson(bench_gate, "requires_apply", .{ .bool = false });
+        const session_view = try self.callTool("zigar_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"stdio-gate\"}");
+        defer self.allocator.free(session_view);
+        try self.expectPathString(session_view, "kind", "zigar_session_view");
+        try self.expectPathString(session_view, "session_kind", "bench_regression_gate");
+        try self.expectPathString(session_view, "session.envelope.status", "failed");
+        try self.expectPathJson(session_view, "record_count", .{ .integer = 1 });
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 

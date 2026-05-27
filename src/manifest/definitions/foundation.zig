@@ -29,6 +29,17 @@ pub const zigar_artifact_read = tool(.{
     .group = .artifact_registry,
     .plan = .{ .pure_analysis = "Reads one workspace-bound artifact path without executing backends or mutating state." },
 });
+/// Inspect a bounded shared workflow session JSONL file without changing lifecycle state.
+pub const zigar_session_view = tool(.{
+    .description = "Inspect a bounded shared workflow session JSONL file without changing lifecycle state.",
+    .input_schema = schemaWithHints(&.{ .{ "kind", "string", true }, .{ "id", "string", true } }, &.{
+        fieldHint("kind", .{ .description = "Session kind token, such as dependency_migration or bench_regression_gate." }),
+        fieldHint("id", .{ .description = "Session id token returned by the workflow that created the session." }),
+    }),
+    .read_only = true,
+    .group = .artifact_registry,
+    .plan = .{ .pure_analysis = "Reads .zigar-cache/sessions/<kind>/<id>.jsonl through workspace-bound cache paths and does not perform resume, close, cancel, cleanup, or mutation." },
+});
 /// Preview or apply pruning of stale artifact registry entries without deleting artifact files.
 pub const zigar_artifact_prune = tool(.{
     .description = "Preview or apply pruning of stale artifact registry entries without deleting artifact files.",

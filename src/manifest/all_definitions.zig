@@ -26,6 +26,7 @@ pub const definitions = struct {
     pub const zigar_http_status = discovery.zigar_http_status;
     pub const zigar_artifact_index = foundation.zigar_artifact_index;
     pub const zigar_artifact_read = foundation.zigar_artifact_read;
+    pub const zigar_session_view = foundation.zigar_session_view;
     pub const zigar_artifact_prune = foundation.zigar_artifact_prune;
     pub const zigar_metrics_v2 = foundation.zigar_metrics_v2;
     pub const zigar_backend_health_history = foundation.zigar_backend_health_history;

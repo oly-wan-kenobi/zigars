@@ -42,7 +42,8 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 178, "zig_bench_baseline", "{\"results\":\"parse: 100 ns\\n\",\"apply\":false}", expected, "bench_baseline_paths", scenarios);
     try assertToolPaths(allocator, io, port, 179, "zig_benchmark_history", "{}", expected, "benchmark_history_paths", scenarios);
     try assertToolPaths(allocator, io, port, 180, "zig_bench_compare", "{\"current\":\"parse: 120 ns\\n\",\"baseline\":\"parse: 100 ns\\n\",\"threshold_pct\":5}", expected, "bench_compare_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 181, "zig_bench_regression_gate", "{\"current\":\"parse: 120 ns\\n\",\"baseline\":\"parse: 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"smoke-gate\",\"apply\":false}", expected, "bench_regression_gate_paths", scenarios);
+    try assertToolPaths(allocator, io, port, 181, "zig_bench_regression_gate", "{\"current\":\"parse: 120 ns\\n\",\"baseline\":\"parse: 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"smoke-gate\",\"apply\":true}", expected, "bench_regression_gate_paths", scenarios);
+    try assertToolPaths(allocator, io, port, 194, "zigar_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"smoke-gate\"}", expected, "session_view_paths", scenarios);
     try assertToolPaths(allocator, io, port, 182, "zig_perf_budget_check", perf_budget_args, expected, "perf_budget_paths", scenarios);
     try assertToolPaths(allocator, io, port, 183, "zig_profile_regression", profile_regression_args, expected, "profile_regression_paths", scenarios);
     try assertToolPaths(allocator, io, port, 184, "zig_samply_record", "{\"command\":\"zig build test\",\"apply\":false}", expected, "samply_record_paths", scenarios);

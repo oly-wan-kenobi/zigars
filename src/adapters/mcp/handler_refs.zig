@@ -142,6 +142,7 @@ pub fn handlerFor(id: manifest.ToolId) HandlerRef {
         .zig_code_action_apply => .{ .module = .edit_zls, .name = "zigCodeActionApply" },
         .zigar_artifact_index => .{ .module = .artifacts, .name = "zigarArtifactIndex" },
         .zigar_artifact_read => .{ .module = .artifacts, .name = "zigarArtifactRead" },
+        .zigar_session_view => .{ .module = .artifacts, .name = "zigarSessionView" },
         .zigar_artifact_prune => .{ .module = .artifacts, .name = "zigarArtifactPrune" },
         .zigar_metrics_v2 => .{ .module = .observability, .name = "zigarMetricsV2" },
         .zigar_backend_health_history => .{ .module = .observability, .name = "zigarBackendHealthHistory" },

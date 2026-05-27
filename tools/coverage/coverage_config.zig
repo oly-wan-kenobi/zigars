@@ -2,8 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 pub const min_total_tests: i64 = 500;
-pub const min_http_smoke_scenarios: usize = 154;
-pub const min_stdio_fixture_tool_calls: usize = 76;
+pub const min_http_smoke_scenarios: usize = 155;
+pub const min_stdio_fixture_tool_calls: usize = 77;
 pub const kcov_include_path = "src,tools";
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist,tools/fuzz_test_runner.zig";
 pub const kcov_exclude_line_pattern = "KCOV_EXCL_LINE";
@@ -79,8 +79,8 @@ test "coverage floors require strict complete coverage" {
     try std.testing.expectEqual(@as(i64, 1), test_binaries[1].min_tests);
     try std.testing.expectEqual(@as(i64, 26), test_binaries[2].min_tests);
     try std.testing.expectEqual(@as(i64, 2), test_binaries[3].min_tests);
-    try std.testing.expectEqual(@as(usize, 154), min_http_smoke_scenarios);
-    try std.testing.expectEqual(@as(usize, 76), min_stdio_fixture_tool_calls);
+    try std.testing.expectEqual(@as(usize, 155), min_http_smoke_scenarios);
+    try std.testing.expectEqual(@as(usize, 77), min_stdio_fixture_tool_calls);
     try std.testing.expectEqualStrings("--exclude-line=KCOV_EXCL_LINE", kcov_exclude_line_arg);
     try std.testing.expectEqualStrings("--exclude-region=KCOV_EXCL_START:KCOV_EXCL_STOP", kcov_exclude_region_arg);
     try std.testing.expectEqual(@as(u32, 10000), min_line_coverage_basis_points);
