@@ -100,9 +100,9 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 
 ### environment_profiles
 
-Tools: `zigar_setup_elicit`, `zigar_profile_elicit`, `zigar_backend_elicit`, `zigar_project_profile_v2`, `zigar_profile_validate`, `zigar_profile_read`, `zigar_profile_bootstrap`, `zigar_profile_import`, `zigar_profile_diff`, `zigar_env_pack`, `zigar_env_export`, `zigar_zvm_probe`, `zigar_zvm_install_plan`, `zigar_zvm_switch_plan`, `zig_zls_match_check`, `zig_toolchain_pin`, `zig_toolchain_pin_check`, `zigar_backend_install_plan`, `zigar_backend_verify`, `zigar_dev_env_generate`, `zigar_backend_conformance`, `zigar_backend_evidence_pack`
+Tools: `zigar_setup_guidance`, `zigar_profile_guidance`, `zigar_backend_guidance`, `zigar_setup_elicit`, `zigar_profile_elicit`, `zigar_backend_elicit`, `zigar_project_profile_v2`, `zigar_profile_validate`, `zigar_profile_read`, `zigar_profile_bootstrap`, `zigar_profile_import`, `zigar_profile_diff`, `zigar_env_pack`, `zigar_env_export`, `zigar_zvm_probe`, `zigar_zvm_install_plan`, `zigar_zvm_switch_plan`, `zig_zls_match_check`, `zig_toolchain_pin`, `zig_toolchain_pin_check`, `zigar_backend_install_plan`, `zigar_backend_verify`, `zigar_dev_env_generate`, `zigar_backend_conformance`, `zigar_backend_evidence_pack`
 
-Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `toolchain pin`, `zvm`, `zls compatibility`, `dev environment`, `backend conformance`, `setup elicitation`
+Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `toolchain pin`, `zvm`, `zls compatibility`, `dev environment`, `backend conformance`, `setup guidance`, `elicitation compatibility`
 
 ### runtime_ux
 
@@ -172,6 +172,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - understand compiler errors: prefer `zig_explain_errors`
 - group compiler errors by file: prefer `zig_compile_error_index`
 - inspect planning support for a tool: prefer `zig_tool_plan`
+- answer setup, profile, and backend ambiguity: prefer `zigar_setup_guidance, zigar_profile_guidance, zigar_backend_guidance`
 - resolve Zig toolchain mismatch: prefer `zig_toolchain_resolve`
 - plan checks for dirty files: prefer `zig_changed_files_plan`
 - select focused tests: prefer `zig_test_select`
@@ -431,6 +432,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_backend_conformance`: optional `backend: string`, `probe_backends: boolean`, `timeout_ms: integer`
 - `zigar_backend_elicit`: optional `backend: string`, `mode: string`
 - `zigar_backend_evidence_pack`: optional `input: string`, `output: string`, `apply: boolean`
+- `zigar_backend_guidance`: optional `backend: string`, `mode: string`
 - `zigar_backend_install_plan`: optional `backend: string`, `manager: string`
 - `zigar_backend_verify`: optional `backend: string`, `timeout_ms: integer`
 - `zigar_cancel_status`: optional `job_id: string`
@@ -448,7 +450,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_edit_policy_check`: optional `files: string`, `patch: string`
 - `zigar_env_export`: optional `output: string`, `apply: boolean`, `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigar_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
-- `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
+- `zigar_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`, `summarize: boolean`
 - `zigar_generated_route`: required `path: string`; optional `goal: string`
 - `zigar_handoff_pack`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_impact`: optional `files: string`, `symbols: string`, `limit: integer`
@@ -467,6 +469,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_profile_bootstrap`: optional `mode: string`
 - `zigar_profile_diff`: optional `content: string`, `path: string`
 - `zigar_profile_elicit`: optional `content: string`, `mode: string`
+- `zigar_profile_guidance`: optional `content: string`, `mode: string`
 - `zigar_profile_import`: required `content: string`; optional `apply: boolean`
 - `zigar_profile_read`: optional `path: string`
 - `zigar_profile_validate`: optional `content: string`, `path: string`
@@ -487,6 +490,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_session_snapshot`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigar_session_view`: required `kind: string`, `id: string`
 - `zigar_setup_elicit`: optional `topic: string`, `mode: string`
+- `zigar_setup_guidance`: optional `topic: string`, `mode: string`
 - `zigar_smoke_plan`: optional `client: string`, `transport: string`, `backend: string`, `platform: string`, `timeout_ms: integer`
 - `zigar_tool_index_check`: optional `mode: string`
 - `zigar_tool_sequence_plan`: optional `goal: string`, `error: string`, `diff: string`, `changed_files: string`
@@ -736,6 +740,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_backend_conformance`: `dynamic_command` runtime-dependent backend plan
 - `zigar_backend_elicit`: `pure_analysis` read-only analysis
 - `zigar_backend_evidence_pack`: `apply_gated_mutation` preview/apply mutation
+- `zigar_backend_guidance`: `pure_analysis` read-only analysis
 - `zigar_backend_health_history`: `pure_analysis` read-only analysis
 - `zigar_backend_install_plan`: `pure_analysis` read-only analysis
 - `zigar_backend_verify`: `dynamic_command` runtime-dependent backend plan
@@ -777,6 +782,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_profile_bootstrap`: `pure_analysis` read-only analysis
 - `zigar_profile_diff`: `pure_analysis` read-only analysis
 - `zigar_profile_elicit`: `pure_analysis` read-only analysis
+- `zigar_profile_guidance`: `pure_analysis` read-only analysis
 - `zigar_profile_import`: `apply_gated_mutation` preview/apply mutation
 - `zigar_profile_read`: `pure_analysis` read-only analysis
 - `zigar_profile_validate`: `pure_analysis` read-only analysis
@@ -798,6 +804,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigar_session_snapshot`: `pure_analysis` read-only analysis
 - `zigar_session_view`: `pure_analysis` read-only analysis
 - `zigar_setup_elicit`: `pure_analysis` read-only analysis
+- `zigar_setup_guidance`: `pure_analysis` read-only analysis
 - `zigar_smoke_plan`: `pure_analysis` read-only analysis
 - `zigar_tool_index`: `pure_analysis` read-only analysis
 - `zigar_tool_index_check`: `pure_analysis` read-only analysis

@@ -868,6 +868,7 @@ fn profileSummaryValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, 
     try obj.put(allocator, "thread_count", .{ .integer = @intCast(thread_names.items.len) });
     try obj.put(allocator, "sample_count", .{ .integer = @intCast(sample_count) });
     try obj.put(allocator, "frame_count", .{ .integer = @intCast(frame_count) });
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic Samply summary; raw profile counters are returned directly.");
     return .{ .object = obj };
 }
 

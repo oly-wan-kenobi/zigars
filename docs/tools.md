@@ -117,11 +117,12 @@ paths, optional backend policy, unresolved unknowns, and verification tools.
 comparison, validation, and bounded reads. Writes are preview-first and require
 `apply=true`.
 
-`zigar_setup_elicit`, `zigar_profile_elicit`, and `zigar_backend_elicit` return
-detected facts, questions, and unknowns for client-mediated setup. They do not
-block deterministic non-interactive flows; unresolved ambiguity stays visible in
-the result so a client can either ask a human or continue with conservative
-defaults.
+`zigar_setup_guidance`, `zigar_profile_guidance`, and
+`zigar_backend_guidance` return detected facts, questions, and unknowns for
+advisory setup. They do not issue MCP protocol elicitation and do not block
+deterministic non-interactive flows; unresolved ambiguity stays visible in the
+result so a client can either ask a human or continue with conservative
+defaults. The older `_elicit` names remain registered as compatibility aliases.
 
 `zigar_env_pack` returns a reproducible environment pack with configured Zig,
 ZLS, optional backend paths, probe argv, optional executable hashes, project

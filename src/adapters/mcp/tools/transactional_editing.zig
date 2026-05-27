@@ -4,12 +4,15 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const app_context = @import("../../../app/context.zig");
+const ports = @import("../../../app/ports.zig");
 const editing = @import("../../../app/usecases/editing/patch_sessions.zig");
 const editing_workflows = @import("../../../app/usecases/editing/workflows.zig");
 const validation_workflows = @import("../../../app/usecases/validation/workflows.zig");
 const validation_adapter = @import("project_intelligence.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
+
+const elicitation_apply_fallback_reason = "MCP elicitation was unavailable; apply=true and expected_preimages remain the fallback safety contract.";
 
 /// Handles MCP `zigar_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarPatchSessionCreate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -183,16 +186,25 @@ fn patchSessionReplacementTool(allocator: std.mem.Allocator, context: app_contex
     defer replacements.deinit(scratch);
     try collectReplacements(scratch, &replacements, parsed.value);
     const expected = parseExpectedPreimages(scratch, argString(args, "expected_preimages")) catch |err| return transactionalError(allocator, tool_name, "parse_expected_preimages", err);
-    var result = editing.replacementSession(scratch, context.editing() catch |err| return transactionalError(allocator, tool_name, "build_app_context", err), .{
+    const editing_context = context.editing() catch |err| return transactionalError(allocator, tool_name, "build_app_context", err);
+    const session_id_value = if (argString(args, "session_id")) |id| id else try sessionId(scratch, tool_name, argString(args, "goal"), null, null, raw_edits);
+    var elicitation_response: ?ports.ProtocolResponse = null;
+    if (apply) {
+        elicitation_response = requestApplyElicitation(scratch, editing_context.protocol_client, session_id_value, replacements.items.len);
+        if (elicitationBlocksApply(elicitation_response.?)) {
+            return structuredScratch(allocator, scratch, try applyDeclinedValue(scratch, session_id_value, expected, elicitation_response.?));
+        }
+    }
+    var result = editing.replacementSession(scratch, editing_context, .{
         .operation = if (apply) .apply else .preview,
-        .session_id = if (argString(args, "session_id")) |id| id else try sessionId(scratch, tool_name, argString(args, "goal"), null, null, raw_edits),
+        .session_id = session_id_value,
         .goal = argString(args, "goal"),
         .replacements = replacements.items,
         .expected_preimages = expected,
         .apply = apply,
     }) catch |err| return transactionalError(allocator, tool_name, "build_session", err);
     defer result.deinit(scratch);
-    return structuredScratch(allocator, scratch, try patchSessionReplacementValue(scratch, result));
+    return structuredScratch(allocator, scratch, try patchSessionReplacementValue(scratch, result, elicitation_response));
 }
 
 /// Returns an allocator-owned JSON value for patch session create.
@@ -219,10 +231,10 @@ fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateR
 }
 
 /// Returns an allocator-owned JSON value for patch session replacement.
-fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.ReplacementResult) !std.json.Value {
+fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.ReplacementResult, elicitation_response: ?ports.ProtocolResponse) !std.json.Value {
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try replacementFileValue(allocator, file));
-    if (result.blocked) return applyBlockedValue(allocator, result.session_id, files, result.expected_preimages);
+    if (result.blocked) return applyBlockedValue(allocator, result.session_id, files, result.expected_preimages, elicitation_response);
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = result.operation.kind() });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
@@ -236,6 +248,7 @@ fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.Re
     try obj.put(allocator, "expected_preimages", try expectedPreimagesValue(allocator, result.expected_preimages));
     try obj.put(allocator, "history_path", .{ .string = editing.history_path_default });
     try obj.put(allocator, "limitations", .{ .string = "Apply requires expected_preimages from preview and refuses generated/vendor paths; validation must be run separately or through zigar_patch_session_validate." });
+    if (result.operation == .apply) try putElicitationMetadata(allocator, &obj, elicitation_response);
     return .{ .object = obj };
 }
 
@@ -350,7 +363,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.js
 }
 
 /// Returns an allocator-owned JSON value for apply blocked.
-fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing.ExpectedPreimage) !std.json.Value {
+fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing.ExpectedPreimage, elicitation_response: ?ports.ProtocolResponse) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
@@ -360,7 +373,108 @@ fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files
     try obj.put(allocator, "files", .{ .array = files });
     try obj.put(allocator, "expected_preimages", try expectedPreimagesValue(allocator, expected_preimages));
     try obj.put(allocator, "resolution", .{ .string = "Re-run preview, pass its expected_preimages unchanged, and avoid generated or vendored paths." });
+    try putElicitationMetadata(allocator, &obj, elicitation_response);
     return .{ .object = obj };
+}
+
+/// Returns a non-applied patch-session result when client elicitation blocks the source write.
+fn applyDeclinedValue(allocator: std.mem.Allocator, session_id: []const u8, expected_preimages: []const editing.ExpectedPreimage, response: ports.ProtocolResponse) !std.json.Value {
+    const files = std.json.Array.init(allocator);
+    var obj = std.json.ObjectMap.empty;
+    try obj.put(allocator, "kind", .{ .string = "zigar_patch_session_apply" });
+    try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
+    try obj.put(allocator, "session_id", try ownedString(allocator, session_id));
+    try obj.put(allocator, "applied", .{ .bool = false });
+    try obj.put(allocator, "requires_apply", .{ .bool = true });
+    try obj.put(allocator, "safe_to_apply", .{ .bool = false });
+    try obj.put(allocator, "files", .{ .array = files });
+    try obj.put(allocator, "expected_preimages", try expectedPreimagesValue(allocator, expected_preimages));
+    try obj.put(allocator, "resolution", .{ .string = "Client elicitation did not accept the apply request; no source file was changed." });
+    try putElicitationMetadata(allocator, &obj, response);
+    return .{ .object = obj };
+}
+
+/// Returns true when an elicitation response should prevent patch-session apply.
+fn elicitationBlocksApply(response: ports.ProtocolResponse) bool {
+    if (!response.supported or response.status == .unsupported) return false;
+    return response.status != .accepted;
+}
+
+/// Requests client confirmation for a source-mutating patch-session apply.
+fn requestApplyElicitation(allocator: std.mem.Allocator, client: ?ports.ProtocolClient, session_id: []const u8, file_count: usize) ports.ProtocolResponse {
+    const protocol_client = client orelse return .{
+        .supported = false,
+        .used = false,
+        .status = .unsupported,
+        .unavailable_reason = elicitation_apply_fallback_reason,
+    };
+    var params = std.json.ObjectMap.empty;
+    params.put(allocator, "message", .{ .string = "Apply this zigar patch session to workspace source files?" }) catch return protocolFailureResponse();
+    var requested_schema = std.json.ObjectMap.empty;
+    requested_schema.put(allocator, "type", .{ .string = "object" }) catch return protocolFailureResponse();
+    var properties = std.json.ObjectMap.empty;
+    var confirm = std.json.ObjectMap.empty;
+    confirm.put(allocator, "type", .{ .string = "boolean" }) catch return protocolFailureResponse();
+    confirm.put(allocator, "description", .{ .string = "Set true to permit this apply=true source mutation." }) catch return protocolFailureResponse();
+    properties.put(allocator, "confirm", .{ .object = confirm }) catch return protocolFailureResponse();
+    requested_schema.put(allocator, "properties", .{ .object = properties }) catch return protocolFailureResponse();
+    var required = std.json.Array.init(allocator);
+    required.append(.{ .string = "confirm" }) catch return protocolFailureResponse();
+    requested_schema.put(allocator, "required", .{ .array = required }) catch return protocolFailureResponse();
+    params.put(allocator, "requestedSchema", .{ .object = requested_schema }) catch return protocolFailureResponse();
+    params.put(allocator, "session_id", .{ .string = session_id }) catch return protocolFailureResponse();
+    params.put(allocator, "changed_file_count", .{ .integer = @intCast(file_count) }) catch return protocolFailureResponse();
+    return protocol_client.request(allocator, .{
+        .feature = .elicitation,
+        .method = "elicitation/create",
+        .params = .{ .object = params },
+    }) catch |err| switch (err) {
+        error.OutOfMemory => protocolFailureResponse(),
+        else => .{
+            .supported = true,
+            .used = false,
+            .status = .timeout,
+            .unavailable_reason = "MCP elicitation request failed before a client response was available.",
+        },
+    };
+}
+
+/// Returns a deterministic response for local allocation/adapter failures.
+fn protocolFailureResponse() ports.ProtocolResponse {
+    return .{
+        .supported = true,
+        .used = false,
+        .status = .malformed,
+        .unavailable_reason = "MCP elicitation request could not be constructed.",
+    };
+}
+
+/// Adds elicitation status metadata to apply outputs.
+fn putElicitationMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, response: ?ports.ProtocolResponse) !void {
+    const protocol_response = response orelse ports.ProtocolResponse{
+        .supported = false,
+        .used = false,
+        .status = .unsupported,
+        .unavailable_reason = elicitation_apply_fallback_reason,
+    };
+    try obj.put(allocator, "elicitation_used", .{ .bool = protocol_response.used });
+    try obj.put(allocator, "elicitation_status", .{ .string = protocolStatusName(protocol_response.status) });
+    if (protocol_response.unavailable_reason.len > 0) {
+        try obj.put(allocator, "elicitation_unavailable_reason", .{ .string = protocol_response.unavailable_reason });
+    }
+}
+
+/// Stable JSON spelling for protocol helper status.
+fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
+    return switch (status) {
+        .accepted => "accepted",
+        .declined => "declined",
+        .cancelled => "cancelled",
+        .malformed => "malformed",
+        .timeout => "timeout",
+        .unsupported => "unsupported",
+        .error_response => "error_response",
+    };
 }
 
 /// Parses expected preimages, returning null when the field is absent.
@@ -767,6 +881,28 @@ test "transactional editing adapter helper parsers and errors are explicit" {
     try std.testing.expect(argString(.{ .string = "not-object" }, "file") == null);
     try std.testing.expect(argBoolOptional(.{ .string = "not-object" }, "apply") == null);
     try std.testing.expect(argIntOptional(.{ .string = "not-object" }, "timeout_ms") == null);
+
+    try std.testing.expect(!elicitationBlocksApply(.{
+        .supported = false,
+        .status = .unsupported,
+    }));
+    try std.testing.expect(!elicitationBlocksApply(.{
+        .supported = true,
+        .used = true,
+        .status = .accepted,
+    }));
+    try std.testing.expect(elicitationBlocksApply(.{
+        .supported = true,
+        .status = .declined,
+    }));
+
+    const declined = try applyDeclinedValue(scratch, "session-1", &.{}, .{
+        .supported = true,
+        .status = .declined,
+        .unavailable_reason = "declined by test client",
+    });
+    try std.testing.expect(!declined.object.get("applied").?.bool);
+    try std.testing.expectEqualStrings("declined", declined.object.get("elicitation_status").?.string);
 }
 
 /// Creates transactional test context from the ports required by the adapter.

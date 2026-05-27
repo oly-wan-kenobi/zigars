@@ -38,6 +38,7 @@ pub const runtime_field_inventory = [_]RuntimeFieldRecord{
     .{ .name = "semantic_index_cache", .concern = .cache_state, .migration_note = "semantic-index cache exposed through typed StaticCache ports" },
     .{ .name = "observability", .concern = .infra_state, .migration_note = "concrete metrics state; migrated code should use ObservabilitySink" },
     .{ .name = "runtime_ux", .concern = .bootstrap, .migration_note = "server task/job state remains runtime/bootstrap state" },
+    .{ .name = "protocol_client", .concern = .bootstrap, .migration_note = "per-call MCP protocol helper port injected by the server adapter and projected into app context" },
     .{ .name = "temp_counter", .concern = .infra_state, .migration_note = "temporary id state; app code should use ClockAndIds" },
 };
 

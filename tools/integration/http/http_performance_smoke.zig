@@ -42,6 +42,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 178, "zig_bench_baseline", "{\"results\":\"parse: 100 ns\\n\",\"apply\":false}", expected, "bench_baseline_paths", scenarios);
     try assertToolPaths(allocator, io, port, 179, "zig_benchmark_history", "{}", expected, "benchmark_history_paths", scenarios);
     try assertToolPaths(allocator, io, port, 180, "zig_bench_compare", "{\"current\":\"parse: 120 ns\\n\",\"baseline\":\"parse: 100 ns\\n\",\"threshold_pct\":5}", expected, "bench_compare_paths", scenarios);
+    try removeFixtureSession(io, "smoke-gate");
     try assertToolPaths(allocator, io, port, 181, "zig_bench_regression_gate", "{\"current\":\"parse: 120 ns\\n\",\"baseline\":\"parse: 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"smoke-gate\",\"apply\":true}", expected, "bench_regression_gate_paths", scenarios);
     try assertToolPaths(allocator, io, port, 194, "zigar_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"smoke-gate\"}", expected, "session_view_paths", scenarios);
     try assertToolPaths(allocator, io, port, 182, "zig_perf_budget_check", perf_budget_args, expected, "perf_budget_paths", scenarios);
@@ -57,6 +58,15 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 191, "zig_tracy_artifacts", "{\"path\":\"tests/fixtures/http-smoke.expect.json\",\"apply\":false}", expected, "tracy_artifacts_paths", scenarios);
     try assertToolPaths(allocator, io, port, 192, "zig_tracy_hints", "{}", expected, "tracy_hints_paths", scenarios);
     try assertToolPaths(allocator, io, port, 193, "zig_perf_evidence_pack", "{\"coverage\":\"inline\",\"benchmarks\":\"inline\",\"apply\":false}", expected, "perf_evidence_pack_paths", scenarios);
+}
+
+fn removeFixtureSession(io: Io, session_id: []const u8) !void {
+    var path_buf: [256]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, ".zigar-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});
+    Io.Dir.cwd().deleteFile(io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
 }
 
 fn assertToolPaths(

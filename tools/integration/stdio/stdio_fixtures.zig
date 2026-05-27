@@ -408,6 +408,7 @@ const StdioClient = struct {
         defer self.allocator.free(migrate);
         try self.expectPathString(migrate, "session_kind", "dependency_migration");
         try self.expectPathJson(migrate, "requires_apply", .{ .bool = true });
+        try removeFixtureSession(self.io, "stdio-gate");
         const bench_gate = try self.callTool("zig_bench_regression_gate", "{\"current\":\"parse 120 ns\\n\",\"baseline\":\"parse 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"stdio-gate\",\"apply\":true}");
         defer self.allocator.free(bench_gate);
         try self.expectPathString(bench_gate, "tool", "zig_bench_regression_gate");
@@ -525,6 +526,15 @@ const StdioClient = struct {
         return error.AssertionFailed;
     }
 };
+
+fn removeFixtureSession(io: Io, session_id: []const u8) !void {
+    var path_buf: [256]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, ".zigar-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});
+    Io.Dir.cwd().deleteFile(io, path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+}
 
 test "stdio fixtures command exposes run entrypoint" {
     try std.testing.expect(@hasDecl(@This(), "run"));

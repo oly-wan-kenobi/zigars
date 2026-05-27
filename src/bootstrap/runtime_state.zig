@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const app_ports = @import("../app/ports.zig");
 const config_mod = @import("config.zig");
 const doctor = @import("../app/usecases/environment/doctor.zig");
 const logging = @import("../infra/observability/logging.zig");
@@ -37,6 +38,7 @@ pub const App = struct {
     semantic_index_cache: static_cache.State = .{},
     observability: observability.State = .{},
     runtime_ux: runtime_ux.State = .{},
+    protocol_client: ?app_ports.ProtocolClient = null,
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     /// Releases runtime-owned caches, ZLS state, and parsed configuration.

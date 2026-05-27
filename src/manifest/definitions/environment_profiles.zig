@@ -12,31 +12,58 @@ const backend_hint = fieldHint("backend", .{ .description = "Backend selector.",
 /// Generated development-environment artifact kind.
 const dev_env_kind_hint = fieldHint("kind", .{ .description = "Generated development-environment artifact kind.", .default_string = "mise", .enum_values = &.{ "mise", "asdf", "nix", "devcontainer", "github-actions" } });
 
-/// Return client-mediated setup questions for unresolved toolchain, profile, and backend ambiguity without mutating the workspace.
-pub const zigar_setup_elicit = tool(.{
-    .description = "Return client-mediated setup questions for unresolved toolchain, profile, and backend ambiguity without mutating the workspace.",
+/// Return advisory setup questions for unresolved toolchain, profile, and backend ambiguity without mutating the workspace.
+pub const zigar_setup_guidance = tool(.{
+    .description = "Return advisory setup questions for unresolved toolchain, profile, and backend ambiguity without mutating the workspace.",
     .input_schema = schemaWithHints(&.{ .{ "topic", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
     .read_only = true,
     .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Workspace/profile inspection only; returns questions, detected facts, unknowns, and next tool suggestions." },
+    .plan = .{ .pure_analysis = "Workspace/profile inspection only; returns questions, detected facts, unknowns, and next tool suggestions without MCP protocol elicitation." },
 });
 
-/// Return project-profile questions for missing or ambiguous source, test, target, CI, lint, and toolchain policy.
-pub const zigar_profile_elicit = tool(.{
-    .description = "Return project-profile questions for missing or ambiguous source, test, target, CI, lint, and toolchain policy.",
+/// Return advisory project-profile questions for missing or ambiguous source, test, target, CI, lint, and toolchain policy.
+pub const zigar_profile_guidance = tool(.{
+    .description = "Return advisory project-profile questions for missing or ambiguous source, test, target, CI, lint, and toolchain policy.",
     .input_schema = schemaWithHints(&.{ .{ "content", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
     .read_only = true,
     .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Profile validation and workspace inspection only; does not write profile files." },
+    .plan = .{ .pure_analysis = "Profile validation and workspace inspection only; does not write profile files or issue MCP protocol elicitation." },
 });
 
-/// Return backend setup questions for missing optional backend paths, claims, and verification choices.
-pub const zigar_backend_elicit = tool(.{
-    .description = "Return backend setup questions for missing optional backend paths, claims, and verification choices.",
+/// Return advisory backend setup questions for missing optional backend paths, claims, and verification choices.
+pub const zigar_backend_guidance = tool(.{
+    .description = "Return advisory backend setup questions for missing optional backend paths, claims, and verification choices.",
     .input_schema = schemaWithHints(&.{ .{ "backend", "string", false }, .{ "mode", "string", false } }, &.{ backend_hint, mode_hint }),
     .read_only = true,
     .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Backend catalog/profile inspection only; does not probe or install backends." },
+    .plan = .{ .pure_analysis = "Backend catalog/profile inspection only; does not probe, install backends, or issue MCP protocol elicitation." },
+});
+
+/// Compatibility alias for zigar_setup_guidance.
+pub const zigar_setup_elicit = tool(.{
+    .description = "Compatibility alias for zigar_setup_guidance; returns advisory setup questions and does not issue MCP protocol elicitation.",
+    .input_schema = schemaWithHints(&.{ .{ "topic", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
+    .read_only = true,
+    .group = .environment_profiles,
+    .plan = .{ .pure_analysis = "Compatibility alias for zigar_setup_guidance; workspace/profile inspection only." },
+});
+
+/// Compatibility alias for zigar_profile_guidance.
+pub const zigar_profile_elicit = tool(.{
+    .description = "Compatibility alias for zigar_profile_guidance; returns advisory profile questions and does not issue MCP protocol elicitation.",
+    .input_schema = schemaWithHints(&.{ .{ "content", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
+    .read_only = true,
+    .group = .environment_profiles,
+    .plan = .{ .pure_analysis = "Compatibility alias for zigar_profile_guidance; profile validation and workspace inspection only." },
+});
+
+/// Compatibility alias for zigar_backend_guidance.
+pub const zigar_backend_elicit = tool(.{
+    .description = "Compatibility alias for zigar_backend_guidance; returns advisory backend questions and does not issue MCP protocol elicitation.",
+    .input_schema = schemaWithHints(&.{ .{ "backend", "string", false }, .{ "mode", "string", false } }, &.{ backend_hint, mode_hint }),
+    .read_only = true,
+    .group = .environment_profiles,
+    .plan = .{ .pure_analysis = "Compatibility alias for zigar_backend_guidance; backend catalog/profile inspection only." },
 });
 
 /// Generate or explicitly write `.zigar/profile.json` when apply=true.

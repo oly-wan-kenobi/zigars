@@ -38,23 +38,40 @@ const backend_evidence_path = ".zigar-cache/backend-conformance/evidence-pack.js
 /// Default workspace path for backend report data.
 const backend_report_path = ".zigar-cache/backend-conformance/report.json";
 
-/// Executes the zigar setup elicit workflow and returns an allocator-owned structured result.
+const guidance_elicitation_reason = "Advisory guidance tools do not issue MCP elicitation/create; questions are returned directly for deterministic clients.";
+
+/// Executes the zigar setup guidance workflow and returns an allocator-owned structured result.
+pub fn zigarSetupGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigar_setup_guidance", "setup");
+}
+
+/// Executes the zigar profile guidance workflow and returns an allocator-owned structured result.
+pub fn zigarProfileGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigar_profile_guidance", "profile");
+}
+
+/// Executes the zigar backend guidance workflow and returns an allocator-owned structured result.
+pub fn zigarBackendGuidance(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    return guidanceResult(a, allocator, args, "zigar_backend_guidance", "backend");
+}
+
+/// Executes the zigar setup elicit compatibility workflow and returns an allocator-owned structured result.
 pub fn zigarSetupElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return elicitationResult(a, allocator, args, "zigar_setup_elicit", "setup");
+    return guidanceResult(a, allocator, args, "zigar_setup_elicit", "setup");
 }
 
-/// Executes the zigar profile elicit workflow and returns an allocator-owned structured result.
+/// Executes the zigar profile elicit compatibility workflow and returns an allocator-owned structured result.
 pub fn zigarProfileElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return elicitationResult(a, allocator, args, "zigar_profile_elicit", "profile");
+    return guidanceResult(a, allocator, args, "zigar_profile_elicit", "profile");
 }
 
-/// Executes the zigar backend elicit workflow and returns an allocator-owned structured result.
+/// Executes the zigar backend elicit compatibility workflow and returns an allocator-owned structured result.
 pub fn zigarBackendElicit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
-    return elicitationResult(a, allocator, args, "zigar_backend_elicit", "backend");
+    return guidanceResult(a, allocator, args, "zigar_backend_elicit", "backend");
 }
 
-/// Implements elicitation result workflow logic using caller-owned inputs.
-fn elicitationResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, default_topic: []const u8) !Result {
+/// Implements guidance result workflow logic using caller-owned inputs.
+fn guidanceResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, default_topic: []const u8) !Result {
     const topic = argString(args, "topic") orelse default_topic;
     var questions = std.json.Array.init(allocator);
     var unknowns = std.json.Array.init(allocator);
@@ -84,6 +101,7 @@ fn elicitationResult(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     try obj.put(allocator, "questions", .{ .array = questions });
     try obj.put(allocator, "unknowns", .{ .array = unknowns });
     try obj.put(allocator, "blocks_noninteractive_flow", .{ .bool = false });
+    try support.putElicitationUnavailable(allocator, &obj, guidance_elicitation_reason);
     try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{ "zigar_profile_bootstrap", "zig_zls_match_check", "zigar_backend_verify", "zigar_env_pack" }));
     try obj.put(allocator, "workflow_contract", try project_intelligence.workflowContractValue(allocator, "workspace/profile/backend catalog inspection", "setup questions for unresolved policy only", "medium", "questions do not imply validation passed; skipped checks remain explicit", "run the named next_tools before release decisions", "stop when unknowns are answered or deterministic defaults are acceptable", &.{ "zigar_profile_bootstrap", "zigar_profile_import" }));
     return structured(allocator, .{ .object = obj });

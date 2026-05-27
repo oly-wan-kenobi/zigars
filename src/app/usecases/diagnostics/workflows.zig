@@ -183,6 +183,7 @@ pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.js
     try obj.put(scratch, "frames", try frameArrayValue(scratch, panic.frames.frames));
     try obj.put(scratch, "frame_count", .{ .integer = @intCast(panic.frames.count) });
     try obj.put(scratch, "repro_command", stringOrNull(argString(args, "command")));
+    try support.putSamplingUnavailable(scratch, &obj, "MCP sampling is not invoked by this deterministic panic-trace analyzer; raw frames and classifications are returned directly.");
     return structured(allocator, .{ .object = obj });
 }
 

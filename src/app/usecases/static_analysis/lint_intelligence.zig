@@ -3,6 +3,7 @@ const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
+const support = @import("../usecase_support.zig");
 const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
 const compiler_output = @import("../../../domain/zig/compiler_output.zig");
 
@@ -421,6 +422,7 @@ fn lintFindingsResultValue(allocator: std.mem.Allocator, tool_name: []const u8, 
     try obj.put(allocator, "optional_backend", .{ .bool = true });
     try obj.put(allocator, "findings", .{ .array = findings });
     try obj.put(allocator, "summary", try summaryValue(allocator, findings));
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic lint summary; normalized findings and counts are returned directly.");
     try obj.put(allocator, "evidence_sources", try stringArrayValue(allocator, &.{"zlint"}));
     return .{ .object = obj };
 }
@@ -455,6 +457,7 @@ fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, 
     try obj.put(allocator, "stderr_preview", try ownedString(allocator, stderr[0..@min(stderr.len, 4096)]));
     try obj.put(allocator, "findings_after_fix", .{ .array = findings });
     try obj.put(allocator, "summary", try summaryValue(allocator, findings));
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic lint summary; normalized findings and counts are returned directly.");
     return .{ .object = obj };
 }
 
@@ -557,6 +560,7 @@ fn sarifResultValue(allocator: std.mem.Allocator, tool_name: []const u8, finding
     try obj.put(allocator, "backend", .{ .string = "zlint" });
     try obj.put(allocator, "sarif", .{ .object = sarif });
     try obj.put(allocator, "summary", try summaryValue(allocator, findings));
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic lint summary; normalized findings and counts are returned directly.");
     return .{ .object = obj };
 }
 
@@ -624,6 +628,7 @@ pub fn lintCompareValue(allocator: std.mem.Allocator, zlint: std.json.Array, zwa
     try obj.put(allocator, "zlint_only", .{ .array = zlint_only });
     try obj.put(allocator, "zwanzig_only", .{ .array = zwanzig_only });
     try obj.put(allocator, "summary", try compareSummaryValue(allocator, consensus, disagreements, zlint_only, zwanzig_only));
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic lint comparison; consensus and disagreement counts are returned directly.");
     return .{ .object = obj };
 }
 

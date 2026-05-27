@@ -57,10 +57,10 @@ fn mcpHandler(
     comptime spec: manifest.ToolMeta,
     comptime handler: ToolHandler(RuntimePtr),
     comptime record_call: anytype,
-) *const fn (?*anyopaque, std.Io, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+) *const fn (?*anyopaque, *mcp_server.Server, std.Io, std.mem.Allocator, ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return struct {
         /// Bridges the typed helper into the callback signature expected by the MCP adapter.
-        fn call(user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+        fn call(user_data: ?*anyopaque, server: *mcp_server.Server, io: std.Io, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
             const runtime: RuntimePtr = @ptrCast(@alignCast(user_data orelse return tool_errors.result(allocator, .{
                 .tool = spec.name,
                 .operation = "dispatch_tool",
@@ -74,6 +74,12 @@ fn mcpHandler(
                 record_call(runtime, spec.name, elapsedMs(io, started_ns), validation_error.is_error);
                 return validation_error;
             }
+            var protocol_adapter = mcp_server.ProtocolClientAdapter.init(server, io);
+            if (comptime runtimeHasProtocolClient(RuntimePtr)) {
+                const previous_protocol_client = runtime.protocol_client;
+                runtime.protocol_client = protocol_adapter.port();
+                defer runtime.protocol_client = previous_protocol_client;
+            }
             const result = handler(runtime, allocator, args) catch |err| {
                 record_call(runtime, spec.name, elapsedMs(io, started_ns), true);
                 return err;
@@ -82,6 +88,13 @@ fn mcpHandler(
             return result;
         }
     }.call;
+}
+
+/// Returns true when the registered runtime can accept a per-call MCP protocol client port.
+fn runtimeHasProtocolClient(comptime RuntimePtr: type) bool {
+    const info = @typeInfo(RuntimePtr);
+    if (info != .pointer) return false;
+    return @hasField(info.pointer.child, "protocol_client");
 }
 
 /// Returns non-negative elapsed wall time in milliseconds.
@@ -111,7 +124,9 @@ test "mcp handler records thrown handler failures" {
 
     var runtime = Runtime{};
     const handler = mcpHandler(*Runtime, manifest.entries[0].meta, Stub.handler, Stub.record);
-    try std.testing.expectError(error.ExecutionFailed, handler(&runtime, std.testing.io, std.testing.allocator, null));
+    var server = mcp_server.Server.init(std.testing.allocator, .{ .name = "test", .version = "1" });
+    defer server.deinit();
+    try std.testing.expectError(error.ExecutionFailed, handler(&runtime, &server, std.testing.io, std.testing.allocator, null));
     try std.testing.expectEqual(@as(usize, 1), runtime.calls);
     try std.testing.expect(runtime.last_error);
 }

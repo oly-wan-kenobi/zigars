@@ -17,6 +17,7 @@ const schema_version: i64 = 1;
 const default_manifest_path = "build.zig.zon";
 const manifest_read_limit: usize = 2 * 1024 * 1024;
 const migration_session_kind = "dependency_migration";
+const dependency_elicitation_reason = "MCP elicitation is not invoked by this deterministic dependency workflow; apply=true and expected preimages remain the fallback confirmation contract.";
 
 const ManifestInput = struct {
     path: []const u8,
@@ -292,6 +293,7 @@ fn mutationResult(
     try obj.put(scratch, "patch_session", try patchSessionValue(scratch, patch));
     try obj.put(scratch, "applied", .{ .bool = patch.applied });
     try obj.put(scratch, "requires_apply", .{ .bool = patch.requires_apply });
+    try support.putElicitationUnavailable(scratch, &obj, dependency_elicitation_reason);
     try obj.put(scratch, "validation_recommendations", try stringArray(scratch, &.{ "zig build --fetch", "zig build test" }));
     try obj.put(scratch, "diagnostics", try diagnosticsValue(scratch, model.diagnostics));
     if (extra.command_argv) |argv| {
@@ -371,6 +373,7 @@ fn syncCommandFailure(
     try obj.put(scratch, "fetch_command", try commandEvidenceValue(scratch, a.context.workspace.root, argv, timeout_ms, command_result));
     try obj.put(scratch, "applied", .{ .bool = false });
     try obj.put(scratch, "requires_apply", .{ .bool = true });
+    try support.putElicitationUnavailable(scratch, &obj, dependency_elicitation_reason);
     try obj.put(scratch, "resolution", .{ .string = "Run the exact fetch command manually or retry after confirming the URL and network access; no source was changed." });
     return support.structured(allocator, .{ .object = obj });
 }

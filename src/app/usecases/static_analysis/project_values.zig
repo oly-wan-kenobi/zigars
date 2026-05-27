@@ -3,6 +3,7 @@ const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
+const support = @import("../usecase_support.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 const compiler_output = @import("../../../domain/zig/compiler_output.zig");
 
@@ -1143,6 +1144,7 @@ pub fn publicApiDiffValue(allocator: std.mem.Allocator, file: ?[]const u8, befor
     try obj.put(allocator, "removed", .{ .array = removed });
     try obj.put(allocator, "changed", .{ .array = changed });
     try obj.put(allocator, "breaking_change_risk", .{ .bool = removed.items.len > 0 or changed.items.len > 0 });
+    try support.putSamplingUnavailable(allocator, &obj, "MCP sampling is not invoked by this deterministic public API diff; raw added, removed, and changed declarations are returned directly.");
     return .{ .object = obj };
 }
 

@@ -2,6 +2,8 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const server_mod = @import("../../adapters/mcp/server.zig");
+const app_ports = @import("../../app/ports.zig");
+const mcp_result = @import("../../adapters/mcp/result.zig");
 
 const Server = server_mod.Server;
 const ServerState = server_mod.ServerState;
@@ -96,7 +98,7 @@ fn expectBefore(haystack: []const u8, first: []const u8, second: []const u8) !vo
 }
 
 /// Tool handler fixture that returns a successful response.
-fn okToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
+fn okToolHandler(_: ?*anyopaque, _: *Server, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
     return .{
         .content = fixture_tool_content[0..],
         .structuredContent = .{ .bool = true },
@@ -104,7 +106,7 @@ fn okToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.V
 }
 
 /// Tool handler fixture that returns a structured failure.
-fn failToolHandler(_: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
+fn failToolHandler(_: ?*anyopaque, _: *Server, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) !mcp.tools.ToolResult {
     return error.ExecutionFailed;
 }
 
@@ -566,6 +568,104 @@ test "protocol helper scaffolds are capability aware" {
     const sent = try joinedSent(allocator, &transport);
     try std.testing.expect(std.mem.indexOf(u8, sent, "elicitation/create") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "sampling/createMessage") != null);
+}
+
+test "protocol helper response classifiers cover declined malformed and timeout responses" {
+    var elicited = std.json.ObjectMap.empty;
+    try elicited.put(std.testing.allocator, "action", .{ .string = "accept" });
+    defer elicited.deinit(std.testing.allocator);
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.accepted, Server.classifyElicitationResponse(.{ .object = elicited }));
+
+    var declined = std.json.ObjectMap.empty;
+    try declined.put(std.testing.allocator, "action", .{ .string = "decline" });
+    defer declined.deinit(std.testing.allocator);
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.declined, Server.classifyElicitationResponse(.{ .object = declined }));
+
+    var malformed = std.json.ObjectMap.empty;
+    try malformed.put(std.testing.allocator, "action", .{ .integer = 1 });
+    defer malformed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.malformed, Server.classifyElicitationResponse(.{ .object = malformed }));
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.timeout, Server.classifyElicitationResponse(null));
+
+    var sampled = std.json.ObjectMap.empty;
+    try sampled.put(std.testing.allocator, "content", .{ .string = "summary" });
+    defer sampled.deinit(std.testing.allocator);
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.accepted, Server.classifySamplingResponse(.{ .object = sampled }));
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.timeout, Server.classifySamplingResponse(null));
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.malformed, Server.classifySamplingResponse(.{ .object = .empty }));
+}
+
+test "client protocol request waits for matching elicitation response" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+    server.client_capabilities = .{ .elicitation = .{ .form = .{} } };
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p","progress":1}}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"result":{"action":"accept","content":{"confirm":true}}}
+        ,
+    };
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+
+    var params = std.json.ObjectMap.empty;
+    try params.put(allocator, "message", .{ .string = "Apply?" });
+    defer params.deinit(allocator);
+    const response = try server.requestClientProtocol(std.testing.io, allocator, .{
+        .feature = .elicitation,
+        .method = "elicitation/create",
+        .params = .{ .object = params },
+    });
+    try std.testing.expect(response.supported);
+    try std.testing.expect(response.used);
+    try std.testing.expectEqual(app_ports.ProtocolResponseStatus.accepted, response.status);
+    try std.testing.expect(response.result != null);
+    if (response.result) |result| mcp_result.deinitOwnedValue(allocator, result);
+    try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
+
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "elicitation/create") != null);
+}
+
+test "client protocol request returns unsupported and transport timeout metadata" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+
+    var params = std.json.ObjectMap.empty;
+    try params.put(allocator, "message", .{ .string = "Apply?" });
+    defer params.deinit(allocator);
+    const unsupported = try server.requestClientProtocol(std.testing.io, allocator, .{
+        .feature = .elicitation,
+        .method = "elicitation/create",
+        .params = .{ .object = params },
+    });
+    try std.testing.expect(!unsupported.supported);
+    try std.testing.expectEqual(app_ports.ProtocolResponseStatus.unsupported, unsupported.status);
+
+    server.client_capabilities = .{ .sampling = .{ .context = .{} } };
+    const messages = [_][]const u8{};
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+    var sampling_params = std.json.ObjectMap.empty;
+    try sampling_params.put(allocator, "maxTokens", .{ .integer = 8 });
+    defer sampling_params.deinit(allocator);
+    const timeout = try server.requestClientProtocol(std.testing.io, allocator, .{
+        .feature = .sampling,
+        .method = "sampling/createMessage",
+        .params = .{ .object = sampling_params },
+    });
+    try std.testing.expect(timeout.supported);
+    try std.testing.expect(!timeout.used);
+    try std.testing.expectEqual(app_ports.ProtocolResponseStatus.timeout, timeout.status);
+    try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
 }
 
 test "protocol response builders release response allocations" {

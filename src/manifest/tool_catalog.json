@@ -35,6 +35,7 @@
     {"intent": "understand compiler errors", "prefer": "zig_explain_errors", "keywords": ["compiler errors", "fix build", "diagnostics"]},
     {"intent": "group compiler errors by file", "prefer": "zig_compile_error_index", "keywords": ["compile error index", "diagnostics", "file errors"]},
     {"intent": "inspect planning support for a tool", "prefer": "zig_tool_plan", "keywords": ["plan", "planning", "argv", "zls request", "tool discovery"]},
+    {"intent": "answer setup, profile, and backend ambiguity", "prefer": "zigar_setup_guidance, zigar_profile_guidance, zigar_backend_guidance", "keywords": ["setup guidance", "profile questions", "backend questions", "elicitation compatibility"]},
     {"intent": "resolve Zig toolchain mismatch", "prefer": "zig_toolchain_resolve", "keywords": ["toolchain", "zig version", "zls version", "mise", "asdf", "zvm", "zigup"]},
     {"intent": "plan checks for dirty files", "prefer": "zig_changed_files_plan", "keywords": ["changed files", "git status", "minimal checks"]},
     {"intent": "select focused tests", "prefer": "zig_test_select", "keywords": ["test select", "impacted tests", "focused tests"]},

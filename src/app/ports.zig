@@ -32,6 +32,56 @@ pub const PortError = error{
     OutOfMemory,
 };
 
+/// Protocol helper feature requested by an app use case through the MCP adapter.
+pub const ProtocolFeature = enum {
+    elicitation,
+    sampling,
+};
+
+/// Normalized response status for server-to-client protocol helper requests.
+pub const ProtocolResponseStatus = enum {
+    accepted,
+    declined,
+    cancelled,
+    malformed,
+    timeout,
+    unsupported,
+    error_response,
+};
+
+/// Protocol helper request sent from a use case to the active MCP client.
+pub const ProtocolRequest = struct {
+    feature: ProtocolFeature,
+    method: []const u8,
+    params: std.json.Value,
+    timeout_ms: ?u64 = null,
+};
+
+/// Protocol helper response with allocator-owned result when owns_result is true.
+pub const ProtocolResponse = struct {
+    supported: bool = false,
+    used: bool = false,
+    status: ProtocolResponseStatus = .unsupported,
+    result: ?std.json.Value = null,
+    owns_result: bool = false,
+    unavailable_reason: []const u8 = "",
+};
+
+/// Vtable-backed MCP client protocol helper port.
+pub const ProtocolClient = struct {
+    ptr: *anyopaque,
+    vtable: *const VTable,
+
+    pub const VTable = struct {
+        request: *const fn (*anyopaque, Allocator, ProtocolRequest) PortError!ProtocolResponse,
+    };
+
+    /// Sends a protocol helper request through the active MCP transport.
+    pub fn request(self: ProtocolClient, allocator: Allocator, request_value: ProtocolRequest) PortError!ProtocolResponse {
+        return self.vtable.request(self.ptr, allocator, request_value);
+    }
+};
+
 /// Snapshot limits for bounded observability reads.
 pub const max_observability_tool_stats = 64;
 /// Maximum command event rows returned by a bounded observability snapshot.

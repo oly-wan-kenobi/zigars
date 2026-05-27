@@ -153,6 +153,7 @@ pub const PortSet = struct {
     observability: ?ports.ObservabilitySink = null,
     observability_reader: ?ports.ObservabilityReader = null,
     clock_and_ids: ?ports.ClockAndIds = null,
+    protocol_client: ?ports.ProtocolClient = null,
 
     /// True when any side-effecting or state-reading capability is present.
     pub fn hasEffects(self: PortSet) bool {
@@ -171,7 +172,8 @@ pub const PortSet = struct {
             self.tool_manifest != null or
             self.observability != null or
             self.observability_reader != null or
-            self.clock_and_ids != null;
+            self.clock_and_ids != null or
+            self.protocol_client != null;
     }
 };
 
@@ -202,6 +204,7 @@ pub const PerformanceContext = struct {
     artifact_store: ?ports.ArtifactStore = null,
     observability: ?ports.ObservabilitySink = null,
     clock_and_ids: ?ports.ClockAndIds = null,
+    protocol_client: ?ports.ProtocolClient = null,
 };
 
 /// Dependencies required by crash, debugger, and binary diagnostic use cases.
@@ -217,6 +220,7 @@ pub const DiagnosticsContext = struct {
     artifact_store: ?ports.ArtifactStore = null,
     observability: ?ports.ObservabilitySink = null,
     clock_and_ids: ?ports.ClockAndIds = null,
+    protocol_client: ?ports.ProtocolClient = null,
 };
 
 /// Dependencies required by release workflow use cases.
@@ -345,6 +349,7 @@ pub const ValidationContext = struct {
     workspace_store: ports.WorkspaceStore,
     clock_and_ids: ports.ClockAndIds,
     observability: ?ports.ObservabilitySink = null,
+    protocol_client: ?ports.ProtocolClient = null,
 };
 
 /// Dependencies required by editing and patch-session use cases.
@@ -353,6 +358,7 @@ pub const EditingContext = struct {
     workspace_store: ports.WorkspaceStore,
     clock_and_ids: ports.ClockAndIds,
     observability: ?ports.ObservabilitySink = null,
+    protocol_client: ?ports.ProtocolClient = null,
 };
 
 /// Dependencies required by artifact registry use cases.
@@ -437,6 +443,7 @@ pub const ProjectIntelligenceContext = struct {
     semantic_index_cache: ?ports.StaticCache = null,
     clock_and_ids: ports.ClockAndIds,
     observability: ?ports.ObservabilitySink = null,
+    protocol_client: ?ports.ProtocolClient = null,
 
     /// Reuses project intelligence dependencies for static analysis helpers.
     pub fn staticAnalysis(self: ProjectIntelligenceContext) StaticAnalysisContext {
@@ -560,6 +567,7 @@ pub const Context = struct {
             .artifact_store = self.ports.artifact_store,
             .observability = self.ports.observability,
             .clock_and_ids = self.ports.clock_and_ids,
+            .protocol_client = self.ports.protocol_client,
         };
     }
 
@@ -668,6 +676,7 @@ pub const Context = struct {
             .workspace_store = try self.requireWorkspace(),
             .clock_and_ids = self.ports.clock_and_ids orelse return ContextError.MissingPort,
             .observability = self.ports.observability,
+            .protocol_client = self.ports.protocol_client,
         };
     }
 
@@ -776,6 +785,7 @@ pub const Context = struct {
             .semantic_index_cache = self.ports.semantic_index_cache,
             .clock_and_ids = self.ports.clock_and_ids orelse return ContextError.MissingPort,
             .observability = self.ports.observability,
+            .protocol_client = self.ports.protocol_client,
         };
     }
 };

@@ -12,6 +12,7 @@ const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
 const pi = project_intelligence;
+const sampling_failure_fusion_reason = "MCP sampling was not requested or was unavailable; compiler, test, and command evidence summaries are returned directly.";
 
 /// Handles MCP `zigar_context_pack` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarContextPack(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -46,14 +47,17 @@ pub fn zigarValidatePatch(allocator: std.mem.Allocator, context: app_context.Pro
 pub fn zigarFailureFusion(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, "zigar_failure_fusion", err);
     defer freeStringList(allocator, extra_args);
-    return structured(allocator, "zigar_failure_fusion", "failure_fusion", pi.failureFusionFromCommandValue(allocator, context, .{
+    var value = pi.failureFusionFromCommandValue(allocator, context, .{
         .text = argString(args, "text"),
         .command = argString(args, "command"),
         .file = argString(args, "file"),
         .filter = argString(args, "filter"),
         .extra_args = extra_args,
         .timeout_ms = timeoutMs(context, args),
-    }));
+    }) catch |err| return workflowError(allocator, "zigar_failure_fusion", "failure_fusion", err);
+    defer deinitTopLevel(allocator, &value);
+    if (value == .object) try applyFailureFusionSampling(allocator, &value.object, context.protocol_client, argBool(args, "summarize", false), value);
+    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zigar_impact` requests by delegating to app logic and shaping owned results/errors.
@@ -342,6 +346,134 @@ fn structured(allocator: std.mem.Allocator, tool_name: []const u8, phase: []cons
     return mcp_result.structured(allocator, value);
 }
 
+/// Optionally requests client sampling for a compact failure-fusion summary.
+fn applyFailureFusionSampling(
+    allocator: std.mem.Allocator,
+    obj: *std.json.ObjectMap,
+    client: ?ports.ProtocolClient,
+    summarize: bool,
+    value: std.json.Value,
+) !void {
+    if (!summarize) {
+        try putSamplingMetadata(allocator, obj, .{
+            .supported = false,
+            .used = false,
+            .status = .unsupported,
+            .unavailable_reason = "summarize=false; deterministic failure evidence was returned without client sampling.",
+        });
+        return;
+    }
+    const protocol_client = client orelse {
+        try putSamplingMetadata(allocator, obj, .{
+            .supported = false,
+            .used = false,
+            .status = .unsupported,
+            .unavailable_reason = sampling_failure_fusion_reason,
+        });
+        return;
+    };
+    const response = protocol_client.request(allocator, .{
+        .feature = .sampling,
+        .method = "sampling/createMessage",
+        .params = try failureFusionSamplingParams(allocator, value),
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => ports.ProtocolResponse{
+            .supported = true,
+            .used = false,
+            .status = .timeout,
+            .unavailable_reason = "MCP sampling request failed before a client response was available.",
+        },
+    };
+    if (response.status == .accepted) {
+        if (sampledText(response.result)) |text| {
+            try obj.put(allocator, "sampling_used", .{ .bool = true });
+            try obj.put(allocator, "sampling_status", .{ .string = "accepted" });
+            try obj.put(allocator, "sampled_summary", .{ .string = text });
+            return;
+        }
+        try putSamplingMetadata(allocator, obj, .{
+            .supported = true,
+            .used = false,
+            .status = .malformed,
+            .unavailable_reason = "MCP sampling response did not include text content.",
+        });
+        return;
+    }
+    try putSamplingMetadata(allocator, obj, response);
+}
+
+/// Builds sampling/createMessage params from deterministic failure-fusion evidence.
+fn failureFusionSamplingParams(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
+    const evidence = try mcp_result.serializeAlloc(allocator, value);
+    defer allocator.free(evidence);
+    var prompt = std.ArrayList(u8).empty;
+    errdefer prompt.deinit(allocator);
+    try prompt.appendSlice(allocator, "Summarize this deterministic Zig failure-fusion evidence. Do not invent facts.\n\n");
+    try prompt.appendSlice(allocator, evidence);
+
+    var content = std.json.ObjectMap.empty;
+    try content.put(allocator, "type", .{ .string = "text" });
+    try content.put(allocator, "text", .{ .string = try prompt.toOwnedSlice(allocator) });
+
+    var message = std.json.ObjectMap.empty;
+    try message.put(allocator, "role", .{ .string = "user" });
+    try message.put(allocator, "content", .{ .object = content });
+    var messages = std.json.Array.init(allocator);
+    try messages.append(.{ .object = message });
+
+    var params = std.json.ObjectMap.empty;
+    try params.put(allocator, "messages", .{ .array = messages });
+    try params.put(allocator, "systemPrompt", .{ .string = "Summarize zigar failure evidence tersely and cite only facts present in the payload." });
+    try params.put(allocator, "maxTokens", .{ .integer = 256 });
+    return .{ .object = params };
+}
+
+/// Adds deterministic sampling status metadata to failure-fusion outputs.
+fn putSamplingMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, response: ports.ProtocolResponse) !void {
+    try obj.put(allocator, "sampling_used", .{ .bool = response.used });
+    try obj.put(allocator, "sampling_status", .{ .string = protocolStatusName(response.status) });
+    try obj.put(allocator, "summary_unavailable_reason", .{ .string = if (response.unavailable_reason.len > 0) response.unavailable_reason else sampling_failure_fusion_reason });
+}
+
+/// Extracts sampled text from common MCP sampling response shapes.
+fn sampledText(result: ?std.json.Value) ?[]const u8 {
+    const value = result orelse return null;
+    if (value != .object) return null;
+    if (value.object.get("content")) |content| {
+        if (content == .object) {
+            if (content.object.get("text")) |text| {
+                if (text == .string) return text.string;
+            }
+        } else if (content == .string) return content.string;
+    }
+    if (value.object.get("message")) |message| {
+        if (message == .object) {
+            if (message.object.get("content")) |content| {
+                if (content == .object) {
+                    if (content.object.get("text")) |text| {
+                        if (text == .string) return text.string;
+                    }
+                } else if (content == .string) return content.string;
+            }
+        }
+    }
+    return null;
+}
+
+/// Stable JSON spelling for protocol helper status.
+fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
+    return switch (status) {
+        .accepted => "accepted",
+        .declined => "declined",
+        .cancelled => "cancelled",
+        .malformed => "malformed",
+        .timeout => "timeout",
+        .unsupported => "unsupported",
+        .error_response => "error_response",
+    };
+}
+
 /// Maps workflow failures to structured MCP tool errors.
 fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.OutOfMemory) return error.OutOfMemory;
@@ -598,6 +730,28 @@ test "project intelligence adapter splits tool args and cleans up allocation fai
     try std.testing.expectError(error.InvalidArguments, splitToolArgs(allocator, "dangling\\"));
 
     try std.testing.checkAllAllocationFailures(std.testing.allocator, splitToolArgsAllocationCase, .{});
+}
+
+test "project intelligence sampling helpers classify sampled text and fallback metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var content = std.json.ObjectMap.empty;
+    try content.put(allocator, "text", .{ .string = "short summary" });
+    var response = std.json.ObjectMap.empty;
+    try response.put(allocator, "content", .{ .object = content });
+    try std.testing.expectEqualStrings("short summary", sampledText(.{ .object = response }).?);
+
+    var obj = std.json.ObjectMap.empty;
+    try putSamplingMetadata(allocator, &obj, .{
+        .supported = false,
+        .status = .unsupported,
+        .unavailable_reason = "no sampling",
+    });
+    try std.testing.expect(!obj.get("sampling_used").?.bool);
+    try std.testing.expectEqualStrings("unsupported", obj.get("sampling_status").?.string);
+    try std.testing.expectEqualStrings("no sampling", obj.get("summary_unavailable_reason").?.string);
 }
 
 /// Exercises split-argument allocation failure handling in tests.

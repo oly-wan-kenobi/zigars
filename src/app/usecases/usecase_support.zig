@@ -288,6 +288,18 @@ pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) !Res
     return .{ .value = try cloneValue(allocator, value), .is_error = true };
 }
 
+/// Adds deterministic Phase 6 elicitation fallback metadata to an object result.
+pub fn putElicitationUnavailable(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, reason: []const u8) !void {
+    try obj.put(allocator, "elicitation_used", .{ .bool = false });
+    try obj.put(allocator, "elicitation_unavailable_reason", .{ .string = reason });
+}
+
+/// Adds deterministic Phase 6 sampling fallback metadata to an object result.
+pub fn putSamplingUnavailable(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, reason: []const u8) !void {
+    try obj.put(allocator, "sampling_used", .{ .bool = false });
+    try obj.put(allocator, "summary_unavailable_reason", .{ .string = reason });
+}
+
 /// Reads an optional string field from object-shaped tool args.
 pub fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     const value = argValue(args, name) orelse return null;

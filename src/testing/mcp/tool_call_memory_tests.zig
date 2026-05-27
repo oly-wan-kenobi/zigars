@@ -209,13 +209,13 @@ test "mcp prompts/get releases repeated owned prompt messages" {
 }
 
 /// Tool-call handler fixture that returns a success payload.
-fn successHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+fn successHandler(_: ?*anyopaque, _: *mcp_server.Server, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = makeOwnedNestedValue(allocator, "structured_success") catch return error.OutOfMemory;
     return json_result.structuredOwned(allocator, value);
 }
 
 /// Tool-call handler fixture that returns a structured error.
-fn structuredErrorHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+fn structuredErrorHandler(_: ?*anyopaque, _: *mcp_server.Server, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const value = makeOwnedNestedValue(allocator, "structured_error") catch return error.OutOfMemory;
     defer json_result.deinitOwnedValue(allocator, value);
     return json_result.structuredError(allocator, value);

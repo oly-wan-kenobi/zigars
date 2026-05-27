@@ -17,7 +17,9 @@ const json_helpers = @import("server/json_helpers.zig");
 const pagination = @import("server/pagination.zig");
 const resource_subscriptions = @import("server/resource_subscriptions.zig");
 const tasks_ext = @import("server/tasks.zig");
+const app_ports = @import("../../app/ports.zig");
 const tool_errors = @import("errors.zig");
+const mcp_result = @import("result.zig");
 
 /// Deinitializer for tool results whose payload storage is owned by request allocators.
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
@@ -36,7 +38,7 @@ pub const Tool = struct {
     execution: ?types.ToolExecution = null,
     icons: ?[]const types.Icon = null,
     annotations: ?mcp.tools.ToolAnnotations = null,
-    handler: *const fn (user_data: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, arguments: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult,
+    handler: *const fn (user_data: ?*anyopaque, server: *Server, io: std.Io, allocator: std.mem.Allocator, arguments: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult,
     deinit_result: ?ToolResultDeinit = null,
     user_data: ?*anyopaque = null,
 };
@@ -97,6 +99,104 @@ pub const Server = struct {
         method: []const u8,
         timestamp: i64,
     };
+
+    /// Stable classifications for protocol-helper peer responses.
+    pub const ProtocolResponseStatus = enum {
+        accepted,
+        declined,
+        cancelled,
+        malformed,
+        timeout,
+    };
+
+    /// Classifies an elicitation/create response without mutating server state.
+    pub fn classifyElicitationResponse(response: ?std.json.Value) ProtocolResponseStatus {
+        const value = response orelse return .timeout;
+        if (value != .object) return .malformed;
+        const action = value.object.get("action") orelse return .malformed;
+        if (action != .string) return .malformed;
+        if (std.mem.eql(u8, action.string, "accept") or std.mem.eql(u8, action.string, "accepted")) {
+            if (value.object.get("content")) |content| {
+                if (content == .object) {
+                    if (content.object.get("confirm")) |confirm| {
+                        if (confirm == .bool and !confirm.bool) return .declined;
+                    }
+                }
+            }
+            return .accepted;
+        }
+        if (std.mem.eql(u8, action.string, "decline") or std.mem.eql(u8, action.string, "declined")) return .declined;
+        if (std.mem.eql(u8, action.string, "cancel") or std.mem.eql(u8, action.string, "cancelled") or std.mem.eql(u8, action.string, "canceled")) return .cancelled;
+        return .malformed;
+    }
+
+    /// Classifies a sampling/createMessage response without mutating server state.
+    pub fn classifySamplingResponse(response: ?std.json.Value) ProtocolResponseStatus {
+        const value = response orelse return .timeout;
+        if (value != .object) return .malformed;
+        if (value.object.get("content")) |_| return .accepted;
+        if (value.object.get("message")) |_| return .accepted;
+        return .malformed;
+    }
+
+    /// Returns whether the initialized client advertised the requested helper capability.
+    fn supportsProtocolFeature(self: *Self, feature: app_ports.ProtocolFeature) bool {
+        return switch (feature) {
+            .elicitation => self.supportsElicitation(),
+            .sampling => self.supportsSampling(),
+        };
+    }
+
+    /// Classifies a helper response according to its feature-specific result shape.
+    fn classifyProtocolResponse(feature: app_ports.ProtocolFeature, response: ?std.json.Value) ProtocolResponseStatus {
+        return switch (feature) {
+            .elicitation => classifyElicitationResponse(response),
+            .sampling => classifySamplingResponse(response),
+        };
+    }
+
+    /// Maps server-local response status to the app port status contract.
+    fn protocolStatus(status: ProtocolResponseStatus) app_ports.ProtocolResponseStatus {
+        return switch (status) {
+            .accepted => .accepted,
+            .declined => .declined,
+            .cancelled => .cancelled,
+            .malformed => .malformed,
+            .timeout => .timeout,
+        };
+    }
+
+    /// Human-readable reason for unsupported protocol helper features.
+    fn unsupportedProtocolReason(feature: app_ports.ProtocolFeature) []const u8 {
+        return switch (feature) {
+            .elicitation => "client did not advertise MCP elicitation support",
+            .sampling => "client did not advertise MCP sampling support",
+        };
+    }
+
+    /// Human-readable reason attached when a protocol helper did not produce usable data.
+    fn protocolUnavailableReason(status: ProtocolResponseStatus) []const u8 {
+        return switch (status) {
+            .accepted => "",
+            .declined => "client declined the protocol helper request",
+            .cancelled => "client cancelled the protocol helper request",
+            .malformed => "client protocol helper response had an unsupported shape",
+            .timeout => "client protocol helper response was not available",
+        };
+    }
+
+    /// Returns true when a JSON-RPC response id matches an outbound integer request id.
+    fn matchesRequestId(response_id: types.RequestId, expected: i64) bool {
+        return switch (response_id) {
+            .integer => |value| value == expected,
+            .string => false,
+        };
+    }
+
+    /// Returns true when an optional JSON-RPC response id matches an outbound integer request id.
+    fn matchesOptionalRequestId(response_id: ?types.RequestId, expected: i64) bool {
+        return if (response_id) |id| matchesRequestId(id, expected) else false;
+    }
 
     /// Initialize a new MCP Server
     pub fn init(allocator: std.mem.Allocator, config: ServerConfig) Self {
@@ -678,7 +778,7 @@ pub const Server = struct {
             var tool_arena = std.heap.ArenaAllocator.init(allocator);
             defer tool_arena.deinit();
             const tool_allocator = tool_arena.allocator();
-            const tool_result = tool.handler(tool.user_data, io, tool_allocator, arguments) catch |err| {
+            const tool_result = tool.handler(tool.user_data, self, io, tool_allocator, arguments) catch |err| {
                 try self.sendToolHandlerErrorResponse(io, allocator, request, tool_name, err);
                 return;
             };
@@ -1223,6 +1323,102 @@ pub const Server = struct {
         return self.sendClientRequestValue(io, allocator, "sampling", "sampling/createMessage", params);
     }
 
+    /// Sends a protocol helper request to the active client and waits for its matching JSON-RPC response.
+    pub fn requestClientProtocol(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: app_ports.ProtocolRequest) !app_ports.ProtocolResponse {
+        if (!self.supportsProtocolFeature(request.feature)) {
+            return .{
+                .supported = false,
+                .used = false,
+                .status = .unsupported,
+                .unavailable_reason = unsupportedProtocolReason(request.feature),
+            };
+        }
+        if (self.transport == null) {
+            return .{
+                .supported = true,
+                .used = false,
+                .status = .unsupported,
+                .unavailable_reason = "no active MCP transport is available for protocol helper requests",
+            };
+        }
+
+        const id = self.next_request_id;
+        self.next_request_id += 1;
+        try self.pending_requests.put(id, .{
+            .method = request.method,
+            .timestamp = @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms)),
+        });
+        defer _ = self.pending_requests.remove(id);
+
+        const json_request = jsonrpc.createRequest(.{ .integer = id }, request.method, request.params);
+        try self.sendResponse(io, allocator, .{ .request = json_request });
+
+        while (true) {
+            const message_data = self.transport.?.receive(io, allocator) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                error.EndOfStream => return .{
+                    .supported = true,
+                    .used = false,
+                    .status = .timeout,
+                    .unavailable_reason = "client protocol response was not available before the transport closed",
+                },
+                else => return .{
+                    .supported = true,
+                    .used = false,
+                    .status = .timeout,
+                    .unavailable_reason = "client protocol response was not available from the active transport",
+                },
+            };
+            const data = message_data orelse return .{
+                .supported = true,
+                .used = false,
+                .status = .timeout,
+                .unavailable_reason = "client protocol response was not available on the active transport",
+            };
+            const parsed_message = jsonrpc.parseMessage(allocator, data) catch return .{
+                .supported = true,
+                .used = false,
+                .status = .malformed,
+                .unavailable_reason = "client protocol response was not valid JSON-RPC",
+            };
+            defer parsed_message.deinit();
+
+            switch (parsed_message.message) {
+                .response => |response| {
+                    if (!matchesRequestId(response.id, id)) {
+                        self.handleResponse(response);
+                        continue;
+                    }
+                    _ = self.pending_requests.remove(id);
+                    const status = classifyProtocolResponse(request.feature, response.result);
+                    return .{
+                        .supported = true,
+                        .used = status == .accepted,
+                        .status = protocolStatus(status),
+                        .result = if (response.result) |result| try mcp_result.cloneValue(allocator, result) else null,
+                        .owns_result = response.result != null,
+                        .unavailable_reason = protocolUnavailableReason(status),
+                    };
+                },
+                .error_response => |err| {
+                    if (!matchesOptionalRequestId(err.id, id)) {
+                        self.handleErrorResponse(io, err);
+                        continue;
+                    }
+                    _ = self.pending_requests.remove(id);
+                    return .{
+                        .supported = true,
+                        .used = false,
+                        .status = .error_response,
+                        .unavailable_reason = "client returned an error response for the protocol helper request",
+                    };
+                },
+                .request => |inbound_request| try self.handleRequest(io, allocator, inbound_request),
+                .notification => |notification| try self.handleNotification(io, notification),
+            }
+        }
+    }
+
     /// Sends a server-to-client request and returns request bookkeeping metadata.
     fn sendClientRequestValue(self: *Self, io: std.Io, allocator: std.mem.Allocator, feature: []const u8, method: []const u8, params: std.json.Value) !std.json.Value {
         const id = self.next_request_id;
@@ -1300,6 +1496,32 @@ pub const Server = struct {
             const formatted = std.fmt.bufPrint(&buf, "ERROR: {s}", .{message}) catch message;
             t.writeStderr(io, formatted);
         }
+    }
+};
+
+/// App-facing protocol helper adapter bound to the currently executing tools/call.
+pub const ProtocolClientAdapter = struct {
+    server: *Server,
+    io: std.Io,
+
+    const Self = @This();
+
+    /// Builds a protocol helper adapter over the live MCP server and transport.
+    pub fn init(server: *Server, io: std.Io) Self {
+        return .{ .server = server, .io = io };
+    }
+
+    /// Projects this adapter as an app port.
+    pub fn port(self: *Self) app_ports.ProtocolClient {
+        return .{ .ptr = self, .vtable = &.{ .request = request } };
+    }
+
+    /// Vtable entrypoint that normalizes MCP adapter failures to app port errors.
+    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: app_ports.ProtocolRequest) app_ports.PortError!app_ports.ProtocolResponse {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        return self.server.requestClientProtocol(self.io, allocator, request_value) catch |err| switch (err) {
+            error.OutOfMemory => app_ports.PortError.OutOfMemory,
+        };
     }
 };
 

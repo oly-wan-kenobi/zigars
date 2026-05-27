@@ -119,6 +119,7 @@ pub const RuntimePorts = struct {
             .tool_manifest = self.tool_manifest.port(),
             .clock_and_ids = self.clock_and_ids.port(),
             .zls_gateway = self.zls_gateway.port(),
+            .protocol_client = self.app.protocol_client,
         };
     }
 
