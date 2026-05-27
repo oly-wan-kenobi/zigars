@@ -51,6 +51,7 @@ After the server starts, these calls are useful first checks:
 zigar_workspace_info
 zigar_doctor {"probe_backends":false}
 zigar_schema
+zigar_setup_guidance
 zigar_smoke_plan
 ```
 
@@ -71,6 +72,13 @@ changes in Zig workspaces. Source writes require explicit `apply=true`.
 | Profiling and performance | `zig_profile_plan`, `zig_flamegraph`, `zig_coverage_run`, `zig_bench_run`, `zig_perf_budget_check` | Command-running tools are apply-gated and preserve backend provenance. |
 | Runtime diagnostics | `zig_debug_plan`, `zig_lldb_backtrace`, `zig_valgrind_memcheck`, `zig_fuzz_plan`, `zig_binary_size` | Uses explicit local backend paths when needed. |
 | Release and adoption | `zigar_schema`, `zigar_doctor`, `zigar_client_config_generate`, `zigar_release_claim_check`, `zigar_smoke_plan` | Helps clients discover capabilities and package setup evidence. |
+
+Protocol features are additive. Clients that understand `outputSchema`,
+`resource_link`, MCP elicitation, or MCP sampling get richer integration;
+clients that do not still receive normal text plus `structuredContent` results.
+Patch-session writes remain `apply=true` and stale-preimage gated, and
+`zigar_failure_fusion summarize=true` falls back to deterministic evidence when
+sampling is unavailable.
 
 <details>
 <summary>Tool group table</summary>

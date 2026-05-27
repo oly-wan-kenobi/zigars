@@ -46,6 +46,11 @@ text, `zig_release_notes_draft` drafts editable notes, and
 `zig_release_evidence_pack` packages evidence pointers and verification
 commands. They do not execute release gates, tag, publish, or certify skipped
 checks.
+Use [release-evidence.md](release-evidence.md) for local phase handoff notes
+when docs, package, skills, or adoption hardening changes need exact command
+evidence before a public release note is drafted. A phase note is useful
+maintenance context, but public optional-backend claims still require clean-tree
+`Release Readiness` evidence for the exact release commit.
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow

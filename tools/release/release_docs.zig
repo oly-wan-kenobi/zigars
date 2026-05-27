@@ -62,6 +62,9 @@ pub fn checkAgentWorkflowDocs(allocator: Allocator, io: Io) !bool {
         "omitted_sections",
         "skipped_phases",
         "heuristic text/import scan",
+        "zigar_setup_guidance",
+        "elicitation/create",
+        "summarize=true",
         "zigar_context_pack -> zigar_next_action",
     });
 }
@@ -192,6 +195,9 @@ pub fn checkPublicAdoptionDocs(allocator: Allocator, io: Io) !bool {
         "zigar_adoption_pack",
         "zigar_smoke_plan",
         "zigar_conformance_report",
+        "Protocol Feature Fallbacks",
+        "outputSchema",
+        "sampling/createMessage",
     })) and ok;
     return ok;
 }

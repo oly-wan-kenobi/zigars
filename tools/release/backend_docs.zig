@@ -27,6 +27,7 @@ pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
         "zlint --rules --format json",
         "ZIGAR_ZLINT_PATH",
         "zig_profile_plan",
+        "zigar_backend_guidance",
         "capture semantics",
         "artifact metadata",
         "Release Readiness",

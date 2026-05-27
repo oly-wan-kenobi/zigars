@@ -58,7 +58,10 @@ heuristic fields as routing advice until a compiler-backed command or
 
 Use `zigar_failure_fusion` to combine compiler diagnostics and test failures into
 a primary failure, rerun command, likely scope, and suggested follow-up tools.
-Lower-level command results also expose a `failure_summary` field.
+Pass `summarize=true` only when a client-supported MCP sampling summary would be
+useful; unsupported clients still receive the deterministic evidence and
+fallback metadata. Lower-level command results also expose a `failure_summary`
+field.
 
 Use `zig_build_events` and `zig_test_events` for captured stdout/stderr when a
 client already ran a Zig command. They extract diagnostic, build-step, test, and
@@ -149,6 +152,10 @@ Use `zigar_patch_session_create` and `zigar_patch_session_preview` for multi-fil
 edits that need stable preimage hashes before applying. Apply with
 `zigar_patch_session_apply` only after passing the preview's
 `expected_preimages`; stale files or generated/vendor paths block the write.
+When the active MCP client advertises protocol elicitation, an applied patch
+session can request confirmation through `elicitation/create`; declined,
+cancelled, malformed, or timed-out responses block the write. Clients without
+elicitation support keep the same `apply=true` and stale-preimage contract.
 `zigar_patch_session_revert` can roll back an applied session while the current
 file hashes still match the recorded session output.
 
@@ -178,9 +185,10 @@ or writes `.zigar/profile.json` with `schema_version: 2`; `zigar_profile_read`,
 `zigar_profile_diff` cover bounded reads, validation, generation, import, and
 top-level comparison.
 
-For setup work, start with `zigar_setup_elicit` or the narrower
-`zigar_profile_elicit` and `zigar_backend_elicit` tools. They return questions
-and unknowns without blocking non-interactive automation. Then use
+For setup work, start with `zigar_setup_guidance` or the narrower
+`zigar_profile_guidance` and `zigar_backend_guidance` tools. They return
+questions and unknowns without blocking non-interactive automation. The older
+`_elicit` names remain compatibility aliases, not the primary public names. Then use
 `zigar_env_pack`, `zig_toolchain_pin`, `zig_zls_match_check`,
 `zigar_backend_install_plan`, `zigar_dev_env_generate`, and
 `zigar_backend_conformance` to make the toolchain, setup files, and backend
@@ -200,7 +208,7 @@ evidence reproducible.
   zigar_job_start -> zigar_job_result -> tasks/result`.
 - Handoff after an interrupted run: `zigar_session_snapshot ->
   zigar_handoff_pack -> zigar_tool_sequence_plan`.
-- Reproducible setup: `zigar_setup_elicit -> zigar_project_profile_v2 ->
+- Reproducible setup: `zigar_setup_guidance -> zigar_project_profile_v2 ->
   zigar_env_pack -> zig_zls_match_check -> zigar_backend_conformance`.
 - Profiling workflow routing: `zigar_next_action -> zig_profile_plan ->
   zig_profile_run` when an explicit command is needed, then `zig_flamegraph` or

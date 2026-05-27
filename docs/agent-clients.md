@@ -60,6 +60,23 @@ zigar_prompt_pack {}
 use `completion/complete` for workflow names, resource URIs, command names, and
 client names.
 
+## Protocol Feature Fallbacks
+
+Zigar publishes richer MCP metadata when a client can use it, but keeps older
+clients functional. Clients may ignore `outputSchema` and `resource_link`
+content blocks and still consume normal text plus `structuredContent` results.
+`zigar_patch_session_apply` can request `elicitation/create` confirmation for
+`apply=true` patch writes when the active client advertises elicitation support;
+the existing `apply=true` argument, workspace guard, generated/vendor policy,
+and stale-preimage checks remain mandatory. Clients without elicitation support
+keep the older apply-gated behavior.
+
+`zigar_failure_fusion` can request `sampling/createMessage` when called with
+`summarize=true` and the client advertises sampling support. If sampling is
+unsupported, declined, or times out, zigar returns deterministic failure
+evidence and structured fallback fields instead of treating summarization as a
+hard dependency.
+
 ## Codex
 
 Codex uses TOML config. Keep using the focused setup guide and examples:

@@ -335,6 +335,19 @@ names, allow-listed command names, and client names. `zigar_agent_guide_v2`,
 `zigar_client_guide`, and `zigar_prompt_pack` summarize shipped workflows for
 compile errors, tests, refactors, API changes, releases, and performance work.
 
+MCP protocol enhancements are capability-gated. `tools/list` publishes declared
+`outputSchema` metadata, large artifact-producing results can include
+`resource_link` blocks, and older clients can ignore both while still reading
+the text and `structuredContent` fallback. `zigar_patch_session_apply` may issue
+`elicitation/create` when `apply=true` and the active client advertises
+elicitation support; accepted responses still must pass the existing
+`apply=true`, workspace, generated/vendor, and stale-preimage checks. Declined,
+cancelled, malformed, or timed-out elicitation responses block the write.
+Clients without elicitation support continue to use the existing apply-gated
+path. `zigar_failure_fusion` accepts `summarize=true` and may issue
+`sampling/createMessage` when the client supports sampling; unsupported clients
+receive the deterministic failure evidence plus structured fallback metadata.
+
 ## Validation Workflow State
 
 `zigar_validation_plan` returns a risk-aware validation plan without executing

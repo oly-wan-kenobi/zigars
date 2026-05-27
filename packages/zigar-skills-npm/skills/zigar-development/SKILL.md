@@ -18,6 +18,9 @@ code-generation behavior inside the server.
 2. If the zigar MCP server is connected, call `zigar_doctor` with
    `probe_backends=false` and use `zigar_client_guide` or
    `zigar_adoption_pack` when client behavior or setup is part of the task.
+   For setup ambiguity, prefer `zigar_setup_guidance`,
+   `zigar_profile_guidance`, and `zigar_backend_guidance`; the older
+   `_elicit` names are compatibility aliases.
 3. For Zig-source work, prefer zigar routing tools before shell commands:
    `zigar_context_pack`, `zigar_next_action`, `zig_file_owner`,
    `zig_workspace_symbol_cache`, `zigar_impact`, or `zig_impact_semantic`
@@ -41,11 +44,16 @@ available zigar workflow tool before falling back to direct shell commands.
   `zig_safety_site_catalog`, and `zig_test_for_symbol` for bounded test and
   safety-review evidence.
 - Source writes: keep preview-first behavior and require `apply=true` for MCP
-  tools that mutate files or run effectful captures.
+  tools that mutate files or run effectful captures. Patch-session apply may
+  use MCP `elicitation/create` when the client supports it, but stale preimages
+  and `apply=true` remain mandatory.
 - Package or distribution changes: keep package files explicit, avoid install
   side effects, and preserve stdout for MCP JSON-RPC in server-facing launchers.
 - Skill changes: keep `SKILL.md` concise, put only directly useful references
   under `references/`, and validate the skill folder before finishing.
+- Failure summaries: `zigar_failure_fusion` can use MCP
+  `sampling/createMessage` only when `summarize=true` and the client supports
+  sampling; unsupported clients keep deterministic failure evidence.
 
 Read `references/workflow-map.md` when the task needs a more detailed mapping
 from zigar development work to zigar MCP tools and validation gates.

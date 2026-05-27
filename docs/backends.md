@@ -130,9 +130,10 @@ without scraping this document.
 `zigar_backend_install_plan` is the setup-oriented companion to the catalog. It
 returns backend-specific commands, compatibility notes, and verify steps for a
 selected backend and package manager, but it never installs packages or mutates
-the developer environment. `zigar_backend_elicit` reports unresolved backend
+the developer environment. `zigar_backend_guidance` reports unresolved backend
 policy questions such as which optional tools should be release-claimed and how
-they will be pinned.
+they will be pinned. `zigar_backend_elicit` remains available only as a
+compatibility alias for older clients.
 
 `zigar_dev_env_generate` can preview or write pinned setup artifacts for mise,
 asdf, Nix, devcontainer, and GitHub Actions. Generated files are workspace

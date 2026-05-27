@@ -35,7 +35,8 @@ directory according to that client's documentation.
 ## Shipped Skills
 
 - `zigar-development`: dogfood zigar while developing zigar itself, including
-  server changes, repo docs, package tooling, validation, and skill refinement.
+  server changes, repo docs, package tooling, validation, Phase 6 protocol
+  feature fallbacks, and skill refinement.
 
 ## Maintainer Notes
 
