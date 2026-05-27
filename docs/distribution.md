@@ -110,8 +110,10 @@ Minimum behavior:
   validation workflows;
 - keep each skill self-contained with `SKILL.md`, optional `agents/` metadata,
   and optional one-level `references/`;
+- include static Claude Code plugin and Gemini CLI extension metadata when those
+  clients can consume the same skill folders without install side effects;
 - provide an explicit helper command for listing skills and printing package
-  paths;
+  paths, including the package root for plugin or extension clients;
 - avoid postinstall hooks, automatic client config writes, or implicit MCP
   installation;
 - avoid claiming skills are part of base MCP; clients consume them through their

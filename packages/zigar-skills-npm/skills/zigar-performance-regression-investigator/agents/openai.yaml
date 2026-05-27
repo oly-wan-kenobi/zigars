@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar performance regression investigator"
+  short_description: "Compare Zig performance evidence rigorously."
+  default_prompt: "Use $zigar-performance-regression-investigator to investigate this benchmark or profiling regression."

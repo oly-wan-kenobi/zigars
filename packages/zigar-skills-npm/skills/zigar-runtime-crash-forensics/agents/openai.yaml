@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar runtime crash forensics"
+  short_description: "Turn Zig crashes into reproducible evidence."
+  default_prompt: "Use $zigar-runtime-crash-forensics to analyze this Zig crash and preserve the raw evidence."

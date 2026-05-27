@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar Zig version migrator"
+  short_description: "Migrate Zig projects across toolchain versions."
+  default_prompt: "Use $zigar-zig-version-migrator to make this Zig version migration evidence-based and version-scoped."

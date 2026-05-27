@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar safe refactor"
+  short_description: "Plan and validate risky Zig changes."
+  default_prompt: "Use $zigar-safe-refactor to map the impact of this Zig change and choose the right validation depth."

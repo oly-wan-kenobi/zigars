@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar cross-target artifact auditor"
+  short_description: "Inspect Zig binaries and target evidence."
+  default_prompt: "Use $zigar-cross-target-artifact-auditor to review this Zig binary or cross-target artifact."

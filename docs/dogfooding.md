@@ -38,6 +38,8 @@ The skills package may:
 
 - ship skill folders for Codex, Claude Code, or other clients that support
   filesystem-style skills;
+- include client metadata such as Claude Code plugin and Gemini CLI extension
+  manifests that point at the same static skill folders;
 - include package-local helper commands for locating shipped skills;
 - describe how to use zigar MCP tools effectively during development.
 

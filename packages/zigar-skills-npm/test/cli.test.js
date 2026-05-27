@@ -8,6 +8,22 @@ const { spawnSync } = require("node:child_process");
 
 const packageRoot = path.resolve(__dirname, "..");
 const cli = path.join(packageRoot, "bin", "zigar-skills.js");
+const skillsRoot = path.join(packageRoot, "skills");
+const expectedSkills = [
+  "zigar-ci-forensics",
+  "zigar-cross-target-artifact-auditor",
+  "zigar-dependency-steward",
+  "zigar-development",
+  "zigar-docs-example-steward",
+  "zigar-evidence-contract",
+  "zigar-ffi-abi-guardian",
+  "zigar-memory-fuzz-forensics",
+  "zigar-performance-regression-investigator",
+  "zigar-release-claim-auditor",
+  "zigar-runtime-crash-forensics",
+  "zigar-safe-refactor",
+  "zigar-zig-version-migrator",
+];
 
 function run(args) {
   return spawnSync(process.execPath, [cli, ...args], {
@@ -20,17 +36,28 @@ test("lists shipped skills", () => {
   const result = run(["list"]);
 
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /^zigar-development$/m);
+  assert.deepEqual(result.stdout.trim().split("\n"), expectedSkills);
   assert.equal(result.stderr, "");
 });
 
 test("prints the path to a shipped skill", () => {
-  const result = run(["path", "zigar-development"]);
-  const skillPath = result.stdout.trim();
+  for (const skill of expectedSkills) {
+    const result = run(["path", skill]);
+    const skillPath = result.stdout.trim();
+
+    assert.equal(result.status, 0);
+    assert.equal(path.basename(skillPath), skill);
+    assert.equal(fs.existsSync(path.join(skillPath, "SKILL.md")), true);
+  }
+});
+
+test("prints the package root for plugin and extension clients", () => {
+  const result = run(["root"]);
 
   assert.equal(result.status, 0);
-  assert.equal(path.basename(skillPath), "zigar-development");
-  assert.equal(fs.existsSync(path.join(skillPath, "SKILL.md")), true);
+  assert.equal(result.stdout.trim(), packageRoot);
+  assert.equal(fs.existsSync(path.join(packageRoot, ".claude-plugin", "plugin.json")), true);
+  assert.equal(fs.existsSync(path.join(packageRoot, "gemini-extension.json")), true);
 });
 
 test("rejects unknown skills", () => {
@@ -40,13 +67,47 @@ test("rejects unknown skills", () => {
   assert.match(result.stderr, /Unknown skill: missing-skill/);
 });
 
-test("shipped skill has complete frontmatter", () => {
-  const skill = fs.readFileSync(
-    path.join(packageRoot, "skills", "zigar-development", "SKILL.md"),
-    "utf8",
+test("shipped skills have complete frontmatter", () => {
+  for (const name of expectedSkills) {
+    const skill = fs.readFileSync(path.join(skillsRoot, name, "SKILL.md"), "utf8");
+
+    assert.match(skill, new RegExp(`^---\\nname: ${name}\\n`, "m"));
+    assert.match(skill, /^description: Use when /m);
+    assert.doesNotMatch(skill, /TODO/);
+  }
+});
+
+test("shipped skills have OpenAI interface metadata", () => {
+  for (const name of expectedSkills) {
+    const metadata = fs.readFileSync(
+      path.join(skillsRoot, name, "agents", "openai.yaml"),
+      "utf8",
+    );
+
+    assert.match(metadata, /^interface:\n/m);
+    assert.match(metadata, /display_name: ".+"/);
+    assert.match(metadata, /short_description: ".+"/);
+    assert.match(metadata, new RegExp(`default_prompt: ".+\\$${name}.+"`));
+  }
+});
+
+test("ships Claude Code plugin metadata", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(packageRoot, ".claude-plugin", "plugin.json"), "utf8"),
   );
 
-  assert.match(skill, /^---\nname: zigar-development\n/m);
-  assert.match(skill, /^description: Use when developing zigar itself,/m);
-  assert.doesNotMatch(skill, /TODO/);
+  assert.equal(manifest.name, "zigar-skills");
+  assert.equal(manifest.version, "0.2.0");
+  assert.match(manifest.description, /Agent skills/);
+  assert.equal(manifest.keywords.includes("claude-code"), true);
+});
+
+test("ships Gemini CLI extension metadata", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(packageRoot, "gemini-extension.json"), "utf8"),
+  );
+
+  assert.equal(manifest.name, "zigar-skills");
+  assert.equal(manifest.version, "0.2.0");
+  assert.match(manifest.description, /Agent skills/);
 });

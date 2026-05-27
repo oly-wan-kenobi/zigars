@@ -1,0 +1,19 @@
+{
+  "name": "zigar-skills",
+  "displayName": "Zigar Skills",
+  "version": "0.2.0",
+  "description": "Agent skills for zigar-aware Zig development evidence, validation, and forensics workflows.",
+  "author": {
+    "name": "Zigar maintainers"
+  },
+  "homepage": "https://github.com/oly-wan-kenobi/zigar#readme",
+  "repository": "https://github.com/oly-wan-kenobi/zigar",
+  "license": "MIT",
+  "keywords": [
+    "zig",
+    "zigar",
+    "mcp",
+    "agent-skills",
+    "claude-code"
+  ]
+}

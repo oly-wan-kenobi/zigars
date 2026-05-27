@@ -21,6 +21,7 @@ function printHelp() {
 Usage:
   zigar-skills list
   zigar-skills path [skill-name]
+  zigar-skills root
   zigar-skills help
 `);
 }
@@ -37,6 +38,11 @@ function main(argv) {
     for (const name of listSkills()) {
       console.log(name);
     }
+    return 0;
+  }
+
+  if (command === "root") {
+    console.log(packageRoot);
     return 0;
   }
 

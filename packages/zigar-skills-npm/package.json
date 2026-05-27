@@ -18,13 +18,18 @@
     "mcp",
     "agent-skills",
     "codex",
-    "claude"
+    "claude",
+    "claude-code",
+    "gemini",
+    "gemini-cli"
   ],
   "bin": {
     "zigar-skills": "bin/zigar-skills.js"
   },
   "files": [
+    ".claude-plugin",
     "bin",
+    "gemini-extension.json",
     "skills",
     "test",
     "README.md",
