@@ -46,9 +46,9 @@ Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`, `autodoc
 
 ### static_analysis
 
-Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`, `zig_impact_semantic`, `zig_test_select_semantic`
+Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_import_cycles`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_test_name_resolve`, `zig_test_fixture_inventory`, `zig_safety_site_catalog`, `zig_test_for_symbol`, `zig_module_surface`, `zig_symbol_dossier`, `zig_change_risk_audit`, `zig_insertion_sites`, `zig_io_migration_scan`, `zig_leak_triage`, `zig_comptime_diagnose`, `zig_memory_layout`, `zig_unsafe_operations_audit`, `zig_abi_layout_diff`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`, `zig_impact_semantic`, `zig_test_select_semantic`
 
-Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `declarations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test map`, `test select`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
+Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `import cycles`, `declarations`, `module surface`, `symbol dossier`, `insertion sites`, `risk audit`, `safety sites`, `fixture inventory`, `io migration`, `std.io`, `std.Io`, `leak triage`, `gpa leak`, `comptime diagnose`, `memory layout`, `abi layout`, `unsafe operations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test name resolve`, `test map`, `test select`, `test for symbol`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
 
 ### ci_artifacts
 
@@ -124,13 +124,13 @@ Keywords: `api lifecycle`, `api baseline`, `api check`, `api docs diff`, `breaki
 
 ### dependency_security
 
-Tools: `zig_dependency_update_plan`, `zig_dependency_fetch_check`, `zig_dependency_lock_audit`, `zig_dependency_impact`, `zig_sbom`, `zig_zat_scan`, `zig_osv_scan`, `zig_dependency_security_report`, `zig_dependency_provenance`, `zig_dependency_license_summary`, `zig_github_dependency_submit_plan`
+Tools: `zig_dependency_update_plan`, `zig_dependency_fetch_check`, `zig_dependency_lock_audit`, `zig_dependency_impact`, `zig_sbom`, `zig_zat_scan`, `zig_osv_scan`, `zig_dependency_security_report`, `zig_dependency_provenance`, `zig_dependency_license_summary`, `zig_github_dependency_submit_plan`, `zig_zon_dep_sync`, `zig_deps_add`, `zig_deps_remove`, `zig_deps_upgrade`, `zig_pkg_search`, `zig_pkg_info`, `zig_pkg_versions`, `zig_pkg_readme`, `zig_dependency_migrate`
 
-Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclonedx`, `security scan`, `osv`, `zat`, `license`, `dependency submission`, `provenance`
+Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclonedx`, `security scan`, `osv`, `zat`, `license`, `dependency submission`, `provenance`, `build.zig.zon mutation`, `zig fetch hash`, `dependency add`, `dependency remove`, `dependency upgrade`, `dependency migration`, `package search`, `zigistry`, `direct url`, `registry provider`
 
 ### performance_workflows
 
-Tools: `zig_coverage_run`, `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, `zig_coverage_budget_check`, `zig_bench_discover`, `zig_bench_run`, `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`, `zig_perf_budget_check`, `zig_profile_regression`, `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`, `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`, `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`, `zig_tracy_hints`, `zig_perf_evidence_pack`
+Tools: `zig_coverage_run`, `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, `zig_coverage_budget_check`, `zig_bench_discover`, `zig_bench_run`, `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`, `zig_bench_regression_gate`, `zig_perf_budget_check`, `zig_profile_regression`, `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`, `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`, `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`, `zig_tracy_hints`, `zig_perf_evidence_pack`
 
 Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `bench baseline`, `performance budget`, `profile regression`, `samply`, `tracy`, `profile artifact`, `performance evidence`
 
@@ -160,6 +160,10 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - parse build and test output events: prefer `zig_build_events, zig_test_events, zig_test_timing`
 - analyze impact of touched files: prefer `zigar_impact`
 - analyze parser-backed semantic impact: prefer `zig_impact_semantic, zig_test_select_semantic`
+- inspect architecture-neutral project structure: prefer `zig_import_cycles, zig_module_surface, zig_symbol_dossier, zig_insertion_sites`
+- catalog tests and safety review sites: prefer `zig_test_name_resolve, zig_test_fixture_inventory, zig_safety_site_catalog, zig_test_for_symbol`
+- analyze Zig migration, comptime, memory, and unsafe-operation pain points: prefer `zig_io_migration_scan, zig_comptime_diagnose, zig_leak_triage, zig_memory_layout, zig_unsafe_operations_audit, zig_abi_layout_diff`
+- risk-rank a planned source change: prefer `zig_change_risk_audit, zig_changed_files_plan, zig_test_select`
 - summarize validation history: prefer `zigar_validation_history, zig_test_flake_history, zig_failure_history`
 - prepare an agent handoff: prefer `zigar_session_snapshot, zigar_handoff_pack`
 - read project memory: prefer `zigar_project_memory, zigar_project_notes, zigar_decision_record`
@@ -178,6 +182,8 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - manage public API lifecycle evidence: prefer `zig_api_baseline_init, zig_api_check, zig_api_diff_baseline, zig_api_docs_diff`
 - verify docs examples and snippets: prefer `zig_docs_query, zig_project_docs_query, zig_doc_example_check, zig_snippet_check, zig_readme_command_check`
 - audit dependency and security evidence: prefer `zig_dependency_update_plan, zig_dependency_fetch_check, zig_dependency_lock_audit, zig_sbom, zig_osv_scan, zig_zat_scan, zig_dependency_security_report, zig_dependency_provenance`
+- manage build.zig.zon dependencies: prefer `zig_zon_dep_sync, zig_deps_add, zig_deps_remove, zig_deps_upgrade, zig_dependency_migrate`
+- browse Zig package metadata: prefer `zig_pkg_search, zig_pkg_info, zig_pkg_versions, zig_pkg_readme`
 - find symbol information: prefer `zig_hover, zig_definition, zig_references, zig_document_symbols`
 - search Zig docs: prefer `zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json`
 - query parser-backed Zig symbols: prefer `zig_semantic_query, zig_semantic_decl, zig_semantic_refs, zig_semantic_callers`
@@ -185,7 +191,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - plan profiling capture: prefer `zig_profile_plan`
 - make a flamegraph: prefer `zig_flamegraph`
 - normalize coverage evidence: prefer `zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check`
-- run and compare benchmarks: prefer `zig_bench_discover, zig_bench_run, zig_bench_compare, zig_perf_budget_check`
+- run and compare benchmarks: prefer `zig_bench_discover, zig_bench_run, zig_bench_compare, zig_bench_regression_gate, zig_perf_budget_check`
 - record profiler evidence: prefer `zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack`
 - debug runtime crashes: prefer `zig_debug_plan, zig_lldb_backtrace, zig_core_inspect, zig_sanitizer_fusion, zig_panic_trace_analyze, zig_crash_repro_plan`
 - run memory and fuzz diagnostics: prefer `zig_heaptrack_run, zig_valgrind_memcheck, zig_callgrind_report, zig_fuzz_plan, zig_afl_run, zig_libfuzzer_run`
@@ -202,6 +208,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Compact Argument Hints
 
+- `zig_abi_layout_diff`: optional `path: string`, `limit: integer`
 - `zig_afl_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_allocations`: required `file: string`
 - `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
@@ -216,6 +223,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_bench_baseline`: optional `command: string`, `results: string`, `current: string`, `baseline: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `threshold_pct: integer`, `limit: integer`
 - `zig_bench_compare`: optional `results: string`, `current: string`, `baseline: string`, `threshold_pct: integer`, `limit: integer`
 - `zig_bench_discover`: optional `limit: integer`
+- `zig_bench_regression_gate`: required `current: string`, `baseline: string`; optional `threshold_pct: integer`, `session_id: string`, `apply: boolean`
 - `zig_bench_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_benchmark_history`: optional `path: string`, `limit: integer`
 - `zig_binary_size`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
@@ -226,6 +234,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_builtin_doc`: required `query: string`; optional `limit: integer`
 - `zig_builtin_doc_json`: required `query: string`; optional `limit: integer`
 - `zig_callgrind_report`: optional `command: string`, `text: string`, `content: string`, `path: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `valgrind_path: string`
+- `zig_change_risk_audit`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`
 - `zig_changed_files_plan`: optional `timeout_ms: integer`
 - `zig_check`: required `file: string`; optional `timeout_ms: integer`
 - `zig_ci_annotations`: required `file: string`; optional `timeout_ms: integer`
@@ -239,6 +248,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
 - `zig_compile_error_index`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`
 - `zig_completion`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
+- `zig_comptime_diagnose`: optional `text: string`, `path: string`, `diagnostic: string`, `limit: integer`
 - `zig_core_inspect`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_coverage_baseline`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `limit: integer`
 - `zig_coverage_budget_check`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
@@ -258,9 +268,13 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_dependency_impact`: optional `dependency: string`, `before: string`, `after: string`, `changed_files: string`, `limit: integer`
 - `zig_dependency_license_summary`: optional `manifest: string`, `license_text: string`
 - `zig_dependency_lock_audit`: optional `manifest: string`, `lockfile: string`
+- `zig_dependency_migrate`: optional `mode: string`, `migration_session_id: string`, `dependency: string`, `name: string`, `target_url: string`, `manifest_path: string`, `manifest: string`, `goal: string`, `apply: boolean`
 - `zig_dependency_provenance`: optional `manifest: string`
 - `zig_dependency_security_report`: optional `manifest: string`, `sbom: string`, `zat: string`, `osv: string`
 - `zig_dependency_update_plan`: optional `dependency: string`, `target_version: string`, `manifest: string`
+- `zig_deps_add`: required `dependency: string`; optional `manifest_path: string`, `manifest: string`, `url: string`, `hash: string`, `path: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
+- `zig_deps_remove`: required `dependency: string`; optional `manifest_path: string`, `manifest: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
+- `zig_deps_upgrade`: required `dependency: string`, `url: string`; optional `manifest_path: string`, `manifest: string`, `hash: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
 - `zig_diagnostics`: required `file: string`; optional `content: string`, `wait_ms: integer`
 - `zig_diagnostics_all`: required `file: string`; optional `content: string`, `wait_ms: integer`, `timeout_ms: integer`
 - `zig_doc_example_check`: optional `path: string`, `content: string`, `limit: integer`
@@ -292,13 +306,17 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_heaptrack_summary`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_hover`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_impact_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
+- `zig_import_cycles`: optional `limit: integer`
 - `zig_import_graph`: optional `limit: integer`
 - `zig_import_graph_json`: optional `limit: integer`
 - `zig_import_resolve`: required `import: string`; optional `from: string`
+- `zig_insertion_sites`: required `topic: string`; optional `path: string`, `limit: integer`
+- `zig_io_migration_scan`: optional `path: string`, `limit: integer`
 - `zig_junit`: optional `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_lang_ref_search`: required `query: string`; optional `limit: integer`
 - `zig_lang_ref_search_json`: required `query: string`; optional `limit: integer`
 - `zig_langref_item`: required `query: string`; optional `limit: integer`
+- `zig_leak_triage`: optional `text: string`, `path: string`, `limit: integer`
 - `zig_libfuzzer_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
 - `zig_lint_baseline`: required `findings: string`; optional `baseline: string`, `output: string`, `apply: boolean`
@@ -311,7 +329,9 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_trend`: required `before: string`, `after: string`
 - `zig_lldb_backtrace`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
+- `zig_memory_layout`: optional `path: string`, `limit: integer`
 - `zig_microzig_plan`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
+- `zig_module_surface`: optional `path: string`, `limit: integer`
 - `zig_move_decl`: required `source_file: string`, `target_file: string`, `name: string`; optional `apply: boolean`
 - `zig_objdump_summary`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_organize_imports`: required `file: string`; optional `apply: boolean`
@@ -321,6 +341,10 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_patch_preview`: required `file: string`, `content: string`; optional `apply: boolean`
 - `zig_perf_budget_check`: optional `comparison: string`, `results: string`, `max_regression_pct: integer`
 - `zig_perf_evidence_pack`: optional `coverage: string`, `benchmarks: string`, `samply: string`, `tracy: string`, `flamegraph: string`, `validation: string`, `output: string`, `apply: boolean`
+- `zig_pkg_info`: optional `name: string`, `url: string`, `query: string`, `provider: string`, `offline: boolean`
+- `zig_pkg_readme`: optional `name: string`, `url: string`, `query: string`, `provider: string`, `offline: boolean`
+- `zig_pkg_search`: optional `query: string`, `url: string`, `provider: string`, `offline: boolean`, `limit: integer`
+- `zig_pkg_versions`: optional `name: string`, `url: string`, `query: string`, `provider: string`, `offline: boolean`
 - `zig_profile_open`: required `path: string`; optional `viewer: string`
 - `zig_profile_plan`: optional `binary: string`, `platform: string`, `output_prefix: string`
 - `zig_profile_regression`: optional `comparison: string`, `backend: string`, `command: string`, `threshold_pct: integer`
@@ -335,6 +359,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_release_notes_draft`: optional `changes: string`, `api_diff: string`, `validation: string`, `ci: string`, `dependencies: string`, `security: string`, `version: string`
 - `zig_release_plan`: optional `goal: string`, `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `changelog: string`, `changed_files: string`
 - `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`, `apply: boolean`
+- `zig_safety_site_catalog`: optional `path: string`, `limit: integer`
 - `zig_samply_artifact`: required `path: string`; optional `apply: boolean`
 - `zig_samply_import`: optional `command: string`, `path: string`, `content: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`, `tracy_capture_path: string`, `probe_backend: boolean`, `address: string`, `port: integer`, `seconds: integer`, `limit: integer`
 - `zig_samply_record`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`
@@ -357,6 +382,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_std_search`: required `query: string`; optional `limit: integer`
 - `zig_std_search_json`: required `query: string`; optional `limit: integer`
 - `zig_std_signature`: required `name: string`; optional `limit: integer`
+- `zig_symbol_dossier`: required `symbol: string`; optional `limit: integer`
 - `zig_symbolize`: required `path: string`; optional `baseline: string`, `objdump_path: string`, `dwarfdump_path: string`, `symbolizer_path: string`, `addresses: string`, `apply: boolean`, `timeout_ms: integer`
 - `zig_target_matrix_plan`: optional `targets: string`, `steps: string`
 - `zig_target_runtime_plan`: optional `target: string`, `targets: string`, `command: string`, `binary: string`, `qemu_path: string`, `apply: boolean`, `timeout_ms: integer`
@@ -364,8 +390,11 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_test_discover`: optional `limit: integer`
 - `zig_test_events`: optional `text: string`, `command: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
 - `zig_test_failure_triage`: optional `text: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`
+- `zig_test_fixture_inventory`: optional `path: string`, `limit: integer`
 - `zig_test_flake_history`: optional `history: string`, `path: string`, `limit: integer`
+- `zig_test_for_symbol`: required `symbol: string`; optional `limit: integer`
 - `zig_test_map`: optional `limit: integer`
+- `zig_test_name_resolve`: optional `filters: string`, `limit: integer`
 - `zig_test_select`: optional `files: string`, `symbols: string`, `limit: integer`
 - `zig_test_select_semantic`: optional `files: string`, `symbols: string`, `diff: string`, `limit: integer`, `refresh: boolean`
 - `zig_test_timing`: required `text: string`
@@ -379,6 +408,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_tracy_plan`: optional `limit: integer`
 - `zig_tracy_probe`: optional `tracy_capture_path: string`, `probe_backend: boolean`, `timeout_ms: integer`
 - `zig_translate_c`: required `file: string`; optional `args: string`, `timeout_ms: integer`
+- `zig_unsafe_operations_audit`: optional `path: string`, `limit: integer`
 - `zig_update_imports`: required `old_import: string`, `new_import: string`; optional `file: string`, `files: string`, `apply: boolean`
 - `zig_valgrind_memcheck`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `heaptrack_path: string`, `valgrind_path: string`
 - `zig_workspace_symbol_cache`: optional `refresh: boolean`, `query: string`, `limit: integer`
@@ -389,6 +419,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_zlint_rules`: optional `timeout_ms: integer`
 - `zig_zlint_sarif`: optional `path: string`, `config: string`, `rules: string`, `args: string`, `timeout_ms: integer`
 - `zig_zls_match_check`: optional `probe_backends: boolean`, `timeout_ms: integer`
+- `zig_zon_dep_sync`: required `dependency: string`; optional `manifest_path: string`, `manifest: string`, `url: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`, `timeout_ms: integer`
 - `zigar_adoption_pack`: optional `client: string`, `transport: string`, `backend: string`, `mode: string`
 - `zigar_agent_guide`: optional `client: string`, `task: string`
 - `zigar_agent_guide_v2`: optional `client: string`, `task: string`
@@ -469,6 +500,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Planning Support
 
+- `zig_abi_layout_diff`: `pure_analysis` read-only analysis
 - `zig_afl_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_allocations`: `pure_analysis` read-only analysis
 - `zig_analysis_graphs`: `workspace_artifact` explicit workspace artifact
@@ -483,6 +515,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_bench_baseline`: `apply_gated_mutation` preview/apply mutation
 - `zig_bench_compare`: `pure_analysis` read-only analysis
 - `zig_bench_discover`: `pure_analysis` read-only analysis
+- `zig_bench_regression_gate`: `workspace_artifact` explicit workspace artifact
 - `zig_bench_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_benchmark_history`: `pure_analysis` read-only analysis
 - `zig_binary_size`: `pure_analysis` read-only analysis
@@ -498,6 +531,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_builtin_list`: `pure_analysis` read-only analysis
 - `zig_builtin_list_json`: `pure_analysis` read-only analysis
 - `zig_callgrind_report`: `apply_gated_mutation` preview/apply mutation
+- `zig_change_risk_audit`: `pure_analysis` read-only analysis
 - `zig_changed_files_plan`: `dynamic_command` runtime-dependent backend plan
 - `zig_check`: `exact_command` exact argv
 - `zig_ci_annotations`: `dynamic_command` runtime-dependent backend plan
@@ -511,6 +545,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_command_plan`: `pure_analysis` read-only analysis
 - `zig_compile_error_index`: `dynamic_command` runtime-dependent backend plan
 - `zig_completion`: `zls_request` `textDocument/completion`
+- `zig_comptime_diagnose`: `pure_analysis` read-only analysis
 - `zig_core_inspect`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_baseline`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_budget_check`: `pure_analysis` read-only analysis
@@ -531,9 +566,13 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_dependency_inspect`: `pure_analysis` read-only analysis
 - `zig_dependency_license_summary`: `pure_analysis` read-only analysis
 - `zig_dependency_lock_audit`: `pure_analysis` read-only analysis
+- `zig_dependency_migrate`: `workspace_artifact` explicit workspace artifact
 - `zig_dependency_provenance`: `pure_analysis` read-only analysis
 - `zig_dependency_security_report`: `pure_analysis` read-only analysis
 - `zig_dependency_update_plan`: `pure_analysis` read-only analysis
+- `zig_deps_add`: `apply_gated_mutation` preview/apply mutation
+- `zig_deps_remove`: `apply_gated_mutation` preview/apply mutation
+- `zig_deps_upgrade`: `apply_gated_mutation` preview/apply mutation
 - `zig_diagnostics`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
 - `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic plus ast-check fallback`
 - `zig_diagnostics_workspace`: `pure_analysis` read-only analysis
@@ -567,13 +606,17 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_heaptrack_summary`: `pure_analysis` read-only analysis
 - `zig_hover`: `zls_request` `textDocument/hover`
 - `zig_impact_semantic`: `pure_analysis` read-only analysis
+- `zig_import_cycles`: `pure_analysis` read-only analysis
 - `zig_import_graph`: `pure_analysis` read-only analysis
 - `zig_import_graph_json`: `pure_analysis` read-only analysis
 - `zig_import_resolve`: `pure_analysis` read-only analysis
+- `zig_insertion_sites`: `pure_analysis` read-only analysis
+- `zig_io_migration_scan`: `pure_analysis` read-only analysis
 - `zig_junit`: `dynamic_command` runtime-dependent backend plan
 - `zig_lang_ref_search`: `pure_analysis` read-only analysis
 - `zig_lang_ref_search_json`: `pure_analysis` read-only analysis
 - `zig_langref_item`: `pure_analysis` read-only analysis
+- `zig_leak_triage`: `pure_analysis` read-only analysis
 - `zig_libfuzzer_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_lint`: `dynamic_command` runtime-dependent backend plan
 - `zig_lint_baseline`: `workspace_artifact` explicit workspace artifact
@@ -587,7 +630,9 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_trend`: `pure_analysis` read-only analysis
 - `zig_lldb_backtrace`: `apply_gated_mutation` preview/apply mutation
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
+- `zig_memory_layout`: `pure_analysis` read-only analysis
 - `zig_microzig_plan`: `pure_analysis` read-only analysis
+- `zig_module_surface`: `pure_analysis` read-only analysis
 - `zig_move_decl`: `apply_gated_mutation` preview/apply mutation
 - `zig_objdump_summary`: `apply_gated_mutation` preview/apply mutation
 - `zig_organize_imports`: `apply_gated_mutation` preview/apply mutation
@@ -597,6 +642,10 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_patch_preview`: `apply_gated_mutation` preview/apply mutation
 - `zig_perf_budget_check`: `pure_analysis` read-only analysis
 - `zig_perf_evidence_pack`: `apply_gated_mutation` preview/apply mutation
+- `zig_pkg_info`: `pure_analysis` read-only analysis
+- `zig_pkg_readme`: `pure_analysis` read-only analysis
+- `zig_pkg_search`: `pure_analysis` read-only analysis
+- `zig_pkg_versions`: `pure_analysis` read-only analysis
 - `zig_profile_open`: `pure_analysis` read-only analysis
 - `zig_profile_plan`: `pure_analysis` read-only analysis
 - `zig_profile_regression`: `pure_analysis` read-only analysis
@@ -611,6 +660,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_release_notes_draft`: `pure_analysis` read-only analysis
 - `zig_release_plan`: `pure_analysis` read-only analysis
 - `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_safety_site_catalog`: `pure_analysis` read-only analysis
 - `zig_samply_artifact`: `apply_gated_mutation` preview/apply mutation
 - `zig_samply_import`: `apply_gated_mutation` preview/apply mutation
 - `zig_samply_record`: `apply_gated_mutation` preview/apply mutation
@@ -634,6 +684,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_std_search`: `pure_analysis` read-only analysis
 - `zig_std_search_json`: `pure_analysis` read-only analysis
 - `zig_std_signature`: `pure_analysis` read-only analysis
+- `zig_symbol_dossier`: `pure_analysis` read-only analysis
 - `zig_symbolize`: `apply_gated_mutation` preview/apply mutation
 - `zig_target_matrix_plan`: `pure_analysis` read-only analysis
 - `zig_target_runtime_plan`: `pure_analysis` read-only analysis
@@ -642,8 +693,11 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_test_discover`: `pure_analysis` read-only analysis
 - `zig_test_events`: `dynamic_command` runtime-dependent backend plan
 - `zig_test_failure_triage`: `dynamic_command` runtime-dependent backend plan
+- `zig_test_fixture_inventory`: `pure_analysis` read-only analysis
 - `zig_test_flake_history`: `pure_analysis` read-only analysis
+- `zig_test_for_symbol`: `pure_analysis` read-only analysis
 - `zig_test_map`: `pure_analysis` read-only analysis
+- `zig_test_name_resolve`: `pure_analysis` read-only analysis
 - `zig_test_select`: `pure_analysis` read-only analysis
 - `zig_test_select_semantic`: `pure_analysis` read-only analysis
 - `zig_test_timing`: `pure_analysis` read-only analysis
@@ -657,6 +711,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_tracy_plan`: `pure_analysis` read-only analysis
 - `zig_tracy_probe`: `dynamic_command` runtime-dependent backend plan
 - `zig_translate_c`: `exact_command` exact argv
+- `zig_unsafe_operations_audit`: `pure_analysis` read-only analysis
 - `zig_update_imports`: `apply_gated_mutation` preview/apply mutation
 - `zig_valgrind_memcheck`: `apply_gated_mutation` preview/apply mutation
 - `zig_version`: `dynamic_command` runtime-dependent backend plan
@@ -668,6 +723,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_zlint_rules`: `dynamic_command` runtime-dependent backend plan
 - `zig_zlint_sarif`: `dynamic_command` runtime-dependent backend plan
 - `zig_zls_match_check`: `dynamic_command` runtime-dependent backend plan
+- `zig_zon_dep_sync`: `apply_gated_mutation` preview/apply mutation
 - `zigar_adoption_pack`: `pure_analysis` read-only analysis
 - `zigar_agent_guide`: `pure_analysis` read-only analysis
 - `zigar_agent_guide_v2`: `pure_analysis` read-only analysis
@@ -759,6 +815,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Static Analysis Capability Tiers
 
+- `zig_abi_layout_diff`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `abi_layout_probe_plan`; cross-check `future compiler-probe backend`
 - `zig_allocations`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_keyword_scan`; cross-check `code review`
 - `zig_analysis_graphs`: tier `zwanzig_backed`, confidence `high`, class `advisory`, kind `optional_zwanzig_analysis_graph`; cross-check `configured zwanzig graph mode`
 - `zig_ast_decl_summary`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_declaration_scan`; cross-check `zig ast-check <file>`
@@ -767,8 +824,10 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_build_graph`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_file_scan`; cross-check `zig build --help`
 - `zig_build_options`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_option_scan`; cross-check `zig build --help`
 - `zig_build_targets`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_file_scan`; cross-check `zig build --help`
+- `zig_change_risk_audit`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `architecture_neutral_change_risk_audit`; cross-check `zig_changed_files_plan`
 - `zig_changed_files_plan`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `git_status_command_planner`; cross-check `zig build test`
 - `zig_code_index_export`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_code_index_export`; cross-check `zig ast-check`
+- `zig_comptime_diagnose`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `parser_only_comptime_diagnosis`; cross-check `zig build test`
 - `zig_dead_decl_candidates`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_private_decl_scan`; cross-check `ZLS references`
 - `zig_decl_summary`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_declaration_scan`; cross-check `zig_ast_decl_summary`
 - `zig_decl_summary_json`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_declaration_scan`; cross-check `zig_ast_decl_summary`
@@ -776,9 +835,13 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_error_sets`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_keyword_scan`; cross-check `zig ast-check`
 - `zig_file_owner`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_build_owner_scan`; cross-check `zig build test`
 - `zig_impact_semantic`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_impact`; cross-check `zig ast-check on impacted files`
+- `zig_import_cycles`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `architecture_neutral_import_cycle_scc`; cross-check `zig_import_graph_json`
 - `zig_import_graph`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_import_scan`; cross-check `zig_ast_imports`
 - `zig_import_graph_json`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_import_scan`; cross-check `zig_ast_imports`
 - `zig_import_resolve`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_import_resolution`; cross-check `zig build test`
+- `zig_insertion_sites`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `project_local_insertion_site_ranking`; cross-check `code review`
+- `zig_io_migration_scan`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `zig_016_io_migration_catalog`; cross-check `zig fmt --check .`
+- `zig_leak_triage`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `gpa_leak_stderr_grouping`; cross-check `rerun failing test with GPA leak detection`
 - `zig_lint`: tier `zwanzig_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zwanzig_lint_json`; cross-check `configured zwanzig --help`
 - `zig_lint_baseline`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_baseline_comparison`; cross-check `zig_lint_gate`
 - `zig_lint_compare`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `dual_linter_consensus_comparison`; cross-check `zig_zlint`
@@ -789,9 +852,12 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_sarif`: tier `zwanzig_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zwanzig_lint_sarif`; cross-check `configured zwanzig --help`
 - `zig_lint_suppressions`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_suppression_filter`; cross-check `code review`
 - `zig_lint_trend`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_trend_comparison`; cross-check `configured linters`
+- `zig_memory_layout`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `layout_sensitive_declaration_catalog`; cross-check `zig_abi_layout_diff`
+- `zig_module_surface`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_module_surface`; cross-check `zig ast-check`
 - `zig_package_cache_doctor`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `package_cache_hygiene_scan`; cross-check `git status`
 - `zig_public_api`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_public_decl_scan`; cross-check `zig_ast_decl_summary`
 - `zig_public_api_diff`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_public_decl_diff`; cross-check `zig_ast_decl_summary`
+- `zig_safety_site_catalog`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `safety_keyword_site_catalog`; cross-check `code review`
 - `zig_scip_export`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_scip_like_export`; cross-check `zig ast-check`
 - `zig_semantic_callers`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `zlint_confirmed_call_site_scan`; cross-check `ZLS references`
 - `zig_semantic_decl`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_declaration_lookup`; cross-check `zig ast-check`
@@ -801,16 +867,21 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_semantic_query`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_index_query`; cross-check `zig ast-check`
 - `zig_semantic_refs`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `zlint_confirmed_reference_scan`; cross-check `ZLS references`
 - `zig_static_fusion`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `multi_source_static_confidence_fusion`; cross-check `zig build test`
+- `zig_symbol_dossier`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `symbol_scoped_static_dossier`; cross-check `zig_semantic_decl`
 - `zig_target_matrix_plan`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_target_matrix_plan`; cross-check `zig_matrix_check`
 - `zig_test_discover`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_test_scan`; cross-check `zig_ast_tests`
 - `zig_test_failure_triage`: tier `compiler_backed`, confidence `medium`, class `advisory`, kind `compiler_output_triage`; cross-check `rerun failing command`
+- `zig_test_fixture_inventory`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_test_fixture_inventory`; cross-check `zig ast-check`
+- `zig_test_for_symbol`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `symbol_to_test_candidate_map`; cross-check `zig test --test-filter`
 - `zig_test_map`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `heuristic_test_declaration_scan`; cross-check `zig_ast_tests`
+- `zig_test_name_resolve`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_test_name_resolution`; cross-check `zig ast-check`
 - `zig_test_select`: tier `advisory_orientation`, confidence `low`, class `advisory`, kind `heuristic_test_impact_selection`; cross-check `zig build test`
 - `zig_test_select_semantic`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_semantic_test_selection`; cross-check `zig ast-check on selected test files`
+- `zig_unsafe_operations_audit`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `unsafe_boundary_operation_catalog`; cross-check `zig_safety_site_catalog`
 - `zig_workspace_symbol_cache`: tier `advisory_orientation`, confidence `medium`, class `orientation_only`, kind `cached_heuristic_symbol_import_scan`; cross-check `ZLS workspace symbols`
 - `zig_zlint`: tier `zlint_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zlint_diagnostics`; cross-check `configured ZLint --help`
 - `zig_zlint_fix`: tier `zlint_backed`, confidence `medium`, class `advisory`, kind `optional_zlint_apply_gated_fix`; cross-check `configured ZLint --help`
 - `zig_zlint_rules`: tier `zlint_backed`, confidence `medium`, class `advisory`, kind `optional_zlint_rule_catalog`; cross-check `configured ZLint --help`
 - `zig_zlint_sarif`: tier `zlint_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zlint_sarif_export`; cross-check `configured ZLint --help`
 
-tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords.
+tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints; pilot tools also publish shared outputSchema envelopes. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords.

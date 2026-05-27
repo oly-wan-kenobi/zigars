@@ -91,12 +91,20 @@ pub fn zigarArtifactRead(
     try obj.put(scratch, "bytes", .{ .integer = @intCast(artifact.bytes) });
     try obj.put(scratch, "max_bytes", .{ .integer = @intCast(artifact.max_bytes) });
     try obj.put(scratch, "sha256", .{ .string = artifact.sha256 });
+    const resource_uri = try std.fmt.allocPrint(scratch, "zigar://artifacts/{s}", .{artifact.sha256});
+    try obj.put(scratch, "resource_uri", .{ .string = resource_uri });
     try obj.put(scratch, "content", .{ .string = artifact.content });
     try obj.put(scratch, "evidence_source", .{ .string = "workspace_file_read" });
     try obj.put(scratch, "confidence", .{ .string = "high" });
     try obj.put(scratch, "limitations", .{ .string = "Content is returned as bounded text; binary artifacts may not be human-readable." });
     try obj.put(scratch, "resolution", .{ .string = "Use the sha256 and path fields when citing this artifact as evidence." });
-    return mcp_result.structured(allocator, .{ .object = obj });
+    return mcp_result.structuredWithResourceLink(allocator, .{ .object = obj }, .{
+        .name = artifact.path,
+        .uri = resource_uri,
+        .title = "Artifact by sha256",
+        .description = "Read this artifact through the zigar artifact resource template.",
+        .mimeType = artifactMimeType(artifact.path),
+    });
 }
 
 /// Previews or applies stale artifact-registry pruning; never deletes artifact files.
@@ -350,6 +358,13 @@ fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !st
     return .{ .array = array };
 }
 
+/// Returns a conservative MIME type for artifact resource links.
+fn artifactMimeType(path: []const u8) []const u8 {
+    if (std.mem.endsWith(u8, path, ".json") or std.mem.endsWith(u8, path, ".jsonl")) return "application/json";
+    if (std.mem.endsWith(u8, path, ".svg")) return "image/svg+xml";
+    return "text/plain";
+}
+
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     const value = args orelse return null;
@@ -480,6 +495,8 @@ test "artifact MCP adapters index read and prune artifact registry data" {
     try workspace.expectRead(.{ .path = "zig-out/kept.txt", .max_bytes = 1024, .for_output = false, .provenance = "artifacts.read.content" }, "kept");
     const read = try zigarArtifactRead(allocator, context, read_args.value);
     try std.testing.expectEqualStrings("zig-out/kept.txt", read.structuredContent.?.object.get("path").?.string);
+    try std.testing.expectEqualStrings("resource_link", read.content[1].resource_link.type);
+    try std.testing.expect(std.mem.startsWith(u8, read.content[1].resource_link.uri, "zigar://artifacts/"));
     try std.testing.expectEqual(@as(usize, 1), read.structuredContent.?.object.get("omitted_sections").?.array.items.len);
 
     var prune_preview_args = try artifactArgs(allocator,

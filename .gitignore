@@ -5,6 +5,7 @@
 /dist/
 /coverage/
 /project/
+node_modules/
 
 .DS_Store
 *.swp

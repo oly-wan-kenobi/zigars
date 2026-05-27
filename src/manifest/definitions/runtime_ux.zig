@@ -9,6 +9,10 @@ const fieldHint = types.fieldHint;
 const mode_hint = fieldHint("mode", .{ .description = "Result shape depth.", .default_string = "standard", .enum_values = &.{ "compact", "standard", "deep" } });
 /// Bounded Zig command to run.
 const command_hint = fieldHint("command", .{ .description = "Bounded Zig command to run.", .enum_values = &.{ "build", "build-test", "test", "check", "fmt-check" } });
+/// Zigar resource URI.
+const resource_uri_hint = fieldHint("uri", .{ .description = "Registered or template-backed zigar resource URI.", .completion_source = .resource_uri });
+/// Shipped workflow prompt identifier.
+const workflow_hint = fieldHint("workflow", .{ .description = "Shipped zigar workflow prompt identifier.", .enum_values = &.{ "zigar_compile_error_workflow", "zigar_test_workflow", "zigar_refactor_workflow", "zigar_api_change_workflow", "zigar_release_workflow", "zigar_perf_workflow" } });
 
 /// Start a bounded zigar-managed Zig job and retain status, result, and event tails in process-local state.
 pub const zigar_job_start = tool(.{
@@ -78,7 +82,7 @@ pub const zigar_run_events = tool(.{
 /// Query registered and dynamic zigar resources, including workspace file symbols, imports, and diagnostics.
 pub const zigar_resource_query = tool(.{
     .description = "Query registered and dynamic zigar resources, including workspace file symbols, imports, and diagnostics.",
-    .input_schema = schema(&.{ .{ "uri", "string", true }, .{ "cursor", "string", false }, .{ "limit", "integer", false }, .{ "mode", "string", false } }),
+    .input_schema = schemaWithHints(&.{ .{ "uri", "string", true }, .{ "cursor", "string", false }, .{ "limit", "integer", false }, .{ "mode", "string", false } }, &.{ resource_uri_hint, mode_hint }),
     .read_only = true,
     .group = .runtime_ux,
     .plan = .{ .pure_analysis = "Reads workspace-bound resources and process-local runtime state without mutating files." },
@@ -87,7 +91,7 @@ pub const zigar_resource_query = tool(.{
 /// Create a process-local subscription record for a zigar resource URI.
 pub const zigar_resource_subscribe = tool(.{
     .description = "Create a process-local subscription record for a zigar resource URI.",
-    .input_schema = schema(&.{.{ "uri", "string", true }}),
+    .input_schema = schemaWithHints(&.{.{ "uri", "string", true }}, &.{resource_uri_hint}),
     .read_only = false,
     .group = .runtime_ux,
     .plan = .{ .not_plannable = "Mutates process-local subscription state only." },
@@ -96,7 +100,7 @@ pub const zigar_resource_subscribe = tool(.{
 /// Deactivate a process-local zigar resource subscription by subscription id or URI.
 pub const zigar_resource_unsubscribe = tool(.{
     .description = "Deactivate a process-local zigar resource subscription by subscription id or URI.",
-    .input_schema = schema(&.{ .{ "subscription_id", "string", false }, .{ "uri", "string", false } }),
+    .input_schema = schemaWithHints(&.{ .{ "subscription_id", "string", false }, .{ "uri", "string", false } }, &.{resource_uri_hint}),
     .read_only = false,
     .group = .runtime_ux,
     .plan = .{ .not_plannable = "Mutates process-local subscription state only." },
@@ -152,7 +156,7 @@ pub const zigar_client_guide = tool(.{
 /// Return shipped zigar workflow prompt text and tool sequences.
 pub const zigar_prompt_pack = tool(.{
     .description = "Return shipped zigar workflow prompt text and tool sequences.",
-    .input_schema = schema(&.{.{ "workflow", "string", false }}),
+    .input_schema = schemaWithHints(&.{.{ "workflow", "string", false }}, &.{workflow_hint}),
     .read_only = true,
     .group = .runtime_ux,
     .plan = .{ .pure_analysis = "Returns static shipped workflow prompt guidance." },

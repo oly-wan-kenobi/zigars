@@ -260,6 +260,11 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
             .properties = .{ .object = props },
             .required = &.{"flag"},
         },
+        .outputSchema = .{
+            .@"$schema" = "https://json-schema.org/draft/2020-12/schema",
+            .properties = .{ .object = props },
+            .required = &.{"kind"},
+        },
         .execution = .{ .taskSupport = "optional" },
         .annotations = .{ .title = "Annotation", .readOnlyHint = true, .destructiveHint = false, .idempotentHint = true, .openWorldHint = false },
         .handler = okToolHandler,
@@ -322,6 +327,8 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
         "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"client\",\"value\":\"co\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":25,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"workflow\",\"value\":\"zigar_\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"uri\",\"value\":\"file\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":27,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"mode\",\"value\":\"comp\"}}}",
         "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"unknown/method\"}",
         "{\"jsonrpc\":\"2.0\",\"id\":23,\"result\":{}}",
         "{\"jsonrpc\":\"2.0\",\"id\":24,\"error\":{\"code\":-32603,\"message\":\"client error\"}}",
@@ -350,6 +357,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "Server not initialized") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"serverInfo\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"tools\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"outputSchema\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"structuredContent\":true") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_link\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "ExecutionFailed") != null);
@@ -362,6 +370,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompts\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"completion\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "zigar_compile_error_workflow") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "compact") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Method not found") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/tools/list_changed") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/resources/updated") != null);
@@ -520,6 +529,43 @@ test "Server rejects unsupported subscriptions and invalid log levels" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "Unsupported logging level") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"code\":-32602") != null);
     try std.testing.expectEqual(mcp.protocol.LogLevel.debug, server.log_level);
+}
+
+test "protocol helper scaffolds are capability aware" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server: Server = .init(allocator, .{ .name = "helper-server", .version = "1.0.0" });
+    defer server.deinit();
+
+    const fallback = try server.tryElicitationCreate(std.testing.io, allocator, .{ .object = .empty });
+    try std.testing.expectEqualStrings("protocol_helper_fallback", fallback.object.get("kind").?.string);
+    try std.testing.expect(!fallback.object.get("supported").?.bool);
+
+    server.client_capabilities = .{
+        .elicitation = .{ .form = .{} },
+        .sampling = .{ .context = .{} },
+    };
+    var transport = ScriptTransport{ .messages = &.{} };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+
+    var elicit_params = std.json.ObjectMap.empty;
+    try elicit_params.put(allocator, "message", .{ .string = "Need value" });
+    const elicit = try server.tryElicitationCreate(std.testing.io, allocator, .{ .object = elicit_params });
+    try std.testing.expect(elicit.object.get("supported").?.bool);
+    try std.testing.expect(server.pending_requests.contains(elicit.object.get("request_id").?.integer));
+
+    var sampling_params = std.json.ObjectMap.empty;
+    try sampling_params.put(allocator, "maxTokens", .{ .integer = 16 });
+    const sampling = try server.trySamplingCreateMessage(std.testing.io, allocator, .{ .object = sampling_params });
+    try std.testing.expect(sampling.object.get("supported").?.bool);
+    try std.testing.expect(server.pending_requests.contains(sampling.object.get("request_id").?.integer));
+
+    const sent = try joinedSent(allocator, &transport);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "elicitation/create") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "sampling/createMessage") != null);
 }
 
 test "protocol response builders release response allocations" {

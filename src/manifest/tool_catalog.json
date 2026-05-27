@@ -23,6 +23,10 @@
     {"intent": "parse build and test output events", "prefer": "zig_build_events, zig_test_events, zig_test_timing", "keywords": ["build events", "test events", "timing", "captured output"]},
     {"intent": "analyze impact of touched files", "prefer": "zigar_impact", "keywords": ["impact", "affected tests", "importers", "symbols"]},
     {"intent": "analyze parser-backed semantic impact", "prefer": "zig_impact_semantic, zig_test_select_semantic", "keywords": ["semantic impact", "semantic test select", "parser backed tests", "affected importers"]},
+    {"intent": "inspect architecture-neutral project structure", "prefer": "zig_import_cycles, zig_module_surface, zig_symbol_dossier, zig_insertion_sites", "keywords": ["import cycles", "module surface", "symbol dossier", "insertion sites", "architecture neutral"]},
+    {"intent": "catalog tests and safety review sites", "prefer": "zig_test_name_resolve, zig_test_fixture_inventory, zig_safety_site_catalog, zig_test_for_symbol", "keywords": ["test filters", "fixture inventory", "safety sites", "panic", "unreachable", "test for symbol"]},
+    {"intent": "analyze Zig migration, comptime, memory, and unsafe-operation pain points", "prefer": "zig_io_migration_scan, zig_comptime_diagnose, zig_leak_triage, zig_memory_layout, zig_unsafe_operations_audit, zig_abi_layout_diff", "keywords": ["io migration", "std.io", "std.Io", "comptime diagnose", "gpa leak", "memory layout", "unsafe operations", "abi layout"]},
+    {"intent": "risk-rank a planned source change", "prefer": "zig_change_risk_audit, zig_changed_files_plan, zig_test_select", "keywords": ["change risk", "risk audit", "public api delta", "importer count", "validation planning"]},
     {"intent": "summarize validation history", "prefer": "zigar_validation_history, zig_test_flake_history, zig_failure_history", "keywords": ["validation history", "flake history", "failure history", "recurring failures"]},
     {"intent": "prepare an agent handoff", "prefer": "zigar_session_snapshot, zigar_handoff_pack", "keywords": ["handoff", "session snapshot", "resume work", "agent state"]},
     {"intent": "read project memory", "prefer": "zigar_project_memory, zigar_project_notes, zigar_decision_record", "keywords": ["project memory", "decision record", "project notes", "apply gate"]},
@@ -41,6 +45,8 @@
     {"intent": "manage public API lifecycle evidence", "prefer": "zig_api_baseline_init, zig_api_check, zig_api_diff_baseline, zig_api_docs_diff", "keywords": ["api baseline", "api check", "api docs diff", "breaking change"]},
     {"intent": "verify docs examples and snippets", "prefer": "zig_docs_query, zig_project_docs_query, zig_doc_example_check, zig_snippet_check, zig_readme_command_check", "keywords": ["docs query", "autodoc", "doc examples", "snippet check", "readme commands"]},
     {"intent": "audit dependency and security evidence", "prefer": "zig_dependency_update_plan, zig_dependency_fetch_check, zig_dependency_lock_audit, zig_sbom, zig_osv_scan, zig_zat_scan, zig_dependency_security_report, zig_dependency_provenance", "keywords": ["dependency update", "sbom", "osv", "zat", "security report", "license", "provenance"]},
+    {"intent": "manage build.zig.zon dependencies", "prefer": "zig_zon_dep_sync, zig_deps_add, zig_deps_remove, zig_deps_upgrade, zig_dependency_migrate", "keywords": ["build.zig.zon mutation", "zig fetch hash", "dependency add", "dependency remove", "dependency upgrade", "dependency migration", "apply=true"]},
+    {"intent": "browse Zig package metadata", "prefer": "zig_pkg_search, zig_pkg_info, zig_pkg_versions, zig_pkg_readme", "keywords": ["package search", "zigistry", "direct url", "dependency registry", "package versions", "readme"]},
     {"intent": "find symbol information", "prefer": "zig_hover, zig_definition, zig_references, zig_document_symbols", "keywords": ["zls", "lsp", "symbol", "definition", "references"]},
     {"intent": "search Zig docs", "prefer": "zig_builtin_doc_json, zig_std_search_json, zig_std_item_json, zig_lang_ref_search_json", "keywords": ["docs", "stdlib", "builtin", "langref", "language reference", "source provenance"]},
     {"intent": "query parser-backed Zig symbols", "prefer": "zig_semantic_query, zig_semantic_decl, zig_semantic_refs, zig_semantic_callers", "keywords": ["semantic index", "semantic query", "declaration", "references", "callers", "zlint ast"]},
@@ -48,7 +54,7 @@
     {"intent": "plan profiling capture", "prefer": "zig_profile_plan", "keywords": ["profile plan", "external capture", "perf", "xctrace", "sample", "dtrace", "vtune"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
     {"intent": "normalize coverage evidence", "prefer": "zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check", "keywords": ["coverage", "lcov", "coverage budget", "coverage baseline"]},
-    {"intent": "run and compare benchmarks", "prefer": "zig_bench_discover, zig_bench_run, zig_bench_compare, zig_perf_budget_check", "keywords": ["benchmark", "bench", "baseline", "performance budget", "regression"]},
+    {"intent": "run and compare benchmarks", "prefer": "zig_bench_discover, zig_bench_run, zig_bench_compare, zig_bench_regression_gate, zig_perf_budget_check", "keywords": ["benchmark", "bench", "baseline", "performance budget", "regression", "regression gate", "session"]},
     {"intent": "record profiler evidence", "prefer": "zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack", "keywords": ["samply", "tracy", "profile artifact", "performance evidence"]},
     {"intent": "debug runtime crashes", "prefer": "zig_debug_plan, zig_lldb_backtrace, zig_core_inspect, zig_sanitizer_fusion, zig_panic_trace_analyze, zig_crash_repro_plan", "keywords": ["debug", "lldb", "core dump", "sanitizer", "panic", "crash repro"]},
     {"intent": "run memory and fuzz diagnostics", "prefer": "zig_heaptrack_run, zig_valgrind_memcheck, zig_callgrind_report, zig_fuzz_plan, zig_afl_run, zig_libfuzzer_run", "keywords": ["heaptrack", "valgrind", "callgrind", "fuzz", "afl", "libfuzzer", "corpus"]},
@@ -64,5 +70,5 @@
     {"intent": "diagnose zigar setup", "prefer": "zigar_doctor", "keywords": ["doctor", "health", "backend", "permission denied", "workspace"]}
   ],
   "tool_argument_scope": "Compact high-signal argument and planning hints are generated from the typed manifest under src/manifest/ at build and runtime.",
-  "tools_list_schema_note": "tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords."
+  "tools_list_schema_note": "tools/list publishes each registered inputSchema with properties, required fields, defaults, enums, and zigar path hints; pilot tools also publish shared outputSchema envelopes. zigar_schema and zigar://tools/schema remain available as compact catalog views with grouping, risk, planning, and discovery keywords."
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigar development"
+  short_description: "Use zigar MCP workflows for zigar changes."
+  default_prompt: "Use $zigar-development to route zigar changes through zigar MCP planning, patch safety, and validation workflows."

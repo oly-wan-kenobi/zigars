@@ -3,6 +3,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const app_context = @import("../../app/context.zig");
+const artifact_registry = @import("../../app/usecases/artifacts/registry.zig");
 const runtime_ux = @import("../../app/usecases/runtime_ux/workflows.zig");
 const ports = @import("../../app/ports.zig");
 const mcp_resource_errors = @import("resource_errors.zig");
@@ -86,6 +87,12 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
     // File-scoped resources are advertised as templates; the dynamic handler
     // resolves concrete URIs at read time so registrations stay bounded.
     server.setDynamicResourceHandler(dynamicResourceHandler(Provider), context_provider, mcp_result.deinitResourceContent);
+    try server.addResourceTemplate(.{
+        .uriTemplate = "zigar://artifacts/{sha}",
+        .name = "Artifact By SHA",
+        .description = "Read a registered workspace artifact by sha256 identity.",
+        .mimeType = "text/plain",
+    });
     try server.addResourceTemplate(.{
         .uriTemplate = "zigar://file/{path}/symbols",
         .name = "File Symbols",
@@ -237,6 +244,54 @@ fn dynamicResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
     return jsonContent(allocator, uri, value);
 }
 
+/// Resolves zigar://artifacts/{sha} URIs through the workspace artifact registry.
+fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    const prefix = "zigar://artifacts/";
+    if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
+    const sha = uri[prefix.len..];
+    if (!isSha256Hex(sha)) {
+        return resourceFailure(allocator, uri, artifactResourceFailure("parse_artifact_uri", "invalid_artifact_resource_uri", "Use zigar://artifacts/{sha} with a lowercase 64-character sha256 hex digest."), error.InvalidArguments);
+    }
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    const registry = artifact_registry.readRegistrySnapshot(scratch, context) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.PathOutsideWorkspace, error.EmptyPath, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("load_registry", "artifact_registry_unavailable", "Confirm the artifact registry path is readable inside the workspace, then retry."), err),
+        else => return resourceFailure(allocator, uri, artifactResourceFailure("load_registry", "artifact_registry_failed", "Regenerate or prune the artifact registry, then retry the resource read."), err),
+    };
+    const entry = for (registry.entries) |candidate| {
+        if (std.mem.eql(u8, candidate.sha256, sha)) break candidate;
+    } else {
+        return resourceFailure(allocator, uri, artifactResourceFailure("lookup_artifact", "artifact_resource_not_found", "Run zigar_artifact_index or regenerate the producing workflow so the artifact is registered."), error.FileNotFound);
+    };
+    const resolved = context.workspace_store.resolve(scratch, .{
+        .path = entry.path,
+        .for_output = false,
+        .provenance = "artifacts.resource.resolve",
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
+        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigar_artifact_read for a structured tool error."), err),
+    };
+    resolved.deinit(scratch);
+    const read = context.workspace_store.read(allocator, .{
+        .path = entry.path,
+        .max_bytes = artifact_registry.default_read_limit,
+        .for_output = false,
+        .provenance = "artifacts.resource.content",
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
+        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigar_artifact_read for a structured tool error."), err),
+    };
+    return .{
+        .uri = uri,
+        .mimeType = artifactMimeType(entry.path),
+        .text = read.bytes,
+    };
+}
+
 /// Adapts a text resource builder into the server callback ABI.
 fn textResourceHandler(
     comptime Provider: type,
@@ -281,6 +336,10 @@ fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.I
     return struct {
         /// Bridges the typed helper into the callback signature expected by the MCP adapter.
         fn call(user_data: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+            if (std.mem.startsWith(u8, uri, "zigar://artifacts/")) {
+                const artifact_context = artifactContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
+                return artifactResource(allocator, artifact_context, uri);
+            }
             const context = runtimeContext(Provider, allocator, user_data, uri) catch |err| return contextFailure(allocator, uri, err);
             return dynamicResource(allocator, context, uri);
         }
@@ -294,6 +353,15 @@ fn runtimeContext(comptime Provider: type, allocator: std.mem.Allocator, user_da
     const ptr = user_data orelse return error.MissingRuntime;
     const provider: Provider = @ptrCast(@alignCast(ptr));
     return provider.runtimeUxContext();
+}
+
+/// Projects opaque server user_data into an ArtifactContext.
+fn artifactContext(comptime Provider: type, allocator: std.mem.Allocator, user_data: ?*anyopaque, uri: []const u8) !app_context.ArtifactContext {
+    _ = allocator;
+    _ = uri;
+    const ptr = user_data orelse return error.MissingRuntime;
+    const provider: Provider = @ptrCast(@alignCast(ptr));
+    return provider.artifactContext();
 }
 
 /// Serializes JSON as owned application/json resource text.
@@ -390,6 +458,35 @@ fn dynamicResourceFailure(phase: []const u8, code: []const u8, category: []const
     };
 }
 
+/// Creates a reusable failure spec for artifact resource reads.
+fn artifactResourceFailure(phase: []const u8, code: []const u8, resolution: []const u8) ResourceFailureSpec {
+    return .{
+        .resource = "artifact_resource",
+        .operation = "read_resource",
+        .phase = phase,
+        .code = code,
+        .category = "artifact",
+        .resolution = resolution,
+    };
+}
+
+/// Returns true for lowercase sha256 hex identities accepted in artifact URIs.
+fn isSha256Hex(value: []const u8) bool {
+    if (value.len != 64) return false;
+    for (value) |c| switch (c) {
+        '0'...'9', 'a'...'f' => {},
+        else => return false,
+    };
+    return true;
+}
+
+/// Returns a conservative MIME type for artifact resources.
+fn artifactMimeType(path: []const u8) []const u8 {
+    if (std.mem.endsWith(u8, path, ".json") or std.mem.endsWith(u8, path, ".jsonl")) return "application/json";
+    if (std.mem.endsWith(u8, path, ".svg")) return "image/svg+xml";
+    return "text/plain";
+}
+
 /// Contract-token anchor for resource URI coverage tests.
 const _resource_contract_tokens = [_][]const u8{
     "zigar://workspace",
@@ -401,6 +498,7 @@ const _resource_contract_tokens = [_][]const u8{
     "zigar://jobs",
     "zigar://run/events",
     "zigar://workspace/roots",
+    "zigar://artifacts/{sha}",
     "zigar://file/{path}/symbols",
     "zigar://file/{path}/diagnostics",
     "zigar://file/{path}/imports",
@@ -420,6 +518,14 @@ const ResourceTestProvider = struct {
     /// Returns the fixed runtime UX context exposed by the test provider.
     fn runtimeUxContext(self: *ResourceTestProvider) app_context.RuntimeUxContext {
         return self.context;
+    }
+
+    /// Returns artifact context backed by the same workspace store.
+    fn artifactContext(self: *ResourceTestProvider) app_context.ArtifactContext {
+        return .{
+            .workspace = self.context.workspace,
+            .workspace_store = self.context.workspace_store,
+        };
     }
 };
 
@@ -466,6 +572,15 @@ fn seedResourceJob(session: *test_fakes.FakeRuntimeSession) !void {
         .stderr_truncated = false,
     });
     _ = try runtime.subscribe("zigar://jobs");
+}
+
+/// Formats one artifact registry entry for resource tests.
+fn resourceArtifactRegistryLine(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) ![]const u8 {
+    const hash = try artifact_registry.sha256Hex(allocator, bytes);
+    return std.fmt.allocPrint(allocator,
+        \\{{"path":"{s}","abs_path":"/repo/{s}","bytes":{d},"sha256":"{s}","indexed_at_unix_ms":1,"provenance":{{"producer":"fixture","artifact_kind":"text","toolchain":{{"zig_path":"zig"}}}}}}
+        \\
+    , .{ path, path, bytes.len, hash });
 }
 
 /// Test resource handler that reports a structured JSON failure.
@@ -614,6 +729,32 @@ test "MCP dynamic resource handler maps success and app-layer errors" {
 
     const analysis_failure = try handler(&provider, std.testing.io, allocator, "zigar://file/unexpected.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, analysis_failure.text.?, "dynamic_resource_failed") != null);
+
+    const artifact_hash = try artifact_registry.sha256Hex(allocator, "artifact text");
+    const artifact_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{artifact_hash});
+    const registry_line = try resourceArtifactRegistryLine(allocator, "zig-out/artifact.txt", "artifact text");
+    try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, registry_line);
+    try workspace.expectResolve(.{ .path = "zig-out/artifact.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, "/repo/zig-out/artifact.txt");
+    try workspace.expectRead(.{ .path = "zig-out/artifact.txt", .max_bytes = artifact_registry.default_read_limit, .for_output = false, .provenance = "artifacts.resource.content" }, "artifact text");
+    const artifact = try handler(&provider, std.testing.io, allocator, artifact_uri);
+    try std.testing.expectEqualStrings("artifact text", artifact.text.?);
+
+    const invalid_artifact = try handler(&provider, std.testing.io, allocator, "zigar://artifacts/not-a-sha");
+    try std.testing.expect(std.mem.indexOf(u8, invalid_artifact.text.?, "invalid_artifact_resource_uri") != null);
+
+    const missing_hash = try artifact_registry.sha256Hex(allocator, "missing");
+    const missing_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{missing_hash});
+    try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, registry_line);
+    const missing_artifact = try handler(&provider, std.testing.io, allocator, missing_uri);
+    try std.testing.expect(std.mem.indexOf(u8, missing_artifact.text.?, "artifact_resource_not_found") != null);
+
+    const outside_hash = try artifact_registry.sha256Hex(allocator, "outside");
+    const outside_uri = try std.fmt.allocPrint(allocator, "zigar://artifacts/{s}", .{outside_hash});
+    const outside_registry = try resourceArtifactRegistryLine(allocator, "../secret.txt", "outside");
+    try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, outside_registry);
+    try workspace.expectResolveError(.{ .path = "../secret.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, error.PathOutsideWorkspace);
+    const outside_artifact = try handler(&provider, std.testing.io, allocator, outside_uri);
+    try std.testing.expect(std.mem.indexOf(u8, outside_artifact.text.?, "artifact_resource_unavailable") != null);
 
     const missing_context = try handler(null, std.testing.io, allocator, "zigar://file/src/main.zig/imports");
     try std.testing.expect(std.mem.indexOf(u8, missing_context.text.?, "missing_runtime_context") != null);

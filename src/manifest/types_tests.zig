@@ -12,6 +12,7 @@ const ToolDefinition = subject.ToolDefinition;
 const GroupSpec = subject.GroupSpec;
 const schema = subject.schema;
 const schemaWithHints = subject.schemaWithHints;
+const outputSchema = subject.outputSchema;
 const fieldHint = subject.fieldHint;
 const tool = subject.tool;
 
@@ -22,9 +23,11 @@ test "manifest type helpers preserve schema hints and tool metadata" {
     const definition = tool(.{
         .description = "fixture",
         .input_schema = spec,
+        .output_schema = outputSchema(.analysis_result),
         .group = .core_zig,
         .plan = .{ .pure_analysis = "fixture" },
     });
     try std.testing.expect(definition.read_only);
     try std.testing.expectEqual(ToolGroup.core_zig, definition.group);
+    try std.testing.expectEqual(tooling.OutputSchemaShape.analysis_result, definition.output_schema.?.shape);
 }

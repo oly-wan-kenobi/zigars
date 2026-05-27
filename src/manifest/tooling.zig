@@ -16,6 +16,25 @@ pub const SchemaSpec = struct {
     field_hints: []const SchemaFieldHint = &.{},
 };
 
+/// Shared output schema families used by tools/list outputSchema projection.
+pub const OutputSchemaShape = enum {
+    error_envelope,
+    command_result,
+    analysis_result,
+    patch_session,
+    artifact,
+};
+
+/// Compact output-schema declaration attached to manifest tools.
+pub const OutputSchemaSpec = struct {
+    shape: OutputSchemaShape,
+};
+
+/// Dynamic completion sources advertised by manifest field hints.
+pub const CompletionSource = enum {
+    resource_uri,
+};
+
 /// Human-facing field metadata used when rendering rich catalog schemas.
 pub const FieldHint = struct {
     description: []const u8,
@@ -23,6 +42,7 @@ pub const FieldHint = struct {
     default_int: ?i64 = null,
     default_string: ?[]const u8 = null,
     enum_values: []const []const u8 = &.{},
+    completion_source: ?CompletionSource = null,
     path_kind: ?[]const u8 = null,
     minimum: ?i64 = null,
     maximum: ?i64 = null,
@@ -36,6 +56,11 @@ pub fn schema(comptime fields: []const SchemaField) SchemaSpec {
 /// Creates a schema with explicit hints for selected fields.
 pub fn schemaWithHints(comptime fields: []const SchemaField, comptime field_hints: []const SchemaFieldHint) SchemaSpec {
     return .{ .fields = fields, .field_hints = field_hints };
+}
+
+/// Creates a compact output schema declaration.
+pub fn outputSchema(shape: OutputSchemaShape) OutputSchemaSpec {
+    return .{ .shape = shape };
 }
 
 /// Resolves a field hint, falling back to conventional defaults by field name.
@@ -69,7 +94,7 @@ fn defaultHintFor(field: SchemaField) FieldHint {
     if (std.mem.eql(u8, name, "command")) return .{ .description = "Command name or argv text accepted by the specific tool." };
     if (std.mem.eql(u8, name, "query")) return .{ .description = "Search query." };
     if (std.mem.eql(u8, name, "mode")) return .{ .description = "Tool-specific mode selector." };
-    if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile." };
+    if (std.mem.eql(u8, name, "client")) return .{ .description = "Agent/client profile.", .enum_values = &.{ "codex", "claude", "gemini", "generic" } };
     if (std.mem.eql(u8, name, "format")) return .{ .description = "Tool-specific format selector." };
     if (std.mem.eql(u8, name, "probe_backends") or std.mem.eql(u8, name, "probe_managers")) return .{ .description = "Run extra backend probes instead of using cheap static checks.", .default_bool = false };
     if (std.mem.eql(u8, name, "include_hashes")) return .{ .description = "Include bounded artifact hashes where practical.", .default_bool = true };

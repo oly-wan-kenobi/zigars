@@ -5,6 +5,9 @@ pub fn run(client: anytype) !void {
     defer client.allocator.free(resources);
     if (std.mem.indexOf(u8, resources, "zigar://jobs") == null) return error.AssertionFailed;
     if (std.mem.indexOf(u8, resources, "zigar://workspace/roots") == null) return error.AssertionFailed;
+    const resource_templates = try client.request("resources/templates/list", null);
+    defer client.allocator.free(resource_templates);
+    if (std.mem.indexOf(u8, resource_templates, "zigar://artifacts/{sha}") == null) return error.AssertionFailed;
 
     const dynamic_resource = try client.request("resources/read", "{\"uri\":\"zigar://file/src/tests.zig/symbols\"}");
     defer client.allocator.free(dynamic_resource);
@@ -22,9 +25,15 @@ pub fn run(client: anytype) !void {
     const completion = try client.request("completion/complete", "{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}");
     defer client.allocator.free(completion);
     if (std.mem.indexOf(u8, completion, "build-test") == null) return error.AssertionFailed;
+    const uri_completion = try client.request("completion/complete", "{\"argument\":{\"name\":\"uri\",\"value\":\"zigar://art\"}}");
+    defer client.allocator.free(uri_completion);
+    if (std.mem.indexOf(u8, uri_completion, "zigar://artifacts/{sha}") == null) return error.AssertionFailed;
     const paged_tools = try client.request("tools/list", "{\"limit\":2}");
     defer client.allocator.free(paged_tools);
     if (std.mem.indexOf(u8, paged_tools, "nextCursor") == null) return error.AssertionFailed;
+    const tools = try client.request("tools/list", null);
+    defer client.allocator.free(tools);
+    if (std.mem.indexOf(u8, tools, "\"outputSchema\"") == null) return error.AssertionFailed;
 
     const workspace_map = try client.callTool("zigar_workspace_map", "{}");
     defer client.allocator.free(workspace_map);

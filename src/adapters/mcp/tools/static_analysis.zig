@@ -6,6 +6,8 @@ const mcp = @import("mcp");
 const app_context = @import("../../../app/context.zig");
 const ports = @import("../../../app/ports.zig");
 const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
+const agent_ergonomics = @import("../../../app/usecases/static_analysis/agent_ergonomics.zig");
+const developer_pain = @import("../../../app/usecases/static_analysis/developer_pain.zig");
 const lint_intelligence = @import("../../../app/usecases/static_analysis/lint_intelligence.zig");
 const project_values = @import("../../../app/usecases/static_analysis/project_values.zig");
 const semantic_index = @import("../../../app/usecases/static_analysis/semantic_index.zig");
@@ -37,6 +39,17 @@ pub fn zigImportGraphJson(
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     return staticStructuredValue(allocator, arena.allocator(), "zig_import_graph_json", try importGraphJsonValue(arena.allocator(), graph));
+}
+
+/// Handles MCP `zig_import_cycles` requests by post-processing the import graph into SCCs.
+pub fn zigImportCycles(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_import_cycles", agent_ergonomics.importCyclesValue(allocator, context, .{
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
 }
 
 /// Handles MCP `zig_build_graph` requests by delegating to app logic and shaping owned results/errors.
@@ -106,6 +119,183 @@ pub fn zigTestDiscover(
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     return staticStructuredValue(allocator, arena.allocator(), "zig_test_discover", try testDiscoverJsonValue(arena.allocator(), tests));
+}
+
+/// Handles MCP `zig_test_name_resolve` requests by resolving filters to actual test declarations.
+pub fn zigTestNameResolve(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_test_name_resolve", agent_ergonomics.testNameResolveValue(allocator, context, .{
+        .filters = argString(args, "filters") orelse argString(args, "filter"),
+        .limit = argInt(args, "limit") orelse 500,
+    }));
+}
+
+/// Handles MCP `zig_test_fixture_inventory` requests.
+pub fn zigTestFixtureInventory(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_test_fixture_inventory", agent_ergonomics.testFixtureInventoryValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_safety_site_catalog` requests.
+pub fn zigSafetySiteCatalog(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_safety_site_catalog", agent_ergonomics.safetySiteCatalogValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_test_for_symbol` requests.
+pub fn zigTestForSymbol(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const symbol = argString(args, "symbol") orelse return mcp_errors.missingArgument(allocator, "zig_test_for_symbol", "symbol", "symbol name");
+    return staticValueResult(allocator, context, "zig_test_for_symbol", agent_ergonomics.testForSymbolValue(allocator, context, .{
+        .symbol = symbol,
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_module_surface` requests.
+pub fn zigModuleSurface(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_module_surface", agent_ergonomics.moduleSurfaceValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_symbol_dossier` requests.
+pub fn zigSymbolDossier(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const symbol = argString(args, "symbol") orelse return mcp_errors.missingArgument(allocator, "zig_symbol_dossier", "symbol", "symbol name");
+    return staticValueResult(allocator, context, "zig_symbol_dossier", agent_ergonomics.symbolDossierValue(allocator, context, .{
+        .symbol = symbol,
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_change_risk_audit` requests.
+pub fn zigChangeRiskAudit(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_change_risk_audit", agent_ergonomics.changeRiskAuditValue(allocator, context, .{
+        .files = argString(args, "files"),
+        .symbols = argString(args, "symbols"),
+        .diff = argString(args, "diff"),
+        .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_insertion_sites` requests.
+pub fn zigInsertionSites(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const topic = argString(args, "topic") orelse argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_insertion_sites", "topic", "topic or feature name");
+    return staticValueResult(allocator, context, "zig_insertion_sites", agent_ergonomics.insertionSitesValue(allocator, context, .{
+        .topic = topic,
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse 20,
+    }));
+}
+
+/// Handles MCP `zig_io_migration_scan` requests.
+pub fn zigIoMigrationScan(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_io_migration_scan", developer_pain.ioMigrationScanValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_leak_triage` requests.
+pub fn zigLeakTriage(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_leak_triage", developer_pain.leakTriageValue(allocator, context, .{
+        .text = argString(args, "text"),
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_comptime_diagnose` requests.
+pub fn zigComptimeDiagnose(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_comptime_diagnose", developer_pain.comptimeDiagnoseValue(allocator, context, .{
+        .text = argString(args, "text"),
+        .path = argString(args, "path"),
+        .diagnostic = argString(args, "diagnostic"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_memory_layout` requests.
+pub fn zigMemoryLayout(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_memory_layout", developer_pain.memoryLayoutValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_unsafe_operations_audit` requests.
+pub fn zigUnsafeOperationsAudit(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_unsafe_operations_audit", developer_pain.unsafeOperationsAuditValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
+}
+
+/// Handles MCP `zig_abi_layout_diff` requests.
+pub fn zigAbiLayoutDiff(
+    allocator: std.mem.Allocator,
+    context: app_context.StaticAnalysisContext,
+    args: ?std.json.Value,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return staticValueResult(allocator, context, "zig_abi_layout_diff", developer_pain.abiLayoutDiffValue(allocator, context, .{
+        .path = argString(args, "path"),
+        .limit = argInt(args, "limit") orelse developer_pain.default_limit,
+    }));
 }
 
 /// Handles MCP `zig_changed_files_plan` requests by delegating to app logic and shaping owned results/errors.
@@ -1396,6 +1586,21 @@ const zwanzig_limits = &.{
 const contracts = [_]Contract{
     .{ .tool = "zig_import_graph", .analysis_kind = "heuristic_import_graph", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
     .{ .tool = "zig_import_graph_json", .analysis_kind = "heuristic_import_graph_json", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
+    .{ .tool = "zig_import_cycles", .analysis_kind = "architecture_neutral_import_cycle_scc", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, post-processed from the heuristic import graph.", .limitations = &.{"Cycle detection only follows workspace-relative string-literal .zig imports; comptime imports, build module aliases, and package imports require compiler/ZLS verification."}, .verify_with = &.{ "zig_import_graph_json", "zig build test", "ZLS references" } },
+    .{ .tool = "zig_test_name_resolve", .analysis_kind = "parser_backed_test_name_resolution", .capability_tier = "parser_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit; test declarations are parsed with std.zig.Ast when possible.", .limitations = &.{"Matches declared test names and declarations; custom build test routing and runtime-generated cases are outside the evidence."}, .verify_with = &.{ "zig_ast_tests", "zig test --test-filter", "zig build test" } },
+    .{ .tool = "zig_test_fixture_inventory", .analysis_kind = "parser_backed_test_fixture_inventory", .capability_tier = "parser_backed", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit; helper classification uses parser declarations plus path/name hints.", .limitations = &.{"Fixture/helper labels are heuristic and usage counts are source-text occurrences, not semantic references."}, .verify_with = &.{ "ZLS references", "zig build test" } },
+    .{ .tool = "zig_safety_site_catalog", .analysis_kind = "safety_keyword_site_catalog", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit with line-level masking for obvious comments and string literals.", .limitations = &.{"Safety sites are review prompts, not proof of unsafety; full semantic intent requires code review and compiler-backed validation."}, .verify_with = &.{ "code review", "zig build test", "configured linters" } },
+    .{ .tool = "zig_test_for_symbol", .analysis_kind = "symbol_to_test_candidate_map", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit; matches symbol names against tests and source proximity.", .limitations = &.{"Candidate tests do not prove coverage and should not be used to skip project validation by themselves."}, .verify_with = &.{ "zig test --test-filter", "zig build test" } },
+    .{ .tool = "zig_module_surface", .analysis_kind = "parser_backed_module_surface", .capability_tier = "parser_backed", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files under the requested path up to the limit; public declarations are parser-backed where possible.", .limitations = &.{"Consumer and unused-export signals are source scans and can miss aliases, re-exports, and comptime-selected API."}, .verify_with = &.{ "zig_public_api", "ZLS references", "zig build test" } },
+    .{ .tool = "zig_symbol_dossier", .analysis_kind = "symbol_scoped_static_dossier", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit; combines declarations, source references, tests, and module hints.", .limitations = &.{"Diagnostics, lint findings, and git history are omitted unless supplied by separate tools."}, .verify_with = &.{ "zig_semantic_decl", "zig_semantic_refs", "zig build test" } },
+    .{ .tool = "zig_change_risk_audit", .analysis_kind = "architecture_neutral_change_risk_audit", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Caller-supplied files, symbols, or diff text matched against workspace declarations, imports, and tests.", .limitations = &.{"Risk scores are planner weights over static evidence, not release gates or architecture-policy enforcement."}, .verify_with = &.{ "zig_changed_files_plan", "zig build test", "project CI" } },
+    .{ .tool = "zig_insertion_sites", .analysis_kind = "project_local_insertion_site_ranking", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit ranked by path, declaration, import, and source-text similarity.", .limitations = &.{"Recommendations are non-authoritative and architecture-neutral; inspect nearby modules before editing."}, .verify_with = &.{ "code review", "zig_module_surface", "zig build test" } },
+    .{ .tool = "zig_io_migration_scan", .analysis_kind = "zig_016_io_migration_catalog", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, masked for obvious comments and strings, matched against a curated std.io/std.Io migration table.", .limitations = &.{"Catalogs likely migration sites only; buffer ownership and concrete reader/writer types require compiler-backed verification."}, .verify_with = &.{ "zig fmt --check .", "zig build test", "zig build -Doptimize=ReleaseSafe" } },
+    .{ .tool = "zig_leak_triage", .analysis_kind = "gpa_leak_stderr_grouping", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Caller-supplied or workspace-read GPA leak stderr text; repeated traces are grouped by first Zig stack frame when present.", .limitations = &.{"Does not execute symbolizers or inspect binaries; optimized or stripped traces can omit allocation sites."}, .verify_with = &.{ "rerun failing test with GPA leak detection", "debug build stack traces" } },
+    .{ .tool = "zig_comptime_diagnose", .analysis_kind = "parser_only_comptime_diagnosis", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Caller-supplied source snippet, workspace file, or compiler diagnostic text mined for comptime-known/runtime-known failure clues.", .limitations = &.{"Does not execute compiler probes or evaluate comptime code; compiler diagnostic locations remain authoritative."}, .verify_with = &.{ "zig build test", "zig check", "compiler diagnostic location" } },
+    .{ .tool = "zig_memory_layout", .analysis_kind = "layout_sensitive_declaration_catalog", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, masked for obvious comments and strings, cataloging struct/union/enum/opaque/packed/extern declarations.", .limitations = &.{"Actual size, alignment, and offsets require target-specific compiler probes."}, .verify_with = &.{ "zig_abi_layout_diff", "compiler @sizeOf/@alignOf probes", "targeted tests" } },
+    .{ .tool = "zig_unsafe_operations_audit", .analysis_kind = "unsafe_boundary_operation_catalog", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, masked for obvious comments and strings, matched against unsafe builtin and boundary-operation patterns.", .limitations = &.{"Review catalog only; it does not prove the matched operation is unsafe or incorrect."}, .verify_with = &.{ "zig_safety_site_catalog", "code review", "zig build test" } },
+    .{ .tool = "zig_abi_layout_diff", .analysis_kind = "abi_layout_probe_plan", .capability_tier = "advisory_orientation", .confidence = "low", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit, identifying packed/extern declarations that merit ABI probes.", .limitations = &.{"Phase 4 implementation plans probes only; it does not execute compiler commands or compare target outputs."}, .verify_with = &.{ "future compiler-probe backend", "zig_memory_layout", "target-specific ABI tests" } },
     .{ .tool = "zig_build_graph", .analysis_kind = "heuristic_build_graph", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "build.zig and build.zig.zon when present in the workspace root.", .limitations = &.{"Heuristic source scan of build files; it does not execute build.zig."}, .verify_with = &.{"zig build --help"} },
     .{ .tool = "zig_build_targets", .analysis_kind = "heuristic_build_targets", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "build.zig target, artifact, test, step, and command suggestions from the workspace root.", .limitations = &.{"Heuristic source scan of build.zig; it does not execute build.zig."}, .verify_with = &.{"zig build --help"} },
     .{ .tool = "zig_build_options", .analysis_kind = "heuristic_build_option_scan", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "build.zig option declarations in the workspace root.", .limitations = &.{"Only detects common std.Build option syntax; dynamic options may be missed."}, .verify_with = &.{"zig build --help"} },

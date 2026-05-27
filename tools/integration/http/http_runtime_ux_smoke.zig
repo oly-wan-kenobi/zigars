@@ -23,8 +23,10 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 81, "zigar_cancel_status", "{\"job_id\":\"job-1\"}", expected, "cancel_status_paths", scenario_count);
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":90,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://workspace/roots\"}}", "zigar_workspace_roots_resource", scenario_count);
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigar://file/src/main.zig/imports\"}}", "zigar_dynamic_file_resource", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":98,\"method\":\"resources/templates/list\"}", "zigar://artifacts/{sha}", scenario_count);
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":92,\"method\":\"prompts/get\",\"params\":{\"name\":\"zigar_compile_error_workflow\",\"arguments\":{}}}", "zig_compile_error_index", scenario_count);
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":93,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"command\",\"value\":\"b\"}}}", "build-test", scenario_count);
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"completion/complete\",\"params\":{\"argument\":{\"name\":\"uri\",\"value\":\"zigar://art\"}}}", "zigar://artifacts/{sha}", scenario_count);
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"tasks/list\",\"params\":{\"limit\":5}}", "job-1", scenario_count);
 }
 

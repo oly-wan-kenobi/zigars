@@ -105,6 +105,26 @@ test "structuredOwned releases input value after cloning result" {
     try std.testing.expectEqualStrings("zigar", result.structuredContent.?.object.get("name").?.string);
 }
 
+test "structuredWithResourceLink emits text fallback and resource link" {
+    const allocator = std.testing.allocator;
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "artifact" });
+
+    const result = try result_mod.structuredWithResourceLink(allocator, .{ .object = obj }, .{
+        .name = "artifact.txt",
+        .uri = "zigar://artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .title = "Artifact",
+        .description = "desc",
+        .mimeType = "text/plain",
+    });
+    defer result_mod.deinitToolResult(allocator, result);
+
+    try std.testing.expectEqual(@as(usize, 2), result.content.len);
+    try std.testing.expectEqualStrings("resource_link", result.content[1].resource_link.type);
+    try std.testing.expectEqualStrings("artifact", result.structuredContent.?.object.get("kind").?.string);
+}
+
 test "deinit helpers release all owned content block variants" {
     const allocator = std.testing.allocator;
     const meta = try result_mod.cloneValue(allocator, .{ .string = "meta" });

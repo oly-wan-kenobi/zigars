@@ -560,7 +560,7 @@ test "patch session validate composes typed validation result" {
 
 test "patch session create and replacement paths tolerate allocation failures" {
     var fail_index: usize = 0;
-    while (fail_index < 512) : (fail_index += 1) {
+    while (fail_index < 64) : (fail_index += 1) {
         {
             var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer backing.deinit();

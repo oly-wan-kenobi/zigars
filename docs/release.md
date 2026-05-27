@@ -5,6 +5,10 @@ Before publishing, run the same gate CI uses and the release-asset gate:
 ```sh
 zig build release-check
 zig build dist release-asset-smoke
+npm --prefix packages/zigar-mcp-npm test
+(cd packages/zigar-mcp-npm && npm pack --dry-run)
+npm --prefix packages/zigar-mcpb ci
+npm --prefix packages/zigar-mcpb run pack
 ```
 
 For a public release candidate, also run the manual `Release Readiness`
@@ -148,13 +152,54 @@ writes archives plus `zigar-checksums.txt` under `dist/assets`.
 each archive, extracts the native archive for the current runner OS/architecture,
 and runs `zigar --version` from it.
 
+`npm --prefix packages/zigar-mcpb run pack` consumes those release archives and
+writes MCPB desktop bundles plus `zigar-mcpb-checksums.txt` under `dist/assets`.
+The package is TypeScript; the npm/Node path compiles `src/build.ts` to
+`dist/build.js`, while `bun run --cwd packages/zigar-mcpb pack:bun` runs the
+same TypeScript source directly. The scripts use `@anthropic-ai/mcpb` to run
+`mcpb validate`, `mcpb pack`, and `mcpb info`. Use
+`npm --prefix packages/zigar-mcpb run sign:dev` for a self-signed development
+bundle only; production `fileSha256` values must be computed from the exact
+final `.mcpb` files that will be published.
+
 ## Publishing
 
 1. Publish from a standalone repository rooted at this directory.
 2. Confirm `zig build version` matches the intended release version.
 3. Run `zig build release-check`.
 4. Run `zig build dist release-asset-smoke`.
-5. Run the manual `Release Readiness` workflow with the real backend paths that
+5. Run npm package checks:
+
+```sh
+npm --prefix packages/zigar-mcp-npm test
+npm --prefix packages/zigar-mcp-npm run test:node
+(cd packages/zigar-mcp-npm && npm pack --dry-run)
+```
+
+6. Build and inspect MCPB artifacts:
+
+```sh
+npm --prefix packages/zigar-mcpb ci
+npm --prefix packages/zigar-mcpb run pack
+unzip -l dist/assets/zigar-darwin-universal.mcpb
+unzip -l dist/assets/zigar-linux-x64.mcpb
+unzip -l dist/assets/zigar-windows-x64.mcpb
+cat dist/assets/zigar-mcpb-checksums.txt
+```
+
+The expected MCPB release files are:
+
+- `zigar-darwin-universal.mcpb`
+- `zigar-linux-x64.mcpb`
+- `zigar-windows-x64.mcpb`
+- `zigar-mcpb-checksums.txt`
+
+`zigar-darwin-universal.mcpb` requires `lipo` or `llvm-lipo` to combine the
+macOS x86_64 and aarch64 release binaries. The Linux and Windows MCPB files
+currently contain x86_64 binaries because MCPB compatibility metadata does not
+provide CPU architecture selectors.
+
+7. Run the manual `Release Readiness` workflow with the real backend paths that
    the release intends to claim. Prefer `pinned_backend_setup: true` when the
    release should cite the repo-owned backend pins. Confirm
    `release-readiness.json` records the intended `source_commit`,
@@ -162,16 +207,19 @@ and runs `zigar --version` from it.
    when used, and a passed scenario matrix for every claimed backend. If only
    ZLS is being refreshed, run the manual `ZLS Conformance` workflow and cite
    that artifact.
-6. Confirm [maturity.md](maturity.md) still says every major feature area is at
+8. Smoke-test MCPB installation in Claude Desktop on macOS, Windows, and Linux
+   where those platforms will be claimed. If a platform cannot be tested before
+   publication, state that explicitly in the release notes.
+9. Confirm [maturity.md](maturity.md) still says every major feature area is at
    the intended public rating without hiding known limitations.
-7. Confirm [trust.md](trust.md) still matches the release notes, especially any
+10. Confirm [trust.md](trust.md) still matches the release notes, especially any
    absent external validation for branch protection, optional backends, or
    client-specific behavior.
-8. Add a validation evidence block to the release notes, including real-backend
+11. Add a validation evidence block to the release notes, including real-backend
    validation status. If the manual backend conformance script or workflow did
    not run, say `not run` instead of implying coverage.
-9. Confirm the tag and GitHub release do not already exist.
-10. Tag the release:
+12. Confirm the tag and GitHub release do not already exist.
+13. Tag the release:
 
 ```sh
 version="$(zig build version)"
@@ -180,13 +228,14 @@ git push origin "v${version}"
 ```
 
 The normal tag workflow reruns `zig build release-check`, runs
-`zig build dist release-asset-smoke`, publishes Linux, macOS, and Windows
-archives, publishes `zigar-checksums.txt` with SHA-256 checksums, and creates
-GitHub provenance attestations from the checksum file when GitHub supports
-attestations for the repository. User-owned private repositories cannot persist
-GitHub attestations, so the workflow skips that step there and the release notes
-must not claim provenance attestations. GitHub Actions are pinned to commit SHAs
-in the workflow; update the adjacent tag comments when bumping an action.
+`zig build dist release-asset-smoke`, builds MCPB bundles, publishes Linux,
+macOS, and Windows archives, publishes `zigar-checksums.txt`,
+`zigar-mcpb-checksums.txt`, and the `.mcpb` files, and creates GitHub provenance
+attestations from the checksum file when GitHub supports attestations for the
+repository. User-owned private repositories cannot persist GitHub attestations,
+so the workflow skips that step there and the release notes must not claim
+provenance attestations. GitHub Actions are pinned to commit SHAs in the
+workflow; update the adjacent tag comments when bumping an action.
 
 A workflow-published version is public only after the tag workflow finishes and
 the GitHub release contains all expected archives, `zigar-checksums.txt`, and
@@ -211,6 +260,10 @@ Release assets are named:
 - `zigar-x86_64-macos.tar.gz`
 - `zigar-aarch64-macos.tar.gz`
 - `zigar-x86_64-windows.tar.gz`
+- `zigar-darwin-universal.mcpb`
+- `zigar-linux-x64.mcpb`
+- `zigar-windows-x64.mcpb`
+- `zigar-mcpb-checksums.txt`
 
 ## Package Hygiene
 

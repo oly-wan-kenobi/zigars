@@ -67,12 +67,14 @@ pub fn expectedMatches(expected: []const ExpectedPreimage, file: []const u8, act
 /// Builds a stable session id from goal and path seed inputs.
 pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
     var seed = std.ArrayList(u8).empty;
+    defer seed.deinit(allocator);
     try seed.appendSlice(allocator, prefix);
     if (goal) |value| try seed.appendSlice(allocator, value);
     if (a) |value| try seed.appendSlice(allocator, value);
     if (b) |value| try seed.appendSlice(allocator, value);
     if (c) |value| try seed.appendSlice(allocator, value);
     const hash = try sha256Hex(allocator, seed.items);
+    defer allocator.free(hash);
     return std.fmt.allocPrint(allocator, "session-{s}", .{hash[0..16]});
 }
 

@@ -163,6 +163,20 @@ fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     try writeJoinedFile(io, workspace, "src/main.zig", "pub fn main() void {const x=1;_ = x;}\n");
     try writeJoinedFile(io, workspace, "src/bad.zig", "pub fn bad() void { const x = ; _ = x; }\n");
     try writeJoinedFile(io, workspace, "src/tests.zig", "const std = @import(\"std\");\npub const Fixture = struct { pub fn run() void {} };\ntest \"fixture works\" { _ = std.testing; }\n");
+    try writeJoinedFile(io, workspace, "src/pain.zig",
+        \\const std = @import("std");
+        \\const OldWriter = std.io.AnyWriter;
+        \\const Packed = packed struct { a: u8, b: u16 };
+        \\extern fn c_call(*anyopaque) void;
+        \\fn unsafe(raw: *anyopaque) void {
+        \\    const p: *u8 = @ptrCast(raw);
+        \\    _ = p;
+        \\}
+        \\fn comptimeCase(value: usize) void {
+        \\    inline for (0..value) |_| {}
+        \\}
+        \\
+    );
     try writeJoinedFile(io, workspace, "stacks.folded", "main;work 7\n");
     try writeJoinedFile(io, workspace, "before.folded", "main;old 3\n");
     try writeJoinedFile(io, workspace, "after.folded", "main;new 5\n");
@@ -228,12 +242,31 @@ const StdioClient = struct {
         try self.expectTool(tools, "zig_test_select");
         try self.expectTool(tools, "zig_ast_decl_summary");
         try self.expectTool(tools, "zig_lang_ref_search");
+        try self.expectTool(tools, "zig_import_cycles");
+        try self.expectTool(tools, "zig_test_name_resolve");
+        try self.expectTool(tools, "zig_test_fixture_inventory");
+        try self.expectTool(tools, "zig_safety_site_catalog");
+        try self.expectTool(tools, "zig_test_for_symbol");
+        try self.expectTool(tools, "zig_module_surface");
+        try self.expectTool(tools, "zig_symbol_dossier");
+        try self.expectTool(tools, "zig_change_risk_audit");
+        try self.expectTool(tools, "zig_insertion_sites");
+        try self.expectTool(tools, "zig_io_migration_scan");
+        try self.expectTool(tools, "zig_leak_triage");
+        try self.expectTool(tools, "zig_comptime_diagnose");
+        try self.expectTool(tools, "zig_memory_layout");
+        try self.expectTool(tools, "zig_unsafe_operations_audit");
+        try self.expectTool(tools, "zig_abi_layout_diff");
+        try self.expectTool(tools, "zig_bench_regression_gate");
         try self.expectTool(tools, "zig_zlint");
         try self.expectTool(tools, "zig_zlint_fix");
         try self.expectTool(tools, "zig_debug_plan");
         try self.expectTool(tools, "zig_fuzz_plan");
         try self.expectTool(tools, "zig_binary_size");
         try self.expectTool(tools, "zig_flash_plan");
+        try self.expectTool(tools, "zig_deps_add");
+        try self.expectTool(tools, "zig_pkg_search");
+        try self.expectTool(tools, "zig_dependency_migrate");
         try self.expectTool(tools, "zigar_adoption_pack");
         try self.expectTool(tools, "zigar_client_config_generate");
         try self.expectTool(tools, "zigar_smoke_plan");
@@ -302,9 +335,83 @@ const StdioClient = struct {
         try self.expectPathString(validate, "kind", "zigar_validate_patch");
         try self.expectPathString(validate, "workflow_contract.verification", "rerun failed phase or run zigar_validate_patch mode=full");
         try stdio_validation_workflow_fixtures.run(self);
+
+        const import_cycles = try self.callTool("zig_import_cycles", "{\"limit\":20}");
+        defer self.allocator.free(import_cycles);
+        try self.expectPathString(import_cycles, "kind", "zig_import_cycles");
+        try self.expectPathString(import_cycles, "capability_tier", "advisory_orientation");
+        const test_names = try self.callTool("zig_test_name_resolve", "{\"filters\":\"fixture\",\"limit\":20}");
+        defer self.allocator.free(test_names);
+        try self.expectPathString(test_names, "kind", "zig_test_name_resolve");
+        try self.expectPathJson(test_names, "match_count", .{ .integer = 1 });
+        const fixtures = try self.callTool("zig_test_fixture_inventory", "{\"limit\":20}");
+        defer self.allocator.free(fixtures);
+        try self.expectPathString(fixtures, "kind", "zig_test_fixture_inventory");
+        const safety_sites = try self.callTool("zig_safety_site_catalog", "{\"limit\":20}");
+        defer self.allocator.free(safety_sites);
+        try self.expectPathString(safety_sites, "kind", "zig_safety_site_catalog");
+        const test_for_symbol = try self.callTool("zig_test_for_symbol", "{\"symbol\":\"Fixture\",\"limit\":20}");
+        defer self.allocator.free(test_for_symbol);
+        try self.expectPathString(test_for_symbol, "kind", "zig_test_for_symbol");
+        const module_surface = try self.callTool("zig_module_surface", "{\"path\":\"src\",\"limit\":20}");
+        defer self.allocator.free(module_surface);
+        try self.expectPathString(module_surface, "kind", "zig_module_surface");
+        try self.expectPathString(module_surface, "path", "src");
+        const symbol_dossier = try self.callTool("zig_symbol_dossier", "{\"symbol\":\"Fixture\",\"limit\":20}");
+        defer self.allocator.free(symbol_dossier);
+        try self.expectPathString(symbol_dossier, "kind", "zig_symbol_dossier");
+        try self.expectPathJson(symbol_dossier, "public_api_member", .{ .bool = true });
+        const risk_audit = try self.callTool("zig_change_risk_audit", "{\"files\":\"src/main.zig\",\"symbols\":\"Fixture\",\"limit\":20}");
+        defer self.allocator.free(risk_audit);
+        try self.expectPathString(risk_audit, "kind", "zig_change_risk_audit");
+        const insertion_sites = try self.callTool("zig_insertion_sites", "{\"topic\":\"fixture\",\"limit\":5}");
+        defer self.allocator.free(insertion_sites);
+        try self.expectPathString(insertion_sites, "kind", "zig_insertion_sites");
+        const io_migration = try self.callTool("zig_io_migration_scan", "{\"path\":\"src/pain.zig\",\"limit\":10}");
+        defer self.allocator.free(io_migration);
+        try self.expectPathString(io_migration, "kind", "zig_io_migration_scan");
+        try self.expectPathJson(io_migration, "finding_count", .{ .integer = 1 });
+        const leak_triage = try self.callTool("zig_leak_triage", "{\"text\":\"error(gpa): memory address 0x1 leaked:\\n    /workspace/src/pain.zig:4:5: 0xabc in unsafe (test)\\n\",\"limit\":10}");
+        defer self.allocator.free(leak_triage);
+        try self.expectPathString(leak_triage, "kind", "zig_leak_triage");
+        try self.expectPathJson(leak_triage, "leak_count", .{ .integer = 1 });
+        const comptime_diagnose = try self.callTool("zig_comptime_diagnose", "{\"path\":\"src/pain.zig\",\"diagnostic\":\"error: unable to resolve comptime value\\n\",\"limit\":10}");
+        defer self.allocator.free(comptime_diagnose);
+        try self.expectPathString(comptime_diagnose, "kind", "zig_comptime_diagnose");
+        try self.expectPathString(comptime_diagnose, "analysis_mode", "parser_only");
+        const memory_layout = try self.callTool("zig_memory_layout", "{\"path\":\"src/pain.zig\",\"limit\":10}");
+        defer self.allocator.free(memory_layout);
+        try self.expectPathString(memory_layout, "kind", "zig_memory_layout");
+        try self.expectPathJson(memory_layout, "candidate_count", .{ .integer = 1 });
+        const unsafe_audit = try self.callTool("zig_unsafe_operations_audit", "{\"path\":\"src/pain.zig\",\"limit\":10}");
+        defer self.allocator.free(unsafe_audit);
+        try self.expectPathString(unsafe_audit, "kind", "zig_unsafe_operations_audit");
+        try self.expectPathJson(unsafe_audit, "operation_count", .{ .integer = 4 });
+        const abi_layout = try self.callTool("zig_abi_layout_diff", "{\"path\":\"src/pain.zig\",\"limit\":10}");
+        defer self.allocator.free(abi_layout);
+        try self.expectPathString(abi_layout, "kind", "zig_abi_layout_diff");
+        try self.expectPathString(abi_layout, "backend_status", "compiler_probe_not_executed");
         try @import("stdio_transactional_editing_fixtures.zig").run(self, workspace);
 
         try stdio_core_fixtures.run(self, workspace);
+
+        const deps_add = try self.callTool("zig_deps_add", "{\"manifest\":\".{\\n    .dependencies = .{},\\n}\\n\",\"dependency\":\"stdio_dep\",\"url\":\"https://example.invalid/stdio.tar.gz\",\"hash\":\"stdiohash\",\"apply\":false}");
+        defer self.allocator.free(deps_add);
+        try self.expectPathJson(deps_add, "applied", .{ .bool = false });
+        try self.expectPathString(deps_add, "dependency", "stdio_dep");
+        const pkg_search = try self.callTool("zig_pkg_search", "{\"provider\":\"direct\",\"url\":\"https://example.invalid/stdio.tar.gz\"}");
+        defer self.allocator.free(pkg_search);
+        try self.expectPathString(pkg_search, "provider.id", "direct");
+        try self.expectPathJson(pkg_search, "package_count", .{ .integer = 1 });
+        const migrate = try self.callTool("zig_dependency_migrate", "{\"manifest\":\".{\\n    .dependencies = .{},\\n}\\n\",\"dependency\":\"stdio_dep\",\"target_url\":\"https://example.invalid/stdio-v2.tar.gz\",\"apply\":false}");
+        defer self.allocator.free(migrate);
+        try self.expectPathString(migrate, "session_kind", "dependency_migration");
+        try self.expectPathJson(migrate, "requires_apply", .{ .bool = true });
+        const bench_gate = try self.callTool("zig_bench_regression_gate", "{\"current\":\"parse 120 ns\\n\",\"baseline\":\"parse 100 ns\\n\",\"threshold_pct\":5,\"session_id\":\"stdio-gate\",\"apply\":false}");
+        defer self.allocator.free(bench_gate);
+        try self.expectPathString(bench_gate, "tool", "zig_bench_regression_gate");
+        try self.expectPathString(bench_gate, "status", "failed");
+        try self.expectPathJson(bench_gate, "requires_apply", .{ .bool = true });
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 

@@ -83,6 +83,12 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolFields(allocator, io, port, 168, "zig_dependency_provenance", &.{str("manifest", dependency_manifest)}, expected, "phase6_dependency_provenance_paths", scenario_count);
     try assertToolFields(allocator, io, port, 169, "zig_dependency_license_summary", &.{ str("manifest", dependency_manifest), str("license_text", "MIT License\n") }, expected, "phase6_dependency_license_summary_paths", scenario_count);
     try assertToolFields(allocator, io, port, 170, "zig_github_dependency_submit_plan", &.{ str("manifest", dependency_manifest), str("job", "fixture"), str("sha", "abc123") }, expected, "phase6_github_dependency_submit_plan_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 171, "zig_deps_add", &.{ str("manifest", dependency_manifest), str("dependency", "new_dep"), str("url", "https://example.com/new-dep.tar.gz"), str("hash", "1220newhash"), boolv("apply", false) }, expected, "phase6_deps_add_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 172, "zig_deps_remove", &.{ str("manifest", dependency_manifest), str("dependency", "local_dep"), boolv("apply", false) }, expected, "phase6_deps_remove_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 173, "zig_deps_upgrade", &.{ str("manifest", dependency_manifest), str("dependency", "dep_a"), str("url", "https://example.com/dep-a-v2.tar.gz"), str("hash", "1220hashv2"), boolv("apply", false) }, expected, "phase6_deps_upgrade_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 174, "zig_pkg_search", &.{ str("provider", "direct"), str("url", "https://example.com/dep-a.tar.gz") }, expected, "phase6_pkg_search_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 175, "zig_pkg_info", &.{ str("provider", "zigistry"), str("query", "dep_a"), boolv("offline", true) }, expected, "phase6_pkg_info_paths", scenario_count);
+    try assertToolFields(allocator, io, port, 176, "zig_dependency_migrate", &.{ str("manifest", dependency_manifest), str("dependency", "dep_a"), str("target_url", "https://example.com/dep-a-v2.tar.gz"), boolv("apply", false) }, expected, "phase6_dependency_migrate_paths", scenario_count);
 }
 
 fn str(key: []const u8, value: []const u8) Field {

@@ -13,8 +13,11 @@ const tooling = zigar.manifest.tooling;
 const mcp_core = zigar.adapters.mcp.core;
 const mcp_static_source_summary = zigar.adapters.mcp.static_source_summary;
 const usecase_support = zigar.app.usecases.usecase_support;
+const app_context = zigar.app.context;
 const project_values = zigar.app.usecases.static_analysis.project_values;
 const ci_evidence = zigar.app.usecases.release.ci_evidence;
+const fake_command = @import("../fakes/command_runner.zig");
+const fake_workspace = @import("../fakes/workspace_store.zig");
 const tool_test_support = @import("../mcp_tool_test_support.zig");
 
 const App = tool_test_support.App;
@@ -322,16 +325,44 @@ test "toolchain resolver defaults to cheap manager checks" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var app = try testAppForCommandPlanning(allocator);
-    var runtime_ports = zigar.bootstrap.runtime_ports.RuntimePorts.init(&app, .{ .workspace_read_resolution = .input });
 
-    const result = try zigToolchainResolve(allocator, runtime_ports.context(), null);
+    var commands = fake_command.FakeCommandRunner.init(allocator);
+    defer commands.deinit();
+    var workspace = fake_workspace.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+
+    try commands.expectRun(.{
+        .argv = &.{ "zig", "version" },
+        .cwd = "/tmp",
+        .timeout_ms = 30_000,
+        .provenance = "discovery.toolchain_resolve.zig",
+    }, .{ .stdout = "0.16.0\n" });
+    try commands.expectRun(.{
+        .argv = &.{ "zls", "--version" },
+        .cwd = "/tmp",
+        .timeout_ms = 30_000,
+        .provenance = "discovery.toolchain_resolve.zls",
+    }, .{ .stdout = "0.16.0\n" });
+    try workspace.expectReadError(.{ .path = ".zigversion", .max_bytes = 64 * 1024, .provenance = "discovery.version_hint" }, error.FileNotFound);
+    try workspace.expectReadError(.{ .path = ".tool-versions", .max_bytes = 64 * 1024, .provenance = "discovery.tool_versions_hint" }, error.FileNotFound);
+    try workspace.expectReadError(.{ .path = "mise.toml", .max_bytes = 128 * 1024, .provenance = "discovery.mise_hint" }, error.FileNotFound);
+    try workspace.expectReadError(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" }, error.FileNotFound);
+
+    const context = app_context.Context{
+        .workspace = .{ .root = "/tmp", .cache_root = "/tmp/.zigar-cache" },
+        .tool_paths = .{ .zig = "zig", .zls = "zls" },
+        .timeouts = .{},
+        .ports = .{ .command_runner = commands.port(), .workspace = workspace.port() },
+    };
+    const result = try zigToolchainResolve(allocator, context, null);
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, result.content[0].text.text, .{});
     const managers = parsed.value.object.get("managers").?.array;
     try std.testing.expect(managers.items.len > 0);
     const first = managers.items[0].object;
     try std.testing.expect(first.get("available").? == .null);
     try std.testing.expect(first.get("version_output").? == .null);
+    try commands.verify();
+    try workspace.verify();
 }
 
 test "command error value declares output limit policy" {

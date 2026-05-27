@@ -4,6 +4,7 @@ pub const backend_catalog = @import("backend_catalog.zig");
 pub const backend_contracts = @import("backend_contracts.zig");
 pub const compiler_output = @import("compiler_output.zig");
 pub const static_analysis_contracts = @import("static_analysis_contracts.zig");
+pub const zon_dependencies = @import("zon_dependencies.zig");
 
 test {
     _ = analysis;
@@ -11,9 +12,11 @@ test {
     _ = backend_contracts;
     _ = compiler_output;
     _ = static_analysis_contracts;
+    _ = zon_dependencies;
     _ = @import("analysis_tests.zig");
     _ = @import("backend_catalog_tests.zig");
     _ = @import("backend_contracts_tests.zig");
     _ = @import("compiler_output_tests.zig");
     _ = @import("static_analysis_contracts_tests.zig");
+    _ = @import("zon_dependencies_tests.zig");
 }

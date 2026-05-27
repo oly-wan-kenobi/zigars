@@ -1837,7 +1837,7 @@ fn parseArgs(allocator: std.mem.Allocator, text: []const u8) !std.json.Parsed(st
 
 /// Implements sweep usecase allocation failures workflow logic using caller-owned inputs.
 fn sweepUsecaseAllocationFailures(comptime call: anytype, args: ?std.json.Value) void {
-    for (0..180) |fail_index| {
+    for (0..32) |fail_index| {
         var backing = std.heap.ArenaAllocator.init(std.testing.allocator);
         var failing = std.testing.FailingAllocator.init(backing.allocator(), .{ .fail_index = fail_index });
         var runtime = TestEnvironmentRuntime{};

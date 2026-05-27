@@ -109,6 +109,19 @@ routing, but release decisions still need compiler-backed validation or CI.
 Use `zig_test_map` to inspect discovered test declarations and `zig_test_select`
 to choose heuristic focused test commands for changed files or symbols.
 
+Use `zig_import_cycles`, `zig_module_surface`, `zig_symbol_dossier`,
+`zig_change_risk_audit`, and `zig_insertion_sites` when planning structural
+work before editing. These tools expose import-cycle SCCs, directory-level
+public surfaces, symbol dossiers, static risk weights, and insertion-site
+rankings without applying zigar's internal architecture policy to arbitrary Zig
+projects.
+
+Use `zig_test_name_resolve`, `zig_test_fixture_inventory`,
+`zig_safety_site_catalog`, and `zig_test_for_symbol` when test filters, fixture
+helpers, safety review sites, or symbol-specific test candidates would otherwise
+require broad grep. Treat the outputs as bounded evidence and keep
+`zig build test` or CI as the correctness proof.
+
 ## Handoff And Memory
 
 Use `zigar_session_snapshot` and `zigar_handoff_pack` to capture the current

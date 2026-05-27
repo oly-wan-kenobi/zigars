@@ -62,6 +62,11 @@ pub fn zigBenchCompare(allocator: std.mem.Allocator, context: app_context.Perfor
     return invoke(allocator, context, args, "zig_bench_compare", workflows.zigBenchCompare);
 }
 
+/// Handles MCP `zig_bench_regression_gate` requests by delegating to app logic and shaping owned results/errors.
+pub fn zigBenchRegressionGate(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_bench_regression_gate", workflows.zigBenchRegressionGate);
+}
+
 /// Handles MCP `zig_perf_budget_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigPerfBudgetCheck(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_perf_budget_check", workflows.zigPerfBudgetCheck);

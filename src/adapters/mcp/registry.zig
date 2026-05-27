@@ -28,12 +28,17 @@ pub fn addTool(
 ) !void {
     const RuntimePtr = @TypeOf(runtime);
     const schema_value = try schema_projection.buildInputSchema(allocator, spec.input_schema);
+    const output_schema_value = if (spec.output_schema) |output_schema|
+        try schema_projection.buildOutputSchema(allocator, output_schema)
+    else
+        null;
     // The registered callback owns the ToolResult memory contract via deinit_result.
     try server.addTool(.{
         .name = spec.name,
         .description = spec.description,
         .title = spec.name,
         .inputSchema = schema_value,
+        .outputSchema = output_schema_value,
         .annotations = .{
             .readOnlyHint = manifest.readOnlyHintFor(spec),
             .idempotentHint = manifest.idempotentHintFor(spec),

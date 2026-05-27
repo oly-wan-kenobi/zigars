@@ -88,6 +88,7 @@ pub const PlanPolicy = union(enum) {
 pub const ToolDefinition = struct {
     description: []const u8,
     input_schema: tooling.SchemaSpec = schema(&.{}),
+    output_schema: ?tooling.OutputSchemaSpec = null,
     read_only: bool = true,
     group: ToolGroup,
     risk: ToolRisk = .{},
@@ -109,6 +110,11 @@ pub fn schema(comptime fields: []const tooling.SchemaField) tooling.SchemaSpec {
 /// Builds a schema spec with per-field metadata overrides.
 pub fn schemaWithHints(comptime fields: []const tooling.SchemaField, comptime field_hints: []const tooling.SchemaFieldHint) tooling.SchemaSpec {
     return tooling.schemaWithHints(fields, field_hints);
+}
+
+/// Builds a shared output schema declaration.
+pub fn outputSchema(shape: tooling.OutputSchemaShape) tooling.OutputSchemaSpec {
+    return tooling.outputSchema(shape);
 }
 
 /// Creates a field-hint override for a named schema field.

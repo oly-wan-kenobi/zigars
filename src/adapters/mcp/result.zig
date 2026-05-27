@@ -41,6 +41,55 @@ pub fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools
     return structuredWithErrorFlag(allocator, value, false);
 }
 
+/// Resource link metadata for tool results that expose large artifacts by URI.
+pub const ResourceLinkSpec = struct {
+    name: []const u8,
+    uri: []const u8,
+    title: ?[]const u8 = null,
+    description: ?[]const u8 = null,
+    mimeType: ?[]const u8 = null,
+};
+
+/// Serializes structured content and appends a resource_link content block.
+pub fn structuredWithResourceLink(
+    allocator: std.mem.Allocator,
+    value: std.json.Value,
+    link: ResourceLinkSpec,
+) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
+    errdefer allocator.free(bytes);
+
+    const structured_value = cloneValue(allocator, value) catch return error.OutOfMemory;
+    errdefer deinitClonedValue(allocator, structured_value);
+
+    const owned_name = allocator.dupe(u8, link.name) catch return error.OutOfMemory;
+    errdefer allocator.free(owned_name);
+    const owned_uri = allocator.dupe(u8, link.uri) catch return error.OutOfMemory;
+    errdefer allocator.free(owned_uri);
+    const owned_title = if (link.title) |title| allocator.dupe(u8, title) catch return error.OutOfMemory else null;
+    errdefer if (owned_title) |title| allocator.free(title);
+    const owned_description = if (link.description) |description| allocator.dupe(u8, description) catch return error.OutOfMemory else null;
+    errdefer if (owned_description) |description| allocator.free(description);
+    const owned_mime = if (link.mimeType) |mime| allocator.dupe(u8, mime) catch return error.OutOfMemory else null;
+    errdefer if (owned_mime) |mime| allocator.free(mime);
+
+    const content = allocator.alloc(mcp.types.ContentBlock, 2) catch return error.OutOfMemory;
+    errdefer allocator.free(content);
+    content[0] = .{ .text = .{ .text = bytes } };
+    content[1] = .{ .resource_link = .{
+        .name = owned_name,
+        .uri = owned_uri,
+        .title = owned_title,
+        .description = owned_description,
+        .mimeType = owned_mime,
+    } };
+    return .{
+        .content = content,
+        .structuredContent = structured_value,
+        .is_error = false,
+    };
+}
+
 /// Same shape as `structured`, but marks the ToolResult as an MCP tool error.
 pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return structuredWithErrorFlag(allocator, value, true);

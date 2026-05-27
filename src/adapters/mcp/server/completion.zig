@@ -3,6 +3,34 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const jsonrpc = mcp.jsonrpc;
+const manifest = @import("../../../manifest/mod.zig");
+const tooling = manifest.tooling;
+
+const completion_cap = 100;
+
+const CompletionSet = struct {
+    allocator: std.mem.Allocator,
+    values: std.json.Array,
+    has_more: bool = false,
+
+    /// Initializes a bounded completion accumulator.
+    fn init(allocator: std.mem.Allocator) CompletionSet {
+        return .{ .allocator = allocator, .values = .init(allocator) };
+    }
+
+    /// Appends a unique prefix-matched candidate or records that more values exist.
+    fn append(self: *CompletionSet, prefix: []const u8, value: []const u8) !void {
+        if (prefix.len > 0 and !std.mem.startsWith(u8, value, prefix)) return;
+        for (self.values.items) |item| {
+            if (item == .string and std.mem.eql(u8, item.string, value)) return;
+        }
+        if (self.values.items.len >= completion_cap) {
+            self.has_more = true;
+            return;
+        }
+        try self.values.append(.{ .string = value });
+    }
+};
 
 /// Handles completions/complete and returns up to 100 prefix-matched values.
 pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
@@ -11,6 +39,7 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
     const response_allocator = response_arena.allocator();
 
     var ref_type: []const u8 = "";
+    var ref_name: []const u8 = "";
     var arg_name: []const u8 = "";
     var prefix: []const u8 = "";
     if (request.params) |params| {
@@ -19,6 +48,11 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
                 if (ref == .object) {
                     if (ref.object.get("type")) |t| {
                         if (t == .string) ref_type = t.string;
+                    }
+                    if (ref.object.get("name")) |n| {
+                        if (n == .string) ref_name = n.string;
+                    } else if (ref.object.get("id")) |id| {
+                        if (id == .string) ref_name = id.string;
                     }
                 }
             }
@@ -35,31 +69,24 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
         }
     }
 
-    var values_array: std.json.Array = .init(response_allocator);
+    var completions = CompletionSet.init(response_allocator);
     if (std.mem.eql(u8, ref_type, "ref/prompt")) {
         var iter = server.prompts.iterator();
-        while (iter.next()) |entry| try appendValue(&values_array, prefix, entry.value_ptr.name);
+        while (iter.next()) |entry| try completions.append(prefix, entry.value_ptr.name);
     } else if (std.mem.eql(u8, ref_type, "ref/resource")) {
-        var iter = server.resources.iterator();
-        while (iter.next()) |entry| try appendValue(&values_array, prefix, entry.value_ptr.uri);
-        for (resource_templates) |value| try appendValue(&values_array, prefix, value);
-    } else if (std.mem.eql(u8, arg_name, "command")) {
-        for (commands) |value| try appendValue(&values_array, prefix, value);
-    } else if (std.mem.eql(u8, arg_name, "client")) {
-        for (clients) |value| try appendValue(&values_array, prefix, value);
-    } else if (std.mem.eql(u8, arg_name, "workflow")) {
-        for (workflows) |value| try appendValue(&values_array, prefix, value);
+        try appendResourceUris(server, &completions, prefix);
+    } else if (arg_name.len > 0 and try appendManifestArgumentCompletions(server, &completions, ref_name, arg_name, prefix)) {
+        // Manifest-backed enum or dynamic argument completions handled the request.
     } else {
         var prompt_iter = server.prompts.iterator();
-        while (prompt_iter.next()) |entry| try appendValue(&values_array, prefix, entry.value_ptr.name);
-        var resource_iter = server.resources.iterator();
-        while (resource_iter.next()) |entry| try appendValue(&values_array, prefix, entry.value_ptr.uri);
+        while (prompt_iter.next()) |entry| try completions.append(prefix, entry.value_ptr.name);
+        try appendResourceUris(server, &completions, prefix);
     }
 
     var completion: std.json.ObjectMap = .empty;
-    try completion.put(response_allocator, "values", .{ .array = values_array });
-    try completion.put(response_allocator, "total", .{ .integer = @intCast(values_array.items.len) });
-    try completion.put(response_allocator, "hasMore", .{ .bool = false });
+    try completion.put(response_allocator, "values", .{ .array = completions.values });
+    try completion.put(response_allocator, "total", .{ .integer = @intCast(completions.values.items.len) });
+    try completion.put(response_allocator, "hasMore", .{ .bool = completions.has_more });
 
     var result: std.json.ObjectMap = .empty;
     try result.put(response_allocator, "completion", .{ .object = completion });
@@ -67,18 +94,47 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
     try server.sendResponse(io, allocator, .{ .response = response });
 }
 
-/// Appends a suggestion when it matches the prefix and result cap.
-fn appendValue(values: *std.json.Array, prefix: []const u8, value: []const u8) !void {
-    if (prefix.len > 0 and !std.mem.startsWith(u8, value, prefix)) return;
-    if (values.items.len >= 100) return;
-    try values.append(.{ .string = value });
+/// Appends argument completions derived from manifest field hints.
+fn appendManifestArgumentCompletions(server: anytype, completions: *CompletionSet, tool_name: []const u8, arg_name: []const u8, prefix: []const u8) !bool {
+    var handled = false;
+    if (tool_name.len > 0) {
+        if (manifest.find(tool_name)) |spec| {
+            handled = try appendSpecArgumentCompletions(server, completions, spec, arg_name, prefix);
+        }
+        return handled;
+    }
+
+    for (manifest.specs) |spec| {
+        handled = (try appendSpecArgumentCompletions(server, completions, spec, arg_name, prefix)) or handled;
+    }
+    return handled;
 }
 
-/// Command argument suggestions for runtime job tools.
-const commands = [_][]const u8{ "build", "build-test", "test", "check", "fmt-check" };
-/// Client argument suggestions for guide/prompt tools.
-const clients = [_][]const u8{ "codex", "claude", "gemini", "generic" };
-/// Dynamic resource URI templates surfaced to completion clients.
-const resource_templates = [_][]const u8{ "zigar://jobs", "zigar://run/events", "zigar://workspace/roots", "zigar://file/{path}/symbols", "zigar://file/{path}/diagnostics", "zigar://file/{path}/imports" };
-/// Workflow prompt suggestions exposed through workflow arguments.
-const workflows = [_][]const u8{ "zigar_compile_error_workflow", "zigar_test_workflow", "zigar_refactor_workflow", "zigar_api_change_workflow", "zigar_release_workflow", "zigar_perf_workflow" };
+/// Appends one tool spec's manifest-backed argument completions.
+fn appendSpecArgumentCompletions(server: anytype, completions: *CompletionSet, spec: manifest.ToolMeta, arg_name: []const u8, prefix: []const u8) !bool {
+    for (spec.input_schema.fields) |field| {
+        if (!std.mem.eql(u8, field[0], arg_name)) continue;
+        const hint = tooling.hintFor(spec.input_schema, field);
+        var handled = false;
+        for (hint.enum_values) |value| {
+            try completions.append(prefix, value);
+            handled = true;
+        }
+        if (hint.completion_source) |source| {
+            switch (source) {
+                .resource_uri => try appendResourceUris(server, completions, prefix),
+            }
+            handled = true;
+        }
+        return handled;
+    }
+    return false;
+}
+
+/// Appends registered resources and resource templates from live server state.
+fn appendResourceUris(server: anytype, completions: *CompletionSet, prefix: []const u8) !void {
+    var iter = server.resources.iterator();
+    while (iter.next()) |entry| try completions.append(prefix, entry.value_ptr.uri);
+    var template_iter = server.resource_templates.iterator();
+    while (template_iter.next()) |entry| try completions.append(prefix, entry.value_ptr.uriTemplate);
+}

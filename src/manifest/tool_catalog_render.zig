@@ -215,6 +215,9 @@ fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Val
         optional.object.deinit(allocator);
     }
     try obj.put(allocator, "fields", try richSchemaFieldsValue(allocator, spec.input_schema));
+    if (spec.output_schema) |output_schema| {
+        try obj.put(allocator, "output_shape", .{ .string = @tagName(output_schema.shape) });
+    }
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -410,6 +413,7 @@ fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.Sche
     if (hint.default_int) |value| try obj.put(allocator, "default", .{ .integer = value });
     if (hint.default_string) |value| try obj.put(allocator, "default", .{ .string = value });
     if (hint.path_kind) |value| try obj.put(allocator, "path_kind", .{ .string = value });
+    if (hint.completion_source) |value| try obj.put(allocator, "completion_source", .{ .string = @tagName(value) });
     if (hint.minimum) |value| try obj.put(allocator, "minimum", .{ .integer = value });
     if (hint.maximum) |value| try obj.put(allocator, "maximum", .{ .integer = value });
     if (hint.enum_values.len > 0) {

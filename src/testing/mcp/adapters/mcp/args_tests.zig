@@ -112,6 +112,7 @@ test "rejects integer arguments above schema maximum" {
         .input_schema = tooling.schemaWithHints(&.{.{ "count", "integer", true }}, &.{
             .{ .field_name = "count", .hint = .{ .description = "Bounded count.", .minimum = 1, .maximum = 3 } },
         }),
+        .output_schema = null,
         .read_only = true,
     };
 

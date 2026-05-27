@@ -2,6 +2,7 @@ const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
+const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
@@ -27,6 +28,7 @@ pub const zigar_patch_session_create = tool(.{
 pub const zigar_patch_session_preview = tool(.{
     .description = "Preview a multi-file replacement patch session with preimage hashes, generated-file policy, and unified diffs.",
     .input_schema = schema(&.{ .{ "goal", "string", false }, .{ "session_id", "string", false }, .{ "edits", "string", true } }),
+    .output_schema = outputSchema(.patch_session),
     .read_only = true,
     .group = .formatting_and_edits,
     .plan = .{ .pure_analysis = patch_session },

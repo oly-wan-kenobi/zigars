@@ -2,6 +2,7 @@ const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
+const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
@@ -17,6 +18,12 @@ const docs_plan = "Builds/query local documentation evidence from installed Zig 
 const dependency_plan = "Inspects build.zig.zon and caller-supplied dependency evidence to plan maintenance and security checks without fetching packages.";
 /// CI evidence format.
 const optional_security_plan = "Ingests caller-supplied scanner reports or returns an explicit optional-backend unavailable result; zigar does not contact external services.";
+/// Dependency lifecycle mutation format.
+const dependency_mutation_plan = "Previews build.zig.zon dependency edits and applies them only when apply=true using patch-session preimage checks.";
+/// Dependency registry provider format.
+const dependency_registry_plan = "Returns deterministic dependency provider metadata; network-backed providers report structured unavailable states unless bounded backends are configured.";
+/// Dependency migration format.
+const dependency_migration_plan = "Builds or resumes a dependency migration session envelope over update, fetch, audit, impact, security, and validation steps.";
 
 /// CI evidence format.
 const ci_format_hint = fieldHint("format", .{ .description = "CI evidence format.", .default_string = "auto", .enum_values = &.{ "auto", "log", "annotations", "junit", "sarif" } });
@@ -24,6 +31,12 @@ const ci_format_hint = fieldHint("format", .{ .description = "CI evidence format
 const docs_scope_hint = fieldHint("scope", .{ .description = "Documentation corpus to inspect.", .default_string = "workspace", .enum_values = &.{ "workspace", "docs", "src", "all" } });
 /// Must be true before writing the generated artifact.
 const apply_hint = fieldHint("apply", .{ .description = "Must be true before writing the generated artifact.", .default_bool = false });
+/// build.zig.zon path to read or mutate.
+const manifest_path_hint = fieldHint("manifest_path", .{ .description = "Workspace-relative build.zig.zon path.", .default_string = "build.zig.zon", .path_kind = "input_file" });
+/// Dependency package provider.
+const package_provider_hint = fieldHint("provider", .{ .description = "Dependency package provider.", .default_string = "direct", .enum_values = &.{ "direct", "zigistry" } });
+/// Migration mode selector.
+const migration_mode_hint = fieldHint("mode", .{ .description = "Dependency migration session mode.", .default_string = "plan", .enum_values = &.{ "plan", "inspect", "resume", "close" } });
 
 /// Ingest CI logs, annotations, JUnit, SARIF, or raw artifacts into structured local failure evidence.
 pub const zig_ci_ingest = tool(.{
@@ -304,4 +317,99 @@ pub const zig_github_dependency_submit_plan = tool(.{
     .read_only = true,
     .group = .dependency_security,
     .plan = .{ .pure_analysis = dependency_plan },
+});
+
+/// Preview or apply a build.zig.zon hash replacement by running exact `zig fetch <url>` and patch-session source writes.
+pub const zig_zon_dep_sync = tool(.{
+    .description = "Preview or apply a build.zig.zon dependency hash sync using exact zig fetch evidence and patch-session preimages.",
+    .input_schema = schemaWithHints(&.{ .{ "dependency", "string", true }, .{ "manifest_path", "string", false }, .{ "manifest", "string", false }, .{ "url", "string", false }, .{ "apply", "boolean", false }, .{ "expected_preimage_sha256", "string", false }, .{ "expected_preimage_bytes", "integer", false }, .{ "timeout_ms", "integer", false } }, &.{ manifest_path_hint, apply_hint }),
+    .output_schema = outputSchema(.patch_session),
+    .read_only = false,
+    .group = .dependency_security,
+    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
+    .plan = .{ .apply_gated_mutation = dependency_mutation_plan },
+});
+
+/// Preview or apply adding a direct URL/hash or local path dependency to build.zig.zon.
+pub const zig_deps_add = tool(.{
+    .description = "Preview or apply adding a direct URL/hash or local path dependency to build.zig.zon.",
+    .input_schema = schemaWithHints(&.{ .{ "dependency", "string", true }, .{ "manifest_path", "string", false }, .{ "manifest", "string", false }, .{ "url", "string", false }, .{ "hash", "string", false }, .{ "path", "string", false }, .{ "apply", "boolean", false }, .{ "expected_preimage_sha256", "string", false }, .{ "expected_preimage_bytes", "integer", false } }, &.{ manifest_path_hint, apply_hint }),
+    .output_schema = outputSchema(.patch_session),
+    .read_only = false,
+    .group = .dependency_security,
+    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
+    .plan = .{ .apply_gated_mutation = dependency_mutation_plan },
+});
+
+/// Preview or apply removing one dependency entry from build.zig.zon.
+pub const zig_deps_remove = tool(.{
+    .description = "Preview or apply removing one dependency entry from build.zig.zon.",
+    .input_schema = schemaWithHints(&.{ .{ "dependency", "string", true }, .{ "manifest_path", "string", false }, .{ "manifest", "string", false }, .{ "apply", "boolean", false }, .{ "expected_preimage_sha256", "string", false }, .{ "expected_preimage_bytes", "integer", false } }, &.{ manifest_path_hint, apply_hint }),
+    .output_schema = outputSchema(.patch_session),
+    .read_only = false,
+    .group = .dependency_security,
+    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
+    .plan = .{ .apply_gated_mutation = dependency_mutation_plan },
+});
+
+/// Preview or apply upgrading a direct URL dependency in build.zig.zon.
+pub const zig_deps_upgrade = tool(.{
+    .description = "Preview or apply upgrading a direct URL dependency in build.zig.zon.",
+    .input_schema = schemaWithHints(&.{ .{ "dependency", "string", true }, .{ "manifest_path", "string", false }, .{ "manifest", "string", false }, .{ "url", "string", true }, .{ "hash", "string", false }, .{ "apply", "boolean", false }, .{ "expected_preimage_sha256", "string", false }, .{ "expected_preimage_bytes", "integer", false } }, &.{ manifest_path_hint, apply_hint }),
+    .output_schema = outputSchema(.patch_session),
+    .read_only = false,
+    .group = .dependency_security,
+    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
+    .plan = .{ .apply_gated_mutation = dependency_mutation_plan },
+});
+
+/// Search dependency provider metadata with direct URL/ref support and structured provider-unavailable states.
+pub const zig_pkg_search = tool(.{
+    .description = "Search dependency provider metadata with direct URL/ref support and structured provider-unavailable states.",
+    .input_schema = schemaWithHints(&.{ .{ "query", "string", false }, .{ "url", "string", false }, .{ "provider", "string", false }, .{ "offline", "boolean", false }, .{ "limit", "integer", false } }, &.{package_provider_hint}),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .dependency_security,
+    .plan = .{ .pure_analysis = dependency_registry_plan },
+});
+
+/// Inspect one dependency package provider record without mutating build.zig.zon.
+pub const zig_pkg_info = tool(.{
+    .description = "Inspect one dependency package provider record without mutating build.zig.zon.",
+    .input_schema = schemaWithHints(&.{ .{ "name", "string", false }, .{ "url", "string", false }, .{ "query", "string", false }, .{ "provider", "string", false }, .{ "offline", "boolean", false } }, &.{package_provider_hint}),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .dependency_security,
+    .plan = .{ .pure_analysis = dependency_registry_plan },
+});
+
+/// List deterministic version/ref metadata for a dependency provider record.
+pub const zig_pkg_versions = tool(.{
+    .description = "List deterministic version/ref metadata for a dependency provider record.",
+    .input_schema = schemaWithHints(&.{ .{ "name", "string", false }, .{ "url", "string", false }, .{ "query", "string", false }, .{ "provider", "string", false }, .{ "offline", "boolean", false } }, &.{package_provider_hint}),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .dependency_security,
+    .plan = .{ .pure_analysis = dependency_registry_plan },
+});
+
+/// Report package README availability without unbounded network access.
+pub const zig_pkg_readme = tool(.{
+    .description = "Report package README availability without unbounded network access.",
+    .input_schema = schemaWithHints(&.{ .{ "name", "string", false }, .{ "url", "string", false }, .{ "query", "string", false }, .{ "provider", "string", false }, .{ "offline", "boolean", false } }, &.{package_provider_hint}),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .dependency_security,
+    .plan = .{ .pure_analysis = dependency_registry_plan },
+});
+
+/// Plan, persist, inspect, or resume a dependency migration session envelope.
+pub const zig_dependency_migrate = tool(.{
+    .description = "Plan, persist, inspect, or resume a dependency migration session envelope over dependency update and validation steps.",
+    .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "migration_session_id", "string", false }, .{ "dependency", "string", false }, .{ "name", "string", false }, .{ "target_url", "string", false }, .{ "manifest_path", "string", false }, .{ "manifest", "string", false }, .{ "goal", "string", false }, .{ "apply", "boolean", false } }, &.{ migration_mode_hint, manifest_path_hint, apply_hint }),
+    .output_schema = outputSchema(.patch_session),
+    .read_only = false,
+    .group = .dependency_security,
+    .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true },
+    .plan = .{ .workspace_artifact = dependency_migration_plan },
 });

@@ -35,6 +35,17 @@ jobs:
       - name: Build and smoke release assets
         run: zig build dist release-asset-smoke
 
+      - name: Install llvm-lipo for macOS MCPB bundle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm
+
+      - name: Install MCPB package dependencies
+        run: npm --prefix packages/zigar-mcpb ci
+
+      - name: Build MCPB bundles
+        run: npm --prefix packages/zigar-mcpb run pack
+
       - name: Attest release archives
         if: ${{ !github.event.repository.private }}
         # actions/attest-build-provenance@v4.1.0
@@ -48,4 +59,6 @@ jobs:
         with:
           files: |
             dist/assets/*.tar.gz
+            dist/assets/*.mcpb
             dist/assets/zigar-checksums.txt
+            dist/assets/zigar-mcpb-checksums.txt

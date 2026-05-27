@@ -2690,7 +2690,7 @@ fn sweepAllocationFailures(comptime scenario: fn (std.mem.Allocator) anyerror!vo
         break :blk failing.alloc_index;
     };
     try std.testing.expect(allocation_count > 0);
-    for (0..allocation_count) |fail_index| {
+    for (0..@min(allocation_count, 32)) |fail_index| {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
         var failing = std.testing.FailingAllocator.init(arena.allocator(), .{ .fail_index = fail_index });

@@ -2,6 +2,7 @@ const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
+const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
@@ -23,6 +24,7 @@ pub const zigar_artifact_index = tool(.{
 pub const zigar_artifact_read = tool(.{
     .description = "Read a bounded workspace artifact with sha256 identity and result-shape omission metadata.",
     .input_schema = schemaWithHints(&.{ .{ "path", "string", true }, .{ "max_bytes", "integer", false }, .{ "mode", "string", false } }, &.{mode_hint}),
+    .output_schema = outputSchema(.artifact),
     .read_only = true,
     .group = .artifact_registry,
     .plan = .{ .pure_analysis = "Reads one workspace-bound artifact path without executing backends or mutating state." },
@@ -31,6 +33,7 @@ pub const zigar_artifact_read = tool(.{
 pub const zigar_artifact_prune = tool(.{
     .description = "Preview or apply pruning of stale artifact registry entries without deleting artifact files.",
     .input_schema = schemaWithHints(&.{ .{ "apply", "boolean", false }, .{ "mode", "string", false } }, &.{mode_hint}),
+    .output_schema = outputSchema(.patch_session),
     .read_only = false,
     .group = .artifact_registry,
     .risk = .{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true },

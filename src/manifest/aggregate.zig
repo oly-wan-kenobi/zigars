@@ -17,6 +17,7 @@ pub const ToolMeta = struct {
     name: []const u8,
     description: []const u8,
     input_schema: types.tooling.SchemaSpec,
+    output_schema: ?types.tooling.OutputSchemaSpec,
     read_only: bool,
 };
 
@@ -51,6 +52,7 @@ fn buildEntries() [definition_count]ToolEntry {
                 .name = decl.name,
                 .description = definition.description,
                 .input_schema = definition.input_schema,
+                .output_schema = definition.output_schema,
                 .read_only = definition.read_only,
             };
             result[entry_index] = .{

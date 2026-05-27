@@ -9,6 +9,7 @@ const benchmark_model = @import("../../../domain/performance/benchmark_model.zig
 const benchmark_usecase = @import("benchmark.zig");
 const coverage_model = @import("../../../domain/performance/coverage_model.zig");
 const coverage_usecase = @import("coverage.zig");
+const sessions = @import("../sessions/envelope.zig");
 
 /// Aliases the app context wrapper used by this workflow module.
 pub const App = support.UsecaseApp(app_context.PerformanceContext);
@@ -48,6 +49,7 @@ const max_evidence_bytes = 16 * 1024 * 1024;
 const default_coverage_baseline = ".zigar-cache/coverage/baseline.json";
 const default_bench_baseline = ".zigar-cache/benchmarks/baseline.json";
 const default_bench_history = ".zigar-cache/benchmarks/history.json";
+const bench_gate_session_kind = "bench_regression_gate";
 const default_samply_profile = ".zigar-cache/profile/samply/profile.json";
 const default_tracy_profile = ".zigar-cache/profile/tracy/capture.tracy";
 const default_perf_evidence = ".zigar-cache/performance/evidence-pack.json";
@@ -341,6 +343,65 @@ pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     defer arena.deinit();
     const value = benchCompareValue(arena.allocator(), a, comparison) catch return error.OutOfMemory;
     return structured(allocator, value);
+}
+
+/// Compares benchmark evidence against a regression threshold and optionally persists a one-shot gate session.
+pub fn zigBenchRegressionGate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    var current_input = readEvidenceInput(a, allocator, args, "zig_bench_regression_gate", "current", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_regression_gate", args, "current", err);
+    defer current_input.deinit(allocator);
+    var baseline_input = readEvidenceInput(a, allocator, args, "zig_bench_regression_gate", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_regression_gate", args, "baseline", err);
+    defer baseline_input.deinit(allocator);
+    var comparison = benchmark_usecase.compare(allocator, .{
+        .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
+        .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
+        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+    }) catch |err| return performanceToolError(allocator, "zig_bench_regression_gate", "compare_benchmarks", err);
+    defer comparison.deinit(allocator);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    const apply = argBool(args, "apply", false);
+    const now = unixMs(a);
+    const session_id = if (argString(args, "session_id")) |id|
+        id
+    else
+        try std.fmt.allocPrint(scratch, "bench-gate-{x}", .{std.hash.Wyhash.hash(0, current_input.bytes) ^ std.hash.Wyhash.hash(1, baseline_input.bytes)});
+    const comparison_value = try benchCompareValue(scratch, a, comparison);
+
+    var events = std.json.Array.init(scratch);
+    try events.append(try sessions.eventValue(scratch, "evaluated", if (comparison.passed()) "benchmark regression gate passed" else "benchmark regression gate failed", now));
+    var validation = std.json.ObjectMap.empty;
+    try validation.put(scratch, "passed", .{ .bool = comparison.passed() });
+    try validation.put(scratch, "threshold_pct", .{ .integer = comparison.threshold_pct });
+    try validation.put(scratch, "compared_count", .{ .integer = @intCast(comparison.compared_count) });
+    try validation.put(scratch, "regression_count", .{ .integer = @intCast(comparison.regressions.items.len) });
+    try validation.put(scratch, "worst_regression_pct", .{ .float = comparison.worst_regression_pct });
+
+    const envelope = try sessions.envelopeValue(scratch, .{
+        .id = session_id,
+        .kind = bench_gate_session_kind,
+        .status = if (comparison.passed()) "completed" else "failed",
+        .workspace_root = a.context.workspace.root,
+        .created_at = now,
+        .updated_at = now,
+        .events = .{ .array = events },
+        .validation = .{ .object = validation },
+    });
+    var obj = envelope.object;
+    try obj.put(scratch, "tool", .{ .string = "zig_bench_regression_gate" });
+    try obj.put(scratch, "comparison", comparison_value);
+    try obj.put(scratch, "one_shot", .{ .bool = true });
+    try obj.put(scratch, "resumable", .{ .bool = false });
+    try obj.put(scratch, "applied", .{ .bool = apply });
+    try obj.put(scratch, "requires_apply", .{ .bool = !apply });
+    if (apply) {
+        const path = sessions.appendSnapshot(scratch, a.context.workspace_store, bench_gate_session_kind, session_id, .{ .object = obj }, "performance.bench_regression_gate_session") catch |err| return workspacePathErrorResult(a, allocator, "zig_bench_regression_gate", sessions.session_root, err);
+        try obj.put(scratch, "session_path", .{ .string = path });
+    } else {
+        try obj.put(scratch, "session_path", .{ .string = try sessions.sessionPath(scratch, bench_gate_session_kind, session_id) });
+    }
+    return structured(allocator, .{ .object = obj });
 }
 
 /// Executes the zig perf budget check workflow and returns an allocator-owned structured result.
@@ -1415,6 +1476,36 @@ test "performance command workflows execute and register coverage and benchmark 
     try workspace.verify();
     try scanner.verify();
     try artifacts_fake.verify();
+}
+
+test "bench regression gate is preview-only unless apply is set" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+    var args = try parsedArgs(allocator,
+        \\{"current":"parse 120 ns\n","baseline":"parse 100 ns\n","threshold_pct":5,"session_id":"gate-1","apply":false}
+    );
+    defer args.deinit();
+
+    const result = try zigBenchRegressionGate(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    try std.testing.expectEqualStrings("zig_bench_regression_gate", result.value.object.get("tool").?.string);
+    try std.testing.expectEqualStrings("failed", result.value.object.get("status").?.string);
+    try std.testing.expect(!result.value.object.get("applied").?.bool);
+    try std.testing.expect(result.value.object.get("requires_apply").?.bool);
+    try std.testing.expectEqualStrings(".zigar-cache/sessions/bench_regression_gate/gate-1.jsonl", result.value.object.get("session_path").?.string);
+    try workspace.verify();
+    try commands.verify();
 }
 
 test "performance workflows report command errors and parse workspace evidence variants" {

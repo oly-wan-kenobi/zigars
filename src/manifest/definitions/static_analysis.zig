@@ -2,6 +2,7 @@ const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
+const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
@@ -18,9 +19,20 @@ pub const zig_import_graph = tool(.{
 pub const zig_import_graph_json = tool(.{
     .description = "Build a JSON-native heuristic import graph from workspace Zig files.",
     .input_schema = schema(&.{.{ "limit", "integer", false }}),
+    .output_schema = outputSchema(.analysis_result),
     .read_only = true,
     .group = .static_analysis,
     .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Detect architecture-neutral import cycles from workspace Zig imports.
+pub const zig_import_cycles = tool(.{
+    .description = "Detect architecture-neutral import cycles from workspace Zig imports, returning SCCs, cycle paths, topological depths, severity, confidence, and limitations.",
+    .input_schema = schema(&.{.{ "limit", "integer", false }}),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Static workspace analysis; post-processes import graph evidence without executing backends or applying project-specific architecture policy." },
     .static_analysis_tier = .advisory_orientation,
 });
 /// Return parser-backed import calls for one Zig source file.
@@ -137,6 +149,159 @@ pub const zig_test_discover = tool(.{
 });
 /// Return parser-backed Zig test declarations for one source file.
 pub const zig_ast_tests = tool(.{ .description = "Return parser-backed Zig test declarations for a Zig file using std.zig.Ast.", .input_schema = schema(&.{.{ "file", "string", true }}), .read_only = true, .group = .static_analysis, .plan = .{ .pure_analysis = "Parser-backed source analysis; parses one Zig file with std.zig.Ast without executing compiler semantic analysis." }, .static_analysis_tier = .parser_backed });
+/// Resolve requested test filters to actual declared Zig test names.
+pub const zig_test_name_resolve = tool(.{
+    .description = "Resolve requested test filters to actual declared Zig test names, files, commands, duplicate-name flags, confidence, and limitations.",
+    .input_schema = schemaWithHints(&.{ .{ "filters", "string", false }, .{ "limit", "integer", false } }, &.{
+        fieldHint("filters", .{ .description = "Comma, whitespace, or newline separated test filters to match against declared test names." }),
+    }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-backed test declaration analysis; reads workspace source without executing tests." },
+    .static_analysis_tier = .parser_backed,
+});
+/// Inventory likely test helpers, fixtures, fakes, and harness utilities.
+pub const zig_test_fixture_inventory = tool(.{
+    .description = "Inventory likely test helpers, fixtures, fakes, and harness utilities with bounded usage-site evidence.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-backed and heuristic workspace source analysis; reads project files without executing tests." },
+    .static_analysis_tier = .parser_backed,
+});
+/// Catalog safety-relevant Zig source sites for review.
+pub const zig_safety_site_catalog = tool(.{
+    .description = "Catalog safety-relevant Zig source sites such as @panic, unreachable, catch unreachable, and unchecked casts.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Line-level static source scan; masks obvious comments and strings and returns review prompts without executing code." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Map a symbol to likely relevant tests.
+pub const zig_test_for_symbol = tool(.{
+    .description = "Map a symbol to likely relevant tests using test names, declarations, and source proximity.",
+    .input_schema = schema(&.{ .{ "symbol", "string", true }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Advisory symbol-to-test analysis over workspace source; does not run tests or prove coverage." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Aggregate a directory-level Zig module surface.
+pub const zig_module_surface = tool(.{
+    .description = "Aggregate a directory-level Zig module surface with public exports, re-exports, consumers, unused-export candidates, and role hints.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-backed public declaration aggregation plus source-scan consumers; architecture-neutral and read-only." },
+    .static_analysis_tier = .parser_backed,
+});
+/// Build a symbol-scoped static dossier.
+pub const zig_symbol_dossier = tool(.{
+    .description = "Build a symbol-scoped dossier with declarations, public API membership, callers, tests, module hints, omitted sections, confidence, and limitations.",
+    .input_schema = schema(&.{ .{ "symbol", "string", true }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Architecture-neutral symbol dossier over parser and source-scan evidence; diagnostics/history/lint are explicitly omitted when unavailable." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Risk-rank a proposed change using static evidence.
+pub const zig_change_risk_audit = tool(.{
+    .description = "Risk-rank a proposed change using import/reference centrality, public API hints, test proximity, and exposed scoring weights.",
+    .input_schema = schemaWithHints(&.{ .{ "files", "string", false }, .{ "symbols", "string", false }, .{ "diff", "string", false }, .{ "limit", "integer", false } }, &.{
+        fieldHint("files", .{ .description = "Comma, whitespace, or newline separated workspace files to audit." }),
+        fieldHint("symbols", .{ .description = "Comma, whitespace, or newline separated symbols to audit." }),
+        fieldHint("diff", .{ .description = "Unified diff text to mine for changed files and public API signals." }),
+    }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Static risk scoring over caller-supplied change evidence; does not enforce architecture policy or run validation." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Rank likely insertion sites for a topic.
+pub const zig_insertion_sites = tool(.{
+    .description = "Rank likely insertion sites for a topic using project-local path, declaration, import-neighborhood, and sibling-pattern evidence.",
+    .input_schema = schemaWithHints(&.{ .{ "topic", "string", true }, .{ "path", "string", false }, .{ "limit", "integer", false } }, &.{
+        fieldHint("topic", .{ .description = "Feature, symbol, module, or behavior topic to place in the existing codebase." }),
+    }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Recommendation-oriented static ranking; reads workspace source and remains architecture-neutral." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Scan for Zig 0.15 to 0.16 IO migration sites without editing source.
+pub const zig_io_migration_scan = tool(.{
+    .description = "Scan for Zig 0.15 to 0.16 IO migration sites using a curated std.io/std.Io mapping table, confidence labels, and verification commands.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-backed and comment/string-masked source scan; returns migration findings and verification commands without editing source." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Triage GeneralPurposeAllocator leak stderr into grouped allocation traces.
+pub const zig_leak_triage = tool(.{
+    .description = "Triage GeneralPurposeAllocator leak stderr into grouped allocation traces, repeated allocation sites, raw frames, and parser limitations.",
+    .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "path", "string", false }, .{ "limit", "integer", false } }, &.{
+        fieldHint("text", .{ .description = "Captured GPA leak stderr text. If omitted, path is read from the workspace." }),
+        fieldHint("path", .{ .description = "Workspace-relative file containing captured GPA leak stderr." }),
+    }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-only stderr analysis; does not execute a symbolizer or inspect host debug information." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Diagnose likely comptime failures from source snippets and compiler diagnostics.
+pub const zig_comptime_diagnose = tool(.{
+    .description = "Diagnose likely comptime failures from source snippets and compiler diagnostic text, labeling parser-only evidence and limitations.",
+    .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "path", "string", false }, .{ "diagnostic", "string", false }, .{ "limit", "integer", false } }, &.{
+        fieldHint("diagnostic", .{ .description = "Compiler diagnostic text to mine for comptime-known/runtime-known failure clues." }),
+    }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Parser-only comptime diagnosis; does not execute compiler probes or claim semantic evaluation." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Catalog layout-sensitive Zig declarations for memory and ABI review.
+pub const zig_memory_layout = tool(.{
+    .description = "Catalog layout-sensitive Zig declarations such as structs, packed/extern containers, unions, enums, and opaque boundaries.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Comment/string-masked source catalog; records layout candidates without running target-specific compiler probes." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Catalog unsafe and boundary-sensitive Zig operations for review.
+pub const zig_unsafe_operations_audit = tool(.{
+    .description = "Catalog unsafe and boundary-sensitive Zig operations such as casts, unreachable paths, runtime safety toggles, volatile, extern, packed, and anyopaque sites.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Review-oriented source catalog; masks obvious comments and strings and does not claim the operation is incorrect." },
+    .static_analysis_tier = .advisory_orientation,
+});
+/// Plan bounded ABI layout probes for layout-sensitive declarations.
+pub const zig_abi_layout_diff = tool(.{
+    .description = "Plan bounded ABI layout probes for layout-sensitive declarations, including @sizeOf, @alignOf, and @offsetOf measurement shapes without executing the compiler.",
+    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .output_schema = outputSchema(.analysis_result),
+    .read_only = true,
+    .group = .static_analysis,
+    .plan = .{ .pure_analysis = "Probe-plan-only ABI analysis; no compiler command is executed and cache layout is reported for a later command-backed implementation." },
+    .static_analysis_tier = .advisory_orientation,
+});
 /// Inspect git changes and recommend the smallest useful Zig validation commands.
 pub const zig_changed_files_plan = tool(.{
     .description = "Inspect git changes and recommend the smallest useful Zig validation commands.",

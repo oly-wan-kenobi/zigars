@@ -4,6 +4,7 @@ const std = @import("std");
 const mcp = @import("mcp");
 
 const app_context = @import("../../../app/context.zig");
+const dependency_workflows = @import("../../../app/usecases/dependencies/workflows.zig");
 const workflows = @import("../../../app/usecases/release/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
@@ -61,6 +62,51 @@ pub fn zigDependencyLicenseSummary(allocator: std.mem.Allocator, context: app_co
 /// Handles MCP `zig_github_dependency_submit_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigGithubDependencySubmitPlan(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_github_dependency_submit_plan", workflows.zigGithubDependencySubmitPlan);
+}
+
+/// Handles MCP `zig_zon_dep_sync` requests with preview/apply patch-session semantics.
+pub fn zigZonDepSync(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_zon_dep_sync", dependency_workflows.zigZonDepSync);
+}
+
+/// Handles MCP `zig_deps_add` requests with preview/apply patch-session semantics.
+pub fn zigDepsAdd(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_deps_add", dependency_workflows.zigDepsAdd);
+}
+
+/// Handles MCP `zig_deps_remove` requests with preview/apply patch-session semantics.
+pub fn zigDepsRemove(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_deps_remove", dependency_workflows.zigDepsRemove);
+}
+
+/// Handles MCP `zig_deps_upgrade` requests with preview/apply patch-session semantics.
+pub fn zigDepsUpgrade(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_deps_upgrade", dependency_workflows.zigDepsUpgrade);
+}
+
+/// Handles MCP `zig_pkg_search` requests.
+pub fn zigPkgSearch(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_pkg_search", dependency_workflows.zigPkgSearch);
+}
+
+/// Handles MCP `zig_pkg_info` requests.
+pub fn zigPkgInfo(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_pkg_info", dependency_workflows.zigPkgInfo);
+}
+
+/// Handles MCP `zig_pkg_versions` requests.
+pub fn zigPkgVersions(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_pkg_versions", dependency_workflows.zigPkgVersions);
+}
+
+/// Handles MCP `zig_pkg_readme` requests.
+pub fn zigPkgReadme(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_pkg_readme", dependency_workflows.zigPkgReadme);
+}
+
+/// Handles MCP `zig_dependency_migrate` requests.
+pub fn zigDependencyMigrate(allocator: std.mem.Allocator, context: app_context.ReleaseWorkflowContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return invoke(allocator, context, args, "zig_dependency_migrate", dependency_workflows.zigDependencyMigrate);
 }
 
 /// Runs a release/dependency workflow and maps structured failures to MCP errors.

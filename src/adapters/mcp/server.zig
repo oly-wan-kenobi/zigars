@@ -478,6 +478,9 @@ pub const Server = struct {
                         };
                     }
                 }
+                if (obj.get("capabilities")) |capabilities_val| {
+                    self.client_capabilities = parseClientCapabilities(capabilities_val);
+                }
             }
         }
 
@@ -623,6 +626,19 @@ pub const Server = struct {
                 try input_schema.put(response_allocator, "type", .{ .string = "object" });
             }
             try tool_obj.put(response_allocator, "inputSchema", .{ .object = input_schema });
+
+            if (tool.outputSchema) |schema| {
+                var output_schema: std.json.ObjectMap = .empty;
+                try output_schema.put(response_allocator, "type", .{ .string = schema.type });
+                if (schema.@"$schema") |s| try output_schema.put(response_allocator, "$schema", .{ .string = s });
+                if (schema.properties) |p| try output_schema.put(response_allocator, "properties", p);
+                if (schema.required) |req| {
+                    var arr: std.json.Array = .init(response_allocator);
+                    for (req) |name| try arr.append(.{ .string = name });
+                    try output_schema.put(response_allocator, "required", .{ .array = arr });
+                }
+                try tool_obj.put(response_allocator, "outputSchema", .{ .object = output_schema });
+            }
 
             if (tool.annotations) |ann| {
                 var ann_obj: std.json.ObjectMap = .empty;
@@ -1054,6 +1070,55 @@ pub const Server = struct {
         return null;
     }
 
+    /// Parses the subset of client capabilities needed by protocol helper scaffolds.
+    fn parseClientCapabilities(value: std.json.Value) types.ClientCapabilities {
+        if (value != .object) return .{};
+        const obj = value.object;
+        return .{
+            .roots = if (obj.get("roots")) |roots| parseRootsCapability(roots) else null,
+            .sampling = if (obj.get("sampling")) |sampling| parseSamplingCapability(sampling) else null,
+            .elicitation = if (obj.get("elicitation")) |elicitation| parseElicitationCapability(elicitation) else null,
+        };
+    }
+
+    /// Parses roots/listChanged support without retaining borrowed JSON.
+    fn parseRootsCapability(value: std.json.Value) ?types.RootsCapability {
+        if (value != .object) return .{};
+        return .{ .listChanged = if (value.object.get("listChanged")) |list_changed| list_changed == .bool and list_changed.bool else false };
+    }
+
+    /// Parses sampling support without retaining borrowed JSON.
+    fn parseSamplingCapability(value: std.json.Value) ?types.SamplingCapability {
+        if (value != .object) return .{};
+        const obj = value.object;
+        return .{
+            .context = if (obj.get("context")) |_| .{} else null,
+            .tools = if (obj.get("tools")) |_| .{} else null,
+        };
+    }
+
+    /// Parses elicitation support without retaining borrowed JSON.
+    fn parseElicitationCapability(value: std.json.Value) ?types.ElicitationCapability {
+        if (value != .object) return .{};
+        const obj = value.object;
+        return .{
+            .form = if (obj.get("form")) |_| .{} else null,
+            .url = if (obj.get("url")) |_| .{} else null,
+        };
+    }
+
+    /// Returns structured fallback metadata when a client omits optional protocol support.
+    fn protocolHelperFallbackValue(allocator: std.mem.Allocator, feature: []const u8, method: []const u8) !std.json.Value {
+        var obj: std.json.ObjectMap = .empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "kind", .{ .string = "protocol_helper_fallback" });
+        try obj.put(allocator, "feature", .{ .string = feature });
+        try obj.put(allocator, "method", .{ .string = method });
+        try obj.put(allocator, "supported", .{ .bool = false });
+        try obj.put(allocator, "resolution", .{ .string = "Client did not advertise this optional MCP capability; continue with deterministic zigar arguments and structured tool results." });
+        return .{ .object = obj };
+    }
+
     /// Handles inbound JSON-RPC notifications and updates local server state.
     fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {
         if (std.mem.eql(u8, notification.method, "notifications/initialized")) {
@@ -1130,6 +1195,54 @@ pub const Server = struct {
             try params.put(response_allocator, "message", .{ .string = m });
         }
         try self.sendNotification(io, allocator, "notifications/progress", .{ .object = params });
+    }
+
+    /// Returns whether the initialized client advertised elicitation support.
+    pub fn supportsElicitation(self: *Self) bool {
+        return self.client_capabilities != null and self.client_capabilities.?.elicitation != null;
+    }
+
+    /// Returns whether the initialized client advertised sampling support.
+    pub fn supportsSampling(self: *Self) bool {
+        return self.client_capabilities != null and self.client_capabilities.?.sampling != null;
+    }
+
+    /// Sends elicitation/create when supported; otherwise returns a structured fallback.
+    pub fn tryElicitationCreate(self: *Self, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
+        if (!self.supportsElicitation()) {
+            return protocolHelperFallbackValue(allocator, "elicitation", "elicitation/create");
+        }
+        return self.sendClientRequestValue(io, allocator, "elicitation", "elicitation/create", params);
+    }
+
+    /// Sends sampling/createMessage when supported; otherwise returns a structured fallback.
+    pub fn trySamplingCreateMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
+        if (!self.supportsSampling()) {
+            return protocolHelperFallbackValue(allocator, "sampling", "sampling/createMessage");
+        }
+        return self.sendClientRequestValue(io, allocator, "sampling", "sampling/createMessage", params);
+    }
+
+    /// Sends a server-to-client request and returns request bookkeeping metadata.
+    fn sendClientRequestValue(self: *Self, io: std.Io, allocator: std.mem.Allocator, feature: []const u8, method: []const u8, params: std.json.Value) !std.json.Value {
+        const id = self.next_request_id;
+        self.next_request_id += 1;
+        try self.pending_requests.put(id, .{
+            .method = method,
+            .timestamp = @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms)),
+        });
+        errdefer _ = self.pending_requests.remove(id);
+        const request = jsonrpc.createRequest(.{ .integer = id }, method, params);
+        try self.sendResponse(io, allocator, .{ .request = request });
+
+        var obj: std.json.ObjectMap = .empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "kind", .{ .string = "protocol_helper_request" });
+        try obj.put(allocator, "feature", .{ .string = feature });
+        try obj.put(allocator, "method", .{ .string = method });
+        try obj.put(allocator, "supported", .{ .bool = true });
+        try obj.put(allocator, "request_id", .{ .integer = id });
+        return .{ .object = obj };
     }
 
     /// Emits the tools changed notification through the active transport.

@@ -12,6 +12,118 @@ diagnostic planning.
 run, format, and analyze Zig projects. Any source write requires an explicit
 `apply=true` argument.
 
+## Quickstart with npm
+
+The fastest way to use zigar from an MCP client is the npm shim. Bun is the
+preferred launcher:
+
+```sh
+bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
+```
+
+The npm package is named `@zigars/mcp`; the project and binary are still named
+`zigar`. The shim is written in TypeScript, publishes compiled JavaScript for
+Node-compatible npm clients, downloads the matching `zigar` release archive from
+GitHub, verifies it against `zigar-checksums.txt`, caches the extracted binary,
+and then runs zigar as a local stdio MCP server. GitHub release assets for the
+package version must exist before this command can start the server.
+
+Node/npm remains a supported launcher:
+
+```sh
+npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
+```
+
+Yarn and pnpm also work when the `zigar-mcp` binary is named explicitly:
+
+```sh
+yarn dlx -p @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+```
+
+Minimum prerequisites for the npm path:
+
+- Bun 1.3 or newer, or Node.js 18 or newer with npm/npx, Yarn dlx, or pnpm dlx
+- Zig `0.16.0` available on `PATH` or passed with `--zig-path`
+- A supported host release asset: Linux x64/arm64, macOS x64/arm64, or Windows
+  x64
+- An MCP client that can launch a stdio server
+
+Common client shapes:
+
+```json
+{
+  "mcpServers": {
+    "zigar": {
+      "command": "bunx",
+      "args": [
+        "--bun",
+        "@zigars/mcp@0.2.0",
+        "--workspace",
+        "/absolute/path/to/zig/project"
+      ]
+    }
+  }
+}
+```
+
+Codex uses TOML:
+
+```toml
+[mcp_servers.zigar]
+command = "bunx"
+args = [
+  "--bun",
+  "@zigars/mcp@0.2.0",
+  "--workspace",
+  "/absolute/path/to/zig/project"
+]
+startup_timeout_sec = 20.0
+```
+
+After startup, useful first calls are:
+
+```text
+zigar_workspace_info
+zigar_doctor {"probe_backends":false}
+zigar_schema
+```
+
+For npm-specific caching, troubleshooting, local publish testing, and Claude
+Desktop/MCPB notes, see
+[packages/zigar-mcp-npm/README.md](packages/zigar-mcp-npm/README.md).
+
+## Optional zigar Skills
+
+Zigar-aware agent skills are shipped separately as `@zigars/skills`. They do not
+start the MCP server or change MCP configuration; they provide client-side
+workflow guidance for using zigar effectively.
+
+```sh
+npx -y @zigars/skills@0.2.0 list
+npx -y @zigars/skills@0.2.0 path zigar-development
+```
+
+The first maintained skill is `zigar-development`, which dogfoods zigar while
+developing this repo. See [docs/dogfooding.md](docs/dogfooding.md).
+
+## Quickstart with Claude Desktop MCPB
+
+Claude Desktop users can install a release `.mcpb` bundle and choose the Zig
+workspace directory during installation. Download the bundle for your platform
+from the matching GitHub release:
+
+```text
+zigar-darwin-universal.mcpb
+zigar-linux-x64.mcpb
+zigar-windows-x64.mcpb
+```
+
+The MCPB path bundles the zigar server binary directly and runs it with
+`--transport stdio --workspace <configured directory>`. It still requires Zig
+`0.16.0` on `PATH`; optional backends such as ZLS can be configured through the
+npm shim or a direct binary setup when needed.
+
 ## Status
 
 `zigar` is ready for public use with Zig 0.16.0 over stdio and local HTTP MCP
@@ -71,6 +183,34 @@ the repo-pinned setup in `tools/real_backend_pins.json` through
 
 ## Install
 
+Fast MCP client install through Bun:
+
+```sh
+bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
+```
+
+Node/npm is still supported:
+
+```sh
+npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
+```
+
+Yarn and pnpm launch forms:
+
+```sh
+yarn dlx -p @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigar-mcp --workspace /absolute/path/to/zig/project
+```
+
+For repeatable client configuration, pin the package version as shown above.
+If you want a locally installed command instead:
+
+```sh
+npm install -g @zigars/mcp@0.2.0
+pnpm add -g @zigars/mcp@0.2.0
+zigar-mcp --workspace /absolute/path/to/zig/project
+```
+
 Build from source:
 
 ```sh
@@ -99,6 +239,25 @@ zigar-x86_64-macos.tar.gz
 zigar-aarch64-macos.tar.gz
 zigar-x86_64-windows.tar.gz
 ```
+
+The npm shim uses these same archive names for host detection. If a package
+version is published before the matching `v<version>` GitHub release assets and
+`zigar-checksums.txt` are available, startup fails with a download or checksum
+error.
+
+Claude Desktop MCPB bundles are published from those same release binaries:
+
+```text
+zigar-darwin-universal.mcpb
+zigar-linux-x64.mcpb
+zigar-windows-x64.mcpb
+zigar-mcpb-checksums.txt
+```
+
+The macOS MCPB contains a universal binary. The Linux and Windows MCPB bundles
+currently contain x86_64 binaries because MCPB compatibility metadata supports
+OS platform selectors but not CPU architecture selectors. Linux arm64 users can
+use the npm shim or direct `zigar-aarch64-linux-musl.tar.gz` archive.
 
 ## Build
 
@@ -150,6 +309,20 @@ floors in `tools/coverage_config.zig`.
 `dist/assets`. `zig build release-asset-smoke` verifies checksums, archive
 contents, and the native archive's `zigar --version` behavior.
 
+MCPB release bundles are built after `zig build dist`:
+
+```sh
+npm --prefix packages/zigar-mcpb ci
+npm --prefix packages/zigar-mcpb run pack
+```
+
+That TypeScript package supports npm/Node and Bun. The npm path compiles
+`src/build.ts` before running; Bun can run the same source with
+`bun run --cwd packages/zigar-mcpb pack:bun`. The command stages the bundled
+server, validates each `manifest.json` with the MCPB CLI, packs `.mcpb` files,
+runs `mcpb info`, and writes
+`dist/assets/zigar-mcpb-checksums.txt` for registry `fileSha256` values.
+
 ## Run
 
 ```sh
@@ -180,9 +353,11 @@ only as a loopback endpoint for clients or wrappers that need local HTTP.
 ## Agent Client Configuration
 
 Zigar works with any MCP client that can launch a local stdio server. Client
-config shapes vary, but the zigar command stays the same: use an absolute
-`command`, pass `--transport stdio`, and pin `--workspace` unless the client
-starts servers from the active project directory.
+config shapes vary. For the npm path, prefer `bunx --bun` with
+`@zigars/mcp@0.2.0`; `npx -y` remains the Node/npm fallback. For a direct binary
+install, use an absolute `command`. Pin `--workspace` unless the client starts
+servers from the active project directory. The npm shim adds `--transport stdio`
+automatically unless you pass a transport yourself.
 
 For Claude, Gemini CLI, Hermes, and generic client guidance, see
 [docs/agent-clients.md](docs/agent-clients.md).
@@ -195,7 +370,25 @@ public support claims before recommending a client/backend profile.
 
 ### Codex
 
-Add a server entry to `~/.codex/config.toml`:
+Add a server entry to `~/.codex/config.toml` using Bun:
+
+```toml
+[mcp_servers.zigar]
+command = "bunx"
+args = [
+  "--bun",
+  "@zigars/mcp@0.2.0",
+  "--workspace",
+  "/absolute/path/to/your/zig/project",
+  "--zig-path",
+  "/opt/homebrew/bin/zig",
+  "--zls-path",
+  "/opt/homebrew/bin/zls"
+]
+startup_timeout_sec = 20.0
+```
+
+Or use a direct binary:
 
 ```toml
 [mcp_servers.zigar]
@@ -443,6 +636,75 @@ More detail:
   verification.
 
 ## Troubleshooting
+
+### npm shim cannot download a release asset
+
+The package downloads from:
+
+```text
+https://github.com/oly-wan-kenobi/zigar/releases/download/v0.2.0/
+```
+
+Confirm the release has `zigar-checksums.txt` and the archive for your host:
+
+```text
+zigar-x86_64-linux-musl.tar.gz
+zigar-aarch64-linux-musl.tar.gz
+zigar-x86_64-macos.tar.gz
+zigar-aarch64-macos.tar.gz
+zigar-x86_64-windows.tar.gz
+```
+
+If assets are missing, publish the GitHub release assets first or use a direct
+source build.
+
+### Unsupported platform
+
+`@zigars/mcp` currently supports Linux x64/arm64, macOS x64/arm64, and Windows
+x64. Other hosts fail with `Unsupported zigar host target: <platform>/<arch>`.
+Build from source or use a supported machine until a release asset exists for
+that target.
+
+### Checksum mismatch or missing checksum
+
+Delete the cached install and retry only after confirming the release asset and
+`zigar-checksums.txt` were produced from the same build:
+
+```sh
+rm -rf ~/.cache/zigar-mcp/0.2.0
+rm -rf ~/Library/Caches/zigar-mcp/0.2.0
+```
+
+On Windows, remove `%LOCALAPPDATA%\zigar-mcp\0.2.0`. You can override the cache
+location with `ZIGAR_MCP_CACHE_DIR`.
+
+### Bun or Node.js version issues
+
+Use Bun 1.3 or newer for the preferred path, or Node.js 18 or newer for the
+npm/npx path:
+
+```sh
+bun --version
+node --version
+npm --version
+```
+
+Older Node.js versions do not provide the runtime APIs the shim relies on.
+
+### Zig path issues
+
+Confirm the server can find Zig:
+
+```sh
+zig version
+bunx --bun @zigars/mcp@0.2.0 \
+  --workspace /absolute/path/to/zig/project \
+  --zig-path /absolute/path/to/zig
+```
+
+Inside an MCP client, call `zigar_doctor {"probe_backends":false}`. Optional
+backends such as ZLS, ZLint, zwanzig, zflame, and diff-folded can be configured
+with their matching `--*-path` arguments.
 
 ### `PermissionDenied` or workspace sandbox errors
 
