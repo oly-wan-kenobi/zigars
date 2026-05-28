@@ -1,5 +1,6 @@
 //! Append-only JSONL audit writer for opt-in forensic operation.
 const std = @import("std");
+const Mutex = @import("../process/sync.zig").Mutex;
 
 /// Audit payload retention mode.
 pub const Mode = enum {
@@ -55,6 +56,7 @@ pub const Writer = struct {
     file: ?std.Io.File = null,
     mode: Mode = .metadata,
     path: []const u8 = "",
+    mutex: Mutex = .{},
     records_written: u64 = 0,
 
     /// Opens or creates the resolved audit file without truncating existing JSONL.
@@ -73,6 +75,7 @@ pub const Writer = struct {
             .file = file,
             .mode = mode,
             .path = owned_path,
+            .mutex = Mutex.init(io),
         };
     }
 
@@ -98,6 +101,8 @@ pub const Writer = struct {
         const line = try aw.toOwnedSlice();
         defer allocator.free(line);
 
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const offset = try file.length(self.io);
         try file.writePositionalAll(self.io, line, offset);
         self.records_written +|= 1;
