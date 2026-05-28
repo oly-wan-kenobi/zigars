@@ -41,6 +41,18 @@ const parseJsonFile = cli_io.parseJsonFile;
 const reportInvalidArguments = cli_io.reportInvalidArguments;
 const stderrPrint = cli_io.stderrPrint;
 
+const FakeBackend = enum {
+    zwanzig,
+    zlint,
+    zflame,
+    diff_folded,
+};
+
+const FakeBackendInvocation = struct {
+    backend: FakeBackend,
+    args: []const []const u8,
+};
+
 test {
     _ = architecture_guard;
     _ = backend_docs;
@@ -86,19 +98,7 @@ pub fn main(init: std.process.Init) !void {
     const args_arena = args_arena_state.allocator();
     const args = try init.minimal.args.toSlice(args_arena);
 
-    if (args.len > 0) {
-        const invoked = executableName(args[0]);
-        if (std.mem.startsWith(u8, invoked, "fake-zwanzig")) return release_checks.fakeZwanzig(io, args[1..]);
-        if (std.mem.startsWith(u8, invoked, "fake-zlint")) return release_checks.fakeZlint(io, args[1..]);
-        if (std.mem.startsWith(u8, invoked, "fake-zflame")) return release_checks.fakeZflame(io, args[1..]);
-        if (std.mem.startsWith(u8, invoked, "fake-diff-folded")) return release_checks.fakeDiffFolded(io, args[1..]);
-    }
-    if (args.len > 1) {
-        if (std.mem.eql(u8, args[1], "fake-zwanzig")) return release_checks.fakeZwanzig(io, args[2..]);
-        if (std.mem.eql(u8, args[1], "fake-zlint")) return release_checks.fakeZlint(io, args[2..]);
-        if (std.mem.eql(u8, args[1], "fake-zflame")) return release_checks.fakeZflame(io, args[2..]);
-        if (std.mem.eql(u8, args[1], "fake-diff-folded")) return release_checks.fakeDiffFolded(io, args[2..]);
-    }
+    if (fakeBackendInvocation(args)) |invocation| return runFakeBackend(io, invocation.backend, invocation.args);
 
     if (args.len < 2) {
         try usage(io);
@@ -156,6 +156,46 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
+fn fakeBackendInvocation(args: []const []const u8) ?FakeBackendInvocation {
+    if (args.len > 0) {
+        const invoked = executableName(args[0]);
+        if (fakeBackendFromExecutable(invoked)) |backend| {
+            return .{ .backend = backend, .args = args[1..] };
+        }
+    }
+    if (args.len > 1) {
+        if (fakeBackendFromCommand(args[1])) |backend| {
+            return .{ .backend = backend, .args = args[2..] };
+        }
+    }
+    return null;
+}
+
+fn fakeBackendFromExecutable(name: []const u8) ?FakeBackend {
+    if (std.mem.startsWith(u8, name, "fake-zwanzig")) return .zwanzig;
+    if (std.mem.startsWith(u8, name, "fake-zlint")) return .zlint;
+    if (std.mem.startsWith(u8, name, "fake-zflame")) return .zflame;
+    if (std.mem.startsWith(u8, name, "fake-diff-folded")) return .diff_folded;
+    return null;
+}
+
+fn fakeBackendFromCommand(name: []const u8) ?FakeBackend {
+    if (std.mem.eql(u8, name, "fake-zwanzig")) return .zwanzig;
+    if (std.mem.eql(u8, name, "fake-zlint")) return .zlint;
+    if (std.mem.eql(u8, name, "fake-zflame")) return .zflame;
+    if (std.mem.eql(u8, name, "fake-diff-folded")) return .diff_folded;
+    return null;
+}
+
+fn runFakeBackend(io: Io, backend: FakeBackend, args: []const []const u8) !void {
+    return switch (backend) {
+        .zwanzig => release_checks.fakeZwanzig(io, args),
+        .zlint => release_checks.fakeZlint(io, args),
+        .zflame => release_checks.fakeZflame(io, args),
+        .diff_folded => release_checks.fakeDiffFolded(io, args),
+    };
+}
+
 fn usage(io: Io) !void {
     try stderrPrint(io,
         \\usage: zigars-tools <command> [options]
@@ -192,4 +232,18 @@ test "json util escapes JSON control characters" {
 
     try json_util.writeString(&out.writer, "a\"b\\c\n\t\x1b");
     try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\n\\t\\u001b\"", out.written());
+}
+
+test "fake backend invocation normalizes executable and subcommand forms" {
+    const executable = fakeBackendInvocation(&.{ "/tmp/fake-zlint", "--json" }).?;
+    try std.testing.expectEqual(FakeBackend.zlint, executable.backend);
+    try std.testing.expectEqual(@as(usize, 1), executable.args.len);
+    try std.testing.expectEqualStrings("--json", executable.args[0]);
+
+    const subcommand = fakeBackendInvocation(&.{ "zigars-tools", "fake-diff-folded", "--svg" }).?;
+    try std.testing.expectEqual(FakeBackend.diff_folded, subcommand.backend);
+    try std.testing.expectEqual(@as(usize, 1), subcommand.args.len);
+    try std.testing.expectEqualStrings("--svg", subcommand.args[0]);
+
+    try std.testing.expect(fakeBackendInvocation(&.{ "zigars-tools", "artifact-hygiene" }) == null);
 }
