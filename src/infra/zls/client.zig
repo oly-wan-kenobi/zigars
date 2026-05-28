@@ -410,7 +410,6 @@ pub const LspClient = struct {
         };
         self.running.store(false, .release);
         self.signalAllPending();
-        // Close all pipes to signal ZLS to exit and unblock reader threads
         if (self.zls_stdin) |stdin| {
             stdin.close(self.io);
             self.zls_stdin = null;
@@ -423,7 +422,6 @@ pub const LspClient = struct {
             se.close(self.io);
             self.zls_stderr = null;
         }
-        // Now safe to join — readers will see EOF from closed pipes
         if (self.reader_thread) |t| {
             t.join();
             self.reader_thread = null;
@@ -469,7 +467,6 @@ pub const LspClient = struct {
     /// Disconnects and frees pending responses, diagnostics, and last-error text.
     pub fn deinit(self: *LspClient) void {
         self.disconnect();
-        // Free any remaining pending requests
         var it = self.pending.iterator();
         while (it.next()) |entry| {
             if (entry.value_ptr.*.response) |r| {
@@ -503,20 +500,12 @@ pub const LspClient = struct {
     }
 };
 
-/// Reports whether an exit-notification failure can be ignored during shutdown.
 fn isBenignExitNotificationError(err: anyerror) bool {
     return err == error.BrokenPipe or err == error.EndOfStream or err == error.NotConnected;
 }
-
-// ── Tests ──
-
-/// Creates a threaded IO handle for tests that need file and condition support.
 fn testIo() std.Io {
-    var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
-    return threaded.io();
+    return std.Io.Threaded.init(std.heap.smp_allocator, .{}).io();
 }
-
-/// Creates paired file handles for scripted transport tests.
 fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
@@ -653,7 +642,6 @@ test "shutdown treats missing exit pipe as benign after response" {
     client.zls_stdin = to_server.write_end;
     client.running.store(true, .release);
 
-    // Responder fixture state shared by the scripted transport.
     const Responder = struct {
         fn run(c: *LspClient, read_end: std.Io.File, thread_io: std.Io) void {
             defer read_end.close(thread_io);
