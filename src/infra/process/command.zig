@@ -25,10 +25,15 @@ pub const RunResult = struct {
     stderr_limit: usize = output_limit,
     duration_ms: i64 = 0,
 
-    /// Frees captured stdout and stderr buffers.
-    pub fn deinit(self: RunResult, allocator: std.mem.Allocator) void {
+    /// Frees captured stdout and stderr buffers and clears the consumed slices.
+    pub fn deinit(self: *RunResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
         allocator.free(self.stderr);
+        self.stdout = emptyMutableBytes();
+        self.stderr = emptyMutableBytes();
+        self.stdout_truncated = false;
+        self.stderr_truncated = false;
+        self.duration_ms = 0;
     }
 
     /// True when the process exited with status code zero.
@@ -101,9 +106,7 @@ pub fn runWithOutputLimitCancellable(
     var stdout_truncated = false;
     var stderr_truncated = false;
     var term: std.process.Child.Term = .{ .unknown = 0 };
-    const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
-    const timeout_ns = @as(i96, timeout_ms) * std.time.ns_per_ms;
-    const deadline_ns = started_ns + timeout_ns;
+    const deadline = CommandDeadline.start(io, timeout_ms);
 
     while (true) {
         if (isCancelled(token)) {
@@ -112,10 +115,7 @@ pub fn runWithOutputLimitCancellable(
             child_active = false;
             return error.Cancelled;
         }
-        const now_ns = std.Io.Clock.now(.real, io).nanoseconds;
-        if (now_ns >= deadline_ns) return error.Timeout;
-        const remaining_ns = deadline_ns - now_ns;
-        const remaining_ms: i64 = @intCast(@divTrunc(remaining_ns + std.time.ns_per_ms - 1, std.time.ns_per_ms));
+        const remaining_ms = deadline.remainingMs(io) orelse return error.Timeout;
         const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(@max(1, remaining_ms)) } };
         multi_reader.fill(64, timeout) catch |err| switch (err) {
             error.EndOfStream => break,
@@ -155,7 +155,7 @@ pub fn runWithOutputLimitCancellable(
         .stderr_truncated = stderr_truncated or stderr.truncated,
         .stdout_limit = stdout_limit,
         .stderr_limit = stderr_limit,
-        .duration_ms = elapsedMs(io, started_ns),
+        .duration_ms = deadline.elapsedMs(io),
     };
 }
 
@@ -163,12 +163,46 @@ fn isCancelled(token: ?cancellation.Token) bool {
     return if (token) |value| value.isCancelled() else false;
 }
 
-/// Converts elapsed nanoseconds to saturated milliseconds.
-fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
-    const finished_ns = std.Io.Clock.now(.real, io).nanoseconds;
-    const duration_ns = finished_ns - started_ns;
-    if (duration_ns <= 0) return 0;
-    return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
+/// Returns a stable empty mutable slice for consumed process output.
+fn emptyMutableBytes() []u8 {
+    return @constCast((&[_]u8{})[0..]);
+}
+
+/// Monotonic deadline helper for subprocess timeout calculations.
+const CommandDeadline = struct {
+    started_ns: i128,
+    deadline_ns: i128,
+
+    fn start(io: std.Io, timeout_ms: i64) CommandDeadline {
+        const started_ns = monotonicNs(io);
+        const clamped_timeout_ms: i128 = @max(0, @as(i128, timeout_ms));
+        const timeout_ns = clamped_timeout_ms *| @as(i128, std.time.ns_per_ms);
+        return .{
+            .started_ns = started_ns,
+            .deadline_ns = started_ns +| timeout_ns,
+        };
+    }
+
+    fn remainingMs(self: CommandDeadline, io: std.Io) ?i64 {
+        return self.remainingMsAt(monotonicNs(io));
+    }
+
+    fn remainingMsAt(self: CommandDeadline, now_ns: i128) ?i64 {
+        const clamped_now = @max(now_ns, self.started_ns);
+        if (clamped_now >= self.deadline_ns) return null;
+        const remaining_ns = self.deadline_ns - clamped_now;
+        return @intCast(@divTrunc(remaining_ns + std.time.ns_per_ms - 1, std.time.ns_per_ms));
+    }
+
+    fn elapsedMs(self: CommandDeadline, io: std.Io) i64 {
+        const clamped_now = @max(monotonicNs(io), self.started_ns);
+        const elapsed_ns = clamped_now - self.started_ns;
+        return @intCast(@divTrunc(elapsed_ns, std.time.ns_per_ms));
+    }
+};
+
+fn monotonicNs(io: std.Io) i128 {
+    return @intCast(std.Io.Clock.now(.awake, io).nanoseconds);
 }
 
 /// Converts the command argument list into argv for child process spawn.
@@ -363,6 +397,38 @@ pub fn termText(term: std.process.Child.Term) []const u8 {
         .stopped => "stopped",
         .unknown => "unknown",
     };
+}
+
+test "run result deinit clears consumed output slices" {
+    var result = RunResult{
+        .term = .{ .exited = 0 },
+        .stdout = try std.testing.allocator.dupe(u8, "stdout"),
+        .stderr = try std.testing.allocator.dupe(u8, "stderr"),
+        .stdout_truncated = true,
+        .stderr_truncated = true,
+        .duration_ms = 42,
+    };
+
+    result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), result.stdout.len);
+    try std.testing.expectEqual(@as(usize, 0), result.stderr.len);
+    try std.testing.expect(!result.stdout_truncated);
+    try std.testing.expect(!result.stderr_truncated);
+    try std.testing.expectEqual(@as(i64, 0), result.duration_ms);
+
+    result.deinit(std.testing.allocator);
+}
+
+test "command deadline uses monotonic clamped remaining time" {
+    const ns_per_ms: i128 = std.time.ns_per_ms;
+    const deadline = CommandDeadline{
+        .started_ns = 10 * ns_per_ms,
+        .deadline_ns = 13 * ns_per_ms,
+    };
+
+    try std.testing.expectEqual(@as(i64, 3), deadline.remainingMsAt(9 * ns_per_ms).?);
+    try std.testing.expectEqual(@as(i64, 1), deadline.remainingMsAt(12 * ns_per_ms + 1).?);
+    try std.testing.expect(deadline.remainingMsAt(13 * ns_per_ms) == null);
 }
 
 test "argv shebang detection preserves oom from path and file reads" {
