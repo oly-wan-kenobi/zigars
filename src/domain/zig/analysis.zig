@@ -1,3 +1,7 @@
+//! Parser-backed Zig source summaries and heuristic fallback scanners.
+//!
+//! Public result structures own their retained slices; callers must release
+//! them with the matching `deinit` method.
 const std = @import("std");
 
 /// Parse completeness state for a source summary.
