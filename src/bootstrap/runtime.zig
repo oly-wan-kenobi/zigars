@@ -42,7 +42,10 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
     defer if (cfg_owned) cfg.deinit(allocator);
 
     const workspace_started = startup.begin();
-    var ws = try workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir);
+    var ws = workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir) catch |err| {
+        logger.warn("main", "workspace resolution failed for `{s}`: {}", .{ cfg.workspace, err });
+        return err;
+    };
     startup.end("workspace_resolution", workspace_started);
     defer ws.deinit();
 
