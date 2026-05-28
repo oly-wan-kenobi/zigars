@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars comptime diagnose"
+  short_description: "Localize and explain runtime-tainted operands behind a Zig comptime error."
+  default_prompt: "Use $zigars-comptime-diagnose to identify which operand is runtime in this comptime diagnostic and propose a compiler-verifiable fix."
