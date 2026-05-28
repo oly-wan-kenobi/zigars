@@ -19,6 +19,11 @@ Public feature claims use this vocabulary:
 
 - Command-backed: zigars invokes an explicit `zig` argv and returns captured
   command metadata.
+- Compiler-backed layout probe: zigars writes a generated standalone probe under
+  `.zigars-cache`, invokes direct `zig build-obj -fno-emit-bin` commands for
+  target measurements, and reports the argv, target, Zig version, cache path,
+  output limits, and whether project imports, build.zig, or target binaries were
+  executed.
 - LSP-backed: ZLS provided the result for that call; unsupported capabilities
   and missing sessions are structured results.
 - Parser-backed: zigars parsed Zig source with `std.zig.Ast`; this is syntactic,
@@ -315,8 +320,9 @@ MCP task support is advertised for clients that use `tasks/list`, `tasks/get`,
 retained zigars job records as the tools above, so task ids are job ids.
 
 `zigars_resource_query` reads registered runtime resources and dynamic file
-resources. The server also exposes `zigars://jobs`, `zigars://run/events`, and
-`zigars://workspace/roots`, plus the dynamic templates
+resources. The server exposes `zigars://trust/manifest` for the connection-time
+trust manifest, plus `zigars://jobs`, `zigars://run/events`, and
+`zigars://workspace/roots`, and the dynamic templates
 `zigars://file/{path}/symbols`, `zigars://file/{path}/diagnostics`, and
 `zigars://file/{path}/imports`. Dynamic file resources remain workspace-bound.
 Symbols and imports use parser-backed Zig source analysis; diagnostics are
