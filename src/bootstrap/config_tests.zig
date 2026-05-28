@@ -29,12 +29,18 @@ test "parse explicit options" {
         "5",
         "--zls-timeout-ms",
         "7",
+        "--audit-log",
+        ".zigars-cache/audit.jsonl",
+        "--audit-log-mode",
+        "redacted",
     });
     try std.testing.expectEqualStrings("/tmp/project", cfg.workspace);
     try std.testing.expectEqual(Transport.http, cfg.transport);
     try std.testing.expectEqual(@as(u16, 9090), cfg.port);
     try std.testing.expectEqual(@as(i64, 5), cfg.timeout_ms);
     try std.testing.expectEqual(@as(i64, 7), cfg.zls_timeout_ms);
+    try std.testing.expectEqualStrings(".zigars-cache/audit.jsonl", cfg.audit_log_path.?);
+    try std.testing.expectEqual(.redacted, cfg.audit_log_mode);
 }
 test "parse result can be deinitialized with general allocator" {
     var cfg = try parse(std.testing.allocator, std.testing.io, &.{
@@ -50,6 +56,40 @@ test "parse result can be deinitialized with general allocator" {
 
     try std.testing.expectEqualStrings("/opt/zig", cfg.zig_path);
     try std.testing.expectEqualStrings(".zigars-cache", cfg.cache_dir.?);
+    try std.testing.expect(cfg.audit_log_path == null);
+    try std.testing.expectEqual(.metadata, cfg.audit_log_mode);
+}
+
+test "parse audit log defaults to metadata and rejects invalid audit inputs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const cfg = try parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--audit-log",
+        ".zigars-cache/audit.jsonl",
+    });
+    try std.testing.expectEqualStrings(".zigars-cache/audit.jsonl", cfg.audit_log_path.?);
+    try std.testing.expectEqual(.metadata, cfg.audit_log_mode);
+
+    try std.testing.expectError(ParseError.InvalidAuditLogMode, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--audit-log-mode",
+        "raw",
+    }));
+    try std.testing.expectError(ParseError.InvalidAuditLogPath, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--audit-log",
+        "",
+    }));
+    const full = try parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--audit-log",
+        ".zigars-cache/full-audit.jsonl",
+        "--audit-log-mode",
+        "full",
+    });
+    try std.testing.expectEqual(.full, full.audit_log_mode);
 }
 test "parse rejects removed strict workspace flag" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
