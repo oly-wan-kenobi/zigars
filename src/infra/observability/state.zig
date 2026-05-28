@@ -96,6 +96,7 @@ pub const ToolCallCorrelation = struct {
     parent_span_id: ?[16]u8 = null,
     tool_call_id: [22]u8 = [_]u8{0} ** 22,
     tool_call_id_len: usize = 0,
+    tool_call_id_truncated: bool = false,
 
     /// Returns the retained request-id value, or null when the request had no id.
     pub fn requestIdValue(self: *const ToolCallCorrelation) ?[]const u8 {
@@ -205,6 +206,13 @@ pub const State = struct {
     total_tool_errors: u64 = 0,
     total_mcp_requests: u64 = 0,
     total_mcp_request_errors: u64 = 0,
+    dropped_tool_stat_observations: u64 = 0,
+    dropped_method_stat_observations: u64 = 0,
+    truncated_method_names: u64 = 0,
+    truncated_tool_call_request_ids: u64 = 0,
+    truncated_tool_call_ids: u64 = 0,
+    truncated_cancellation_request_ids: u64 = 0,
+    truncated_cancellation_methods: u64 = 0,
     total_command_duration_ms: u64 = 0,
     command_latency: LatencySamples = .{},
     audit_enabled: bool = false,
@@ -230,7 +238,10 @@ pub const State = struct {
 
         if (correlation) |fields| self.recordToolCallCorrelation(name, is_error, fields);
 
-        const slot = self.toolSlot(name) orelse return;
+        const slot = self.toolSlot(name) orelse {
+            self.dropped_tool_stat_observations +|= 1;
+            return;
+        };
         slot.calls += 1;
         if (is_error) slot.errors += 1;
         slot.total_latency_ms +|= latency_ms;
@@ -245,7 +256,10 @@ pub const State = struct {
         self.total_mcp_requests += 1;
         if (is_error) self.total_mcp_request_errors += 1;
 
-        const slot = self.methodSlot(method) orelse return;
+        const slot = self.methodSlot(method) orelse {
+            self.dropped_method_stat_observations +|= 1;
+            return;
+        };
         slot.calls += 1;
         if (is_error) slot.errors += 1;
         slot.total_latency_ms +|= latency_ms;
@@ -270,6 +284,7 @@ pub const State = struct {
             @memcpy(event.mcp_request_id_value[0..copy_len], value[0..copy_len]);
             event.mcp_request_id_value_len = copy_len;
             event.mcp_request_id_truncated = value.len > copy_len;
+            if (event.mcp_request_id_truncated) self.truncated_tool_call_request_ids +|= 1;
         }
         copyFixed(event.trace_id[0..], fields.trace_id, '0');
         copyFixed(event.span_id[0..], fields.span_id, '0');
@@ -281,6 +296,10 @@ pub const State = struct {
         const tool_call_copy_len = @min(fields.tool_call_id.len, event.tool_call_id.len);
         @memcpy(event.tool_call_id[0..tool_call_copy_len], fields.tool_call_id[0..tool_call_copy_len]);
         event.tool_call_id_len = tool_call_copy_len;
+        if (fields.tool_call_id.len > tool_call_copy_len) {
+            event.tool_call_id_truncated = true;
+            self.truncated_tool_call_ids +|= 1;
+        }
 
         self.tool_call_correlations[index] = event;
         self.tool_call_correlation_count = sequence;
@@ -368,12 +387,14 @@ pub const State = struct {
             @memcpy(event.mcp_request_id_value[0..copy_len], value[0..copy_len]);
             event.mcp_request_id_value_len = copy_len;
             event.mcp_request_id_truncated = value.len > copy_len;
+            if (event.mcp_request_id_truncated) self.truncated_cancellation_request_ids +|= 1;
         }
         if (method) |value| {
             const copy_len = @min(value.len, event.method.len);
             @memcpy(event.method[0..copy_len], value[0..copy_len]);
             event.method_len = copy_len;
             event.method_truncated = value.len > copy_len;
+            if (event.method_truncated) self.truncated_cancellation_methods +|= 1;
         }
         self.cancellation_events[index] = event;
         self.cancellation_event_count = sequence;
@@ -414,7 +435,7 @@ pub const State = struct {
     /// Returns the mutable metrics slot for an MCP method name.
     fn methodSlot(self: *State, name: []const u8) ?*MethodStats {
         for (self.method_stats[0..self.method_stat_count]) |*stat| {
-            if (std.mem.eql(u8, stat.nameSlice(), name)) return stat;
+            if (methodNameMatches(stat, name)) return stat;
         }
         if (self.method_stat_count < self.method_stats.len) {
             const index = self.method_stat_count;
@@ -424,6 +445,7 @@ pub const State = struct {
             @memcpy(self.method_stats[index].name[0..copy_len], name[0..copy_len]);
             self.method_stats[index].name_len = copy_len;
             self.method_stats[index].name_truncated = name.len > copy_len;
+            if (self.method_stats[index].name_truncated) self.truncated_method_names +|= 1;
             return &self.method_stats[index];
         }
         return null;
@@ -460,6 +482,7 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: B
     try obj.put(allocator, "mcp_method_latency", try methodLatencyValue(allocator, state));
     try obj.put(allocator, "tool_latency", try toolLatencyValue(allocator, state));
     try obj.put(allocator, "command_durations", try commandDurationsValue(allocator, state));
+    try obj.put(allocator, "retention", try retentionValue(allocator, state));
     try obj.put(allocator, "limitations", try limitationsValue(allocator));
     return .{ .object = obj };
 }
@@ -546,10 +569,14 @@ pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.
     try obj.put(allocator, "kind", .{ .string = "zigars_tool_latency" });
     try obj.put(allocator, "observed_tool_calls", .{ .integer = @intCast(state.total_tool_calls) });
     try obj.put(allocator, "observed_tool_errors", .{ .integer = @intCast(state.total_tool_errors) });
+    try obj.put(allocator, "tool_stat_capacity", .{ .integer = max_tool_stats });
     try obj.put(allocator, "tool_count", .{ .integer = @intCast(state.tool_stat_count) });
+    try obj.put(allocator, "dropped_tool_stat_observations", .{ .integer = @intCast(state.dropped_tool_stat_observations) });
     try obj.put(allocator, "tools", try toolStatsValue(allocator, state));
     try obj.put(allocator, "correlation_history_capacity", .{ .integer = max_tool_call_correlations });
     try obj.put(allocator, "recorded_correlations", .{ .integer = @intCast(state.tool_call_correlation_count) });
+    try obj.put(allocator, "truncated_request_id_values", .{ .integer = @intCast(state.truncated_tool_call_request_ids) });
+    try obj.put(allocator, "truncated_tool_call_ids", .{ .integer = @intCast(state.truncated_tool_call_ids) });
     try obj.put(allocator, "recent_tool_call_correlations", try toolCallCorrelationsValue(allocator, state));
     try obj.put(allocator, "units", .{ .string = "milliseconds" });
     try obj.put(allocator, "resolution", .{ .string = "Latency is measured around MCP schema validation and handler dispatch inside the current zigars process." });
@@ -563,7 +590,10 @@ pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !st
     try obj.put(allocator, "kind", .{ .string = "zigars_mcp_method_latency" });
     try obj.put(allocator, "observed_mcp_requests", .{ .integer = @intCast(state.total_mcp_requests) });
     try obj.put(allocator, "observed_mcp_request_errors", .{ .integer = @intCast(state.total_mcp_request_errors) });
+    try obj.put(allocator, "method_stat_capacity", .{ .integer = max_method_stats });
     try obj.put(allocator, "method_count", .{ .integer = @intCast(state.method_stat_count) });
+    try obj.put(allocator, "dropped_method_stat_observations", .{ .integer = @intCast(state.dropped_method_stat_observations) });
+    try obj.put(allocator, "truncated_method_names", .{ .integer = @intCast(state.truncated_method_names) });
     try obj.put(allocator, "methods", try methodStatsValue(allocator, state));
     try obj.put(allocator, "units", .{ .string = "milliseconds" });
     try obj.put(allocator, "resolution", .{ .string = "Request method latency is measured inside the current zigars process and resets on restart." });
@@ -623,8 +653,30 @@ pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std
     try obj.put(allocator, "uncancellable", .{ .integer = @intCast(state.cancellation_uncancellable) });
     try obj.put(allocator, "history_capacity", .{ .integer = max_cancellation_events });
     try obj.put(allocator, "recorded_events", .{ .integer = @intCast(state.cancellation_event_count) });
+    try obj.put(allocator, "truncated_request_id_values", .{ .integer = @intCast(state.truncated_cancellation_request_ids) });
+    try obj.put(allocator, "truncated_methods", .{ .integer = @intCast(state.truncated_cancellation_methods) });
     try obj.put(allocator, "events", try cancellationEventsValue(allocator, state));
     try obj.put(allocator, "resolution", .{ .string = "Cancellation is cooperative and process-local; sequential dispatch can observe notifications while the server is reading MCP messages or waiting on helper protocol responses." });
+    return .{ .object = obj };
+}
+
+/// Renders capacity, overflow, and truncation counters for bounded observability state.
+fn retentionValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_observability_retention" });
+    try obj.put(allocator, "tool_stat_capacity", .{ .integer = max_tool_stats });
+    try obj.put(allocator, "tool_stat_count", .{ .integer = @intCast(state.tool_stat_count) });
+    try obj.put(allocator, "dropped_tool_stat_observations", .{ .integer = @intCast(state.dropped_tool_stat_observations) });
+    try obj.put(allocator, "method_stat_capacity", .{ .integer = max_method_stats });
+    try obj.put(allocator, "method_stat_count", .{ .integer = @intCast(state.method_stat_count) });
+    try obj.put(allocator, "dropped_method_stat_observations", .{ .integer = @intCast(state.dropped_method_stat_observations) });
+    try obj.put(allocator, "truncated_method_names", .{ .integer = @intCast(state.truncated_method_names) });
+    try obj.put(allocator, "request_id_value_capacity", .{ .integer = max_request_id_value_len });
+    try obj.put(allocator, "truncated_tool_call_request_ids", .{ .integer = @intCast(state.truncated_tool_call_request_ids) });
+    try obj.put(allocator, "truncated_tool_call_ids", .{ .integer = @intCast(state.truncated_tool_call_ids) });
+    try obj.put(allocator, "truncated_cancellation_request_ids", .{ .integer = @intCast(state.truncated_cancellation_request_ids) });
+    try obj.put(allocator, "truncated_cancellation_methods", .{ .integer = @intCast(state.truncated_cancellation_methods) });
     return .{ .object = obj };
 }
 
@@ -759,6 +811,7 @@ fn toolCallCorrelationsValue(allocator: std.mem.Allocator, state: *const State) 
         try obj.put(allocator, "span_id", .{ .string = event.spanId() });
         try obj.put(allocator, "parent_span_id", if (event.parentSpanId()) |span| .{ .string = span } else .null);
         try obj.put(allocator, "tool_call_id", .{ .string = event.toolCallId() });
+        try obj.put(allocator, "tool_call_id_truncated", .{ .bool = event.tool_call_id_truncated });
         try array.append(.{ .object = obj });
     }
     return .{ .array = array };
@@ -949,6 +1002,13 @@ fn optionalStringEqual(a: ?[]const u8, b: ?[]const u8) bool {
     if (a == null and b == null) return true;
     if (a == null or b == null) return false;
     return std.mem.eql(u8, a.?, b.?);
+}
+
+/// Matches method stats by full name, or by retained prefix when the name was truncated.
+fn methodNameMatches(stat: *const MethodStats, name: []const u8) bool {
+    const retained = stat.nameSlice();
+    if (!stat.name_truncated) return std.mem.eql(u8, retained, name);
+    return name.len >= retained.len and std.mem.eql(u8, retained, name[0..retained.len]);
 }
 
 /// Calculates a per-thousand rate with zero-denominator protection.
@@ -1143,4 +1203,73 @@ test "observability state retains bounded tool-call correlation and resets with 
     const restarted = State{};
     try std.testing.expectEqual(@as(u64, 0), restarted.tool_call_correlation_count);
     try std.testing.expectEqual(@as(u64, 0), restarted.total_tool_calls);
+}
+
+test "observability state reports capacity drops and truncated identifiers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var state = State{};
+    var tool_names: [max_tool_stats + 1][16]u8 = undefined;
+    for (tool_names[0..], 0..) |*buffer, index| {
+        const name = try std.fmt.bufPrint(buffer, "tool_{d}", .{index});
+        state.recordToolCall(name, 1, false);
+    }
+    try std.testing.expectEqual(@as(usize, max_tool_stats), state.tool_stat_count);
+    try std.testing.expectEqual(@as(u64, 1), state.dropped_tool_stat_observations);
+
+    const long_request_id: [max_request_id_value_len + 8]u8 = [_]u8{'r'} ** (max_request_id_value_len + 8);
+    state.recordToolCallWithCorrelation("tool_0", 2, false, .{
+        .mcp_request_id_type = "string",
+        .mcp_request_id_value = long_request_id[0..],
+        .trace_id = "0123456789abcdef0123456789abcdef",
+        .span_id = "0123456789abcdef",
+        .tool_call_id = "tool-call-id-longer-than-twenty-two",
+    });
+    try std.testing.expectEqual(@as(u64, 1), state.truncated_tool_call_request_ids);
+    try std.testing.expectEqual(@as(u64, 1), state.truncated_tool_call_ids);
+
+    const long_method: [80]u8 = [_]u8{'m'} ** 80;
+    state.recordMcpRequest(long_method[0..], 1, false);
+    state.recordMcpRequest(long_method[0..], 2, true);
+    try std.testing.expectEqual(@as(usize, 1), state.method_stat_count);
+    try std.testing.expectEqual(@as(u64, 1), state.truncated_method_names);
+    try std.testing.expectEqual(@as(u64, 2), state.method_stats[0].calls);
+    try std.testing.expectEqual(@as(u64, 1), state.method_stats[0].errors);
+
+    var method_names: [max_method_stats][20]u8 = undefined;
+    for (method_names[0..], 0..) |*buffer, index| {
+        const name = try std.fmt.bufPrint(buffer, "method/{d}", .{index});
+        state.recordMcpRequest(name, 1, false);
+    }
+    try std.testing.expectEqual(@as(usize, max_method_stats), state.method_stat_count);
+    try std.testing.expectEqual(@as(u64, 1), state.dropped_method_stat_observations);
+
+    const cancellation_method: [80]u8 = [_]u8{'c'} ** 80;
+    state.recordCancellation("unknown", "string", long_request_id[0..], cancellation_method[0..]);
+    try std.testing.expectEqual(@as(u64, 1), state.truncated_cancellation_request_ids);
+    try std.testing.expectEqual(@as(u64, 1), state.truncated_cancellation_methods);
+
+    const tool_latency = try toolLatencyValue(allocator, &state);
+    try std.testing.expectEqual(@as(i64, 1), tool_latency.object.get("dropped_tool_stat_observations").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), tool_latency.object.get("truncated_request_id_values").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), tool_latency.object.get("truncated_tool_call_ids").?.integer);
+    const correlation = tool_latency.object.get("recent_tool_call_correlations").?.array.items[0].object;
+    try std.testing.expect(correlation.get("mcp_request_id").?.object.get("truncated").?.bool);
+    try std.testing.expect(correlation.get("tool_call_id_truncated").?.bool);
+
+    const method_latency = try methodLatencyValue(allocator, &state);
+    try std.testing.expectEqual(@as(i64, 1), method_latency.object.get("dropped_method_stat_observations").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), method_latency.object.get("truncated_method_names").?.integer);
+
+    const cancellation = try cancellationValue(allocator, &state);
+    try std.testing.expectEqual(@as(i64, 1), cancellation.object.get("truncated_request_id_values").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), cancellation.object.get("truncated_methods").?.integer);
+
+    const retention = try retentionValue(allocator, &state);
+    try std.testing.expectEqual(@as(i64, 1), retention.object.get("dropped_tool_stat_observations").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), retention.object.get("dropped_method_stat_observations").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), retention.object.get("truncated_tool_call_request_ids").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), retention.object.get("truncated_cancellation_methods").?.integer);
 }
