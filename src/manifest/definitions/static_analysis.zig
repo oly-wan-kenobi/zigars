@@ -272,15 +272,19 @@ pub const zig_comptime_diagnose = tool(.{
     .plan = .{ .pure_analysis = "Parser-only comptime diagnosis; does not execute compiler probes or claim semantic evaluation." },
     .static_analysis_tier = .advisory_orientation,
 });
+const layout_measure_hint = fieldHint("measure", .{ .description = "Run optional standalone compiler-backed layout probes.", .default_bool = false });
+const layout_targets_hint = fieldHint("targets", .{ .description = "Space- or comma-separated Zig target triples for compiler-backed measurements." });
+const layout_comptime_hint = fieldHint("allow_project_comptime", .{ .description = "Opt in to compiling copied declarations that contain explicit comptime logic; project imports and build.zig remain disallowed.", .default_bool = false });
 /// Catalog layout-sensitive Zig declarations for memory and ABI review.
 pub const zig_memory_layout = tool(.{
-    .description = "Catalog layout-sensitive Zig declarations such as structs, packed/extern containers, unions, enums, and opaque boundaries.",
-    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .description = "Catalog layout-sensitive Zig declarations and, with measure=true, run standalone compiler-backed target measurements without importing project modules or executing build.zig.",
+    .input_schema = schemaWithHints(&.{ .{ "path", "string", false }, .{ "limit", "integer", false }, .{ "measure", "boolean", false }, .{ "targets", "string", false }, .{ "allow_project_comptime", "boolean", false }, .{ "timeout_ms", "integer", false } }, &.{ layout_measure_hint, layout_targets_hint, layout_comptime_hint }),
     .output_schema = outputSchema(.analysis_result),
     .read_only = true,
     .group = .static_analysis,
-    .plan = .{ .pure_analysis = "Comment/string-masked source catalog; records layout candidates without running target-specific compiler probes." },
-    .static_analysis_tier = .advisory_orientation,
+    .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
+    .plan = .{ .dynamic_command = "Default mode is parser-only; measure=true writes standalone probes under .zigars-cache and runs direct zig build-obj -fno-emit-bin commands with argv evidence." },
+    .static_analysis_tier = .compiler_backed,
 });
 /// Catalog unsafe and boundary-sensitive Zig operations for review.
 pub const zig_unsafe_operations_audit = tool(.{
@@ -294,13 +298,14 @@ pub const zig_unsafe_operations_audit = tool(.{
 });
 /// Plan bounded ABI layout probes for layout-sensitive declarations.
 pub const zig_abi_layout_diff = tool(.{
-    .description = "Plan bounded ABI layout probes for layout-sensitive declarations, including @sizeOf, @alignOf, and @offsetOf measurement shapes without executing the compiler.",
-    .input_schema = schema(&.{ .{ "path", "string", false }, .{ "limit", "integer", false } }),
+    .description = "Plan ABI layout probes and, with measure=true, compare standalone compiler-backed @sizeOf/@alignOf/@offsetOf/@bitOffsetOf evidence across target triples.",
+    .input_schema = schemaWithHints(&.{ .{ "path", "string", false }, .{ "limit", "integer", false }, .{ "measure", "boolean", false }, .{ "targets", "string", false }, .{ "allow_project_comptime", "boolean", false }, .{ "timeout_ms", "integer", false } }, &.{ layout_measure_hint, layout_targets_hint, layout_comptime_hint }),
     .output_schema = outputSchema(.analysis_result),
     .read_only = true,
     .group = .static_analysis,
-    .plan = .{ .pure_analysis = "Probe-plan-only ABI analysis; no compiler command is executed and cache layout is reported for a later command-backed implementation." },
-    .static_analysis_tier = .advisory_orientation,
+    .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_backend = true },
+    .plan = .{ .dynamic_command = "Default mode is parser-only; measure=true writes standalone probes under .zigars-cache and runs direct zig build-obj -fno-emit-bin commands for each declaration/target." },
+    .static_analysis_tier = .compiler_backed,
 });
 /// Inspect git changes and recommend the smallest useful Zig validation commands.
 pub const zig_changed_files_plan = tool(.{
