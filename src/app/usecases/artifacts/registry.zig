@@ -377,10 +377,12 @@ fn entryFromValue(allocator: std.mem.Allocator, value: std.json.Value) ArtifactE
     const obj = value.object;
     const provenance = objectValue(obj.get("provenance")) orelse return error.InvalidArtifactRegistryEntry;
     const toolchain = objectValue(provenance.get("toolchain")) orelse return error.InvalidArtifactRegistryEntry;
+    const bytes = integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry;
+    if (bytes < 0) return error.InvalidArtifactRegistryEntry;
     return .{
         .path = try dupStringField(allocator, obj, "path"),
         .abs_path = try dupStringField(allocator, obj, "abs_path"),
-        .bytes = @intCast(integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry),
+        .bytes = @intCast(bytes),
         .sha256 = try dupStringField(allocator, obj, "sha256"),
         .indexed_at_unix_ms = integerField(obj, "indexed_at_unix_ms") orelse 0,
         .parser_confidence = try dupOptionalStringFieldDefault(allocator, obj, "parser_confidence", "medium"),
@@ -615,6 +617,13 @@ test "artifact registry JSON helpers and write error mapping cover rollback edge
 
     try std.testing.expectEqual(error.OutOfMemory, mapWriteError(error.OutOfMemory));
     try std.testing.expectEqual(error.Unavailable, mapWriteError(error.WriteFailed));
+}
+
+test "artifact registry rejects negative persisted byte counts" {
+    try std.testing.expectError(error.InvalidArtifactRegistryEntry, parseRegistryJsonl(
+        std.testing.allocator,
+        "{\"path\":\"zig-out/report.json\",\"abs_path\":\"/repo/zig-out/report.json\",\"bytes\":-1,\"sha256\":\"abcd\",\"provenance\":{\"producer\":\"test\",\"artifact_kind\":\"json\",\"toolchain\":{\"zig_path\":\"zig\"}}}\n",
+    ));
 }
 
 /// Implements test artifact context workflow logic using caller-owned inputs.

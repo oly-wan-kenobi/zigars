@@ -843,9 +843,10 @@ fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Ident
         else => return error.InvalidArguments,
     };
     const exists = boolField(obj, "exists") orelse false;
+    const bytes = integerField(obj, "bytes") orelse 0;
     return .{
         .exists = exists,
-        .bytes = @intCast(integerField(obj, "bytes") orelse 0),
+        .bytes = @intCast(if (bytes < 0) 0 else bytes),
         .sha256 = if (stringField(obj, "sha256")) |hash| try allocator.dupe(u8, hash) else null,
     };
 }
@@ -982,4 +983,18 @@ fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
         .integer => |value| value,
         else => null,
     };
+}
+
+test "patch history identity clamps negative persisted byte counts" {
+    const allocator = std.testing.allocator;
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(allocator);
+    try obj.put(allocator, "exists", .{ .bool = true });
+    try obj.put(allocator, "bytes", .{ .integer = -1 });
+
+    var identity = try identityFromValue(allocator, .{ .object = obj });
+    defer identity.deinit(allocator);
+
+    try std.testing.expect(identity.exists);
+    try std.testing.expectEqual(@as(usize, 0), identity.bytes);
 }
