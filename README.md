@@ -93,6 +93,23 @@ gate, the process trust posture, and the connection-time trust manifest linked
 from MCP `initialize`. The guided walkthrough is
 [docs/getting-started.md](docs/getting-started.md).
 
+## Thin CLI Mode
+
+MCP remains the primary agent surface, but the `zigars` binary also has an
+explicit thin JSON CLI for CI, release bots, and shell-only checks:
+
+```sh
+zigars cli workspace-info --workspace /absolute/path/to/zig/project --json
+zigars cli doctor --workspace /absolute/path/to/zig/project --probe-backends=false --json
+```
+
+Successful CLI command output is stable machine JSON on stdout using the same
+structured object shapes as the corresponding MCP tool results. Diagnostics go
+to stderr. The CLI is a reporting surface over existing use cases; generated
+artifacts and CLI JSON are the non-MCP integration path, while a public Zig
+library API remains deferred. See [docs/cli.md](docs/cli.md) for exit codes and
+the follow-up command list.
+
 ## How To Trust A Result
 
 Public feature claims use evidence labels instead of broad precision claims:
