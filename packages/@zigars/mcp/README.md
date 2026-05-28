@@ -3,7 +3,7 @@
 `@zigars/mcp` is the npm entry point for `zigars`, a deterministic local MCP
 server for Zig development.
 
-It is a small TypeScript shim: it downloads the matching `zigars` binary from
+It is a small TypeScript launcher: it downloads the matching `zigars` binary from
 GitHub Releases, verifies the archive checksum, caches the binary locally, and
 runs it as a stdio MCP server. The package name is `@zigars/mcp`; the project,
 server, and downloaded binary are still named `zigars`.
@@ -171,10 +171,10 @@ Common server arguments:
 | `--workspace <path>` | Workspace root zigars is allowed to serve. Prefer an absolute path. |
 | `--zig-path <path>` | Zig executable path when the client does not inherit your shell `PATH`. |
 | `--zls-path <path>` | ZLS executable path for language-server-backed tools. |
-| `--transport stdio\|http` | Transport. The npm shim defaults to `stdio`. |
+| `--transport stdio\|http` | Transport. `@zigars/mcp` defaults to `stdio`. |
 | `--host 127.0.0.1` | Host for local HTTP mode. |
 | `--port 8080` | Port for local HTTP mode. |
-| `--cache-dir <path>` | zigars server cache directory. Different from the npm shim cache. |
+| `--cache-dir <path>` | zigars server cache directory. Different from the package launcher cache. |
 | `--timeout-ms <n>` | Command timeout. |
 | `--zls-timeout-ms <n>` | ZLS request timeout. |
 
@@ -288,7 +288,7 @@ zigars-windows-x64.mcpb
 ```
 
 MCPB bundles include the zigars server binary directly and ask for the workspace
-directory during installation. The npm shim remains the broad MCP-client path,
+directory during installation. `@zigars/mcp` remains the broad MCP-client path,
 the fallback when you need Linux arm64, and the easiest way to pass optional
 backend paths such as `--zls-path`.
 
@@ -479,7 +479,7 @@ workspace is wrong.
 Run from the package directory:
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 bun install
 bun run test:bun
 npm run test:node
@@ -495,7 +495,7 @@ The dry-run tarball should include:
 | `package.json` | Package metadata, bin entry, Bun/Node scripts, public access config. |
 | `bin/` | `zigars-mcp` executable wrapper. |
 | `dist/src/` | Compiled JavaScript used by the published bin. |
-| `src/` | TypeScript shim implementation. |
+| `src/` | TypeScript launcher implementation. |
 
 </details>
 
@@ -503,7 +503,7 @@ The dry-run tarball should include:
 <summary>Test the packed package before publish</summary>
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 npm pack
 npm exec --yes --package ./zigars-mcp-0.2.0.tgz -- \
   zigars-mcp --help

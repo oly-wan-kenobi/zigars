@@ -1,8 +1,14 @@
 {
-  "name": "zigars-mcpb-release",
+  "name": "@zigars/mcpb",
   "private": true,
   "version": "0.2.0",
   "description": "Release tooling for zigars MCPB desktop bundles",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oly-wan-kenobi/zigars.git",
+    "directory": "packages/@zigars/mcpb"
+  },
   "type": "module",
   "scripts": {
     "compile": "tsc -p tsconfig.json",

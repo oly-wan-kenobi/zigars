@@ -52,7 +52,7 @@ function formatUsage() {
         "Example:",
         "  zigars-mcp --workspace /absolute/path/to/zig/project",
         "",
-        "This npm shim writes diagnostics to stderr only. stdout is reserved for MCP JSON-RPC.",
+        "@zigars/mcp writes diagnostics to stderr only. stdout is reserved for MCP JSON-RPC.",
     ].join("\n");
 }
 function signalExitCode(signal) {

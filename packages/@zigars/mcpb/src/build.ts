@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const packageRoot = path.resolve(path.dirname(__filename), "..");
-const repoRoot = path.resolve(packageRoot, "..", "..");
+const repoRoot = path.resolve(packageRoot, "..", "..", "..");
 const mcpbPackage = process.env.MCPB_CLI_PACKAGE ?? "@anthropic-ai/mcpb@2.1.2";
 const processVersions = process.versions as NodeJS.ProcessVersions & { bun?: string };
 const mcpbRunner = process.env.MCPB_CLI_RUNNER ?? (processVersions.bun ? "bun" : "npm");
@@ -148,13 +148,13 @@ async function readZonVersion(): Promise<string> {
 
 async function resolveVersion(): Promise<string> {
   const zonVersion = await readZonVersion();
-  const npmPackage = await readJson<PackageJson>(path.join(repoRoot, "packages", "zigars-mcp-npm", "package.json"));
+  const npmPackage = await readJson<PackageJson>(path.join(repoRoot, "packages", "@zigars", "mcp", "package.json"));
   const mcpbPackageJson = await readJson<PackageJson>(path.join(packageRoot, "package.json"));
   if (npmPackage.version !== zonVersion) {
     throw new Error(`Version mismatch: build.zig.zon=${zonVersion}, @zigars/mcp=${npmPackage.version ?? "unknown"}`);
   }
   if (mcpbPackageJson.version !== zonVersion) {
-    throw new Error(`Version mismatch: build.zig.zon=${zonVersion}, zigars-mcpb-release=${mcpbPackageJson.version ?? "unknown"}`);
+    throw new Error(`Version mismatch: build.zig.zon=${zonVersion}, @zigars/mcpb=${mcpbPackageJson.version ?? "unknown"}`);
   }
   return zonVersion;
 }

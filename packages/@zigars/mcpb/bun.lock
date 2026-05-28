@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "zigars-mcpb-release",
+      "name": "@zigars/mcpb",
       "devDependencies": {
         "@types/node": "^24.10.1",
         "typescript": "^5.9.3",

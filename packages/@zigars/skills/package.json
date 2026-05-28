@@ -6,7 +6,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/oly-wan-kenobi/zigars.git",
-    "directory": "packages/zigars-skills-npm"
+    "directory": "packages/@zigars/skills"
   },
   "homepage": "https://github.com/oly-wan-kenobi/zigars#readme",
   "bugs": {
@@ -31,7 +31,6 @@
     "bin",
     "gemini-extension.json",
     "skills",
-    "test",
     "README.md",
     "LICENSE",
     "package.json"

@@ -23,8 +23,8 @@ architecture policy:
 | `zigars-linux-x64.mcpb` | `zigars-x86_64-linux-musl` | `linux` |
 | `zigars-windows-x64.mcpb` | `zigars-x86_64-windows-gnu` | `win32` |
 
-Linux arm64 and Windows arm64 users should use the npm shim or the direct
-release archive until MCPB consumers have an arch-selectable package flow or
+Linux arm64 and Windows arm64 users should use `@zigars/mcp` or the direct
+release archive until MCPB consumers have an architecture-selectable package flow or
 those bundles are separately smoke-tested.
 
 ## Commands
@@ -33,29 +33,29 @@ From the repository root:
 
 ```sh
 zig build dist
-npm --prefix packages/zigars-mcpb ci
-npm --prefix packages/zigars-mcpb run pack
+npm --prefix packages/@zigars/mcpb ci
+npm --prefix packages/@zigars/mcpb run pack
 ```
 
 The npm/Node path compiles `src/build.ts` to `dist/build.js` before running.
 Bun can run the same TypeScript source directly:
 
 ```sh
-bun --cwd packages/zigars-mcpb install
-bun run --cwd packages/zigars-mcpb pack:bun
+bun --cwd packages/@zigars/mcpb install
+bun run --cwd packages/@zigars/mcpb pack:bun
 ```
 
 Useful variants:
 
 ```sh
-npm --prefix packages/zigars-mcpb run stage
-npm --prefix packages/zigars-mcpb run validate
-npm --prefix packages/zigars-mcpb run build:darwin
-npm --prefix packages/zigars-mcpb run build:linux
-npm --prefix packages/zigars-mcpb run build:windows
-npm --prefix packages/zigars-mcpb run sign:dev
-bun run --cwd packages/zigars-mcpb validate:bun
-bun run --cwd packages/zigars-mcpb build:darwin:bun
+npm --prefix packages/@zigars/mcpb run stage
+npm --prefix packages/@zigars/mcpb run validate
+npm --prefix packages/@zigars/mcpb run build:darwin
+npm --prefix packages/@zigars/mcpb run build:linux
+npm --prefix packages/@zigars/mcpb run build:windows
+npm --prefix packages/@zigars/mcpb run sign:dev
+bun run --cwd packages/@zigars/mcpb validate:bun
+bun run --cwd packages/@zigars/mcpb build:darwin:bun
 ```
 
 The scripts validate manifests with `mcpb validate`, pack with `mcpb pack`,

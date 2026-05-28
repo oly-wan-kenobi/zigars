@@ -1,14 +1,14 @@
 {
   "name": "@zigars/mcp",
   "version": "0.2.0",
-  "description": "npm shim for the zigars local stdio MCP server",
+  "description": "Package launcher for the zigars local stdio MCP server",
   "license": "MIT",
   "mcpName": "io.github.oly-wan-kenobi/zigars",
   "main": "dist/src/cli.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/oly-wan-kenobi/zigars.git",
-    "directory": "packages/zigars-mcp-npm"
+    "directory": "packages/@zigars/mcp"
   },
   "homepage": "https://github.com/oly-wan-kenobi/zigars#readme",
   "bugs": {
