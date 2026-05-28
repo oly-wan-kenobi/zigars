@@ -77,6 +77,22 @@ test "manifest-generated catalog groups match typed registry groups" {
         try std.testing.expectEqualStrings(expected, actual);
     }
 }
+test "catalog common-intent preferred tools resolve to registered ids" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const parsed_catalog = try parsed(arena.allocator());
+    const intents = parsed_catalog.value.object.get("common_intents").?.array;
+    for (intents.items) |intent_value| {
+        const prefer = intent_value.object.get("prefer").?.string;
+        var parts = std.mem.splitScalar(u8, prefer, ',');
+        while (parts.next()) |raw_name| {
+            const name = std.mem.trim(u8, raw_name, " \t\r\n");
+            try std.testing.expect(name.len > 0);
+            try std.testing.expect(find(name) != null);
+        }
+    }
+}
 test "catalog lookup helpers return null for unknown tools" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
