@@ -1,4 +1,4 @@
 interface:
   display_name: "zigars dependency steward"
-  short_description: "Audit and update Zig dependencies safely."
-  default_prompt: "Use $zigars-dependency-steward to review this build.zig.zon dependency change with fetch, provenance, and validation evidence."
+  short_description: "Add, update, and audit Zig dependencies for provenance, license, and security evidence."
+  default_prompt: "Use $zigars-dependency-steward to plan this dependency change with provenance, license, and security evidence (hash repair belongs to zigars-zon-hash-sync)."
