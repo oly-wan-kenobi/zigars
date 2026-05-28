@@ -106,7 +106,7 @@ test "mcp tools/call releases repeated successful structured results" {
 
     try std.testing.expectEqual(messages.len, transport.responses.items.len);
     for (transport.responses.items) |response| {
-        try expectToolCallResponse(response, false, "structured_success");
+        try expectToolCallResponse(response, false, "structured_success", "owned_success");
     }
 }
 
@@ -139,7 +139,7 @@ test "mcp tools/call releases repeated structured tool errors" {
 
     try std.testing.expectEqual(messages.len, transport.responses.items.len);
     for (transport.responses.items) |response| {
-        try expectToolCallResponse(response, true, "structured_error");
+        try expectToolCallResponse(response, true, "structured_error", "owned_error");
     }
 }
 
@@ -243,12 +243,13 @@ fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _
 }
 
 /// Records an expected tool call response call, cloning request data and failing on allocation errors.
-fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8) !void {
+fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8, expected_tool: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
 
     const root = parsed.value.object;
     const result = root.get("result").?.object;
+    const response_id = root.get("id").?.integer;
     try std.testing.expectEqual(is_error, result.get("isError").?.bool);
 
     const content = result.get("content").?.array;
@@ -257,10 +258,24 @@ fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: [
 
     const structured = result.get("structuredContent").?.object;
     try std.testing.expectEqualStrings(expected_kind, structured.get("kind").?.string);
+    try std.testing.expect(structured.get("dev.zigars/correlation") == null);
     try expectJsonNumber(structured.get("ratio").?, 1.25);
     const details = structured.get("details").?.array;
     try std.testing.expectEqualStrings("alpha", details.items[0].string);
     try expectJsonNumber(details.items[1], 99.5);
+
+    const meta = result.get("_meta").?.object;
+    const correlation = meta.get("dev.zigars/correlation").?.object;
+    try std.testing.expectEqual(@as(i64, 1), correlation.get("schema_version").?.integer);
+    try std.testing.expectEqualStrings("tools/call", correlation.get("mcp_method").?.string);
+    try std.testing.expectEqualStrings(expected_tool, correlation.get("tool_name").?.string);
+    try std.testing.expectEqualStrings("integer", correlation.get("mcp_request_id").?.object.get("type").?.string);
+    var id_buffer: [32]u8 = undefined;
+    const expected_id = try std.fmt.bufPrint(&id_buffer, "{d}", .{response_id});
+    try std.testing.expectEqualStrings(expected_id, correlation.get("mcp_request_id").?.object.get("value").?.string);
+    try std.testing.expectEqual(@as(usize, 32), correlation.get("trace_id").?.string.len);
+    try std.testing.expectEqual(@as(usize, 16), correlation.get("span_id").?.string.len);
+    try std.testing.expect(std.mem.startsWith(u8, correlation.get("tool_call_id").?.string, "zigars-tc-"));
 }
 
 /// Records an expected resource read response call, cloning request data and failing on allocation errors.
