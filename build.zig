@@ -68,11 +68,17 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }));
-    fuzz_mod.addImport("command", b.createModule(.{
+    const fuzz_command_mod = b.createModule(.{
         .root_source_file = b.path("src/infra/process/command.zig"),
         .target = target,
         .optimize = optimize,
+    });
+    fuzz_command_mod.addImport("cancellation", b.createModule(.{
+        .root_source_file = b.path("src/domain/cancellation.zig"),
+        .target = target,
+        .optimize = optimize,
     }));
+    fuzz_mod.addImport("command", fuzz_command_mod);
 
     const release_optimize: std.builtin.OptimizeMode = .ReleaseSafe;
     const release_mcp_dep = b.dependency("mcp", .{
@@ -272,6 +278,11 @@ fn addZigarsModule(
         .optimize = optimize,
     });
     zigars_mod.addImport("mcp", mcp_mod);
+    zigars_mod.addImport("cancellation", b.createModule(.{
+        .root_source_file = b.path("src/domain/cancellation.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
     zigars_mod.addOptions("zigars_build_options", build_options);
     return zigars_mod;
 }
