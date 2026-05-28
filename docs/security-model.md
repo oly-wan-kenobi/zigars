@@ -17,6 +17,10 @@ The primary boundary is the configured workspace:
 - Generated, cache, artifact, and vendored paths are classified separately and
   should be changed through source inputs or regeneration commands.
 - stdout is reserved for MCP JSON-RPC; logs go to stderr.
+- Audit JSONL is off by default. When enabled with `--audit-log`, metadata mode
+  records payload hashes and sizes, redacted mode masks secret-like JSON fields,
+  and full mode records raw MCP payloads only with explicit
+  `--audit-log-mode full` plus a stderr privacy warning.
 - Tool arguments are validated against typed metadata before handlers run.
 - Free-form `args` are split into argv vectors and are not passed through a
   shell.
