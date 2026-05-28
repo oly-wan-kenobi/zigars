@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars zon hash sync"
+  short_description: "Repair a build.zig.zon hash mismatch in one preview-first edit."
+  default_prompt: "Use $zigars-zon-hash-sync to fetch the correct hash for this dependency and apply the build.zig.zon update preview-first."
