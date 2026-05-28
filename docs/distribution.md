@@ -106,7 +106,7 @@ binary.
 ## Skills Package Contract
 
 The skills package is a dogfooding and client-guidance channel, not an MCP
-server channel. It lives under `packages/zigars-skills-npm/`, publishes as
+server channel. It lives under `packages/@zigars/skills/`, publishes as
 `@zigars/skills`, and ships static skill folders under `skills/`.
 
 Minimum behavior:
@@ -168,18 +168,18 @@ Each MCPB manifest should:
 - be validated with the MCPB CLI and a real Claude Desktop install smoke before
   publication.
 
-MCPB build tooling lives in `packages/zigars-mcpb/`. It consumes the
+MCPB build tooling lives in `packages/@zigars/mcpb/`. It consumes the
 `zig build dist` release archives, stages `manifest.json`, `server/zigars` or
 `server/zigars.exe`, README/LICENSE files, and `.mcpbignore`, then runs:
 
 ```sh
-npm --prefix packages/zigars-mcpb ci
-npm --prefix packages/zigars-mcpb run pack
+npm --prefix packages/@zigars/mcpb ci
+npm --prefix packages/@zigars/mcpb run pack
 ```
 
 The package is TypeScript and supports both npm/Node and Bun. The npm path
 compiles `src/build.ts` to `dist/build.js`; the Bun path runs
-`bun run --cwd packages/zigars-mcpb pack:bun` directly against the TypeScript
+`bun run --cwd packages/@zigars/mcpb pack:bun` directly against the TypeScript
 source. The scripts use the current npm-published MCPB CLI package
 `@anthropic-ai/mcpb`; `mcpb` and `@modelcontextprotocol/mcpb` are not published
 npm package names at the time of this plan. The pack step validates each
@@ -276,7 +276,7 @@ Remaining before or after the first npm publish:
 1. Confirm the `v0.2.0` GitHub release has all platform archives and
    `zigars-checksums.txt`.
 2. Run `bun run test:bun`, `npm run test:node`, and `npm pack --dry-run` in
-   `packages/zigars-mcp-npm`.
+   `packages/@zigars/mcp`.
 3. Publish `@zigars/mcp@0.2.0` with public access.
 4. Add an MCP Registry `server.json` that points to the package.
 5. Add client-config generation templates for Cursor, VS Code, Cline,
@@ -286,7 +286,7 @@ Remaining before or after the first npm publish:
    VS Code, Gemini CLI, and one generic MCP JSON client.
 8. Produce `zigars-darwin-universal.mcpb`, `zigars-linux-x64.mcpb`, and
    `zigars-windows-x64.mcpb` from verified release binaries with
-   `npm --prefix packages/zigars-mcpb ci && npm --prefix packages/zigars-mcpb run pack`.
+   `npm --prefix packages/@zigars/mcpb ci && npm --prefix packages/@zigars/mcpb run pack`.
 9. Inspect `dist/assets/zigars-mcpb-checksums.txt` and copy the final hash of
    each published `.mcpb` into MCP Registry `fileSha256` metadata.
 10. Smoke-test MCPB installation in Claude Desktop on each package platform that

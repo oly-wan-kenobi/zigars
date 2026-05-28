@@ -22,7 +22,7 @@ The project is primarily Zig:
 - Tool behavior belongs in focused modules under `src/app/usecases/`.
 - Pure Zig parsing and domain policy belongs under `src/domain/`.
 - The release and local helper dispatcher is `tools/zigars_tools.zig`.
-- The npm shim is under `packages/zigars-mcp-npm/`.
+- The npm shim is under `packages/@zigars/mcp/`.
 
 ## Required Toolchain
 
@@ -102,7 +102,7 @@ representative `tools/call`.
 For npm shim changes:
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 npm run build
 npm run test:node
 bun run test:bun

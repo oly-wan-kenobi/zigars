@@ -27,11 +27,11 @@ behavior.
 5. Validate with zigars validation tools and the focused local commands required
    by the touched area.
 6. Capture repeated agent friction as changes to
-   `packages/zigars-skills-npm/skills/`.
+   `packages/@zigars/skills/skills/`.
 
 ## Skills Package
 
-Zigars-specific skills live in `packages/zigars-skills-npm/` and are published as
+Zigars-specific skills live in `packages/@zigars/skills/` and are published as
 `@zigars/skills`. This package is intentionally separate from `@zigars/mcp`.
 
 The skills package may:
@@ -62,8 +62,8 @@ one-level reference files under the skill.
 For skill-package changes, run:
 
 ```sh
-npm --prefix packages/zigars-skills-npm test
-npm --prefix packages/zigars-skills-npm run pack:dry
+npm --prefix packages/@zigars/skills test
+npm --prefix packages/@zigars/skills run pack:dry
 ```
 
 Also run the active client skill validator when it is available. For Codex

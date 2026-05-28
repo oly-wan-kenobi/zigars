@@ -57,7 +57,7 @@ Phase 0 reconciles the proposal set with these current repository facts:
 - `src/adapters/mcp/result.zig` and `src/adapters/mcp/server.zig` already emit
   `structuredContent` for tool results. The remaining contract gap is declared
   `outputSchema` projection and coverage.
-- `packages/zigars-skills-npm/` now contains `package.json`, a CLI entrypoint,
+- `packages/@zigars/skills/` now contains `package.json`, a CLI entrypoint,
   README, license, tests, and a populated `zigars-development` skill. It is no
   longer the placeholder package described in the original analysis.
 - `zig_architecture_layer` is not part of the public roadmap surface. Keep
@@ -71,7 +71,7 @@ Phase 0 reconciles the proposal set with these current repository facts:
 | Resource templates and subscriptions are unknown or absent. | Resource templates and subscribe/unsubscribe routes exist; artifact-specific resource links remain future work. |
 | Tool outputs need `structuredContent` consistency from scratch. | `structuredContent` is already emitted broadly; declared `outputSchema` remains missing. |
 | `tools/list` pagination needed verification before planning. | Cursor pagination infrastructure and handlers exist; later work should preserve and extend coverage. |
-| `packages/zigars-skills-npm` is only a placeholder with no package metadata. | The package now has metadata, CLI, README, tests, and a concrete skill; publish readiness still requires package-local validation and any client-side skill validator. |
+| `packages/@zigars/skills` is only a placeholder with no package metadata. | The package now has metadata, CLI, README, tests, and a concrete skill; publish readiness still requires package-local validation and any client-side skill validator. |
 | Public architecture-layer tooling is a roadmap item. | It is removed from the public surface; public ergonomics remain architecture-neutral. |
 
 ## 4. `CLAUDE_ANALYSIS.md` Finding Classification
@@ -81,7 +81,7 @@ Phase 0 reconciles the proposal set with these current repository facts:
 | v0.2.0 GitHub release has Zig tarballs but no MCPB bundles. | Still valid | `gh release view v0.2.0 --repo oly-wan-kenobi/zigars` on 2026-05-27 showed the five Zig tarballs and `zigars-checksums.txt`; no `.mcpb` assets were listed. |
 | `@zigars/mcp@0.2.0` has not been published to npm. | Still valid | `npm view @zigars/mcp@0.2.0 version --json` returned `E404` on 2026-05-27. |
 | Coverage gate reports `ok: false` because of missing files despite 100% measured line coverage. | Deferred | This remains outside Phase 0's documentation-only scope unless a later quality-gate phase changes coverage policy. |
-| `packages/zigars-skills-npm` is a placeholder with no `package.json`. | Stale | The package now has `package.json`, `bin/zigars-skills.js`, tests, README, license, and `skills/zigars-development/SKILL.md`. |
+| `packages/@zigars/skills` is a placeholder with no `package.json`. | Stale | The package now has `package.json`, `bin/zigars-skills.js`, tests, README, license, and `skills/zigars-development/SKILL.md`. |
 | npm shim lacks end-to-end install/launch smoke tests. | Deferred | Relevant to package hardening and release readiness, but not changed by Phase 0. |
 | README install-path routing, maturity/trust links, Zig version matrix, error catalog, ADRs, performance thresholds, backend conformance build targets, checksum signing, MCPB pin docs, and README/package README duplication. | Deferred | Valid roadmap or polish items, but outside this baseline reconciliation unless their text misstates current state. |
 | Original correction that all v0.2.0 assets returning 404 was stale. | Still valid correction | GitHub release assets were reachable through release metadata; the missing release asset class is MCPB. |
@@ -102,7 +102,7 @@ zig build artifact-hygiene
 If the skills package is edited in a later phase, run:
 
 ```sh
-cd packages/zigars-skills-npm
+cd packages/@zigars/skills
 npm test
 npm run pack:dry
 ```

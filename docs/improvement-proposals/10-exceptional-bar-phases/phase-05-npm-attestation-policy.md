@@ -37,10 +37,10 @@ Acceptance criteria:
 
 Likely files:
 
-- `packages/zigars-mcp-npm/src/args.ts`
-- `packages/zigars-mcp-npm/src/install.ts`
-- `packages/zigars-mcp-npm/test/args.test.ts`
-- `packages/zigars-mcp-npm/test/install.test.ts`
+- `packages/@zigars/mcp/src/args.ts`
+- `packages/@zigars/mcp/src/install.ts`
+- `packages/@zigars/mcp/test/args.test.ts`
+- `packages/@zigars/mcp/test/install.test.ts`
 
 ### P5-T2 Add Attestation Verification Runner
 
@@ -141,7 +141,7 @@ Acceptance criteria:
 ## Validation
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 npm run build
 npm run test:node
 bun run test:bun

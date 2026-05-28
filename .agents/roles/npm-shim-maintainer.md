@@ -1,6 +1,6 @@
 # npm Shim Maintainer
 
-Use this role for changes under `packages/zigars-mcp-npm/` or anything affecting
+Use this role for changes under `packages/@zigars/mcp/` or anything affecting
 published npm launcher behavior.
 
 ## Responsibilities
@@ -26,7 +26,7 @@ published npm launcher behavior.
 ## Validation
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 npm run build
 npm run test:node
 bun run test:bun

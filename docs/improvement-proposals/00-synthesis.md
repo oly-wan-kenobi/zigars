@@ -372,7 +372,7 @@ opt-in profile with labeled project policy, not zigars' own folder/layer rules.
 ### 5.6 Skills package fate (intersects with CLAUDE_ANALYSIS P0 #3)
 
 Several new tools below would benefit from skill packaging. The
-`packages/zigars-skills-npm/` package now has package metadata, a CLI, tests,
+`packages/@zigars/skills/` package now has package metadata, a CLI, tests,
 README, and a concrete `zigars-development` skill, so P0 #3 is no longer a
 "populate or remove the placeholder" decision. The remaining question is
 release readiness and client validation. The Wave 3 ergonomics tools

@@ -487,8 +487,8 @@ MCPB:
 ### Source Basis
 
 - Local:
-  [packages/zigars-mcp-npm/src/install.ts](../../packages/zigars-mcp-npm/src/install.ts),
-  [packages/zigars-mcp-npm/src/checksums.ts](../../packages/zigars-mcp-npm/src/checksums.ts),
+  [packages/@zigars/mcp/src/install.ts](../../packages/@zigars/mcp/src/install.ts),
+  [packages/@zigars/mcp/src/checksums.ts](../../packages/@zigars/mcp/src/checksums.ts),
   [.github/workflows/release.yml](../../.github/workflows/release.yml),
   [docs/trust.md](../trust.md),
   [docs/release.md](../release.md).
@@ -698,8 +698,8 @@ metadata, third-party command/workspace policy, and at least one real adopter.
 - Local:
   [tools/zigars_tools.zig](../../tools/zigars_tools.zig),
   [build.zig](../../build.zig),
-  [packages/zigars-mcp-npm/package.json](../../packages/zigars-mcp-npm/package.json),
-  [packages/zigars-skills-npm/README.md](../../packages/zigars-skills-npm/README.md),
+  [packages/@zigars/mcp/package.json](../../packages/@zigars/mcp/package.json),
+  [packages/@zigars/skills/README.md](../../packages/@zigars/skills/README.md),
   [docs/distribution.md](../distribution.md),
   [docs/tools.md](../tools.md).
 - External:

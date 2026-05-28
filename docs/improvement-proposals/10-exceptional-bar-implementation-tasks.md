@@ -82,7 +82,7 @@ zig build docs-check json-check
 Npm shim phases should also run:
 
 ```sh
-cd packages/zigars-mcp-npm
+cd packages/@zigars/mcp
 npm run build
 npm run test:node
 bun run test:bun

@@ -142,7 +142,7 @@ pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zi
 
 For npm-specific caching, troubleshooting, local publish testing, and Claude
 Desktop/MCPB notes, see
-[packages/zigars-mcp-npm/README.md](packages/zigars-mcp-npm/README.md).
+[packages/@zigars/mcp/README.md](packages/@zigars/mcp/README.md).
 
 ## Optional zigars Skills
 
@@ -372,13 +372,13 @@ contents, and the native archive's `zigars --version` behavior.
 MCPB release bundles are built after `zig build dist`:
 
 ```sh
-npm --prefix packages/zigars-mcpb ci
-npm --prefix packages/zigars-mcpb run pack
+npm --prefix packages/@zigars/mcpb ci
+npm --prefix packages/@zigars/mcpb run pack
 ```
 
 That TypeScript package supports npm/Node and Bun. The npm path compiles
 `src/build.ts` before running; Bun can run the same source with
-`bun run --cwd packages/zigars-mcpb pack:bun`. The command stages the bundled
+`bun run --cwd packages/@zigars/mcpb pack:bun`. The command stages the bundled
 server, validates each `manifest.json` with the MCPB CLI, packs `.mcpb` files,
 runs `mcpb info`, and writes
 `dist/assets/zigars-mcpb-checksums.txt` for registry `fileSha256` values.

@@ -5,10 +5,10 @@ Before publishing, run the same gate CI uses and the release-asset gate:
 ```sh
 zig build release-check
 zig build dist release-asset-smoke
-npm --prefix packages/zigars-mcp-npm test
-(cd packages/zigars-mcp-npm && npm pack --dry-run)
-npm --prefix packages/zigars-mcpb ci
-npm --prefix packages/zigars-mcpb run pack
+npm --prefix packages/@zigars/mcp test
+(cd packages/@zigars/mcp && npm pack --dry-run)
+npm --prefix packages/@zigars/mcpb ci
+npm --prefix packages/@zigars/mcpb run pack
 ```
 
 For a public release candidate, also run the manual `Release Readiness`
@@ -157,13 +157,13 @@ writes archives plus `zigars-checksums.txt` under `dist/assets`.
 each archive, extracts the native archive for the current runner OS/architecture,
 and runs `zigars --version` from it.
 
-`npm --prefix packages/zigars-mcpb run pack` consumes those release archives and
+`npm --prefix packages/@zigars/mcpb run pack` consumes those release archives and
 writes MCPB desktop bundles plus `zigars-mcpb-checksums.txt` under `dist/assets`.
 The package is TypeScript; the npm/Node path compiles `src/build.ts` to
-`dist/build.js`, while `bun run --cwd packages/zigars-mcpb pack:bun` runs the
+`dist/build.js`, while `bun run --cwd packages/@zigars/mcpb pack:bun` runs the
 same TypeScript source directly. The scripts use `@anthropic-ai/mcpb` to run
 `mcpb validate`, `mcpb pack`, and `mcpb info`. Use
-`npm --prefix packages/zigars-mcpb run sign:dev` for a self-signed development
+`npm --prefix packages/@zigars/mcpb run sign:dev` for a self-signed development
 bundle only; production `fileSha256` values must be computed from the exact
 final `.mcpb` files that will be published.
 
@@ -176,16 +176,16 @@ final `.mcpb` files that will be published.
 5. Run npm package checks:
 
 ```sh
-npm --prefix packages/zigars-mcp-npm test
-npm --prefix packages/zigars-mcp-npm run test:node
-(cd packages/zigars-mcp-npm && npm pack --dry-run)
+npm --prefix packages/@zigars/mcp test
+npm --prefix packages/@zigars/mcp run test:node
+(cd packages/@zigars/mcp && npm pack --dry-run)
 ```
 
 6. Build and inspect MCPB artifacts:
 
 ```sh
-npm --prefix packages/zigars-mcpb ci
-npm --prefix packages/zigars-mcpb run pack
+npm --prefix packages/@zigars/mcpb ci
+npm --prefix packages/@zigars/mcpb run pack
 unzip -l dist/assets/zigars-darwin-universal.mcpb
 unzip -l dist/assets/zigars-linux-x64.mcpb
 unzip -l dist/assets/zigars-windows-x64.mcpb

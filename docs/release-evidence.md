@@ -31,12 +31,12 @@ Validation run for this phase:
 - `zig build smoke stdio-fixtures --summary all` -> passed.
 - `zig build -Doptimize=ReleaseSafe --summary all` -> passed.
 - `git diff --check` -> passed.
-- `npm run build` in `packages/zigars-mcp-npm` -> passed.
-- `npm run test:node` in `packages/zigars-mcp-npm` -> passed, 24/24 tests.
-- `bun run test:bun` in `packages/zigars-mcp-npm` -> passed, 24/24 tests.
-- `npm pack --dry-run` in `packages/zigars-mcp-npm` -> passed.
-- `npm test` in `packages/zigars-skills-npm` -> passed, 4/4 tests.
-- `npm run pack:dry` in `packages/zigars-skills-npm` -> passed.
+- `npm run build` in `packages/@zigars/mcp` -> passed.
+- `npm run test:node` in `packages/@zigars/mcp` -> passed, 24/24 tests.
+- `bun run test:bun` in `packages/@zigars/mcp` -> passed, 24/24 tests.
+- `npm pack --dry-run` in `packages/@zigars/mcp` -> passed.
+- `npm test` in `packages/@zigars/skills` -> passed, 4/4 tests.
+- `npm run pack:dry` in `packages/@zigars/skills` -> passed.
 - `zig build artifact-hygiene --summary all` -> failed on unrelated existing
   line-budget checks in MCP adapter, manifest, and fixture files not changed by
   this phase.

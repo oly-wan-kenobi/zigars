@@ -46,5 +46,5 @@ that covers the risk.
   Domain Engineer.
 - Preparing public artifacts or versioned releases: use QA Release, Docs
   Maintainer, and Release Readiness.
-- Editing `packages/zigars-mcp-npm/`: use npm Shim Maintainer and npm Shim
+- Editing `packages/@zigars/mcp/`: use npm Shim Maintainer and npm Shim
   Change.

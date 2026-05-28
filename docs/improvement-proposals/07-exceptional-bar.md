@@ -204,7 +204,7 @@ in-flight commands and ZLS requests. Parallel-safe by tool category
 
 ### 5.1 First-download trust is TOFU
 
-[packages/zigars-mcp-npm/src/install.ts:193-196](../../packages/zigars-mcp-npm/src/install.ts)
+[packages/@zigars/mcp/src/install.ts:193-196](../../packages/@zigars/mcp/src/install.ts)
 fetches the archive and the checksum file from the same GitHub release
 URL. If the TLS chain is compromised between the user and GitHub at the
 moment of first install, both files can be MITM'd as a coordinated pair.
@@ -343,8 +343,8 @@ will read first.
 
 ### 7.1 Closed product, not ecosystem
 
-[packages/](../../packages) ships `zigars-mcp-npm`, `zigars-mcpb`, and
-`zigars-skills-npm`. No `@zigars/parser`, no `@zigars/lsp`, no
+[packages/](../../packages) ships `@zigars/mcp`, `@zigars/mcpb`, and
+`@zigars/skills`. No `@zigars/parser`, no `@zigars/lsp`, no
 `@zigars/cli`, no `@zigars/compose`. A VS Code extension wanting zigars'
 import-graph would have to embed an MCP client; a CI script wanting
 public-API diff would have to launch a stdio server.
