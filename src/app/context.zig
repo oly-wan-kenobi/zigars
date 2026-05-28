@@ -39,6 +39,13 @@ pub const Timeouts = struct {
     zls_ms: i64 = 30_000,
 };
 
+/// Borrowed audit-log configuration projected from bootstrap.
+pub const AuditLogView = struct {
+    enabled: bool = false,
+    mode: []const u8 = "disabled",
+    path: ?[]const u8 = null,
+};
+
 /// Borrowed platform facts projected by bootstrap for app-level branching.
 pub const PlatformView = struct {
     os: []const u8 = "unknown",
@@ -321,6 +328,7 @@ pub const TrustContext = struct {
     workspace: WorkspaceView,
     tool_paths: ToolPaths,
     timeouts: Timeouts,
+    audit_log: AuditLogView = .{},
     command_runner: ports.CommandRunner,
     workspace_store: ports.WorkspaceStore,
     tool_manifest: ports.ToolManifestCatalog,
@@ -407,9 +415,11 @@ pub const RuntimeUxContext = struct {
     workspace: WorkspaceView,
     tool_paths: ToolPaths,
     timeouts: Timeouts,
+    audit_log: AuditLogView = .{},
     zls_state: ZlsState,
     counters: CounterHandles = .{},
     caches: CacheState = .{},
+    probe_cache: TrustProbeCache = .{},
     command_runner: ports.CommandRunner,
     workspace_store: ports.WorkspaceStore,
     workspace_scanner: ports.WorkspaceScanner,
@@ -479,6 +489,7 @@ pub const Context = struct {
     workspace: WorkspaceView = .{},
     tool_paths: ToolPaths = .{},
     timeouts: Timeouts = .{},
+    audit_log: AuditLogView = .{},
     platform: PlatformView = .{},
     zls_state: ZlsState = .{},
     ports: PortSet = .{},
@@ -644,6 +655,7 @@ pub const Context = struct {
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
             .timeouts = self.timeouts,
+            .audit_log = self.audit_log,
             .command_runner = try self.requireCommandRunner(),
             .workspace_store = try self.requireWorkspace(),
             .tool_manifest = try self.requireToolManifest(),
@@ -745,9 +757,11 @@ pub const Context = struct {
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
             .timeouts = self.timeouts,
+            .audit_log = self.audit_log,
             .zls_state = self.zls_state,
             .counters = self.counters,
             .caches = self.caches,
+            .probe_cache = self.trust_probe_cache,
             .command_runner = try self.requireCommandRunner(),
             .workspace_store = try self.requireWorkspace(),
             .workspace_scanner = try self.requireWorkspaceScanner(),
