@@ -201,11 +201,14 @@ pub fn usage() []const u8 {
     \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]
     \\        [--audit-log <workspace-path>] [--audit-log-mode metadata|redacted|full]
+    \\  zigars cli workspace-info --workspace <path> --json
+    \\  zigars cli doctor --workspace <path> --probe-backends=false --json
     \\
     \\stdio is the safest default for Codex. http is local-only and must bind loopback.
     \\Audit logging is off by default. Full audit mode records raw MCP payloads and should
     \\only be used intentionally for local forensic debugging.
-    \\stdout is reserved for MCP JSON-RPC. Logs, help, and version go to stderr.
+    \\stdout is reserved for MCP JSON-RPC in server mode. In explicit cli mode,
+    \\successful command output is JSON on stdout and diagnostics go to stderr.
     \\
     ;
 }
