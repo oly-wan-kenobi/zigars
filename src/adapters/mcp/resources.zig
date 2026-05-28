@@ -510,6 +510,7 @@ fn artifactMimeType(path: []const u8) []const u8 {
 
 /// Contract-token anchor for resource URI coverage tests.
 const _resource_contract_tokens = [_][]const u8{
+    "zigars://trust/manifest",
     "zigars://workspace",
     "zigars://zls/status",
     "zigars://tools/capabilities",
