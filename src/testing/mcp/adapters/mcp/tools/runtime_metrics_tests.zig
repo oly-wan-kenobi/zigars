@@ -12,6 +12,20 @@ test "metrics v2 adapter exposes observed latency and backend history" {
             .{ .name = "zig_version", .calls = 1, .total_latency_ms = 3, .max_latency_ms = 3, .last_latency_ms = 3 },
             .{ .name = "zig_check", .calls = 1, .errors = 1, .total_latency_ms = 9, .max_latency_ms = 9, .last_latency_ms = 9, .last_error = true },
         };
+        var tool_call_correlations = [_]ports.ObservabilityToolCallCorrelation{
+            .{
+                .sequence = 1,
+                .tool_name = "zig_check",
+                .is_error = true,
+                .mcp_request_id_type = "integer",
+                .mcp_request_id_value = requestIdValue("42"),
+                .mcp_request_id_value_len = 2,
+                .trace_id = fixedTrace("00000000000000000000000000000042"),
+                .span_id = fixedSpan("0000000000000042"),
+                .tool_call_id = fixedToolCallId("zigars-tc-000000000042"),
+                .tool_call_id_len = 22,
+            },
+        };
         var backend_events = [_]ports.ObservabilityBackendEvent{
             .{ .sequence = 1, .backend = "zls", .ok = true, .status = "ok", .resolution = "backend command completed" },
         };
@@ -22,13 +36,39 @@ test "metrics v2 adapter exposes observed latency and backend history" {
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{
                 .tool_stats = tool_stats[0..],
+                .tool_call_correlations = tool_call_correlations[0..],
                 .backend_events = backend_events[0..],
                 .zls_events = zls_events[0..],
                 .total_tool_calls = 2,
                 .total_tool_errors = 1,
+                .tool_call_correlation_count = 1,
                 .backend_event_count = 1,
                 .zls_event_count = 1,
             };
+        }
+
+        fn requestIdValue(comptime value: []const u8) [ports.max_observability_request_id_value_len]u8 {
+            var out = [_]u8{0} ** ports.max_observability_request_id_value_len;
+            @memcpy(out[0..value.len], value);
+            return out;
+        }
+
+        fn fixedTrace(comptime value: []const u8) [32]u8 {
+            var out: [32]u8 = undefined;
+            @memcpy(out[0..], value);
+            return out;
+        }
+
+        fn fixedSpan(comptime value: []const u8) [16]u8 {
+            var out: [16]u8 = undefined;
+            @memcpy(out[0..], value);
+            return out;
+        }
+
+        fn fixedToolCallId(comptime value: []const u8) [22]u8 {
+            var out: [22]u8 = undefined;
+            @memcpy(out[0..], value);
+            return out;
         }
 
         fn workspaceRead(_: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
@@ -76,6 +116,9 @@ test "metrics v2 adapter exposes observed latency and backend history" {
     try std.testing.expectEqual(@as(i64, 2), root.get("observed_tool_calls").?.integer);
     try std.testing.expectEqual(@as(i64, 1), root.get("observed_tool_errors").?.integer);
     try std.testing.expect(root.get("tool_latency").?.object.get("tools").?.array.items.len >= 2);
+    try std.testing.expectEqual(@as(i64, 1), root.get("tool_latency").?.object.get("recorded_correlations").?.integer);
+    const correlation = root.get("tool_latency").?.object.get("recent_tool_call_correlations").?.array.items[0].object;
+    try std.testing.expectEqualStrings("zigars-tc-000000000042", correlation.get("tool_call_id").?.string);
     try std.testing.expectEqual(@as(i64, 1), root.get("backend_health_history").?.object.get("recorded_events").?.integer);
     try std.testing.expectEqual(@as(i64, 1), root.get("zls_timeline").?.object.get("recorded_events").?.integer);
 
