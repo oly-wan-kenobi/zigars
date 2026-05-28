@@ -1,6 +1,7 @@
 //! Runs subprocesses with bounded output capture and timeout enforcement.
 const std = @import("std");
 const builtin = @import("builtin");
+const cancellation = @import("cancellation");
 
 /// Default byte cap for stdout and stderr capture.
 pub const output_limit: usize = 1024 * 1024;
@@ -60,6 +61,21 @@ pub fn runWithOutputLimit(
     stdout_limit: usize,
     stderr_limit: usize,
 ) !RunResult {
+    return runWithOutputLimitCancellable(allocator, io, cwd, argv, timeout_ms, stdout_limit, stderr_limit, null);
+}
+
+/// Runs argv with explicit stdout/stderr caps, timeout enforcement, and optional cooperative cancellation.
+pub fn runWithOutputLimitCancellable(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: []const u8,
+    argv: []const []const u8,
+    timeout_ms: i64,
+    stdout_limit: usize,
+    stderr_limit: usize,
+    token: ?cancellation.Token,
+) !RunResult {
+    if (isCancelled(token)) return error.Cancelled;
     // Spawn argv may be rewritten to honor script shebang interpreters on POSIX.
     var spawn_arena = std.heap.ArenaAllocator.init(allocator);
     defer spawn_arena.deinit();
@@ -90,6 +106,12 @@ pub fn runWithOutputLimit(
     const deadline_ns = started_ns + timeout_ns;
 
     while (true) {
+        if (isCancelled(token)) {
+            multi_reader.batch.cancel(io);
+            child.kill(io);
+            child_active = false;
+            return error.Cancelled;
+        }
         const now_ns = std.Io.Clock.now(.real, io).nanoseconds;
         if (now_ns >= deadline_ns) return error.Timeout;
         const remaining_ns = deadline_ns - now_ns;
@@ -135,6 +157,10 @@ pub fn runWithOutputLimit(
         .stderr_limit = stderr_limit,
         .duration_ms = elapsedMs(io, started_ns),
     };
+}
+
+fn isCancelled(token: ?cancellation.Token) bool {
+    return if (token) |value| value.isCancelled() else false;
 }
 
 /// Converts elapsed nanoseconds to saturated milliseconds.
