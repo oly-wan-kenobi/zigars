@@ -36,7 +36,7 @@ pub const Env = struct {
     /// Reads the requested environment value through this port implementation.
     fn get(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
         const self: *Self = @ptrCast(@alignCast(ptr));
-        const result = command.run(allocator, self.io, self.cwd, &.{ self.zig_path, "env" }, self.timeout_ms) catch |err| return mapPortError(err);
+        var result = command.run(allocator, self.io, self.cwd, &.{ self.zig_path, "env" }, self.timeout_ms) catch |err| return mapPortError(err);
         defer result.deinit(allocator);
         const needle = std.fmt.allocPrint(allocator, ".{s} = \"", .{request.key}) catch return error.OutOfMemory;
         defer allocator.free(needle);
