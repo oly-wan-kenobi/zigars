@@ -23,14 +23,13 @@ pub const zig_document_change = tool(.{
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .zls_request = .{ .method = "textDocument/didChange", .requires_document_sync = true, .mutates_document_state = true } },
 });
-/// Close a Zig document in the ZLS session.
+/// Report a Zig document close in stateless gateway mode.
 pub const zig_document_close = tool(.{
-    .description = "Close a Zig document in the ZLS session.",
+    .description = "Report a Zig document close in stateless gateway mode. This is an idempotent no-op; later ZLS requests resync documents as needed.",
     .input_schema = schema(&.{.{ "file", "string", true }}),
-    .read_only = false,
+    .read_only = true,
     .group = .zls,
-    .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .zls_request = .{ .method = "textDocument/didClose", .mutates_document_state = true } },
+    .plan = .{ .pure_analysis = "Returns the stateless document-close acknowledgement without sending a ZLS notification." },
 });
 /// Return tracked ZLS document version/hash/dirty metadata.
 pub const zig_document_status = tool(.{
@@ -49,14 +48,14 @@ pub const zig_diagnostics = tool(.{
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .zls_request = .{ .method = "textDocument/publishDiagnostics with ast-check fallback", .requires_document_sync = true } },
 });
-/// Aggregate diagnostics from ZLS publish/pull diagnostics and `zig ast-check`.
+/// Return diagnostics for one file using the same ZLS/ast-check fallback path as `zig_diagnostics`.
 pub const zig_diagnostics_all = tool(.{
-    .description = "Aggregate diagnostics from ZLS publish/pull diagnostics and `zig ast-check`.",
+    .description = "Return diagnostics for one file using the same ZLS/ast-check fallback path as `zig_diagnostics`.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "wait_ms", "integer", false }, .{ "timeout_ms", "integer", false } }),
     .read_only = true,
     .group = .zls,
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic plus ast-check fallback", .requires_document_sync = true } },
+    .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic with ast-check fallback", .requires_document_sync = true } },
 });
 /// Return cached workspace diagnostics grouped by file and severity.
 pub const zig_diagnostics_workspace = tool(.{
