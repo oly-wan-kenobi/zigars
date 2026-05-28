@@ -12,6 +12,7 @@ pub const Options = struct {
     command_calls: ?*usize = null,
     tool_errors: ?*usize = null,
     observability: ?*observability_mod.State = null,
+    cancellation_token: ?ports.CancellationToken = null,
     count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
@@ -26,6 +27,7 @@ pub const Runner = struct {
     command_calls: ?*usize = null,
     tool_errors: ?*usize = null,
     observability: ?*observability_mod.State = null,
+    cancellation_token: ?ports.CancellationToken = null,
     count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
@@ -41,6 +43,7 @@ pub const Runner = struct {
             .command_calls = options.command_calls,
             .tool_errors = options.tool_errors,
             .observability = options.observability,
+            .cancellation_token = options.cancellation_token,
             .count_command_calls = options.count_command_calls,
             .non_exited_exit_code = options.non_exited_exit_code,
             .record_observability = options.record_observability,
@@ -69,7 +72,7 @@ pub const Runner = struct {
             if (self.command_calls) |counter| counter.* += 1;
         }
         const started_ns = std.Io.Clock.now(.real, self.io).nanoseconds;
-        const result = command.runWithOutputLimit(allocator, self.io, cwd, request.argv, timeout_ms, stdout_limit, stderr_limit) catch |err| {
+        const result = command.runWithOutputLimitCancellable(allocator, self.io, cwd, request.argv, timeout_ms, stdout_limit, stderr_limit, self.cancellation_token) catch |err| {
             self.recordCommand(title, request.argv, elapsedMs(self.io, started_ns), false, @errorName(err));
             if (self.record_observability) {
                 if (self.tool_errors) |counter| counter.* += 1;
@@ -110,6 +113,7 @@ pub fn mapPortError(err: anyerror) ports.PortError {
         error.RequestTimeout => error.RequestTimeout,
         error.EndOfStream => error.EndOfStream,
         error.BrokenPipe => error.BrokenPipe,
+        error.Cancelled => error.Cancelled,
         error.PathOutsideWorkspace => error.PathOutsideWorkspace,
         error.EmptyPath => error.EmptyPath,
         error.StreamTooLong => error.StreamTooLong,
