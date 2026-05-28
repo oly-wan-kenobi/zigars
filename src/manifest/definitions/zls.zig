@@ -55,7 +55,7 @@ pub const zig_diagnostics_all = tool(.{
     .read_only = true,
     .group = .zls,
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .zls_request = .{ .method = "textDocument/diagnostic with ast-check fallback", .requires_document_sync = true } },
+    .plan = .{ .zls_request = .{ .method = "textDocument/publishDiagnostics with ast-check fallback", .requires_document_sync = true } },
 });
 /// Return cached workspace diagnostics grouped by file and severity.
 pub const zig_diagnostics_workspace = tool(.{

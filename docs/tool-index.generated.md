@@ -580,7 +580,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_deps_remove`: `apply_gated_mutation` preview/apply mutation
 - `zig_deps_upgrade`: `apply_gated_mutation` preview/apply mutation
 - `zig_diagnostics`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
-- `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic with ast-check fallback`
+- `zig_diagnostics_all`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
 - `zig_diagnostics_workspace`: `pure_analysis` read-only analysis
 - `zig_doc_example_check`: `pure_analysis` read-only analysis
 - `zig_docs_index_build`: `pure_analysis` read-only analysis
