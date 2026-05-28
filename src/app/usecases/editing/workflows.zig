@@ -229,6 +229,7 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "ok", .{ .bool = true });
     try obj.put(allocator, "applied", .{ .bool = apply });
     try obj.put(allocator, "file", try ownedString(allocator, rel));
     try obj.put(allocator, "input_source", .{ .string = if (content == null) "workspace_file" else "content" });
@@ -684,6 +685,7 @@ test "formatValue formats supplied content without reading source on preview" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const value = try formatValue(arena.allocator(), context, rel, input, false, 1000);
+    try std.testing.expect(value.object.get("ok").?.bool);
     try std.testing.expect(!value.object.get("applied").?.bool);
     try std.testing.expectEqualStrings("content", value.object.get("input_source").?.string);
     try std.testing.expect(value.object.get("changed").?.bool);

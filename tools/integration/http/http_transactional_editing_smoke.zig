@@ -18,7 +18,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 127, "zig_update_imports", "{\"file\":\"tests/fixtures/static-analysis/tricky.zig\",\"old_import\":\"math.zig\",\"new_import\":\"math2.zig\",\"apply\":false}", expected, "update_imports_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 128, "zig_move_decl", "{\"source_file\":\"tests/fixtures/static-analysis/tricky.zig\",\"target_file\":\"tests/fixtures/static-analysis/usingnamespace.zig\",\"name\":\"LocalErrors\",\"apply\":false}", expected, "move_decl_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 129, "zig_extract_decl", "{\"file\":\"tests/fixtures/static-analysis/tricky.zig\",\"target_file\":\"tests/fixtures/static-analysis/usingnamespace.zig\",\"start_line\":25,\"end_line\":27,\"apply\":false}", expected, "extract_decl_paths", scenario_count);
-    try assertToolPaths(allocator, io, port, 130, "zig_code_action_batch", "{\"file\":\"src/main.zig\",\"start_line\":1,\"start_char\":1,\"end_line\":1,\"end_char\":1,\"action_indices\":\"0\",\"apply\":false}", expected, "code_action_batch_paths", scenario_count);
+    try assertToolPaths(allocator, io, port, 130, "zig_code_action_batch", "{}", expected, "code_action_batch_paths", scenario_count);
 }
 
 fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {

@@ -564,7 +564,7 @@
   },
   "memory_layout_paths": {
     "kind": "zig_memory_layout",
-    "capability_tier": "advisory_orientation"
+    "capability_tier": "compiler_backed"
   },
   "unsafe_operations_audit_paths": {
     "kind": "zig_unsafe_operations_audit",

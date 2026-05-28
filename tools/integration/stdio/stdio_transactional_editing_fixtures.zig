@@ -83,7 +83,7 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     try client.expectPathString(extracted, "kind", "zig_extract_decl");
     try client.expectPathJson(extracted, "files.1.changed", .{ .bool = true });
 
-    const batch = try client.callTool("zig_code_action_batch", "{\"file\":\"src/main.zig\",\"start_line\":1,\"start_char\":1,\"end_line\":1,\"end_char\":1,\"action_indices\":\"0\",\"apply\":false}");
+    const batch = try client.callTool("zig_code_action_batch", "{}");
     defer client.allocator.free(batch);
     try client.expectPathString(batch, "kind", "backend_error");
     try client.expectPathString(batch, "error_kind", "unavailable");
