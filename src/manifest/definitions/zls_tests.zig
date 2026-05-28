@@ -18,3 +18,14 @@ const zig_workspace_symbols = subject.zig_workspace_symbols;
 test "zls definitions expose document metadata" {
     try @import("std").testing.expect(zig_document_open.description.len > 0);
 }
+
+test "zls diagnostics plan advertises pull diagnostic request" {
+    switch (zig_diagnostics.plan) {
+        .zls_request => |plan| try std.testing.expectEqualStrings("textDocument/diagnostic", plan.method),
+        else => return error.TestExpectedEqual,
+    }
+    switch (zig_diagnostics_all.plan) {
+        .zls_request => |plan| try std.testing.expectEqualStrings("textDocument/diagnostic", plan.method),
+        else => return error.TestExpectedEqual,
+    }
+}
