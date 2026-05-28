@@ -44,6 +44,14 @@ const StaticManifest = struct {
     }
 };
 
+fn findCheck(checks: []const std.json.Value, name: []const u8) ?std.json.Value {
+    for (checks) |check| {
+        const candidate = check.object.get("name") orelse continue;
+        if (candidate == .string and std.mem.eql(u8, candidate.string, name)) return check;
+    }
+    return null;
+}
+
 test "catalog text is retrieved through typed catalog port" {
     var catalog_fake = fakes.FakeToolCatalog.init("{\"tools\":[\"zig_build\"]}");
     const text = try workflows.catalogText(std.testing.allocator, .{
@@ -90,6 +98,131 @@ test "doctor probes configured backend paths through backend probe port" {
     try std.testing.expectEqualStrings("not installed", checks[12].object.get("status").?.string);
     try std.testing.expectEqualStrings("zls missing", checks[12].object.get("resolution").?.string);
     try backend_fake.verify();
+}
+
+test "doctor reports compatible Zig version preflight" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try workspace_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.zig_version_preflight" },
+        \\.{
+        \\    .minimum_zig_version = "0.16.0",
+        \\}
+    );
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig-bin", "version" },
+        .cwd = "/workspace",
+        .timeout_ms = 700,
+        .max_stdout_bytes = 64 * 1024,
+        .max_stderr_bytes = 64 * 1024,
+        .provenance = "discovery.zig_version_preflight",
+    }, .{ .stdout = "0.16.1\n" });
+
+    const value = try workflows.doctorValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig-bin" },
+        .ports = .{ .command_runner = command_fake.port(), .workspace = workspace_fake.port() },
+    }, true, 700);
+
+    const preflight = findCheck(value.object.get("checks").?.array.items, "zig_version_preflight").?;
+    try std.testing.expect(preflight.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("compatible", preflight.object.get("status").?.string);
+    try std.testing.expectEqualStrings("0.16.1", preflight.object.get("observed_version").?.string);
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+test "doctor reports incompatible Zig version preflight" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try workspace_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.zig_version_preflight" },
+        \\.{
+        \\    .minimum_zig_version = "0.16.0",
+        \\}
+    );
+    try command_fake.expectRun(.{
+        .argv = &.{ "zig-bin", "version" },
+        .cwd = "/workspace",
+        .timeout_ms = 700,
+        .max_stdout_bytes = 64 * 1024,
+        .max_stderr_bytes = 64 * 1024,
+        .provenance = "discovery.zig_version_preflight",
+    }, .{ .stdout = "0.15.2\n" });
+
+    const value = try workflows.doctorValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig-bin" },
+        .ports = .{ .command_runner = command_fake.port(), .workspace = workspace_fake.port() },
+    }, true, 700);
+
+    const preflight = findCheck(value.object.get("checks").?.array.items, "zig_version_preflight").?;
+    try std.testing.expect(!preflight.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("incompatible", preflight.object.get("status").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, preflight.object.get("resolution").?.string, "requires 0.16.0 or newer") != null);
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+test "doctor reports unavailable Zig version preflight when Zig is missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var command_fake = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer command_fake.deinit();
+    var workspace_fake = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace_fake.deinit();
+
+    try workspace_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.zig_version_preflight" },
+        \\.{
+        \\    .minimum_zig_version = "0.16.0",
+        \\}
+    );
+    try command_fake.expectRunError(.{
+        .argv = &.{ "zig-bin", "version" },
+        .cwd = "/workspace",
+        .timeout_ms = 700,
+        .max_stdout_bytes = 64 * 1024,
+        .max_stderr_bytes = 64 * 1024,
+        .provenance = "discovery.zig_version_preflight",
+    }, error.FileNotFound);
+
+    const value = try workflows.doctorValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig-bin" },
+        .ports = .{ .command_runner = command_fake.port(), .workspace = workspace_fake.port() },
+    }, true, 700);
+
+    const preflight = findCheck(value.object.get("checks").?.array.items, "zig_version_preflight").?;
+    try std.testing.expect(!preflight.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("unavailable", preflight.object.get("status").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, preflight.object.get("resolution").?.string, "FileNotFound") != null);
+    try command_fake.verify();
+    try workspace_fake.verify();
+}
+
+test "doctor reports unprobed Zig version preflight when backend probes are disabled" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const value = try workflows.doctorValue(arena.allocator(), .{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig-bin" },
+    }, false, 700);
+
+    const preflight = findCheck(value.object.get("checks").?.array.items, "zig_version_preflight").?;
+    try std.testing.expect(preflight.object.get("ok").? == .null);
+    try std.testing.expectEqualStrings("unprobed", preflight.object.get("status").?.string);
 }
 
 test "toolchain resolve classifies project Zig version hints through ports" {
