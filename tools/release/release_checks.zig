@@ -70,6 +70,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkCliErrorContract(allocator, io)) and ok;
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     ok = (try checkStaticAnalysisContracts(io)) and ok;
+    ok = (try checkCatalogCommonIntentPreferences(allocator, io)) and ok;
     ok = (try checkWorkflowPermissions(allocator, io)) and ok;
     ok = (try release_docs.checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try backend_docs.checkOptionalBackendContracts(allocator, io)) and ok;
@@ -330,6 +331,57 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
         if (entry.group == .static_analysis and (!entry.meta.read_only or entry.risk.writes_source)) {
             if (!(entry.risk.writes_source and entry.risk.writes_require_apply and entry.risk.preview_by_default and !entry.meta.read_only)) {
                 try stderrPrint(io, "static-analysis source writes must be explicit apply-gated previews: {s}\n", .{entry.name});
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+fn checkCatalogCommonIntentPreferences(allocator: Allocator, io: Io) !bool {
+    var catalog = zigars.manifest.tool_catalog_render.parsed(allocator) catch |err| {
+        try stderrPrint(io, "tool catalog common-intent check could not parse catalog: {s}\n", .{@errorName(err)});
+        return false;
+    };
+    defer catalog.deinit();
+
+    const intents_value = catalog.value.object.get("common_intents") orelse {
+        try stderrPrint(io, "tool catalog common-intent check missing common_intents\n", .{});
+        return false;
+    };
+    if (intents_value != .array) {
+        try stderrPrint(io, "tool catalog common-intent check expected common_intents array\n", .{});
+        return false;
+    }
+
+    var ok = true;
+    for (intents_value.array.items) |intent_value| {
+        if (intent_value != .object) {
+            try stderrPrint(io, "tool catalog common-intent entry is not an object\n", .{});
+            ok = false;
+            continue;
+        }
+        const intent = intent_value.object.get("intent").?.string;
+        const prefer_value = intent_value.object.get("prefer") orelse {
+            try stderrPrint(io, "tool catalog common-intent `{s}` is missing prefer\n", .{intent});
+            ok = false;
+            continue;
+        };
+        if (prefer_value != .string) {
+            try stderrPrint(io, "tool catalog common-intent `{s}` has non-string prefer\n", .{intent});
+            ok = false;
+            continue;
+        }
+        var parts = std.mem.splitScalar(u8, prefer_value.string, ',');
+        while (parts.next()) |raw_name| {
+            const name = std.mem.trim(u8, raw_name, " \t\r\n");
+            if (name.len == 0) {
+                try stderrPrint(io, "tool catalog common-intent `{s}` contains an empty preferred tool id\n", .{intent});
+                ok = false;
+                continue;
+            }
+            if (zigars.manifest.find(name) == null) {
+                try stderrPrint(io, "tool catalog common-intent `{s}` references unknown preferred tool id `{s}`\n", .{ intent, name });
                 ok = false;
             }
         }
