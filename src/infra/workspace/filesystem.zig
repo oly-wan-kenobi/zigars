@@ -17,6 +17,7 @@ pub const Store = struct {
     io: std.Io,
     default_read_limit: usize = command.output_limit,
     read_resolution: ReadResolution = .input,
+    cancellation_token: ?ports.CancellationToken = null,
 
     const Self = @This();
 
@@ -27,6 +28,7 @@ pub const Store = struct {
             .io = io,
             .default_read_limit = options.default_read_limit,
             .read_resolution = options.read_resolution,
+            .cancellation_token = options.cancellation_token,
         };
     }
 
@@ -34,6 +36,7 @@ pub const Store = struct {
     pub const Options = struct {
         default_read_limit: usize = command.output_limit,
         read_resolution: ReadResolution = .input,
+        cancellation_token: ?ports.CancellationToken = null,
     };
 
     /// Exposes this store through the WorkspaceStore vtable.
@@ -101,6 +104,7 @@ pub const Store = struct {
     /// Writes bytes through this port implementation.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        if (self.isCancelled()) return error.Cancelled;
         self.workspace.writeFile(self.io, request.path, request.bytes) catch |err| return mapPortError(err);
         return .{
             .bytes_written = request.bytes.len,
@@ -111,6 +115,7 @@ pub const Store = struct {
     /// Deletes a path through this port implementation.
     fn delete(ptr: *anyopaque, request: ports.WorkspaceDeleteRequest) ports.PortError!ports.WorkspaceDeleteResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        if (self.isCancelled()) return error.Cancelled;
         const resolved = self.workspace.resolve(request.path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(resolved);
         std.Io.Dir.cwd().deleteFile(self.io, resolved) catch |err| switch (err) {
@@ -161,10 +166,16 @@ pub const Store = struct {
     /// Ensures a directory exists through this port implementation.
     fn ensureDir(ptr: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        if (self.isCancelled()) return error.Cancelled;
         const resolved = self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err);
         defer self.workspace.allocator.free(resolved);
         std.Io.Dir.cwd().createDirPath(self.io, resolved) catch |err| return mapPortError(err);
         return .{};
+    }
+
+    /// Returns whether the active request has been cancelled.
+    fn isCancelled(self: *Self) bool {
+        return if (self.cancellation_token) |token| token.isCancelled() else false;
     }
 
     /// Scans a directory through this port implementation.
@@ -212,6 +223,7 @@ pub fn mapPortError(err: anyerror) ports.PortError {
         error.RequestTimeout => error.RequestTimeout,
         error.EndOfStream => error.EndOfStream,
         error.BrokenPipe => error.BrokenPipe,
+        error.Cancelled => error.Cancelled,
         error.PathOutsideWorkspace => error.PathOutsideWorkspace,
         error.EmptyPath => error.EmptyPath,
         error.StreamTooLong => error.StreamTooLong,
