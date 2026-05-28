@@ -314,7 +314,7 @@ fn warnOnZigVersionPreflight(runtime: *App) void {
     defer runtime.allocator.free(build_zon);
     const required_minimum = doctor_usecase.minimumZigVersionFromBuildZon(build_zon) orelse return;
 
-    const result = command_mod.runWithOutputLimit(
+    var result = command_mod.runWithOutputLimit(
         runtime.allocator,
         runtime.io,
         runtime.workspace.root,
