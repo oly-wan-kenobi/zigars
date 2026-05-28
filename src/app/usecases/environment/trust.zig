@@ -16,6 +16,20 @@ const invalidArgumentResult = support.invalidArgumentResult;
 const structured = support.structured;
 const toolTimeout = support.toolTimeout;
 
+/// Stable resource URI for the connection-time trust manifest.
+pub const trust_manifest_uri = "zigars://trust/manifest";
+/// Schema version for the trust manifest payload.
+pub const trust_manifest_schema_version = 1;
+
+/// Input projection used to build trust manifests from tool and resource contexts.
+pub const ManifestInput = struct {
+    workspace: app_context.WorkspaceView,
+    tool_paths: app_context.ToolPaths,
+    timeouts: app_context.Timeouts,
+    probe_cache: app_context.TrustProbeCache = .{},
+    audit_log: app_context.AuditLogView = .{},
+};
+
 /// Executes the zigars trust report workflow and returns an allocator-owned structured result.
 pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
     const include_clean_tree = argBool(args, "include_clean_tree", false);
@@ -23,8 +37,11 @@ pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_trust_report" });
+    try obj.put(allocator, "schema_version", .{ .integer = trust_manifest_schema_version });
+    try obj.put(allocator, "trust_manifest", try trustManifestValueFromTrustContext(allocator, a));
     try obj.put(allocator, "workspace", try workspaceEvidenceValue(allocator, a));
     try obj.put(allocator, "path_policy", try pathPolicyValue(allocator));
+    try obj.put(allocator, "source_write_policy", try sourceWritePolicyValue(allocator));
     try obj.put(allocator, "backend_identities", try backendIdentitiesValue(allocator, a));
     try obj.put(allocator, "dependency_hashes", try dependencyHashesValue(allocator, a));
     try obj.put(allocator, "risk_audit", try riskAuditValue(allocator, a, false));
@@ -41,6 +58,28 @@ pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.
     const result = try structured(allocator, .{ .object = obj });
     obj_owned = false;
     return result;
+}
+
+/// Builds a trust manifest from the trust tool context.
+pub fn trustManifestValueFromTrustContext(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    return trustManifestValue(allocator, .{
+        .workspace = a.context.workspace,
+        .tool_paths = a.context.tool_paths,
+        .timeouts = a.context.timeouts,
+        .probe_cache = a.context.probe_cache,
+        .audit_log = a.context.audit_log,
+    });
+}
+
+/// Builds a trust manifest from the runtime resource context.
+pub fn trustManifestValueFromRuntimeContext(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
+    return trustManifestValue(allocator, .{
+        .workspace = context.workspace,
+        .tool_paths = context.tool_paths,
+        .timeouts = context.timeouts,
+        .probe_cache = context.probe_cache,
+        .audit_log = context.audit_log,
+    });
 }
 
 /// Executes the zigars command provenance workflow and returns an allocator-owned structured result.
@@ -179,9 +218,177 @@ fn pathPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
     defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "workspace_boundary", .{ .string = "realpath" });
     try obj.put(allocator, "symlink_escapes", .{ .string = "rejected" });
+    try obj.put(allocator, "user_paths", .{ .string = "workspace-relative or absolute paths must resolve under the configured workspace before read/write" });
     try obj.put(allocator, "source_write_gate", .{ .string = "mutating source tools require apply=true and preview by default" });
     try obj.put(allocator, "generated_or_vendored_filter", .{ .string = "domain.zig.analysis.skipWorkspacePath" });
     try obj.put(allocator, "evidence", try trust_domain.stringArray(allocator, &.{ "src/infra/workspace", "src/manifest/mod.zig risk metadata" }));
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes the connection-time trust manifest.
+fn trustManifestValue(allocator: std.mem.Allocator, input: ManifestInput) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_trust_manifest" });
+    try obj.put(allocator, "schema_version", .{ .integer = trust_manifest_schema_version });
+    try obj.put(allocator, "resource_uri", .{ .string = trust_manifest_uri });
+    try obj.put(allocator, "workspace", try workspaceManifestValue(allocator, input.workspace));
+    try obj.put(allocator, "path_policy", try pathPolicyValue(allocator));
+    try obj.put(allocator, "source_write_policy", try sourceWritePolicyValue(allocator));
+    try obj.put(allocator, "subprocess_classes", try subprocessClassesValue(allocator, input.tool_paths));
+    try obj.put(allocator, "output_body_limits", try outputBodyLimitsValue(allocator));
+    try obj.put(allocator, "http_transport", try httpPostureValue(allocator, input.workspace));
+    try obj.put(allocator, "backend_status", try backendIdentitiesFromViewsValue(allocator, input.tool_paths, input.probe_cache));
+    try obj.put(allocator, "backend_status_resolution", .{ .string = "Call zigars_doctor with probe_backends=true to refresh command availability and Zig version preflight evidence." });
+    try obj.put(allocator, "audit_log", try auditLogStatusValue(allocator, input.audit_log));
+    try obj.put(allocator, "release_integrity", try releaseIntegrityValue(allocator));
+    try obj.put(allocator, "timeouts", try timeoutPolicyValue(allocator, input.timeouts));
+    try obj.put(allocator, "limitations", try trust_domain.stringArray(allocator, &.{
+        "The manifest describes zigars process policy and configured local paths; it is not an OS sandbox.",
+        "Configured backend paths are identities until a doctor/backend probe supplies availability evidence.",
+        "Checksum information is install-time integrity evidence; npm attestation verification is not implemented in this phase.",
+    }));
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes workspace roots for manifest consumers.
+fn workspaceManifestValue(allocator: std.mem.Allocator, workspace: app_context.WorkspaceView) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "root", .{ .string = workspace.root });
+    try obj.put(allocator, "cache_root", .{ .string = workspace.cache_root });
+    try obj.put(allocator, "transport", .{ .string = workspace.transport });
+    try obj.put(allocator, "evidence", try trust_domain.evidenceValue(allocator, "runtime_config", "app context workspace projection", "high"));
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes source-write policy fields shared by report and manifest.
+fn sourceWritePolicyValue(allocator: std.mem.Allocator) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "source_mutations_require_apply", .{ .bool = true });
+    try obj.put(allocator, "required_argument", .{ .string = "apply=true" });
+    try obj.put(allocator, "preview_by_default", .{ .bool = true });
+    try obj.put(allocator, "policy_source", .{ .string = "typed tool manifest risk metadata and apply-gated handlers" });
+    try obj.put(allocator, "applies_to", .{ .string = "source-mutating MCP tools" });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes subprocess classes without claiming stronger sandboxing than exists.
+fn subprocessClassesValue(allocator: std.mem.Allocator, paths: app_context.ToolPaths) !std.json.Value {
+    var classes = std.json.Array.init(allocator);
+    var classes_owned = true;
+    defer if (classes_owned) classes.deinit();
+    try classes.append(try subprocessClassValue(allocator, "zig", "compiler/build/test/fmt/fetch commands", paths.zig, false));
+    try classes.append(try subprocessClassValue(allocator, "zls", "local ZLS language-server process and LSP requests", paths.zls, true));
+    try classes.append(try subprocessClassValue(allocator, "lint_static_analysis", "optional ZLint and zwanzig analysis backends", "zlint, zwanzig", true));
+    try classes.append(try subprocessClassValue(allocator, "profiling", "optional zflame and diff-folded profiling helpers", "zflame, diff-folded", true));
+    try classes.append(try subprocessClassValue(allocator, "runtime_diagnostics", "bounded local diagnostic commands such as git status for clean-tree evidence", "git", true));
+    try classes.append(try subprocessClassValue(allocator, "npm_shim_downloads", "npm shim downloads release archives and checksum files before launching zigars", "@zigars/mcp", true));
+    classes_owned = false;
+    return .{ .array = classes };
+}
+
+/// Serializes one subprocess class.
+fn subprocessClassValue(allocator: std.mem.Allocator, name: []const u8, purpose: []const u8, configured_path: []const u8, optional: bool) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "name", .{ .string = name });
+    try obj.put(allocator, "purpose", .{ .string = purpose });
+    try obj.put(allocator, "configured_path", .{ .string = configured_path });
+    try obj.put(allocator, "optional", .{ .bool = optional });
+    try obj.put(allocator, "execution_model", .{ .string = "direct argv, no shell interpolation by zigars" });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes default process/resource/HTTP body limits.
+fn outputBodyLimitsValue(allocator: std.mem.Allocator) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "command_stdout_bytes", .{ .integer = @intCast(support.command_output_limit) });
+    try obj.put(allocator, "command_stderr_bytes", .{ .integer = @intCast(support.command_output_limit) });
+    try obj.put(allocator, "resource_read_bytes", .{ .integer = 1024 * 1024 });
+    try obj.put(allocator, "http_json_rpc_body_bytes", .{ .integer = 4 * 1024 * 1024 });
+    try obj.put(allocator, "limit_mode", .{ .string = support.command_output_limit_mode });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes local-only HTTP posture.
+fn httpPostureValue(allocator: std.mem.Allocator, workspace: app_context.WorkspaceView) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "configured_transport", .{ .string = workspace.transport });
+    try obj.put(allocator, "host", .{ .string = workspace.host });
+    try obj.put(allocator, "port", .{ .integer = workspace.port });
+    try obj.put(allocator, "local_only", .{ .bool = true });
+    try obj.put(allocator, "authentication", .{ .string = "none; bind HTTP only to loopback and prefer stdio for agent clients" });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes backend identities from app-context views.
+fn backendIdentitiesFromViewsValue(allocator: std.mem.Allocator, paths: app_context.ToolPaths, probes: app_context.TrustProbeCache) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "zig", try backendIdentityValue(allocator, paths.zig, probes.zig));
+    try obj.put(allocator, "zls", try backendIdentityValue(allocator, paths.zls, probes.zls));
+    try obj.put(allocator, "zlint", try backendIdentityValue(allocator, paths.zlint, probes.zlint));
+    try obj.put(allocator, "zwanzig", try backendIdentityValue(allocator, paths.zwanzig, probes.zwanzig));
+    try obj.put(allocator, "zflame", try backendIdentityValue(allocator, paths.zflame, probes.zflame));
+    try obj.put(allocator, "diff_folded", try backendIdentityValue(allocator, paths.diff_folded, probes.diff_folded));
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes audit-log availability and privacy posture.
+fn auditLogStatusValue(allocator: std.mem.Allocator, audit_log: app_context.AuditLogView) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "available", .{ .bool = true });
+    try obj.put(allocator, "enabled", .{ .bool = audit_log.enabled });
+    try obj.put(allocator, "status", .{ .string = if (audit_log.enabled) "enabled" else "not_configured" });
+    try obj.put(allocator, "mode", .{ .string = audit_log.mode });
+    try obj.put(allocator, "path", if (audit_log.path) |path| .{ .string = path } else .null);
+    try obj.put(allocator, "default_mode_when_enabled", .{ .string = "metadata" });
+    try obj.put(allocator, "privacy", .{ .string = "metadata mode stores payload size and SHA-256 only; redacted mode masks secret-like JSON fields; full mode records raw MCP payloads and requires explicit --audit-log-mode full." });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes release/checksum/attestation posture without claiming attestation verification.
+fn releaseIntegrityValue(allocator: std.mem.Allocator) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "release_checksums", .{ .string = "GitHub release archives are distributed with zigars-checksums.txt for SHA-256 verification." });
+    try obj.put(allocator, "npm_shim", .{ .string = "The npm shim downloads zigars-checksums.txt and verifies the selected archive SHA-256 before extraction." });
+    try obj.put(allocator, "attestation_verification", .{ .string = "not_implemented" });
+    try obj.put(allocator, "attestation_note", .{ .string = "npm attestation verification belongs to Phase 5 and is not claimed by this manifest." });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Serializes timeout policy visible at connection time.
+fn timeoutPolicyValue(allocator: std.mem.Allocator, timeouts: app_context.Timeouts) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "command_ms", .{ .integer = timeouts.command_ms });
+    try obj.put(allocator, "zls_ms", .{ .integer = timeouts.zls_ms });
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -555,6 +762,11 @@ test "trust report wrapper covers dependency hashes backend identities and clean
     try std.testing.expectEqual(@as(usize, 1), preview.value.object.get("dependency_hashes").?.object.get("hashes").?.array.items.len);
     try std.testing.expectEqualStrings("ok", preview.value.object.get("backend_identities").?.object.get("zig").?.object.get("probe_status").?.string);
     try std.testing.expectEqualStrings("low", preview.value.object.get("backend_identities").?.object.get("zlint").?.object.get("confidence").?.string);
+    const manifest_value = preview.value.object.get("trust_manifest").?.object;
+    try std.testing.expectEqualStrings(trust_manifest_uri, manifest_value.get("resource_uri").?.string);
+    try std.testing.expect(manifest_value.get("source_write_policy").?.object.get("source_mutations_require_apply").?.bool);
+    try std.testing.expectEqualStrings("not_configured", manifest_value.get("audit_log").?.object.get("status").?.string);
+    try std.testing.expectEqualStrings("not_implemented", manifest_value.get("release_integrity").?.object.get("attestation_verification").?.string);
 
     const clean_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"include_clean_tree\":true,\"timeout_ms\":4000}", .{});
     const clean = try zigarsTrustReport(&app, allocator, clean_args.value);
