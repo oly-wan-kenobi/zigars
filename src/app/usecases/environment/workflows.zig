@@ -1,3 +1,7 @@
+//! Environment, backend, profile, and trust-report workflows.
+//!
+//! These workflows inspect configuration and optional backend state while
+//! keeping generated artifacts and profile mutations behind explicit policies.
 const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
