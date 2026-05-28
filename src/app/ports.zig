@@ -1,8 +1,12 @@
 //! App-side port contracts that isolate usecases from filesystem/process/LSP
 //! adapters. Owned buffers are explicitly tracked with `owns_*` flags.
 const std = @import("std");
+const cancellation = @import("cancellation");
 
 const Allocator = std.mem.Allocator;
+
+/// Borrowed cooperative cancellation token carried through runtime ports.
+pub const CancellationToken = cancellation.Token;
 
 /// Shared error set used by app ports to normalize adapter failures.
 pub const PortError = error{
@@ -22,6 +26,7 @@ pub const PortError = error{
     NoResponse,
     EndOfStream,
     BrokenPipe,
+    Cancelled,
     PathOutsideWorkspace,
     EmptyPath,
     DocumentTooLarge,
@@ -84,12 +89,26 @@ pub const ProtocolClient = struct {
 
 /// Snapshot limits for bounded observability reads.
 pub const max_observability_tool_stats = 64;
+/// Maximum MCP method stats returned by a bounded observability snapshot.
+pub const max_observability_method_stats = 32;
+/// Maximum latency samples retained per observed key.
+pub const max_observability_latency_samples = 64;
+/// Minimum samples before latency percentiles should be rendered.
+pub const min_observability_percentile_samples = 5;
+/// Maximum recent MCP tool-call correlation rows returned by a bounded snapshot.
+pub const max_observability_tool_call_correlations = 64;
+/// Maximum retained request-id bytes for one observed tool-call correlation.
+pub const max_observability_request_id_value_len = 64;
 /// Maximum command event rows returned by a bounded observability snapshot.
 pub const max_observability_command_events = 64;
 /// Maximum backend event rows returned by a bounded observability snapshot.
 pub const max_observability_backend_events = 64;
 /// Maximum ZLS event rows returned by a bounded observability snapshot.
 pub const max_observability_zls_events = 64;
+/// Maximum startup phase timing rows returned by a bounded observability snapshot.
+pub const max_observability_startup_phases = 24;
+/// Maximum cancellation event rows returned by a bounded observability snapshot.
+pub const max_observability_cancellation_events = 32;
 
 /// Command invocation requested by app use cases.
 /// Slices are borrowed; adapters decide whether returned output is owned.
@@ -1163,6 +1182,70 @@ pub const ObservabilityToolStats = struct {
     max_latency_ms: u64 = 0,
     last_latency_ms: u64 = 0,
     last_error: bool = false,
+    latency_samples: [max_observability_latency_samples]u64 = [_]u64{0} ** max_observability_latency_samples,
+    latency_sample_count: u64 = 0,
+};
+
+/// Aggregated MCP request method metrics for one method.
+pub const ObservabilityMethodStats = struct {
+    name: [64]u8 = [_]u8{0} ** 64,
+    name_len: usize = 0,
+    name_truncated: bool = false,
+    calls: u64 = 0,
+    errors: u64 = 0,
+    total_latency_ms: u64 = 0,
+    max_latency_ms: u64 = 0,
+    last_latency_ms: u64 = 0,
+    last_error: bool = false,
+    latency_samples: [max_observability_latency_samples]u64 = [_]u64{0} ** max_observability_latency_samples,
+    latency_sample_count: u64 = 0,
+
+    /// Returns the retained method name.
+    pub fn nameSlice(self: *const ObservabilityMethodStats) []const u8 {
+        return self.name[0..self.name_len];
+    }
+};
+
+/// Borrowed MCP tool-call correlation snapshot.
+pub const ObservabilityToolCallCorrelation = struct {
+    sequence: u64 = 0,
+    tool_name: []const u8 = "",
+    is_error: bool = false,
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: [max_observability_request_id_value_len]u8 = [_]u8{0} ** max_observability_request_id_value_len,
+    mcp_request_id_value_len: usize = 0,
+    mcp_request_id_truncated: bool = false,
+    trace_id: [32]u8 = [_]u8{'0'} ** 32,
+    span_id: [16]u8 = [_]u8{'0'} ** 16,
+    parent_span_id: ?[16]u8 = null,
+    tool_call_id: [22]u8 = [_]u8{0} ** 22,
+    tool_call_id_len: usize = 0,
+
+    /// Returns the retained request-id value, or null when the request had no id.
+    pub fn requestIdValue(self: *const ObservabilityToolCallCorrelation) ?[]const u8 {
+        if (std.mem.eql(u8, self.mcp_request_id_type, "null")) return null;
+        return self.mcp_request_id_value[0..self.mcp_request_id_value_len];
+    }
+
+    /// Returns the retained trace id.
+    pub fn traceId(self: *const ObservabilityToolCallCorrelation) []const u8 {
+        return self.trace_id[0..];
+    }
+
+    /// Returns the retained span id.
+    pub fn spanId(self: *const ObservabilityToolCallCorrelation) []const u8 {
+        return self.span_id[0..];
+    }
+
+    /// Returns the retained parent span id, when present.
+    pub fn parentSpanId(self: *const ObservabilityToolCallCorrelation) ?[]const u8 {
+        return if (self.parent_span_id) |span| span[0..] else null;
+    }
+
+    /// Returns the retained tool-call id.
+    pub fn toolCallId(self: *const ObservabilityToolCallCorrelation) []const u8 {
+        return self.tool_call_id[0..self.tool_call_id_len];
+    }
 };
 
 /// Borrowed backend probe event snapshot.
@@ -1192,27 +1275,84 @@ pub const ObservabilityCommandEvent = struct {
     error_name: ?[]const u8 = null,
 };
 
+/// Borrowed startup phase timing snapshot.
+pub const ObservabilityStartupPhase = struct {
+    sequence: u64 = 0,
+    name: []const u8 = "",
+    start_ms: u64 = 0,
+    duration_ms: u64 = 0,
+};
+
+/// Borrowed cancellation notification outcome snapshot.
+pub const ObservabilityCancellationEvent = struct {
+    sequence: u64 = 0,
+    status: []const u8 = "",
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: [max_observability_request_id_value_len]u8 = [_]u8{0} ** max_observability_request_id_value_len,
+    mcp_request_id_value_len: usize = 0,
+    mcp_request_id_truncated: bool = false,
+    method: [64]u8 = [_]u8{0} ** 64,
+    method_len: usize = 0,
+    method_truncated: bool = false,
+
+    /// Returns the retained request-id value, or null when none was present.
+    pub fn requestIdValue(self: *const ObservabilityCancellationEvent) ?[]const u8 {
+        if (std.mem.eql(u8, self.mcp_request_id_type, "null")) return null;
+        return self.mcp_request_id_value[0..self.mcp_request_id_value_len];
+    }
+
+    /// Returns the retained method name.
+    pub fn methodSlice(self: *const ObservabilityCancellationEvent) []const u8 {
+        return self.method[0..self.method_len];
+    }
+};
+
 /// Bounded metrics snapshot; slices are borrowed unless owns_memory is set.
 pub const ObservabilitySnapshot = struct {
     tool_stats: []const ObservabilityToolStats = &.{},
+    method_stats: []const ObservabilityMethodStats = &.{},
+    tool_call_correlations: []const ObservabilityToolCallCorrelation = &.{},
     command_events: []const ObservabilityCommandEvent = &.{},
     backend_events: []const ObservabilityBackendEvent = &.{},
     zls_events: []const ObservabilityZlsEvent = &.{},
+    startup_phases: []const ObservabilityStartupPhase = &.{},
+    cancellation_events: []const ObservabilityCancellationEvent = &.{},
     total_tool_calls: u64 = 0,
     total_tool_errors: u64 = 0,
+    total_mcp_requests: u64 = 0,
+    total_mcp_request_errors: u64 = 0,
     total_command_duration_ms: u64 = 0,
+    command_latency_samples: [max_observability_latency_samples]u64 = [_]u64{0} ** max_observability_latency_samples,
+    command_latency_sample_count: u64 = 0,
+    tool_call_correlation_count: u64 = 0,
     command_event_count: u64 = 0,
     backend_event_count: u64 = 0,
     zls_event_count: u64 = 0,
+    startup_phase_count: u64 = 0,
+    cancellation_event_count: u64 = 0,
+    audit_enabled: bool = false,
+    audit_mode: []const u8 = "disabled",
+    audit_path: ?[]const u8 = null,
+    audit_records_written: u64 = 0,
+    audit_write_errors: u64 = 0,
+    audit_last_error: ?[]const u8 = null,
+    cancellation_requested: u64 = 0,
+    cancellation_unknown: u64 = 0,
+    cancellation_completed: u64 = 0,
+    cancellation_uncancellable: u64 = 0,
     owns_memory: bool = false,
 
     /// Frees snapshot slices when owned by the result.
     pub fn deinit(self: ObservabilitySnapshot, allocator: Allocator) void {
         if (!self.owns_memory) return;
         allocator.free(self.tool_stats);
+        allocator.free(self.method_stats);
+        allocator.free(self.tool_call_correlations);
         allocator.free(self.command_events);
         allocator.free(self.backend_events);
         allocator.free(self.zls_events);
+        allocator.free(self.startup_phases);
+        allocator.free(self.cancellation_events);
     }
 };
 
