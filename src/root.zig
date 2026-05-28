@@ -16,6 +16,7 @@ test {
     _ = @import("testing/mcp/core_adapter_tests.zig");
     _ = @import("infra/observability/state_tests.zig");
     _ = @import("testing/mcp/server_tests.zig");
+    _ = @import("testing/mcp/server_protocol_tests.zig");
     _ = @import("testing/mcp/server_task_tests.zig");
     _ = @import("testing/mcp/tool_call_memory_tests.zig");
     _ = @import("testing/mcp/handler_invariants.zig");
