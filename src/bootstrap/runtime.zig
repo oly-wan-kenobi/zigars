@@ -3,6 +3,7 @@ const std = @import("std");
 
 const config_mod = @import("config.zig");
 const audit = @import("../infra/observability/audit.zig");
+const cli_adapter = @import("../adapters/cli/root.zig");
 const command_mod = @import("../infra/process/command.zig");
 const doctor_usecase = @import("../app/usecases/environment/doctor.zig");
 const logging = @import("../infra/observability/logging.zig");
@@ -22,15 +23,16 @@ const zls_session = @import("../infra/zls/session.zig");
 
 const App = runtime_mod.App;
 
-/// Initializes runtime state, registers MCP surfaces, and serves the selected transport.
-pub fn run(init: std.process.Init) !void {
+/// Initializes runtime state and serves either explicit CLI mode or the default MCP transport.
+pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
     const allocator = init.gpa;
-    var startup = StartupTimeline.init(init.io);
-
     var args_arena_state = std.heap.ArenaAllocator.init(allocator);
     defer args_arena_state.deinit();
     const args_arena = args_arena_state.allocator();
     const args = try init.minimal.args.toSlice(args_arena);
+    if (cli_adapter.isInvocation(args)) return runCli(init, args);
+
+    var startup = StartupTimeline.init(init.io);
 
     const config_started = startup.begin();
     var cfg = config_mod.parse(allocator, init.io, args) catch |err| return handleConfigParseError(init.io, err);
@@ -151,6 +153,88 @@ pub fn run(init: std.process.Init) !void {
         .stdio => try server.run(init.io, allocator, .stdio),
         .http => try server.run(init.io, allocator, .{ .http = .{ .host = cfg.host, .port = cfg.port } }),
     }
+    return .success;
+}
+
+/// Executes explicit CLI mode as a one-shot JSON reporting surface over app use cases.
+fn runCli(init: std.process.Init, args: []const []const u8) !cli_adapter.ExitCode {
+    const allocator = init.gpa;
+    const invocation = cli_adapter.parse(args) catch |err| {
+        cli_adapter.writeParseDiagnostic(init.io, err) catch {};
+        return cli_adapter.parseErrorExitCode(err);
+    };
+
+    var cfg = configFromCli(allocator, init.io, invocation) catch |err| {
+        cli_adapter.stderrPrint(init.io, "zigars cli: invalid configuration: {s}\n", .{@errorName(err)}) catch {};
+        return cliConfigExitCode(err);
+    };
+    var cfg_owned = true;
+    defer if (cfg_owned) cfg.deinit(allocator);
+
+    var ws = workspace_mod.Workspace.init(allocator, init.io, cfg.workspace, cfg.cache_dir) catch |err| {
+        cli_adapter.stderrPrint(init.io, "zigars cli: workspace error: {s}\n", .{@errorName(err)}) catch {};
+        return cliWorkspaceExitCode(err);
+    };
+    defer ws.deinit();
+
+    var runtime = App{
+        .allocator = allocator,
+        .io = init.io,
+        .logger = logging.Logger.disabled(),
+        .config = cfg,
+        .workspace = ws,
+    };
+    cfg_owned = false;
+    defer runtime.deinit();
+
+    var runtime_ports = runtime_ports_mod.RuntimePorts.init(&runtime, .{ .workspace_read_resolution = .input });
+    var json_arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer json_arena_state.deinit();
+    const json_allocator = json_arena_state.allocator();
+
+    const value = cli_adapter.renderValue(json_allocator, runtime_ports.context(), invocation) catch |err| {
+        cli_adapter.stderrPrint(init.io, "zigars cli: fatal internal error while rendering {s}: {s}\n", .{ invocation.command.label(), @errorName(err) }) catch {};
+        return .fatal_internal;
+    };
+    const bytes = cli_adapter.stringifyAlloc(json_allocator, value) catch |err| {
+        cli_adapter.stderrPrint(init.io, "zigars cli: fatal internal error while serializing {s}: {s}\n", .{ invocation.command.label(), @errorName(err) }) catch {};
+        return .fatal_internal;
+    };
+    cli_adapter.stdoutWrite(init.io, bytes) catch |err| {
+        cli_adapter.stderrPrint(init.io, "zigars cli: fatal internal error while writing stdout: {s}\n", .{@errorName(err)}) catch {};
+        return .fatal_internal;
+    };
+    return .success;
+}
+
+/// Reuses the server config parser for shared CLI process configuration.
+fn configFromCli(allocator: std.mem.Allocator, io: std.Io, invocation: cli_adapter.Invocation) !config_mod.Config {
+    var config_args: std.ArrayList([]const u8) = .empty;
+    defer config_args.deinit(allocator);
+    try cli_adapter.appendConfigArgs(allocator, &config_args, invocation);
+    return config_mod.parse(allocator, io, config_args.items);
+}
+
+fn cliConfigExitCode(err: anyerror) cli_adapter.ExitCode {
+    return switch (err) {
+        error.MissingValue,
+        error.UnknownArgument,
+        error.InvalidPort,
+        error.InvalidTimeout,
+        error.InvalidTransport,
+        error.InvalidAuditLogMode,
+        error.InvalidAuditLogPath,
+        error.UnsafeHttpHost,
+        => .invalid_args,
+        else => .fatal_internal,
+    };
+}
+
+fn cliWorkspaceExitCode(err: anyerror) cli_adapter.ExitCode {
+    return switch (err) {
+        error.OutOfMemory => .fatal_internal,
+        else => .workspace_error,
+    };
 }
 
 const StartupTimeline = struct {
@@ -291,15 +375,15 @@ fn recordMcpToolCall(runtime: *App, name: []const u8, duration_ms: u64, is_error
 }
 
 /// Config parse exits are normalized at the process boundary so transports never start on invalid startup state.
-fn handleConfigParseError(io: std.Io, err: anyerror) !void {
+fn handleConfigParseError(io: std.Io, err: anyerror) !cli_adapter.ExitCode {
     switch (err) {
         error.HelpRequested => {
             try stderrPrint(io, "{s}", .{config_mod.usage()});
-            return;
+            return .success;
         },
         error.VersionRequested => {
             try stderrPrint(io, "zigars " ++ version ++ "\n", .{});
-            return;
+            return .success;
         },
         else => {
             try stderrPrint(io, "zigars: {s}\n\n{s}", .{ @errorName(err), config_mod.usage() });
@@ -324,9 +408,17 @@ fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
 }
 
 test "bootstrap runtime handles config parse exits" {
-    try handleConfigParseError(std.testing.io, error.HelpRequested);
-    try handleConfigParseError(std.testing.io, error.VersionRequested);
+    try std.testing.expectEqual(cli_adapter.ExitCode.success, try handleConfigParseError(std.testing.io, error.HelpRequested));
+    try std.testing.expectEqual(cli_adapter.ExitCode.success, try handleConfigParseError(std.testing.io, error.VersionRequested));
     try std.testing.expectError(error.UnknownArgument, handleConfigParseError(std.testing.io, error.UnknownArgument));
+}
+
+test "bootstrap cli maps configuration and workspace failures to stable exit codes" {
+    try std.testing.expectEqual(cli_adapter.ExitCode.invalid_args, cliConfigExitCode(error.InvalidTimeout));
+    try std.testing.expectEqual(cli_adapter.ExitCode.fatal_internal, cliConfigExitCode(error.OutOfMemory));
+    try std.testing.expectEqual(cli_adapter.ExitCode.workspace_error, cliWorkspaceExitCode(error.PathOutsideWorkspace));
+    try std.testing.expectEqual(cli_adapter.ExitCode.workspace_error, cliWorkspaceExitCode(error.FileNotFound));
+    try std.testing.expectEqual(cli_adapter.ExitCode.fatal_internal, cliWorkspaceExitCode(error.OutOfMemory));
 }
 
 test "bootstrap runtime zls session logging helper is side-effect safe when disabled" {
