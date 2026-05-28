@@ -1,10 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const command = @import("command.zig");
+const cancellation = @import("cancellation");
 
 const splitArgs = command.splitArgs;
 const run = command.run;
 const runWithOutputLimit = command.runWithOutputLimit;
+const runWithOutputLimitCancellable = command.runWithOutputLimitCancellable;
 const errorKind = command.errorKind;
 const isOutputLimitError = command.isOutputLimitError;
 const isTimeoutError = command.isTimeoutError;
@@ -64,6 +66,21 @@ test "classifies command errors" {
     try std.testing.expectEqualStrings("output_limit", errorKind(error.StreamTooLong));
     try std.testing.expect(isOutputLimitError(error.StreamTooLong));
     try std.testing.expect(isTimeoutError(error.Timeout));
+}
+
+test "run observes cancellation before spawning" {
+    var state = cancellation.State{};
+    state.request("test cancellation");
+    try std.testing.expectError(error.Cancelled, runWithOutputLimitCancellable(
+        std.testing.allocator,
+        std.testing.io,
+        ".",
+        &.{"definitely-not-spawned"},
+        1000,
+        1024,
+        1024,
+        state.token(),
+    ));
 }
 
 test "run truncates oversized stdout instead of failing" {
