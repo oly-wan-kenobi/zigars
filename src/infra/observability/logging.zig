@@ -1,5 +1,30 @@
 const std = @import("std");
 
+/// Borrowed request correlation fields used in compact diagnostic prefixes.
+pub const CorrelationFields = struct {
+    trace_id: []const u8,
+    request_id: []const u8,
+    method: []const u8,
+    tool_name: ?[]const u8 = null,
+};
+
+/// Formats a compact request correlation prefix for stderr diagnostics.
+pub fn formatCorrelationPrefix(buffer: []u8, fields: CorrelationFields) []const u8 {
+    if (fields.tool_name) |tool_name| {
+        return std.fmt.bufPrint(buffer, "trace={s} req={s} method={s} tool={s}", .{
+            fields.trace_id,
+            fields.request_id,
+            fields.method,
+            tool_name,
+        }) catch "trace=unavailable req=unavailable method=unavailable";
+    }
+    return std.fmt.bufPrint(buffer, "trace={s} req={s} method={s}", .{
+        fields.trace_id,
+        fields.request_id,
+        fields.method,
+    }) catch "trace=unavailable req=unavailable method=unavailable";
+}
+
 /// Log severity threshold used by the lightweight process logger.
 pub const Level = enum(u8) {
     debug = 0,
