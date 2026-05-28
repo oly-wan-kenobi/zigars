@@ -1094,10 +1094,18 @@ fn intField(obj: std.json.ObjectMap, name: []const u8) ?i64 {
     const value = obj.get(name) orelse return null;
     return switch (value) {
         .integer => |i| i,
-        .float => |f| @intFromFloat(f),
+        .float => |f| floatToInt(f),
         .number_string => |s| std.fmt.parseInt(i64, s, 10) catch null,
         else => null,
     };
+}
+
+fn floatToInt(value: f64) ?i64 {
+    if (!std.math.isFinite(value)) return null;
+    const max: f64 = @floatFromInt(std.math.maxInt(i64));
+    const min: f64 = @floatFromInt(std.math.minInt(i64));
+    if (value >= max or value < min) return null;
+    return @intFromFloat(value);
 }
 
 /// Implements float field workflow logic using caller-owned inputs.
@@ -1670,11 +1678,15 @@ test "performance scanner and profile helpers cover discovery summaries and priv
     try std.testing.expectEqual(@as(?[]const u8, null), stringField(parsed_profile.value.object, "missing"));
     var numbers = std.json.ObjectMap.empty;
     try numbers.put(allocator, "int_float", .{ .float = 9.75 });
+    try numbers.put(allocator, "huge_float", .{ .float = 1e308 });
+    try numbers.put(allocator, "nan_float", .{ .float = std.math.nan(f64) });
     try numbers.put(allocator, "int_text", .{ .number_string = "42" });
     try numbers.put(allocator, "float_int", .{ .integer = 5 });
     try numbers.put(allocator, "float_text", .{ .number_string = "2.5" });
     try numbers.put(allocator, "bad_text", .{ .number_string = "nan?" });
     try std.testing.expectEqual(@as(?i64, 9), intField(numbers, "int_float"));
+    try std.testing.expectEqual(@as(?i64, null), intField(numbers, "huge_float"));
+    try std.testing.expectEqual(@as(?i64, null), intField(numbers, "nan_float"));
     try std.testing.expectEqual(@as(?i64, 42), intField(numbers, "int_text"));
     try std.testing.expectEqual(@as(?i64, null), intField(numbers, "bad_text"));
     try std.testing.expectEqual(@as(?f64, 5.0), floatField(numbers, "float_int"));

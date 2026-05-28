@@ -323,10 +323,18 @@ pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     const value = argValue(args, name) orelse return default;
     return switch (value) {
         .integer => |i| i,
-        .float => |f| @intFromFloat(f),
+        .float => |f| floatToInt(f, default),
         .number_string => |s| std.fmt.parseInt(i64, s, 10) catch default,
         else => default,
     };
+}
+
+fn floatToInt(value: f64, default: i64) i64 {
+    if (!std.math.isFinite(value)) return default;
+    const max: f64 = @floatFromInt(std.math.maxInt(i64));
+    const min: f64 = @floatFromInt(std.math.minInt(i64));
+    if (value >= max or value < min) return default;
+    return @intFromFloat(value);
 }
 
 /// Serializes arg fields into an allocator-owned JSON value; allocation failures propagate.
@@ -1322,6 +1330,10 @@ test "workflow support result helpers clone and classify structured errors" {
     try std.testing.expectEqual(@as(i64, 12), argInt(.{ .object = obj }, "missing", 12));
     try obj.put(allocator, "float", .{ .float = 7.9 });
     try std.testing.expectEqual(@as(i64, 7), argInt(.{ .object = obj }, "float", 0));
+    try obj.put(allocator, "huge_float", .{ .float = 1e308 });
+    try obj.put(allocator, "nan_float", .{ .float = std.math.nan(f64) });
+    try std.testing.expectEqual(@as(i64, 99), argInt(.{ .object = obj }, "huge_float", 99));
+    try std.testing.expectEqual(@as(i64, 99), argInt(.{ .object = obj }, "nan_float", 99));
     try std.testing.expectEqual(@as(usize, 3), lineNumberLocal("a\nb\nc", 4));
 }
 
