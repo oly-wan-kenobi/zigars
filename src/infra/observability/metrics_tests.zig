@@ -8,6 +8,13 @@ const Reader = metrics.Reader;
 fn snapshotWithAllocator(allocator: std.mem.Allocator) !void {
     var state = observability.State{};
     state.recordToolCall("zig_build", 4, false);
+    state.recordToolCallWithCorrelation("zig_check", 5, true, .{
+        .mcp_request_id_type = "integer",
+        .mcp_request_id_value = "17",
+        .trace_id = "00000000000000000000000000000017",
+        .span_id = "0000000000000017",
+        .tool_call_id = "zigars-tc-000000000017",
+    });
     state.recordCommand("zig build", &.{"zig"}, 11, true, null);
     state.recordBackendProbe("zls", true, "ok", "backend command completed");
     state.recordZlsStatus("connected", null, 0);
@@ -24,6 +31,13 @@ test "reader returns bounded observability snapshots in chronological order" {
         state.recordBackendProbe("zls", i % 2 == 0, "ok", "backend command completed");
     }
     state.recordToolCall("zig_build", 4, false);
+    state.recordToolCallWithCorrelation("zig_check", 5, true, .{
+        .mcp_request_id_type = "integer",
+        .mcp_request_id_value = "17",
+        .trace_id = "00000000000000000000000000000017",
+        .span_id = "0000000000000017",
+        .tool_call_id = "zigars-tc-000000000017",
+    });
     state.recordCommand("zig build", &.{ "zig", "build" }, 11, true, null);
     state.recordZlsStatus("connected", null, 0);
 
@@ -35,6 +49,9 @@ test "reader returns bounded observability snapshots in chronological order" {
     try std.testing.expectEqual(@as(usize, observability.max_backend_events), snapshot_value.backend_events.len);
     try std.testing.expectEqual(@as(u64, 3), snapshot_value.backend_events[0].sequence);
     try std.testing.expectEqualStrings("zig_build", snapshot_value.tool_stats[0].name);
+    try std.testing.expectEqual(@as(u64, 1), snapshot_value.tool_call_correlation_count);
+    try std.testing.expectEqualStrings("17", snapshot_value.tool_call_correlations[0].requestIdValue().?);
+    try std.testing.expectEqualStrings("zigars-tc-000000000017", snapshot_value.tool_call_correlations[0].toolCallId());
     try std.testing.expectEqualStrings("zig build", snapshot_value.command_events[0].title);
     try std.testing.expectEqualStrings("connected", snapshot_value.zls_events[0].status);
 }
