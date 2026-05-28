@@ -18,9 +18,7 @@ const unexpectedArgument = cli_io.unexpectedArgument;
 const valueAt = smoke.valueAt;
 const writeFile = cli_io.writeFile;
 
-// Owns stdio protocol lifecycle fixtures and delegates larger tool families to
-// sibling modules that share the same StdioClient boundary.
-
+// Owns stdio protocol lifecycle fixtures and delegates larger tool families to sibling modules.
 const StdioOptions = struct {
     binary: []const u8 = "zig-out/bin/zigars",
     zig_path: []const u8 = "zig",
@@ -28,7 +26,6 @@ const StdioOptions = struct {
     server_kcov_dir: ?[]const u8 = null,
 };
 
-/// Runs end-to-end stdio fixtures against a temporary workspace.
 pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []const []const u8) !void {
     var options: StdioOptions = .{};
     var i: usize = 0;
