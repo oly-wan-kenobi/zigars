@@ -8,15 +8,19 @@ test "tool latency stats aggregate calls and errors" {
     state.recordToolCall("zig_check", 3, false);
     state.recordCommand("zig build", &.{ "zig", "build" }, 11, true, null);
 
-    const value = try observability.toolLatencyValue(std.testing.allocator, state);
+    const value = try observability.toolLatencyValue(std.testing.allocator, &state);
     defer {
         var root = value.object;
         var tools = root.get("tools").?.array;
         for (tools.items) |item| {
             var obj = item.object;
+            var percentiles = obj.get("latency_percentiles").?.object;
+            percentiles.deinit(std.testing.allocator);
             obj.deinit(std.testing.allocator);
         }
         tools.deinit();
+        var correlations = root.get("recent_tool_call_correlations").?.array;
+        correlations.deinit();
         root.deinit(std.testing.allocator);
     }
 
@@ -28,9 +32,11 @@ test "tool latency stats aggregate calls and errors" {
     try std.testing.expectEqual(@as(i64, 7), first.get("avg_latency_ms").?.integer);
     try std.testing.expectEqual(@as(i64, 10), first.get("max_latency_ms").?.integer);
 
-    const command_value = try observability.commandDurationsValue(std.testing.allocator, state);
+    const command_value = try observability.commandDurationsValue(std.testing.allocator, &state);
     defer {
         var root = command_value.object;
+        var percentiles = root.get("latency_percentiles").?.object;
+        percentiles.deinit(std.testing.allocator);
         var events = root.get("events").?.array;
         for (events.items) |item| {
             var obj = item.object;
@@ -66,7 +72,7 @@ test "backend and zls histories keep chronological bounded events" {
         .artifacts = .{},
     };
 
-    const backend_value = try observability.backendHistoryValue(std.testing.allocator, state, base);
+    const backend_value = try observability.backendHistoryValue(std.testing.allocator, &state, base);
     defer {
         var root = backend_value.object;
         var events = root.get("events").?.array;
@@ -88,7 +94,7 @@ test "backend and zls histories keep chronological bounded events" {
     try std.testing.expectEqual(@as(usize, observability.max_backend_events), backend_value.object.get("events").?.array.items.len);
     try std.testing.expectEqual(@as(i64, 3), backend_value.object.get("events").?.array.items[0].object.get("sequence").?.integer);
 
-    const zls_value = try observability.zlsTimelineValue(std.testing.allocator, state, base);
+    const zls_value = try observability.zlsTimelineValue(std.testing.allocator, &state, base);
     defer {
         var root = zls_value.object;
         var events = root.get("events").?.array;
