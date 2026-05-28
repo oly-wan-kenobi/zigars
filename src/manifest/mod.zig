@@ -172,7 +172,12 @@ pub fn idempotentHintFor(spec: ToolMeta) bool {
 pub fn destructiveHintFor(spec: ToolMeta) bool {
     const risk_value = riskFor(spec.id);
     if (risk_value.writes_require_apply and risk_value.preview_by_default) return false;
-    return !spec.read_only;
+    return risk_value.writes_source or
+        risk_value.writes_artifacts or
+        risk_value.mutates_lsp_state or
+        risk_value.executes_project_code or
+        risk_value.executes_user_command or
+        !spec.read_only;
 }
 
 /// Builds the group-keyword lookup table at comptime from group specs.

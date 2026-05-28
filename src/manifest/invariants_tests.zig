@@ -32,6 +32,11 @@ test "manifest side-effect metadata stays aligned with planning policy" {
         if (risk.writes_artifacts or risk.executes_project_code or risk.executes_user_command or risk.mutates_lsp_state) {
             try std.testing.expect(!manifest.readOnlyHintFor(entry.meta));
         }
+        if (!risk.writes_require_apply or !risk.preview_by_default) {
+            if (risk.writes_source or risk.writes_artifacts or risk.executes_project_code or risk.executes_user_command or risk.mutates_lsp_state) {
+                try std.testing.expect(manifest.destructiveHintFor(entry.meta));
+            }
+        }
     }
 }
 test "manifest free-form args and output fields disclose runtime risk" {

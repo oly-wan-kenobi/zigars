@@ -84,12 +84,14 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expectEqualStrings("high", riskLevel(profile_risk));
     try std.testing.expect(!readOnlyHintFor(find("zig_profile_run").?));
     try std.testing.expect(!idempotentHintFor(find("zig_profile_run").?));
+    try std.testing.expect(destructiveHintFor(find("zig_profile_run").?));
 
     const build_risk = riskFor(.zig_build);
     try std.testing.expect(build_risk.executes_project_code);
     try std.testing.expectEqualStrings("medium", riskLevel(build_risk));
     try std.testing.expect(!readOnlyHintFor(find("zig_build").?));
     try std.testing.expect(!idempotentHintFor(find("zig_build").?));
+    try std.testing.expect(destructiveHintFor(find("zig_build").?));
 
     const validation_risk = riskFor(.zigars_validate_patch);
     try std.testing.expect(validation_risk.executes_project_code);
@@ -110,6 +112,7 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expect(riskFor(.zig_hover).mutates_lsp_state);
     try std.testing.expect(!readOnlyHintFor(hover));
     try std.testing.expect(!idempotentHintFor(hover));
+    try std.testing.expect(destructiveHintFor(hover));
 
     const code_actions = find("zig_code_actions").?;
     try std.testing.expect(code_actions.read_only);
@@ -120,9 +123,11 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     try std.testing.expect(matrix_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(matrix_risk));
     try std.testing.expect(!readOnlyHintFor(find("zig_matrix_check").?));
+    try std.testing.expect(destructiveHintFor(find("zig_matrix_check").?));
 
     try std.testing.expect(readOnlyHintFor(find("zig_version").?));
     try std.testing.expect(idempotentHintFor(find("zig_version").?));
+    try std.testing.expect(!destructiveHintFor(find("zig_version").?));
 }
 test "manifest lookup returns null for unknown tools" {
     try std.testing.expect(find("missing_tool") == null);
