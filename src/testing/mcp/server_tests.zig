@@ -460,6 +460,32 @@ test "Server rejects repeated initialize requests without leaving ready state" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") != null);
 }
 
+test "Server rejects malformed list cursors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server: Server = .init(allocator, .{
+        .name = "cursor-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"cursor\":\"-1\"}}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    const sent = try joinedSent(allocator, &transport);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"id\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "Pagination cursor must be a non-negative decimal offset") != null);
+}
+
 test "Server dynamic resources cover fallback handler success and failure" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

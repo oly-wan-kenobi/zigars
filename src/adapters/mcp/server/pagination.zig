@@ -8,8 +8,14 @@ pub const Pagination = struct {
     requested: bool = false,
 };
 
+pub const ParseError = error{
+    InvalidCursor,
+};
+
+pub const invalid_cursor_message = "Pagination cursor must be a non-negative decimal offset";
+
 /// Parses optional params.cursor and params.limit values from JSON-RPC params.
-pub fn fromParams(params: ?std.json.Value) Pagination {
+pub fn fromParams(params: ?std.json.Value) ParseError!Pagination {
     var page: Pagination = .{};
     const obj = switch (params orelse .null) {
         .object => |o| o,
@@ -17,14 +23,15 @@ pub fn fromParams(params: ?std.json.Value) Pagination {
     };
     if (obj.get("cursor")) |cursor| switch (cursor) {
         .string => |s| {
-            page.start = std.fmt.parseUnsigned(usize, s, 10) catch 0;
+            page.start = std.fmt.parseUnsigned(usize, s, 10) catch return error.InvalidCursor;
             page.requested = true;
         },
         .integer => |i| {
-            page.start = if (i > 0) @intCast(i) else 0;
+            if (i < 0) return error.InvalidCursor;
+            page.start = @intCast(i);
             page.requested = true;
         },
-        else => {},
+        else => return error.InvalidCursor,
     };
     if (obj.get("limit")) |limit| switch (limit) {
         .integer => |i| {

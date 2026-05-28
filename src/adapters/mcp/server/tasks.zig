@@ -145,7 +145,7 @@ pub fn handleList(server: anytype, io: std.Io, allocator: std.mem.Allocator, req
     var response_arena = std.heap.ArenaAllocator.init(allocator);
     defer response_arena.deinit();
     const a = response_arena.allocator();
-    const page = pagination.fromParams(request.params);
+    const page = pagination.fromParams(request.params) catch return server.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
     var tasks = std.json.Array.init(a);
     const job_count = state.jobCount();

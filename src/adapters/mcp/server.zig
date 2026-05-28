@@ -644,7 +644,7 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
-        const page = pagination.fromParams(request.params);
+        const page = pagination.fromParams(request.params) catch return self.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
         var tools_array: std.json.Array = .init(response_allocator);
 
@@ -804,7 +804,7 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
-        const page = pagination.fromParams(request.params);
+        const page = pagination.fromParams(request.params) catch return self.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
         var resources_array: std.json.Array = .init(response_allocator);
 
@@ -928,7 +928,7 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
-        const page = pagination.fromParams(request.params);
+        const page = pagination.fromParams(request.params) catch return self.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
         var templates_array: std.json.Array = .init(response_allocator);
 
@@ -965,7 +965,7 @@ pub const Server = struct {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
-        const page = pagination.fromParams(request.params);
+        const page = pagination.fromParams(request.params) catch return self.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
         var prompts_array: std.json.Array = .init(response_allocator);
 
