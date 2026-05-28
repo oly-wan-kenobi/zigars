@@ -244,7 +244,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_ci_ingest`: optional `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_ci_repro_plan`: optional `path: string`, `content: string`, `format: string`, `changed_files: string`, `limit: integer`
 - `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`
-- `zig_code_action_batch`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_indices: string`; optional `content: string`, `apply: boolean`
 - `zig_code_actions`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`; optional `content: string`
 - `zig_code_index_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
 - `zig_command_plan`: required `tool: string`; optional `file: string`, `path: string`, `args: string`, `timeout_ms: integer`
@@ -545,7 +544,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_ci_ingest`: `pure_analysis` read-only analysis
 - `zig_ci_repro_plan`: `pure_analysis` read-only analysis
 - `zig_code_action_apply`: `zls_request` `textDocument/codeAction`
-- `zig_code_action_batch`: `apply_gated_mutation` preview/apply mutation
+- `zig_code_action_batch`: `pure_analysis` read-only analysis
 - `zig_code_actions`: `zls_request` `textDocument/codeAction`
 - `zig_code_index_export`: `workspace_artifact` explicit workspace artifact
 - `zig_command_plan`: `pure_analysis` read-only analysis

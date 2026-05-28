@@ -134,9 +134,8 @@ pub const zig_organize_imports = tool(.{
 /// Inspect batch ZLS code-action support and return structured unavailable or unsupported state when transaction-safe batching is not available.
 pub const zig_code_action_batch = tool(.{
     .description = "Inspect batch ZLS code-action support and return structured unavailable or unsupported state when transaction-safe batching is not available.",
-    .input_schema = schemaWithHints(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true }, .{ "action_indices", "string", true }, .{ "apply", "boolean", false } }, &.{apply_hint}),
-    .read_only = false,
+    .input_schema = schema(&.{}),
+    .read_only = true,
     .group = .formatting_and_edits,
-    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .apply_gated_mutation = "ZLS-backed code-action batching; returns unavailable or unsupported-state results instead of guessing." },
+    .plan = .{ .pure_analysis = "Reports whether transaction-safe ZLS code-action batching is available; current handler returns unavailable or unsupported state." },
 });

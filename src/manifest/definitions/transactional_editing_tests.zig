@@ -17,3 +17,15 @@ const zig_code_action_batch = subject.zig_code_action_batch;
 test "transactional editing definitions expose patch metadata" {
     try @import("std").testing.expect(zigars_patch_session_create.description.len > 0);
 }
+
+test "code action batch definition matches unavailable stub behavior" {
+    try std.testing.expect(zig_code_action_batch.read_only);
+    try std.testing.expectEqual(@as(usize, 0), zig_code_action_batch.input_schema.fields.len);
+    try std.testing.expect(!zig_code_action_batch.risk.writes_source);
+    try std.testing.expect(!zig_code_action_batch.risk.writes_require_apply);
+    try std.testing.expect(!zig_code_action_batch.risk.mutates_lsp_state);
+    switch (zig_code_action_batch.plan) {
+        .pure_analysis => {},
+        else => return error.TestExpectedEqual,
+    }
+}

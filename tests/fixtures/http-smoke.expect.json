@@ -216,11 +216,6 @@
       "inputSchema.required.0": "source_file",
       "inputSchema.required.2": "name"
     },
-    "zig_code_action_batch": {
-      "inputSchema.properties.apply.default": false,
-      "inputSchema.required.0": "file",
-      "inputSchema.required.5": "action_indices"
-    },
     "zig_ci_ingest": {
       "inputSchema.properties.content.type": "string",
       "inputSchema.properties.format.default": "auto"
@@ -371,7 +366,6 @@
     "registry_tool_arguments.zigars_patch_session_apply.risk.writes_require_apply": true,
     "registry_tool_arguments.zigars_patch_session_validate.risk.executes_project_code": true,
     "registry_tool_arguments.zig_move_decl.risk.preview_by_default": true,
-    "registry_tool_arguments.zig_code_action_batch.risk.mutates_lsp_state": true,
     "registry_tool_arguments.zig_ci_ingest.optional.content": "string",
     "registry_tool_arguments.zig_release_plan.optional.validation": "string",
     "registry_tool_arguments.zig_api_baseline_init.optional.apply": "boolean",
