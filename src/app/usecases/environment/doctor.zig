@@ -24,6 +24,7 @@ pub const Input = struct {
     zwanzig_probe: ?Probe = null,
     zflame_probe: ?Probe = null,
     diff_folded_probe: ?Probe = null,
+    zig_version_preflight: ?ZigVersionPreflightReport = null,
 };
 
 /// Carries probe data across use case and port boundaries.
@@ -31,6 +32,31 @@ pub const Probe = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
+};
+
+/// Input data used to classify the configured Zig binary against build.zig.zon.
+pub const ZigVersionPreflightInput = struct {
+    probe_enabled: bool = true,
+    zig_path: []const u8 = "zig",
+    observed_version: ?[]const u8 = null,
+    required_minimum: ?[]const u8 = null,
+    minimum_unavailable_reason: ?[]const u8 = null,
+    unavailable_reason: ?[]const u8 = null,
+};
+
+/// Carries Zig version preflight data across use case and port boundaries.
+pub const ZigVersionPreflightReport = struct {
+    ok: ?bool,
+    status: []const u8,
+    observed_version: ?[]const u8 = null,
+    required_minimum: ?[]const u8 = null,
+    resolution: []const u8,
+    owns_resolution: bool = false,
+
+    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
+    pub fn deinit(self: ZigVersionPreflightReport, allocator: std.mem.Allocator) void {
+        if (self.owns_resolution) allocator.free(self.resolution);
+    }
 };
 
 /// Implements report workflow logic using caller-owned inputs.
@@ -88,6 +114,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     if (input.zwanzig_probe) |probe| try checks.append(try probeValue(allocator, "zwanzig_probe", probe));
     if (input.zflame_probe) |probe| try checks.append(try probeValue(allocator, "zflame_probe", probe));
     if (input.diff_folded_probe) |probe| try checks.append(try probeValue(allocator, "diff_folded_probe", probe));
+    if (input.zig_version_preflight) |preflight| try checks.append(try zigVersionPreflightCheckValue(allocator, preflight));
 
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -108,6 +135,157 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Classifies observed Zig version compatibility with build.zig.zon minimum_zig_version.
+pub fn zigVersionPreflight(allocator: std.mem.Allocator, input: ZigVersionPreflightInput) !ZigVersionPreflightReport {
+    if (!input.probe_enabled) return .{
+        .ok = null,
+        .status = "unprobed",
+        .observed_version = null,
+        .required_minimum = input.required_minimum,
+        .resolution = "Run zigars_doctor with probe_backends=true to compare `zig version` with build.zig.zon minimum_zig_version.",
+    };
+
+    const minimum = input.required_minimum orelse {
+        if (input.minimum_unavailable_reason) |reason| return .{
+            .ok = null,
+            .status = "unavailable",
+            .observed_version = input.observed_version,
+            .required_minimum = null,
+            .resolution = try std.fmt.allocPrint(
+                allocator,
+                "Could not read build.zig.zon minimum_zig_version ({s}); restore workspace access so Zig compatibility preflight can run.",
+                .{reason},
+            ),
+            .owns_resolution = true,
+        };
+        return .{
+            .ok = null,
+            .status = "unavailable",
+            .observed_version = input.observed_version,
+            .required_minimum = null,
+            .resolution = "build.zig.zon minimum_zig_version was not found; add it to enable Zig compatibility preflight.",
+        };
+    };
+    if (std.mem.trim(u8, minimum, " \t\r\n\"'").len == 0) return .{
+        .ok = null,
+        .status = "unavailable",
+        .observed_version = input.observed_version,
+        .required_minimum = null,
+        .resolution = "build.zig.zon minimum_zig_version was empty; set it to the required Zig release.",
+    };
+
+    if (input.unavailable_reason) |reason| return .{
+        .ok = false,
+        .status = "unavailable",
+        .observed_version = input.observed_version,
+        .required_minimum = minimum,
+        .resolution = try std.fmt.allocPrint(
+            allocator,
+            "Configured Zig at `{s}` was unavailable ({s}); install or select Zig {s} or newer, then restart zigars with --zig-path pointing at that toolchain.",
+            .{ input.zig_path, reason, minimum },
+        ),
+        .owns_resolution = true,
+    };
+
+    const observed = input.observed_version orelse return .{
+        .ok = false,
+        .status = "unavailable",
+        .observed_version = null,
+        .required_minimum = minimum,
+        .resolution = try std.fmt.allocPrint(
+            allocator,
+            "Configured Zig at `{s}` did not return a version; install or select Zig {s} or newer, then restart zigars with --zig-path pointing at that toolchain.",
+            .{ input.zig_path, minimum },
+        ),
+        .owns_resolution = true,
+    };
+    const active = std.mem.trim(u8, observed, " \t\r\n");
+    if (parseVersionPrefix(active) == null or parseVersionPrefix(minimum) == null) return .{
+        .ok = false,
+        .status = "unavailable",
+        .observed_version = active,
+        .required_minimum = minimum,
+        .resolution = try std.fmt.allocPrint(
+            allocator,
+            "Could not compare configured Zig version `{s}` with build.zig.zon minimum_zig_version `{s}`; verify --zig-path and the minimum_zig_version field.",
+            .{ active, minimum },
+        ),
+        .owns_resolution = true,
+    };
+    if (!versionMeetsMinimum(active, minimum)) return .{
+        .ok = false,
+        .status = "incompatible",
+        .observed_version = active,
+        .required_minimum = minimum,
+        .resolution = try std.fmt.allocPrint(
+            allocator,
+            "Configured Zig at `{s}` reports {s}, but build.zig.zon requires {s} or newer; install or select Zig {s} or newer, then restart zigars with --zig-path pointing at that toolchain.",
+            .{ input.zig_path, active, minimum, minimum },
+        ),
+        .owns_resolution = true,
+    };
+    return .{
+        .ok = true,
+        .status = "compatible",
+        .observed_version = active,
+        .required_minimum = minimum,
+        .resolution = "Configured Zig satisfies build.zig.zon minimum_zig_version.",
+    };
+}
+
+/// Serializes Zig version preflight into the standard doctor check shape.
+pub fn zigVersionPreflightValue(allocator: std.mem.Allocator, input: ZigVersionPreflightInput) !std.json.Value {
+    const preflight = try zigVersionPreflight(allocator, input);
+    defer preflight.deinit(allocator);
+    return zigVersionPreflightCheckValue(allocator, preflight);
+}
+
+/// Extracts build.zig.zon minimum_zig_version from caller-owned bytes.
+pub fn minimumZigVersionFromBuildZon(bytes: []const u8) ?[]const u8 {
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r\n");
+        if (std.mem.indexOf(u8, trimmed, "minimum_zig_version") == null) continue;
+        return quotedString(trimmed);
+    }
+    return null;
+}
+
+/// Implements version meets minimum workflow logic using caller-owned inputs.
+pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
+    const active = parseVersionPrefix(active_zig) orelse return false;
+    const minimum = parseVersionPrefix(minimum_zig) orelse return false;
+    for (active, minimum) |active_part, minimum_part| {
+        if (active_part > minimum_part) return true;
+        if (active_part < minimum_part) return false;
+    }
+    return true;
+}
+
+/// Parses the leading major.minor.patch version from Zig version strings.
+pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
+    const trimmed = std.mem.trim(u8, raw, " \t\r\n\"'");
+    if (trimmed.len == 0) return null;
+    var pos: usize = if (trimmed[0] == 'v') 1 else 0;
+    var parts: [3]u64 = .{ 0, 0, 0 };
+    var index: usize = 0;
+    while (index < parts.len) : (index += 1) {
+        if (pos >= trimmed.len or !std.ascii.isDigit(trimmed[pos])) break;
+        var value: u64 = 0;
+        while (pos < trimmed.len and std.ascii.isDigit(trimmed[pos])) : (pos += 1) {
+            value = value * 10 + (trimmed[pos] - '0');
+        }
+        parts[index] = value;
+        if (pos >= trimmed.len or trimmed[pos] != '.') {
+            index += 1;
+            break;
+        }
+        pos += 1;
+    }
+    if (index < 2) return null;
+    return parts;
+}
+
 /// Serializes check fields into an allocator-owned JSON value; allocation failures propagate.
 fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
@@ -121,4 +299,33 @@ fn checkValue(allocator: std.mem.Allocator, name: []const u8, ok: bool, status: 
 /// Serializes probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn probeValue(allocator: std.mem.Allocator, name: []const u8, probe: Probe) !std.json.Value {
     return checkValue(allocator, name, probe.ok, probe.status, probe.resolution);
+}
+
+/// Serializes Zig version preflight fields into an allocator-owned JSON value.
+fn zigVersionPreflightCheckValue(allocator: std.mem.Allocator, preflight: ZigVersionPreflightReport) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "name", .{ .string = "zig_version_preflight" });
+    try obj.put(allocator, "ok", if (preflight.ok) |ok| .{ .bool = ok } else .null);
+    try obj.put(allocator, "status", try ownedString(allocator, preflight.status));
+    try obj.put(allocator, "resolution", try ownedString(allocator, preflight.resolution));
+    try obj.put(allocator, "observed_version", if (preflight.observed_version) |version| try ownedString(allocator, version) else .null);
+    try obj.put(allocator, "required_minimum", if (preflight.required_minimum) |version| try ownedString(allocator, version) else .null);
+    try obj.put(allocator, "source_path", .{ .string = "build.zig.zon" });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Returns the first quoted string found in caller-owned input.
+fn quotedString(line: []const u8) ?[]const u8 {
+    const start = std.mem.indexOfScalar(u8, line, '"') orelse return null;
+    const rest = line[start + 1 ..];
+    const end = std.mem.indexOfScalar(u8, rest, '"') orelse return null;
+    return rest[0..end];
+}
+
+/// Copies the provided string into allocator-owned storage.
+fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
+    return .{ .string = try allocator.dupe(u8, value) };
 }
