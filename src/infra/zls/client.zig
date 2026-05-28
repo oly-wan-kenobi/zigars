@@ -33,6 +33,9 @@ pub const LspClient = struct {
     zls_stdout: ?std.Io.File,
     next_id: std.atomic.Value(i64) = std.atomic.Value(i64).init(1),
     pending: std.AutoHashMapUnmanaged(i64, *PendingRequest),
+    // Lock ordering: request tracking may take pending_mutex before
+    // last_error_mutex on response-allocation failure. write_mutex is kept
+    // independent and must not be held while acquiring either state mutex.
     pending_mutex: Mutex = .{},
     write_mutex: Mutex = .{},
     diagnostics: DiagnosticsCache,
