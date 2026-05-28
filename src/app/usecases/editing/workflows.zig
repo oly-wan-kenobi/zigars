@@ -1,3 +1,7 @@
+//! Focused editing workflows for file snapshots, replacements, renames, and formatting.
+//!
+//! Source-mutating entry points require explicit `apply=true`; preview results
+//! own their returned JSON values.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
