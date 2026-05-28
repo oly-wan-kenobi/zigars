@@ -21,3 +21,19 @@ test "clean tree gate parses porcelain status with generated path evidence" {
     try std.testing.expectEqual(@as(i64, 1), obj.get("untracked_count").?.integer);
     try std.testing.expectEqual(@as(i64, 1), obj.get("generated_or_vendored_count").?.integer);
 }
+
+test "trust JSON builders clean up allocation failures" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, trustValuesWithAllocator, .{});
+}
+
+/// Exercises trust JSON construction under allocation-failure testing.
+fn trustValuesWithAllocator(allocator: std.mem.Allocator) !void {
+    const gate = try trust.cleanTreeGateFromStatus(allocator, "/tmp/work", " M src/main.zig\n?? zig-out/bin/app\n", true, "fixture");
+    defer trust.deinitOwnedValue(allocator, gate);
+
+    const evidence_value = try trust.evidenceValue(allocator, "git", "git status --porcelain stdout", "high");
+    defer trust.deinitOwnedValue(allocator, evidence_value);
+
+    const array = try trust.stringArray(allocator, &.{ "zig build test", "zig build docs-check" });
+    defer trust.deinitOwnedValue(allocator, array);
+}

@@ -35,21 +35,54 @@ pub fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Va
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
+/// Frees JSON values produced by this module; object keys are borrowed field names.
+pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    switch (value) {
+        .string => |text| allocator.free(text),
+        .array => |array| {
+            var mutable = array;
+            for (mutable.items) |item| deinitOwnedValue(allocator, item);
+            mutable.deinit();
+        },
+        .object => |object| {
+            var mutable = object;
+            var it = mutable.iterator();
+            while (it.next()) |entry| deinitOwnedValue(allocator, entry.value_ptr.*);
+            mutable.deinit(allocator);
+        },
+        else => {},
+    }
+}
+
+/// Inserts a value into an object, freeing the value if the object allocation fails.
+fn putOwned(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
+    errdefer deinitOwnedValue(allocator, value);
+    try obj.put(allocator, key, value);
+}
+
+/// Appends a value into an array, freeing the value if the append allocation fails.
+fn appendOwned(allocator: std.mem.Allocator, array: *std.json.Array, value: std.json.Value) !void {
+    errdefer deinitOwnedValue(allocator, value);
+    try array.append(value);
+}
+
 /// Builds an owned JSON string array from borrowed string slices.
 pub fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
-    defer if (array_owned) array.deinit();
-    for (values) |value| try array.append(try ownedString(allocator, value));
+    defer if (array_owned) deinitOwnedValue(allocator, .{ .array = array });
+    for (values) |value| try appendOwned(allocator, &array, try ownedString(allocator, value));
     array_owned = false;
     return .{ .array = array };
 }
 
-/// Encodes source enums as JSON string arrays without extra allocations.
+/// Encodes source enums as owned JSON string arrays.
 pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !std.json.Value {
     var array = std.json.Array.init(allocator);
-    errdefer array.deinit();
-    for (sources) |source| try array.append(.{ .string = sourceName(source) });
+    var array_owned = true;
+    defer if (array_owned) deinitOwnedValue(allocator, .{ .array = array });
+    for (sources) |source| try appendOwned(allocator, &array, try ownedString(allocator, sourceName(source)));
+    array_owned = false;
     return .{ .array = array };
 }
 
@@ -57,10 +90,10 @@ pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !
 pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "file", try ownedString(allocator, file));
-    try obj.put(allocator, "line", .{ .integer = @intCast(@max(line, 1)) });
-    try obj.put(allocator, "column", .{ .integer = @intCast(@max(column, 1)) });
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "file", try ownedString(allocator, file));
+    try putOwned(allocator, &obj, "line", .{ .integer = @intCast(@max(line, 1)) });
+    try putOwned(allocator, &obj, "column", .{ .integer = @intCast(@max(column, 1)) });
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -75,11 +108,11 @@ pub fn evidenceValue(
 ) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "source", .{ .string = sourceName(source) });
-    try obj.put(allocator, "confidence", .{ .string = confidenceName(confidence) });
-    try obj.put(allocator, "detail", try ownedString(allocator, detail));
-    try obj.put(allocator, "verify_with", try stringArrayValue(allocator, verify_with));
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "source", try ownedString(allocator, sourceName(source)));
+    try putOwned(allocator, &obj, "confidence", try ownedString(allocator, confidenceName(confidence)));
+    try putOwned(allocator, &obj, "detail", try ownedString(allocator, detail));
+    try putOwned(allocator, &obj, "verify_with", try stringArrayValue(allocator, verify_with));
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -98,14 +131,14 @@ pub fn findingValue(
 ) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "source", .{ .string = sourceName(source) });
-    try obj.put(allocator, "rule", try ownedString(allocator, rule));
-    try obj.put(allocator, "severity", try ownedString(allocator, severity));
-    try obj.put(allocator, "location", try locationValue(allocator, file, line, column));
-    try obj.put(allocator, "message", try ownedString(allocator, message));
-    try obj.put(allocator, "confidence", .{ .string = confidenceName(confidence) });
-    try obj.put(allocator, "recommended_cross_check", try stringArrayValue(allocator, &.{ "zig_lint_compare", "zig build test" }));
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "source", try ownedString(allocator, sourceName(source)));
+    try putOwned(allocator, &obj, "rule", try ownedString(allocator, rule));
+    try putOwned(allocator, &obj, "severity", try ownedString(allocator, severity));
+    try putOwned(allocator, &obj, "location", try locationValue(allocator, file, line, column));
+    try putOwned(allocator, &obj, "message", try ownedString(allocator, message));
+    try putOwned(allocator, &obj, "confidence", try ownedString(allocator, confidenceName(confidence)));
+    try putOwned(allocator, &obj, "recommended_cross_check", try stringArrayValue(allocator, &.{ "zig_lint_compare", "zig build test" }));
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -135,11 +168,11 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
     }
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "finding_count", .{ .integer = @intCast(findings.items.len) });
-    try obj.put(allocator, "error_count", .{ .integer = @intCast(errors) });
-    try obj.put(allocator, "warning_count", .{ .integer = @intCast(warnings) });
-    try obj.put(allocator, "info_count", .{ .integer = @intCast(infos) });
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "finding_count", .{ .integer = @intCast(findings.items.len) });
+    try putOwned(allocator, &obj, "error_count", .{ .integer = @intCast(errors) });
+    try putOwned(allocator, &obj, "warning_count", .{ .integer = @intCast(warnings) });
+    try putOwned(allocator, &obj, "info_count", .{ .integer = @intCast(infos) });
     obj_owned = false;
     return .{ .object = obj };
 }

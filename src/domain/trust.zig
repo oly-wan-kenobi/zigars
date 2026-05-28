@@ -46,7 +46,7 @@ pub fn isGeneratedOrVendored(path: []const u8) bool {
 pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []const u8, stdout: []const u8, git_ok: bool, evidence_command: []const u8) !std.json.Value {
     var paths = std.json.Array.init(allocator);
     var paths_owned = true;
-    defer if (paths_owned) paths.deinit();
+    defer if (paths_owned) deinitOwnedValue(allocator, .{ .array = paths });
     var untracked: usize = 0;
     var generated_or_vendored: usize = 0;
 
@@ -61,29 +61,29 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
         if (std.mem.startsWith(u8, line, "??")) untracked += 1;
         var item = std.json.ObjectMap.empty;
         var item_owned = true;
-        defer if (item_owned) item.deinit(allocator);
-        try item.put(allocator, "path", .{ .string = try allocator.dupe(u8, path) });
-        try item.put(allocator, "status", .{ .string = try allocator.dupe(u8, std.mem.trim(u8, line[0..2], " ")) });
-        try item.put(allocator, "generated_or_vendored", .{ .bool = generated });
-        try paths.append(.{ .object = item });
+        defer if (item_owned) deinitOwnedValue(allocator, .{ .object = item });
+        try putOwned(allocator, &item, "path", try ownedString(allocator, path));
+        try putOwned(allocator, &item, "status", try ownedString(allocator, std.mem.trim(u8, line[0..2], " ")));
+        try putOwned(allocator, &item, "generated_or_vendored", .{ .bool = generated });
         item_owned = false;
+        try appendOwned(allocator, &paths, .{ .object = item });
     }
 
     const clean = git_ok and paths.items.len == 0;
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "zigars_clean_tree_gate" });
-    try obj.put(allocator, "ok", .{ .bool = clean });
-    try obj.put(allocator, "clean", .{ .bool = clean });
-    try obj.put(allocator, "workspace", .{ .string = workspace_root });
-    try obj.put(allocator, "changed_count", .{ .integer = @intCast(paths.items.len) });
-    try obj.put(allocator, "untracked_count", .{ .integer = @intCast(untracked) });
-    try obj.put(allocator, "generated_or_vendored_count", .{ .integer = @intCast(generated_or_vendored) });
-    try obj.put(allocator, "changed_paths", .{ .array = paths });
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "kind", try ownedString(allocator, "zigars_clean_tree_gate"));
+    try putOwned(allocator, &obj, "ok", .{ .bool = clean });
+    try putOwned(allocator, &obj, "clean", .{ .bool = clean });
+    try putOwned(allocator, &obj, "workspace", try ownedString(allocator, workspace_root));
+    try putOwned(allocator, &obj, "changed_count", .{ .integer = @intCast(paths.items.len) });
+    try putOwned(allocator, &obj, "untracked_count", .{ .integer = @intCast(untracked) });
+    try putOwned(allocator, &obj, "generated_or_vendored_count", .{ .integer = @intCast(generated_or_vendored) });
     paths_owned = false;
-    try obj.put(allocator, "evidence", try evidenceValue(allocator, evidence_command, "git status --porcelain stdout", if (git_ok) "high" else "low"));
-    try obj.put(allocator, "resolution", .{ .string = if (clean) "workspace tree is clean according to git status" else "review, commit, stash, or intentionally account for changed paths before release decisions" });
+    try putOwned(allocator, &obj, "changed_paths", .{ .array = paths });
+    try putOwned(allocator, &obj, "evidence", try evidenceValue(allocator, evidence_command, "git status --porcelain stdout", if (git_ok) "high" else "low"));
+    try putOwned(allocator, &obj, "resolution", try ownedString(allocator, if (clean) "workspace tree is clean according to git status" else "review, commit, stash, or intentionally account for changed paths before release decisions"));
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -92,10 +92,10 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
 pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
-    defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "source", .{ .string = source });
-    try obj.put(allocator, "reference", .{ .string = reference });
-    try obj.put(allocator, "confidence", .{ .string = confidence });
+    defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
+    try putOwned(allocator, &obj, "source", try ownedString(allocator, source));
+    try putOwned(allocator, &obj, "reference", try ownedString(allocator, reference));
+    try putOwned(allocator, &obj, "confidence", try ownedString(allocator, confidence));
     obj_owned = false;
     return .{ .object = obj };
 }
@@ -104,8 +104,44 @@ pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference
 pub fn stringArray(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
-    defer if (array_owned) array.deinit();
-    for (items) |item| try array.append(.{ .string = try allocator.dupe(u8, item) });
+    defer if (array_owned) deinitOwnedValue(allocator, .{ .array = array });
+    for (items) |item| try appendOwned(allocator, &array, try ownedString(allocator, item));
     array_owned = false;
     return .{ .array = array };
+}
+
+/// Duplicates bytes into allocator-owned JSON string storage.
+fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
+    return .{ .string = try allocator.dupe(u8, value) };
+}
+
+/// Frees JSON values produced by this module; object keys are borrowed field names.
+pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    switch (value) {
+        .string => |text| allocator.free(text),
+        .array => |array| {
+            var mutable = array;
+            for (mutable.items) |item| deinitOwnedValue(allocator, item);
+            mutable.deinit();
+        },
+        .object => |object| {
+            var mutable = object;
+            var it = mutable.iterator();
+            while (it.next()) |entry| deinitOwnedValue(allocator, entry.value_ptr.*);
+            mutable.deinit(allocator);
+        },
+        else => {},
+    }
+}
+
+/// Inserts a value into an object, freeing the value if the object allocation fails.
+fn putOwned(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, key: []const u8, value: std.json.Value) !void {
+    errdefer deinitOwnedValue(allocator, value);
+    try obj.put(allocator, key, value);
+}
+
+/// Appends a value into an array, freeing the value if the append allocation fails.
+fn appendOwned(allocator: std.mem.Allocator, array: *std.json.Array, value: std.json.Value) !void {
+    errdefer deinitOwnedValue(allocator, value);
+    try array.append(value);
 }
