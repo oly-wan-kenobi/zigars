@@ -5,7 +5,6 @@ const schemaWithHints = types.schemaWithHints;
 const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
-
 /// Build a heuristic import graph from workspace Zig files.
 pub const zig_import_graph = tool(.{
     .description = "Build a heuristic import graph from workspace Zig files.",
