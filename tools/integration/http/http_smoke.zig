@@ -63,6 +63,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try waitForInitialize(allocator, io, port, &child);
     try assertRequiredTools(allocator, io, port, expected.value);
     scenarios += 1;
+    try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigars://trust/manifest\"}}", "zigars_trust_manifest", &scenarios);
     try smoke.assertRawHttpContains(
         allocator,
         io,
@@ -108,6 +109,14 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
         io,
         port,
         "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 66\r\nConnection: close\r\n\r\n{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}",
+        "204",
+        &scenarios,
+    );
+    try smoke.assertRawHttpContains(
+        allocator,
+        io,
+        port,
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 120\r\nConnection: close\r\n\r\n{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":999999,\"reason\":\"http smoke unknown request\"}}",
         "204",
         &scenarios,
     );
@@ -234,6 +243,8 @@ fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *st
         defer parsed.deinit();
         const name = valueAt(parsed.value, "result.serverInfo.name").?.string;
         try smoke.expectStringEq(io, name, "zigars", "initialize serverInfo.name");
+        const trust_uri = valueAt(parsed.value, "result.zigars.trust_manifest.uri").?.string;
+        try smoke.expectStringEq(io, trust_uri, "zigars://trust/manifest", "initialize trust manifest URI");
         return;
     }
 }
