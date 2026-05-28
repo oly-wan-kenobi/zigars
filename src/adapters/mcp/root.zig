@@ -2,6 +2,7 @@
 pub const args = @import("args.zig");
 pub const artifacts = @import("tools/artifacts.zig");
 pub const core = @import("tools/core.zig");
+pub const correlation = @import("correlation.zig");
 pub const dependencies = @import("tools/dependencies.zig");
 pub const diagnostics = @import("tools/diagnostics.zig");
 pub const discovery = @import("tools/discovery.zig");
