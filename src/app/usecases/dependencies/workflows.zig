@@ -1,3 +1,7 @@
+//! Dependency inspection, package lookup, and dependency-session workflows.
+//!
+//! Results are allocator-owned JSON values; source writes remain apply-gated
+//! through dependency session state.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
