@@ -11,18 +11,24 @@ const cli = path.join(packageRoot, "bin", "zigars-skills.js");
 const skillsRoot = path.join(packageRoot, "skills");
 const expectedSkills = [
   "zigars-ci-forensics",
+  "zigars-compile-error-triage",
+  "zigars-comptime-diagnose",
   "zigars-cross-target-artifact-auditor",
   "zigars-dependency-steward",
-  "zigars-development",
   "zigars-docs-example-steward",
   "zigars-evidence-contract",
   "zigars-ffi-abi-guardian",
+  "zigars-handoff-resume",
+  "zigars-incremental-validation",
+  "zigars-io-016-migration",
   "zigars-memory-fuzz-forensics",
   "zigars-performance-regression-investigator",
   "zigars-release-claim-auditor",
   "zigars-runtime-crash-forensics",
   "zigars-safe-refactor",
+  "zigars-toolchain-pin-and-doctor",
   "zigars-zig-version-migrator",
+  "zigars-zon-hash-sync",
 ];
 
 function run(args) {
