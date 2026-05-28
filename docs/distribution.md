@@ -219,6 +219,23 @@ showing startup, workspace identity, structured MCP results, one read-only Zig
 command, one docs/static-analysis call, and one preview-first source-write tool
 without `apply=true`.
 
+## Binary CLI Reporting Surface
+
+Release archives also expose a thin, explicit CLI mode under the same `zigars`
+binary:
+
+```sh
+zigars cli workspace-info --workspace /absolute/path/to/zig/project --json
+zigars cli doctor --workspace /absolute/path/to/zig/project --probe-backends=false --json
+```
+
+This is not the MCP server path and does not use `tools/zigars_tools.zig`.
+Successful command output is minified JSON on stdout, diagnostics go to stderr,
+and the output shape matches the corresponding MCP `structuredContent` object.
+Use CLI JSON and generated artifacts as the non-MCP integration path for CI and
+release automation. A public Zig library API remains deferred. See
+[cli.md](cli.md) for exit codes and follow-up CLI candidates.
+
 ## MCP Registry Plan
 
 The first MCP Registry package should point to the npm shim. MCPB packages can
