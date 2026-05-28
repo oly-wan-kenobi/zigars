@@ -64,14 +64,30 @@ directories. They are not run by this package automatically.
 
 ## Shipped Skills
 
+- `zigars-compile-error-triage`: route a failing Zig build to its primary error
+  via structured diagnostics and confirm the fix with `zigars_validate_patch`.
+- `zigars-comptime-diagnose`: localize the runtime-tainted operand behind a Zig
+  comptime error and propose a compiler-verifiable fix.
+- `zigars-zon-hash-sync`: repair a `build.zig.zon` hash mismatch in one
+  preview-first edit, then rerun the failing build.
+- `zigars-io-016-migration`: audit and migrate `std.io`, `std.posix`, `std.fs`,
+  `std.net.Address`, and `std.time` call sites to Zig 0.16's `std.Io` interface.
+- `zigars-incremental-validation`: pick the cheapest sufficient validation
+  depth for a change and report what is left unproven.
+- `zigars-toolchain-pin-and-doctor`: pin Zig, ZLS, and optional backends for
+  reproducible builds on this machine.
+- `zigars-handoff-resume`: capture or replay session context so work can resume
+  across agents, clients, or sessions without redoing discovery.
 - `zigars-evidence-contract`: audit zigars evidence before making final claims
   about safety, validation, release readiness, or backend support.
 - `zigars-safe-refactor`: plan and validate risky Zig source changes with impact,
   edit-policy, patch-session, and test-selection discipline.
-- `zigars-dependency-steward`: update, repair, and audit `build.zig.zon`
-  dependencies, hashes, provenance, license, and security evidence.
-- `zigars-zig-version-migrator`: migrate Zig projects across toolchain, stdlib,
-  language-reference, ZLS, and package-version changes.
+- `zigars-dependency-steward`: add, update, and audit Zig dependencies for
+  provenance, license, SBOM, scanner evidence, and lock state (hash repair
+  belongs to `zigars-zon-hash-sync`).
+- `zigars-zig-version-migrator`: handle the non-IO parts of a Zig version bump
+  (`build.zig` API, package metadata, non-IO stdlib re-paths, version-scoped
+  docs) and route specialized concerns to their dedicated skills.
 - `zigars-ci-forensics`: interpret CI logs, annotations, JUnit, SARIF, and matrix
   failures without replacing raw artifact authority.
 - `zigars-release-claim-auditor`: keep release notes, semver decisions, backend
@@ -88,9 +104,6 @@ directories. They are not run by this package automatically.
   QEMU, target runtime, and native-vs-cross-target artifact evidence.
 - `zigars-docs-example-steward`: keep README commands, snippets, autodoc, local
   std/langref claims, examples, and docs drift evidence-based.
-- `zigars-development`: dogfood zigars while developing zigars itself, including
-  server changes, repo docs, package tooling, validation, Phase 6 protocol
-  feature fallbacks, and skill refinement.
 
 ## Maintainer Notes
 
