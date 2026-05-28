@@ -1,4 +1,4 @@
 interface:
   display_name: "zigars Zig version migrator"
-  short_description: "Migrate Zig projects across toolchain versions."
-  default_prompt: "Use $zigars-zig-version-migrator to make this Zig version migration evidence-based and version-scoped."
+  short_description: "Cross-version build.zig, package metadata, and non-IO stdlib migration."
+  default_prompt: "Use $zigars-zig-version-migrator to handle the non-IO parts of this Zig version bump and route specialized concerns (std.Io, toolchain pinning, hash sync) to their dedicated skills."
