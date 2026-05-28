@@ -4,6 +4,7 @@ const mcp = @import("mcp");
 
 const app_context = @import("../../app/context.zig");
 const artifact_registry = @import("../../app/usecases/artifacts/registry.zig");
+const trust_usecase = @import("../../app/usecases/environment/trust.zig");
 const runtime_ux = @import("../../app/usecases/runtime_ux/workflows.zig");
 const ports = @import("../../app/ports.zig");
 const mcp_resource_errors = @import("resource_errors.zig");
@@ -12,6 +13,14 @@ const mcp_result = @import("result.zig");
 /// Registers static resource URIs and dynamic file resource templates.
 pub fn registerResources(server: anytype, context_provider: anytype) !void {
     const Provider = @TypeOf(context_provider);
+    try server.addResourceWithDeinit(.{
+        .uri = trust_usecase.trust_manifest_uri,
+        .name = "Zigars Trust Manifest",
+        .description = "Connection-time trust posture, source-write policy, backend identity, and setup guidance.",
+        .mimeType = "application/json",
+        .handler = jsonResourceHandler(Provider, trustManifestResource),
+        .user_data = context_provider,
+    }, mcp_result.deinitResourceContent);
     try server.addResourceWithDeinit(.{
         .uri = "zigars://workspace",
         .name = "Zigars Workspace",
@@ -111,6 +120,18 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
         .description = "Use zig_import_graph_json and filter by path for import data.",
         .mimeType = "application/json",
     });
+}
+
+/// Returns the connection-time trust manifest for MCP reads.
+fn trustManifestResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    return trust_usecase.trustManifestValueFromRuntimeContext(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
+        .resource = "trust_manifest",
+        .operation = "read_resource",
+        .phase = "build_manifest",
+        .code = "trust_manifest_failed",
+        .category = "trust",
+        .resolution = "Retry the resource read; use zigars_trust_report if the connection-time resource remains unavailable.",
+    }, err);
 }
 
 /// Builds the text workspace resource from runtime UX context.
