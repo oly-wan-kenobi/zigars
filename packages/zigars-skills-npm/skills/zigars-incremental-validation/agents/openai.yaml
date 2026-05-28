@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars incremental validation"
+  short_description: "Pick the cheapest sufficient validation depth for a Zig change."
+  default_prompt: "Use $zigars-incremental-validation to choose risk-ordered validation phases for this change and report what is left unproven."
