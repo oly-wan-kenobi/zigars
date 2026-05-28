@@ -39,6 +39,7 @@ pub const runtime_field_inventory = [_]RuntimeFieldRecord{
     .{ .name = "observability", .concern = .infra_state, .migration_note = "concrete metrics state; migrated code should use ObservabilitySink" },
     .{ .name = "runtime_ux", .concern = .bootstrap, .migration_note = "server task/job state remains runtime/bootstrap state" },
     .{ .name = "protocol_client", .concern = .bootstrap, .migration_note = "per-call MCP protocol helper port injected by the server adapter and projected into app context" },
+    .{ .name = "active_cancellation", .concern = .bootstrap, .migration_note = "per-call cooperative cancellation token projected into infra ports during active MCP dispatch" },
     .{ .name = "temp_counter", .concern = .infra_state, .migration_note = "temporary id state; app code should use ClockAndIds" },
 };
 
@@ -76,6 +77,11 @@ pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet
         .timeouts = .{
             .command_ms = runtime.config.timeout_ms,
             .zls_ms = runtime.config.zls_timeout_ms,
+        },
+        .audit_log = .{
+            .enabled = runtime.config.audit_log_path != null,
+            .mode = if (runtime.config.audit_log_path != null) runtime.config.audit_log_mode.text() else "disabled",
+            .path = runtime.config.audit_log_path,
         },
         .platform = .{
             .os = @tagName(builtin.os.tag),
