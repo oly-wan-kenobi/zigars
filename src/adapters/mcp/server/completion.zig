@@ -11,19 +11,26 @@ const completion_cap = 100;
 const CompletionSet = struct {
     allocator: std.mem.Allocator,
     values: std.json.Array,
+    seen: std.StringHashMap(void),
+    total: usize = 0,
     has_more: bool = false,
 
     /// Initializes a bounded completion accumulator.
     fn init(allocator: std.mem.Allocator) CompletionSet {
-        return .{ .allocator = allocator, .values = .init(allocator) };
+        return .{ .allocator = allocator, .values = .init(allocator), .seen = std.StringHashMap(void).init(allocator) };
+    }
+
+    /// Releases accumulator bookkeeping. Response values are owned by the response arena.
+    fn deinit(self: *CompletionSet) void {
+        self.seen.deinit();
     }
 
     /// Appends a unique prefix-matched candidate or records that more values exist.
     fn append(self: *CompletionSet, prefix: []const u8, value: []const u8) !void {
         if (prefix.len > 0 and !std.mem.startsWith(u8, value, prefix)) return;
-        for (self.values.items) |item| {
-            if (item == .string and std.mem.eql(u8, item.string, value)) return;
-        }
+        if (self.seen.contains(value)) return;
+        try self.seen.put(value, {});
+        self.total += 1;
         if (self.values.items.len >= completion_cap) {
             self.has_more = true;
             return;
@@ -70,6 +77,7 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
     }
 
     var completions = CompletionSet.init(response_allocator);
+    defer completions.deinit();
     if (std.mem.eql(u8, ref_type, "ref/prompt")) {
         var iter = server.prompts.iterator();
         while (iter.next()) |entry| try completions.append(prefix, entry.value_ptr.name);
@@ -85,7 +93,7 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
 
     var completion: std.json.ObjectMap = .empty;
     try completion.put(response_allocator, "values", .{ .array = completions.values });
-    try completion.put(response_allocator, "total", .{ .integer = @intCast(completions.values.items.len) });
+    try completion.put(response_allocator, "total", .{ .integer = @intCast(completions.total) });
     try completion.put(response_allocator, "hasMore", .{ .bool = completions.has_more });
 
     var result: std.json.ObjectMap = .empty;
@@ -137,4 +145,26 @@ fn appendResourceUris(server: anytype, completions: *CompletionSet, prefix: []co
     while (iter.next()) |entry| try completions.append(prefix, entry.value_ptr.uri);
     var template_iter = server.resource_templates.iterator();
     while (template_iter.next()) |entry| try completions.append(prefix, entry.value_ptr.uriTemplate);
+}
+
+test "completion set tracks total matches beyond response cap" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var completions = CompletionSet.init(allocator);
+    defer completions.deinit();
+
+    for (0..completion_cap + 5) |index| {
+        const value = try std.fmt.allocPrint(allocator, "item-{d}", .{index});
+        try completions.append("item-", value);
+    }
+
+    try std.testing.expectEqual(@as(usize, completion_cap), completions.values.items.len);
+    try std.testing.expectEqual(@as(usize, completion_cap + 5), completions.total);
+    try std.testing.expect(completions.has_more);
+
+    try completions.append("item-", "item-0");
+    try completions.append("other-", "item-999");
+    try std.testing.expectEqual(@as(usize, completion_cap + 5), completions.total);
 }
