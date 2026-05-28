@@ -47,6 +47,7 @@ fn buildEntries() [definition_count]ToolEntry {
             index += 1;
             const id = @field(ToolId, decl.name);
             const definition = @field(group, decl.name);
+            comptime validateDefinition(decl.name, definition);
             const meta = ToolMeta{
                 .id = id,
                 .name = decl.name,
@@ -67,6 +68,44 @@ fn buildEntries() [definition_count]ToolEntry {
         }
     }
     return result;
+}
+
+/// Enforces local declaration invariants while aggregating manifest definitions.
+fn validateDefinition(comptime name: []const u8, comptime definition: types.ToolDefinition) void {
+    if (definition.risk.writes_source and !definition.risk.writes_require_apply) {
+        @compileError(name ++ ": source-writing tools must require apply=true");
+    }
+    if (definition.risk.writes_source and !definition.risk.preview_by_default) {
+        @compileError(name ++ ": source-writing tools must preview by default");
+    }
+    if (definition.risk.writes_source and definition.read_only) {
+        @compileError(name ++ ": source-writing tools cannot be read-only");
+    }
+    switch (definition.plan) {
+        .apply_gated_mutation => {
+            if (!definition.risk.writes_require_apply or !definition.risk.preview_by_default) {
+                @compileError(name ++ ": apply-gated mutations must advertise apply-required preview behavior");
+            }
+        },
+        .workspace_artifact => {
+            if (!definition.risk.writes_artifacts) {
+                @compileError(name ++ ": workspace artifact plans must advertise artifact writes");
+            }
+        },
+        .zls_request => |plan| {
+            if (plan.mutates_document_state and !definition.risk.mutates_lsp_state) {
+                @compileError(name ++ ": mutating ZLS requests must advertise LSP state mutation");
+            }
+        },
+        else => {},
+    }
+    const needs_static_tier = definition.group == .static_analysis or definition.group == .zwanzig;
+    if (needs_static_tier and definition.static_analysis_tier == null) {
+        @compileError(name ++ ": static-analysis tools must declare a capability tier");
+    }
+    if (!needs_static_tier and definition.static_analysis_tier != null) {
+        @compileError(name ++ ": only static-analysis tools may declare a capability tier");
+    }
 }
 
 /// Projects the full entry table into the public metadata table.
