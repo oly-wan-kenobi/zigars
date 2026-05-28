@@ -1,3 +1,7 @@
+//! Shared CLI I/O helpers for repository tooling.
+//!
+//! Tool helpers use stderr for diagnostics and reserve stdout for explicit
+//! machine-readable command output.
 const std = @import("std");
 const builtin = @import("builtin");
 
