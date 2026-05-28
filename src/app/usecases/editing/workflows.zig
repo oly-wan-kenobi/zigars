@@ -171,35 +171,27 @@ pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.V
 }
 
 /// Serializes format fields into an allocator-owned JSON value; allocation failures propagate.
-pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, apply: bool, timeout_ms: i64) !std.json.Value {
+pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: ?[]const u8, apply: bool, timeout_ms: i64) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.format" });
     defer resolved.deinit(allocator);
-    if (apply) {
-        const argv = [_][]const u8{ context.tool_paths.zig, "fmt", resolved.path };
-        const result = try context.command_runner.run(allocator, .{
-            .argv = &argv,
-            .cwd = context.workspace.root,
-            .timeout_ms = @intCast(@max(1, timeout_ms)),
-            .max_stdout_bytes = core_commands.command_output_limit,
-            .max_stderr_bytes = core_commands.command_output_limit,
-            .provenance = "editing.format.apply",
-        });
-        defer result.deinit(allocator);
-        return commandResultValue(allocator, "zig fmt apply", &argv, context.workspace.root, timeout_ms, result);
-    }
-
     const rel = workspaceRelative(context.workspace.root, resolved.path);
-    const input = try context.workspace_store.read(allocator, .{
-        .path = rel,
-        .max_bytes = max_session_file_bytes,
-        .provenance = "editing.format.preview.read_source",
-    });
-    defer input.deinit(allocator);
-    const preview_path = try std.fs.path.join(allocator, &.{ ".zigars-cache", "format-preview", rel });
+    const source = if (content) |bytes|
+        ports.WorkspaceReadResult{ .bytes = bytes, .owns_bytes = false }
+    else
+        try context.workspace_store.read(allocator, .{
+            .path = rel,
+            .max_bytes = max_session_file_bytes,
+            .provenance = "editing.format.read_source",
+        });
+    defer source.deinit(allocator);
+
+    const preview_name = try std.fmt.allocPrint(allocator, "{x:0>16}.zig", .{std.hash.Wyhash.hash(std.hash.Wyhash.hash(0, rel), source.bytes)});
+    defer allocator.free(preview_name);
+    const preview_path = try std.fs.path.join(allocator, &.{ ".zigars-cache", "format-preview", preview_name });
     defer allocator.free(preview_path);
     _ = try context.workspace_store.write(.{
         .path = preview_path,
-        .bytes = input.bytes,
+        .bytes = source.bytes,
         .provenance = "editing.format.preview.write_preview",
     });
     defer _ = context.workspace_store.delete(.{ .path = preview_path, .missing_ok = true, .provenance = "editing.format.preview.cleanup" }) catch {};
@@ -223,14 +215,23 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
         .provenance = "editing.format.preview.read_formatted",
     });
     defer formatted.deinit(allocator);
-    const diff = try session_domain.unifiedDiff(allocator, rel, input.bytes, formatted.bytes);
+    const diff = try session_domain.unifiedDiff(allocator, rel, source.bytes, formatted.bytes);
+    if (apply) _ = try context.workspace_store.write(.{
+        .path = rel,
+        .bytes = formatted.bytes,
+        .provenance = "editing.format.apply.write_source",
+    });
+
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
-    try obj.put(allocator, "applied", .{ .bool = false });
+    try obj.put(allocator, "applied", .{ .bool = apply });
     try obj.put(allocator, "file", try ownedString(allocator, rel));
-    try obj.put(allocator, "source_hash", try hashHexValue(allocator, input.bytes));
+    try obj.put(allocator, "input_source", .{ .string = if (content == null) "workspace_file" else "content" });
+    try obj.put(allocator, "source_hash", try hashHexValue(allocator, source.bytes));
     try obj.put(allocator, "updated_hash", try hashHexValue(allocator, formatted.bytes));
+    try obj.put(allocator, "changed", .{ .bool = !std.mem.eql(u8, source.bytes, formatted.bytes) });
+    try obj.put(allocator, "would_write", .{ .bool = !apply and !std.mem.eql(u8, source.bytes, formatted.bytes) });
     try obj.put(allocator, "diff", .{ .string = diff });
     try obj.put(allocator, "formatted", try ownedString(allocator, formatted.bytes));
     try obj.put(allocator, "preview_retained", .{ .bool = false });
@@ -636,6 +637,58 @@ test "replacement sessions apply safe changed files through workspace store" {
     try std.testing.expect(value.object.get("safe_to_apply").?.bool);
     try workspace.verify();
     try clock.verify();
+}
+
+test "formatValue formats supplied content without reading source on preview" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var runner = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer runner.deinit();
+    const context = app_context.CoreCommandContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 1000 },
+        .zls_state = .{},
+        .command_runner = runner.port(),
+        .workspace_store = workspace.port(),
+    };
+
+    const rel = "src/main.zig";
+    const input = "const x=1;\n";
+    const formatted_text = "const x = 1;\n";
+    const preview_name = try std.fmt.allocPrint(std.testing.allocator, "{x:0>16}.zig", .{std.hash.Wyhash.hash(std.hash.Wyhash.hash(0, rel), input)});
+    defer std.testing.allocator.free(preview_name);
+    const preview_path = try std.fs.path.join(std.testing.allocator, &.{ ".zigars-cache", "format-preview", preview_name });
+    defer std.testing.allocator.free(preview_path);
+    const preview_abs = try std.fs.path.join(std.testing.allocator, &.{ "/workspace", preview_path });
+    defer std.testing.allocator.free(preview_abs);
+
+    try workspace.expectResolve(.{ .path = rel, .provenance = "editing.format" }, "/workspace/src/main.zig");
+    try workspace.expectWrite(.{ .path = preview_path, .bytes = input, .provenance = "editing.format.preview.write_preview" }, .{ .bytes_written = input.len });
+    try workspace.expectResolve(.{ .path = preview_path, .for_output = true, .provenance = "editing.format.preview.resolve_preview" }, preview_abs);
+    try runner.expectRun(.{
+        .argv = &.{ "zig", "fmt", preview_abs },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = core_commands.command_output_limit,
+        .max_stderr_bytes = core_commands.command_output_limit,
+        .provenance = "editing.format.preview.run",
+    }, .{ .exit_code = 0 });
+    try workspace.expectRead(.{ .path = preview_path, .max_bytes = max_session_file_bytes, .for_output = true, .provenance = "editing.format.preview.read_formatted" }, formatted_text);
+    try workspace.expectDelete(.{ .path = preview_path, .missing_ok = true, .provenance = "editing.format.preview.cleanup" }, .{ .deleted = true });
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const value = try formatValue(arena.allocator(), context, rel, input, false, 1000);
+    try std.testing.expect(!value.object.get("applied").?.bool);
+    try std.testing.expectEqualStrings("content", value.object.get("input_source").?.string);
+    try std.testing.expect(value.object.get("changed").?.bool);
+    try std.testing.expectEqualStrings(formatted_text, value.object.get("formatted").?.string);
+    try std.testing.expectEqual(@as(usize, 1), workspace.readCalls().len);
+    try std.testing.expectEqualStrings(preview_path, workspace.readCalls()[0].path);
+    try std.testing.expectEqual(@as(usize, 1), workspace.writeCalls().len);
+    try workspace.verify();
+    try runner.verify();
 }
 
 test "readSnapshot treats missing files as empty absent snapshots" {
