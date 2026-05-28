@@ -39,6 +39,7 @@ pub const App = struct {
     observability: observability.State = .{},
     runtime_ux: runtime_ux.State = .{},
     protocol_client: ?app_ports.ProtocolClient = null,
+    active_cancellation: ?app_ports.CancellationToken = null,
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     /// Releases runtime-owned caches, ZLS state, and parsed configuration.
