@@ -151,6 +151,45 @@ test "client protocol request waits for matching elicitation response" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "elicitation/create") != null);
 }
 
+test "client protocol request rejects nested inbound requests while waiting for response" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+    server.client_capabilities = .{ .elicitation = .{ .form = .{} } };
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":"nested","method":"ping"}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"result":{"action":"accept","content":{"confirm":true}}}
+        ,
+    };
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+
+    var params = std.json.ObjectMap.empty;
+    try params.put(allocator, "message", .{ .string = "Apply?" });
+    defer params.deinit(allocator);
+    const response = try server.requestClientProtocol(std.testing.io, allocator, .{
+        .feature = .elicitation,
+        .method = "elicitation/create",
+        .params = .{ .object = params },
+    });
+    try std.testing.expect(response.supported);
+    try std.testing.expect(response.used);
+    try std.testing.expectEqual(app_ports.ProtocolResponseStatus.accepted, response.status);
+    if (response.result) |result| mcp_result.deinitOwnedValue(allocator, result);
+    try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
+
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "elicitation/create") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"id\":\"nested\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "nested requests are not accepted") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") == null);
+}
+
 test "client protocol request returns unsupported and transport timeout metadata" {
     const allocator = std.testing.allocator;
     var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });

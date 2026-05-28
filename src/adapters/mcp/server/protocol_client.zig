@@ -163,10 +163,20 @@ pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.All
                     .unavailable_reason = "client returned an error response for the protocol helper request",
                 };
             },
-            .request => |inbound_request| try server.handleRequest(io, allocator, inbound_request, data),
+            .request => |inbound_request| try rejectNestedRequest(server, io, allocator, inbound_request),
             .notification => |notification| try server.handleNotification(io, notification, data),
         }
     }
+}
+
+fn rejectNestedRequest(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+    const error_response = jsonrpc.createErrorResponse(
+        request.id,
+        jsonrpc.ErrorCode.INVALID_REQUEST,
+        "Server is awaiting a client protocol response; nested requests are not accepted",
+        null,
+    );
+    try server.sendResponse(io, allocator, .{ .error_response = error_response });
 }
 
 /// App-facing protocol helper adapter bound to the currently executing tools/call.
