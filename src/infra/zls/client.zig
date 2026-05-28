@@ -244,8 +244,14 @@ pub const LspClient = struct {
         defer aw.deinit();
         aw.writer.print(
             \\{{"jsonrpc":"2.0","method":"$/cancelRequest","params":{{"id":{d}}}}}
-        , .{id}) catch return;
-        const msg = aw.toOwnedSlice() catch return;
+        , .{id}) catch |err| {
+            self.logger.debug("lsp", "cancel notification render failed: {}", .{err});
+            return;
+        };
+        const msg = aw.toOwnedSlice() catch |err| {
+            self.logger.debug("lsp", "cancel notification allocation failed: {}", .{err});
+            return;
+        };
         defer self.allocator.free(msg);
         self.writeMessage(stdin, msg) catch |err| {
             self.logger.debug("lsp", "cancel notification failed: {}", .{err});
