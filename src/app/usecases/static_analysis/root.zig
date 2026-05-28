@@ -5,6 +5,7 @@ pub const workspace_scans = @import("workspace_scans.zig");
 pub const project_values = @import("project_values.zig");
 pub const agent_ergonomics = @import("agent_ergonomics.zig");
 pub const developer_pain = @import("developer_pain.zig");
+pub const layout_probes = @import("layout_probes.zig");
 
 test {
     _ = source_summary;
@@ -14,6 +15,7 @@ test {
     _ = project_values;
     _ = agent_ergonomics;
     _ = developer_pain;
+    _ = layout_probes;
     _ = @import("lint_intelligence_tests.zig");
     _ = @import("source_summary_tests.zig");
     _ = @import("semantic_index_tests.zig");
