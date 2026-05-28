@@ -7,6 +7,7 @@
     "backend_or_artifact": "Backend and artifact tools must have a non-empty plan so release-check can name missing coverage by tool."
   },
   "resources": [
+    "zigars://trust/manifest",
     "zigars://workspace",
     "zigars://zls/status",
     "zigars://tools/capabilities",
