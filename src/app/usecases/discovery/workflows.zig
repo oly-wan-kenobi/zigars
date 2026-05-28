@@ -4,6 +4,7 @@ const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
 const backend_catalog = @import("../environment/backend_catalog.zig");
+const env_doctor = @import("../environment/doctor.zig");
 const static_project = @import("../static_analysis/project_values.zig");
 
 /// Error set returned by toolchain workflow failures.
@@ -84,6 +85,7 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
         try appendProbeCheck(allocator, &checks, "zflame_probe", context, .zflame, context.tool_paths.zflame, probe_timeout_ms);
         try appendProbeCheck(allocator, &checks, "diff_folded_probe", context, .diff_folded, context.tool_paths.diff_folded, probe_timeout_ms);
     }
+    try appendZigVersionPreflightCheck(allocator, &checks, context, probe_backends, probe_timeout_ms);
 
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -591,37 +593,12 @@ pub fn zigVersionHintAppliesToZig(key: []const u8) bool {
 
 /// Implements version meets minimum workflow logic using caller-owned inputs.
 pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
-    const active = parseVersionPrefix(active_zig) orelse return false;
-    const minimum = parseVersionPrefix(minimum_zig) orelse return false;
-    for (active, minimum) |active_part, minimum_part| {
-        if (active_part > minimum_part) return true;
-        if (active_part < minimum_part) return false;
-    }
-    return true;
+    return env_doctor.versionMeetsMinimum(active_zig, minimum_zig);
 }
 
 /// Parses version prefix input using caller-provided storage; malformed input and allocation failures propagate.
 pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
-    const trimmed = std.mem.trim(u8, raw, " \t\r\n\"'");
-    if (trimmed.len == 0) return null;
-    var pos: usize = if (trimmed[0] == 'v') 1 else 0;
-    var parts: [3]u64 = .{ 0, 0, 0 };
-    var index: usize = 0;
-    while (index < parts.len) : (index += 1) {
-        if (pos >= trimmed.len or !std.ascii.isDigit(trimmed[pos])) break;
-        var value: u64 = 0;
-        while (pos < trimmed.len and std.ascii.isDigit(trimmed[pos])) : (pos += 1) {
-            value = value * 10 + (trimmed[pos] - '0');
-        }
-        parts[index] = value;
-        if (pos >= trimmed.len or trimmed[pos] != '.') {
-            index += 1;
-            break;
-        }
-        pos += 1;
-    }
-    if (index < 2) return null;
-    return parts;
+    return env_doctor.parseVersionPrefix(raw);
 }
 
 /// Serializes probe fields into an allocator-owned JSON value; allocation failures propagate.
@@ -678,6 +655,86 @@ fn appendProbeCheck(
     const probe = try probeValue(allocator, context, id, configured_path, timeout_ms);
     defer probe.deinit(allocator);
     try checks.append(try probeCheckValue(allocator, name, probe));
+}
+
+/// Appends Zig version preflight data into caller-provided storage.
+fn appendZigVersionPreflightCheck(
+    allocator: std.mem.Allocator,
+    checks: *std.json.Array,
+    context: app_context.Context,
+    probe_backends: bool,
+    timeout_ms: i64,
+) !void {
+    if (!probe_backends) {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .probe_enabled = false,
+            .zig_path = context.tool_paths.zig,
+        }));
+        return;
+    }
+
+    const workspace = context.ports.workspace orelse {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .zig_path = context.tool_paths.zig,
+            .minimum_unavailable_reason = "workspace port unavailable",
+        }));
+        return;
+    };
+
+    const build_zon = workspace.read(allocator, .{
+        .path = "build.zig.zon",
+        .max_bytes = 256 * 1024,
+        .provenance = "discovery.zig_version_preflight",
+    }) catch |err| {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .zig_path = context.tool_paths.zig,
+            .minimum_unavailable_reason = @errorName(err),
+        }));
+        return;
+    };
+    defer build_zon.deinit(allocator);
+    const required_minimum = env_doctor.minimumZigVersionFromBuildZon(build_zon.bytes);
+    if (required_minimum == null) {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .zig_path = context.tool_paths.zig,
+            .required_minimum = null,
+        }));
+        return;
+    }
+
+    const runner = context.ports.command_runner orelse {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .zig_path = context.tool_paths.zig,
+            .required_minimum = required_minimum,
+            .unavailable_reason = "command runner port unavailable",
+        }));
+        return;
+    };
+
+    const result = runner.run(allocator, .{
+        .argv = &.{ context.tool_paths.zig, "version" },
+        .cwd = context.workspace.root,
+        .timeout_ms = @intCast(@min(timeout_ms, 5000)),
+        .max_stdout_bytes = 64 * 1024,
+        .max_stderr_bytes = 64 * 1024,
+        .provenance = "discovery.zig_version_preflight",
+    }) catch |err| {
+        try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+            .zig_path = context.tool_paths.zig,
+            .required_minimum = required_minimum,
+            .unavailable_reason = @errorName(err),
+        }));
+        return;
+    };
+    defer result.deinit(allocator);
+
+    const stderr_reason = std.mem.trim(u8, if (result.stderr.len > 0) result.stderr else result.effectiveTerm().name(), " \t\r\n");
+    try checks.append(try env_doctor.zigVersionPreflightValue(allocator, .{
+        .zig_path = context.tool_paths.zig,
+        .observed_version = std.mem.trim(u8, result.stdout, " \t\r\n"),
+        .required_minimum = required_minimum,
+        .unavailable_reason = if (result.effectiveTerm().failed()) stderr_reason else null,
+    }));
 }
 
 /// Serializes check fields into an allocator-owned JSON value; allocation failures propagate.
