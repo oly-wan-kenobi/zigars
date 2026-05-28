@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars IO 0.16 migration"
+  short_description: "Audit and migrate std.io/std.posix call sites to Zig 0.16's std.Io interface."
+  default_prompt: "Use $zigars-io-016-migration to scan this project for std.Io 0.16 migration sites and apply each batch under a patch session with validation."
