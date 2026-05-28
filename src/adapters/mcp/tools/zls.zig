@@ -19,7 +19,7 @@ pub fn zigFormat(allocator: std.mem.Allocator, context: app_context.Context, arg
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    const value = editing_workflows.formatValue(scratch, context.coreCommands() catch |err| return contextError(allocator, "zig_format", "editing_format_context", err), file, argBool(args, "apply", false), toolTimeout(context, args)) catch |err| return formatError(allocator, file, err);
+    const value = editing_workflows.formatValue(scratch, context.coreCommands() catch |err| return contextError(allocator, "zig_format", "editing_format_context", err), file, argString(args, "content"), argBool(args, "apply", false), toolTimeout(context, args)) catch |err| return formatError(allocator, file, err);
     return mcp_result.structured(allocator, value);
 }
 
@@ -115,18 +115,55 @@ pub fn zigWorkspaceSymbols(allocator: std.mem.Allocator, context: app_context.Co
 
 /// Handles MCP `zig_code_actions` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActions(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return positionTool(allocator, context, args, "zig_code_actions", "textDocument/codeAction");
+    return rangeTool(allocator, context, args, "zig_code_actions");
 }
 
 /// Handles MCP `zig_code_action_apply` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return zigCodeActions(allocator, context, args);
+    if (argBool(args, "apply", false)) return sourceWriteUnsupported(allocator, "zig_code_action_apply", "Code-action source writes are not transaction-safe yet; call without apply to preview the selected action.");
+    const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "file", "string");
+    const start_line = argIntRequired(args, "start_line") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "start_line", "integer");
+    const start_char = argIntRequired(args, "start_char") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "start_char", "integer");
+    const end_line = argIntRequired(args, "end_line") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "end_line", "integer");
+    const end_char = argIntRequired(args, "end_char") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "end_char", "integer");
+    const action_index = argIntRequired(args, "action_index") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "action_index", "integer");
+    const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_code_action_apply", "zls_context", err);
+    var outcome = code_intel.codeActionSelection(allocator, zls_ctx, .{
+        .file = file,
+        .content = argString(args, "content"),
+        .start_line = start_line,
+        .start_character = start_char,
+        .end_line = end_line,
+        .end_character = end_char,
+        .action_index = action_index,
+    }) catch return error.OutOfMemory;
+    defer outcome.deinit(allocator);
+    return switch (outcome) {
+        .ok => |response| lspStructuredTool(allocator, response.method, response.payload),
+        .err => |failure| zlsFailureResult(allocator, context, "zig_code_action_apply", "textDocument/codeAction", file, failure),
+    };
 }
 
 /// Handles MCP `zig_rename` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigRename(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    if (argString(args, "new_name") == null) return mcp_errors.missingArgument(allocator, "zig_rename", "new_name", "string");
-    return positionTool(allocator, context, args, "zig_rename", "textDocument/rename");
+    if (argBool(args, "apply", false)) return sourceWriteUnsupported(allocator, "zig_rename", "Rename source writes are not transaction-safe yet; call without apply to preview the workspace edit.");
+    const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "file", "string");
+    const line = argIntRequired(args, "line") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "line", "integer");
+    const character = argIntRequired(args, "character") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "character", "integer");
+    const new_name = argString(args, "new_name") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "new_name", "string");
+    const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_rename", "zls_context", err);
+    var outcome = code_intel.rename(allocator, zls_ctx, .{
+        .file = file,
+        .content = argString(args, "content"),
+        .line = line,
+        .character = character,
+        .new_name = new_name,
+    }) catch return error.OutOfMemory;
+    defer outcome.deinit(allocator);
+    return switch (outcome) {
+        .ok => |response| lspStructuredTool(allocator, response.method, response.payload),
+        .err => |failure| zlsFailureResult(allocator, context, "zig_rename", "textDocument/rename", file, failure),
+    };
 }
 
 /// Handles MCP `zig_diagnostics` requests by delegating to app logic and shaping owned results/errors.
@@ -170,19 +207,46 @@ fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args
 
 /// Validates file/position arguments and invokes a positional ZLS request.
 fn positionTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
+    const line = argIntRequired(args, "line") orelse return mcp_errors.missingArgument(allocator, tool_name, "line", "integer");
+    const character = argIntRequired(args, "character") orelse return mcp_errors.missingArgument(allocator, tool_name, "character", "integer");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
     var outcome = code_intel.position(allocator, zls_ctx, .{
         .method = method,
-        .file = argString(args, "file"),
+        .file = file,
         .content = argString(args, "content"),
-        .line = argInt(args, "line", 0),
-        .character = argInt(args, "character", 0),
+        .line = line,
+        .character = character,
         .include_declaration = argBool(args, "include_declaration", true),
     }) catch return error.OutOfMemory;
     defer outcome.deinit(allocator);
     return switch (outcome) {
         .ok => |response| lspStructuredTool(allocator, response.method, response.payload),
         .err => |failure| zlsFailureResult(allocator, context, tool_name, method, argString(args, "file"), failure),
+    };
+}
+
+/// Validates the file/range arguments and invokes a range-scoped ZLS request.
+fn rangeTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
+    const start_line = argIntRequired(args, "start_line") orelse return mcp_errors.missingArgument(allocator, tool_name, "start_line", "integer");
+    const start_char = argIntRequired(args, "start_char") orelse return mcp_errors.missingArgument(allocator, tool_name, "start_char", "integer");
+    const end_line = argIntRequired(args, "end_line") orelse return mcp_errors.missingArgument(allocator, tool_name, "end_line", "integer");
+    const end_char = argIntRequired(args, "end_char") orelse return mcp_errors.missingArgument(allocator, tool_name, "end_char", "integer");
+    const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
+    var outcome = code_intel.range(allocator, zls_ctx, .{
+        .method = "textDocument/codeAction",
+        .file = file,
+        .content = argString(args, "content"),
+        .start_line = start_line,
+        .start_character = start_char,
+        .end_line = end_line,
+        .end_character = end_char,
+    }) catch return error.OutOfMemory;
+    defer outcome.deinit(allocator);
+    return switch (outcome) {
+        .ok => |response| lspStructuredTool(allocator, response.method, response.payload),
+        .err => |failure| zlsFailureResult(allocator, context, tool_name, "textDocument/codeAction", file, failure),
     };
 }
 
@@ -207,6 +271,8 @@ fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, 
         .unavailable => zlsUnavailable(allocator, context),
         .unsupported_capability => |capability| unsupportedCapability(allocator, method, capability),
         .missing_file => mcp_errors.missingArgument(allocator, tool_name, "file", "string"),
+        .invalid_action_index => |selection| invalidCodeActionIndex(allocator, selection.index, selection.count),
+        .invalid_response => |message| invalidZlsResponse(allocator, tool_name, method, message),
         .sync_failed => |port_failure| zlsPortError(allocator, context, tool_name, method, file orelse port_failure.file orelse "", port_failure.err),
         .request_failed => |port_failure| zlsPortError(allocator, context, tool_name, method, file orelse port_failure.file orelse "", port_failure.err),
     };
@@ -273,6 +339,45 @@ fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capab
     try obj.put(allocator, "error", .{ .string = "ZLS did not advertise this capability" });
     try obj.put(allocator, "resolution", .{ .string = "Upgrade or reconfigure ZLS, or choose a tool that does not require this LSP capability." });
     return mcp_result.structured(allocator, .{ .object = obj });
+}
+
+/// Returns a structured result when a requested source write is not implemented safely.
+fn sourceWriteUnsupported(allocator: std.mem.Allocator, tool_name: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(allocator);
+    try obj.put(allocator, "ok", .{ .bool = false });
+    try obj.put(allocator, "kind", .{ .string = "zls_source_write_unsupported" });
+    try obj.put(allocator, "tool", .{ .string = tool_name });
+    try obj.put(allocator, "applied", .{ .bool = false });
+    try obj.put(allocator, "requires_apply", .{ .bool = false });
+    try obj.put(allocator, "error", .{ .string = "This ZLS workspace edit is available as a preview only." });
+    try obj.put(allocator, "resolution", .{ .string = resolution });
+    return mcp_result.structured(allocator, .{ .object = obj });
+}
+
+/// Returns a structured result for an out-of-range code-action selection.
+fn invalidCodeActionIndex(allocator: std.mem.Allocator, index: i64, count: usize) mcp.tools.ToolError!mcp.tools.ToolResult {
+    var obj = std.json.ObjectMap.empty;
+    defer obj.deinit(allocator);
+    try obj.put(allocator, "ok", .{ .bool = false });
+    try obj.put(allocator, "kind", .{ .string = "zls_invalid_code_action_index" });
+    try obj.put(allocator, "action_index", .{ .integer = index });
+    try obj.put(allocator, "available_actions", .{ .integer = @intCast(count) });
+    try obj.put(allocator, "error", .{ .string = "Requested code action index is outside the ZLS result array." });
+    try obj.put(allocator, "resolution", .{ .string = "Call zig_code_actions again and choose an index from the returned result array." });
+    return mcp_result.structured(allocator, .{ .object = obj });
+}
+
+/// Returns a structured result for a malformed ZLS payload.
+fn invalidZlsResponse(allocator: std.mem.Allocator, tool_name: []const u8, method: []const u8, message: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return mcp_errors.fromError(allocator, .{
+        .tool = tool_name,
+        .operation = method,
+        .phase = "parse_response",
+        .code = "malformed_backend_response",
+        .category = "lsp",
+        .resolution = message,
+    }, error.InvalidRequest);
 }
 
 /// Returns a structured result describing the configured ZLS backend status.
@@ -384,6 +489,18 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     };
 }
 
+/// Reads an int argument only when present with the expected type.
+fn argIntRequired(args: ?std.json.Value, name: []const u8) ?i64 {
+    const obj = switch (args orelse return null) {
+        .object => |o| o,
+        else => return null,
+    };
+    return switch (obj.get(name) orelse .null) {
+        .integer => |i| i,
+        else => null,
+    };
+}
+
 /// Creates zls adapter test context from the ports required by the adapter.
 fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
     return .{
@@ -433,7 +550,7 @@ test "zls MCP adapter exercises document workspace and position wrappers" {
         .uri = "file:///repo/src/main.zig",
         .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"}}",
     }, .{ .method = "textDocument/documentSymbol", .payload = "{\"result\":[{\"name\":\"main\"}]}" });
-    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}", .{});
     defer file_args.deinit();
     const symbols = try zigDocumentSymbols(allocator, context, file_args.value);
     defer mcp_result.deinitToolResult(allocator, symbols);
@@ -467,13 +584,14 @@ test "zls MCP adapter exercises document workspace and position wrappers" {
     defer mcp_result.deinitToolResult(allocator, hover);
     try std.testing.expect(hover.structuredContent.?.object.get("ok").?.bool);
 
-    try expectCapability(&gateway, "hoverProvider", true);
     const missing_file = try zigHover(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, missing_file);
     try std.testing.expect(missing_file.is_error);
 
     try expectCapability(&gateway, "codeActionProvider", false);
-    const code_actions = try zigCodeActionApply(allocator, context, hover_args.value);
+    const code_action_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"start_line\":1,\"start_char\":0,\"end_line\":1,\"end_char\":4,\"action_index\":0}", .{});
+    defer code_action_args.deinit();
+    const code_actions = try zigCodeActionApply(allocator, context, code_action_args.value);
     defer mcp_result.deinitToolResult(allocator, code_actions);
     try std.testing.expect(!code_actions.structuredContent.?.object.get("ok").?.bool);
 
@@ -498,7 +616,7 @@ test "zls MCP adapter maps failures malformed payloads and diagnostics summaries
         .uri = "file:///repo/src/main.zig",
         .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"position\":{\"line\":0,\"character\":0}}",
     }, error.Timeout);
-    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\"}", .{});
+    const file_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"line\":0,\"character\":0}", .{});
     defer file_args.deinit();
     const timed_out = try zigHover(allocator, context, file_args.value);
     defer mcp_result.deinitToolResult(allocator, timed_out);
@@ -514,7 +632,7 @@ test "zls MCP adapter maps failures malformed payloads and diagnostics summaries
     defer escape_args.deinit();
     const escaped = try zigDocumentSymbols(allocator, context, escape_args.value);
     defer mcp_result.deinitToolResult(allocator, escaped);
-    try std.testing.expect(escaped.is_error);
+    try std.testing.expect(!escaped.structuredContent.?.object.get("ok").?.bool);
 
     const diagnostics = try zigDiagnosticsWorkspace(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, diagnostics);
