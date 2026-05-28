@@ -48,6 +48,7 @@ pub const Gateway = struct {
                 .capability = capability,
                 .sync = sync,
                 .request = request,
+                .diagnostics = diagnostics,
             },
         };
     }
@@ -121,6 +122,26 @@ pub const Gateway = struct {
             .method = request_value.method,
             .payload = response,
             .owns_payload = true,
+        };
+    }
+
+    /// Returns cached diagnostics collected by the live ZLS client.
+    fn diagnostics(ptr: *anyopaque, allocator: std.mem.Allocator) ports.PortError!ports.ZlsDiagnosticsSnapshot {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        const client = self.state.client orelse return error.Unavailable;
+        const messages = client.diagnosticsSnapshot(allocator) catch |err| return mapZlsError(err);
+        const status = client.diagnosticsStatus();
+        return .{
+            .messages = messages,
+            .owns_messages = true,
+            .status = .{
+                .files = status.files,
+                .retained_bytes = status.retained_bytes,
+                .max_bytes = status.max_bytes,
+                .evicted_files = status.evicted_files,
+                .evicted_bytes = status.evicted_bytes,
+                .dropped_oversized = status.dropped_oversized,
+            },
         };
     }
 

@@ -11,12 +11,14 @@ pub const FakeZlsGateway = struct {
     expected_capabilities: std.ArrayList(ExpectedCapability) = .empty,
     expected_syncs: std.ArrayList(ExpectedSync) = .empty,
     expected_requests: std.ArrayList(ExpectedRequest) = .empty,
+    diagnostics_messages: std.ArrayList([]const u8) = .empty,
     capability_records: std.ArrayList(ports.ZlsCapabilityRequest) = .empty,
     sync_records: std.ArrayList(ports.ZlsSyncRequest) = .empty,
     request_records: std.ArrayList(ports.ZlsRequest) = .empty,
     next_capability: usize = 0,
     next_sync: usize = 0,
     next_request: usize = 0,
+    diagnostics_call_count: usize = 0,
 
     const Self = @This();
 
@@ -99,6 +101,9 @@ pub const FakeZlsGateway = struct {
         for (self.expected_requests.items) |expected| expected.deinit(self.allocator);
         self.expected_requests.deinit(self.allocator);
 
+        for (self.diagnostics_messages.items) |message| self.allocator.free(message);
+        self.diagnostics_messages.deinit(self.allocator);
+
         for (self.capability_records.items) |record| freeCapabilityRequest(self.allocator, record);
         self.capability_records.deinit(self.allocator);
 
@@ -118,6 +123,7 @@ pub const FakeZlsGateway = struct {
                 .capability = capability,
                 .sync = sync,
                 .request = request,
+                .diagnostics = diagnostics,
             },
         };
     }
@@ -206,6 +212,17 @@ pub const FakeZlsGateway = struct {
         request_owned = false;
     }
 
+    /// Replaces cached diagnostics messages returned by the diagnostics snapshot port.
+    pub fn setDiagnosticsMessages(self: *Self, messages: []const []const u8) !void {
+        for (self.diagnostics_messages.items) |message| self.allocator.free(message);
+        self.diagnostics_messages.clearRetainingCapacity();
+        for (messages) |message| {
+            const owned = try common.dupString(self.allocator, message);
+            errdefer self.allocator.free(owned);
+            try self.diagnostics_messages.append(self.allocator, owned);
+        }
+    }
+
     /// Returns recorded capability call snapshots owned by this fake.
     pub fn capabilityCalls(self: *const Self) []const ports.ZlsCapabilityRequest {
         return self.capability_records.items;
@@ -219,6 +236,11 @@ pub const FakeZlsGateway = struct {
     /// Returns recorded request call snapshots owned by this fake.
     pub fn requestCalls(self: *const Self) []const ports.ZlsRequest {
         return self.request_records.items;
+    }
+
+    /// Returns how many diagnostics snapshots have been requested.
+    pub fn diagnosticsCalls(self: *const Self) usize {
+        return self.diagnostics_call_count;
     }
 
     /// Verifies that all queued expectations were consumed, returning the first missing-call error.
@@ -290,6 +312,33 @@ pub const FakeZlsGateway = struct {
                 };
             },
             .err => |err| err,
+        };
+    }
+
+    /// Returns cloned cached diagnostics messages for the caller.
+    fn diagnostics(ptr: *anyopaque, allocator: Allocator) ports.PortError!ports.ZlsDiagnosticsSnapshot {
+        const self: *Self = @ptrCast(@alignCast(ptr));
+        self.diagnostics_call_count += 1;
+        const messages = try allocator.alloc([]const u8, self.diagnostics_messages.items.len);
+        var copied: usize = 0;
+        errdefer {
+            for (messages[0..copied]) |message| allocator.free(message);
+            allocator.free(messages);
+        }
+        var retained_bytes: usize = 0;
+        for (self.diagnostics_messages.items, 0..) |message, index| {
+            messages[index] = try common.dupString(allocator, message);
+            copied += 1;
+            retained_bytes += message.len;
+        }
+        return .{
+            .messages = messages,
+            .owns_messages = true,
+            .status = .{
+                .files = self.diagnostics_messages.items.len,
+                .retained_bytes = retained_bytes,
+                .max_bytes = retained_bytes,
+            },
         };
     }
 

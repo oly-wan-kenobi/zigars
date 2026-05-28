@@ -181,16 +181,12 @@ pub fn zigDiagnosticsAll(allocator: std.mem.Allocator, context: app_context.Cont
 /// Handles MCP `zig_diagnostics_workspace` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (!context.zls_state.running) return structuredText(allocator, "zig_diagnostics_workspace", "ZLS session is unavailable; no workspace diagnostics cache exists.");
-    var obj = std.json.ObjectMap.empty;
-    defer obj.deinit(allocator);
-    try obj.put(allocator, "files", .{ .array = std.json.Array.init(allocator) });
-    try obj.put(allocator, "total", .{ .integer = 0 });
-    try obj.put(allocator, "errors", .{ .integer = 0 });
-    try obj.put(allocator, "warnings", .{ .integer = 0 });
-    try obj.put(allocator, "information", .{ .integer = 0 });
-    try obj.put(allocator, "hints", .{ .integer = 0 });
-    try obj.put(allocator, "malformed_notifications", .{ .integer = 0 });
-    return mcp_result.structured(allocator, .{ .object = obj });
+    const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_diagnostics_workspace", "zls_context", err);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    const value = zls_workflows.workspaceDiagnosticsValue(scratch, zls_ctx) catch |err| return zlsPortError(allocator, context, "zig_diagnostics_workspace", "textDocument/publishDiagnostics", "", err);
+    return mcp_result.structured(allocator, value);
 }
 
 /// Validates document sync arguments and forwards them to the ZLS workflow.
@@ -634,9 +630,20 @@ test "zls MCP adapter maps failures malformed payloads and diagnostics summaries
     defer mcp_result.deinitToolResult(allocator, escaped);
     try std.testing.expect(!escaped.structuredContent.?.object.get("ok").?.bool);
 
+    try gateway.setDiagnosticsMessages(&.{
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"file:///repo/src/main.zig\",\"diagnostics\":[{\"severity\":1},{\"severity\":2},{\"message\":\"missing severity\"}]}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"file:///repo/invalid.zig\",\"diagnostics\":\"not an array\"}}",
+    });
     const diagnostics = try zigDiagnosticsWorkspace(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, diagnostics);
-    try std.testing.expectEqual(@as(i64, 0), diagnostics.structuredContent.?.object.get("total").?.integer);
+    const diagnostics_obj = diagnostics.structuredContent.?.object;
+    try std.testing.expectEqual(@as(i64, 3), diagnostics_obj.get("total").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), diagnostics_obj.get("errors").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), diagnostics_obj.get("warnings").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), diagnostics_obj.get("unknown").?.integer);
+    try std.testing.expectEqual(@as(i64, 1), diagnostics_obj.get("malformed_notifications").?.integer);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics_obj.get("files").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), gateway.diagnosticsCalls());
 
     const malformed = try lspStructuredTool(allocator, "textDocument/hover", "{not json");
     defer mcp_result.deinitToolResult(allocator, malformed);

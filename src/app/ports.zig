@@ -583,6 +583,30 @@ pub const ZlsResponse = struct {
     }
 };
 
+/// Memory and eviction counters for cached ZLS diagnostics.
+pub const ZlsDiagnosticsStatus = struct {
+    files: usize = 0,
+    retained_bytes: usize = 0,
+    max_bytes: usize = 0,
+    evicted_files: usize = 0,
+    evicted_bytes: usize = 0,
+    dropped_oversized: usize = 0,
+};
+
+/// Cached raw publishDiagnostics messages; messages are owned when `owns_messages` is set.
+pub const ZlsDiagnosticsSnapshot = struct {
+    messages: []const []const u8 = &.{},
+    status: ZlsDiagnosticsStatus = .{},
+    owns_messages: bool = false,
+
+    /// Frees cloned diagnostic messages only when ownership was transferred by the port.
+    pub fn deinit(self: ZlsDiagnosticsSnapshot, allocator: Allocator) void {
+        if (!self.owns_messages) return;
+        for (self.messages) |message| allocator.free(message);
+        allocator.free(self.messages);
+    }
+};
+
 /// Vtable-backed ZLS gateway that owns protocol state in the adapter.
 pub const ZlsGateway = struct {
     ptr: *anyopaque,
@@ -593,6 +617,7 @@ pub const ZlsGateway = struct {
         capability: *const fn (*anyopaque, ZlsCapabilityRequest) PortError!ZlsCapabilityResult,
         sync: *const fn (*anyopaque, Allocator, ZlsSyncRequest) PortError!ZlsSyncResult,
         request: *const fn (*anyopaque, Allocator, ZlsRequest) PortError!ZlsResponse,
+        diagnostics: *const fn (*anyopaque, Allocator) PortError!ZlsDiagnosticsSnapshot,
     };
 
     /// Checks whether a named ZLS capability is available.
@@ -608,6 +633,11 @@ pub const ZlsGateway = struct {
     /// Sends a raw LSP request through ZLS and returns a possibly-owned payload.
     pub fn request(self: ZlsGateway, allocator: Allocator, request_value: ZlsRequest) PortError!ZlsResponse {
         return self.vtable.request(self.ptr, allocator, request_value);
+    }
+
+    /// Returns cached raw workspace diagnostics without issuing a new ZLS request.
+    pub fn diagnostics(self: ZlsGateway, allocator: Allocator) PortError!ZlsDiagnosticsSnapshot {
+        return self.vtable.diagnostics(self.ptr, allocator);
     }
 };
 
