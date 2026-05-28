@@ -1,0 +1,25 @@
+{
+  "zig_version": "0.16.0",
+  "targets": {
+    "x86_64-linux": {
+      "Header": {"size": 16, "alignment": 8, "payload_offset": 8, "payload_bit_offset": 64}
+    },
+    "x86-linux": {
+      "Header": {"size": 12, "alignment": 4, "payload_offset": 4, "payload_bit_offset": 32}
+    },
+    "aarch64-linux": {
+      "Header": {"size": 16, "alignment": 8, "payload_offset": 8, "payload_bit_offset": 64}
+    },
+    "powerpc-linux": {
+      "Header": {"size": 16, "alignment": 8, "payload_offset": 8, "payload_bit_offset": 64}
+    },
+    "wasm32-freestanding": {
+      "Header": {"size": 16, "alignment": 8, "payload_offset": 8, "payload_bit_offset": 64}
+    }
+  },
+  "risk_fixtures": {
+    "project_comptime_side_effect.zig": "must be skipped unless explicit project-comptime risk is opted in",
+    "embed_file_boundary.zig": "must be skipped by standalone probes to preserve workspace-boundary policy",
+    "build.zig": "must never be executed by ABI/layout probes"
+  }
+}
