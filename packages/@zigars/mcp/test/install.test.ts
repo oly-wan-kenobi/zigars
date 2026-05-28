@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { sha256 } from "../src/checksums";
-import { installZigars } from "../src/install";
+import { installZigars, verifiedCachedExecutable } from "../src/install";
 import { resolveHostTarget } from "../src/targets";
 
 const target = resolveHostTarget({ platform: "linux", arch: "x64" });
@@ -41,6 +41,7 @@ test("reuses verified cached executable without downloading", async () => {
       version: "0.2.0",
       archiveName: target.archiveName,
       executableName: target.executableName,
+      sha256: sha256(Buffer.from("binary")),
     }));
 
     const executablePath = await installZigars(target, {
@@ -52,6 +53,31 @@ test("reuses verified cached executable without downloading", async () => {
     });
 
     assert.equal(executablePath, path.join(installDir, "zigars"));
+  });
+});
+
+test("rejects cached executable when marker checksum is missing or mismatched", async () => {
+  await withTempDir(async (cacheRoot) => {
+    const installDir = path.join(cacheRoot, "0.2.0", "linux-x64");
+    const executablePath = path.join(installDir, "zigars");
+    await fs.promises.mkdir(installDir, { recursive: true });
+    await fs.promises.writeFile(executablePath, "poisoned");
+    await fs.promises.writeFile(path.join(installDir, "install.json"), JSON.stringify({
+      version: "0.2.0",
+      archiveName: target.archiveName,
+      executableName: target.executableName,
+      sha256: sha256(Buffer.from("expected")),
+    }));
+
+    assert.equal(await verifiedCachedExecutable(installDir, "0.2.0", target), null);
+
+    await fs.promises.writeFile(path.join(installDir, "install.json"), JSON.stringify({
+      version: "0.2.0",
+      archiveName: target.archiveName,
+      executableName: target.executableName,
+    }));
+
+    assert.equal(await verifiedCachedExecutable(installDir, "0.2.0", target), null);
   });
 });
 

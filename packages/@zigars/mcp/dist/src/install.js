@@ -80,15 +80,18 @@ function markerPath(installDir) {
 async function verifiedCachedExecutable(installDir, version, target, fsp = node_fs_1.default.promises) {
     const executablePath = node_path_1.default.join(installDir, target.executableName);
     try {
-        const [markerText, executableStat] = await Promise.all([
+        const [markerText, executableStat, executableBytes] = await Promise.all([
             fsp.readFile(markerPath(installDir), "utf8"),
             fsp.stat(executablePath),
+            fsp.readFile(executablePath),
         ]);
         const marker = JSON.parse(markerText);
         if (executableStat.isFile()
             && marker.version === version
             && marker.archiveName === target.archiveName
-            && marker.executableName === target.executableName) {
+            && marker.executableName === target.executableName
+            && typeof marker.sha256 === "string"
+            && (0, checksums_1.sha256)(executableBytes) === marker.sha256.toLowerCase()) {
             return executablePath;
         }
     }

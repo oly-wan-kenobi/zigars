@@ -2,7 +2,7 @@ import * as childProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { checksumForArchive, parseChecksums, verifySha256 } from "./checksums";
+import { checksumForArchive, parseChecksums, sha256, verifySha256 } from "./checksums";
 import { checksumUrl, releaseAssetUrl } from "./releases";
 import type { HostTarget } from "./targets";
 
@@ -86,9 +86,10 @@ export async function verifiedCachedExecutable(
 ): Promise<string | null> {
   const executablePath = path.join(installDir, target.executableName);
   try {
-    const [markerText, executableStat] = await Promise.all([
+    const [markerText, executableStat, executableBytes] = await Promise.all([
       fsp.readFile(markerPath(installDir), "utf8"),
       fsp.stat(executablePath),
+      fsp.readFile(executablePath),
     ]);
     const marker = JSON.parse(markerText);
     if (
@@ -96,6 +97,8 @@ export async function verifiedCachedExecutable(
       && marker.version === version
       && marker.archiveName === target.archiveName
       && marker.executableName === target.executableName
+      && typeof marker.sha256 === "string"
+      && sha256(executableBytes) === marker.sha256.toLowerCase()
     ) {
       return executablePath;
     }
