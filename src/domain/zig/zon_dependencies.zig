@@ -72,6 +72,7 @@ pub const EditError = error{
     DependencyAlreadyExists,
     UnsupportedDependencyShape,
     MissingUrl,
+    InvalidDependencyField,
     OutOfMemory,
 };
 
@@ -164,6 +165,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Model {
 pub fn replaceHash(allocator: std.mem.Allocator, model: Model, name: []const u8, new_hash: []const u8) EditError![]u8 {
     const entry = model.find(name) orelse return error.DependencyNotFound;
     if (entry.url == null or entry.path != null) return error.UnsupportedDependencyShape;
+    try requireSafeStringLiteralField(new_hash);
     if (entry.hash) |hash| {
         return replaceRange(allocator, model.text, hash.value_start, hash.value_end, new_hash);
     }
@@ -185,8 +187,12 @@ pub fn addDependency(
     path: ?[]const u8,
 ) EditError![]u8 {
     if (model.dependencies_end == null) return error.MissingDependenciesBlock;
+    try requireSafeDependencyName(name);
     if (model.find(name) != null) return error.DependencyAlreadyExists;
     if ((url == null and path == null) or (url != null and path != null)) return error.UnsupportedDependencyShape;
+    if (url) |dep_url| try requireSafeStringLiteralField(dep_url);
+    if (hash) |hash_value| try requireSafeStringLiteralField(hash_value);
+    if (path) |dep_path| try requireSafeStringLiteralField(dep_path);
     const indent = try detectBlockIndent(allocator, model.text, model.dependencies_end.?);
     defer allocator.free(indent);
     const fragment = if (url) |dep_url|
@@ -208,6 +214,8 @@ pub fn upgradeDependency(allocator: std.mem.Allocator, model: Model, name: []con
     const entry = model.find(name) orelse return error.DependencyNotFound;
     const url = entry.url orelse return error.MissingUrl;
     if (entry.path != null) return error.UnsupportedDependencyShape;
+    try requireSafeStringLiteralField(new_url);
+    if (new_hash) |hash_value| try requireSafeStringLiteralField(hash_value);
     var updated = try replaceRange(allocator, model.text, url.value_start, url.value_end, new_url);
     errdefer allocator.free(updated);
     if (new_hash) |hash_value| {
@@ -348,6 +356,20 @@ fn skipSpaceAndComments(text: []const u8, start: usize, end: usize) usize {
         break;
     }
     return cursor;
+}
+
+fn requireSafeDependencyName(name: []const u8) EditError!void {
+    if (name.len == 0) return error.InvalidDependencyField;
+    if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return error.InvalidDependencyField;
+    for (name[1..]) |c| {
+        if (!std.ascii.isAlphanumeric(c) and c != '_') return error.InvalidDependencyField;
+    }
+}
+
+fn requireSafeStringLiteralField(value: []const u8) EditError!void {
+    for (value) |c| {
+        if (c < 0x20 or c == 0x7f or c == '"' or c == '\\') return error.InvalidDependencyField;
+    }
 }
 
 fn lineNumber(text: []const u8, offset: usize) usize {

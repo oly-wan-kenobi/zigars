@@ -64,6 +64,18 @@ test "zon dependency add remove and upgrade are minimal text edits" {
     try std.testing.expect(std.mem.indexOf(u8, upgraded, ".hash = \"hash2\"") != null);
 }
 
+test "zon dependency edits reject fields that would escape generated literals" {
+    var model = try zon.parse(std.testing.allocator, manifest);
+    defer model.deinit(std.testing.allocator);
+
+    try std.testing.expectError(error.InvalidDependencyField, zon.addDependency(std.testing.allocator, model, "bad-name", "https://example.invalid/delta.tar.gz", "dhash", null));
+    try std.testing.expectError(error.InvalidDependencyField, zon.addDependency(std.testing.allocator, model, "delta", "https://example.invalid/\"}, .evil = .{ .path = \"x", "dhash", null));
+    try std.testing.expectError(error.InvalidDependencyField, zon.addDependency(std.testing.allocator, model, "delta", "https://example.invalid/delta.tar.gz", "bad\nhash", null));
+    try std.testing.expectError(error.InvalidDependencyField, zon.addDependency(std.testing.allocator, model, "local", null, null, "vendor\\beta"));
+    try std.testing.expectError(error.InvalidDependencyField, zon.replaceHash(std.testing.allocator, model, "alpha", "hash\""));
+    try std.testing.expectError(error.InvalidDependencyField, zon.upgradeDependency(std.testing.allocator, model, "alpha", "https://example.invalid/new\n.tar.gz", null));
+}
+
 test "zon dependency model reports unsupported or missing shapes as diagnostics" {
     var missing = try zon.parse(std.testing.allocator, ".{ .name = .fixture }\n");
     defer missing.deinit(std.testing.allocator);
