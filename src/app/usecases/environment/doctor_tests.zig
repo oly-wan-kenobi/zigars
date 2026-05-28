@@ -65,3 +65,75 @@ test "doctor report uses default ZLS resolution when disconnected without failur
     const checks = value.object.get("checks").?.array;
     try std.testing.expect(checks.items.len >= 1);
 }
+
+test "zig version preflight reports compatible exact minimum" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const value = try doctor.zigVersionPreflightValue(arena.allocator(), .{
+        .zig_path = "/opt/zig/zig",
+        .observed_version = "0.16.0\n",
+        .required_minimum = "0.16.0",
+    });
+
+    try std.testing.expectEqualStrings("zig_version_preflight", value.object.get("name").?.string);
+    try std.testing.expect(value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("compatible", value.object.get("status").?.string);
+    try std.testing.expectEqualStrings("0.16.0", value.object.get("observed_version").?.string);
+    try std.testing.expectEqualStrings("0.16.0", value.object.get("required_minimum").?.string);
+}
+
+test "zig version preflight reports incompatible version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const value = try doctor.zigVersionPreflightValue(arena.allocator(), .{
+        .zig_path = "/opt/zig/zig",
+        .observed_version = "0.15.2",
+        .required_minimum = "0.16.0",
+    });
+
+    try std.testing.expect(!value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("incompatible", value.object.get("status").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, value.object.get("resolution").?.string, "requires 0.16.0 or newer") != null);
+}
+
+test "zig version preflight reports missing Zig as unavailable" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const value = try doctor.zigVersionPreflightValue(arena.allocator(), .{
+        .zig_path = "/missing/zig",
+        .required_minimum = "0.16.0",
+        .unavailable_reason = "FileNotFound",
+    });
+
+    try std.testing.expect(!value.object.get("ok").?.bool);
+    try std.testing.expectEqualStrings("unavailable", value.object.get("status").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, value.object.get("resolution").?.string, "FileNotFound") != null);
+}
+
+test "zig version preflight reports probe-disabled behavior" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const value = try doctor.zigVersionPreflightValue(arena.allocator(), .{
+        .probe_enabled = false,
+        .zig_path = "zig",
+    });
+
+    try std.testing.expect(value.object.get("ok").? == .null);
+    try std.testing.expectEqualStrings("unprobed", value.object.get("status").?.string);
+}
+
+test "build zon minimum parser finds quoted version" {
+    const bytes =
+        \\.{
+        \\    .name = .zigar,
+        \\    .minimum_zig_version = "0.16.0",
+        \\}
+    ;
+    try std.testing.expectEqualStrings("0.16.0", doctor.minimumZigVersionFromBuildZon(bytes).?);
+    try std.testing.expect(doctor.versionMeetsMinimum("0.16.0-dev.123", "0.16.0"));
+    try std.testing.expect(!doctor.versionMeetsMinimum("0.15.2", "0.16.0"));
+}
