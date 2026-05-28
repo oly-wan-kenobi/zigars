@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars handoff and resume"
+  short_description: "Capture or replay session context so work can resume across agents."
+  default_prompt: "Use $zigars-handoff-resume to snapshot the current session, bundle the handoff, and plan the resume sequence."
