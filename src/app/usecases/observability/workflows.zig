@@ -8,12 +8,24 @@ const ports = @import("../../ports.zig");
 
 /// Maximum tool stats accepted by this workflow module.
 pub const max_tool_stats = ports.max_observability_tool_stats;
+/// Maximum MCP method stats accepted by this workflow module.
+pub const max_method_stats = ports.max_observability_method_stats;
+/// Maximum latency samples retained per observed key.
+pub const max_latency_samples = ports.max_observability_latency_samples;
+/// Minimum retained samples before percentile fields are published.
+pub const min_percentile_samples = ports.min_observability_percentile_samples;
+/// Maximum recent tool-call correlations accepted by this workflow module.
+pub const max_tool_call_correlations = ports.max_observability_tool_call_correlations;
 /// Maximum command events accepted by this workflow module.
 pub const max_command_events = ports.max_observability_command_events;
 /// Maximum backend events accepted by this workflow module.
 pub const max_backend_events = ports.max_observability_backend_events;
 /// Maximum zls events accepted by this workflow module.
 pub const max_zls_events = ports.max_observability_zls_events;
+/// Maximum startup phase timings accepted by this workflow module.
+pub const max_startup_phases = ports.max_observability_startup_phases;
+/// Maximum cancellation events accepted by this workflow module.
+pub const max_cancellation_events = ports.max_observability_cancellation_events;
 
 /// Artifact scan limit applied when collecting workflow evidence.
 pub const artifact_scan_limit: usize = 500;
