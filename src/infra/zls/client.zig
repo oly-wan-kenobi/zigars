@@ -1,6 +1,7 @@
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
 const diagnostics_cache = @import("diagnostics_cache.zig");
+const cancellation = @import("cancellation");
 const json_rpc = @import("json_rpc.zig");
 const logging = @import("../observability/logging.zig");
 const Mutex = @import("../process/sync.zig").Mutex;
@@ -100,6 +101,15 @@ pub const LspClient = struct {
         return self.sendRawRequest(allocator, id, msg);
     }
 
+    /// Send an LSP request and cooperatively emit `$/cancelRequest` if the token is cancelled while waiting.
+    pub fn sendRequestCancellable(self: *LspClient, allocator: std.mem.Allocator, method: []const u8, params: anytype, token: cancellation.Token) ![]const u8 {
+        if (token.isCancelled()) return error.Cancelled;
+        const id = self.next_id.fetchAdd(1, .monotonic);
+        const msg = try json_rpc.writeRequest(allocator, .{ .integer = id }, method, params);
+        defer allocator.free(msg);
+        return self.sendRawRequestWithCancellation(allocator, id, msg, self.request_timeout_ms, "RequestTimeout", token);
+    }
+
     /// Reports whether the client has live pipes and has not observed reader failure.
     pub fn isRunning(self: *LspClient) bool {
         return self.running.load(.acquire) and self.zls_stdin != null and self.zls_stdout != null;
@@ -164,6 +174,11 @@ pub const LspClient = struct {
 
     /// Sends an LSP request and waits for its response before the deadline.
     fn sendRawRequestWithTimeout(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8) ![]const u8 {
+        return self.sendRawRequestWithCancellation(allocator, id, msg, timeout_ms, timeout_label, null);
+    }
+
+    /// Sends an LSP request and waits for its response, polling a cancellation token when present.
+    fn sendRawRequestWithCancellation(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8, token: ?cancellation.Token) ![]const u8 {
         const stdin = self.zls_stdin orelse return error.NotConnected;
 
         const pending = try self.allocator.create(PendingRequest);
@@ -180,11 +195,34 @@ pub const LspClient = struct {
 
         try self.writeMessage(stdin, msg);
 
-        pending.event.waitTimeout(self.io, .{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(@max(1, timeout_ms)), .clock = .awake } }) catch {
-            self.rememberLastError(timeout_label);
-            self.removePending(id);
-            return error.RequestTimeout;
-        };
+        const started_ns = std.Io.Clock.now(.awake, self.io).nanoseconds;
+        while (true) {
+            if (token) |value| {
+                if (value.isCancelled()) {
+                    self.sendCancelRequestNotification(id);
+                    self.removePending(id);
+                    return error.Cancelled;
+                }
+            }
+            const now_ns = std.Io.Clock.now(.awake, self.io).nanoseconds;
+            const elapsed_ms: i64 = @intCast(@divTrunc(@max(0, now_ns - started_ns), std.time.ns_per_ms));
+            if (elapsed_ms >= timeout_ms) {
+                self.rememberLastError(timeout_label);
+                self.removePending(id);
+                return error.RequestTimeout;
+            }
+            const remaining_ms = timeout_ms - elapsed_ms;
+            const wait_ms = @max(1, @min(remaining_ms, 50));
+            pending.event.waitTimeout(self.io, .{ .duration = .{ .raw = std.Io.Duration.fromMilliseconds(wait_ms), .clock = .awake } }) catch |err| switch (err) {
+                error.Timeout => continue,
+                else => {
+                    self.rememberLastError(timeout_label);
+                    self.removePending(id);
+                    return error.RequestTimeout;
+                },
+            };
+            break;
+        }
 
         const removed = self.takePending(id) orelse return error.NoResponse;
         defer self.allocator.destroy(removed);
@@ -194,6 +232,21 @@ pub const LspClient = struct {
 
         defer self.allocator.free(response);
         return try allocator.dupe(u8, response);
+    }
+
+    /// Best-effort LSP cancellation notification for an already-sent request.
+    fn sendCancelRequestNotification(self: *LspClient, id: i64) void {
+        const stdin = self.zls_stdin orelse return;
+        var aw: std.Io.Writer.Allocating = .init(self.allocator);
+        defer aw.deinit();
+        aw.writer.print(
+            \\{{"jsonrpc":"2.0","method":"$/cancelRequest","params":{{"id":{d}}}}}
+        , .{id}) catch return;
+        const msg = aw.toOwnedSlice() catch return;
+        defer self.allocator.free(msg);
+        self.writeMessage(stdin, msg) catch |err| {
+            self.logger.debug("lsp", "cancel notification failed: {}", .{err});
+        };
     }
 
     /// Background thread: reads LSP messages from ZLS stdout, dispatches responses.
