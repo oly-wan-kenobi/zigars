@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars compile error triage"
+  short_description: "Route a failing Zig build to its primary error and a verified fix."
+  default_prompt: "Use $zigars-compile-error-triage to extract structured diagnostics from this Zig build failure and confirm the fix with zigars_validate_patch."
