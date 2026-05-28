@@ -1,32 +1,26 @@
 # zigars
 
-`zigars` is a deterministic MCP server for Zig development. It gives MCP-capable
-agents such as Codex, Claude, Gemini CLI, and Hermes a structured Zig workbench:
-compiler commands, formatting, ZLS code intelligence, local docs lookup, static
-analysis summaries, transactional edit/refactor previews, ZLint/zwanzig linting,
-zflame profiling helpers, and coverage/benchmark performance evidence
-workflows, plus runtime debug, fuzzing, binary, cross-target, and embedded
-diagnostic planning.
+`zigars` is a deterministic Zig MCP workbench, not an AI code generator. It
+gives MCP-capable agents such as Codex, Claude, Gemini CLI, and Hermes
+structured Zig evidence: compiler commands, formatting, ZLS code intelligence,
+parser-backed facts, local docs lookup, static-analysis summaries,
+transactional edit/refactor previews, optional backend evidence, and
+runtime/test/performance workflow helpers.
 
-`zigars` is intentionally not an AI code generator. It exposes tools that inspect,
-run, format, and analyze Zig projects. Any source write requires an explicit
-`apply=true` argument.
+Shell can run `zig build`. zigars adds structured diagnostics, command metadata,
+parser-backed facts, ZLS-backed code intelligence, preview diffs, confidence
+labels, and next verification steps so agents do not have to infer everything
+from shell text. Shell, the Zig compiler, project tests, CI, and external
+backends remain the source of truth for the behavior they execute. See
+[docs/why-zigars.md](docs/why-zigars.md).
 
-## Quickstart with npm
+## Quickstart
 
-The fastest way to use zigars from an MCP client is the npm shim. Bun is the
-preferred launcher:
+The fastest MCP client path is the npm shim. Bun is the preferred launcher:
 
 ```sh
 bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
-
-The npm package is named `@zigars/mcp`; the project, binary, and MCP server are
-named `zigars`. The shim is written in TypeScript, publishes compiled JavaScript for
-Node-compatible npm clients, downloads the matching `zigars` release archive from
-GitHub, verifies it against `zigars-checksums.txt`, caches the extracted binary,
-and then runs zigars as a local stdio MCP server. GitHub release assets for the
-package version must exist before this command can start the server.
 
 Node/npm remains a supported launcher:
 
@@ -34,14 +28,7 @@ Node/npm remains a supported launcher:
 npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
 
-Yarn and pnpm also work when the `zigars-mcp` binary is named explicitly:
-
-```sh
-yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
-pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
-```
-
-Minimum prerequisites for the npm path:
+Minimum prerequisites:
 
 - Bun 1.3 or newer, or Node.js 18 or newer with npm/npx, Yarn dlx, or pnpm dlx
 - Zig `0.16.0` available on `PATH` or passed with `--zig-path`
@@ -49,7 +36,12 @@ Minimum prerequisites for the npm path:
   x64/arm64
 - An MCP client that can launch a stdio server
 
-Common client shapes:
+The npm package is named `@zigars/mcp`; the project, binary, and MCP server are
+named `zigars`. The shim downloads the matching GitHub release archive, verifies
+it against `zigars-checksums.txt`, caches the extracted binary, and runs zigars
+as a local stdio MCP server. The shim does not verify npm attestations.
+
+Common MCP JSON shape:
 
 ```json
 {
@@ -81,12 +73,54 @@ args = [
 startup_timeout_sec = 20.0
 ```
 
-After startup, useful first calls are:
+## First Five Minutes
+
+After startup, make these first calls from the MCP client. If your project does
+not have `src/main.zig`, substitute an existing workspace-relative Zig file.
 
 ```text
 zigars_workspace_info
 zigars_doctor {"probe_backends":false}
-zigars_schema
+zig_ast_imports {"file":"src/main.zig"}
+zig_format {"file":"src/main.zig","apply":false}
+zigars_trust_report
+resources/read {"uri":"zigars://trust/manifest"}
+```
+
+This verifies the served workspace, basic server health without optional backend
+probes, one parser-backed read-only insight, the preview-first source-write
+gate, the process trust posture, and the connection-time trust manifest linked
+from MCP `initialize`. The guided walkthrough is
+[docs/getting-started.md](docs/getting-started.md).
+
+## How To Trust A Result
+
+Public feature claims use evidence labels instead of broad precision claims:
+command-backed, LSP/ZLS-backed, parser-backed, source-scan-backed,
+heuristic/advisory, external-backend-backed, curated fallback, and real
+conformance artifact. The short reference is
+[docs/evidence-tiers.md](docs/evidence-tiers.md); the full tool-surface
+discussion is [docs/tools.md](docs/tools.md).
+
+## Trust Boundary
+
+No LLM calls run inside zigars server tools. Source writes are preview-first and
+require `apply=true`. Command-backed tools execute argv vectors directly,
+without a shell. The workspace is the primary safety boundary; zigars is not an
+OS sandbox, and project commands or optional backends run with the local user's
+privileges. MCP `initialize` links `zigars://trust/manifest`, a JSON resource
+that summarizes these policies, configured backend identities, output limits,
+HTTP posture, checksum posture, and current limitations. See
+[docs/trust.md](docs/trust.md) and
+[docs/determinism.md](docs/determinism.md).
+
+## Install Alternatives
+
+Yarn and pnpm work when the `zigars-mcp` binary is named explicitly:
+
+```sh
+yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
+pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
 For npm-specific caching, troubleshooting, local publish testing, and Claude
@@ -228,7 +262,8 @@ and put `zigars` on `PATH`. The initial `v0.1.0` release was built and verified
 locally while GitHub Actions were unavailable; its release notes list the source
 commit and local gates. Tag-workflow releases attach GitHub provenance
 attestations generated from the checksum file when GitHub supports attestations
-for the repository.
+for the repository. The npm shim currently verifies SHA-256 checksums only; npm
+attestation verification is not implemented.
 
 Published release archives are named:
 
@@ -608,6 +643,11 @@ The short version is: start with `zigars_context_pack`, ask
   truth for command execution and artifact-write behavior.
 - stdout is reserved for MCP JSON-RPC. Logs, help, version, and startup errors
   go to stderr.
+- Audit JSONL is opt-in with `--audit-log <workspace-path>`. Enabled audit
+  logging defaults to metadata mode; `--audit-log-mode full` must be explicit
+  because it records raw MCP payloads and emits a stderr privacy warning. Runtime
+  timings, latency samples, and cancellation counters are summarized in
+  [docs/perf.md](docs/perf.md).
 - zwanzig graph output, zflame SVG output, diff folded intermediates, coverage
   baselines, benchmark baselines, profile captures, performance evidence packs,
   and runtime diagnostic evidence artifacts must use workspace-local output
@@ -616,6 +656,12 @@ The short version is: start with `zigars_context_pack`, ask
 
 More detail:
 
+- [Getting started](docs/getting-started.md): the first-five-minutes path and
+  what each verification call proves.
+- [Why zigars](docs/why-zigars.md): shell versus structured Zig evidence.
+- [Evidence tiers](docs/evidence-tiers.md) and
+  [determinism contract](docs/determinism.md): result labels, stable fields,
+  runtime-specific fields, and non-contracts.
 - [Agent clients](docs/agent-clients.md): Codex, Claude, Gemini CLI, Hermes, and
   generic MCP client setup.
 - [Codex setup](docs/codex.md): focused Codex stdio configuration, first calls,
@@ -629,6 +675,8 @@ More detail:
   and handler contracts.
 - [Optional backends](docs/backends.md): ZLS, ZLint, zwanzig, zflame,
   diff-folded, Samply, and Tracy setup.
+- [Runtime observability](docs/perf.md): audit JSONL modes, cancellation
+  counters, startup timings, and latency samples.
 - [Testing and coverage](docs/testing.md): local gates, smoke fixtures, kcov
   coverage, and release assets.
 - [Feature maturity](docs/maturity.md): public-readiness rubric,
@@ -762,9 +810,12 @@ and diff-folded checks, see [docs/backends.md](docs/backends.md).
 Run `zigars_doctor` for a compact health report that includes workspace,
 dependency, transport, timeout, ZLS status, and optional backend paths. Pass
 `probe_backends=true` to execute short backend probes for Zig, ZLS, ZLint,
-zwanzig, zflame, and diff-folded. Probe results are cached in the server
-process and are also visible through `zigars_workspace_info` and
-`zigars_metrics`.
+zwanzig, zflame, and diff-folded, and to compare `zig version` with
+`build.zig.zon` `minimum_zig_version` when the project declares one. Startup
+also emits a stderr warning with the same resolution text when that declared
+minimum exists and the configured Zig is unavailable or too old. Probe results
+are cached in the server process and are also visible through
+`zigars_workspace_info` and `zigars_metrics`.
 
 ## Development
 
