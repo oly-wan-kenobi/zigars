@@ -35,7 +35,7 @@ test("rejects missing archive checksum entries", () => {
 
 test("verifies archive sha256 and rejects mismatches", () => {
   assert.equal(
-    verifySha256(Buffer.from("archive"), "0eb3e36bfb24dcd9bb1d1bece1531216b59539a8fde17ee80224af0653c92aa3", "archive.tar.gz"),
+    verifySha256(Buffer.from("archive"), "0EB3E36BFB24DCD9BB1D1BECE1531216B59539A8FDE17EE80224AF0653C92AA3", "archive.tar.gz"),
     "0eb3e36bfb24dcd9bb1d1bece1531216b59539a8fde17ee80224af0653c92aa3",
   );
 
@@ -49,4 +49,9 @@ test("verifies archive sha256 and rejects mismatches", () => {
       return true;
     },
   );
+
+  assert.throws(() => verifySha256(Buffer.from("archive"), "not-a-sha256", "archive.tar.gz"), {
+    name: "ChecksumError",
+    code: "ERR_ZIGARS_CHECKSUM_MISMATCH",
+  });
 });

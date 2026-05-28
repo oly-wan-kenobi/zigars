@@ -7,6 +7,7 @@ exports.ChecksumError = void 0;
 exports.parseChecksums = parseChecksums;
 exports.checksumForArchive = checksumForArchive;
 exports.sha256 = sha256;
+exports.sha256Equals = sha256Equals;
 exports.verifySha256 = verifySha256;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 class ChecksumError extends Error {
@@ -53,13 +54,28 @@ function checksumForArchive(entries, archiveName) {
 function sha256(buffer) {
     return node_crypto_1.default.createHash("sha256").update(buffer).digest("hex");
 }
+function sha256Equals(actual, expected) {
+    const actualNormalized = normalizeSha256Hex(actual);
+    const expectedNormalized = normalizeSha256Hex(expected);
+    if (!actualNormalized || !expectedNormalized) {
+        return false;
+    }
+    const actualBytes = Buffer.from(actualNormalized, "hex");
+    const expectedBytes = Buffer.from(expectedNormalized, "hex");
+    return actualBytes.length === expectedBytes.length && node_crypto_1.default.timingSafeEqual(actualBytes, expectedBytes);
+}
 function verifySha256(buffer, expected, archiveName) {
     const actual = sha256(buffer);
-    if (actual !== expected.toLowerCase()) {
-        throw new ChecksumError(`Checksum mismatch for ${archiveName}: expected ${expected.toLowerCase()}, got ${actual}`, {
+    const expectedNormalized = expected.toLowerCase();
+    if (!sha256Equals(actual, expected)) {
+        throw new ChecksumError(`Checksum mismatch for ${archiveName}: expected ${expectedNormalized}, got ${actual}`, {
             code: "ERR_ZIGARS_CHECKSUM_MISMATCH",
             archiveName,
         });
     }
     return actual;
+}
+function normalizeSha256Hex(value) {
+    const normalized = value.toLowerCase();
+    return /^[a-f0-9]{64}$/.test(normalized) ? normalized : null;
 }

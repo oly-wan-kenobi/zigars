@@ -56,11 +56,23 @@ export function sha256(buffer: crypto.BinaryLike): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+export function sha256Equals(actual: string, expected: string): boolean {
+  const actualNormalized = normalizeSha256Hex(actual);
+  const expectedNormalized = normalizeSha256Hex(expected);
+  if (!actualNormalized || !expectedNormalized) {
+    return false;
+  }
+  const actualBytes = Buffer.from(actualNormalized, "hex");
+  const expectedBytes = Buffer.from(expectedNormalized, "hex");
+  return actualBytes.length === expectedBytes.length && crypto.timingSafeEqual(actualBytes, expectedBytes);
+}
+
 export function verifySha256(buffer: crypto.BinaryLike, expected: string, archiveName: string): string {
   const actual = sha256(buffer);
-  if (actual !== expected.toLowerCase()) {
+  const expectedNormalized = expected.toLowerCase();
+  if (!sha256Equals(actual, expected)) {
     throw new ChecksumError(
-      `Checksum mismatch for ${archiveName}: expected ${expected.toLowerCase()}, got ${actual}`,
+      `Checksum mismatch for ${archiveName}: expected ${expectedNormalized}, got ${actual}`,
       {
         code: "ERR_ZIGARS_CHECKSUM_MISMATCH",
         archiveName,
@@ -68,4 +80,9 @@ export function verifySha256(buffer: crypto.BinaryLike, expected: string, archiv
     );
   }
   return actual;
+}
+
+function normalizeSha256Hex(value: string): string | null {
+  const normalized = value.toLowerCase();
+  return /^[a-f0-9]{64}$/.test(normalized) ? normalized : null;
 }

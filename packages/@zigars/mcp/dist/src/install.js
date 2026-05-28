@@ -91,7 +91,7 @@ async function verifiedCachedExecutable(installDir, version, target, fsp = node_
             && marker.archiveName === target.archiveName
             && marker.executableName === target.executableName
             && typeof marker.sha256 === "string"
-            && (0, checksums_1.sha256)(executableBytes) === marker.sha256.toLowerCase()) {
+            && (0, checksums_1.sha256Equals)((0, checksums_1.sha256)(executableBytes), marker.sha256)) {
             return executablePath;
         }
     }
