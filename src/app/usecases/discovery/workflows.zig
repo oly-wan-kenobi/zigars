@@ -1,3 +1,7 @@
+//! Discovery workflows for workspace metadata, tool catalogs, and runtime status.
+//!
+//! Functions project existing app context into allocator-owned JSON without
+//! mutating source files.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
