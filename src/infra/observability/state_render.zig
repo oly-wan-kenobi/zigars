@@ -265,7 +265,7 @@ fn toolStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.V
 fn methodStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
-    for (state.method_stats[0..state.method_stat_count]) |stat| {
+    for (state.method_stats[0..state.method_stat_count]) |*stat| {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
         try obj.put(allocator, "name", .{ .string = stat.nameSlice() });

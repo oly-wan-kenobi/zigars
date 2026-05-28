@@ -30,7 +30,7 @@ pub fn toolStatsValue(allocator: std.mem.Allocator, stats: []const ports.Observa
 pub fn methodStatsValue(allocator: std.mem.Allocator, stats: []const ports.ObservabilityMethodStats) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
-    for (stats) |stat| {
+    for (stats) |*stat| {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
         try obj.put(allocator, "name", .{ .string = stat.nameSlice() });
@@ -139,4 +139,24 @@ fn percentile(sorted: []const u64, p: u64) u64 {
     const rank = (p * sorted.len + 99) / 100;
     const index = @min(sorted.len - 1, @max(@as(usize, 1), @as(usize, @intCast(rank))) - 1);
     return sorted[index];
+}
+
+test "methodStatsValue serializes method names from retained stats" {
+    var stats = [_]ports.ObservabilityMethodStats{ .{}, .{} };
+    @memcpy(stats[0].name[0.."tools/call".len], "tools/call");
+    stats[0].name_len = "tools/call".len;
+    stats[0].calls = 1;
+    @memcpy(stats[1].name[0.."initialize".len], "initialize");
+    stats[1].name_len = "initialize".len;
+    stats[1].calls = 1;
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const value = try methodStatsValue(arena.allocator(), stats[0..]);
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    try std.json.Stringify.value(value, .{}, &aw.writer);
+    const json = aw.written();
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"tools/call\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"initialize\"") != null);
 }
