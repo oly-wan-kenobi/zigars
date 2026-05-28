@@ -49,6 +49,7 @@ pub const RuntimePorts = struct {
                 .command_calls = &app.command_calls,
                 .tool_errors = &app.tool_errors,
                 .observability = &app.observability,
+                .cancellation_token = app.active_cancellation,
                 .count_command_calls = options.count_command_calls,
                 .non_exited_exit_code = options.non_exited_exit_code,
                 .record_observability = options.record_command_observability,
@@ -56,6 +57,7 @@ pub const RuntimePorts = struct {
             .workspace_store = infra.workspace.filesystem.Store.init(&app.workspace, app.io, .{
                 .default_read_limit = options.default_read_limit,
                 .read_resolution = options.workspace_read_resolution,
+                .cancellation_token = app.active_cancellation,
             }),
             .workspace_scanner = infra.workspace.scanner.Scanner.init(&app.workspace, app.io),
             .backend_probe = undefined,
@@ -86,6 +88,7 @@ pub const RuntimePorts = struct {
                     .observability = &app.observability,
                 },
                 .request_counter = &app.zls_requests,
+                .cancellation_token = app.active_cancellation,
             }),
             .runtime_session = infra.runtime_ux.session.Session.init(&app.runtime_ux),
             .tool_catalog = .{},
