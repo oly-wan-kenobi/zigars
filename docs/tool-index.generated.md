@@ -243,7 +243,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_ci_failure_map`: optional `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_ci_ingest`: optional `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_ci_repro_plan`: optional `path: string`, `content: string`, `format: string`, `changed_files: string`, `limit: integer`
-- `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`, `apply: boolean`
+- `zig_code_action_apply`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_index: integer`; optional `content: string`
 - `zig_code_action_batch`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`, `action_indices: string`; optional `content: string`, `apply: boolean`
 - `zig_code_actions`: required `file: string`, `start_line: integer`, `start_char: integer`, `end_line: integer`, `end_char: integer`; optional `content: string`
 - `zig_code_index_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
@@ -360,7 +360,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_release_evidence_pack`: optional `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `artifacts: string`
 - `zig_release_notes_draft`: optional `changes: string`, `api_diff: string`, `validation: string`, `ci: string`, `dependencies: string`, `security: string`, `version: string`
 - `zig_release_plan`: optional `goal: string`, `validation: string`, `ci: string`, `api: string`, `docs: string`, `dependencies: string`, `security: string`, `changelog: string`, `changed_files: string`
-- `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`, `apply: boolean`
+- `zig_rename`: required `file: string`, `line: integer`, `character: integer`, `new_name: string`; optional `content: string`
 - `zig_safety_site_catalog`: optional `path: string`, `limit: integer`
 - `zig_samply_artifact`: required `path: string`; optional `apply: boolean`
 - `zig_samply_import`: optional `command: string`, `path: string`, `content: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `samply_path: string`, `tracy_capture_path: string`, `probe_backend: boolean`, `address: string`, `port: integer`, `seconds: integer`, `limit: integer`
@@ -544,7 +544,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_ci_failure_map`: `pure_analysis` read-only analysis
 - `zig_ci_ingest`: `pure_analysis` read-only analysis
 - `zig_ci_repro_plan`: `pure_analysis` read-only analysis
-- `zig_code_action_apply`: `apply_gated_mutation` preview/apply mutation
+- `zig_code_action_apply`: `zls_request` `textDocument/codeAction`
 - `zig_code_action_batch`: `apply_gated_mutation` preview/apply mutation
 - `zig_code_actions`: `zls_request` `textDocument/codeAction`
 - `zig_code_index_export`: `workspace_artifact` explicit workspace artifact
@@ -580,13 +580,13 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_deps_remove`: `apply_gated_mutation` preview/apply mutation
 - `zig_deps_upgrade`: `apply_gated_mutation` preview/apply mutation
 - `zig_diagnostics`: `zls_request` `textDocument/publishDiagnostics with ast-check fallback`
-- `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic plus ast-check fallback`
+- `zig_diagnostics_all`: `zls_request` `textDocument/diagnostic with ast-check fallback`
 - `zig_diagnostics_workspace`: `pure_analysis` read-only analysis
 - `zig_doc_example_check`: `pure_analysis` read-only analysis
 - `zig_docs_index_build`: `pure_analysis` read-only analysis
 - `zig_docs_query`: `pure_analysis` read-only analysis
 - `zig_document_change`: `zls_request` `textDocument/didChange`
-- `zig_document_close`: `zls_request` `textDocument/didClose`
+- `zig_document_close`: `pure_analysis` read-only analysis
 - `zig_document_open`: `zls_request` `textDocument/didOpen`
 - `zig_document_status`: `pure_analysis` read-only analysis
 - `zig_document_symbols`: `zls_request` `textDocument/documentSymbol`
@@ -665,7 +665,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_release_evidence_pack`: `pure_analysis` read-only analysis
 - `zig_release_notes_draft`: `pure_analysis` read-only analysis
 - `zig_release_plan`: `pure_analysis` read-only analysis
-- `zig_rename`: `apply_gated_mutation` preview/apply mutation
+- `zig_rename`: `zls_request` `textDocument/rename`
 - `zig_safety_site_catalog`: `pure_analysis` read-only analysis
 - `zig_samply_artifact`: `apply_gated_mutation` preview/apply mutation
 - `zig_samply_import`: `apply_gated_mutation` preview/apply mutation
