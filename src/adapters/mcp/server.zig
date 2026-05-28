@@ -18,6 +18,11 @@ const pagination = @import("server/pagination.zig");
 const resource_subscriptions = @import("server/resource_subscriptions.zig");
 const tasks_ext = @import("server/tasks.zig");
 const app_ports = @import("../../app/ports.zig");
+const audit = @import("../../infra/observability/audit.zig");
+const cancellation = @import("cancellation");
+const correlation = @import("correlation.zig");
+const logging = @import("../../infra/observability/logging.zig");
+const observability_mod = @import("../../infra/observability/state.zig");
 const tool_errors = @import("errors.zig");
 const mcp_result = @import("result.zig");
 
@@ -55,6 +60,7 @@ pub const ServerConfig = struct {
     icons: ?[]const types.Icon = null,
     websiteUrl: ?[]const u8 = null,
     instructions: ?[]const u8 = null,
+    trustManifestUri: ?[]const u8 = null,
 };
 
 /// Current state of the server
@@ -86,6 +92,16 @@ pub const Server = struct {
     client_capabilities: ?types.ClientCapabilities = null,
     transport: ?transport_mod.Transport = null,
     stdio_transport: ?*transport_mod.StdioTransport = null,
+    correlation_generator: correlation.Generator = .{},
+    active_correlation: ?*const correlation.Context = null,
+    active_request: ?ActiveRequest = null,
+    completed_requests: [64]CompletedRequest = [_]CompletedRequest{.{}} ** 64,
+    completed_request_count: u64 = 0,
+    startup_started_ns: ?i128 = null,
+    first_initialize_recorded: bool = false,
+    audit_writer: ?*audit.Writer = null,
+    observability: ?*observability_mod.State = null,
+    transport_name: []const u8 = "unknown",
     next_request_id: i64 = 1,
     pending_requests: std.AutoHashMap(i64, PendingRequest),
     log_level: protocol.LogLevel = .info,
@@ -98,6 +114,23 @@ pub const Server = struct {
     pub const PendingRequest = struct {
         method: []const u8,
         timestamp: i64,
+    };
+
+    /// Currently executing inbound JSON-RPC request.
+    const ActiveRequest = struct {
+        request_id: correlation.RequestId,
+        method: []const u8,
+        cancellable: bool,
+        state: *cancellation.State,
+    };
+
+    /// Recently completed request id retained to classify late cancellation notifications.
+    const CompletedRequest = struct {
+        request_id: correlation.RequestId = .{},
+        request_id_string: [128]u8 = [_]u8{0} ** 128,
+        request_id_string_len: usize = 0,
+        method: [64]u8 = [_]u8{0} ** 64,
+        method_len: usize = 0,
     };
 
     /// Stable classifications for protocol-helper peer responses.
@@ -305,6 +338,28 @@ pub const Server = struct {
         self.dynamic_resource_deinit = deinit_content;
     }
 
+    /// Attaches an opt-in audit writer; server stdout remains reserved for JSON-RPC.
+    pub fn setAuditWriter(self: *Self, writer: *audit.Writer) void {
+        self.audit_writer = writer;
+    }
+
+    /// Attaches process-local observability state for adapter-level events.
+    pub fn setObservability(self: *Self, state: *observability_mod.State) void {
+        self.observability = state;
+    }
+
+    /// Carries the monotonic bootstrap start time for startup timing records.
+    pub fn setStartupStart(self: *Self, started_ns: i128) void {
+        self.startup_started_ns = started_ns;
+    }
+
+    /// Returns the active cooperative cancellation token, if the current request is cancellable.
+    pub fn currentCancellationToken(self: *Self) ?app_ports.CancellationToken {
+        const active = self.active_request orelse return null;
+        if (!active.cancellable) return null;
+        return active.state.token();
+    }
+
     /// Options for running the server
     pub const HttpRunConfig = struct {
         port: u16 = 8080,
@@ -322,10 +377,13 @@ pub const Server = struct {
         switch (options) {
             .stdio => {
                 self.log(io, "Server listening on STDIO");
+                const bind_started_ns = monotonicNowNs(io);
                 const stdio = try allocator.create(transport_mod.StdioTransport);
                 stdio.* = .{};
                 self.stdio_transport = stdio;
                 self.transport = stdio.transport();
+                self.transport_name = "stdio";
+                self.recordStartupPhaseRange("transport_bind", bind_started_ns, monotonicNowNs(io));
                 try self.messageLoop(io, allocator);
             },
             .http => |config| {
@@ -338,12 +396,15 @@ pub const Server = struct {
     fn runHttp(self: *Self, io: std.Io, allocator: std.mem.Allocator, config: HttpRunConfig) !void {
         const bind_host = if (std.mem.eql(u8, config.host, "localhost")) "127.0.0.1" else config.host;
 
+        const bind_started_ns = monotonicNowNs(io);
         const address = std.Io.net.IpAddress.resolve(io, bind_host, config.port) catch {
             return error.AddressResolutionError;
         };
 
         var listener = try std.Io.net.IpAddress.listen(&address, io, .{});
         defer listener.deinit(io);
+        self.transport_name = "http";
+        self.recordStartupPhaseRange("transport_bind", bind_started_ns, monotonicNowNs(io));
 
         while (self.state != .stopped and self.state != .shutting_down) {
             const stream = try listener.accept(io);
@@ -454,6 +515,7 @@ pub const Server = struct {
     /// Run the server with a custom transport
     pub fn runWithTransport(self: *Self, io: std.Io, allocator: std.mem.Allocator, t: transport_mod.Transport) !void {
         self.transport = t;
+        self.transport_name = "custom";
         try self.messageLoop(io, allocator);
     }
 
@@ -484,6 +546,16 @@ pub const Server = struct {
     /// Handle an incoming message
     fn handleMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
         const parsed_message = jsonrpc.parseMessage(allocator, data) catch {
+            var parse_correlation = self.nextCorrelation(correlation.RequestId.absent(), "jsonrpc/parse", null);
+            self.logWithCorrelation(io, &parse_correlation, "JSON-RPC parse error");
+            self.appendAudit(allocator, .{
+                .event = "parse_error",
+                .direction = "inbound",
+                .transport = self.transport_name,
+                .mcp_method = "jsonrpc/parse",
+                .payload = data,
+                .is_error = true,
+            });
             const error_response = jsonrpc.createParseError(null);
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
             return;
@@ -491,21 +563,61 @@ pub const Server = struct {
         defer parsed_message.deinit();
 
         switch (parsed_message.message) {
-            .request => |req| try self.handleRequest(io, allocator, req),
-            .notification => |notif| try self.handleNotification(io, notif),
+            .request => |req| try self.handleRequest(io, allocator, req, data),
+            .notification => |notif| try self.handleNotification(io, notif, data),
             .response => |resp| self.handleResponse(resp),
             .error_response => |err| self.handleErrorResponse(io, err),
         }
     }
 
     /// Handle an incoming request
-    fn handleRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
-        var buf: [256]u8 = undefined;
-        if (std.fmt.bufPrint(&buf, "Received request: {s}", .{request.method})) |msg| {
-            self.log(io, msg);
-        } else |_| {}
+    fn handleRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, raw_payload: ?[]const u8) !void {
+        const started_ns = monotonicNowNs(io);
+        var request_correlation = self.nextCorrelation(correlation.RequestId.from(request.id), request.method, null);
+        const previous_correlation = self.active_correlation;
+        self.active_correlation = &request_correlation;
+        defer self.active_correlation = previous_correlation;
+
+        var cancellation_state: cancellation.State = .{};
+        const previous_active = self.active_request;
+        self.active_request = .{
+            .request_id = request_correlation.request_id,
+            .method = request.method,
+            .cancellable = isCancellableMethod(request.method),
+            .state = &cancellation_state,
+        };
+        defer self.active_request = previous_active;
+
+        var request_is_error = false;
+        defer {
+            const ended_ns = monotonicNowNs(io);
+            self.rememberCompletedRequest(request_correlation.request_id, request.method);
+            if (self.observability) |observability| {
+                observability.recordMcpRequest(request.method, elapsedMs(started_ns, ended_ns), request_is_error);
+            }
+            if (std.mem.eql(u8, request.method, "initialize") and !self.first_initialize_recorded) {
+                self.first_initialize_recorded = true;
+                self.recordStartupPhaseRange("first_initialize", started_ns, ended_ns);
+            }
+        }
+        errdefer request_is_error = true;
+
+        self.appendAudit(allocator, .{
+            .event = "request",
+            .direction = "inbound",
+            .transport = self.transport_name,
+            .mcp_method = request.method,
+            .mcp_request_id_type = request_correlation.request_id.typeName(),
+            .mcp_request_id_value = request_correlation.request_id.valueString(),
+            .correlation = auditCorrelation(&request_correlation),
+            .tool_name = request_correlation.tool_name,
+            .payload = raw_payload,
+        });
+        self.logWithCorrelation(io, &request_correlation, "Received request");
 
         if (self.state == .uninitialized and !std.mem.eql(u8, request.method, "initialize")) {
+            self.logWithCorrelation(io, &request_correlation, "Server not initialized");
+            request_is_error = true;
             const error_response = jsonrpc.createErrorResponse(
                 request.id,
                 jsonrpc.ErrorCode.SERVER_NOT_INITIALIZED,
@@ -525,7 +637,7 @@ pub const Server = struct {
         } else if (std.mem.eql(u8, request.method, "tools/list")) {
             try self.handleToolsList(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "tools/call")) {
-            try self.handleToolsCall(io, allocator, request);
+            try self.handleToolsCall(io, allocator, request, &request_correlation);
         } else if (std.mem.eql(u8, request.method, "resources/list")) {
             try self.handleResourcesList(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "resources/read")) {
@@ -553,6 +665,8 @@ pub const Server = struct {
         } else if (std.mem.eql(u8, request.method, "tasks/cancel")) {
             try tasks_ext.handleCancel(self, io, allocator, request);
         } else {
+            self.logWithCorrelation(io, &request_correlation, "Method not found");
+            request_is_error = true;
             const error_response = jsonrpc.createMethodNotFound(request.id, request.method);
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
         }
@@ -664,6 +778,15 @@ pub const Server = struct {
         if (self.config.instructions) |inst| {
             try result.put(response_allocator, "instructions", .{ .string = inst });
         }
+        if (self.config.trustManifestUri) |uri| {
+            var trust_manifest: std.json.ObjectMap = .empty;
+            try trust_manifest.put(response_allocator, "uri", .{ .string = uri });
+            try trust_manifest.put(response_allocator, "mimeType", .{ .string = "application/json" });
+
+            var zigars: std.json.ObjectMap = .empty;
+            try zigars.put(response_allocator, "trust_manifest", .{ .object = trust_manifest });
+            try result.put(response_allocator, "zigars", .{ .object = zigars });
+        }
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
@@ -770,16 +893,21 @@ pub const Server = struct {
     }
 
     /// Handles the tools call request and sends the JSON-RPC response or error.
-    fn handleToolsCall(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+    fn handleToolsCall(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, request_correlation: *correlation.Context) !void {
         const tool_name = mcp.tools.getString(request.params, "name") orelse "";
+        request_correlation.setToolName(tool_name);
         const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
 
         if (self.tools.get(tool_name)) |tool| {
             var tool_arena = std.heap.ArenaAllocator.init(allocator);
             defer tool_arena.deinit();
             const tool_allocator = tool_arena.allocator();
+            const previous_correlation = self.active_correlation;
+            self.active_correlation = request_correlation;
+            defer self.active_correlation = previous_correlation;
             const tool_result = tool.handler(tool.user_data, self, io, tool_allocator, arguments) catch |err| {
-                try self.sendToolHandlerErrorResponse(io, allocator, request, tool_name, err);
+                self.logWithCorrelation(io, request_correlation, "Tool handler failed");
+                try self.sendToolHandlerErrorResponse(io, allocator, request, tool_name, err, request_correlation);
                 return;
             };
             defer if (tool.deinit_result) |deinit_result| deinit_result(tool_allocator, tool_result);
@@ -799,17 +927,19 @@ pub const Server = struct {
             if (tool_result.structuredContent) |sc| {
                 try result.put(allocator, "structuredContent", sc);
             }
+            try request_correlation.putMeta(allocator, &result);
 
             const response = jsonrpc.createResponse(request.id, .{ .object = result });
             try self.sendResponse(io, allocator, .{ .response = response });
         } else {
+            self.logWithCorrelation(io, request_correlation, "Tool not found");
             const error_response = jsonrpc.createInvalidParams(request.id, "Tool not found");
             try self.sendResponse(io, allocator, .{ .error_response = error_response });
         }
     }
 
     /// Sends a structured tools/call error response using transient JSON owned by the response arena.
-    fn sendToolHandlerErrorResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, tool_name: []const u8, err: anyerror) !void {
+    fn sendToolHandlerErrorResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, tool_name: []const u8, err: anyerror, request_correlation: *const correlation.Context) !void {
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -821,6 +951,7 @@ pub const Server = struct {
         try result.put(response_allocator, "content", .{ .array = content_array });
         try result.put(response_allocator, "isError", .{ .bool = true });
         try result.put(response_allocator, "structuredContent", try toolHandlerErrorValue(response_allocator, tool_name, err));
+        try request_correlation.putMeta(response_allocator, &result);
 
         const response = jsonrpc.createResponse(request.id, .{ .object = result });
         try self.sendResponse(io, allocator, .{ .response = response });
@@ -1220,20 +1351,24 @@ pub const Server = struct {
     }
 
     /// Handles inbound JSON-RPC notifications and updates local server state.
-    fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification) !void {
+    fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification, raw_payload: ?[]const u8) !void {
+        var notification_correlation = self.nextCorrelation(correlation.RequestId.absent(), notification.method, null);
+        self.appendAudit(self.allocator, .{
+            .event = "notification",
+            .direction = "inbound",
+            .transport = self.transport_name,
+            .mcp_method = notification.method,
+            .correlation = auditCorrelation(&notification_correlation),
+            .payload = raw_payload,
+        });
         if (std.mem.eql(u8, notification.method, "notifications/initialized")) {
             self.state = .ready;
-            self.log(io, "Server initialized and ready");
+            self.logWithCorrelation(io, &notification_correlation, "Server initialized and ready");
         } else if (std.mem.eql(u8, notification.method, "notifications/cancelled")) {
-            if (notification.params) |params| {
-                if (params == .object) {
-                    if (params.object.get("requestId")) |req_id| {
-                        _ = req_id;
-                    }
-                }
-            }
+            self.handleCancellationNotification(io, notification, &notification_correlation);
+            self.logWithCorrelation(io, &notification_correlation, "Cancellation notification received");
         } else if (std.mem.eql(u8, notification.method, "notifications/roots/list_changed")) {
-            self.log(io, "Roots list changed");
+            self.logWithCorrelation(io, &notification_correlation, "Roots list changed");
         }
     }
 
@@ -1413,8 +1548,8 @@ pub const Server = struct {
                         .unavailable_reason = "client returned an error response for the protocol helper request",
                     };
                 },
-                .request => |inbound_request| try self.handleRequest(io, allocator, inbound_request),
-                .notification => |notification| try self.handleNotification(io, notification),
+                .request => |inbound_request| try self.handleRequest(io, allocator, inbound_request, data),
+                .notification => |notification| try self.handleNotification(io, notification, data),
             }
         }
     }
@@ -1475,11 +1610,202 @@ pub const Server = struct {
                 return;
             };
             defer allocator.free(json);
+            self.appendAudit(allocator, self.auditEventForOutboundMessage(message, json));
             t.send(io, allocator, json) catch {
                 self.logError(io, "Failed to send response");
                 return;
             };
         }
+    }
+
+    /// Classifies and applies an MCP cancellation notification to the currently active request.
+    fn handleCancellationNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification, notification_correlation: *const correlation.Context) void {
+        _ = io;
+        var target_id = cancellationTargetId(notification.params) orelse {
+            self.recordCancellationEvent("malformed", correlation.RequestId.absent(), null);
+            self.appendAudit(self.allocator, .{
+                .event = "cancellation",
+                .direction = "inbound",
+                .transport = self.transport_name,
+                .mcp_method = notification.method,
+                .correlation = auditCorrelation(notification_correlation),
+                .ok = false,
+                .is_error = true,
+            });
+            return;
+        };
+        const reason = cancellationReason(notification.params) orelse "client requested cancellation";
+
+        var status: []const u8 = "unknown";
+        var target_method: ?[]const u8 = null;
+        if (self.active_request) |active| {
+            if (requestIdEqual(active.request_id, target_id)) {
+                target_method = active.method;
+                if (active.cancellable) {
+                    active.state.request(reason);
+                    status = "requested_active";
+                } else {
+                    status = "not_cancellable";
+                }
+            }
+        }
+        if (std.mem.eql(u8, status, "unknown")) {
+            if (self.completedRequestMethod(target_id)) |method| {
+                status = "completed_late";
+                target_method = method;
+            }
+        }
+
+        self.recordCancellationEvent(status, target_id, target_method);
+        self.appendAudit(self.allocator, .{
+            .event = "cancellation",
+            .direction = "inbound",
+            .transport = self.transport_name,
+            .mcp_method = notification.method,
+            .mcp_request_id_type = target_id.typeName(),
+            .mcp_request_id_value = target_id.valueString(),
+            .correlation = auditCorrelation(notification_correlation),
+            .ok = std.mem.eql(u8, status, "requested_active") or std.mem.eql(u8, status, "completed_late"),
+            .is_error = std.mem.eql(u8, status, "unknown") or std.mem.eql(u8, status, "not_cancellable"),
+        });
+    }
+
+    /// Appends an audit record when audit logging is enabled; audit failures never touch stdout or fail the request.
+    fn appendAudit(self: *Self, allocator: std.mem.Allocator, event: audit.Event) void {
+        const writer = self.audit_writer orelse return;
+        writer.append(allocator, event) catch |err| {
+            if (self.observability) |observability| observability.recordAuditWriteError(@errorName(err));
+            return;
+        };
+        if (self.observability) |observability| observability.recordAuditWriteOk();
+    }
+
+    /// Builds the audit record for an outbound JSON-RPC message after serialization.
+    fn auditEventForOutboundMessage(self: *Self, message: jsonrpc.Message, payload: []const u8) audit.Event {
+        const active = self.active_correlation;
+        const corr = if (active) |context| auditCorrelation(context) else null;
+        return switch (message) {
+            .request => |request| blk: {
+                var request_id = correlation.RequestId.from(request.id);
+                break :blk .{
+                    .event = "request",
+                    .direction = "outbound",
+                    .transport = self.transport_name,
+                    .mcp_method = request.method,
+                    .mcp_request_id_type = request_id.typeName(),
+                    .mcp_request_id_value = request_id.valueString(),
+                    .correlation = corr,
+                    .payload = payload,
+                };
+            },
+            .notification => |notification| .{
+                .event = "notification",
+                .direction = "outbound",
+                .transport = self.transport_name,
+                .mcp_method = notification.method,
+                .correlation = corr,
+                .payload = payload,
+            },
+            .response => |response| blk: {
+                var request_id = correlation.RequestId.from(response.id);
+                break :blk .{
+                    .event = "response",
+                    .direction = "outbound",
+                    .transport = self.transport_name,
+                    .mcp_method = if (active) |context| context.mcp_method else null,
+                    .mcp_request_id_type = request_id.typeName(),
+                    .mcp_request_id_value = request_id.valueString(),
+                    .correlation = corr,
+                    .tool_name = if (active) |context| context.tool_name else null,
+                    .ok = true,
+                    .payload = payload,
+                };
+            },
+            .error_response => |err| blk: {
+                var request_id = correlation.RequestId.fromOptional(err.id);
+                break :blk .{
+                    .event = "response",
+                    .direction = "outbound",
+                    .transport = self.transport_name,
+                    .mcp_method = if (active) |context| context.mcp_method else null,
+                    .mcp_request_id_type = request_id.typeName(),
+                    .mcp_request_id_value = request_id.valueString(),
+                    .correlation = corr,
+                    .tool_name = if (active) |context| context.tool_name else null,
+                    .ok = false,
+                    .is_error = true,
+                    .payload = payload,
+                };
+            },
+        };
+    }
+
+    /// Records a completed request id in a fixed-size ring for late cancellation classification.
+    fn rememberCompletedRequest(self: *Self, request_id: correlation.RequestId, method: []const u8) void {
+        if (request_id.kind == .absent) return;
+        const index: usize = @intCast(self.completed_request_count % @as(u64, self.completed_requests.len));
+        const slot = &self.completed_requests[index];
+        slot.* = .{};
+        slot.request_id.kind = request_id.kind;
+        slot.request_id.integer = request_id.integer;
+        slot.request_id.integer_text = request_id.integer_text;
+        slot.request_id.integer_text_len = request_id.integer_text_len;
+        if (request_id.kind == .string) {
+            const len = @min(request_id.string.len, slot.request_id_string.len);
+            @memcpy(slot.request_id_string[0..len], request_id.string[0..len]);
+            slot.request_id_string_len = len;
+            slot.request_id.string = slot.request_id_string[0..len];
+        }
+        slot.method_len = @min(method.len, slot.method.len);
+        @memcpy(slot.method[0..slot.method_len], method[0..slot.method_len]);
+        self.completed_request_count +|= 1;
+    }
+
+    /// Finds the method for a recently completed request id, if still retained.
+    fn completedRequestMethod(self: *Self, request_id: correlation.RequestId) ?[]const u8 {
+        const retained: usize = @intCast(@min(self.completed_request_count, @as(u64, self.completed_requests.len)));
+        var offset: usize = 0;
+        while (offset < retained) : (offset += 1) {
+            const index: usize = @intCast((self.completed_request_count - 1 - @as(u64, offset)) % @as(u64, self.completed_requests.len));
+            const slot = &self.completed_requests[index];
+            if (requestIdEqual(slot.request_id, request_id)) return slot.method[0..slot.method_len];
+        }
+        return null;
+    }
+
+    /// Records a cancellation event into observability state when available.
+    fn recordCancellationEvent(self: *Self, status: []const u8, request_id: correlation.RequestId, method: ?[]const u8) void {
+        if (self.observability) |observability| {
+            observability.recordCancellation(status, request_id.typeName(), request_id.valueString(), method);
+        }
+    }
+
+    /// Records a startup phase range relative to the bootstrap start time.
+    fn recordStartupPhaseRange(self: *Self, name: []const u8, phase_start_ns: i128, phase_end_ns: i128) void {
+        const observability = self.observability orelse return;
+        const startup_start_ns = self.startup_started_ns orelse phase_start_ns;
+        observability.recordStartupPhase(name, elapsedMs(startup_start_ns, phase_start_ns), elapsedMs(phase_start_ns, phase_end_ns));
+    }
+
+    /// Allocates the next process-local request correlation context.
+    fn nextCorrelation(self: *Self, request_id: correlation.RequestId, method: []const u8, tool_name: ?[]const u8) correlation.Context {
+        return self.correlation_generator.next(request_id, method, tool_name);
+    }
+
+    /// Writes request-scoped diagnostics with compact correlation fields.
+    fn logWithCorrelation(self: *Self, io: std.Io, context: *const correlation.Context, message: []const u8) void {
+        var request_id_buffer: [64]u8 = undefined;
+        const request_id = context.request_id.compactValue(&request_id_buffer);
+        var prefix_buffer: [256]u8 = undefined;
+        const prefix = logging.formatCorrelationPrefix(&prefix_buffer, .{
+            .trace_id = context.compactTrace(),
+            .request_id = request_id,
+            .method = context.mcp_method,
+            .tool_name = context.tool_name,
+        });
+        var line_buffer: [768]u8 = undefined;
+        const line = std.fmt.bufPrint(&line_buffer, "[{s}] {s}", .{ prefix, message }) catch message;
+        self.log(io, line);
     }
 
     /// Writes diagnostic text to stderr when stdio transport owns the error stream.
@@ -1498,6 +1824,71 @@ pub const Server = struct {
         }
     }
 };
+
+/// Returns true for request methods where zigars can cooperatively observe cancellation.
+fn isCancellableMethod(method: []const u8) bool {
+    return std.mem.eql(u8, method, "tools/call") or
+        std.mem.eql(u8, method, "completion/complete") or
+        std.mem.eql(u8, method, "resources/read") or
+        std.mem.eql(u8, method, "prompts/get");
+}
+
+/// Extracts the target request id from an MCP cancellation notification.
+fn cancellationTargetId(params: ?std.json.Value) ?correlation.RequestId {
+    const value = params orelse return null;
+    if (value != .object) return null;
+    const raw_id = value.object.get("requestId") orelse return null;
+    return switch (raw_id) {
+        .integer => |integer| correlation.RequestId.from(.{ .integer = integer }),
+        .string => |string| correlation.RequestId.from(.{ .string = string }),
+        else => null,
+    };
+}
+
+/// Extracts the optional human-readable cancellation reason.
+fn cancellationReason(params: ?std.json.Value) ?[]const u8 {
+    const value = params orelse return null;
+    if (value != .object) return null;
+    const reason = value.object.get("reason") orelse return null;
+    return if (reason == .string) reason.string else null;
+}
+
+/// Compares normalized MCP request ids without conflating integer and string forms.
+fn requestIdEqual(left: correlation.RequestId, right: correlation.RequestId) bool {
+    if (left.kind != right.kind) return false;
+    return switch (left.kind) {
+        .integer => left.integer == right.integer,
+        .string => std.mem.eql(u8, left.string, right.string),
+        .absent => true,
+    };
+}
+
+/// Captures adapter correlation metadata for the audit writer.
+fn auditCorrelation(context: *const correlation.Context) audit.Correlation {
+    return .{
+        .schema_version = 1,
+        .mcp_request_id_type = context.request_id.typeName(),
+        .mcp_request_id_value = context.request_id.valueString(),
+        .mcp_method = context.mcp_method,
+        .tool_name = context.tool_name,
+        .trace_id = context.traceId(),
+        .span_id = context.spanId(),
+        .parent_span_id = context.parent_span_id,
+        .tool_call_id = context.toolCallId(),
+    };
+}
+
+/// Monotonic nanoseconds for latency and startup phase measurements.
+fn monotonicNowNs(io: std.Io) i128 {
+    return std.Io.Clock.now(.awake, io).nanoseconds;
+}
+
+/// Converts a monotonic range to milliseconds, saturating pathological overflow.
+fn elapsedMs(start_ns: i128, end_ns: i128) u64 {
+    if (end_ns <= start_ns) return 0;
+    const milliseconds = @divTrunc(end_ns - start_ns, std.time.ns_per_ms);
+    return std.math.cast(u64, milliseconds) orelse std.math.maxInt(u64);
+}
 
 /// App-facing protocol helper adapter bound to the currently executing tools/call.
 pub const ProtocolClientAdapter = struct {
@@ -1625,4 +2016,49 @@ test "server rollback and transport error branches" {
         .@"error" = .{ .code = -32603, .message = "client error" },
     });
     try std.testing.expect(send_server.pending_requests.contains(1));
+}
+
+test "server cancellation notifications mark active and completed requests" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server = Server.init(std.testing.allocator, .{ .name = "cancel", .version = "1" });
+    defer server.deinit();
+    var state = observability_mod.State{};
+    server.setObservability(&state);
+
+    var request_state = cancellation.State{};
+    const active_id = correlation.RequestId.from(.{ .integer = 7 });
+    server.active_request = .{
+        .request_id = active_id,
+        .method = "tools/call",
+        .cancellable = true,
+        .state = &request_state,
+    };
+    var params: std.json.ObjectMap = .empty;
+    try params.put(allocator, "requestId", .{ .integer = 7 });
+    try params.put(allocator, "reason", .{ .string = "client stopped waiting" });
+    var notification_correlation = server.nextCorrelation(correlation.RequestId.absent(), "notifications/cancelled", null);
+    server.handleCancellationNotification(std.testing.io, .{
+        .method = "notifications/cancelled",
+        .params = .{ .object = params },
+    }, &notification_correlation);
+
+    try std.testing.expect(request_state.token().isCancelled());
+    try std.testing.expectEqualStrings("client stopped waiting", request_state.token().reason());
+    try std.testing.expectEqual(@as(u64, 1), state.cancellation_requested);
+
+    server.active_request = null;
+    server.rememberCompletedRequest(correlation.RequestId.from(.{ .string = "done-1" }), "tools/call");
+    var late_params: std.json.ObjectMap = .empty;
+    try late_params.put(allocator, "requestId", .{ .string = "done-1" });
+    server.handleCancellationNotification(std.testing.io, .{
+        .method = "notifications/cancelled",
+        .params = .{ .object = late_params },
+    }, &notification_correlation);
+
+    try std.testing.expectEqual(@as(u64, 2), state.cancellation_requested);
+    try std.testing.expectEqual(@as(u64, 1), state.cancellation_completed);
+    try std.testing.expectEqualStrings("completed_late", state.cancellation_events[1].status);
 }
