@@ -10,12 +10,12 @@ const mcp_result = @import("../result.zig");
 
 /// Handles MCP `zigars_capabilities` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsCapabilities(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
+    return catalogStructured(allocator, "zigars_capabilities", discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
 /// Handles MCP `zigars_schema` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsSchema(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return jsonTextOnly(allocator, discovery.catalogText(allocator, context) catch return error.OutOfMemory);
+    return catalogStructured(allocator, "zigars_schema", discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
 /// Handles MCP `zigars_backend_catalog` requests by delegating to app logic and shaping owned results/errors.
@@ -69,15 +69,22 @@ fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.Too
     return mcp_result.structured(allocator, value);
 }
 
-/// Serializes a JSON value for tools that return text-only MCP content.
-fn jsonTextOnly(allocator: std.mem.Allocator, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Ownership of `bytes` transfers into the text content block on success.
-    var bytes_owned = true;
-    defer if (bytes_owned) allocator.free(bytes);
-    const content = allocator.alloc(mcp.types.ContentBlock, 1) catch return error.OutOfMemory;
-    content[0] = .{ .text = .{ .text = bytes } };
-    bytes_owned = false;
-    return .{ .content = content };
+/// Parses catalog JSON and returns both structuredContent and a text fallback.
+fn catalogStructured(allocator: std.mem.Allocator, tool_name: []const u8, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    defer allocator.free(bytes);
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch |err| {
+        if (err == error.OutOfMemory) return error.OutOfMemory;
+        return mcp_errors.fromError(allocator, .{
+            .tool = tool_name,
+            .operation = "parse_catalog",
+            .phase = "discovery_usecase",
+            .code = "catalog_parse_failed",
+            .category = "discovery",
+            .resolution = "Retry after regenerating the tool catalog with zigars release and docs checks.",
+        }, err);
+    };
+    defer parsed.deinit();
+    return structured(allocator, parsed.value);
 }
 
 /// Parse permissive JSON args and clamp timeout at the adapter boundary so

@@ -18,7 +18,13 @@ test "discovery adapter wrappers expose text and structured status results" {
 
     const capabilities = try discovery.zigarsCapabilities(allocator, context, null);
     try std.testing.expect(std.mem.indexOf(u8, capabilities.content[0].text.text, "zigars_schema") != null);
+    try std.testing.expectEqualStrings("zigars_schema", capabilities.structuredContent.?.object.get("tools").?.array.items[0].string);
     try std.testing.expectEqual(@as(usize, 1), catalog.calls);
+
+    const schema = try discovery.zigarsSchema(allocator, context, null);
+    try std.testing.expect(std.mem.indexOf(u8, schema.content[0].text.text, "zigars_schema") != null);
+    try std.testing.expectEqualStrings("zigars_schema", schema.structuredContent.?.object.get("tools").?.array.items[0].string);
+    try std.testing.expectEqual(@as(usize, 2), catalog.calls);
 
     const metrics = try discovery.zigarsMetrics(allocator, context, null);
     try std.testing.expectEqualStrings("connected", metrics.structuredContent.?.object.get("zls_status").?.string);
