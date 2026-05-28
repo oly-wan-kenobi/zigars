@@ -1,4 +1,5 @@
 const std = @import("std");
+const audit = @import("../infra/observability/audit.zig");
 
 /// Startup transport selected for the MCP server process.
 pub const Transport = enum {
@@ -20,6 +21,8 @@ pub const Config = struct {
     host: []const u8 = "127.0.0.1",
     port: u16 = 8080,
     cache_dir: ?[]const u8 = null,
+    audit_log_path: ?[]const u8 = null,
+    audit_log_mode: audit.Mode = .metadata,
     timeout_ms: i64 = 30_000,
     zls_timeout_ms: i64 = 30_000,
 
@@ -34,6 +37,7 @@ pub const Config = struct {
         allocator.free(self.diff_folded_path);
         allocator.free(self.host);
         if (self.cache_dir) |cache_dir| allocator.free(cache_dir);
+        if (self.audit_log_path) |audit_log_path| allocator.free(audit_log_path);
         self.* = undefined;
     }
 };
@@ -47,6 +51,8 @@ pub const ParseError = error{
     InvalidPort,
     InvalidTimeout,
     InvalidTransport,
+    InvalidAuditLogMode,
+    InvalidAuditLogPath,
     UnsafeHttpHost,
 };
 
@@ -85,6 +91,18 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
             const value = try dupeNext(allocator, raw_args, &i);
             if (result.cache_dir) |old| allocator.free(old);
             result.cache_dir = value;
+        } else if (std.mem.eql(u8, arg, "--audit-log")) {
+            const value = try dupeNext(allocator, raw_args, &i);
+            if (value.len == 0) {
+                allocator.free(value);
+                return ParseError.InvalidAuditLogPath;
+            }
+            if (result.audit_log_path) |old| allocator.free(old);
+            result.audit_log_path = value;
+        } else if (std.mem.eql(u8, arg, "--audit-log-mode")) {
+            const value = try dupeNext(allocator, raw_args, &i);
+            defer allocator.free(value);
+            result.audit_log_mode = audit.parseMode(value) orelse return ParseError.InvalidAuditLogMode;
         } else if (std.mem.eql(u8, arg, "--transport")) {
             const value = try dupeNext(allocator, raw_args, &i);
             defer allocator.free(value);
@@ -182,8 +200,11 @@ pub fn usage() []const u8 {
     \\        [--diff-folded-path <path>]
     \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]
+    \\        [--audit-log <workspace-path>] [--audit-log-mode metadata|redacted|full]
     \\
     \\stdio is the safest default for Codex. http is local-only and must bind loopback.
+    \\Audit logging is off by default. Full audit mode records raw MCP payloads and should
+    \\only be used intentionally for local forensic debugging.
     \\stdout is reserved for MCP JSON-RPC. Logs, help, and version go to stderr.
     \\
     ;
