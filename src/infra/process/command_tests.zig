@@ -52,7 +52,7 @@ test "command runner executes shebang scripts through their interpreter" {
         .flags = .{ .permissions = .executable_file },
     });
 
-    const result = try run(allocator, std.testing.io, ".", &.{ script, "ok" }, 1000);
+    var result = try run(allocator, std.testing.io, ".", &.{ script, "ok" }, 1000);
     defer result.deinit(allocator);
     try std.testing.expect(result.succeeded());
     try std.testing.expectEqualStrings("script:ok\n", result.stdout);
@@ -86,7 +86,7 @@ test "run observes cancellation before spawning" {
 test "run truncates oversized stdout instead of failing" {
     if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
 
-    const result = try runWithOutputLimit(
+    var result = try runWithOutputLimit(
         std.testing.allocator,
         std.testing.io,
         ".",
