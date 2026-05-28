@@ -2,7 +2,6 @@
 //! Owns routing and zigars result lifetimes over the pinned upstream MCP dependency.
 
 const std = @import("std");
-const http = std.http;
 const mcp = @import("mcp");
 
 const jsonrpc = mcp.jsonrpc;
@@ -11,10 +10,11 @@ const types = mcp.types;
 const transport_mod = mcp.transport;
 const prompts_mod = mcp.prompts;
 const resources_mod = mcp.resources;
-const HttpRequestTransport = @import("server/http_transport.zig").HttpRequestTransport;
 const completion_ext = @import("server/completion.zig");
+const http_runner = @import("server/http_runner.zig");
 const json_helpers = @import("server/json_helpers.zig");
 const pagination = @import("server/pagination.zig");
+const protocol_client = @import("server/protocol_client.zig");
 const resource_subscriptions = @import("server/resource_subscriptions.zig");
 const tasks_ext = @import("server/tasks.zig");
 const app_ports = @import("../../app/ports.zig");
@@ -24,7 +24,6 @@ const correlation = @import("correlation.zig");
 const logging = @import("../../infra/observability/logging.zig");
 const observability_mod = @import("../../infra/observability/state.zig");
 const tool_errors = @import("errors.zig");
-const mcp_result = @import("result.zig");
 
 /// Deinitializer for tool results whose payload storage is owned by request allocators.
 pub const ToolResultDeinit = *const fn (allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void;
@@ -106,9 +105,32 @@ pub const Server = struct {
     pending_requests: std.AutoHashMap(i64, PendingRequest),
     log_level: protocol.LogLevel = .info,
     /// Maximum accepted JSON-RPC POST body size for the built-in HTTP transport.
-    pub const max_http_body_size: usize = 4 * 1024 * 1024;
+    pub const max_http_body_size: usize = http_runner.max_body_size;
 
     const Self = @This();
+
+    /// White-box test accessors kept separate from the production request API.
+    pub const TestAccess = struct {
+        pub fn log(server: *Self, io: std.Io, message: []const u8) void {
+            server.log(io, message);
+        }
+
+        pub fn logError(server: *Self, io: std.Io, message: []const u8) void {
+            server.logError(io, message);
+        }
+
+        pub fn nextCorrelation(server: *Self, request_id: correlation.RequestId, method: []const u8, tool_name: ?[]const u8) correlation.Context {
+            return server.nextCorrelation(request_id, method, tool_name);
+        }
+
+        pub fn handleCancellationNotification(server: *Self, io: std.Io, notification: jsonrpc.Notification, notification_correlation: *const correlation.Context) void {
+            server.handleCancellationNotification(io, notification, notification_correlation);
+        }
+
+        pub fn rememberCompletedRequest(server: *Self, request_id: correlation.RequestId, method: []const u8) void {
+            server.rememberCompletedRequest(request_id, method);
+        }
+    };
 
     /// Outbound request bookkeeping for responses from the peer.
     pub const PendingRequest = struct {
@@ -134,101 +156,16 @@ pub const Server = struct {
     };
 
     /// Stable classifications for protocol-helper peer responses.
-    pub const ProtocolResponseStatus = enum {
-        accepted,
-        declined,
-        cancelled,
-        malformed,
-        timeout,
-    };
+    pub const ProtocolResponseStatus = protocol_client.ResponseStatus;
 
     /// Classifies an elicitation/create response without mutating server state.
     pub fn classifyElicitationResponse(response: ?std.json.Value) ProtocolResponseStatus {
-        const value = response orelse return .timeout;
-        if (value != .object) return .malformed;
-        const action = value.object.get("action") orelse return .malformed;
-        if (action != .string) return .malformed;
-        if (std.mem.eql(u8, action.string, "accept") or std.mem.eql(u8, action.string, "accepted")) {
-            if (value.object.get("content")) |content| {
-                if (content == .object) {
-                    if (content.object.get("confirm")) |confirm| {
-                        if (confirm == .bool and !confirm.bool) return .declined;
-                    }
-                }
-            }
-            return .accepted;
-        }
-        if (std.mem.eql(u8, action.string, "decline") or std.mem.eql(u8, action.string, "declined")) return .declined;
-        if (std.mem.eql(u8, action.string, "cancel") or std.mem.eql(u8, action.string, "cancelled") or std.mem.eql(u8, action.string, "canceled")) return .cancelled;
-        return .malformed;
+        return protocol_client.classifyElicitationResponse(response);
     }
 
     /// Classifies a sampling/createMessage response without mutating server state.
     pub fn classifySamplingResponse(response: ?std.json.Value) ProtocolResponseStatus {
-        const value = response orelse return .timeout;
-        if (value != .object) return .malformed;
-        if (value.object.get("content")) |_| return .accepted;
-        if (value.object.get("message")) |_| return .accepted;
-        return .malformed;
-    }
-
-    /// Returns whether the initialized client advertised the requested helper capability.
-    fn supportsProtocolFeature(self: *Self, feature: app_ports.ProtocolFeature) bool {
-        return switch (feature) {
-            .elicitation => self.supportsElicitation(),
-            .sampling => self.supportsSampling(),
-        };
-    }
-
-    /// Classifies a helper response according to its feature-specific result shape.
-    fn classifyProtocolResponse(feature: app_ports.ProtocolFeature, response: ?std.json.Value) ProtocolResponseStatus {
-        return switch (feature) {
-            .elicitation => classifyElicitationResponse(response),
-            .sampling => classifySamplingResponse(response),
-        };
-    }
-
-    /// Maps server-local response status to the app port status contract.
-    fn protocolStatus(status: ProtocolResponseStatus) app_ports.ProtocolResponseStatus {
-        return switch (status) {
-            .accepted => .accepted,
-            .declined => .declined,
-            .cancelled => .cancelled,
-            .malformed => .malformed,
-            .timeout => .timeout,
-        };
-    }
-
-    /// Human-readable reason for unsupported protocol helper features.
-    fn unsupportedProtocolReason(feature: app_ports.ProtocolFeature) []const u8 {
-        return switch (feature) {
-            .elicitation => "client did not advertise MCP elicitation support",
-            .sampling => "client did not advertise MCP sampling support",
-        };
-    }
-
-    /// Human-readable reason attached when a protocol helper did not produce usable data.
-    fn protocolUnavailableReason(status: ProtocolResponseStatus) []const u8 {
-        return switch (status) {
-            .accepted => "",
-            .declined => "client declined the protocol helper request",
-            .cancelled => "client cancelled the protocol helper request",
-            .malformed => "client protocol helper response had an unsupported shape",
-            .timeout => "client protocol helper response was not available",
-        };
-    }
-
-    /// Returns true when a JSON-RPC response id matches an outbound integer request id.
-    fn matchesRequestId(response_id: types.RequestId, expected: i64) bool {
-        return switch (response_id) {
-            .integer => |value| value == expected,
-            .string => false,
-        };
-    }
-
-    /// Returns true when an optional JSON-RPC response id matches an outbound integer request id.
-    fn matchesOptionalRequestId(response_id: ?types.RequestId, expected: i64) bool {
-        return if (response_id) |id| matchesRequestId(id, expected) else false;
+        return protocol_client.classifySamplingResponse(response);
     }
 
     /// Initialize a new MCP Server
@@ -361,10 +298,7 @@ pub const Server = struct {
     }
 
     /// Options for running the server
-    pub const HttpRunConfig = struct {
-        port: u16 = 8080,
-        host: []const u8 = "localhost",
-    };
+    pub const HttpRunConfig = http_runner.RunConfig;
 
     /// Transport choices supported by the standalone server loop.
     pub const RunOptions = union(enum) {
@@ -387,129 +321,9 @@ pub const Server = struct {
                 try self.messageLoop(io, allocator);
             },
             .http => |config| {
-                try self.runHttp(io, allocator, config);
+                try http_runner.run(self, io, allocator, config);
             },
         }
-    }
-
-    /// Accepts sequential HTTP connections and routes each POST as one JSON-RPC message.
-    fn runHttp(self: *Self, io: std.Io, allocator: std.mem.Allocator, config: HttpRunConfig) !void {
-        const bind_host = if (std.mem.eql(u8, config.host, "localhost")) "127.0.0.1" else config.host;
-
-        const bind_started_ns = monotonicNowNs(io);
-        const address = std.Io.net.IpAddress.resolve(io, bind_host, config.port) catch {
-            return error.AddressResolutionError;
-        };
-
-        var listener = try std.Io.net.IpAddress.listen(&address, io, .{});
-        defer listener.deinit(io);
-        self.transport_name = "http";
-        self.recordStartupPhaseRange("transport_bind", bind_started_ns, monotonicNowNs(io));
-
-        while (self.state != .stopped and self.state != .shutting_down) {
-            const stream = try listener.accept(io);
-            self.serveHttpConnection(io, allocator, stream) catch |err| {
-                std.log.err("HTTP connection error: {s}", .{@errorName(err)});
-            };
-        }
-    }
-
-    /// Serves one HTTP request stream and maps its JSON-RPC response onto HTTP status/body output.
-    fn serveHttpConnection(self: *Self, io: std.Io, allocator: std.mem.Allocator, stream: std.Io.net.Stream) !void {
-        defer stream.close(io);
-
-        var send_buffer: [4096]u8 = undefined;
-        var recv_buffer: [4096]u8 = undefined;
-        var connection_reader = stream.reader(io, &recv_buffer);
-        var connection_writer = stream.writer(io, &send_buffer);
-        var server: http.Server = .init(&connection_reader.interface, &connection_writer.interface);
-
-        var request = server.receiveHead() catch |err| switch (err) {
-            error.HttpConnectionClosing => return,
-            else => return err,
-        };
-
-        if (request.head.method != .POST) {
-            try request.respond("Method Not Allowed", .{
-                .status = .method_not_allowed,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        }
-
-        try self.handleHttpJsonRpcRequest(io, allocator, &request);
-    }
-
-    /// Reads a bounded JSON-RPC request body and returns the captured response payload.
-    fn handleHttpJsonRpcRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: *http.Server.Request) !void {
-        const content_length = request.head.content_length orelse {
-            try request.respond("Content-Length required", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        };
-
-        if (content_length == 0) {
-            try request.respond("Empty JSON-RPC payload", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        }
-
-        if (content_length > max_http_body_size) {
-            try request.respond("Request body too large", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        }
-
-        var read_buffer: [2048]u8 = undefined;
-        var body_reader = try request.readerExpectContinue(&read_buffer);
-
-        const read_len: usize = @intCast(content_length);
-
-        const body_items = body_reader.readAlloc(allocator, read_len) catch {
-            try request.respond("Failed to read request body", .{
-                .status = .bad_request,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "text/plain" },
-                },
-            });
-            return;
-        };
-        defer allocator.free(body_items);
-
-        var request_transport: HttpRequestTransport = .{};
-        defer request_transport.deinit(allocator);
-
-        const previous_transport = self.transport;
-        self.transport = request_transport.transport();
-        defer self.transport = previous_transport;
-
-        try self.handleMessage(io, allocator, body_items);
-
-        if (request_transport.response_message) |response_json| {
-            try request.respond(response_json, .{
-                .status = .ok,
-                .extra_headers = &.{
-                    .{ .name = "Content-Type", .value = "application/json" },
-                },
-            });
-            return;
-        }
-
-        try request.respond("", .{ .status = .no_content });
     }
 
     /// Run the server with a custom transport
@@ -544,7 +358,7 @@ pub const Server = struct {
     }
 
     /// Handle an incoming message
-    fn handleMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
+    pub fn handleMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
         const parsed_message = jsonrpc.parseMessage(allocator, data) catch {
             var parse_correlation = self.nextCorrelation(correlation.RequestId.absent(), "jsonrpc/parse", null);
             self.logWithCorrelation(io, &parse_correlation, "JSON-RPC parse error");
@@ -571,7 +385,7 @@ pub const Server = struct {
     }
 
     /// Handle an incoming request
-    fn handleRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, raw_payload: ?[]const u8) !void {
+    pub fn handleRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, raw_payload: ?[]const u8) !void {
         const started_ns = monotonicNowNs(io);
         var request_correlation = self.nextCorrelation(correlation.RequestId.from(request.id), request.method, null);
         const previous_correlation = self.active_correlation;
@@ -1338,20 +1152,8 @@ pub const Server = struct {
         };
     }
 
-    /// Returns structured fallback metadata when a client omits optional protocol support.
-    fn protocolHelperFallbackValue(allocator: std.mem.Allocator, feature: []const u8, method: []const u8) !std.json.Value {
-        var obj: std.json.ObjectMap = .empty;
-        errdefer obj.deinit(allocator);
-        try obj.put(allocator, "kind", .{ .string = "protocol_helper_fallback" });
-        try obj.put(allocator, "feature", .{ .string = feature });
-        try obj.put(allocator, "method", .{ .string = method });
-        try obj.put(allocator, "supported", .{ .bool = false });
-        try obj.put(allocator, "resolution", .{ .string = "Client did not advertise this optional MCP capability; continue with deterministic zigars arguments and structured tool results." });
-        return .{ .object = obj };
-    }
-
     /// Handles inbound JSON-RPC notifications and updates local server state.
-    fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification, raw_payload: ?[]const u8) !void {
+    pub fn handleNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification, raw_payload: ?[]const u8) !void {
         var notification_correlation = self.nextCorrelation(correlation.RequestId.absent(), notification.method, null);
         self.appendAudit(self.allocator, .{
             .event = "notification",
@@ -1373,7 +1175,7 @@ pub const Server = struct {
     }
 
     /// Handles successful peer responses by clearing pending request bookkeeping.
-    fn handleResponse(self: *Self, response: jsonrpc.Response) void {
+    pub fn handleResponse(self: *Self, response: jsonrpc.Response) void {
         const id = switch (response.id) {
             .integer => |i| i,
             .string => return,
@@ -1382,7 +1184,7 @@ pub const Server = struct {
     }
 
     /// Handles peer error responses by clearing pending request bookkeeping and logging.
-    fn handleErrorResponse(self: *Self, io: std.Io, err: jsonrpc.ErrorResponse) void {
+    pub fn handleErrorResponse(self: *Self, io: std.Io, err: jsonrpc.ErrorResponse) void {
         if (err.id) |id| {
             const int_id = switch (id) {
                 .integer => |i| i,
@@ -1434,146 +1236,27 @@ pub const Server = struct {
 
     /// Returns whether the initialized client advertised elicitation support.
     pub fn supportsElicitation(self: *Self) bool {
-        return self.client_capabilities != null and self.client_capabilities.?.elicitation != null;
+        return protocol_client.supportsElicitation(self);
     }
 
     /// Returns whether the initialized client advertised sampling support.
     pub fn supportsSampling(self: *Self) bool {
-        return self.client_capabilities != null and self.client_capabilities.?.sampling != null;
+        return protocol_client.supportsSampling(self);
     }
 
     /// Sends elicitation/create when supported; otherwise returns a structured fallback.
     pub fn tryElicitationCreate(self: *Self, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
-        if (!self.supportsElicitation()) {
-            return protocolHelperFallbackValue(allocator, "elicitation", "elicitation/create");
-        }
-        return self.sendClientRequestValue(io, allocator, "elicitation", "elicitation/create", params);
+        return protocol_client.tryElicitationCreate(self, io, allocator, params);
     }
 
     /// Sends sampling/createMessage when supported; otherwise returns a structured fallback.
     pub fn trySamplingCreateMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
-        if (!self.supportsSampling()) {
-            return protocolHelperFallbackValue(allocator, "sampling", "sampling/createMessage");
-        }
-        return self.sendClientRequestValue(io, allocator, "sampling", "sampling/createMessage", params);
+        return protocol_client.trySamplingCreateMessage(self, io, allocator, params);
     }
 
     /// Sends a protocol helper request to the active client and waits for its matching JSON-RPC response.
     pub fn requestClientProtocol(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: app_ports.ProtocolRequest) !app_ports.ProtocolResponse {
-        if (!self.supportsProtocolFeature(request.feature)) {
-            return .{
-                .supported = false,
-                .used = false,
-                .status = .unsupported,
-                .unavailable_reason = unsupportedProtocolReason(request.feature),
-            };
-        }
-        if (self.transport == null) {
-            return .{
-                .supported = true,
-                .used = false,
-                .status = .unsupported,
-                .unavailable_reason = "no active MCP transport is available for protocol helper requests",
-            };
-        }
-
-        const id = self.next_request_id;
-        self.next_request_id += 1;
-        try self.pending_requests.put(id, .{
-            .method = request.method,
-            .timestamp = @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms)),
-        });
-        defer _ = self.pending_requests.remove(id);
-
-        const json_request = jsonrpc.createRequest(.{ .integer = id }, request.method, request.params);
-        try self.sendResponse(io, allocator, .{ .request = json_request });
-
-        while (true) {
-            const message_data = self.transport.?.receive(io, allocator) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                error.EndOfStream => return .{
-                    .supported = true,
-                    .used = false,
-                    .status = .timeout,
-                    .unavailable_reason = "client protocol response was not available before the transport closed",
-                },
-                else => return .{
-                    .supported = true,
-                    .used = false,
-                    .status = .timeout,
-                    .unavailable_reason = "client protocol response was not available from the active transport",
-                },
-            };
-            const data = message_data orelse return .{
-                .supported = true,
-                .used = false,
-                .status = .timeout,
-                .unavailable_reason = "client protocol response was not available on the active transport",
-            };
-            const parsed_message = jsonrpc.parseMessage(allocator, data) catch return .{
-                .supported = true,
-                .used = false,
-                .status = .malformed,
-                .unavailable_reason = "client protocol response was not valid JSON-RPC",
-            };
-            defer parsed_message.deinit();
-
-            switch (parsed_message.message) {
-                .response => |response| {
-                    if (!matchesRequestId(response.id, id)) {
-                        self.handleResponse(response);
-                        continue;
-                    }
-                    _ = self.pending_requests.remove(id);
-                    const status = classifyProtocolResponse(request.feature, response.result);
-                    return .{
-                        .supported = true,
-                        .used = status == .accepted,
-                        .status = protocolStatus(status),
-                        .result = if (response.result) |result| try mcp_result.cloneValue(allocator, result) else null,
-                        .owns_result = response.result != null,
-                        .unavailable_reason = protocolUnavailableReason(status),
-                    };
-                },
-                .error_response => |err| {
-                    if (!matchesOptionalRequestId(err.id, id)) {
-                        self.handleErrorResponse(io, err);
-                        continue;
-                    }
-                    _ = self.pending_requests.remove(id);
-                    return .{
-                        .supported = true,
-                        .used = false,
-                        .status = .error_response,
-                        .unavailable_reason = "client returned an error response for the protocol helper request",
-                    };
-                },
-                .request => |inbound_request| try self.handleRequest(io, allocator, inbound_request, data),
-                .notification => |notification| try self.handleNotification(io, notification, data),
-            }
-        }
-    }
-
-    /// Sends a server-to-client request and returns request bookkeeping metadata.
-    fn sendClientRequestValue(self: *Self, io: std.Io, allocator: std.mem.Allocator, feature: []const u8, method: []const u8, params: std.json.Value) !std.json.Value {
-        const id = self.next_request_id;
-        self.next_request_id += 1;
-        try self.pending_requests.put(id, .{
-            .method = method,
-            .timestamp = @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms)),
-        });
-        errdefer _ = self.pending_requests.remove(id);
-        const request = jsonrpc.createRequest(.{ .integer = id }, method, params);
-        try self.sendResponse(io, allocator, .{ .request = request });
-
-        var obj: std.json.ObjectMap = .empty;
-        errdefer obj.deinit(allocator);
-        try obj.put(allocator, "kind", .{ .string = "protocol_helper_request" });
-        try obj.put(allocator, "feature", .{ .string = feature });
-        try obj.put(allocator, "method", .{ .string = method });
-        try obj.put(allocator, "supported", .{ .bool = true });
-        try obj.put(allocator, "request_id", .{ .integer = id });
-        return .{ .object = obj };
+        return protocol_client.requestClientProtocol(self, io, allocator, request);
     }
 
     /// Emits the tools changed notification through the active transport.
@@ -1781,7 +1464,7 @@ pub const Server = struct {
     }
 
     /// Records a startup phase range relative to the bootstrap start time.
-    fn recordStartupPhaseRange(self: *Self, name: []const u8, phase_start_ns: i128, phase_end_ns: i128) void {
+    pub fn recordStartupPhaseRange(self: *Self, name: []const u8, phase_start_ns: i128, phase_end_ns: i128) void {
         const observability = self.observability orelse return;
         const startup_start_ns = self.startup_started_ns orelse phase_start_ns;
         observability.recordStartupPhase(name, elapsedMs(startup_start_ns, phase_start_ns), elapsedMs(phase_start_ns, phase_end_ns));
@@ -1891,174 +1574,4 @@ fn elapsedMs(start_ns: i128, end_ns: i128) u64 {
 }
 
 /// App-facing protocol helper adapter bound to the currently executing tools/call.
-pub const ProtocolClientAdapter = struct {
-    server: *Server,
-    io: std.Io,
-
-    const Self = @This();
-
-    /// Builds a protocol helper adapter over the live MCP server and transport.
-    pub fn init(server: *Server, io: std.Io) Self {
-        return .{ .server = server, .io = io };
-    }
-
-    /// Projects this adapter as an app port.
-    pub fn port(self: *Self) app_ports.ProtocolClient {
-        return .{ .ptr = self, .vtable = &.{ .request = request } };
-    }
-
-    /// Vtable entrypoint that normalizes MCP adapter failures to app port errors.
-    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: app_ports.ProtocolRequest) app_ports.PortError!app_ports.ProtocolResponse {
-        const self: *Self = @ptrCast(@alignCast(ptr));
-        return self.server.requestClientProtocol(self.io, allocator, request_value) catch |err| switch (err) {
-            error.OutOfMemory => app_ports.PortError.OutOfMemory,
-        };
-    }
-};
-
-test "server rollback and transport error branches" {
-    {
-        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
-        var server = Server.init(failing.allocator(), .{ .name = "rollback", .version = "1" });
-        defer server.deinit();
-        try std.testing.expectError(error.OutOfMemory, server.addResourceWithDeinit(.{
-            .uri = "file:///rollback",
-            .name = "Rollback",
-            .handler = undefined,
-        }, undefined));
-        try std.testing.expect(!server.resources.contains("file:///rollback"));
-    }
-    {
-        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
-        var server = Server.init(failing.allocator(), .{ .name = "rollback", .version = "1" });
-        defer server.deinit();
-        try std.testing.expectError(error.OutOfMemory, server.addPromptWithDeinit(.{
-            .name = "rollback",
-            .handler = undefined,
-        }, undefined));
-        try std.testing.expect(!server.prompts.contains("rollback"));
-    }
-
-    const ErrorReceiveTransport = struct {
-        calls: usize = 0,
-
-        /// Returns a transport vtable bound to this fixture.
-        fn transport(self: *@This()) transport_mod.Transport {
-            return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
-        }
-
-        /// Accepts a send call for the test transport without taking ownership of the message.
-        fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {}
-
-        /// Fixture receive hook used to force a configured transport failure.
-        fn receive(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
-            const self: *@This() = @ptrCast(@alignCast(ptr));
-            self.calls += 1;
-            if (self.calls == 1) return error.ReadError;
-            return error.EndOfStream;
-        }
-
-        /// Fixture close hook; no resources are owned by the test transport.
-        fn close(_: *anyopaque) void {}
-    };
-
-    var receive_transport: ErrorReceiveTransport = .{};
-    var receive_server = Server.init(std.testing.allocator, .{ .name = "receive", .version = "1" });
-    defer receive_server.deinit();
-    try receive_server.runWithTransport(std.testing.io, std.testing.allocator, receive_transport.transport());
-    try std.testing.expectEqual(@as(usize, 2), receive_transport.calls);
-    try receive_transport.transport().send(std.testing.io, std.testing.allocator, "{}");
-    receive_transport.transport().close();
-
-    const ErrorSendTransport = struct {
-        /// Returns a transport vtable bound to this fixture.
-        fn transport(self: *@This()) transport_mod.Transport {
-            return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
-        }
-
-        /// Accepts a send call for the test transport without taking ownership of the message.
-        fn send(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) transport_mod.Transport.SendError!void {
-            return error.WriteError;
-        }
-
-        /// Fixture receive hook used to force a configured transport failure.
-        fn receive(_: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
-            return error.EndOfStream;
-        }
-
-        /// Fixture close hook; no resources are owned by the test transport.
-        fn close(_: *anyopaque) void {}
-    };
-
-    var send_transport: ErrorSendTransport = .{};
-    var send_server = Server.init(std.testing.allocator, .{ .name = "send", .version = "1" });
-    defer send_server.deinit();
-    send_server.transport = send_transport.transport();
-    try send_server.sendNotification(std.testing.io, std.testing.allocator, "notifications/test", null);
-    try std.testing.expectError(error.EndOfStream, send_transport.transport().receive(std.testing.io, std.testing.allocator));
-    send_transport.transport().close();
-
-    var serialize_failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    try send_server.sendNotification(std.testing.io, serialize_failing.allocator(), "notifications/test", null);
-
-    var stdio: transport_mod.StdioTransport = .{};
-    send_server.stdio_transport = &stdio;
-    send_server.log(std.testing.io, "log message");
-    send_server.logError(std.testing.io, "log error");
-    send_server.stdio_transport = null;
-    stdio.deinit(std.testing.allocator);
-
-    try send_server.pending_requests.put(1, .{ .method = "client/request", .timestamp = 1 });
-    send_server.handleResponse(.{ .id = .{ .string = "string-id" }, .result = null });
-    try std.testing.expect(send_server.pending_requests.contains(1));
-    send_server.handleErrorResponse(std.testing.io, .{
-        .id = .{ .string = "string-id" },
-        .@"error" = .{ .code = -32603, .message = "client error" },
-    });
-    try std.testing.expect(send_server.pending_requests.contains(1));
-}
-
-test "server cancellation notifications mark active and completed requests" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var server = Server.init(std.testing.allocator, .{ .name = "cancel", .version = "1" });
-    defer server.deinit();
-    var state = observability_mod.State{};
-    server.setObservability(&state);
-
-    var request_state = cancellation.State{};
-    const active_id = correlation.RequestId.from(.{ .integer = 7 });
-    server.active_request = .{
-        .request_id = active_id,
-        .method = "tools/call",
-        .cancellable = true,
-        .state = &request_state,
-    };
-    var params: std.json.ObjectMap = .empty;
-    try params.put(allocator, "requestId", .{ .integer = 7 });
-    try params.put(allocator, "reason", .{ .string = "client stopped waiting" });
-    var notification_correlation = server.nextCorrelation(correlation.RequestId.absent(), "notifications/cancelled", null);
-    server.handleCancellationNotification(std.testing.io, .{
-        .method = "notifications/cancelled",
-        .params = .{ .object = params },
-    }, &notification_correlation);
-
-    try std.testing.expect(request_state.token().isCancelled());
-    try std.testing.expectEqualStrings("client stopped waiting", request_state.token().reason());
-    try std.testing.expectEqual(@as(u64, 1), state.cancellation_requested);
-
-    server.active_request = null;
-    server.rememberCompletedRequest(correlation.RequestId.from(.{ .string = "done-1" }), "tools/call");
-    var late_params: std.json.ObjectMap = .empty;
-    try late_params.put(allocator, "requestId", .{ .string = "done-1" });
-    server.handleCancellationNotification(std.testing.io, .{
-        .method = "notifications/cancelled",
-        .params = .{ .object = late_params },
-    }, &notification_correlation);
-
-    try std.testing.expectEqual(@as(u64, 2), state.cancellation_requested);
-    try std.testing.expectEqual(@as(u64, 1), state.cancellation_completed);
-    try std.testing.expectEqualStrings("completed_late", state.cancellation_events[1].status);
-}
+pub const ProtocolClientAdapter = protocol_client.Adapter(Server);
