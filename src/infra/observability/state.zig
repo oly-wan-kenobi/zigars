@@ -2,12 +2,44 @@ const std = @import("std");
 
 /// Fixed tool-stat capacity retained for process-local metrics.
 pub const max_tool_stats = 64;
+/// Fixed MCP method-stat capacity retained for process-local metrics.
+pub const max_method_stats = 32;
+/// Fixed latency sample ring capacity per observed key.
+pub const max_latency_samples = 64;
+/// Minimum retained samples before percentile fields are published.
+pub const min_percentile_samples = 5;
+/// Fixed recent tool-call correlation ring capacity.
+pub const max_tool_call_correlations = 64;
+/// Maximum retained request-id value bytes in observability state.
+pub const max_request_id_value_len = 64;
 /// Fixed command history ring capacity.
 pub const max_command_events = 64;
 /// Fixed backend probe history ring capacity.
 pub const max_backend_events = 64;
 /// Fixed ZLS status history ring capacity.
 pub const max_zls_events = 64;
+/// Fixed startup phase timing ring capacity.
+pub const max_startup_phases = 24;
+/// Fixed cancellation event ring capacity.
+pub const max_cancellation_events = 32;
+
+/// Bounded latency samples used for percentile computation.
+pub const LatencySamples = struct {
+    samples: [max_latency_samples]u64 = [_]u64{0} ** max_latency_samples,
+    sample_count: u64 = 0,
+
+    /// Appends a latency sample to the bounded ring.
+    pub fn record(self: *LatencySamples, latency_ms: u64) void {
+        const sequence = self.sample_count + 1;
+        self.samples[ringIndex(sequence, max_latency_samples)] = latency_ms;
+        self.sample_count = sequence;
+    }
+
+    /// Returns retained sample count.
+    pub fn retained(self: LatencySamples) usize {
+        return @intCast(@min(self.sample_count, max_latency_samples));
+    }
+};
 
 /// Aggregated counters for one MCP tool name.
 pub const ToolStats = struct {
@@ -18,6 +50,78 @@ pub const ToolStats = struct {
     max_latency_ms: u64 = 0,
     last_latency_ms: u64 = 0,
     last_error: bool = false,
+    latency: LatencySamples = .{},
+};
+
+/// Aggregated counters for one MCP request method.
+pub const MethodStats = struct {
+    name: [64]u8 = [_]u8{0} ** 64,
+    name_len: usize = 0,
+    name_truncated: bool = false,
+    calls: u64 = 0,
+    errors: u64 = 0,
+    total_latency_ms: u64 = 0,
+    max_latency_ms: u64 = 0,
+    last_latency_ms: u64 = 0,
+    last_error: bool = false,
+    latency: LatencySamples = .{},
+
+    /// Returns the retained method name.
+    pub fn nameSlice(self: *const MethodStats) []const u8 {
+        return self.name[0..self.name_len];
+    }
+};
+
+/// Borrowed correlation data supplied by the MCP adapter for one tool call.
+pub const ToolCallCorrelationInput = struct {
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: ?[]const u8 = null,
+    trace_id: []const u8 = "",
+    span_id: []const u8 = "",
+    parent_span_id: ?[]const u8 = null,
+    tool_call_id: []const u8 = "",
+};
+
+/// Bounded process-local correlation event for one MCP tools/call response.
+pub const ToolCallCorrelation = struct {
+    sequence: u64 = 0,
+    tool_name: []const u8 = "",
+    is_error: bool = false,
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: [max_request_id_value_len]u8 = [_]u8{0} ** max_request_id_value_len,
+    mcp_request_id_value_len: usize = 0,
+    mcp_request_id_truncated: bool = false,
+    trace_id: [32]u8 = [_]u8{'0'} ** 32,
+    span_id: [16]u8 = [_]u8{'0'} ** 16,
+    parent_span_id: ?[16]u8 = null,
+    tool_call_id: [22]u8 = [_]u8{0} ** 22,
+    tool_call_id_len: usize = 0,
+
+    /// Returns the retained request-id value, or null when the request had no id.
+    pub fn requestIdValue(self: *const ToolCallCorrelation) ?[]const u8 {
+        if (std.mem.eql(u8, self.mcp_request_id_type, "null")) return null;
+        return self.mcp_request_id_value[0..self.mcp_request_id_value_len];
+    }
+
+    /// Returns the retained trace id.
+    pub fn traceId(self: *const ToolCallCorrelation) []const u8 {
+        return self.trace_id[0..];
+    }
+
+    /// Returns the retained span id.
+    pub fn spanId(self: *const ToolCallCorrelation) []const u8 {
+        return self.span_id[0..];
+    }
+
+    /// Returns the retained parent span id, when present.
+    pub fn parentSpanId(self: *const ToolCallCorrelation) ?[]const u8 {
+        return if (self.parent_span_id) |span| span[0..] else null;
+    }
+
+    /// Returns the retained tool-call id.
+    pub fn toolCallId(self: *const ToolCallCorrelation) []const u8 {
+        return self.tool_call_id[0..self.tool_call_id_len];
+    }
 };
 
 /// Bounded history event for one backend probe.
@@ -47,24 +151,84 @@ pub const CommandEvent = struct {
     error_name: ?[]const u8 = null,
 };
 
+/// Startup phase timing captured with monotonic process-local offsets.
+pub const StartupPhase = struct {
+    sequence: u64 = 0,
+    name: []const u8 = "",
+    start_ms: u64 = 0,
+    duration_ms: u64 = 0,
+};
+
+/// Bounded record of one cancellation notification outcome.
+pub const CancellationEvent = struct {
+    sequence: u64 = 0,
+    status: []const u8 = "",
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: [max_request_id_value_len]u8 = [_]u8{0} ** max_request_id_value_len,
+    mcp_request_id_value_len: usize = 0,
+    mcp_request_id_truncated: bool = false,
+    method: [64]u8 = [_]u8{0} ** 64,
+    method_len: usize = 0,
+    method_truncated: bool = false,
+
+    /// Returns the retained request-id value, or null when none was present.
+    pub fn requestIdValue(self: *const CancellationEvent) ?[]const u8 {
+        if (std.mem.eql(u8, self.mcp_request_id_type, "null")) return null;
+        return self.mcp_request_id_value[0..self.mcp_request_id_value_len];
+    }
+
+    /// Returns the retained method value.
+    pub fn methodSlice(self: *const CancellationEvent) []const u8 {
+        return self.method[0..self.method_len];
+    }
+};
+
 /// Process-local observability state with bounded rings and saturating totals.
 pub const State = struct {
     tool_stats: [max_tool_stats]ToolStats = [_]ToolStats{.{}} ** max_tool_stats,
+    method_stats: [max_method_stats]MethodStats = [_]MethodStats{.{}} ** max_method_stats,
+    tool_call_correlations: [max_tool_call_correlations]ToolCallCorrelation = [_]ToolCallCorrelation{.{}} ** max_tool_call_correlations,
     command_events: [max_command_events]CommandEvent = [_]CommandEvent{.{}} ** max_command_events,
     backend_events: [max_backend_events]BackendEvent = [_]BackendEvent{.{}} ** max_backend_events,
     zls_events: [max_zls_events]ZlsEvent = [_]ZlsEvent{.{}} ** max_zls_events,
+    startup_phases: [max_startup_phases]StartupPhase = [_]StartupPhase{.{}} ** max_startup_phases,
+    cancellation_events: [max_cancellation_events]CancellationEvent = [_]CancellationEvent{.{}} ** max_cancellation_events,
     tool_stat_count: usize = 0,
+    method_stat_count: usize = 0,
+    tool_call_correlation_count: u64 = 0,
     command_event_count: u64 = 0,
     backend_event_count: u64 = 0,
     zls_event_count: u64 = 0,
+    startup_phase_count: u64 = 0,
+    cancellation_event_count: u64 = 0,
     total_tool_calls: u64 = 0,
     total_tool_errors: u64 = 0,
+    total_mcp_requests: u64 = 0,
+    total_mcp_request_errors: u64 = 0,
     total_command_duration_ms: u64 = 0,
+    command_latency: LatencySamples = .{},
+    audit_enabled: bool = false,
+    audit_mode: []const u8 = "disabled",
+    audit_path: ?[]const u8 = null,
+    audit_records_written: u64 = 0,
+    audit_write_errors: u64 = 0,
+    audit_last_error: ?[]const u8 = null,
+    cancellation_requested: u64 = 0,
+    cancellation_unknown: u64 = 0,
+    cancellation_completed: u64 = 0,
+    cancellation_uncancellable: u64 = 0,
 
     /// Records per-tool latency and error counters, dropping new names after capacity.
     pub fn recordToolCall(self: *State, name: []const u8, latency_ms: u64, is_error: bool) void {
+        self.recordToolCallWithCorrelation(name, latency_ms, is_error, null);
+    }
+
+    /// Records per-tool counters plus optional bounded request correlation.
+    pub fn recordToolCallWithCorrelation(self: *State, name: []const u8, latency_ms: u64, is_error: bool, correlation: ?ToolCallCorrelationInput) void {
         self.total_tool_calls += 1;
         if (is_error) self.total_tool_errors += 1;
+
+        if (correlation) |fields| self.recordToolCallCorrelation(name, is_error, fields);
 
         const slot = self.toolSlot(name) orelse return;
         slot.calls += 1;
@@ -73,6 +237,53 @@ pub const State = struct {
         slot.last_latency_ms = latency_ms;
         slot.last_error = is_error;
         slot.max_latency_ms = @max(slot.max_latency_ms, latency_ms);
+        slot.latency.record(latency_ms);
+    }
+
+    /// Records per-MCP-method request latency and error counters.
+    pub fn recordMcpRequest(self: *State, method: []const u8, latency_ms: u64, is_error: bool) void {
+        self.total_mcp_requests += 1;
+        if (is_error) self.total_mcp_request_errors += 1;
+
+        const slot = self.methodSlot(method) orelse return;
+        slot.calls += 1;
+        if (is_error) slot.errors += 1;
+        slot.total_latency_ms +|= latency_ms;
+        slot.last_latency_ms = latency_ms;
+        slot.last_error = is_error;
+        slot.max_latency_ms = @max(slot.max_latency_ms, latency_ms);
+        slot.latency.record(latency_ms);
+    }
+
+    /// Appends request correlation to a bounded process-local ring.
+    fn recordToolCallCorrelation(self: *State, name: []const u8, is_error: bool, fields: ToolCallCorrelationInput) void {
+        const sequence = self.tool_call_correlation_count + 1;
+        const index = ringIndex(sequence, max_tool_call_correlations);
+        var event: ToolCallCorrelation = .{
+            .sequence = sequence,
+            .tool_name = name,
+            .is_error = is_error,
+            .mcp_request_id_type = fields.mcp_request_id_type,
+        };
+        if (fields.mcp_request_id_value) |value| {
+            const copy_len = @min(value.len, event.mcp_request_id_value.len);
+            @memcpy(event.mcp_request_id_value[0..copy_len], value[0..copy_len]);
+            event.mcp_request_id_value_len = copy_len;
+            event.mcp_request_id_truncated = value.len > copy_len;
+        }
+        copyFixed(event.trace_id[0..], fields.trace_id, '0');
+        copyFixed(event.span_id[0..], fields.span_id, '0');
+        if (fields.parent_span_id) |parent| {
+            var parent_copy: [16]u8 = [_]u8{'0'} ** 16;
+            copyFixed(parent_copy[0..], parent, '0');
+            event.parent_span_id = parent_copy;
+        }
+        const tool_call_copy_len = @min(fields.tool_call_id.len, event.tool_call_id.len);
+        @memcpy(event.tool_call_id[0..tool_call_copy_len], fields.tool_call_id[0..tool_call_copy_len]);
+        event.tool_call_id_len = tool_call_copy_len;
+
+        self.tool_call_correlations[index] = event;
+        self.tool_call_correlation_count = sequence;
     }
 
     /// Appends a backend probe result to the bounded ring.
@@ -103,7 +314,69 @@ pub const State = struct {
             .error_name = error_name,
         };
         self.total_command_duration_ms +|= safe_duration;
+        self.command_latency.record(safe_duration);
         self.command_event_count = sequence;
+    }
+
+    /// Records one monotonic startup phase timing.
+    pub fn recordStartupPhase(self: *State, name: []const u8, start_ms: u64, duration_ms: u64) void {
+        const sequence = self.startup_phase_count + 1;
+        const index = ringIndex(sequence, max_startup_phases);
+        self.startup_phases[index] = .{
+            .sequence = sequence,
+            .name = name,
+            .start_ms = start_ms,
+            .duration_ms = duration_ms,
+        };
+        self.startup_phase_count = sequence;
+    }
+
+    /// Records audit mode once bootstrap successfully enables the writer.
+    pub fn recordAuditEnabled(self: *State, mode: []const u8, path: []const u8) void {
+        self.audit_enabled = true;
+        self.audit_mode = mode;
+        self.audit_path = path;
+    }
+
+    /// Records one successful audit append.
+    pub fn recordAuditWriteOk(self: *State) void {
+        self.audit_records_written +|= 1;
+    }
+
+    /// Records one failed audit append without affecting JSON-RPC stdout.
+    pub fn recordAuditWriteError(self: *State, err_name: []const u8) void {
+        self.audit_write_errors +|= 1;
+        self.audit_last_error = err_name;
+    }
+
+    /// Records an inbound cancellation notification outcome.
+    pub fn recordCancellation(self: *State, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void {
+        self.cancellation_requested +|= 1;
+        if (std.mem.eql(u8, status, "unknown")) self.cancellation_unknown +|= 1;
+        if (std.mem.eql(u8, status, "completed") or std.mem.eql(u8, status, "completed_late")) self.cancellation_completed +|= 1;
+        if (std.mem.eql(u8, status, "uncancellable") or std.mem.eql(u8, status, "not_cancellable")) self.cancellation_uncancellable +|= 1;
+
+        const sequence = self.cancellation_event_count + 1;
+        const index = ringIndex(sequence, max_cancellation_events);
+        var event: CancellationEvent = .{
+            .sequence = sequence,
+            .status = status,
+            .mcp_request_id_type = request_id_type,
+        };
+        if (request_id_value) |value| {
+            const copy_len = @min(value.len, event.mcp_request_id_value.len);
+            @memcpy(event.mcp_request_id_value[0..copy_len], value[0..copy_len]);
+            event.mcp_request_id_value_len = copy_len;
+            event.mcp_request_id_truncated = value.len > copy_len;
+        }
+        if (method) |value| {
+            const copy_len = @min(value.len, event.method.len);
+            @memcpy(event.method[0..copy_len], value[0..copy_len]);
+            event.method_len = copy_len;
+            event.method_truncated = value.len > copy_len;
+        }
+        self.cancellation_events[index] = event;
+        self.cancellation_event_count = sequence;
     }
 
     /// Records ZLS status transitions, suppressing consecutive duplicates.
@@ -137,10 +410,28 @@ pub const State = struct {
         }
         return null;
     }
+
+    /// Returns the mutable metrics slot for an MCP method name.
+    fn methodSlot(self: *State, name: []const u8) ?*MethodStats {
+        for (self.method_stats[0..self.method_stat_count]) |*stat| {
+            if (std.mem.eql(u8, stat.nameSlice(), name)) return stat;
+        }
+        if (self.method_stat_count < self.method_stats.len) {
+            const index = self.method_stat_count;
+            self.method_stat_count += 1;
+            self.method_stats[index] = .{};
+            const copy_len = @min(name.len, self.method_stats[index].name.len);
+            @memcpy(self.method_stats[index].name[0..copy_len], name[0..copy_len]);
+            self.method_stats[index].name_len = copy_len;
+            self.method_stats[index].name_truncated = name.len > copy_len;
+            return &self.method_stats[index];
+        }
+        return null;
+    }
 };
 
 /// Renders all current observability state as the metrics v2 JSON object.
-pub fn metricsV2Value(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
+pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_metrics_v2" });
@@ -154,6 +445,8 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: State, base: BaseMetr
     try obj.put(allocator, "observed_tool_calls", .{ .integer = @intCast(state.total_tool_calls) });
     try obj.put(allocator, "observed_tool_errors", .{ .integer = @intCast(state.total_tool_errors) });
     try obj.put(allocator, "observed_tool_error_rate_per_1000", .{ .integer = @intCast(ratePerThousand(state.total_tool_errors, state.total_tool_calls)) });
+    try obj.put(allocator, "observed_mcp_requests", .{ .integer = @intCast(state.total_mcp_requests) });
+    try obj.put(allocator, "observed_mcp_request_errors", .{ .integer = @intCast(state.total_mcp_request_errors) });
     try obj.put(allocator, "analysis_cache", try analysisCacheValue(allocator, base.analysis_cache));
     try obj.put(allocator, "artifact_registry", try artifactMetricsValue(allocator, base.artifacts));
     try obj.put(allocator, "zls_status", .{ .string = base.zls_status });
@@ -161,6 +454,10 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: State, base: BaseMetr
     try obj.put(allocator, "zls_last_failure", optionalString(base.zls_last_failure));
     try obj.put(allocator, "backend_health_history", try backendHistoryValue(allocator, state, base));
     try obj.put(allocator, "zls_timeline", try zlsTimelineValue(allocator, state, base));
+    try obj.put(allocator, "startup_timings", try startupTimingsValue(allocator, state));
+    try obj.put(allocator, "audit_logging", try auditLoggingValue(allocator, state));
+    try obj.put(allocator, "request_cancellation", try cancellationValue(allocator, state));
+    try obj.put(allocator, "mcp_method_latency", try methodLatencyValue(allocator, state));
     try obj.put(allocator, "tool_latency", try toolLatencyValue(allocator, state));
     try obj.put(allocator, "command_durations", try commandDurationsValue(allocator, state));
     try obj.put(allocator, "limitations", try limitationsValue(allocator));
@@ -215,7 +512,7 @@ pub const ProbeSnapshot = struct {
 };
 
 /// Renders bounded backend probe history plus current probe cache.
-pub fn backendHistoryValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
+pub fn backendHistoryValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_backend_health_history" });
@@ -228,7 +525,7 @@ pub fn backendHistoryValue(allocator: std.mem.Allocator, state: State, base: Bas
 }
 
 /// Renders bounded ZLS status transitions, or the current snapshot when empty.
-pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
+pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_zls_timeline" });
@@ -243,7 +540,7 @@ pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: State, base: BaseMe
 }
 
 /// Renders per-tool latency/error counters.
-pub fn toolLatencyValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
+pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_tool_latency" });
@@ -251,21 +548,83 @@ pub fn toolLatencyValue(allocator: std.mem.Allocator, state: State) !std.json.Va
     try obj.put(allocator, "observed_tool_errors", .{ .integer = @intCast(state.total_tool_errors) });
     try obj.put(allocator, "tool_count", .{ .integer = @intCast(state.tool_stat_count) });
     try obj.put(allocator, "tools", try toolStatsValue(allocator, state));
+    try obj.put(allocator, "correlation_history_capacity", .{ .integer = max_tool_call_correlations });
+    try obj.put(allocator, "recorded_correlations", .{ .integer = @intCast(state.tool_call_correlation_count) });
+    try obj.put(allocator, "recent_tool_call_correlations", try toolCallCorrelationsValue(allocator, state));
     try obj.put(allocator, "units", .{ .string = "milliseconds" });
     try obj.put(allocator, "resolution", .{ .string = "Latency is measured around MCP schema validation and handler dispatch inside the current zigars process." });
     return .{ .object = obj };
 }
 
+/// Renders MCP request method latency counters.
+pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_mcp_method_latency" });
+    try obj.put(allocator, "observed_mcp_requests", .{ .integer = @intCast(state.total_mcp_requests) });
+    try obj.put(allocator, "observed_mcp_request_errors", .{ .integer = @intCast(state.total_mcp_request_errors) });
+    try obj.put(allocator, "method_count", .{ .integer = @intCast(state.method_stat_count) });
+    try obj.put(allocator, "methods", try methodStatsValue(allocator, state));
+    try obj.put(allocator, "units", .{ .string = "milliseconds" });
+    try obj.put(allocator, "resolution", .{ .string = "Request method latency is measured inside the current zigars process and resets on restart." });
+    return .{ .object = obj };
+}
+
 /// Renders bounded subprocess duration history.
-pub fn commandDurationsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
+pub fn commandDurationsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_command_durations" });
     try obj.put(allocator, "history_capacity", .{ .integer = max_command_events });
     try obj.put(allocator, "recorded_events", .{ .integer = @intCast(state.command_event_count) });
     try obj.put(allocator, "avg_duration_ms", .{ .integer = @intCast(if (state.command_event_count == 0) 0 else state.total_command_duration_ms / state.command_event_count) });
+    try obj.put(allocator, "latency_percentiles", try latencyPercentilesValue(allocator, state.command_latency));
     try obj.put(allocator, "events", try commandEventsValue(allocator, state));
     try obj.put(allocator, "resolution", .{ .string = "Command durations are observed for commands routed through shared zigars command helpers in the current server process." });
+    return .{ .object = obj };
+}
+
+/// Renders process-local startup phase timings.
+pub fn startupTimingsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_startup_timings" });
+    try obj.put(allocator, "clock", .{ .string = "monotonic_awake" });
+    try obj.put(allocator, "history_capacity", .{ .integer = max_startup_phases });
+    try obj.put(allocator, "recorded_phases", .{ .integer = @intCast(state.startup_phase_count) });
+    try obj.put(allocator, "phases", try startupPhasesValue(allocator, state));
+    try obj.put(allocator, "resolution", .{ .string = "Startup timings are process-local, runtime-specific, and reset when zigars restarts." });
+    return .{ .object = obj };
+}
+
+/// Renders audit logging runtime state.
+pub fn auditLoggingValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_audit_logging" });
+    try obj.put(allocator, "enabled", .{ .bool = state.audit_enabled });
+    try obj.put(allocator, "mode", .{ .string = state.audit_mode });
+    try obj.put(allocator, "path", optionalString(state.audit_path));
+    try obj.put(allocator, "records_written", .{ .integer = @intCast(state.audit_records_written) });
+    try obj.put(allocator, "write_errors", .{ .integer = @intCast(state.audit_write_errors) });
+    try obj.put(allocator, "last_error", optionalString(state.audit_last_error));
+    try obj.put(allocator, "privacy", .{ .string = "Audit logging is opt-in; metadata mode stores sizes and hashes, redacted mode masks secret-looking fields, and full mode records raw MCP payloads only when explicitly configured." });
+    return .{ .object = obj };
+}
+
+/// Renders cancellation notification outcomes.
+pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "zigars_request_cancellation" });
+    try obj.put(allocator, "requested", .{ .integer = @intCast(state.cancellation_requested) });
+    try obj.put(allocator, "unknown", .{ .integer = @intCast(state.cancellation_unknown) });
+    try obj.put(allocator, "completed", .{ .integer = @intCast(state.cancellation_completed) });
+    try obj.put(allocator, "uncancellable", .{ .integer = @intCast(state.cancellation_uncancellable) });
+    try obj.put(allocator, "history_capacity", .{ .integer = max_cancellation_events });
+    try obj.put(allocator, "recorded_events", .{ .integer = @intCast(state.cancellation_event_count) });
+    try obj.put(allocator, "events", try cancellationEventsValue(allocator, state));
+    try obj.put(allocator, "resolution", .{ .string = "Cancellation is cooperative and process-local; sequential dispatch can observe notifications while the server is reading MCP messages or waiting on helper protocol responses." });
     return .{ .object = obj };
 }
 
@@ -294,7 +653,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: ArtifactMetrics) 
 }
 
 /// Builds a snapshot of tool invocation metrics.
-fn toolStatsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
+fn toolStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (state.tool_stats[0..state.tool_stat_count]) |stat| {
@@ -308,13 +667,115 @@ fn toolStatsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
         try obj.put(allocator, "max_latency_ms", .{ .integer = @intCast(stat.max_latency_ms) });
         try obj.put(allocator, "last_latency_ms", .{ .integer = @intCast(stat.last_latency_ms) });
         try obj.put(allocator, "last_error", .{ .bool = stat.last_error });
+        try obj.put(allocator, "latency_samples_retained", .{ .integer = @intCast(stat.latency.retained()) });
+        try obj.put(allocator, "latency_percentiles", try latencyPercentilesValue(allocator, stat.latency));
         try array.append(.{ .object = obj });
     }
     return .{ .array = array };
 }
 
+/// Builds a snapshot of MCP method invocation metrics.
+fn methodStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    for (state.method_stats[0..state.method_stat_count]) |stat| {
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "name", .{ .string = stat.nameSlice() });
+        try obj.put(allocator, "name_truncated", .{ .bool = stat.name_truncated });
+        try obj.put(allocator, "calls", .{ .integer = @intCast(stat.calls) });
+        try obj.put(allocator, "errors", .{ .integer = @intCast(stat.errors) });
+        try obj.put(allocator, "error_rate_per_1000", .{ .integer = @intCast(ratePerThousand(stat.errors, stat.calls)) });
+        try obj.put(allocator, "avg_latency_ms", .{ .integer = @intCast(if (stat.calls == 0) 0 else stat.total_latency_ms / stat.calls) });
+        try obj.put(allocator, "max_latency_ms", .{ .integer = @intCast(stat.max_latency_ms) });
+        try obj.put(allocator, "last_latency_ms", .{ .integer = @intCast(stat.last_latency_ms) });
+        try obj.put(allocator, "last_error", .{ .bool = stat.last_error });
+        try obj.put(allocator, "latency_samples_retained", .{ .integer = @intCast(stat.latency.retained()) });
+        try obj.put(allocator, "latency_percentiles", try latencyPercentilesValue(allocator, stat.latency));
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+/// Builds percentile fields from a bounded latency sample ring.
+fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: LatencySamples) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    const retained = samples.retained();
+    try obj.put(allocator, "sample_capacity", .{ .integer = max_latency_samples });
+    try obj.put(allocator, "samples_seen", .{ .integer = @intCast(samples.sample_count) });
+    try obj.put(allocator, "samples_retained", .{ .integer = @intCast(retained) });
+    try obj.put(allocator, "minimum_samples", .{ .integer = min_percentile_samples });
+    if (retained < min_percentile_samples) {
+        try obj.put(allocator, "enough_samples", .{ .bool = false });
+        try obj.put(allocator, "p50_ms", .null);
+        try obj.put(allocator, "p95_ms", .null);
+        try obj.put(allocator, "p99_ms", .null);
+        try obj.put(allocator, "status", .{ .string = "insufficient_samples" });
+        return .{ .object = obj };
+    }
+
+    var retained_samples: [max_latency_samples]u64 = undefined;
+    const first = firstSequence(samples.sample_count, max_latency_samples);
+    var sequence = first;
+    var index: usize = 0;
+    while (sequence <= samples.sample_count) : (sequence += 1) {
+        retained_samples[index] = samples.samples[ringIndex(sequence, max_latency_samples)];
+        index += 1;
+    }
+    std.mem.sort(u64, retained_samples[0..retained], {}, std.sort.asc(u64));
+
+    try obj.put(allocator, "enough_samples", .{ .bool = true });
+    try obj.put(allocator, "p50_ms", .{ .integer = @intCast(percentile(retained_samples[0..retained], 50)) });
+    try obj.put(allocator, "p95_ms", .{ .integer = @intCast(percentile(retained_samples[0..retained], 95)) });
+    try obj.put(allocator, "p99_ms", .{ .integer = @intCast(percentile(retained_samples[0..retained], 99)) });
+    try obj.put(allocator, "status", .{ .string = "ok" });
+    return .{ .object = obj };
+}
+
+/// Nearest-rank percentile over a sorted non-empty sample slice.
+fn percentile(sorted: []const u64, p: u64) u64 {
+    if (sorted.len == 0) return 0;
+    const rank = (p * sorted.len + 99) / 100;
+    const index = @min(sorted.len - 1, @max(@as(usize, 1), @as(usize, @intCast(rank))) - 1);
+    return sorted[index];
+}
+
+/// Builds bounded request correlation events for recent tool calls.
+fn toolCallCorrelationsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    const first = firstSequence(state.tool_call_correlation_count, max_tool_call_correlations);
+    var sequence = first;
+    while (sequence <= state.tool_call_correlation_count) : (sequence += 1) {
+        const event = &state.tool_call_correlations[ringIndex(sequence, max_tool_call_correlations)];
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "sequence", .{ .integer = @intCast(event.sequence) });
+        try obj.put(allocator, "tool_name", .{ .string = event.tool_name });
+        try obj.put(allocator, "is_error", .{ .bool = event.is_error });
+        try obj.put(allocator, "mcp_request_id", try observedRequestIdValue(allocator, event));
+        try obj.put(allocator, "trace_id", .{ .string = event.traceId() });
+        try obj.put(allocator, "span_id", .{ .string = event.spanId() });
+        try obj.put(allocator, "parent_span_id", if (event.parentSpanId()) |span| .{ .string = span } else .null);
+        try obj.put(allocator, "tool_call_id", .{ .string = event.toolCallId() });
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+/// Builds the normalized request id object for an observed tool call.
+fn observedRequestIdValue(allocator: std.mem.Allocator, event: *const ToolCallCorrelation) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "type", .{ .string = event.mcp_request_id_type });
+    try obj.put(allocator, "value", if (event.requestIdValue()) |value| .{ .string = value } else .null);
+    try obj.put(allocator, "truncated", .{ .bool = event.mcp_request_id_truncated });
+    return .{ .object = obj };
+}
+
 /// Builds a snapshot of backend event counters.
-fn backendEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
+fn backendEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.backend_event_count, max_backend_events);
@@ -334,7 +795,7 @@ fn backendEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Valu
 }
 
 /// Builds a snapshot of command execution counters.
-fn commandEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Value {
+fn commandEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.command_event_count, max_command_events);
@@ -354,8 +815,57 @@ fn commandEventsValue(allocator: std.mem.Allocator, state: State) !std.json.Valu
     return .{ .array = array };
 }
 
+/// Builds a snapshot of startup phase timings.
+fn startupPhasesValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    const first = firstSequence(state.startup_phase_count, max_startup_phases);
+    var sequence = first;
+    while (sequence <= state.startup_phase_count) : (sequence += 1) {
+        const phase = state.startup_phases[ringIndex(sequence, max_startup_phases)];
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "sequence", .{ .integer = @intCast(phase.sequence) });
+        try obj.put(allocator, "name", .{ .string = phase.name });
+        try obj.put(allocator, "start_ms", .{ .integer = @intCast(phase.start_ms) });
+        try obj.put(allocator, "duration_ms", .{ .integer = @intCast(phase.duration_ms) });
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+/// Builds a snapshot of cancellation notification outcomes.
+fn cancellationEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    errdefer array.deinit();
+    const first = firstSequence(state.cancellation_event_count, max_cancellation_events);
+    var sequence = first;
+    while (sequence <= state.cancellation_event_count) : (sequence += 1) {
+        const event = &state.cancellation_events[ringIndex(sequence, max_cancellation_events)];
+        var obj = std.json.ObjectMap.empty;
+        errdefer obj.deinit(allocator);
+        try obj.put(allocator, "sequence", .{ .integer = @intCast(event.sequence) });
+        try obj.put(allocator, "status", .{ .string = event.status });
+        try obj.put(allocator, "mcp_request_id", try cancellationRequestIdValue(allocator, event));
+        try obj.put(allocator, "method", .{ .string = event.methodSlice() });
+        try obj.put(allocator, "method_truncated", .{ .bool = event.method_truncated });
+        try array.append(.{ .object = obj });
+    }
+    return .{ .array = array };
+}
+
+/// Builds normalized request-id JSON for a cancellation event.
+fn cancellationRequestIdValue(allocator: std.mem.Allocator, event: *const CancellationEvent) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    errdefer obj.deinit(allocator);
+    try obj.put(allocator, "type", .{ .string = event.mcp_request_id_type });
+    try obj.put(allocator, "value", if (event.requestIdValue()) |value| .{ .string = value } else .null);
+    try obj.put(allocator, "truncated", .{ .bool = event.mcp_request_id_truncated });
+    return .{ .object = obj };
+}
+
 /// Builds a snapshot of ZLS event counters.
-fn zlsEventsValue(allocator: std.mem.Allocator, state: State, base: BaseMetrics) !std.json.Value {
+fn zlsEventsValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     if (state.zls_event_count == 0) {
@@ -424,6 +934,8 @@ fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
     try array.append(.{ .string = "Backend history records probes observed through shared probe helpers, not external backend state changes." });
     try array.append(.{ .string = "Command-duration history covers commands routed through shared zigars helpers; direct external process state is not inferred." });
     try array.append(.{ .string = "Latency is dispatch duration and does not include client/network serialization time." });
+    try array.append(.{ .string = "Percentiles are computed from bounded process-local samples and are withheld until enough samples are retained." });
+    try array.append(.{ .string = "Startup timings and cancellation counters are process-local and runtime-specific." });
     return .{ .array = array };
 }
 
@@ -453,7 +965,14 @@ fn firstSequence(count: u64, capacity: u64) u64 {
 
 /// Maps a sequence number to its ring-buffer index.
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
-    return @intCast((sequence - 1) % capacity);
+    return @intCast((sequence - 1) % @as(u64, capacity));
+}
+
+/// Copies a bounded source into a fixed destination and pads the remainder.
+fn copyFixed(dest: []u8, source: []const u8, pad: u8) void {
+    const copy_len = @min(dest.len, source.len);
+    @memcpy(dest[0..copy_len], source[0..copy_len]);
+    if (copy_len < dest.len) @memset(dest[copy_len..], pad);
 }
 
 test "observability state records rings and renders populated metrics" {
@@ -491,21 +1010,21 @@ test "observability state records rings and renders populated metrics" {
         .artifacts = .{ .registry_available = true, .registry_entries = 1, .scanned_artifacts = 2, .scan_limit = 3, .status = "ok" },
     };
 
-    const metrics = try metricsV2Value(allocator, state, base);
+    const metrics = try metricsV2Value(allocator, &state, base);
     try std.testing.expectEqualStrings("zigars_metrics_v2", metrics.object.get("kind").?.string);
     try std.testing.expectEqual(@as(i64, 3), metrics.object.get("observed_tool_calls").?.integer);
 
-    const backend_history = try backendHistoryValue(allocator, state, base);
+    const backend_history = try backendHistoryValue(allocator, &state, base);
     try std.testing.expectEqual(@as(usize, 2), backend_history.object.get("events").?.array.items.len);
 
-    const timeline = try zlsTimelineValue(allocator, state, base);
+    const timeline = try zlsTimelineValue(allocator, &state, base);
     try std.testing.expectEqualStrings("runtime_transition", timeline.object.get("events").?.array.items[0].object.get("source").?.string);
 
-    const latency = try toolLatencyValue(allocator, state);
+    const latency = try toolLatencyValue(allocator, &state);
     const first_tool = latency.object.get("tools").?.array.items[0].object;
     try std.testing.expectEqual(@as(i64, 500), first_tool.get("error_rate_per_1000").?.integer);
 
-    const durations = try commandDurationsValue(allocator, state);
+    const durations = try commandDurationsValue(allocator, &state);
     const second_command = durations.object.get("events").?.array.items[1].object;
     try std.testing.expectEqualStrings("", second_command.get("argv0").?.string);
     try std.testing.expectEqualStrings("Timeout", second_command.get("error").?.string);
@@ -529,7 +1048,8 @@ test "zls timeline falls back to current snapshot when no transitions were obser
         .artifacts = .{},
     };
 
-    const timeline = try zlsTimelineValue(allocator, .{}, base);
+    const empty_state = State{};
+    const timeline = try zlsTimelineValue(allocator, &empty_state, base);
     const event = timeline.object.get("events").?.array.items[0].object;
     try std.testing.expectEqual(@as(i64, 0), event.get("sequence").?.integer);
     try std.testing.expectEqualStrings("current_snapshot", event.get("source").?.string);
@@ -576,15 +1096,51 @@ test "observability metric builders clean up partially allocated JSON" {
         const state = Fixture.state();
         const base = Fixture.base();
 
-        if (metricsV2Value(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
-        if (backendHistoryValue(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
-        if (zlsTimelineValue(allocator, state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
-        if (toolLatencyValue(allocator, state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
-        if (commandDurationsValue(allocator, state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
-        if (zlsTimelineValue(allocator, .{}, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (metricsV2Value(allocator, &state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (backendHistoryValue(allocator, &state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (zlsTimelineValue(allocator, &state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (toolLatencyValue(allocator, &state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (toolCallCorrelationsValue(allocator, &state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        if (commandDurationsValue(allocator, &state)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        const empty_state = State{};
+        if (zlsTimelineValue(allocator, &empty_state, base)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
         if (backendProbeCacheValue(allocator, base.backend_probe_cache)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
         if (probeSnapshotValue(allocator, base.backend_probe_cache.zig)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
         if (probeSnapshotValue(allocator, null)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
         if (limitationsValue(allocator)) |_| {} else |err| try std.testing.expectEqual(error.OutOfMemory, err);
     }
+}
+
+test "observability state retains bounded tool-call correlation and resets with new state" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var state = State{};
+    var sequence: u64 = 1;
+    while (sequence <= max_tool_call_correlations + 2) : (sequence += 1) {
+        var trace: [32]u8 = [_]u8{'0'} ** 32;
+        var span: [16]u8 = [_]u8{'0'} ** 16;
+        const trace_text = std.fmt.bufPrint(&trace, "0000000000000000000000000000{x:0>4}", .{sequence}) catch unreachable;
+        const span_text = std.fmt.bufPrint(&span, "000000000000{x:0>4}", .{sequence}) catch unreachable;
+        state.recordToolCallWithCorrelation("zig_check", sequence, sequence % 2 == 0, .{
+            .mcp_request_id_type = "integer",
+            .mcp_request_id_value = "42",
+            .trace_id = trace_text,
+            .span_id = span_text,
+            .tool_call_id = "zigars-tc-000000000001",
+        });
+    }
+
+    try std.testing.expectEqual(@as(u64, max_tool_call_correlations + 2), state.tool_call_correlation_count);
+    const value = try toolLatencyValue(allocator, &state);
+    const recent = value.object.get("recent_tool_call_correlations").?.array;
+    try std.testing.expectEqual(@as(usize, max_tool_call_correlations), recent.items.len);
+    try std.testing.expectEqual(@as(i64, 3), recent.items[0].object.get("sequence").?.integer);
+    try std.testing.expectEqualStrings("integer", recent.items[0].object.get("mcp_request_id").?.object.get("type").?.string);
+    try std.testing.expectEqualStrings("42", recent.items[0].object.get("mcp_request_id").?.object.get("value").?.string);
+
+    const restarted = State{};
+    try std.testing.expectEqual(@as(u64, 0), restarted.tool_call_correlation_count);
+    try std.testing.expectEqual(@as(u64, 0), restarted.total_tool_calls);
 }
