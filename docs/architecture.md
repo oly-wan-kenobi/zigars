@@ -1,61 +1,80 @@
 # Architecture Notes
 
-Zigars is intentionally a deterministic workbench, not an advice or code-generation
-server. The implementation is split around boundaries that keep that contract
-auditable:
+Zigars is intentionally a deterministic workbench, not an advice or
+code-generation server. The implementation is split around boundaries that keep
+that contract auditable.
 
-- `src/main.zig` delegates process startup to `src/bootstrap/runtime.zig`; the
-  source root contains only `src/main.zig` and `src/root.zig`. Public imports
-  should go through package owners such as `src/app`, `src/domain`, `src/infra`,
-  `src/manifest`, `src/adapters`, and `src/bootstrap`.
-- `src/adapters/mcp/server.zig` is zigars' first-party MCP server adapter. zigars imports
-  protocol types, JSON-RPC helpers, content/resource/prompt types, and transport
-  primitives from the pinned upstream `mcp.zig` dependency, but zigars owns
-  server-side request routing and the result-lifetime boundary for `tools/call`,
-  `resources/read`, and `prompts/get`.
+Entrypoints and composition:
+
+- `src/main.zig` delegates process startup to `src/bootstrap/runtime.zig`.
+- The source root contains only `src/main.zig` and `src/root.zig`.
+- Public imports should go through package owners such as `src/app`,
+  `src/domain`, `src/infra`, `src/manifest`, `src/adapters`, and
+  `src/bootstrap`.
+- `src/bootstrap/runtime_state.zig` owns process composition state such as
+  workspace config, counters, backend probes, and infra-owned cache/session state
+  handles.
+- Runtime job, event, subscription, and client-root rings live in
+  `src/infra/runtime_ux/state.zig` and are intentionally bounded and
+  process-local.
+
+MCP adapter boundary:
+
+- `src/adapters/mcp/server.zig` is zigars' first-party MCP server adapter.
+  zigars imports protocol types, JSON-RPC helpers, content/resource/prompt types,
+  and transport primitives from the pinned upstream `mcp.zig` dependency, but
+  zigars owns server-side request routing and the result-lifetime boundary for
+  `tools/call`, `resources/read`, and `prompts/get`.
 - `src/adapters/mcp/registration.zig`, `registry.zig`, and `handlers.zig` wire
   MCP tools from the typed manifest through bootstrap-supplied runtime ports.
 - `src/adapters/mcp/tools/*.zig` groups MCP projections by workflow area.
   Application behavior belongs under `src/app/usecases/**`; root-level tool
   modules and direct root implementation aliases must stay absent.
-- `src/bootstrap/runtime_state.zig` owns process composition state such as workspace config,
-  counters, backend probes, and infra-owned cache/session state handles.
-  Runtime job, event, subscription, and client-root rings live in
-  `src/infra/runtime_ux/state.zig` and are intentionally bounded and process-local.
+- `src/adapters/mcp/handlers.zig` resolves manifest handler references to
+  functions by handler module namespace. It does not map individual tools.
+- `src/adapters/mcp/registry.zig` adapts typed metadata to `mcp.zig` tools and
+  validates JSON arguments before handlers run. `src/adapters/mcp/schema.zig`
+  owns the transport-specific projection from manifest schema metadata to MCP
+  input schemas.
+- `src/adapters/mcp/result.zig` centralizes structured JSON result serialization
+  for MCP tool responses and deep-clones structured content into the request
+  allocator.
+
+Manifest and catalog:
+
 - `src/manifest/mod.zig` is the typed tool manifest owner. It derives ids,
   tables, and lookup helpers from focused manifest modules:
   `src/manifest/types.zig` defines the schema vocabulary,
   `src/manifest/definitions.zig` lists tool definitions, and
-  `src/manifest/groups.zig` owns group keyword metadata. Together these hold
-  names, descriptions, argument schemas, grouping, discovery keywords, handler
-  references, planning policies, MCP read-only annotations, and risk metadata.
-- `src/adapters/mcp/handlers.zig` resolves manifest handler references to functions by
-  handler module namespace. It does not map individual tools.
-- `src/adapters/mcp/registry.zig` adapts typed metadata to `mcp.zig` tools and validates
-  JSON arguments before handlers run. `src/adapters/mcp/schema.zig` owns the
-  transport-specific projection from manifest schema metadata to MCP input
-  schemas.
+  `src/manifest/groups.zig` owns group keyword metadata.
+- Together these manifest files hold names, descriptions, argument schemas,
+  grouping, discovery keywords, handler references, planning policies, MCP
+  read-only annotations, and risk metadata.
 - `src/manifest/tool_catalog_render.zig` renders the public tool catalog by
   projecting static manifest metadata, domain-owned backend setup metadata, and
-  domain-owned static-analysis contracts. `src/infra/runtime_ux/catalog.zig`
-  is only the concrete `ToolCatalog` port wrapper.
-- `src/adapters/mcp/result.zig` centralizes structured JSON result serialization for MCP
-  tool responses and deep-clones structured content into the request allocator.
+  domain-owned static-analysis contracts. `src/infra/runtime_ux/catalog.zig` is
+  only the concrete `ToolCatalog` port wrapper.
+
+Analysis and backend boundaries:
+
 - `src/app/usecases/static_analysis/source_summary.zig` contains source-text
-  summaries, and `src/app/usecases/static_analysis/workspace_scans.zig`
-  contains port-backed workspace scans. `src/domain/zig/static_analysis_contracts.zig`
-  owns the shared confidence vocabulary, limitations, and verification guidance
-  for static-analysis tools.
+  summaries, and `src/app/usecases/static_analysis/workspace_scans.zig` contains
+  port-backed workspace scans.
+- `src/domain/zig/static_analysis_contracts.zig` owns the shared confidence
+  vocabulary, limitations, and verification guidance for static-analysis tools.
 - `src/infra/zls/*` owns the ZLS session boundary.
-  `src/infra/zls/client.zig` owns request/response correlation, pipe
-  lifecycle, shutdown, and reader threads. `src/infra/zls/diagnostics_cache.zig` owns
+  `src/infra/zls/client.zig` owns request/response correlation, pipe lifecycle,
+  shutdown, and reader threads. `src/infra/zls/diagnostics_cache.zig` owns
   diagnostics retention, bounded eviction, snapshot ordering, and cache counters.
-  Document-state locks should protect state transitions only; file I/O and LSP
+- Document-state locks should protect state transitions only; file I/O and LSP
   sends should run outside the mutex. Unsaved document content is retained in
   process memory so ZLS restarts reopen the same buffer content clients sent.
-- `tools/zigars_tools.zig` is the pure-Zig helper executable used by build steps.
-  Shared helper concerns are grouped under `tools/common`, `tools/coverage`,
-  `tools/integration`, `tools/release`, and `tools/quality`.
+
+Build helpers:
+
+- `tools/zigars_tools.zig` is the pure-Zig helper executable used by build
+  steps. Shared helper concerns are grouped under `tools/common`,
+  `tools/coverage`, `tools/integration`, `tools/release`, and `tools/quality`.
 
 The architecture guard is strict by default: its exception allowlist must remain
 empty. New boundary pressure should be resolved by adding app ports, bootstrap
@@ -204,10 +223,11 @@ retaining explicit zigars-owned cleanup hooks.
 ## Heuristic Analysis Rules
 
 Heuristic scanners are useful for fast orientation, but they are not semantic
-Zig analysis. Keep source-text heuristics isolated in static-analysis app
-use cases, route workspace reads through app ports, include fixture tests, and prefer parser-backed, ZLS, Zig
-compiler-backed, or optional zwanzig-backed tools for actions that would modify
-source. Static-analysis results should include `analysis_kind`,
+Zig analysis. Keep source-text heuristics isolated in static-analysis app use
+cases, route workspace reads through app ports, and include fixture tests. For
+actions that would modify source, prefer parser-backed, ZLS, Zig
+compiler-backed, or optional zwanzig-backed evidence. Static-analysis results
+should include `analysis_kind`,
 `capability_tier`, `confidence`, `confidence_class`, `source_coverage`,
 `limitations`, `verify_with`, `recommended_cross_check`, and skipped-file counts
 when unreadable files are omitted. The release hygiene check fails when a

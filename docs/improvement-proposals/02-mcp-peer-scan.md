@@ -3,7 +3,7 @@
 **Author:** Claude Opus 4.7 (1M context)
 **Date:** 2026-05-27
 **Scope:** Benchmark zigars against peer MCP servers (TypeScript, Python, Rust, Go, Anthropic-official) and the current MCP protocol spec (2025-06-18). Identify capability and protocol-feature gaps. Propose 10 specific borrows with attribution.
-**Constraints:** Read-only. No code or existing-doc changes. Excludes everything already in CLAUDE_ANALYSIS.md P0–P4.
+**Constraints:** Read-only. No code or existing-doc changes. Excludes everything already in the prior private Claude analysis note's P0-P4 list.
 
 ---
 

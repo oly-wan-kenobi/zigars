@@ -7,7 +7,7 @@
 Planner, Test Author, Test Reviewer, or Implementer agent reason about a Zig
 codebase without falling back to `rg` + multi-file reads. Excludes anything
 already shipping (see [tool-index.generated.md](../tool-index.generated.md))
-and anything already on the P0–P4 list in `CLAUDE_ANALYSIS.md` or in
+and anything already on the prior private Claude analysis note's P0-P4 list or in
 [01-internal-gaps.md](01-internal-gaps.md), [03-zig-dev-pain.md](03-zig-dev-pain.md),
 or [04-compound-workflows.md](04-compound-workflows.md).
 

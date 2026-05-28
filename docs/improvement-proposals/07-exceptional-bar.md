@@ -4,7 +4,7 @@
 **Scope:** What separates *well-engineered* from *truly exceptional*.
 **Method:** Four parallel deep-dives over operational quality, onboarding/DX,
 reliability/safety posture, and strategic positioning. No code changes.
-**Frame:** Additive to [CLAUDE_ANALYSIS.md](../../CLAUDE_ANALYSIS.md) and
+**Frame:** Additive to the prior private Claude analysis note and
 [00-synthesis.md](00-synthesis.md). Those answer "what to ship next." This
 answers "what would make zigars *the* canonical Zig+agent tool."
 
@@ -12,7 +12,7 @@ answers "what would make zigars *the* canonical Zig+agent tool."
 
 ## 1. The Gap
 
-CLAUDE_ANALYSIS.md established that zigars is in strong shape on the
+The prior private Claude analysis note established that zigars is in strong shape on the
 fundamentals: hexagonal core, zero TODOs, 885 passing tests, multi-platform
 CI, eight-target release pipeline, ~300 manifest-driven tools. The
 improvement-proposals roadmap adds capability surface (dependency cluster,
@@ -183,9 +183,8 @@ three questions: *what happened*, *what the user did to trigger it*, and
 
 **Action (Impact 5, Effort M).** Audit every `catch` in
 `src/bootstrap/` and `src/adapters/` for swallowed cause text. Populate
-`AppError.resolution` from a small catalog keyed by `code` (per the
-already-recommended `app/errors.zig` error catalog in
-[CLAUDE_ANALYSIS.md](../../CLAUDE_ANALYSIS.md) §5 P3 #9).
+`AppError.resolution` from a small catalog keyed by `code`, following the
+previously recommended `app/errors.zig` error-catalog direction.
 
 ### 4.5 Single-threaded request dispatch with no cancellation surface
 
@@ -402,7 +401,7 @@ forcing it on solos.
 ### 8.1 The exceptional bar shifts the roadmap weights, not the items
 
 Almost every action above either:
-- Exists as a P3/P4 item in CLAUDE_ANALYSIS.md (error catalog, perf
+- Exists as a P3/P4 item in the prior private Claude analysis note (error catalog, perf
   thresholds, signed checksums), or
 - Sits in Wave 3/4 of [00-synthesis.md](00-synthesis.md) (comptime
   trilogy, ZLS lifecycle, watcher), or
@@ -439,8 +438,9 @@ five-year position.
 
 ## 9. Prioritized 90-Day Punch List
 
-Sorted by `Impact / Effort` ratio. Items are additive to CLAUDE_ANALYSIS
-P0–P4 and to 00-synthesis Waves 1–4 — they don't displace anything;
+Sorted by `Impact / Effort` ratio. Items are additive to the prior private
+Claude analysis note's P0-P4 list and to 00-synthesis Waves 1-4. They do not
+displace anything;
 they re-prioritize.
 
 ### Tier A — under a week, transformative

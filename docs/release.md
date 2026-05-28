@@ -24,21 +24,24 @@ and `backend-provisioning/checksums.sha256`.
 
 The gate includes formatting, generated docs/JSON drift checks, `zig build
 test`, ReleaseSafe compilation, release-binary coverage, HTTP and stdio MCP
-fixture coverage through coverage/conformance gates, backend conformance
-contract smoke, backend scenario manifest drift, artifact hygiene, architecture
-guard, hex architecture inventory, and public MCP contracts. It also checks
-[trust.md](trust.md) and [maturity.md](maturity.md) so release readiness cannot
-drift away from the documented product boundaries. It checks that the build
-imports the pinned upstream `mcp` package directly instead of routing through a
-patched MCP server wrapper, and that the first-party adapter still exposes
-explicit `tools/call`, `resources/read`, and `prompts/get`
+fixture coverage, backend conformance contract smoke, backend scenario manifest
+drift, artifact hygiene, architecture guard, hex architecture inventory, and
+public MCP contracts.
+
+It also checks [trust.md](trust.md) and [maturity.md](maturity.md) so release
+readiness cannot drift away from the documented product boundaries. The gate
+verifies that the build imports the pinned upstream `mcp` package directly
+instead of routing through a patched MCP server wrapper, and that the first-party
+adapter still exposes explicit `tools/call`, `resources/read`, and `prompts/get`
 post-serialization cleanup hooks.
+
 The release drift tools provide the same contract as MCP-facing preflight
 checks: `zigars_docs_drift_check` verifies public documentation markers and
 generated-index coverage, `zigars_release_claim_check` scans public docs for
 conservative overclaim tokens, and `zigars_tool_index_check` compares registered
 tools to `docs/tool-index.generated.md`. These tools are read-only convenience
 checks; the release authority remains the build targets above.
+
 Release-intelligence tools can organize supporting evidence before the gate:
 `zig_release_plan` lists observed and missing release evidence,
 `zig_semver_suggest` suggests a conservative bump from supplied API/release
@@ -46,11 +49,13 @@ text, `zig_release_notes_draft` drafts editable notes, and
 `zig_release_evidence_pack` packages evidence pointers and verification
 commands. They do not execute release gates, tag, publish, or certify skipped
 checks.
+
 Use [release-evidence.md](release-evidence.md) for local phase handoff notes
 when docs, package, skills, or adoption hardening changes need exact command
 evidence before a public release note is drafted. A phase note is useful
 maintenance context, but public optional-backend claims still require clean-tree
 `Release Readiness` evidence for the exact release commit.
+
 The default GitHub Actions PR/main workflow then runs
 `zig build dist release-asset-smoke` in the same Zig job, so archive shape,
 checksums, and native archive runtime behavior are verified before a tag workflow

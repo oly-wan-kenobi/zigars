@@ -7,7 +7,7 @@
 [04-compound-workflows.md](04-compound-workflows.md), and
 [05-agent-ergonomics.md](05-agent-ergonomics.md).
 **Scope:** Single ranked roadmap. No code or existing-doc changes. Excludes
-everything on the P0-P4 list in [../../CLAUDE_ANALYSIS.md](../../CLAUDE_ANALYSIS.md).
+items already captured in the prior private Claude analysis note.
 
 **Phase 0 baseline:** Current-state corrections and roadmap decisions are
 recorded in [06-phase-00-baseline-reconciliation.md](06-phase-00-baseline-reconciliation.md).
@@ -369,7 +369,7 @@ module surfaces, symbol dossiers, insertion sites, and risk audits. If a
 future public architecture-policy surface is needed, it must be an explicit
 opt-in profile with labeled project policy, not zigars' own folder/layer rules.
 
-### 5.6 Skills package fate (intersects with CLAUDE_ANALYSIS P0 #3)
+### 5.6 Skills package fate
 
 Several new tools below would benefit from skill packaging. The
 `packages/@zigars/skills/` package now has package metadata, a CLI, tests,

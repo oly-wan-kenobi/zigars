@@ -74,7 +74,7 @@ Phase 0 reconciles the proposal set with these current repository facts:
 | `packages/@zigars/skills` is only a placeholder with no package metadata. | The package now has metadata, CLI, README, tests, and a concrete skill; publish readiness still requires package-local validation and any client-side skill validator. |
 | Public architecture-layer tooling is a roadmap item. | It is removed from the public surface; public ergonomics remain architecture-neutral. |
 
-## 4. `CLAUDE_ANALYSIS.md` Finding Classification
+## 4. Prior Private Analysis Finding Classification
 
 | Finding | Classification | Phase 0 note |
 |---|---|---|

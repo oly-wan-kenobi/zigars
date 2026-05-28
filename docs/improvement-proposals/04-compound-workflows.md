@@ -5,7 +5,8 @@
 **Status:** Proposal — read-only analysis, no code or doc changes made.
 **Scope:** Identify chains of *existing* zigars tools that agents currently
 compose by hand and that deserve to be promoted to first-class workflow
-primitives. Excludes anything already on the CLAUDE_ANALYSIS.md P0–P4 list.
+primitives. Excludes anything already on the prior private Claude analysis
+note's P0-P4 list.
 
 ---
 

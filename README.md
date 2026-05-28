@@ -234,26 +234,30 @@ the repo-pinned setup in `tools/real_backend_pins.json` through
 
 ## Install
 
-Fast MCP client install through Bun:
+Use the npm shim for most MCP clients. Bun is the preferred launcher:
 
 ```sh
 bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
 
-Node/npm is still supported:
+Node/npm remains supported:
 
 ```sh
 npx -y @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
 ```
 
-Yarn and pnpm launch forms:
+Yarn and pnpm work when the `zigars-mcp` binary is named explicitly:
 
 ```sh
 yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
-For repeatable client configuration, pin the package version as shown above.
+For repeatable client configuration, pin the package version as shown above. For
+npm-specific caching, checksum behavior, publish checks, and package-manager
+troubleshooting, see
+[packages/@zigars/mcp/README.md](packages/@zigars/mcp/README.md).
+
 If you want a locally installed command instead:
 
 ```sh
@@ -274,50 +278,11 @@ zigars --version
 
 Published archives are available from
 [GitHub Releases](https://github.com/oly-wan-kenobi/zigars/releases). Download
-the archive for your platform, verify its SHA-256 against `zigars-checksums.txt`,
-and put `zigars` on `PATH`. The initial `v0.1.0` release was built and verified
-locally while GitHub Actions were unavailable; its release notes list the source
-commit and local gates. Tag-workflow releases attach GitHub provenance
-attestations generated from the checksum file when GitHub supports attestations
-for the repository. The npm shim currently verifies SHA-256 checksums only; npm
-attestation verification is not implemented.
-
-Published release archives are named:
-
-```text
-zigars-x86_64-linux-gnu.tar.gz
-zigars-aarch64-linux-gnu.tar.gz
-zigars-x86_64-linux-musl.tar.gz
-zigars-aarch64-linux-musl.tar.gz
-zigars-x86_64-macos.tar.gz
-zigars-aarch64-macos.tar.gz
-zigars-x86_64-windows-gnu.tar.gz
-zigars-aarch64-windows-gnu.tar.gz
-```
-
-The npm shim uses these same archive names for host detection, with Linux x64
-and arm64 hosts deliberately mapped to the musl archives because Node and Bun do
-not expose libc ABI consistently. GNU Linux archives remain available for direct
-downloads and CI jobs that explicitly need glibc ABI. If a package version is
-published before the matching `v<version>` GitHub release assets and
-`zigars-checksums.txt` are available, startup fails with a download or checksum
-error.
-
-Claude Desktop MCPB bundles are published from those same release binaries:
-
-```text
-zigars-darwin-universal.mcpb
-zigars-linux-x64.mcpb
-zigars-windows-x64.mcpb
-zigars-mcpb-checksums.txt
-```
-
-The macOS MCPB contains a universal binary. The Linux and Windows MCPB bundles
-currently contain x86_64 binaries because MCPB compatibility metadata supports
-OS platform selectors but not CPU architecture selectors. Linux arm64 users can
-use the npm shim or direct `zigars-aarch64-linux-musl.tar.gz` archive; Windows
-arm64 users can use the npm shim or direct `zigars-aarch64-windows-gnu.tar.gz`
-archive.
+the archive for your platform, verify its SHA-256 against
+`zigars-checksums.txt`, and put `zigars` on `PATH`. Archive names, MCPB bundle
+names, platform mapping, and attestation limits are documented in
+[docs/distribution.md](docs/distribution.md) and
+[packages/@zigars/mcp/README.md](packages/@zigars/mcp/README.md).
 
 ## Build
 
@@ -332,12 +297,12 @@ The binary is written to:
 zig-out/bin/zigars
 ```
 
-`zig build release-check` is the adoption gate: it runs formatting, generated
-docs/JSON checks, unit tests, ReleaseSafe compilation, HTTP and stdio MCP smoke
-fixtures, kcov line coverage floors, fake-backend conformance report-contract
-smoke, artifact hygiene, structured error-contract scans, trust/maturity docs
-checks, MCP public-surface contract checks, static/docs maturity guards, and
-line-budget headroom checks.
+`zig build release-check` is the broad pre-release gate. It covers formatting,
+generated docs/JSON drift, unit tests, ReleaseSafe compilation, HTTP and stdio
+MCP smoke fixtures, kcov line coverage floors, fake-backend conformance
+contracts, artifact hygiene, structured error-contract scans, public MCP
+contract checks, trust/maturity docs, static/docs maturity guards, and
+line-budget headroom.
 
 `zig build test` includes unit coverage for executable startup helpers, CLI
 parsing, workspace sandboxing, command parsing, JSON serialization, diagnostics
@@ -505,7 +470,8 @@ optional-backend support is claimed only from a release evidence artifact.
   `zigars_workspace_info`, `zigars_metrics`, `zigars_http_status`,
   `zig_command_plan`, `zig_tool_plan`, `zig_toolchain_resolve`
 - Agent workflows: `zigars_context_pack`, `zigars_next_action`,
-  `zigars_agent_guide`, `zigars_validate_patch`, `zigars_failure_fusion`,
+  `zigars_agent_guide_v2`, `zigars_client_guide`, `zigars_validate_patch`,
+  `zigars_failure_fusion`,
   `zigars_impact`, `zigars_project_profile`, `zigars_patch_guard`,
   `zigars_validation_plan`, `zigars_validation_run`,
   `zigars_patch_session_create`, `zigars_patch_session_validate`
@@ -635,7 +601,7 @@ checked in CI.
 
 For agent workflows, see [docs/agent-workflows.md](docs/agent-workflows.md).
 The short version is: start with `zigars_context_pack`, ask
-`zigars_agent_guide` for the client profile, route uncertain work through
+`zigars_agent_guide_v2` for the client profile, route uncertain work through
 `zigars_next_action`, and finish with `zigars_validate_patch`.
 
 ## Safety Model
@@ -710,129 +676,20 @@ More detail:
 
 ## Troubleshooting
 
-### npm shim cannot download a release asset
+Start with [docs/troubleshooting.md](docs/troubleshooting.md) for workspace,
+backend, HTTP, argument, and cache issues. For npm shim download, platform,
+checksum, extraction, Bun/Node, and package cache issues, use
+[packages/@zigars/mcp/README.md](packages/@zigars/mcp/README.md#troubleshooting).
 
-The package downloads from:
-
-```text
-https://github.com/oly-wan-kenobi/zigars/releases/download/v0.2.0/
-```
-
-Confirm the release has `zigars-checksums.txt` and the archive for your host:
-
-```text
-zigars-x86_64-linux-gnu.tar.gz
-zigars-aarch64-linux-gnu.tar.gz
-zigars-x86_64-linux-musl.tar.gz
-zigars-aarch64-linux-musl.tar.gz
-zigars-x86_64-macos.tar.gz
-zigars-aarch64-macos.tar.gz
-zigars-x86_64-windows-gnu.tar.gz
-zigars-aarch64-windows-gnu.tar.gz
-```
-
-If assets are missing, publish the GitHub release assets first or use a direct
-source build.
-
-### Unsupported platform
-
-`@zigars/mcp` currently supports Linux x64/arm64, macOS x64/arm64, and Windows
-x64/arm64. Linux hosts use the musl archives by default; choose GNU Linux
-archives manually if you need glibc ABI. Other hosts fail with
-`Unsupported zigars host target: <platform>/<arch>`. Build from source or use a
-supported machine until a release asset exists for that target.
-
-### Checksum mismatch or missing checksum
-
-Delete the cached install and retry only after confirming the release asset and
-`zigars-checksums.txt` were produced from the same build:
-
-```sh
-rm -rf ~/.cache/zigars-mcp/0.2.0
-rm -rf ~/Library/Caches/zigars-mcp/0.2.0
-```
-
-On Windows, remove `%LOCALAPPDATA%\zigars-mcp\0.2.0`. You can override the cache
-location with `ZIGARS_MCP_CACHE_DIR`.
-
-### Bun or Node.js version issues
-
-Use Bun 1.3 or newer for the preferred path, or Node.js 18 or newer for the
-npm/npx path:
-
-```sh
-bun --version
-node --version
-npm --version
-```
-
-Older Node.js versions do not provide the runtime APIs the shim relies on.
-
-### Zig path issues
-
-Confirm the server can find Zig:
-
-```sh
-zig version
-bunx --bun @zigars/mcp@0.2.0 \
-  --workspace /absolute/path/to/zig/project \
-  --zig-path /absolute/path/to/zig
-```
-
-Inside an MCP client, call `zigars_doctor {"probe_backends":false}`. Optional
-backends such as ZLS, ZLint, zwanzig, zflame, and diff-folded can be configured
-with their matching `--*-path` arguments.
-
-### `PermissionDenied` or workspace sandbox errors
-
-Run:
+The most useful first diagnostic calls are:
 
 ```text
 zigars_workspace_info
+zigars_doctor {"probe_backends":false}
 ```
 
-If the reported workspace is not the project you are editing, restart/configure
-the MCP server with the correct `--workspace` or pass workspace-relative paths.
-
-### Formatter tool not found
-
-Restart the MCP client so it refreshes `tools/list`, then search for:
-
-```text
-zigars formatter
-zigars format
-zig_format
-zig_format_check
-```
-
-`zigars_capabilities` and `zigars_tool_index` include these discovery keywords.
-
-### ZLS tools are unavailable
-
-Confirm `--zls-path` points to a working `zls` binary compatible with your Zig
-version. Command-backed tools such as `zig_check`, `zig_build`, and `zig_test`
-continue to work without ZLS.
-
-ZLS-only tools report a structured `backend_error` with the configured path,
-current session status, restart attempts, last failure when available, and a
-resolution. Tools with static or command-backed fallbacks, including
-`zig_document_symbols`, diagnostics summaries, and workspace symbols, continue
-with degraded advisory output when the ZLS session is unavailable. An
-`zls_unsupported_capability` result means ZLS did initialize, but its
-advertised capabilities omitted the requested LSP method.
-
-For install paths, wrapper-script configuration, and ZLint, zwanzig, zflame,
-and diff-folded checks, see [docs/backends.md](docs/backends.md).
-
-Run `zigars_doctor` for a compact health report that includes workspace,
-dependency, transport, timeout, ZLS status, and optional backend paths. Pass
-`probe_backends=true` to execute short backend probes for Zig, ZLS, ZLint,
-zwanzig, zflame, and diff-folded, and to compare `zig version` with
-`build.zig.zon` `minimum_zig_version` when the project declares one. Startup
-also emits a stderr warning with the same resolution text when that declared
-minimum exists and the configured Zig is unavailable or too old. Probe results
-are cached in the server process and are also visible through
-`zigars_workspace_info` and `zigars_metrics`.
+Use `probe_backends=true` only when you want zigars to execute short backend
+probes for Zig, ZLS, ZLint, zwanzig, zflame, and diff-folded.
 
 ## Development
 

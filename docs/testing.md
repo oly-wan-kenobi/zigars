@@ -34,6 +34,11 @@ zig build public-contracts
 zig build dist release-asset-smoke
 ```
 
+`zig build docs-check` verifies the generated tool index. It does not validate
+every Markdown link in roadmap or proposal files. When docs move or archived
+analysis notes are removed, run a Markdown link scan as a separate review step
+and fix broken repository-local links before merging.
+
 ## Testing By Layer
 
 Business behavior belongs in the fastest typed layer that can express it:

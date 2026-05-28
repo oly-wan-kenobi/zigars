@@ -1,9 +1,10 @@
 # Distribution Strategy
 
-This document records the public distribution strategy for zigars. It is not a
-release checklist and does not claim that npm, MCPB, or MCP Registry publication
-already exists. Use [release.md](release.md) as the authority for tagging,
-archive verification, and release-note evidence.
+This document records the public distribution strategy for zigars across current
+and planned channels. It is not a release checklist and does not by itself prove
+that any package, bundle, or registry entry has been published for a given
+version. Use [release.md](release.md) as the authority for tagging, archive
+verification, and release-note evidence.
 
 ## Goals
 
@@ -21,7 +22,7 @@ archive verification, and release-note evidence.
 
 ## Public Names
 
-| Surface | Planned name |
+| Surface | Public name |
 |---|---|
 | Binary command | `zigars` |
 | Display title | `zigars MCP` |
@@ -37,7 +38,7 @@ projects that use similar names.
 
 ## Channel Strategy
 
-| Channel | Role | Planned artifact | Main users | Main drawback |
+| Channel | Role | Artifact | Main users | Main drawback |
 |---|---|---|---|---|
 | GitHub Releases | Verified binary source and fallback install path | Existing platform archives plus `zigars-checksums.txt` | Power users, CI, npm shim downloader | Manual path and MCP config work |
 | npm shim | Broadest MCP client onboarding path | `@zigars/mcp` executable package | Cursor, VS Code, Cline, Codex, Claude Code, Gemini CLI, opencode, Kimi, Antigravity | Requires Bun or Node/npm and wrapper maintenance |
@@ -47,8 +48,8 @@ projects that use similar names.
 | Zig community indexes | Zig ecosystem discovery | GitHub topics and community submissions | Zig developers | Discovery only; not a standard MCP install mechanism |
 | OCI image | Later optional channel | Multi-arch `ghcr.io/.../zigars` image | CI, devcontainers, enterprise runners | Local workspace mounts and stdio UX are less ergonomic |
 
-The npm shim is the first new channel because it keeps client configuration
-consistent:
+The npm shim is the primary broad-client channel because it keeps client
+configuration consistent:
 
 ```sh
 bunx --bun @zigars/mcp@0.2.0 --workspace /absolute/path/to/zig/project
@@ -67,18 +68,17 @@ yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/proje
 pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
-The shim should be authored in TypeScript, publish compiled JavaScript for
-Node-compatible npm clients, and forward all zigars arguments after selecting the
-correct binary. The resulting process should still run zigars as a local stdio
-MCP server. GitHub release assets for the matching `v<version>` tag must be
-uploaded before the npm package can start successfully, because the package
-downloads `zigars-checksums.txt` and the selected platform archive from GitHub
-Releases.
+The shim is authored in TypeScript, publishes compiled JavaScript for
+Node-compatible npm clients, and forwards zigars arguments after selecting the
+correct binary. The resulting process runs zigars as a local stdio MCP server.
+GitHub release assets for the matching `v<version>` tag must be uploaded before
+the npm package can start successfully, because the package downloads
+`zigars-checksums.txt` and the selected platform archive from GitHub Releases.
 
 ## npm Shim Contract
 
-The npm package should stay small. Its responsibility is distribution, not MCP
-tool behavior.
+The npm package stays small. Its responsibility is distribution, not MCP tool
+behavior.
 
 Minimum behavior:
 
@@ -130,8 +130,8 @@ development strategy.
 
 ## MCPB Contract
 
-MCPB should be a secondary, desktop-focused path for Claude Desktop. It should
-not block the npm shim or MCP Registry publication.
+MCPB is a secondary, desktop-focused path for Claude Desktop. It should not
+block the npm shim or MCP Registry publication.
 
 Target bundles:
 
@@ -239,9 +239,10 @@ release automation. A public Zig library API remains deferred. See
 ## MCP Registry Plan
 
 The first MCP Registry package should point to the npm shim. MCPB packages can
-be added after real Claude Desktop install smoke evidence exists.
+be added after real Claude Desktop install smoke evidence exists for the
+published bundles.
 
-Planned server metadata:
+Server metadata:
 
 - `name`: `io.github.oly-wan-kenobi/zigars`
 - `title`: `zigars MCP`
@@ -271,7 +272,7 @@ Completed for the npm shim package:
   argument forwarding.
 - Add package-local npm README and LICENSE files for the published tarball.
 
-Remaining before or after the first npm publish:
+Remaining before or after publication of a given version:
 
 1. Confirm the `v0.2.0` GitHub release has all platform archives and
    `zigars-checksums.txt`.

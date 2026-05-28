@@ -37,8 +37,8 @@ request ports. Unknown, already-completed, malformed, or non-cancellable targets
 are counted in runtime metrics instead of creating a second request identity
 system.
 
-The server still dispatches tools sequentially. This phase does not add broad
-concurrent tool execution.
+The server still dispatches tools sequentially. Cancellation support is
+cooperative and does not imply broad concurrent tool execution.
 
 ## Startup And Latency Metrics
 

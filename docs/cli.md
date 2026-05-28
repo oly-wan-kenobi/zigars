@@ -40,8 +40,8 @@ command itself ran.
 
 ## Follow-Up Commands
 
-These are planned CLI candidates, not implemented in the first slice. Each must
-reuse an existing use case and keep stdout as JSON.
+These are planned CLI candidates, not implemented in the initial CLI surface.
+Each must reuse an existing use case and keep stdout as JSON.
 
 | Command | Existing use case | Proposed JSON contract | Exit behavior |
 |---|---|---|---|

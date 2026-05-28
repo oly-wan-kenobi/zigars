@@ -15,11 +15,11 @@ proposal 01 asks "what infra is wired but unexposed?"; this proposal asks
 "what do Zig developers actually struggle with day-to-day, and what would
 turn a multi-step manual loop into one tool call?".
 
-Out of scope: every entry on the P0–P4 list in
-[../../CLAUDE_ANALYSIS.md](../../CLAUDE_ANALYSIS.md) (release upload, npm
-publish, skills decision, coverage gate, shim smoke, README routing, ADRs,
-error catalog, perf thresholds, backend variants as build targets, GPG
-signing, LLM-judge tests, MCPB pin doc) and every tool already in
+Out of scope: every entry on the P0-P4 list in the prior private Claude
+analysis note (release upload, npm publish, skills decision, coverage gate,
+shim smoke, README routing, ADRs, error catalog, perf thresholds, backend
+variants as build targets, GPG signing, LLM-judge tests, MCPB pin doc) and
+every tool already in
 [../tool-index.generated.md](../tool-index.generated.md). Each proposal
 below was cross-checked against that index; none refine an existing tool.
 

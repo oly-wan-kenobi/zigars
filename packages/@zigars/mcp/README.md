@@ -86,7 +86,7 @@ sampling is unavailable.
 | Group | Representative tools |
 |---|---|
 | Discovery and health | `zigars_capabilities`, `zigars_tool_index`, `zigars_schema`, `zigars_backend_catalog`, `zigars_doctor`, `zigars_workspace_info` |
-| Agent workflow | `zigars_context_pack`, `zigars_next_action`, `zigars_agent_guide`, `zigars_validate_patch`, `zigars_validation_plan` |
+| Agent workflow | `zigars_context_pack`, `zigars_next_action`, `zigars_agent_guide_v2`, `zigars_client_guide`, `zigars_validate_patch`, `zigars_validation_plan` |
 | Core Zig | `zig_version`, `zig_env`, `zig_targets`, `zig_build`, `zig_test`, `zig_check`, `zig_translate_c` |
 | Formatting and transactional edits | `zig_format`, `zig_format_check`, `zig_patch_preview`, `zigars_patch_session_preview`, `zigars_patch_session_apply` |
 | ZLS code intelligence | `zig_diagnostics`, `zig_hover`, `zig_definition`, `zig_references`, `zig_completion`, `zig_signature_help` |

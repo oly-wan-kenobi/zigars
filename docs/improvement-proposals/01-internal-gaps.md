@@ -8,7 +8,8 @@
 **Goal:** Identify net-new tool capabilities (or workflow compressions) whose
 backend/infra is already wired but unexposed.
 
-Out of scope: anything already on the P0–P4 list in `CLAUDE_ANALYSIS.md`
+Out of scope: anything already on the P0-P4 list in the prior private Claude
+analysis note
 (release upload, npm publish, skills decision, coverage gate, shim smoke,
 README routing, ADRs, error catalog, perf thresholds, backend variants as
 build targets, GPG signing, LLM-judge tests, mcpb pin doc).
