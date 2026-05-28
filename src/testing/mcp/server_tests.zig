@@ -3,7 +3,9 @@ const mcp = @import("mcp");
 
 const server_mod = @import("../../adapters/mcp/server.zig");
 const app_ports = @import("../../app/ports.zig");
+const manifest = @import("../../manifest/mod.zig");
 const mcp_result = @import("../../adapters/mcp/result.zig");
+const tool_registry = @import("../../adapters/mcp/registry.zig");
 
 const Server = server_mod.Server;
 const ServerState = server_mod.ServerState;
@@ -185,6 +187,77 @@ test "Server add tool" {
     try std.testing.expect(server.capabilities.tools != null);
 }
 
+test "registered tool validation errors include correlation metadata" {
+    const allocator = std.testing.allocator;
+    var server: Server = .init(allocator, .{
+        .name = "test-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+    server.state = .ready;
+    var schema_arena = std.heap.ArenaAllocator.init(allocator);
+    defer schema_arena.deinit();
+
+    const TestRuntime = struct {
+        calls: usize = 0,
+        records: usize = 0,
+        last_error: bool = false,
+        last_has_correlation: bool = false,
+    };
+    const TestHandler = struct {
+        fn handler(runtime: *TestRuntime, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+            runtime.calls += 1;
+            return .{ .content = &.{.{ .text = .{ .text = "unexpected" } }} };
+        }
+
+        fn record(runtime: *TestRuntime, _: []const u8, _: u64, is_error: bool, correlation: anytype) void {
+            runtime.records += 1;
+            runtime.last_error = is_error;
+            runtime.last_has_correlation = correlation != null;
+        }
+    };
+
+    var runtime = TestRuntime{};
+    try tool_registry.addTool(
+        &server,
+        schema_arena.allocator(),
+        &runtime,
+        manifest.entryFor(.zig_check).meta,
+        TestHandler.handler,
+        TestHandler.record,
+    );
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":\"req-validation\",\"method\":\"tools/call\",\"params\":{\"name\":\"zig_check\",\"arguments\":{}}}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+    try std.testing.expectEqual(@as(usize, 1), transport.sent.items.len);
+    try std.testing.expectEqual(@as(usize, 0), runtime.calls);
+    try std.testing.expectEqual(@as(usize, 1), runtime.records);
+    try std.testing.expect(runtime.last_error);
+    try std.testing.expect(runtime.last_has_correlation);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, transport.sent.items[0], .{});
+    defer parsed.deinit();
+
+    const result = parsed.value.object.get("result").?.object;
+    try std.testing.expect(result.get("isError").?.bool);
+    const structured = result.get("structuredContent").?.object;
+    try std.testing.expectEqualStrings("argument_error", structured.get("kind").?.string);
+    try std.testing.expectEqualStrings("missing_required_argument", structured.get("code").?.string);
+    try std.testing.expectEqualStrings("file", structured.get("field").?.string);
+
+    const corr = result.get("_meta").?.object.get("dev.zigars/correlation").?.object;
+    try std.testing.expectEqualStrings("tools/call", corr.get("mcp_method").?.string);
+    try std.testing.expectEqualStrings("zig_check", corr.get("tool_name").?.string);
+    const request_id = corr.get("mcp_request_id").?.object;
+    try std.testing.expectEqualStrings("string", request_id.get("type").?.string);
+    try std.testing.expectEqualStrings("req-validation", request_id.get("value").?.string);
+}
+
 test "Server add resource" {
     var server: Server = .init(std.testing.allocator, .{
         .name = "test-server",
@@ -361,6 +434,7 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"tools\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"outputSchema\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"structuredContent\":true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"_meta\":{\"dev.zigars/correlation\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_link\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "ExecutionFailed") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_tool_handler_error") != null);
