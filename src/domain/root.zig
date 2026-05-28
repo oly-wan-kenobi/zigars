@@ -6,6 +6,7 @@ pub const diagnostics = @import("diagnostics/root.zig");
 pub const performance = @import("performance/root.zig");
 pub const release = @import("release/root.zig");
 pub const trust = @import("trust.zig");
+pub const cancellation = @import("cancellation");
 
 test {
     _ = profiling;
@@ -15,6 +16,7 @@ test {
     _ = performance;
     _ = release;
     _ = trust;
+    _ = cancellation;
     _ = @import("evidence_tests.zig");
     _ = @import("trust_tests.zig");
 }
