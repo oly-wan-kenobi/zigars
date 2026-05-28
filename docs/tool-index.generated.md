@@ -48,7 +48,7 @@ Keywords: `docs`, `stdlib`, `builtin`, `langref`, `language reference`, `autodoc
 
 Tools: `zig_import_graph`, `zig_import_graph_json`, `zig_import_cycles`, `zig_ast_imports`, `zig_decl_summary`, `zig_decl_summary_json`, `zig_ast_decl_summary`, `zig_allocations`, `zig_error_sets`, `zig_public_api`, `zig_dead_decl_candidates`, `zig_build_graph`, `zig_build_targets`, `zig_build_options`, `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`, `zig_ast_tests`, `zig_test_name_resolve`, `zig_test_fixture_inventory`, `zig_safety_site_catalog`, `zig_test_for_symbol`, `zig_module_surface`, `zig_symbol_dossier`, `zig_change_risk_audit`, `zig_insertion_sites`, `zig_io_migration_scan`, `zig_leak_triage`, `zig_comptime_diagnose`, `zig_memory_layout`, `zig_unsafe_operations_audit`, `zig_abi_layout_diff`, `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_target_matrix_plan`, `zig_test_failure_triage`, `zig_workspace_symbol_cache`, `zig_package_cache_doctor`, `zig_test_map`, `zig_test_select`, `zig_public_api_diff`, `zig_semantic_index_build`, `zig_semantic_index_status`, `zig_semantic_index_refresh`, `zig_semantic_query`, `zig_semantic_refs`, `zig_semantic_decl`, `zig_semantic_callers`, `zig_static_fusion`, `zig_code_index_export`, `zig_scip_export`, `zig_zlint`, `zig_zlint_sarif`, `zig_zlint_rules`, `zig_zlint_fix`, `zig_lint_compare`, `zig_lint_profile`, `zig_lint_gate`, `zig_lint_fix_plan`, `zig_lint_baseline`, `zig_lint_suppressions`, `zig_lint_trend`, `zig_impact_semantic`, `zig_test_select_semantic`
 
-Keywords: `heuristic`, `parser backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `import cycles`, `declarations`, `module surface`, `symbol dossier`, `insertion sites`, `risk audit`, `safety sites`, `fixture inventory`, `io migration`, `std.io`, `std.Io`, `leak triage`, `gpa leak`, `comptime diagnose`, `memory layout`, `abi layout`, `unsafe operations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test name resolve`, `test map`, `test select`, `test for symbol`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
+Keywords: `heuristic`, `parser backed`, `compiler backed`, `capability tier`, `confidence`, `evidence source`, `semantic index`, `semantic query`, `references`, `callers`, `code index`, `scip`, `imports`, `import cycles`, `declarations`, `module surface`, `symbol dossier`, `insertion sites`, `risk audit`, `safety sites`, `fixture inventory`, `io migration`, `std.io`, `std.Io`, `leak triage`, `gpa leak`, `comptime diagnose`, `memory layout`, `target layout`, `abi layout`, `unsafe operations`, `allocation`, `error set`, `public api`, `api diff`, `breaking change`, `build graph`, `build options`, `test discovery`, `test name resolve`, `test map`, `test select`, `test for symbol`, `changed files`, `dependency inspector`, `target matrix`, `test failure triage`, `symbol cache`, `package cache doctor`, `zlint`, `zlint fix`, `lint compare`, `lint gate`, `lint baseline`, `suppressions`, `trend`
 
 ### ci_artifacts
 
@@ -210,7 +210,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Compact Argument Hints
 
-- `zig_abi_layout_diff`: optional `path: string`, `limit: integer`
+- `zig_abi_layout_diff`: optional `path: string`, `limit: integer`, `measure: boolean`, `targets: string`, `allow_project_comptime: boolean`, `timeout_ms: integer`
 - `zig_afl_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_allocations`: required `file: string`
 - `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
@@ -331,7 +331,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_trend`: required `before: string`, `after: string`
 - `zig_lldb_backtrace`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_matrix_check`: optional `zig_paths: string`, `args: string`, `timeout_ms: integer`
-- `zig_memory_layout`: optional `path: string`, `limit: integer`
+- `zig_memory_layout`: optional `path: string`, `limit: integer`, `measure: boolean`, `targets: string`, `allow_project_comptime: boolean`, `timeout_ms: integer`
 - `zig_microzig_plan`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
 - `zig_module_surface`: optional `path: string`, `limit: integer`
 - `zig_move_decl`: required `source_file: string`, `target_file: string`, `name: string`; optional `apply: boolean`
@@ -506,7 +506,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Planning Support
 
-- `zig_abi_layout_diff`: `pure_analysis` read-only analysis
+- `zig_abi_layout_diff`: `dynamic_command` runtime-dependent backend plan
 - `zig_afl_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_allocations`: `pure_analysis` read-only analysis
 - `zig_analysis_graphs`: `workspace_artifact` explicit workspace artifact
@@ -636,7 +636,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_trend`: `pure_analysis` read-only analysis
 - `zig_lldb_backtrace`: `apply_gated_mutation` preview/apply mutation
 - `zig_matrix_check`: `dynamic_command` runtime-dependent backend plan
-- `zig_memory_layout`: `pure_analysis` read-only analysis
+- `zig_memory_layout`: `dynamic_command` runtime-dependent backend plan
 - `zig_microzig_plan`: `pure_analysis` read-only analysis
 - `zig_module_surface`: `pure_analysis` read-only analysis
 - `zig_move_decl`: `apply_gated_mutation` preview/apply mutation
@@ -825,7 +825,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 
 ## Static Analysis Capability Tiers
 
-- `zig_abi_layout_diff`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `abi_layout_probe_plan`; cross-check `future compiler-probe backend`
+- `zig_abi_layout_diff`: tier `compiler_backed`, confidence `medium`, class `advisory`, kind `abi_layout_target_comparison_with_optional_compiler_measurements`; cross-check `zig_memory_layout measure=true`
 - `zig_allocations`: tier `advisory_orientation`, confidence `low`, class `orientation_only`, kind `heuristic_keyword_scan`; cross-check `code review`
 - `zig_analysis_graphs`: tier `zwanzig_backed`, confidence `high`, class `advisory`, kind `optional_zwanzig_analysis_graph`; cross-check `configured zwanzig graph mode`
 - `zig_ast_decl_summary`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_declaration_scan`; cross-check `zig ast-check <file>`
@@ -862,7 +862,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lint_sarif`: tier `zwanzig_backed`, confidence `high`, class `release_gating_candidate`, kind `optional_zwanzig_lint_sarif`; cross-check `configured zwanzig --help`
 - `zig_lint_suppressions`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_suppression_filter`; cross-check `code review`
 - `zig_lint_trend`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `lint_trend_comparison`; cross-check `configured linters`
-- `zig_memory_layout`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `layout_sensitive_declaration_catalog`; cross-check `zig_abi_layout_diff`
+- `zig_memory_layout`: tier `compiler_backed`, confidence `medium`, class `advisory`, kind `layout_sensitive_declaration_catalog_with_optional_compiler_measurements`; cross-check `zig_abi_layout_diff measure=true`
 - `zig_module_surface`: tier `parser_backed`, confidence `high`, class `advisory`, kind `parser_backed_module_surface`; cross-check `zig ast-check`
 - `zig_package_cache_doctor`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `package_cache_hygiene_scan`; cross-check `git status`
 - `zig_public_api`: tier `advisory_orientation`, confidence `medium`, class `advisory`, kind `heuristic_public_decl_scan`; cross-check `zig_ast_decl_summary`
