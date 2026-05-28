@@ -1,3 +1,7 @@
+//! Diagnostic evidence workflows for compiler output, test failures, and crashes.
+//!
+//! Entry points return allocator-owned JSON summaries and route command
+//! execution through app ports.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
