@@ -447,6 +447,18 @@ pub const Server = struct {
         }
 
         if (std.mem.eql(u8, request.method, "initialize")) {
+            if (self.state != .uninitialized) {
+                self.logWithCorrelation(io, &request_correlation, "Server already initialized");
+                request_is_error = true;
+                const error_response = jsonrpc.createErrorResponse(
+                    request.id,
+                    jsonrpc.ErrorCode.INVALID_REQUEST,
+                    "Server already initialized",
+                    null,
+                );
+                try self.sendResponse(io, allocator, .{ .error_response = error_response });
+                return;
+            }
             try self.handleInitialize(io, allocator, request);
         } else if (std.mem.eql(u8, request.method, "shutdown")) {
             try self.handleShutdown(io, allocator, request);

@@ -430,6 +430,36 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "notifications/prompts/list_changed") != null);
 }
 
+test "Server rejects repeated initialize requests without leaving ready state" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server: Server = .init(allocator, .{
+        .name = "repeat-init-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"tester\",\"version\":\"1\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"intruder\",\"version\":\"2\"}}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}",
+    };
+    var transport: ScriptTransport = .{ .messages = messages[0..] };
+    defer transport.deinit(allocator);
+
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    const sent = try joinedSent(allocator, &transport);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"serverInfo\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"id\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "Server already initialized") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"id\":3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") != null);
+}
+
 test "Server dynamic resources cover fallback handler success and failure" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
