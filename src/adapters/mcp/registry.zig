@@ -71,7 +71,7 @@ fn mcpHandler(
             })));
             const started_ns = std.Io.Clock.now(.real, io).nanoseconds;
             if (try mcp_args.validateToolArgs(allocator, spec, args)) |validation_error| {
-                record_call(runtime, spec.name, elapsedMs(io, started_ns), validation_error.is_error);
+                record_call(runtime, spec.name, elapsedMs(io, started_ns), validation_error.is_error, server.active_correlation);
                 return validation_error;
             }
             var protocol_adapter = mcp_server.ProtocolClientAdapter.init(server, io);
@@ -80,11 +80,16 @@ fn mcpHandler(
                 runtime.protocol_client = protocol_adapter.port();
                 defer runtime.protocol_client = previous_protocol_client;
             }
+            if (comptime runtimeHasActiveCancellation(RuntimePtr)) {
+                const previous_cancellation = runtime.active_cancellation;
+                runtime.active_cancellation = server.currentCancellationToken();
+                defer runtime.active_cancellation = previous_cancellation;
+            }
             const result = handler(runtime, allocator, args) catch |err| {
-                record_call(runtime, spec.name, elapsedMs(io, started_ns), true);
+                record_call(runtime, spec.name, elapsedMs(io, started_ns), true, server.active_correlation);
                 return err;
             };
-            record_call(runtime, spec.name, elapsedMs(io, started_ns), result.is_error);
+            record_call(runtime, spec.name, elapsedMs(io, started_ns), result.is_error, server.active_correlation);
             return result;
         }
     }.call;
@@ -95,6 +100,13 @@ fn runtimeHasProtocolClient(comptime RuntimePtr: type) bool {
     const info = @typeInfo(RuntimePtr);
     if (info != .pointer) return false;
     return @hasField(info.pointer.child, "protocol_client");
+}
+
+/// Returns true when the registered runtime accepts a per-call cancellation token.
+fn runtimeHasActiveCancellation(comptime RuntimePtr: type) bool {
+    const info = @typeInfo(RuntimePtr);
+    if (info != .pointer) return false;
+    return @hasField(info.pointer.child, "active_cancellation");
 }
 
 /// Returns non-negative elapsed wall time in milliseconds.
@@ -116,7 +128,7 @@ test "mcp handler records thrown handler failures" {
         }
 
         /// Records whether a test handler invocation failed.
-        fn record(runtime: *Runtime, _: []const u8, _: u64, is_error: bool) void {
+        fn record(runtime: *Runtime, _: []const u8, _: u64, is_error: bool, _: anytype) void {
             runtime.calls += 1;
             runtime.last_error = is_error;
         }
