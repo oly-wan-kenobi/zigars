@@ -203,6 +203,104 @@ test "references use case includes declaration context in ZLS payload" {
     try fake.verify();
 }
 
+test "rename use case sends newName in ZLS payload" {
+    const allocator = std.testing.allocator;
+    var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer fake.deinit();
+
+    try fake.expectCapability(.{ .capability = "renameProvider" }, .{
+        .capability = "renameProvider",
+        .supported = true,
+    });
+    try fake.expectSync(.{ .file = "src/main.zig", .content = "const old_name = 1;\n", .provenance = code_intel.provenance }, .{
+        .uri = "file:///repo/src/main.zig",
+    });
+    try fake.expectRequest(.{
+        .method = "textDocument/rename",
+        .uri = "file:///repo/src/main.zig",
+        .payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"position\":{\"line\":0,\"character\":6},\"newName\":\"new_name\"}",
+    }, .{
+        .method = "textDocument/rename",
+        .payload = "{\"result\":{\"changes\":{}}}",
+    });
+
+    var outcome = try code_intel.rename(allocator, testContext(&fake), .{
+        .file = "src/main.zig",
+        .content = "const old_name = 1;\n",
+        .line = 0,
+        .character = 6,
+        .new_name = "new_name",
+    });
+    defer outcome.deinit(allocator);
+    try std.testing.expect(std.mem.indexOf(u8, outcome.ok.payload, "\"changes\"") != null);
+    try fake.verify();
+}
+
+test "code actions use case sends range context and selection preview" {
+    const allocator = std.testing.allocator;
+    var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer fake.deinit();
+
+    const expected_payload = "{\"textDocument\":{\"uri\":\"file:///repo/src/main.zig\"},\"range\":{\"start\":{\"line\":1,\"character\":2},\"end\":{\"line\":3,\"character\":4}},\"context\":{\"diagnostics\":[]}}";
+    try fake.expectCapability(.{ .capability = "codeActionProvider" }, .{
+        .capability = "codeActionProvider",
+        .supported = true,
+    });
+    try fake.expectSync(.{ .file = "src/main.zig", .provenance = code_intel.provenance }, .{
+        .uri = "file:///repo/src/main.zig",
+    });
+    try fake.expectRequest(.{
+        .method = "textDocument/codeAction",
+        .uri = "file:///repo/src/main.zig",
+        .payload = expected_payload,
+    }, .{
+        .method = "textDocument/codeAction",
+        .payload = "{\"result\":[{\"title\":\"first\"},{\"title\":\"second\",\"edit\":{\"changes\":{}}}]}",
+    });
+
+    var actions = try code_intel.range(allocator, testContext(&fake), .{
+        .method = "textDocument/codeAction",
+        .file = "src/main.zig",
+        .start_line = 1,
+        .start_character = 2,
+        .end_line = 3,
+        .end_character = 4,
+    });
+    defer actions.deinit(allocator);
+    try std.testing.expect(std.mem.indexOf(u8, actions.ok.payload, "\"second\"") != null);
+    try fake.verify();
+
+    var selector_fake = fake_zls_mod.FakeZlsGateway.init(allocator);
+    defer selector_fake.deinit();
+    try selector_fake.expectCapability(.{ .capability = "codeActionProvider" }, .{
+        .capability = "codeActionProvider",
+        .supported = true,
+    });
+    try selector_fake.expectSync(.{ .file = "src/main.zig", .provenance = code_intel.provenance }, .{
+        .uri = "file:///repo/src/main.zig",
+    });
+    try selector_fake.expectRequest(.{
+        .method = "textDocument/codeAction",
+        .uri = "file:///repo/src/main.zig",
+        .payload = expected_payload,
+    }, .{
+        .method = "textDocument/codeAction",
+        .payload = "{\"result\":[{\"title\":\"first\"},{\"title\":\"second\",\"edit\":{\"changes\":{}}}]}",
+    });
+    var selected = try code_intel.codeActionSelection(allocator, testContext(&selector_fake), .{
+        .file = "src/main.zig",
+        .start_line = 1,
+        .start_character = 2,
+        .end_line = 3,
+        .end_character = 4,
+        .action_index = 1,
+    });
+    defer selected.deinit(allocator);
+    try std.testing.expect(std.mem.indexOf(u8, selected.ok.payload, "\"title\":\"second\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, selected.ok.payload, "\"title\":\"first\"") == null);
+    try selector_fake.verify();
+}
+
 test "file-only and workspace symbol use cases send expected ZLS payloads" {
     const allocator = std.testing.allocator;
     var fake = fake_zls_mod.FakeZlsGateway.init(allocator);
