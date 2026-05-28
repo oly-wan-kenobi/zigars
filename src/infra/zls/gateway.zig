@@ -12,6 +12,7 @@ pub const Gateway = struct {
     slots: zls_session.Slots,
     config: zls_session.Config,
     request_counter: ?*usize = null,
+    cancellation_token: ?ports.CancellationToken = null,
 
     const Self = @This();
 
@@ -23,6 +24,7 @@ pub const Gateway = struct {
         slots: zls_session.Slots = .{},
         config: zls_session.Config,
         request_counter: ?*usize = null,
+        cancellation_token: ?ports.CancellationToken = null,
     };
 
     /// Stores borrowed workspace/session pointers and request counter.
@@ -34,6 +36,7 @@ pub const Gateway = struct {
             .slots = options.slots,
             .config = options.config,
             .request_counter = options.request_counter,
+            .cancellation_token = options.cancellation_token,
         };
     }
 
@@ -84,6 +87,7 @@ pub const Gateway = struct {
     /// Applies a text synchronization request through the fake ZLS gateway.
     fn sync(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        if (self.isCancelled()) return error.Cancelled;
         zls_session.ensureReady(self.state, self.slots, self.config) catch |err| return mapZlsError(err);
         const client = self.state.client orelse return error.Unavailable;
         const doc_state = self.state.documents orelse return error.Unavailable;
@@ -103,17 +107,26 @@ pub const Gateway = struct {
     /// Sends a raw request through the fake ZLS gateway.
     fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
+        if (self.isCancelled()) return error.Cancelled;
         const client = self.state.client orelse return error.Unavailable;
         const params_bytes = if (request_value.payload.len == 0) "{}" else request_value.payload;
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, params_bytes, .{}) catch return error.InvalidRequest;
         defer parsed.deinit();
         if (self.request_counter) |counter| counter.* += 1;
-        const response = client.sendRequest(allocator, request_value.method, parsed.value) catch |err| return mapZlsError(err);
+        const response = if (self.cancellation_token) |token|
+            client.sendRequestCancellable(allocator, request_value.method, parsed.value, token) catch |err| return mapZlsError(err)
+        else
+            client.sendRequest(allocator, request_value.method, parsed.value) catch |err| return mapZlsError(err);
         return .{
             .method = request_value.method,
             .payload = response,
             .owns_payload = true,
         };
+    }
+
+    /// Returns whether the active request has been cancelled.
+    fn isCancelled(self: *Self) bool {
+        return if (self.cancellation_token) |token| token.isCancelled() else false;
     }
 };
 
@@ -143,6 +156,7 @@ fn mapZlsError(err: anyerror) ports.PortError {
         error.NoResponse => error.NoResponse,
         error.EndOfStream => error.EndOfStream,
         error.BrokenPipe => error.BrokenPipe,
+        error.Cancelled => error.Cancelled,
         else => error.Unavailable,
     };
 }
