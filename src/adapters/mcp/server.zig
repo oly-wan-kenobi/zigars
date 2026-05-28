@@ -130,6 +130,10 @@ pub const Server = struct {
         pub fn rememberCompletedRequest(server: *Self, request_id: correlation.RequestId, method: []const u8) void {
             server.rememberCompletedRequest(request_id, method);
         }
+
+        pub fn requestCanObserveCancellation(method: []const u8) bool {
+            return isCancellableMethod(method);
+        }
     };
 
     /// Outbound request bookkeeping for responses from the peer.
@@ -1508,12 +1512,15 @@ pub const Server = struct {
     }
 };
 
-/// Returns true for request methods where zigars can cooperatively observe cancellation.
+/// Returns whether a foreground request method can cooperatively observe cancellation.
 fn isCancellableMethod(method: []const u8) bool {
-    return std.mem.eql(u8, method, "tools/call") or
-        std.mem.eql(u8, method, "completion/complete") or
-        std.mem.eql(u8, method, "resources/read") or
-        std.mem.eql(u8, method, "prompts/get");
+    _ = method;
+    // The current stdio and HTTP transports dispatch inbound messages serially.
+    // A notifications/cancelled message for an active request cannot be handled
+    // until that request returns, so no normal request should receive a live
+    // cooperative cancellation token. Runtime jobs remain cancellable through
+    // tasks/cancel because those jobs run outside the foreground request.
+    return false;
 }
 
 /// Extracts the target request id from an MCP cancellation notification.

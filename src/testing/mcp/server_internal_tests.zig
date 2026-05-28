@@ -146,3 +146,40 @@ test "server cancellation notifications mark active and completed requests" {
     try std.testing.expectEqual(@as(u64, 1), state.cancellation_completed);
     try std.testing.expectEqualStrings("completed_late", state.cancellation_events[1].status);
 }
+
+test "server request cancellation metadata matches sequential transports" {
+    try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("tools/call"));
+    try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("completion/complete"));
+    try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("resources/read"));
+    try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("prompts/get"));
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var server = Server.init(std.testing.allocator, .{ .name = "cancel", .version = "1" });
+    defer server.deinit();
+    var state = observability_mod.State{};
+    server.setObservability(&state);
+
+    var request_state = cancellation.State{};
+    server.active_request = .{
+        .request_id = correlation.RequestId.from(.{ .integer = 9 }),
+        .method = "tools/call",
+        .cancellable = Server.TestAccess.requestCanObserveCancellation("tools/call"),
+        .state = &request_state,
+    };
+
+    var params: std.json.ObjectMap = .empty;
+    try params.put(allocator, "requestId", .{ .integer = 9 });
+    var notification_correlation = Server.TestAccess.nextCorrelation(&server, correlation.RequestId.absent(), "notifications/cancelled", null);
+    Server.TestAccess.handleCancellationNotification(&server, std.testing.io, .{
+        .method = "notifications/cancelled",
+        .params = .{ .object = params },
+    }, &notification_correlation);
+
+    try std.testing.expect(!request_state.token().isCancelled());
+    try std.testing.expectEqual(@as(u64, 1), state.cancellation_requested);
+    try std.testing.expectEqual(@as(u64, 1), state.cancellation_uncancellable);
+    try std.testing.expectEqualStrings("not_cancellable", state.cancellation_events[0].status);
+}
