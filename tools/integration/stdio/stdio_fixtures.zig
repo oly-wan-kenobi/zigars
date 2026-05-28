@@ -220,8 +220,10 @@ const StdioClient = struct {
             const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, init, .{});
             defer parsed.deinit();
             try smoke.expectStringEq(self.io, valueAt(parsed.value, "serverInfo.name").?.string, "zigars", "stdio initialize serverInfo.name");
+            try smoke.expectStringEq(self.io, valueAt(parsed.value, "zigars.trust_manifest.uri").?.string, "zigars://trust/manifest", "stdio initialize trust manifest URI");
         }
         try self.notify("notifications/initialized", null);
+        try self.notify("notifications/cancelled", "{\"requestId\":999999,\"reason\":\"stdio smoke unknown request\"}");
 
         const tools = try self.request("tools/list", null);
         defer self.allocator.free(tools);
@@ -275,8 +277,13 @@ const StdioClient = struct {
 
         const resources = try self.request("resources/list", null);
         defer self.allocator.free(resources);
+        if (std.mem.indexOf(u8, resources, "zigars://trust/manifest") == null) return error.AssertionFailed;
         if (std.mem.indexOf(u8, resources, "zigars://workspace") == null) return error.AssertionFailed;
         if (std.mem.indexOf(u8, resources, "zigars://tools/schema") == null) return error.AssertionFailed;
+
+        const trust_manifest = try self.request("resources/read", "{\"uri\":\"zigars://trust/manifest\"}");
+        defer self.allocator.free(trust_manifest);
+        if (std.mem.indexOf(u8, trust_manifest, "zigars_trust_manifest") == null) return error.AssertionFailed;
 
         const resource_read = try self.request("resources/read", "{\"uri\":\"zigars://workspace\"}");
         defer self.allocator.free(resource_read);
