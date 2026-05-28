@@ -4,6 +4,7 @@ const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
+const layout_probes = @import("layout_probes.zig");
 const workspace_scans = @import("workspace_scans.zig");
 
 /// Default scan limit for Phase 4 parser-backed analyzers.
@@ -14,6 +15,10 @@ const max_source_read = workspace_scans.default_source_read_limit;
 pub const SourceScanRequest = struct {
     path: ?[]const u8 = null,
     limit: usize = default_limit,
+    measure: bool = false,
+    targets: ?[]const u8 = null,
+    allow_project_comptime: bool = false,
+    timeout_ms: ?u64 = null,
 };
 
 /// Text or file-backed log analysis request.
@@ -178,12 +183,25 @@ pub fn memoryLayoutValue(allocator: std.mem.Allocator, context: app_context.Stat
     try obj.put(allocator, "candidates", .{ .array = candidates });
     try obj.put(allocator, "candidate_count", .{ .integer = @intCast(candidates.items.len) });
     try obj.put(allocator, "probe_status", .{ .string = "not_executed" });
+    try obj.put(allocator, "measurement_mode", .{ .string = if (request.measure) "requested" else "parser_only" });
     try obj.put(allocator, "evidence_basis", .{ .string = "comment/string-masked source scan for struct, union, enum, opaque, packed, and extern layout declarations" });
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, &.{
         "Layout candidates are source declarations; actual size, alignment, and offsets require compiler probes for a concrete target.",
         "Nested anonymous container declarations may need manual review.",
     }));
     try obj.put(allocator, "skipped_file_count", .{ .integer = @intCast(sources.skipped_files) });
+    if (request.measure) {
+        const declarations = try collectLayoutProbeDeclarations(allocator, sources, request.limit, false);
+        defer declarations.deinit(allocator);
+        const evidence = try layout_probes.compilerEvidenceValue(allocator, context, declarations.declarations, .{
+            .tool_name = "zig_memory_layout",
+            .targets = request.targets,
+            .timeout_ms = request.timeout_ms orelse normalizedTimeout(context.timeouts.command_ms),
+            .allow_project_comptime = request.allow_project_comptime,
+            .compare_targets = false,
+        });
+        try attachCompilerEvidence(allocator, &obj, evidence, false);
+    }
     return .{ .object = obj };
 }
 
@@ -230,13 +248,26 @@ pub fn abiLayoutDiffValue(allocator: std.mem.Allocator, context: app_context.Sta
     try obj.put(allocator, "kind", .{ .string = "zig_abi_layout_diff" });
     try obj.put(allocator, "analysis_mode", .{ .string = "probe_plan_only" });
     try obj.put(allocator, "backend_status", .{ .string = "compiler_probe_not_executed" });
+    try obj.put(allocator, "measurement_mode", .{ .string = if (request.measure) "requested" else "parser_only" });
     try obj.put(allocator, "probes", .{ .array = probes });
     try obj.put(allocator, "probe_count", .{ .integer = @intCast(probes.items.len) });
-    try obj.put(allocator, "cache_layout", .{ .string = ".zigars-cache/abi-layout/<session-or-artifact-id> when compiler probing is enabled in a later phase" });
+    try obj.put(allocator, "cache_layout", .{ .string = ".zigars-cache/abi-layout/<probe-id>.zig plus .zigars-cache/abi-layout/cache when compiler probing is enabled" });
     try obj.put(allocator, "limitations", try stringArrayValue(allocator, &.{
-        "This Phase 4 implementation does not execute compiler probes.",
-        "Actual ABI differences require a concrete target pair and generated @sizeOf/@alignOf/@offsetOf code.",
+        "Parser-only mode does not execute compiler probes.",
+        "Actual ABI differences require concrete target pairs and generated @sizeOf/@alignOf/@offsetOf/@bitOffsetOf code.",
     }));
+    if (request.measure) {
+        const declarations = try collectLayoutProbeDeclarations(allocator, sources, request.limit, true);
+        defer declarations.deinit(allocator);
+        const evidence = try layout_probes.compilerEvidenceValue(allocator, context, declarations.declarations, .{
+            .tool_name = "zig_abi_layout_diff",
+            .targets = request.targets,
+            .timeout_ms = request.timeout_ms orelse normalizedTimeout(context.timeouts.command_ms),
+            .allow_project_comptime = request.allow_project_comptime,
+            .compare_targets = true,
+        });
+        try attachCompilerEvidence(allocator, &obj, evidence, true);
+    }
     return .{ .object = obj };
 }
 
@@ -467,11 +498,46 @@ fn appendAbiProbePlans(allocator: std.mem.Allocator, probes: *std.json.Array, so
         try item.put(allocator, "file", try ownedString(allocator, source.file));
         try item.put(allocator, "line", .{ .integer = @intCast(line_no) });
         try item.put(allocator, "kind", .{ .string = kind });
-        try item.put(allocator, "planned_measurements", try stringArrayValue(allocator, &.{ "@sizeOf", "@alignOf", "@offsetOf for named fields" }));
-        try item.put(allocator, "argv_shape", try stringArrayValue(allocator, &.{ "zig", "build-exe", "<generated-probe.zig>", "-target", "<target>" }));
+        try item.put(allocator, "planned_measurements", try stringArrayValue(allocator, &.{ "@sizeOf", "@alignOf", "@offsetOf for named fields", "@bitOffsetOf for packed/bit-sensitive fields" }));
+        try item.put(allocator, "argv_shape", try stringArrayValue(allocator, &.{ "zig", "build-obj", ".zigars-cache/abi-layout/<probe>.zig", "-target", "<target>", "-fno-emit-bin", "--cache-dir", ".zigars-cache/abi-layout/cache" }));
         try item.put(allocator, "text", try ownedString(allocator, std.mem.trim(u8, line, " \t")));
         try probes.append(.{ .object = item });
     }
+}
+
+fn collectLayoutProbeDeclarations(allocator: std.mem.Allocator, sources: SourceSet, limit: usize, abi_only: bool) !layout_probes.DeclarationSet {
+    var declarations: std.ArrayList(layout_probes.LayoutDeclaration) = .empty;
+    errdefer {
+        for (declarations.items) |declaration| declaration.deinit(allocator);
+        declarations.deinit(allocator);
+    }
+    for (sources.sources) |source| {
+        try layout_probes.appendDeclarations(allocator, &declarations, source.file, source.bytes, limit, abi_only);
+        if (declarations.items.len >= limit) break;
+    }
+    return .{ .declarations = try declarations.toOwnedSlice(allocator) };
+}
+
+fn attachCompilerEvidence(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, evidence: std.json.Value, abi_diff: bool) !void {
+    if (evidence == .object) {
+        if (evidence.object.get("backend_status")) |status| if (status == .string) {
+            try obj.put(allocator, if (abi_diff) "backend_status" else "probe_status", .{ .string = status.string });
+        };
+        if (evidence.object.get("measurement_mode")) |mode| if (mode == .string) {
+            try obj.put(allocator, "measurement_mode", .{ .string = mode.string });
+        };
+        if (evidence.object.get("measurement_count")) |count| try obj.put(allocator, "measurement_count", count);
+        if (evidence.object.get("unsupported_count")) |count| try obj.put(allocator, "unsupported_count", count);
+        if (abi_diff) {
+            if (evidence.object.get("layout_differences")) |differences| try obj.put(allocator, "layout_differences", differences);
+            if (evidence.object.get("unchanged_layouts")) |unchanged| try obj.put(allocator, "unchanged_layouts", unchanged);
+        }
+    }
+    try obj.put(allocator, "compiler_evidence", evidence);
+}
+
+fn normalizedTimeout(timeout_ms: i64) u64 {
+    return @intCast(@max(1, @min(timeout_ms, 60 * 60 * 1000)));
 }
 
 fn sanitizeCodeLine(allocator: std.mem.Allocator, line: []const u8) ![]u8 {
