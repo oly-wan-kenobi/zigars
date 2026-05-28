@@ -6,7 +6,8 @@ const version = zigars.manifest.version.string;
 
 /// Program entry point that delegates to the configured bootstrap runner.
 pub fn main(init: std.process.Init) !void {
-    try bootstrap_runtime.run(init);
+    const exit_code = try bootstrap_runtime.run(init);
+    if (exit_code != .success) std.process.exit(@intFromEnum(exit_code));
 }
 
 test {
