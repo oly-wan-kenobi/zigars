@@ -19,7 +19,7 @@ test "doctor report includes checks" {
         .zls_last_failure = null,
         .timeout_ms = 30_000,
         .zls_timeout_ms = 30_000,
-        .mcp_dependency = "mcp.zig 0.0.4",
+        .mcp_dependency = "mcp.zig 0.0.5",
         .tools_list_schema_rich = true,
         .http_available = false,
         .zig_probe = .{ .ok = true, .status = "ok", .resolution = "backend command completed" },
@@ -59,7 +59,7 @@ test "doctor report uses default ZLS resolution when disconnected without failur
         .zls_last_failure = null,
         .timeout_ms = 30_000,
         .zls_timeout_ms = 30_000,
-        .mcp_dependency = "mcp.zig 0.0.4",
+        .mcp_dependency = "mcp.zig 0.0.5",
         .http_available = true,
     });
     const checks = value.object.get("checks").?.array;

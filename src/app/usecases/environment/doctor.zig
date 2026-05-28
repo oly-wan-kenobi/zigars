@@ -47,7 +47,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
         "realpath",
         "workspace root, existing input paths, existing output files, and output parents are canonicalized; symlink escapes are rejected",
     ));
-    try checks.append(try checkValue(allocator, "mcp_dependency", std.mem.indexOf(u8, input.mcp_dependency, "0.0.4") != null, input.mcp_dependency, "use mcp.zig 0.0.4 or newer"));
+    try checks.append(try checkValue(allocator, "mcp_dependency", std.mem.indexOf(u8, input.mcp_dependency, "0.0.5") != null, input.mcp_dependency, "use mcp.zig 0.0.5 or newer"));
     try checks.append(try checkValue(
         allocator,
         "mcp_tools_list_schema",

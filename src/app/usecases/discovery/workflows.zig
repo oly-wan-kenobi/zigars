@@ -68,7 +68,7 @@ pub fn doctorValue(allocator: std.mem.Allocator, context: app_context.Context, p
     try checks.append(try checkValue(allocator, "workspace", true, "configured", context.workspace.root));
     try checks.append(try checkValue(allocator, "cache", true, "configured", context.workspace.cache_root));
     try checks.append(try checkValue(allocator, "workspace_boundary", true, "realpath", "workspace root, existing input paths, existing output files, and output parents are canonicalized; symlink escapes are rejected"));
-    try checks.append(try checkValue(allocator, "mcp_dependency", true, "mcp.zig 0.0.4+57b3f9b", "use mcp.zig 0.0.4 or newer"));
+    try checks.append(try checkValue(allocator, "mcp_dependency", true, "mcp.zig 0.0.5", "use mcp.zig 0.0.5 or newer"));
     try checks.append(try checkValue(allocator, "mcp_tools_list_schema", true, "rich", "tools/list publishes registered inputSchema properties and required fields"));
     try checks.append(try checkValue(allocator, "http_transport", true, "available", "HTTP is available; stdio remains the safest default for Codex sessions"));
     try checks.append(try checkValue(allocator, "zls_session", std.mem.eql(u8, context.zls_state.status, "connected"), context.zls_state.status, if (std.mem.eql(u8, context.zls_state.status, "connected")) "ZLS-backed tools are available" else context.zls_state.last_failure orelse "ZLS-backed tools require a working zls binary"));
@@ -159,7 +159,7 @@ pub fn httpStatusValue(allocator: std.mem.Allocator, context: app_context.Contex
     try obj.put(allocator, "host", .{ .string = context.workspace.host });
     try obj.put(allocator, "port", .{ .integer = context.workspace.port });
     try obj.put(allocator, "http_available", .{ .bool = true });
-    try obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.4+57b3f9b; zigars only supports loopback HTTP by default and stdio remains the safest default for Codex" });
+    try obj.put(allocator, "reason", .{ .string = "HTTP transport and rich tools/list schemas are enabled through mcp.zig 0.0.5; zigars only supports loopback HTTP by default and stdio remains the safest default for Codex" });
     obj_owned = false;
     return .{ .object = obj };
 }
