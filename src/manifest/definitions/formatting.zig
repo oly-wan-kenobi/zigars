@@ -7,7 +7,7 @@ const fieldHint = types.fieldHint;
 
 /// Format a Zig file.
 pub const zig_format = tool(.{
-    .description = "Format a Zig file. Returns preview by default; writes only with apply=true.",
+    .description = "Format a Zig file or supplied buffer. Returns preview by default; writes the source file only with apply=true.",
     .input_schema = schema(&.{ .{ "file", "string", true }, .{ "apply", "boolean", false }, .{ "content", "string", false } }),
     .read_only = false,
     .group = .formatting_and_edits,
@@ -32,14 +32,14 @@ pub const zig_patch_preview = tool(.{
     .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
-/// Request a ZLS workspace edit for a symbol rename.
+/// Preview a ZLS workspace edit for a symbol rename.
 pub const zig_rename = tool(.{
-    .description = "Request a ZLS workspace edit for a symbol rename. Returns preview by default; writes only with apply=true.",
-    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true }, .{ "new_name", "string", true }, .{ "apply", "boolean", false } }),
-    .read_only = false,
+    .description = "Preview the ZLS workspace edit for a symbol rename. Does not write source files.",
+    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "line", "integer", true }, .{ "character", "integer", true }, .{ "new_name", "string", true } }),
+    .read_only = true,
     .group = .formatting_and_edits,
-    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
+    .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
+    .plan = .{ .zls_request = .{ .method = "textDocument/rename", .requires_document_sync = true, .required_capability = "renameProvider" } },
 });
 /// Get ZLS code actions for a range.
 pub const zig_code_actions = tool(.{
@@ -50,12 +50,12 @@ pub const zig_code_actions = tool(.{
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
     .plan = .{ .zls_request = .{ .method = "textDocument/codeAction", .requires_document_sync = true, .required_capability = "codeActionProvider" } },
 });
-/// Preview or apply one ZLS code action by index.
+/// Preview one ZLS code action by index.
 pub const zig_code_action_apply = tool(.{
-    .description = "Preview or apply one ZLS code action by index. Writes only with apply=true.",
-    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true }, .{ "action_index", "integer", true }, .{ "apply", "boolean", false } }),
-    .read_only = false,
+    .description = "Preview one ZLS code action by index. Does not write source files.",
+    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "start_line", "integer", true }, .{ "start_char", "integer", true }, .{ "end_line", "integer", true }, .{ "end_char", "integer", true }, .{ "action_index", "integer", true } }),
+    .read_only = true,
     .group = .formatting_and_edits,
-    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
-    .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
+    .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
+    .plan = .{ .zls_request = .{ .method = "textDocument/codeAction", .requires_document_sync = true, .required_capability = "codeActionProvider" } },
 });
