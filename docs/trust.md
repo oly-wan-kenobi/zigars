@@ -38,14 +38,46 @@ enforce them, and the product boundaries that should stay visible.
    public tag. This prevents maturity docs from claiming readiness without the
    exact source commit, local gate results, and real-backend validation status.
 
+## Connection-Time Trust Manifest
+
+The MCP `initialize` result includes `zigars.trust_manifest.uri`, currently
+`zigars://trust/manifest`. Clients can also discover the same URI through
+`resources/list` and read it with `resources/read`.
+
+The manifest is JSON with a text fallback through normal MCP resource
+serialization. It reports the schema version, workspace root, cache root, path
+policy, `apply=true` source-write policy, subprocess classes, output/body
+limits, local-only HTTP posture, configured backend identities, audit-log status
+when projected into the runtime, release checksum posture, and known
+limitations. Backend availability is only evidence-backed after a doctor probe;
+otherwise the manifest points clients to `zigars_doctor`.
+
+Audit logging is disabled unless `--audit-log <workspace-path>` is configured.
+When enabled, the default mode records metadata only. Redacted mode masks
+secret-like JSON fields, and full mode records raw MCP payloads only after an
+explicit `--audit-log-mode full` startup flag and stderr privacy warning.
+
+The manifest does not claim OS sandboxing, byte-identical build determinism, or
+verified npm attestations. The npm shim currently verifies release archive
+SHA-256 checksums against `zigars-checksums.txt`; npm attestation verification is
+not implemented in this phase.
+
 ## Trust Tools
 
 `zigars_trust_report` is the machine-readable trust summary for the current
 server process. It reports the configured workspace/cache roots, path policy,
-backend identities, dependency hash references from `build.zig.zon`, manifest
-risk audit, and optional clean-tree evidence. By default it does not run git;
-pass `include_clean_tree=true` to include the same clean-tree gate used by
+source-write policy, the connection-time trust manifest, backend identities,
+dependency hash references from `build.zig.zon`, manifest risk audit, and
+optional clean-tree evidence. By default it does not run git; pass
+`include_clean_tree=true` to include the same clean-tree gate used by
 `zigars_clean_tree_gate`.
+
+`zigars_doctor {"probe_backends":true}` adds a Zig version preflight when
+`build.zig.zon` declares `minimum_zig_version`. It reports `compatible`,
+`incompatible`, `unavailable`, or `unprobed` and includes resolution text for
+mismatches. At startup, zigars emits a stderr warning with the same resolution
+when that declared minimum exists and the configured `--zig-path` cannot be
+confirmed compatible. The server does not fail fast for this policy.
 
 `zigars_command_provenance` reports how registered tools are planned: exact Zig
 argv, dynamic command, ZLS request, apply-gated mutation, workspace artifact,
