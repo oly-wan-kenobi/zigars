@@ -338,7 +338,7 @@ pub fn handlerFor(id: manifest.ToolId) HandlerRef {
         .zigars_capability_match => .{ .module = .validation_workflows, .name = "zigarsCapabilityMatch" },
         .zigars_tool_sequence_plan => .{ .module = .validation_workflows, .name = "zigarsToolSequencePlan" },
         .zig_document_open => .{ .module = .edit_zls, .name = "zigDocumentOpen" },
-        .zig_document_change => .{ .module = .edit_zls, .name = "zigDocumentOpen" },
+        .zig_document_change => .{ .module = .edit_zls, .name = "zigDocumentChange" },
         .zig_document_close => .{ .module = .edit_zls, .name = "zigDocumentClose" },
         .zig_document_status => .{ .module = .edit_zls, .name = "zigDocumentStatus" },
         .zig_diagnostics => .{ .module = .edit_zls_diagnostics, .name = "zigDiagnostics" },

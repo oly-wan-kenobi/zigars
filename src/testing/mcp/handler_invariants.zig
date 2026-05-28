@@ -30,3 +30,7 @@ test "each declared handler module owns at least one public tool" {
         try std.testing.expect(found);
     }
 }
+
+test "document change resolves to the change handler" {
+    try std.testing.expectEqualStrings("zigDocumentChange", handler_refs.handlerFor(.zig_document_change).name);
+}

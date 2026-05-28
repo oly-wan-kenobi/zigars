@@ -46,7 +46,12 @@ pub fn zigPatchPreview(allocator: std.mem.Allocator, context: app_context.Contex
 
 /// Opens/syncs a document snapshot for downstream ZLS requests.
 pub fn zigDocumentOpen(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return documentSync(allocator, context, args, "zig_document_open");
+    return documentSync(allocator, context, args, "zig_document_open", "textDocument/didOpen");
+}
+
+/// Replaces/syncs a document snapshot for downstream ZLS requests.
+pub fn zigDocumentChange(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    return documentSync(allocator, context, args, "zig_document_change", "textDocument/didChange");
 }
 
 /// Reports document closure as an idempotent no-op for stateless gateway clients.
@@ -190,14 +195,14 @@ pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_contex
 }
 
 /// Validates document sync arguments and forwards them to the ZLS workflow.
-fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, tool_name, "content", "string");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
-    const value = zls_workflows.documentSyncValue(scratch, zls_ctx, tool_name, file, content) catch |err| return zlsPortError(allocator, context, tool_name, "textDocument/didOpen", file, err);
+    const value = zls_workflows.documentSyncValue(scratch, zls_ctx, tool_name, file, content) catch |err| return zlsPortError(allocator, context, tool_name, method, file, err);
     return mcp_result.structured(allocator, value);
 }
 
@@ -534,6 +539,17 @@ test "zls MCP adapter exercises document workspace and position wrappers" {
     const opened = try zigDocumentOpen(allocator, context, open_args.value);
     defer mcp_result.deinitToolResult(allocator, opened);
     try std.testing.expect(opened.structuredContent.?.object.get("open").?.bool);
+
+    try gateway.expectSync(.{
+        .file = "src/main.zig",
+        .content = "pub fn main() void { return; }",
+        .provenance = "zig_document_change",
+    }, .{ .uri = "file:///repo/src/main.zig", .basis = "content" });
+    const change_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"content\":\"pub fn main() void { return; }\"}", .{});
+    defer change_args.deinit();
+    const changed = try zigDocumentChange(allocator, context, change_args.value);
+    defer mcp_result.deinitToolResult(allocator, changed);
+    try std.testing.expect(changed.structuredContent.?.object.get("open").?.bool);
 
     try expectCapability(&gateway, "documentSymbolProvider", true);
     try gateway.expectSync(.{
