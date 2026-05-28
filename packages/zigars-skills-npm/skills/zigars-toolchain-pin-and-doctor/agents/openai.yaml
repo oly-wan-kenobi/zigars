@@ -1,0 +1,4 @@
+interface:
+  display_name: "zigars toolchain pin and doctor"
+  short_description: "Pin Zig, ZLS, and optional backends for reproducible builds on this machine."
+  default_prompt: "Use $zigars-toolchain-pin-and-doctor to bootstrap or repair the project profile, pin the toolchain, and confirm backend conformance."
