@@ -1769,7 +1769,9 @@ fn buildZigArgv(
 }
 
 /// Path-bearing `zig build`-system flags that would redirect compilation,
-/// caching, or emitted output outside the workspace sandbox.
+/// caching, emitted output, package/library resolution, or the build runner
+/// itself outside the workspace sandbox (the last enabling arbitrary code
+/// execution).
 ///
 /// There is no shell on this surface, so user tokens cannot inject commands —
 /// but they can inject *flags* to the fixed `zig` binary. These flags take a
@@ -1789,6 +1791,26 @@ const denied_build_flag_prefixes = [_][]const u8{
     "--prefix-lib-dir",
     "--prefix-exe-dir",
     "--prefix-include-dir",
+    // `-p` is the documented short alias of `--prefix` (`zig build -h`:
+    // "-p, --prefix [path]"), so it redirects install output just like
+    // `--prefix`. Zig only accepts its operand space-separated (`-p <path>`);
+    // the glued `-p<path>` and `-p=<path>` forms are rejected by the build
+    // runner as unrecognized, so the exact-token / `=` matching below is exactly
+    // the live surface.
+    "-p",
+    // `--build-runner [file]` overrides the build runner with an arbitrary Zig
+    // file, executing attacker-chosen code outside the workspace — strictly
+    // worse than the already-denied `--build-file`.
+    "--build-runner",
+    // System-integration flags that take a path operand (`zig build -h`,
+    // "System Integration Options"). Each points compilation, linking, libc, or
+    // package resolution at a directory or file outside the workspace, so they
+    // can both read host paths and pull in foreign build/link inputs.
+    "--search-prefix",
+    "--sysroot",
+    "--libc",
+    "--libc-runtimes",
+    "--system",
 };
 
 /// Returns true when `arg` is (or begins, for `--flag=value`/`-femit-*` forms) a
@@ -2813,6 +2835,12 @@ test "buildZigArgv guards extra args against workspace-escaping build flags" {
         &.{ "--zig-lib-dir", "/tmp/escape" },
         &.{"-femit-bin=/tmp/escape/out"},
         &.{"--prefix-lib-dir=/tmp/escape"},
+        // System-integration flags that take a path operand also escape.
+        &.{ "--search-prefix", "/tmp/escape" },
+        &.{ "--sysroot", "/tmp/escape" },
+        &.{"--libc=/tmp/escape/libc.txt"},
+        &.{ "--libc-runtimes", "/tmp/escape" },
+        &.{ "--system", "/tmp/escape/pkgs" },
     };
     for (denied) |extra| {
         try std.testing.expectError(
@@ -2849,6 +2877,47 @@ test "buildZigArgv guards extra args against workspace-escaping build flags" {
         try std.testing.expectEqualStrings("/repo/src/util.zig", argv.items[2]);
         try std.testing.expectEqualStrings("--", argv.items[3]);
         try std.testing.expectEqualStrings("-femit-bin=/tmp/escape", argv.items[4]);
+    }
+}
+
+test "buildZigArgv denies -p prefix alias and --build-runner override" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var runtime = AllocationRuntime{};
+    const context = runtime.context();
+
+    // Residual deny-list gap on the `zig build` family: `-p` is the documented
+    // short alias of `--prefix` (redirects install output), and `--build-runner`
+    // points the build at an arbitrary Zig file (arbitrary code execution
+    // outside the workspace, strictly worse than the already-denied
+    // `--build-file`). Both must fail closed in every operand form Zig accepts:
+    // `-p` only takes a space-separated operand, while `--build-runner` accepts
+    // both the space- and `=`-separated forms.
+    const denied = [_][]const []const u8{
+        &.{ "-p", "/tmp/escape" },
+        &.{ "--build-runner", "/tmp/x.zig" },
+        &.{"--build-runner=/tmp/x.zig"},
+    };
+    for (denied) |extra| {
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build", null, null, extra),
+        );
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build-test", null, null, extra),
+        );
+    }
+
+    // The benign short build option `-Doptimize=ReleaseSafe` still passes
+    // through untouched; the new `-p` entry must not over-match `-D*` tokens.
+    {
+        var argv = try buildZigArgv(allocator, context, "build", null, null, &.{"-Doptimize=ReleaseSafe"});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 3), argv.items.len);
+        try std.testing.expectEqualStrings("-Doptimize=ReleaseSafe", argv.items[2]);
     }
 }
 
