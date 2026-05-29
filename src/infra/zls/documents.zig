@@ -318,7 +318,7 @@ pub const DocumentState = struct {
     pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
         self.mutex.lock();
         const removed = self.open_docs.fetchRemove(file_uri);
-        if (removed) |kv| self.retained_content_bytes -= contentLen(kv.value);
+        if (removed) |kv| self.subtractRetainedBytesLocked(contentLen(kv.value));
         self.mutex.unlock();
 
         if (removed) |kv| {
@@ -439,7 +439,7 @@ pub const DocumentState = struct {
         defer self.mutex.unlock();
         if (self.open_docs.fetchRemove(file_uri)) |kv| {
             self.allocator.free(kv.key);
-            self.retained_content_bytes -= contentLen(kv.value);
+            self.subtractRetainedBytesLocked(contentLen(kv.value));
             if (kv.value.content) |content| self.allocator.free(content);
         }
     }
@@ -449,11 +449,23 @@ pub const DocumentState = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         if (self.open_docs.getPtr(file_uri)) |current| {
-            self.retained_content_bytes = self.retained_content_bytes - contentLen(current.*) + contentLen(info);
+            self.subtractRetainedBytesLocked(contentLen(current.*));
+            self.retained_content_bytes +|= contentLen(info);
             if (current.content) |content| {
                 if (info.content == null or content.ptr != info.content.?.ptr) self.allocator.free(content);
             }
             current.* = info;
+        }
+    }
+
+    /// Subtracts retained document bytes, clamping at zero while the mutex is held.
+    /// Mirrors `diagnostics_cache.subtractBytesLocked` so an accounting desync can
+    /// never wrap to ~usize.MAX and spuriously trip RetainedContentLimitExceeded.
+    fn subtractRetainedBytesLocked(self: *DocumentState, bytes: usize) void {
+        if (bytes <= self.retained_content_bytes) {
+            self.retained_content_bytes -= bytes;
+        } else {
+            self.retained_content_bytes = 0;
         }
     }
 
@@ -490,4 +502,36 @@ test "DocumentState removes reserved document entries" {
     ds.removeReserved("file:///tmp/main.zig");
 
     try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
+test "DocumentState retained-byte subtraction clamps at zero on accounting desync" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    // Simulate a desync: a tracked document holds more bytes than the retained
+    // counter believes. The pre-fix raw `-=` underflows (panic in safe builds /
+    // wrap to ~usize.MAX) and would spuriously trip RetainedContentLimitExceeded.
+    const uri = try alloc.dupe(u8, "file:///tmp/main.zig");
+    const content = try alloc.dupe(u8, "12345678"); // 8 bytes
+    try ds.open_docs.put(alloc, uri, .{ .version = 1, .content_hash = 1, .dirty = true, .content = content });
+    ds.retained_content_bytes = 3; // under-counted vs the 8-byte body
+
+    ds.removeReserved("file:///tmp/main.zig");
+
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
+    try std.testing.expectEqual(@as(u32, 0), ds.open_docs.count());
+}
+
+test "DocumentState subtractRetainedBytesLocked never underflows" {
+    const alloc = std.testing.allocator;
+    var ds = DocumentState.init(alloc, "/tmp");
+    defer ds.deinit();
+
+    ds.retained_content_bytes = 10;
+    ds.subtractRetainedBytesLocked(4);
+    try std.testing.expectEqual(@as(usize, 6), ds.retained_content_bytes);
+    // Over-subtraction clamps to zero rather than wrapping.
+    ds.subtractRetainedBytesLocked(100);
+    try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
