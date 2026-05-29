@@ -122,6 +122,7 @@ pub fn updateImportsValue(allocator: std.mem.Allocator, context: app_context.Edi
 
 /// Serializes move decl fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn moveDeclValue(allocator: std.mem.Allocator, context: app_context.EditingContext, source_file: []const u8, target_file: []const u8, name: []const u8, apply: bool) !std.json.Value {
+    if (std.mem.eql(u8, source_file, target_file)) return error.InvalidArguments;
     const source = try readSnapshot(allocator, context, source_file);
     defer source.deinit(allocator);
     const target = try readSnapshot(allocator, context, target_file);
@@ -220,7 +221,9 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     });
     defer formatted.deinit(allocator);
     const diff = try session_domain.unifiedDiff(allocator, rel, source.bytes, formatted.bytes);
-    if (apply) _ = try context.workspace_store.write(.{
+    const policy = classifyPath(rel);
+    const applied = apply and policy.direct_edit_allowed;
+    if (applied) _ = try context.workspace_store.write(.{
         .path = rel,
         .bytes = formatted.bytes,
         .provenance = "editing.format.apply.write_source",
@@ -230,13 +233,15 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = true });
-    try obj.put(allocator, "applied", .{ .bool = apply });
+    try obj.put(allocator, "applied", .{ .bool = applied });
+    try obj.put(allocator, "safe_to_apply", .{ .bool = policy.direct_edit_allowed });
     try obj.put(allocator, "file", try ownedString(allocator, rel));
+    try obj.put(allocator, "policy", try policyValue(allocator, policy));
     try obj.put(allocator, "input_source", .{ .string = if (content == null) "workspace_file" else "content" });
     try obj.put(allocator, "source_hash", try hashHexValue(allocator, source.bytes));
     try obj.put(allocator, "updated_hash", try hashHexValue(allocator, formatted.bytes));
     try obj.put(allocator, "changed", .{ .bool = !std.mem.eql(u8, source.bytes, formatted.bytes) });
-    try obj.put(allocator, "would_write", .{ .bool = !apply and !std.mem.eql(u8, source.bytes, formatted.bytes) });
+    try obj.put(allocator, "would_write", .{ .bool = !applied and !std.mem.eql(u8, source.bytes, formatted.bytes) });
     try obj.put(allocator, "diff", .{ .string = diff });
     try obj.put(allocator, "formatted", try ownedString(allocator, formatted.bytes));
     try obj.put(allocator, "preview_retained", .{ .bool = false });
@@ -273,7 +278,9 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     });
     defer source.deinit(allocator);
     const diff = try session_domain.unifiedDiff(allocator, rel, source.bytes, content);
-    if (apply) _ = try context.workspace_store.write(.{
+    const policy = classifyPath(rel);
+    const applied = apply and policy.direct_edit_allowed;
+    if (applied) _ = try context.workspace_store.write(.{
         .path = rel,
         .bytes = content,
         .provenance = "editing.patch_preview.write",
@@ -283,14 +290,16 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_patch_preview" });
-    try obj.put(allocator, "applied", .{ .bool = apply });
-    try obj.put(allocator, "preview_only", .{ .bool = !apply });
+    try obj.put(allocator, "applied", .{ .bool = applied });
+    try obj.put(allocator, "safe_to_apply", .{ .bool = policy.direct_edit_allowed });
+    try obj.put(allocator, "preview_only", .{ .bool = !applied });
     try obj.put(allocator, "requires_apply", .{ .bool = !apply });
     try obj.put(allocator, "file", try ownedString(allocator, rel));
+    try obj.put(allocator, "policy", try policyValue(allocator, policy));
     try obj.put(allocator, "source_hash", try hashHexValue(allocator, source.bytes));
     try obj.put(allocator, "updated_hash", try hashHexValue(allocator, content));
     try obj.put(allocator, "changed", .{ .bool = !std.mem.eql(u8, source.bytes, content) });
-    try obj.put(allocator, "would_write", .{ .bool = !apply and !std.mem.eql(u8, source.bytes, content) });
+    try obj.put(allocator, "would_write", .{ .bool = !applied and !std.mem.eql(u8, source.bytes, content) });
     try obj.put(allocator, "diff", .{ .string = diff });
     obj_owned = false;
     return .{ .object = obj };
@@ -721,4 +730,109 @@ test "readSnapshot treats missing files as empty absent snapshots" {
 test "editing range helpers return null for absent declarations and out of range lines" {
     try std.testing.expect(findDeclarationRange("const present = 1;\n", "missing") == null);
     try std.testing.expect(lineRange("one\n", 3, 4) == null);
+}
+
+test "moveDeclValue rejects identical source and target file before touching the workspace" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+    defer clock.deinit();
+    const context = app_context.EditingContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    // A same-file move would otherwise duplicate the decl and drop its removal; reject up front.
+    try std.testing.expectError(error.InvalidArguments, moveDeclValue(arena.allocator(), context, "src/main.zig", "src/main.zig", "value", true));
+    // No snapshot read or source write should have happened.
+    try std.testing.expectEqual(@as(usize, 0), workspace.readCalls().len);
+    try std.testing.expectEqual(@as(usize, 0), workspace.writeCalls().len);
+    try workspace.verify();
+    try clock.verify();
+}
+
+test "formatValue refuses to apply onto a vendored path and flags safe_to_apply false" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var runner = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer runner.deinit();
+    const context = app_context.CoreCommandContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 1000 },
+        .zls_state = .{},
+        .command_runner = runner.port(),
+        .workspace_store = workspace.port(),
+    };
+
+    const rel = "vendor/dep.zig";
+    const input = "const x=1;\n";
+    const formatted_text = "const x = 1;\n";
+    const preview_name = try std.fmt.allocPrint(std.testing.allocator, "{x:0>16}.zig", .{std.hash.Wyhash.hash(std.hash.Wyhash.hash(0, rel), input)});
+    defer std.testing.allocator.free(preview_name);
+    const preview_path = try std.fs.path.join(std.testing.allocator, &.{ ".zigars-cache", "format-preview", preview_name });
+    defer std.testing.allocator.free(preview_path);
+    const preview_abs = try std.fs.path.join(std.testing.allocator, &.{ "/workspace", preview_path });
+    defer std.testing.allocator.free(preview_abs);
+
+    try workspace.expectResolve(.{ .path = rel, .provenance = "editing.format" }, "/workspace/vendor/dep.zig");
+    try workspace.expectWrite(.{ .path = preview_path, .bytes = input, .provenance = "editing.format.preview.write_preview" }, .{ .bytes_written = input.len });
+    try workspace.expectResolve(.{ .path = preview_path, .for_output = true, .provenance = "editing.format.preview.resolve_preview" }, preview_abs);
+    try runner.expectRun(.{
+        .argv = &.{ "zig", "fmt", preview_abs },
+        .cwd = "/workspace",
+        .timeout_ms = 1000,
+        .max_stdout_bytes = core_commands.command_output_limit,
+        .max_stderr_bytes = core_commands.command_output_limit,
+        .provenance = "editing.format.preview.run",
+    }, .{ .exit_code = 0 });
+    try workspace.expectRead(.{ .path = preview_path, .max_bytes = max_session_file_bytes, .for_output = true, .provenance = "editing.format.preview.read_formatted" }, formatted_text);
+    try workspace.expectDelete(.{ .path = preview_path, .missing_ok = true, .provenance = "editing.format.preview.cleanup" }, .{ .deleted = true });
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const value = try formatValue(arena.allocator(), context, rel, input, true, 1000);
+    try std.testing.expect(value.object.get("ok").?.bool);
+    // apply=true must NOT land on a vendored path; only the preview write is expected.
+    try std.testing.expect(!value.object.get("applied").?.bool);
+    try std.testing.expect(!value.object.get("safe_to_apply").?.bool);
+    try std.testing.expectEqualStrings("vendor", value.object.get("policy").?.object.get("classification").?.string);
+    try std.testing.expectEqual(@as(usize, 1), workspace.writeCalls().len);
+    try std.testing.expectEqualStrings(preview_path, workspace.writeCalls()[0].path);
+    try workspace.verify();
+    try runner.verify();
+}
+
+test "patchPreviewValue refuses to apply onto a vendored path and flags safe_to_apply false" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var runner = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer runner.deinit();
+    const context = app_context.CoreCommandContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 1000 },
+        .zls_state = .{},
+        .command_runner = runner.port(),
+        .workspace_store = workspace.port(),
+    };
+
+    const rel = "vendor/dep.zig";
+    try workspace.expectResolve(.{ .path = rel, .provenance = "editing.patch_preview.resolve" }, "/workspace/vendor/dep.zig");
+    try workspace.expectRead(.{ .path = rel, .max_bytes = max_session_file_bytes, .provenance = "editing.patch_preview.read_source" }, "const old = 1;\n");
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const value = try patchPreviewValue(arena.allocator(), context, rel, "const new = 2;\n", true);
+    // apply=true must NOT land arbitrary content on a vendored path.
+    try std.testing.expect(!value.object.get("applied").?.bool);
+    try std.testing.expect(!value.object.get("safe_to_apply").?.bool);
+    try std.testing.expect(value.object.get("preview_only").?.bool);
+    try std.testing.expectEqualStrings("vendor", value.object.get("policy").?.object.get("classification").?.string);
+    try std.testing.expectEqual(@as(usize, 0), workspace.writeCalls().len);
+    try workspace.verify();
+    try runner.verify();
 }
