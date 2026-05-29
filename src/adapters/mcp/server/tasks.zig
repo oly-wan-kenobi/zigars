@@ -110,6 +110,11 @@ fn jobView(job: anytype) JobView {
     };
 }
 
+/// Orders task views oldest-first by their monotonic creation sequence.
+fn lessByCreatedSequence(_: void, lhs: JobView, rhs: JobView) bool {
+    return lhs.created_sequence < rhs.created_sequence;
+}
+
 /// Handles tasks/get for a single retained runtime job.
 pub fn handleGet(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
@@ -127,16 +132,7 @@ pub fn handleResult(server: anytype, io: std.Io, allocator: std.mem.Allocator, r
     var response_arena = std.heap.ArenaAllocator.init(allocator);
     defer response_arena.deinit();
     const a = response_arena.allocator();
-    var result: std.json.ObjectMap = .empty;
-    try result.put(a, "task", try taskValue(a, job));
-    try result.put(a, "job_id", .{ .string = job.id });
-    try result.put(a, "status", .{ .string = job.status });
-    try result.put(a, "ok", .{ .bool = job.ok });
-    try result.put(a, "stdout_tail", .{ .string = job.stdout_tail });
-    try result.put(a, "stderr_tail", .{ .string = job.stderr_tail });
-    try result.put(a, "stdout_truncated", .{ .bool = job.stdout_truncated });
-    try result.put(a, "stderr_truncated", .{ .bool = job.stderr_truncated });
-    try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(request.id, .{ .object = result }) });
+    try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(request.id, try resultValue(a, job)) });
 }
 
 /// Handles tasks/list with optional cursor pagination.
@@ -147,18 +143,25 @@ pub fn handleList(server: anytype, io: std.Io, allocator: std.mem.Allocator, req
     const a = response_arena.allocator();
     const page = pagination.fromParams(request.params) catch return server.sendInvalidParams(io, allocator, request.id, pagination.invalid_cursor_message);
 
-    var tasks = std.json.Array.init(a);
+    // Collect retained jobs, then order by created_sequence so the list reads
+    // oldest-to-newest regardless of the ring's physical slot rotation.
     const job_count = state.jobCount();
-    var index: usize = 0;
-    while (index < job_count) : (index += 1) {
+    var jobs = try std.ArrayList(JobView).initCapacity(a, job_count);
+    var collected: usize = 0;
+    while (collected < job_count) : (collected += 1) {
+        if (state.jobAt(collected)) |job| jobs.appendAssumeCapacity(job);
+    }
+    std.mem.sort(JobView, jobs.items, {}, lessByCreatedSequence);
+
+    var tasks = std.json.Array.init(a);
+    for (jobs.items, 0..) |job, index| {
         if (!pagination.shouldIncludeIndex(page, index)) continue;
-        const job = state.jobAt(index) orelse continue;
         try tasks.append(try taskValue(a, job));
     }
 
     var result: std.json.ObjectMap = .empty;
     try result.put(a, "tasks", .{ .array = tasks });
-    try pagination.maybePutNextCursor(a, &result, page, job_count);
+    try pagination.maybePutNextCursor(a, &result, page, jobs.items.len);
     try server.sendResponse(io, allocator, .{ .response = jsonrpc.createResponse(request.id, .{ .object = result }) });
 }
 
@@ -203,6 +206,23 @@ fn taskValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
     return .{ .object = obj };
 }
 
+/// Builds the tasks/result payload with retained tails and a normalized status.
+fn resultValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
+    // The top-level `status` is normalized through the same mapping as
+    // `task.status` so the two views never disagree; the raw "queued"/"running"
+    // vocabulary previously leaked here and contradicted the normalized task.
+    var result: std.json.ObjectMap = .empty;
+    try result.put(allocator, "task", try taskValue(allocator, job));
+    try result.put(allocator, "job_id", .{ .string = job.id });
+    try result.put(allocator, "status", .{ .string = taskStatusText(job.status) });
+    try result.put(allocator, "ok", .{ .bool = job.ok });
+    try result.put(allocator, "stdout_tail", .{ .string = job.stdout_tail });
+    try result.put(allocator, "stderr_tail", .{ .string = job.stderr_tail });
+    try result.put(allocator, "stdout_truncated", .{ .bool = job.stdout_truncated });
+    try result.put(allocator, "stderr_truncated", .{ .bool = job.stderr_truncated });
+    return .{ .object = result };
+}
+
 /// Normalizes internal task status strings for MCP progress responses.
 fn taskStatusText(status: []const u8) []const u8 {
     if (std.mem.eql(u8, status, "queued") or std.mem.eql(u8, status, "running")) return "working";
@@ -244,4 +264,71 @@ test "task value maps queued and running status to working" {
     });
     try std.testing.expectEqualStrings("completed", completed.object.get("status").?.string);
     try std.testing.expectEqualStrings("working", taskStatusText("running"));
+}
+
+test "tasks/result top-level status agrees with normalized task status" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // A running job: raw status "running" must surface as "working" both at the
+    // top level and inside `task`, never the conflicting raw vocabulary.
+    const running = try resultValue(allocator, .{
+        .id = "job-7",
+        .label = "Build",
+        .status = "running",
+        .ok = false,
+        .stdout_tail = "partial",
+        .stderr_tail = "",
+        .stdout_truncated = false,
+        .stderr_truncated = false,
+        .created_sequence = 3,
+        .updated_sequence = 4,
+    });
+    const top_status = running.object.get("status").?.string;
+    const task_status = running.object.get("task").?.object.get("status").?.string;
+    try std.testing.expectEqualStrings("working", top_status);
+    try std.testing.expectEqualStrings(task_status, top_status);
+    // The retained result payload still rides along under the same response.
+    try std.testing.expectEqualStrings("job-7", running.object.get("job_id").?.string);
+    try std.testing.expectEqualStrings("partial", running.object.get("stdout_tail").?.string);
+
+    // A terminal job keeps its concrete status identically in both places.
+    const failed = try resultValue(allocator, .{
+        .id = "job-8",
+        .label = "Test",
+        .status = "failed",
+        .ok = false,
+        .stdout_tail = "",
+        .stderr_tail = "boom",
+        .stdout_truncated = false,
+        .stderr_truncated = false,
+        .created_sequence = 5,
+        .updated_sequence = 6,
+    });
+    try std.testing.expectEqualStrings("failed", failed.object.get("status").?.string);
+    try std.testing.expectEqualStrings("failed", failed.object.get("task").?.object.get("status").?.string);
+}
+
+test "tasks/list projection orders jobs by created_sequence" {
+    // Physical ring slot order after wrap is not creation order; the projection
+    // must sort by created_sequence so the list reads oldest-to-newest.
+    var views = [_]JobView{
+        .{ .id = "job-33", .label = "", .status = "completed", .ok = true, .stdout_tail = "", .stderr_tail = "", .stdout_truncated = false, .stderr_truncated = false, .created_sequence = 33, .updated_sequence = 33 },
+        .{ .id = "job-3", .label = "", .status = "completed", .ok = true, .stdout_tail = "", .stderr_tail = "", .stdout_truncated = false, .stderr_truncated = false, .created_sequence = 3, .updated_sequence = 3 },
+        .{ .id = "job-34", .label = "", .status = "running", .ok = false, .stdout_tail = "", .stderr_tail = "", .stdout_truncated = false, .stderr_truncated = false, .created_sequence = 34, .updated_sequence = 34 },
+        .{ .id = "job-10", .label = "", .status = "completed", .ok = true, .stdout_tail = "", .stderr_tail = "", .stdout_truncated = false, .stderr_truncated = false, .created_sequence = 10, .updated_sequence = 10 },
+    };
+
+    std.mem.sort(JobView, &views, {}, lessByCreatedSequence);
+
+    const expected_ids = [_][]const u8{ "job-3", "job-10", "job-33", "job-34" };
+    for (views, expected_ids) |view, expected_id| {
+        try std.testing.expectEqualStrings(expected_id, view.id);
+    }
+    var previous: u64 = 0;
+    for (views) |view| {
+        try std.testing.expect(view.created_sequence > previous);
+        previous = view.created_sequence;
+    }
 }
