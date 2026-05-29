@@ -429,6 +429,10 @@ test "typed public api diffs and argument splitting cover edge cases" {
         .workspace_scanner = scanner_fake.port(),
     };
 
+    // The baseline path is resolved through the workspace sandbox before it is
+    // embedded in the `git show <ref>:<path>` token, matching the sandboxed
+    // current-source sibling.
+    try store_fake.expectResolve(.{ .path = "src/api.zig", .provenance = "static_analysis.public_api_diff.baseline" }, "/workspace/src/api.zig");
     try commands.expectRun(.{
         .argv = &.{ "git", "show", "HEAD~1:src/api.zig" },
         .cwd = "/workspace",
@@ -451,6 +455,98 @@ test "typed public api diffs and argument splitting cover edge cases" {
     try commands.verify();
     try store_fake.verify();
     try scanner_fake.verify();
+}
+
+test "public api baseline resolves through the workspace sandbox before git show" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Case 1: a workspace-escaping `file` is rejected by resolve, so no
+    // `git show` runs and the baseline falls back to empty content. On pre-fix
+    // code the raw `../../../../etc/passwd` reached `git show HEAD:...`,
+    // disclosing out-of-workspace blobs; here it must never reach the runner.
+    {
+        var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+        defer commands.deinit();
+        var store_fake = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+        defer store_fake.deinit();
+        var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+        defer scanner_fake.deinit();
+        const context = app_context.StaticAnalysisContext{
+            .workspace = .{ .root = "/workspace" },
+            .command_runner = commands.port(),
+            .workspace_store = store_fake.port(),
+            .workspace_scanner = scanner_fake.port(),
+        };
+
+        try store_fake.expectResolveError(.{ .path = "../../../../etc/passwd", .provenance = "static_analysis.public_api_diff.baseline" }, error.PathOutsideWorkspace);
+        try store_fake.expectRead(.{ .path = "../../../../etc/passwd", .max_bytes = project_values.default_source_read_limit, .provenance = "static_analysis.public_api_diff.current" }, "");
+        const diff = try project_values.publicApiDiffFromWorkspaceValue(allocator, context, .{ .file = "../../../../etc/passwd", .baseline_ref = "HEAD" });
+        // No subprocess argv was constructed from the escaping path.
+        try std.testing.expectEqual(@as(usize, 0), commands.calls().len);
+        try std.testing.expectEqual(@as(usize, 0), diff.object.get("before").?.array.items.len);
+        try commands.verify();
+        try store_fake.verify();
+    }
+
+    // Case 2: a valid `file` is resolved, and the `git show <ref>:<path>` token
+    // carries the *resolved* workspace-relative path, not the raw caller input.
+    {
+        var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+        defer commands.deinit();
+        var store_fake = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+        defer store_fake.deinit();
+        var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+        defer scanner_fake.deinit();
+        const context = app_context.StaticAnalysisContext{
+            .workspace = .{ .root = "/workspace" },
+            .command_runner = commands.port(),
+            .workspace_store = store_fake.port(),
+            .workspace_scanner = scanner_fake.port(),
+        };
+
+        // The fake maps the requested path to a normalized absolute path under
+        // root; the use case must reduce it back to `src/api.zig` for the token.
+        try store_fake.expectResolve(.{ .path = "src/./api.zig", .provenance = "static_analysis.public_api_diff.baseline" }, "/workspace/src/api.zig");
+        try commands.expectRun(.{
+            .argv = &.{ "git", "show", "HEAD:src/api.zig" },
+            .cwd = "/workspace",
+            .timeout_ms = 5000,
+            .provenance = "static_analysis.public_api_diff.baseline",
+        }, .{ .stdout = "pub fn kept() void {}\n" });
+        try store_fake.expectRead(.{ .path = "src/./api.zig", .max_bytes = project_values.default_source_read_limit, .provenance = "static_analysis.public_api_diff.current" }, "pub fn kept() void {}\n");
+        _ = try project_values.publicApiDiffFromWorkspaceValue(allocator, context, .{ .file = "src/./api.zig", .baseline_ref = "HEAD" });
+        try std.testing.expectEqualStrings("git", commands.calls()[0].argv[0]);
+        try std.testing.expectEqualStrings("show", commands.calls()[0].argv[1]);
+        try std.testing.expectEqualStrings("HEAD:src/api.zig", commands.calls()[0].argv[2]);
+        try commands.verify();
+        try store_fake.verify();
+    }
+
+    // Case 3: an invalid baseline_ref (smuggling a second `:` path component) is
+    // rejected before any resolve or subprocess call.
+    {
+        var commands = command_runner_fake.FakeCommandRunner.init(std.testing.allocator);
+        defer commands.deinit();
+        var store_fake = workspace_store_fake.FakeWorkspaceStore.init(std.testing.allocator);
+        defer store_fake.deinit();
+        var scanner_fake = workspace_scanner_fake.FakeWorkspaceScanner.init(std.testing.allocator);
+        defer scanner_fake.deinit();
+        const context = app_context.StaticAnalysisContext{
+            .workspace = .{ .root = "/workspace" },
+            .command_runner = commands.port(),
+            .workspace_store = store_fake.port(),
+            .workspace_scanner = scanner_fake.port(),
+        };
+
+        try store_fake.expectRead(.{ .path = "src/api.zig", .max_bytes = project_values.default_source_read_limit, .provenance = "static_analysis.public_api_diff.current" }, "");
+        _ = try project_values.publicApiDiffFromWorkspaceValue(allocator, context, .{ .file = "src/api.zig", .baseline_ref = "HEAD:../../etc/passwd" });
+        try std.testing.expectEqual(@as(usize, 0), commands.calls().len);
+        try std.testing.expectEqual(@as(usize, 0), store_fake.resolveCalls().len);
+        try commands.verify();
+        try store_fake.verify();
+    }
 }
 
 test "typed static project value builders release partial objects on allocation failure" {

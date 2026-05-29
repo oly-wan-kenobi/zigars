@@ -1570,10 +1570,45 @@ fn workspaceRelative(root: []const u8, path: []const u8) []const u8 {
     return path;
 }
 
+/// Returns true when `ref` only contains characters valid in a git revision spec.
+///
+/// Rejecting other bytes keeps the caller-supplied ref from smuggling a second
+/// `:` path component (or whitespace/control bytes) into the `<ref>:<path>`
+/// argv token handed to `git show`.
+fn validBaselineRef(ref: []const u8) bool {
+    if (ref.len == 0) return false;
+    for (ref) |c| {
+        const ok = std.ascii.isAlphanumeric(c) or switch (c) {
+            '_', '-', '.', '/', '~', '^', '@', '{', '}' => true,
+            else => false,
+        };
+        if (!ok) return false;
+    }
+    return true;
+}
+
 /// Implements public api baseline workflow logic using caller-owned inputs.
+///
+/// `file` is a caller-controlled tool argument that becomes part of the
+/// `<ref>:<path>` token passed to `git show`. Unlike `git show`'s own path
+/// resolution (which would expose any blob tracked anywhere in an enclosing
+/// repo), the path is first resolved through the workspace sandbox and reduced
+/// to a workspace-relative path, matching the sandboxed `publicApiCurrent`
+/// sibling. Any escape (`..`, absolute, symlink) or invalid ref fails closed to
+/// an empty baseline rather than disclosing out-of-workspace content.
 fn publicApiBaseline(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, file: ?[]const u8, baseline_ref: []const u8) StaticProjectError![]const u8 {
-    const rel = file orelse return "";
+    const requested = file orelse return "";
     const runner = context.command_runner orelse return "";
+    if (!validBaselineRef(baseline_ref)) return "";
+    const resolved = context.workspace_store.resolve(allocator, .{
+        .path = requested,
+        .provenance = "static_analysis.public_api_diff.baseline",
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return "",
+    };
+    defer resolved.deinit(allocator);
+    const rel = workspaceRelative(context.workspace.root, resolved.path);
     const spec = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ baseline_ref, rel });
     const result = runner.run(allocator, .{
         .argv = &.{ "git", "show", spec },
