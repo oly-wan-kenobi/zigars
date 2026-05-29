@@ -27,7 +27,7 @@ pub const zig_junit = tool(.{
 pub const zig_matrix_check = tool(.{
     .description = "Run build/test checks across configured Zig binaries with direct per-entry status fields.",
     .input_schema = schema(&.{ .{ "zig_paths", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false } }),
-    .read_only = true,
+    .read_only = false,
     .group = .ci_artifacts,
     .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true, .executes_backend = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },

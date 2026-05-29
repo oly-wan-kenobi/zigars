@@ -190,6 +190,67 @@ test "client protocol request rejects nested inbound requests while waiting for 
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"result\":{}") == null);
 }
 
+/// Transport that never closes and always returns a non-matching notification
+/// frame, modelling a client that streams unrelated traffic without ever
+/// replying to the server's protocol request. Without a deadline the wait loop
+/// would live-lock; the deadline must terminate it (MEDIUM-2).
+const StreamingNonMatchingTransport = struct {
+    receives: usize = 0,
+    frame: []const u8 =
+        \\{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p","progress":1}}
+    ,
+
+    fn transport(self: *StreamingNonMatchingTransport) mcp.transport.Transport {
+        return .{
+            .ptr = self,
+            .vtable = &.{ .send = sendVtable, .receive = receiveVtable, .close = closeVtable },
+        };
+    }
+
+    fn sendVtable(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) mcp.transport.Transport.SendError!void {}
+
+    fn receiveVtable(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) mcp.transport.Transport.ReceiveError!?[]const u8 {
+        const self: *StreamingNonMatchingTransport = @ptrCast(@alignCast(ptr));
+        self.receives += 1;
+        // Borrow the static frame (matching ScriptTransport's convention); the
+        // wait loop does not own/free received frames.
+        return self.frame;
+    }
+
+    fn closeVtable(_: *anyopaque) void {}
+};
+
+test "client protocol request terminates via timeout when the client never matches" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+    server.client_capabilities = .{ .elicitation = .{ .form = .{} } };
+
+    var transport = StreamingNonMatchingTransport{};
+    server.transport = transport.transport();
+
+    var params = std.json.ObjectMap.empty;
+    try params.put(allocator, "message", .{ .string = "Apply?" });
+    defer params.deinit(allocator);
+
+    // A short timeout bounds the wait; without the deadline this loop would spin
+    // on the non-matching frames forever (the test would hang).
+    const response = try server.requestClientProtocol(std.testing.io, allocator, .{
+        .feature = .elicitation,
+        .method = "elicitation/create",
+        .params = .{ .object = params },
+        .timeout_ms = 25,
+    });
+    try std.testing.expect(response.supported);
+    try std.testing.expect(!response.used);
+    try std.testing.expectEqual(app_ports.ProtocolResponseStatus.timeout, response.status);
+    // The wait consumed at least one streamed non-matching frame before the
+    // deadline fired, proving the deadline (not EndOfStream) terminated the loop.
+    try std.testing.expect(transport.receives >= 1);
+    try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
+}
+
 test "client protocol request returns unsupported and transport timeout metadata" {
     const allocator = std.testing.allocator;
     var server = Server.init(allocator, .{ .name = "protocol", .version = "1" });

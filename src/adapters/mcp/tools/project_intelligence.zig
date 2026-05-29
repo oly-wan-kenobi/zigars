@@ -147,11 +147,17 @@ pub fn zigTestEvents(allocator: std.mem.Allocator, context: app_context.ProjectI
 fn commandEventsTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, kind: pi.EventCommandKind) mcp.tools.ToolError!mcp.tools.ToolResult {
     const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, tool_name, err);
     defer freeStringList(allocator, extra_args);
+    // `filter` is a test-name filter and is only registered on `zig_test_events`.
+    // `zig_build_events` does not advertise it (a build has no test filter), and
+    // central validation rejects unknown arguments before this handler runs, so
+    // only read `filter` for the test command kind to keep schema and handler in
+    // sync.
+    const filter = if (kind == .test_cmd) argString(args, "filter") else null;
     return structured(allocator, tool_name, "build_events", pi.commandEventsValue(allocator, context, tool_name, .{
         .text = argString(args, "text"),
         .command = argString(args, "command"),
         .file = argString(args, "file"),
-        .filter = argString(args, "filter"),
+        .filter = filter,
         .extra_args = extra_args,
         .timeout_ms = timeoutMs(context, args),
         .kind = kind,

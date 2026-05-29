@@ -110,7 +110,7 @@ test "server cancellation notifications mark active and completed requests" {
     var server = Server.init(std.testing.allocator, .{ .name = "cancel", .version = "1" });
     defer server.deinit();
     var state = observability_mod.State{};
-    server.setObservability(&state);
+    server.setObservability(state.recorder());
 
     var request_state = cancellation.State{};
     const active_id = correlation.RequestId.from(.{ .integer = 7 });
@@ -147,6 +147,33 @@ test "server cancellation notifications mark active and completed requests" {
     try std.testing.expectEqualStrings("completed_late", state.cancellation_events[1].status);
 }
 
+test "notifications/initialized only transitions to ready from initializing (LOW-2)" {
+    var server = Server.init(std.testing.allocator, .{ .name = "lifecycle", .version = "1" });
+    defer server.deinit();
+
+    // A fresh server starts uninitialized. From .uninitialized (no prior
+    // initialize), the notification must NOT force the server to .ready with
+    // default client_info/capabilities.
+    try std.testing.expect(server.state == .uninitialized);
+    try server.handleNotification(std.testing.io, .{ .method = "notifications/initialized" }, null);
+    try std.testing.expect(server.state == .uninitialized);
+
+    // From .initializing (a successful initialize is in flight), the transition
+    // is honored.
+    server.state = .initializing;
+    try server.handleNotification(std.testing.io, .{ .method = "notifications/initialized" }, null);
+    try std.testing.expect(server.state == .ready);
+
+    // A repeat notification after .ready does not regress or change state.
+    try server.handleNotification(std.testing.io, .{ .method = "notifications/initialized" }, null);
+    try std.testing.expect(server.state == .ready);
+
+    // After shutdown, the notification must not resurrect the server to .ready.
+    server.state = .shutting_down;
+    try server.handleNotification(std.testing.io, .{ .method = "notifications/initialized" }, null);
+    try std.testing.expect(server.state == .shutting_down);
+}
+
 test "server request cancellation metadata matches sequential transports" {
     try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("tools/call"));
     try std.testing.expect(!Server.TestAccess.requestCanObserveCancellation("completion/complete"));
@@ -160,7 +187,7 @@ test "server request cancellation metadata matches sequential transports" {
     var server = Server.init(std.testing.allocator, .{ .name = "cancel", .version = "1" });
     defer server.deinit();
     var state = observability_mod.State{};
-    server.setObservability(&state);
+    server.setObservability(state.recorder());
 
     var request_state = cancellation.State{};
     server.active_request = .{

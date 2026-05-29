@@ -221,8 +221,13 @@ pub fn forTool(tool_name: []const u8) ?Contract {
 }
 
 /// Adds standardized analysis metadata to a JSON object.
+///
+/// Callers dispatch literal tool names that are present in `contracts` (enforced
+/// by the comptime assertion and contract-completeness test below). If a future
+/// registration gap ever passes an unregistered name, metadata is skipped rather
+/// than panicking the serial MCP transport via `unreachable`.
 pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) error{OutOfMemory}!void {
-    const contract = forTool(tool_name) orelse unreachable;
+    const contract = forTool(tool_name) orelse return;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
     try obj.put(allocator, "capability_tier", .{ .string = capabilityTierName(contract.tier) });
     try obj.put(allocator, "confidence", .{ .string = confidenceName(contract.confidence) });
@@ -302,6 +307,69 @@ test "static analysis contract lookup and empty verification fallback are explic
         .verify_with = &.{},
     });
     try std.testing.expect(value.object.get("primary").? == .null);
+}
+
+comptime {
+    // Every contract entry must resolve through forTool: the lookup helper and
+    // the contracts table cannot drift apart even under future refactors.
+    @setEvalBranchQuota(contracts.len * contracts.len + 1000);
+    for (contracts) |contract| {
+        if (forTool(contract.tool) == null) {
+            @compileError("contract tool name does not resolve via forTool: " ++ contract.tool);
+        }
+    }
+}
+
+test "putMetadata skips metadata instead of panicking on a registration gap" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // An unregistered tool name must not panic (no `unreachable`); it degrades by
+    // adding no metadata keys, keeping the serial MCP transport alive.
+    var obj = std.json.ObjectMap.empty;
+    try putMetadata(allocator, &obj, "zig_tool_with_no_contract");
+    try std.testing.expectEqual(@as(usize, 0), obj.count());
+}
+
+test "every dispatched static-analysis tool name resolves to a contract" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Tool names dispatched through putMetadata by the static-analysis adapters.
+    // A name added to dispatch without a matching contract entry must fail here
+    // rather than panic the serial MCP transport at runtime.
+    const dispatched_tool_names = [_][]const u8{
+        "zig_import_graph",            "zig_import_graph_json",      "zig_import_cycles",
+        "zig_ast_imports",             "zig_decl_summary",           "zig_decl_summary_json",
+        "zig_ast_decl_summary",        "zig_allocations",            "zig_error_sets",
+        "zig_public_api",              "zig_dead_decl_candidates",   "zig_build_graph",
+        "zig_build_targets",           "zig_build_options",          "zig_file_owner",
+        "zig_import_resolve",          "zig_test_discover",          "zig_ast_tests",
+        "zig_test_name_resolve",       "zig_test_fixture_inventory", "zig_safety_site_catalog",
+        "zig_test_for_symbol",         "zig_module_surface",         "zig_symbol_dossier",
+        "zig_change_risk_audit",       "zig_insertion_sites",        "zig_io_migration_scan",
+        "zig_leak_triage",             "zig_comptime_diagnose",      "zig_memory_layout",
+        "zig_unsafe_operations_audit", "zig_abi_layout_diff",        "zig_changed_files_plan",
+        "zig_dependency_inspect",      "zig_target_matrix_plan",     "zig_test_failure_triage",
+        "zig_workspace_symbol_cache",  "zig_package_cache_doctor",   "zig_test_map",
+        "zig_test_select",             "zig_public_api_diff",        "zig_semantic_index_build",
+        "zig_semantic_index_status",   "zig_semantic_index_refresh", "zig_semantic_query",
+        "zig_semantic_refs",           "zig_semantic_decl",          "zig_semantic_callers",
+        "zig_static_fusion",           "zig_code_index_export",      "zig_scip_export",
+        "zig_zlint",                   "zig_zlint_sarif",            "zig_zlint_rules",
+        "zig_zlint_fix",               "zig_lint_compare",           "zig_lint_profile",
+        "zig_lint_gate",               "zig_lint_fix_plan",          "zig_lint_baseline",
+        "zig_lint_suppressions",       "zig_lint_trend",             "zig_impact_semantic",
+        "zig_test_select_semantic",    "zig_lint",                   "zig_lint_sarif",
+        "zig_lint_rules",              "zig_analysis_graphs",
+    };
+    for (dispatched_tool_names) |tool_name| {
+        try std.testing.expect(forTool(tool_name) != null);
+        var obj = std.json.ObjectMap.empty;
+        try putMetadata(allocator, &obj, tool_name);
+    }
 }
 
 /// Returns whether any string in a slice equals the needle.

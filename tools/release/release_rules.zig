@@ -93,6 +93,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "runtime diagnostic definitions are over the preferred audit size and should split schema groups next",
     },
     .{
+        .path = "src/manifest/definitions/diagnostics_schemas.zig",
+        .max_lines = 165,
+        .reason = "shared diagnostics input-schema and risk vocabulary should stay a compact private building-block module split out of the public tool list",
+    },
+    .{
         .path = "src/manifest/definitions/adoption.zig",
         .max_lines = 100,
         .reason = "adoption tool definitions should remain compact and centralized",
@@ -103,6 +108,11 @@ pub const line_budgets = [_]LineBudget{
         .reason = "discovery MCP adapter must stay projection-only over app discovery use cases",
     },
     .{
+        .path = "src/adapters/mcp/tools/discovery_args.zig",
+        .max_lines = 60,
+        .reason = "permissive JSON argument readers for the discovery adapter should stay a small focused helper",
+    },
+    .{
         .path = "src/infra/workspace/workspace.zig",
         .max_lines = 616,
         .reason = "workspace path and IO boundaries are trust-critical and must stay compact enough to audit",
@@ -111,6 +121,16 @@ pub const line_budgets = [_]LineBudget{
         .path = "src/infra/zls/documents.zig",
         .max_lines = 543,
         .reason = "document state is over the preferred audit size and should split lifecycle helpers from retained-content accounting next",
+    },
+    .{
+        .path = "src/infra/zls/document_retained.zig",
+        .max_lines = 60,
+        .reason = "retained in-memory document byte accounting should stay a small focused policy module beside document lifecycle",
+    },
+    .{
+        .path = "src/infra/zls/document_retained_tests.zig",
+        .max_lines = 60,
+        .reason = "retained-content accounting fixtures should stay a compact paired test module",
     },
     .{
         .path = "src/infra/zls/documents_tests.zig",
@@ -258,6 +278,21 @@ pub const line_budgets = [_]LineBudget{
         .reason = "HTTP tool contract smoke assertions should stay grouped by tool family",
     },
     .{
+        .path = "tools/integration/http/http_tool_contract_smoke_b.zig",
+        .max_lines = 140,
+        .reason = "static-analysis tool-family contract scenarios should stay a focused fixture list, splitting by sub-family if they grow further",
+    },
+    .{
+        .path = "tools/integration/http/http_tool_contract_support.zig",
+        .max_lines = 90,
+        .reason = "shared HTTP tool-result contract assertions should stay a small helper module separate from the per-family scenario lists",
+    },
+    .{
+        .path = "tools/integration/http/http_smoke_tools_list.zig",
+        .max_lines = 60,
+        .reason = "tools/list presence and schema-path assertions should stay separate from the HTTP transport-level smoke entrypoint",
+    },
+    .{
         .path = "tools/integration/http/http_performance_smoke.zig",
         .max_lines = 120,
         .reason = "performance HTTP smoke coverage should stay a focused fixture module",
@@ -286,6 +321,21 @@ pub const line_budgets = [_]LineBudget{
         .path = "tools/integration/smoke_support.zig",
         .max_lines = 184,
         .reason = "shared smoke-test utilities should remain a small helper module",
+    },
+    .{
+        .path = "tools/integration/common/smoke_http.zig",
+        .max_lines = 170,
+        .reason = "no-panic HTTP request and tools/call envelope helpers should stay a focused shared module",
+    },
+    .{
+        .path = "tools/integration/common/smoke_assert.zig",
+        .max_lines = 100,
+        .reason = "shared smoke assertion, path, and filesystem-gating helpers should stay compact",
+    },
+    .{
+        .path = "tools/integration/common/smoke_port.zig",
+        .max_lines = 80,
+        .reason = "deterministic loopback-port selection should stay a small focused helper",
     },
     .{
         .path = "tools/release/release_targets.zig",

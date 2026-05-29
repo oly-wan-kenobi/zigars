@@ -213,8 +213,8 @@ pub fn zigCoverageBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.
     var budget = coverage_usecase.budget(allocator, .{
         .coverage = .{ .bytes = input.bytes, .source_kind = input.source_kind },
         .changed_files = changed.items,
-        .min_line_rate_bp = @intCast(argInt(args, "min_line_rate_bp", 8000)),
-        .min_changed_line_rate_bp = @intCast(argInt(args, "min_changed_line_rate_bp", 0)),
+        .min_line_rate_bp = @intCast(@max(0, argInt(args, "min_line_rate_bp", 8000))),
+        .min_changed_line_rate_bp = @intCast(@max(0, argInt(args, "min_changed_line_rate_bp", 0))),
     }) catch |err| return performanceToolError(allocator, "zig_coverage_budget_check", "coverage_budget", err);
     defer budget.deinit(allocator);
     const value = coverageBudgetValue(arena.allocator(), a, budget) catch return error.OutOfMemory;
@@ -336,7 +336,7 @@ pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     var comparison = benchmark_usecase.compare(allocator, .{
         .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
         .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
-        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+        .threshold_pct = @max(0, argInt(args, "threshold_pct", 5)),
     }) catch |err| return performanceToolError(allocator, "zig_bench_compare", "compare_benchmarks", err);
     defer comparison.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -354,7 +354,7 @@ pub fn zigBenchRegressionGate(a: *App, allocator: std.mem.Allocator, args: ?std.
     var comparison = benchmark_usecase.compare(allocator, .{
         .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
         .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
-        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+        .threshold_pct = @max(0, argInt(args, "threshold_pct", 5)),
     }) catch |err| return performanceToolError(allocator, "zig_bench_regression_gate", "compare_benchmarks", err);
     defer comparison.deinit(allocator);
 
@@ -679,11 +679,24 @@ fn coverageMapValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, set
     return .{ .object = obj };
 }
 
+/// Clamps an accumulated coverage line count to the `i64` JSON range.
+///
+/// Coverage totals accumulate with saturating adds (`+|`) in `coverage_model`,
+/// so a multi-file payload with near-`usize` line counts can push `set.total`
+/// or `file.total` above `maxInt(i64)` while staying below `maxInt(usize)`. A
+/// plain `@intCast(i64, x)` would then trap ("integer does not fit") under
+/// ReleaseSafe and crash the read-only coverage tools. Saturating to
+/// `maxInt(i64)` keeps the projection lossless for every realistic count and
+/// finite for the saturated extreme.
+fn coverageCountI64(count: usize) i64 {
+    return std.math.cast(i64, count) orelse std.math.maxInt(i64);
+}
+
 /// Serializes coverage summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn coverageSummaryValue(allocator: std.mem.Allocator, set: CoverageSet) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
-    try obj.put(allocator, "total_lines", .{ .integer = @intCast(set.total) });
-    try obj.put(allocator, "covered_lines", .{ .integer = @intCast(set.covered) });
+    try obj.put(allocator, "total_lines", .{ .integer = coverageCountI64(set.total) });
+    try obj.put(allocator, "covered_lines", .{ .integer = coverageCountI64(set.covered) });
     try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(set.covered, set.total)) });
     try obj.put(allocator, "file_count", .{ .integer = @intCast(set.files.items.len) });
     try obj.put(allocator, "source_kind", .{ .string = set.source_kind });
@@ -696,8 +709,8 @@ fn coverageFilesValue(allocator: std.mem.Allocator, set: CoverageSet) !std.json.
     for (set.files.items) |file| {
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "path", .{ .string = file.path });
-        try obj.put(allocator, "total_lines", .{ .integer = @intCast(file.total) });
-        try obj.put(allocator, "covered_lines", .{ .integer = @intCast(file.covered) });
+        try obj.put(allocator, "total_lines", .{ .integer = coverageCountI64(file.total) });
+        try obj.put(allocator, "covered_lines", .{ .integer = coverageCountI64(file.covered) });
         try obj.put(allocator, "line_rate_bp", .{ .integer = @intCast(coverage_model.rateBp(file.covered, file.total)) });
         try files.append(.{ .object = obj });
     }
@@ -1513,6 +1526,114 @@ test "bench regression gate is preview-only unless apply is set" {
     try std.testing.expect(!result.value.object.get("applied").?.bool);
     try std.testing.expect(result.value.object.get("requires_apply").?.bool);
     try std.testing.expectEqualStrings(".zigars-cache/sessions/bench_regression_gate/gate-1.jsonl", result.value.object.get("session_path").?.string);
+    try workspace.verify();
+    try commands.verify();
+}
+
+test "coverage budget check tolerates negative thresholds and huge coverage counts" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    // DoS payload: a negative budget bp traps on the unsigned `@intCast` pre-fix,
+    // while huge JSON line counts overflow the `covered * 10000` rate multiply.
+    // zig_coverage_budget_check is read-only (no apply gate).
+    var args = try parsedArgs(allocator,
+        \\{"coverage":"{\"files\":[{\"path\":\"a.zig\",\"total_lines\":2000000000000000,\"covered_lines\":2000000000000000}]}","min_line_rate_bp":-1,"min_changed_line_rate_bp":-1}
+    );
+    defer args.deinit();
+    const result = try zigCoverageBudgetCheck(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    // Negative minimums clamp to 0, so full coverage trivially passes.
+    try std.testing.expect(result.value.object.get("passed").?.bool);
+    try std.testing.expectEqual(@as(i64, 0), result.value.object.get("min_line_rate_bp").?.integer);
+    try std.testing.expectEqual(@as(i64, 10000), result.value.object.get("line_rate_bp").?.integer);
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "coverage map clamps overflowing line counts so projection does not trap" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    // DoS payload: two distinct files, each with line counts near i64 max. The
+    // coverage model accumulates totals with saturating adds (`+|`), so
+    // `set.total` climbs above maxInt(i64) (9.2e18) while staying below
+    // maxInt(usize). The aggregate `coverageSummaryValue` cast `@intCast(i64,
+    // set.total)` then trapped ("integer does not fit") under ReleaseSafe pre-fix,
+    // crashing the read-only zig_coverage_map tool. Clamping to maxInt(i64) keeps
+    // the projection finite and structured. Per-file counts (9e18) still fit i64
+    // and round-trip exactly; only the saturated aggregate is capped.
+    var args = try parsedArgs(allocator,
+        \\{"content":"{\"files\":[{\"path\":\"a.zig\",\"total_lines\":9000000000000000000,\"covered_lines\":9000000000000000000},{\"path\":\"b.zig\",\"total_lines\":9000000000000000000,\"covered_lines\":9000000000000000000}]}"}
+    );
+    defer args.deinit();
+    const result = try zigCoverageMap(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    const coverage = result.value.object.get("coverage").?.object;
+    // Aggregate saturated above i64 max, so the cast clamps to maxInt(i64).
+    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), coverage.get("total_lines").?.integer);
+    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), coverage.get("covered_lines").?.integer);
+    // Rate stays capped at 100% (covered == total before saturation).
+    try std.testing.expectEqual(@as(i64, 10000), coverage.get("line_rate_bp").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), coverage.get("file_count").?.integer);
+    // Per-file counts (9e18) still fit i64, so the files projection round-trips them.
+    const files = result.value.object.get("files").?.array;
+    try std.testing.expectEqual(@as(usize, 2), files.items.len);
+    try std.testing.expectEqual(@as(i64, 9000000000000000000), files.items[0].object.get("total_lines").?.integer);
+    try std.testing.expectEqual(@as(i64, 9000000000000000000), files.items[0].object.get("covered_lines").?.integer);
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "bench regression gate clamps negative threshold so it does not invert" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    // DoS/logic payload: a negative threshold makes `pct > threshold` true for an
+    // unchanged benchmark (0 > -5), flagging it as a regression and inverting the
+    // gate to "failed". Clamping to 0 keeps an unchanged bench passing.
+    var args = try parsedArgs(allocator,
+        \\{"current":"parse 100 ns\n","baseline":"parse 100 ns\n","threshold_pct":-5,"session_id":"gate-neg","apply":false}
+    );
+    defer args.deinit();
+    const result = try zigBenchRegressionGate(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    // A passing one-shot gate reports envelope status "completed".
+    try std.testing.expectEqualStrings("completed", result.value.object.get("status").?.string);
+    const validation = result.value.object.get("validation").?.object;
+    try std.testing.expect(validation.get("passed").?.bool);
+    try std.testing.expectEqual(@as(i64, 0), validation.get("threshold_pct").?.integer);
+    try std.testing.expectEqual(@as(i64, 0), validation.get("regression_count").?.integer);
     try workspace.verify();
     try commands.verify();
 }

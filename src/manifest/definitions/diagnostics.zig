@@ -1,127 +1,24 @@
 const types = @import("../types.zig");
+const schemas = @import("diagnostics_schemas.zig");
 
-const fieldHint = types.fieldHint;
 const schema = types.schema;
-const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const group = types.ToolGroup.runtime_diagnostics;
 
-/// Workspace-relative executable or test binary path.
-const backend_read_risk = types.ToolRisk{ .executes_backend = true };
-/// Workspace-relative executable or test binary path.
-const backend_apply_risk = types.ToolRisk{ .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
-/// Workspace-relative executable or test binary path.
-const backend_run_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
-/// Workspace-relative executable or test binary path.
-const command_run_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_project_code = true, .executes_user_command = true };
+const backend_read_risk = schemas.backend_read_risk;
+const backend_apply_risk = schemas.backend_apply_risk;
+const backend_run_risk = schemas.backend_run_risk;
+const command_run_risk = schemas.command_run_risk;
 
-/// Workspace-relative executable or test binary path.
-const evidence_schema = schema(&.{
-    .{ "text", "string", false },
-    .{ "content", "string", false },
-    .{ "path", "string", false },
-    .{ "command", "string", false },
-    .{ "target", "string", false },
-    .{ "limit", "integer", false },
-});
-/// Workspace-relative executable or test binary path.
-const debug_schema = schemaWithHints(&.{
-    .{ "binary", "string", false },
-    .{ "core", "string", false },
-    .{ "command", "string", false },
-    .{ "target", "string", false },
-    .{ "lldb_path", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-    .{ "probe_backend", "boolean", false },
-}, &.{
-    fieldHint("binary", .{ .description = "Workspace-relative executable or test binary path.", .path_kind = "input_file" }),
-    fieldHint("core", .{ .description = "Workspace-relative core dump path.", .path_kind = "input_file" }),
-    fieldHint("lldb_path", .{ .description = "Optional LLDB executable path for this call only." }),
-    fieldHint("probe_backend", .{ .description = "Run an LLDB availability probe for this call.", .default_bool = false }),
-});
-/// Optional heaptrack executable path for this call only.
-const memory_run_schema = schemaWithHints(&.{
-    .{ "command", "string", true },
-    .{ "output", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-    .{ "heaptrack_path", "string", false },
-    .{ "valgrind_path", "string", false },
-}, &.{
-    fieldHint("heaptrack_path", .{ .description = "Optional heaptrack executable path for this call only." }),
-    fieldHint("valgrind_path", .{ .description = "Optional Valgrind executable path for this call only." }),
-});
-/// Workspace-relative callgrind report path.
-const callgrind_schema = schemaWithHints(&.{
-    .{ "command", "string", false },
-    .{ "text", "string", false },
-    .{ "content", "string", false },
-    .{ "path", "string", false },
-    .{ "output", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-    .{ "valgrind_path", "string", false },
-}, &.{
-    fieldHint("path", .{ .description = "Workspace-relative callgrind report path.", .path_kind = "input_file" }),
-    fieldHint("valgrind_path", .{ .description = "Optional Valgrind executable path for this call only." }),
-});
-/// Workspace-relative fuzz corpus directory.
-const fuzz_run_schema = schemaWithHints(&.{
-    .{ "command", "string", true },
-    .{ "corpus", "string", false },
-    .{ "output", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-    .{ "afl_path", "string", false },
-}, &.{
-    fieldHint("corpus", .{ .description = "Workspace-relative fuzz corpus directory.", .path_kind = "input_path" }),
-    fieldHint("afl_path", .{ .description = "Optional AFL++ afl-fuzz executable path for this call only." }),
-});
-/// Workspace-relative baseline binary path.
-const binary_schema = schemaWithHints(&.{
-    .{ "path", "string", true },
-    .{ "baseline", "string", false },
-    .{ "objdump_path", "string", false },
-    .{ "dwarfdump_path", "string", false },
-    .{ "symbolizer_path", "string", false },
-    .{ "addresses", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-}, &.{
-    fieldHint("baseline", .{ .description = "Workspace-relative baseline binary path.", .path_kind = "input_file" }),
-    fieldHint("objdump_path", .{ .description = "Optional llvm-objdump executable path for this call only." }),
-    fieldHint("dwarfdump_path", .{ .description = "Optional llvm-dwarfdump executable path for this call only." }),
-    fieldHint("symbolizer_path", .{ .description = "Optional llvm-symbolizer executable path for this call only." }),
-    fieldHint("addresses", .{ .description = "Whitespace or comma separated addresses to symbolize." }),
-});
-/// Workspace-relative cross-target executable path.
-const cross_schema = schemaWithHints(&.{
-    .{ "target", "string", false },
-    .{ "targets", "string", false },
-    .{ "command", "string", false },
-    .{ "binary", "string", false },
-    .{ "qemu_path", "string", false },
-    .{ "apply", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-}, &.{
-    fieldHint("binary", .{ .description = "Workspace-relative cross-target executable path.", .path_kind = "input_file" }),
-    fieldHint("qemu_path", .{ .description = "Optional QEMU executable path for this call only." }),
-});
-/// Workspace-relative firmware image path.
-const embedded_schema = schemaWithHints(&.{
-    .{ "board", "string", false },
-    .{ "target", "string", false },
-    .{ "image", "string", false },
-    .{ "flash_tool", "string", false },
-    .{ "probe_backend", "boolean", false },
-    .{ "timeout_ms", "integer", false },
-    .{ "limit", "integer", false },
-}, &.{
-    fieldHint("image", .{ .description = "Workspace-relative firmware image path.", .path_kind = "input_file" }),
-    fieldHint("flash_tool", .{ .description = "Optional flash backend command such as probe-rs, openocd, or pyocd." }),
-    fieldHint("probe_backend", .{ .description = "Run a flash-tool availability probe for this call.", .default_bool = false }),
-});
+const evidence_schema = schemas.evidence_schema;
+const debug_schema = schemas.debug_schema;
+const memory_run_schema = schemas.memory_run_schema;
+const callgrind_schema = schemas.callgrind_schema;
+const afl_run_schema = schemas.afl_run_schema;
+const libfuzzer_run_schema = schemas.libfuzzer_run_schema;
+const binary_schema = schemas.binary_schema;
+const cross_schema = schemas.cross_schema;
+const embedded_schema = schemas.embedded_schema;
 
 /// Plan an LLDB-oriented debug session from a binary, core dump, command, target, or crash text.
 pub const zig_debug_plan = tool(.{ .description = "Plan an LLDB-oriented debug session from a binary, core dump, command, target, or crash text.", .input_schema = debug_schema, .group = group, .risk = backend_read_risk, .plan = .{ .dynamic_command = "Optionally probes LLDB and returns exact debugger argv without running a debuggee." } });
@@ -151,9 +48,9 @@ pub const zig_callgrind_report = tool(.{ .description = "Summarize callgrind out
 /// Plan AFL++ or libFuzzer harness execution, corpus layout, limits, and crash handling.
 pub const zig_fuzz_plan = tool(.{ .description = "Plan AFL++ or libFuzzer harness execution, corpus layout, limits, and crash handling.", .input_schema = evidence_schema, .group = group, .plan = .{ .pure_analysis = "Builds a fuzzing plan without running a fuzzer." } });
 /// Preview or run AFL++ with caller-provided command and corpus paths.
-pub const zig_afl_run = tool(.{ .description = "Preview or run AFL++ with caller-provided command and corpus paths.", .input_schema = fuzz_run_schema, .read_only = false, .group = group, .risk = backend_run_risk, .plan = .{ .apply_gated_mutation = "Runs afl-fuzz and writes fuzz evidence only with apply=true." } });
+pub const zig_afl_run = tool(.{ .description = "Preview or run AFL++ with caller-provided command and corpus paths.", .input_schema = afl_run_schema, .read_only = false, .group = group, .risk = backend_run_risk, .plan = .{ .apply_gated_mutation = "Runs afl-fuzz and writes fuzz evidence only with apply=true." } });
 /// Preview or run a libFuzzer-enabled binary command and normalize result evidence.
-pub const zig_libfuzzer_run = tool(.{ .description = "Preview or run a libFuzzer-enabled binary command and normalize result evidence.", .input_schema = fuzz_run_schema, .read_only = false, .group = group, .risk = command_run_risk, .plan = .{ .apply_gated_mutation = "Runs the caller-provided libFuzzer command and writes evidence only with apply=true." } });
+pub const zig_libfuzzer_run = tool(.{ .description = "Preview or run a libFuzzer-enabled binary command and normalize result evidence.", .input_schema = libfuzzer_run_schema, .read_only = false, .group = group, .risk = command_run_risk, .plan = .{ .apply_gated_mutation = "Runs the caller-provided libFuzzer command and writes evidence only with apply=true." } });
 /// Plan deterministic minimization for AFL++ or libFuzzer crash inputs.
 pub const zig_fuzz_crash_minimize = tool(.{ .description = "Plan deterministic minimization for AFL++ or libFuzzer crash inputs.", .input_schema = evidence_schema, .group = group, .plan = .{ .pure_analysis = "Returns minimization argv plans without running minimizers." } });
 /// Summarize workspace fuzz corpus file count, bytes, and bounded identity metadata.

@@ -263,6 +263,8 @@ fn keywordSummaryText(
 /// Parses Zig source with an owned NUL-terminated source buffer.
 fn parseAst(allocator: std.mem.Allocator, contents: []const u8) !std.zig.Ast {
     const source = try allocator.dupeZ(u8, contents);
+    // Ast.deinit does not free tree.source, so the duped buffer must be freed if parse fails.
+    errdefer allocator.free(source);
     return std.zig.Ast.parse(allocator, source, .zig);
 }
 
@@ -627,6 +629,25 @@ fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
     defer allocator.free(dead);
     const allocations = try allocationSummaryText(allocator, "x.zig", "var list: std.ArrayList(u8) = .empty;\n");
     defer allocator.free(allocations);
+}
+
+test "parseAst frees the duped source buffer on allocation failure" {
+    // Guards the parseAst errdefer: Ast.deinit does not free tree.source, so the
+    // duped source buffer must be freed if Ast.parse fails under base-GPA OOM.
+    // Without `errdefer allocator.free(source)` this leaks on the failing index.
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, parseAstAllocationCase, .{});
+}
+
+/// Exercises parseAst under allocation-failure testing, freeing source + tree on success.
+fn parseAstAllocationCase(allocator: std.mem.Allocator) !void {
+    var tree = try parseAst(allocator,
+        \\const std = @import("std");
+        \\pub fn main() void {}
+        \\test "unit" {}
+    );
+    const parsed_source = tree.source;
+    tree.deinit(allocator);
+    allocator.free(parsed_source);
 }
 
 // KCOV_EXCL_START

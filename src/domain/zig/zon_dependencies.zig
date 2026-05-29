@@ -273,7 +273,7 @@ fn parseName(text: []const u8, start: usize) ?ParsedName {
 }
 
 fn fieldInEntry(_: []const u8, entry_start: usize, entry_text: []const u8, field_name: []const u8) ?Field {
-    const field_idx = std.mem.indexOf(u8, entry_text, field_name) orelse return null;
+    const field_idx = findFieldToken(entry_text, field_name) orelse return null;
     var cursor = field_idx + field_name.len;
     cursor = skipHorizontal(entry_text, cursor, entry_text.len);
     if (cursor >= entry_text.len or entry_text[cursor] != '=') return null;
@@ -286,6 +286,69 @@ fn fieldInEntry(_: []const u8, entry_start: usize, entry_text: []const u8, field
         .value_start = entry_start + value_start_local,
         .value_end = entry_start + value_end_local,
     };
+}
+
+/// Finds the local offset of `field_name` as a real field token directly inside the
+/// dependency literal body (brace depth 1), skipping string literals and `//` comments.
+///
+/// `entry_text` spans `.name = .{ ... }`, so the body fields live at depth 1. This avoids
+/// matching the literal `.url`/`.hash`/`.path` inside a comment or another field's value.
+fn findFieldToken(entry_text: []const u8, field_name: []const u8) ?usize {
+    var cursor: usize = 0;
+    var depth: usize = 0;
+    var in_string = false;
+    var escaping = false;
+    while (cursor < entry_text.len) {
+        const c = entry_text[cursor];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (c == '\\') {
+                escaping = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            cursor += 1;
+            continue;
+        }
+        if (c == '"') {
+            in_string = true;
+            cursor += 1;
+            continue;
+        }
+        if (c == '/' and cursor + 1 < entry_text.len and entry_text[cursor + 1] == '/') {
+            cursor += 2;
+            while (cursor < entry_text.len and entry_text[cursor] != '\n') : (cursor += 1) {}
+            continue;
+        }
+        if (c == '{') {
+            depth += 1;
+            cursor += 1;
+            continue;
+        }
+        if (c == '}') {
+            if (depth > 0) depth -= 1;
+            cursor += 1;
+            continue;
+        }
+        if (depth == 1 and c == '.' and matchesFieldToken(entry_text, cursor, field_name)) {
+            return cursor;
+        }
+        cursor += 1;
+    }
+    return null;
+}
+
+/// Reports whether `field_name` appears at `index` as a complete leading-dot token.
+fn matchesFieldToken(entry_text: []const u8, index: usize, field_name: []const u8) bool {
+    if (index + field_name.len > entry_text.len) return false;
+    if (!std.mem.eql(u8, entry_text[index .. index + field_name.len], field_name)) return false;
+    const after = index + field_name.len;
+    if (after < entry_text.len) {
+        const next = entry_text[after];
+        if (std.ascii.isAlphanumeric(next) or next == '_') return false;
+    }
+    return true;
 }
 
 fn scanStringEnd(text: []const u8, value_start: usize) ?usize {

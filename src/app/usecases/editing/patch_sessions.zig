@@ -290,6 +290,16 @@ pub fn classifyPath(path: []const u8) PathPolicy {
     return path_policy.classify(path);
 }
 
+/// Reports whether two replacements target the same workspace file.
+fn hasDuplicateReplacementFile(replacements: []const Replacement) bool {
+    for (replacements, 0..) |replacement, index| {
+        for (replacements[index + 1 ..]) |other| {
+            if (std.mem.eql(u8, replacement.file, other.file)) return true;
+        }
+    }
+    return false;
+}
+
 /// Implements create workflow logic using caller-owned inputs.
 pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext, request: CreateRequest) !CreateResult {
     var files = std.ArrayList(CreateFile).empty;
@@ -348,6 +358,11 @@ pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext,
 
 /// Previews or applies a replacement session while preserving preimage evidence.
 pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.EditingContext, request: ReplacementRequest) !ReplacementResult {
+    // Reject duplicate target files up front: applying two edits to the same path
+    // would let the second read the first's output, silently dropping the earlier
+    // edit and recording an intermediate-state preimage that revert cannot undo.
+    if (hasDuplicateReplacementFile(request.replacements)) return error.InvalidArguments;
+
     var files = std.ArrayList(ReplacementFile).empty;
     errdefer {
         for (files.items) |*file| file.deinit(allocator);
@@ -414,9 +429,37 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
 
     // Apply only after every replacement has passed policy and expected-preimage checks.
     if (request.apply) {
-        for (request.replacements, 0..) |replacement, index| {
-            var snapshot = try readSnapshot(allocator, context, replacement.file);
-            defer snapshot.deinit(allocator);
+        // Re-read every file once and hold the fresh snapshots so the apply pass
+        // writes the exact bytes it just verified.
+        var snapshots = std.ArrayList(FileSnapshot).empty;
+        defer {
+            for (snapshots.items) |*snapshot| snapshot.deinit(allocator);
+            snapshots.deinit(allocator);
+        }
+        try snapshots.ensureTotalCapacity(allocator, request.replacements.len);
+        for (request.replacements) |replacement| {
+            snapshots.appendAssumeCapacity(try readSnapshot(allocator, context, replacement.file));
+        }
+
+        // Re-verify policy and the expected preimage against the freshly read bytes.
+        // If a file changed between the preview read and now, abort the whole apply
+        // before any write so revert preimages never capture an unexpected state.
+        for (snapshots.items, request.replacements) |snapshot, replacement| {
+            _ = replacement;
+            const policy = classifyPath(snapshot.file);
+            var fresh_preimage = try session_domain.identityFromBytes(allocator, snapshot.exists, snapshot.bytes);
+            defer fresh_preimage.deinit(allocator);
+            const expected_ok = session_domain.expectedMatches(request.expected_preimages, snapshot.file, fresh_preimage);
+            if (!policy.direct_edit_allowed or !expected_ok) {
+                for (history_files.items) |*file| file.deinit(allocator);
+                history_files.deinit(allocator);
+                history_files = .empty;
+                return replacementResultFromParts(allocator, request, false, false, false, changed_count, true, &files, &expected);
+            }
+        }
+
+        // Write from the verified snapshots only.
+        for (snapshots.items, request.replacements, 0..) |snapshot, replacement, index| {
             if (!snapshot.exists or !std.mem.eql(u8, snapshot.bytes, replacement.content)) {
                 const artifact_path = try session_domain.preimageArtifactPath(allocator, request.session_id, index, snapshot.file);
                 defer allocator.free(artifact_path);
@@ -997,4 +1040,84 @@ test "patch history identity clamps negative persisted byte counts" {
 
     try std.testing.expect(identity.exists);
     try std.testing.expectEqual(@as(usize, 0), identity.bytes);
+}
+
+const fakes = @import("../../../testing/fakes/root.zig");
+
+test "replacementSession rejects duplicate target files before reading the workspace" {
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(std.testing.allocator);
+    defer clock.deinit();
+    const context = app_context.EditingContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    // Two edits to the same file would last-win and corrupt the preimage chain; reject up front.
+    const replacements = [_]Replacement{
+        .{ .file = "src/main.zig", .content = "const a = 1;\n" },
+        .{ .file = "src/main.zig", .content = "const a = 2;\n" },
+    };
+    try std.testing.expectError(error.InvalidArguments, replacementSession(arena.allocator(), context, .{
+        .operation = .apply,
+        .session_id = "dup-session",
+        .replacements = &replacements,
+        .apply = true,
+    }));
+    // Rejection happens before any snapshot read or source write.
+    try std.testing.expectEqual(@as(usize, 0), workspace.readCalls().len);
+    try std.testing.expectEqual(@as(usize, 0), workspace.writeCalls().len);
+    try workspace.verify();
+    try clock.verify();
+}
+
+test "replacementSession aborts apply when fresh bytes no longer match the expected preimage" {
+    const allocator = std.testing.allocator;
+    var workspace = fakes.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(allocator);
+    defer clock.deinit();
+    const context = app_context.EditingContext{
+        .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    const file = "src/main.zig";
+    const preview_bytes = "const a = 1;\n"; // bytes observed during preview / expected preimage
+    const racing_bytes = "const a = 2;\n"; // bytes the file mutated to before apply re-read
+    const new_content = "const a = 3;\n"; // the edit the caller asked us to write
+
+    // Pass 1 read returns the preview bytes; the apply re-read returns the raced bytes.
+    try workspace.expectRead(.{ .path = file, .max_bytes = max_session_file_bytes, .provenance = "patch_session_snapshot" }, preview_bytes);
+    try workspace.expectRead(.{ .path = file, .max_bytes = max_session_file_bytes, .provenance = "patch_session_snapshot" }, racing_bytes);
+
+    // Expected preimage matches the preview bytes so pass 1 considers the apply safe.
+    var expected_identity = try session_domain.identityFromBytes(allocator, true, preview_bytes);
+    defer expected_identity.deinit(allocator);
+    const expected = [_]ExpectedPreimage{.{ .file = file, .identity = expected_identity }};
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const replacements = [_]Replacement{.{ .file = file, .content = new_content }};
+    var result = try replacementSession(arena.allocator(), context, .{
+        .operation = .apply,
+        .session_id = "toctou-session",
+        .replacements = &replacements,
+        .expected_preimages = &expected,
+        .apply = true,
+    });
+    defer result.deinit(arena.allocator());
+
+    // The TOCTOU guard must abort the whole apply: no preimage or source writes occur.
+    try std.testing.expect(!result.applied);
+    try std.testing.expect(!result.safe_to_apply);
+    try std.testing.expect(result.blocked);
+    try std.testing.expectEqual(@as(usize, 0), workspace.writeCalls().len);
+    try workspace.verify();
+    try clock.verify();
 }

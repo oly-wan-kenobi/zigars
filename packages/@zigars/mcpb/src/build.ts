@@ -179,9 +179,20 @@ function run(command: string, args: string[], options: Partial<SpawnSyncOptionsW
 }
 
 function findTool(names: string[]): string | null {
+  const pathEntries = (process.env.PATH ?? "").split(path.delimiter).filter((entry) => entry.length > 0);
+  const pathExtensions = process.platform === "win32"
+    ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((ext) => ext.length > 0)
+    : [""];
   for (const name of names) {
-    const result = spawnSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" });
-    if (result.status === 0) return result.stdout.trim();
+    // Absolute or relative paths are probed directly; bare names are resolved against PATH.
+    const candidateDirs = path.basename(name) === name ? pathEntries : [path.dirname(name)];
+    const baseName = path.basename(name);
+    for (const dir of candidateDirs) {
+      for (const ext of pathExtensions) {
+        const candidate = path.join(dir, `${baseName}${ext}`);
+        if (existsSync(candidate)) return candidate;
+      }
+    }
   }
   return null;
 }

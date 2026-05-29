@@ -37,6 +37,10 @@ test "validation plan selects command phases and skipped build gate" {
         .max_bytes = 0,
         .provenance = "zigars_validation_plan path probe",
     }, "");
+    try workspace.expectResolve(.{
+        .path = "src/main.zig",
+        .provenance = "zigars_validation_plan source phase",
+    }, "src/main.zig");
     const ctx = (TestPorts{ .command = &command, .workspace = workspace.port(), .clock = &clock }).context();
 
     var result = try validation.plan(std.testing.allocator, ctx, .{
@@ -109,6 +113,10 @@ test "validation run records command failure and timeout as typed phase outcomes
         .max_bytes = 0,
         .provenance = "zigars_validation_plan path probe",
     }, "");
+    try workspace.expectResolve(.{
+        .path = "src/main.zig",
+        .provenance = "zigars_validation_plan source phase",
+    }, "src/main.zig");
     try workspace.expectReadError(.{
         .path = validation.history_path_default,
         .max_bytes = validation.history_max_bytes,
@@ -298,6 +306,10 @@ test "validation plan covers build config goals and missing source probes" {
         .max_bytes = 0,
         .provenance = "zigars_validation_plan path probe",
     }, "");
+    try workspace.expectResolve(.{
+        .path = "build.zig",
+        .provenance = "zigars_validation_plan source phase",
+    }, "build.zig");
     try workspace.expectReadError(.{
         .path = "src/missing.zig",
         .max_bytes = 0,
@@ -506,10 +518,16 @@ const RecordingWorkspace = struct {
         return .{
             .ptr = self,
             .vtable = &.{
+                .resolve = resolve,
                 .read = read,
                 .write = write,
             },
         };
+    }
+
+    /// Resolves the requested path unchanged so source-phase argv stays workspace-relative.
+    fn resolve(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        return .{ .path = request.path };
     }
 
     /// Reads read data from the provided context without taking ownership of inputs.

@@ -21,7 +21,7 @@ pub const zig_profile_plan = tool(.{
 pub const zig_profile_run = tool(.{
     .description = "Run an explicit user-provided profiler command in the workspace after splitting argv without a shell.",
     .input_schema = schema(&.{ .{ "command", "string", true }, .{ "timeout_ms", "integer", false } }),
-    .read_only = true,
+    .read_only = false,
     .group = .profiling,
     .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true },
     .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },

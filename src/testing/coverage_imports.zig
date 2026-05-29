@@ -17,6 +17,7 @@ test {
     _ = @import("../manifest/definitions/ci.zig");
     _ = @import("../manifest/definitions/core.zig");
     _ = @import("../manifest/definitions/diagnostics.zig");
+    _ = @import("../manifest/definitions/diagnostics_schemas.zig");
     _ = @import("../manifest/definitions/discovery.zig");
     _ = @import("../manifest/definitions/docs.zig");
     _ = @import("../manifest/definitions/environment_profiles.zig");

@@ -1737,7 +1737,19 @@ fn buildZigArgv(
     } else if (std.mem.eql(u8, command_name, "fmt-check")) {
         try appendOwnedArg(allocator, &list, "fmt");
         try appendOwnedArg(allocator, &list, "--check");
-        if (file) |file_value| try appendOwnedArg(allocator, &list, file_value) else try appendOwnedArg(allocator, &list, "src");
+        // Resolve a caller-supplied path through the workspace sandbox before it
+        // reaches the `zig fmt --check` argv, matching the `check`/`test`
+        // branches. Without this, a raw `../../etc/hosts` would escape the
+        // workspace boundary the tool advertises. The `src` default is preserved
+        // when no path is supplied.
+        if (file) |file_value| {
+            const resolved = try context.workspace_store.resolve(allocator, .{
+                .path = file_value,
+                .provenance = "project_intelligence.command_arg",
+            });
+            defer resolved.deinit(allocator);
+            try appendOwnedArg(allocator, &list, resolved.path);
+        } else try appendOwnedArg(allocator, &list, "src");
     } else if (std.mem.eql(u8, command_name, "test")) {
         try appendOwnedArg(allocator, &list, "test");
         const file_value = file orelse return error.MissingFile;
@@ -1752,8 +1764,96 @@ fn buildZigArgv(
             try appendOwnedArg(allocator, &list, filter_value);
         }
     } else return error.InvalidCommand;
-    for (extra_args) |arg| try appendOwnedArg(allocator, &list, arg);
+    try appendExtraArgs(allocator, &list, command_name, extra_args);
     return .{ .items = try list.toOwnedSlice(allocator) };
+}
+
+/// Path-bearing `zig build`-system flags that would redirect compilation,
+/// caching, emitted output, package/library resolution, or the build runner
+/// itself outside the workspace sandbox (the last enabling arbitrary code
+/// execution).
+///
+/// There is no shell on this surface, so user tokens cannot inject commands —
+/// but they can inject *flags* to the fixed `zig` binary. These flags take a
+/// filesystem operand (as `--flag value`, `--flag=value`, or, for `-femit-*`,
+/// `-femit-bin=path`) that escapes the write/exec boundary the rest of the
+/// server enforces, so they are denied in the passthrough.
+const denied_build_flag_prefixes = [_][]const u8{
+    "--build-file",
+    "--prefix",
+    "--cache-dir",
+    "--global-cache-dir",
+    "--zig-lib-dir",
+    "-femit-",
+    // `--prefix-lib-dir` / `--prefix-exe-dir` / `--prefix-include-dir` also
+    // redirect install output; they share the `--prefix` stem above only as a
+    // separate token, so list them explicitly.
+    "--prefix-lib-dir",
+    "--prefix-exe-dir",
+    "--prefix-include-dir",
+    // `-p` is the documented short alias of `--prefix` (`zig build -h`:
+    // "-p, --prefix [path]"), so it redirects install output just like
+    // `--prefix`. Zig only accepts its operand space-separated (`-p <path>`);
+    // the glued `-p<path>` and `-p=<path>` forms are rejected by the build
+    // runner as unrecognized, so the exact-token / `=` matching below is exactly
+    // the live surface.
+    "-p",
+    // `--build-runner [file]` overrides the build runner with an arbitrary Zig
+    // file, executing attacker-chosen code outside the workspace — strictly
+    // worse than the already-denied `--build-file`.
+    "--build-runner",
+    // System-integration flags that take a path operand (`zig build -h`,
+    // "System Integration Options"). Each points compilation, linking, libc, or
+    // package resolution at a directory or file outside the workspace, so they
+    // can both read host paths and pull in foreign build/link inputs.
+    "--search-prefix",
+    "--sysroot",
+    "--libc",
+    "--libc-runtimes",
+    "--system",
+};
+
+/// Returns true when `arg` is (or begins, for `--flag=value`/`-femit-*` forms) a
+/// denied path-bearing build-system flag.
+fn isDeniedBuildFlag(arg: []const u8) bool {
+    for (denied_build_flag_prefixes) |flag| {
+        if (std.mem.eql(u8, arg, flag)) return true;
+        // `--cache-dir=foo` and `-femit-bin=foo` carry the operand inline.
+        if (std.mem.startsWith(u8, arg, flag) and arg.len > flag.len) {
+            const next = arg[flag.len];
+            if (next == '=' or std.mem.startsWith(u8, flag, "-femit-")) return true;
+        }
+    }
+    return false;
+}
+
+/// Appends caller-supplied passthrough tokens to the assembled argv with a
+/// sandbox guard appropriate to the subcommand.
+///
+/// - `zig test`: a `--` end-of-options separator is inserted first, so every
+///   following token is handed to the compiled test binary rather than
+///   interpreted as a compiler flag. `zig test --` does not carry run-step
+///   semantics, so this is both safe and sufficient.
+/// - `zig build` / `zig build test` and the `zig ast-check` / `zig fmt`
+///   helpers: `--` is *not* added (for `zig build` it would mean "arguments to
+///   the run step"). Instead path-bearing build-system flags that escape the
+///   workspace are rejected outright, failing closed.
+fn appendExtraArgs(
+    allocator: std.mem.Allocator,
+    list: *std.ArrayList([]const u8),
+    command_name: []const u8,
+    extra_args: []const []const u8,
+) !void {
+    if (extra_args.len == 0) return;
+    if (std.mem.eql(u8, command_name, "test")) {
+        try appendOwnedArg(allocator, list, "--");
+        for (extra_args) |arg| try appendOwnedArg(allocator, list, arg);
+        return;
+    }
+    for (extra_args) |arg| {
+        if (isDeniedBuildFlag(arg)) return error.UnsafeBuildFlag;
+        try appendOwnedArg(allocator, list, arg);
+    }
 }
 
 /// Appends owned arg data into caller-provided storage, propagating allocation failures.
@@ -2678,6 +2778,155 @@ test "project intelligence JSON builders clean up allocation failures" {
 
 test "project intelligence allocation sweep propagates non allocation errors" {
     try std.testing.expectError(error.AccessDenied, sweepAllocationFailures(nonAllocationFailureScenario));
+}
+
+test "buildZigArgv resolves the fmt-check path through the workspace sandbox" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var runtime = AllocationRuntime{};
+    const context = runtime.context();
+
+    // An escaping path is rejected by the workspace resolve before it can reach
+    // the `zig fmt --check` argv. Pre-fix this path was appended verbatim.
+    try std.testing.expectError(
+        error.PathOutsideWorkspace,
+        buildZigArgv(allocator, context, "fmt-check", "../../../../etc/hosts", null, &.{}),
+    );
+
+    // A valid path is resolved and the *resolved* path lands in the argv.
+    {
+        var argv = try buildZigArgv(allocator, context, "fmt-check", "lib/api.zig", null, &.{});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+        try std.testing.expectEqualStrings("zig", argv.items[0]);
+        try std.testing.expectEqualStrings("fmt", argv.items[1]);
+        try std.testing.expectEqualStrings("--check", argv.items[2]);
+        try std.testing.expectEqualStrings("/repo/lib/api.zig", argv.items[3]);
+    }
+
+    // The `src` default is preserved when no path is supplied.
+    {
+        var argv = try buildZigArgv(allocator, context, "fmt-check", null, null, &.{});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+        try std.testing.expectEqualStrings("src", argv.items[3]);
+    }
+}
+
+test "buildZigArgv guards extra args against workspace-escaping build flags" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var runtime = AllocationRuntime{};
+    const context = runtime.context();
+
+    // `zig build` family: each path-bearing build-system flag is rejected,
+    // covering the space- and `=`-separated forms. Pre-fix these tokens were
+    // appended directly to `zig build`, redirecting build/exec output outside
+    // the workspace.
+    const denied = [_][]const []const u8{
+        &.{ "--build-file", "/tmp/evil/build.zig" },
+        &.{ "--prefix", "/tmp/escape" },
+        &.{"--cache-dir=/tmp/escape"},
+        &.{ "--global-cache-dir", "/tmp/escape" },
+        &.{ "--zig-lib-dir", "/tmp/escape" },
+        &.{"-femit-bin=/tmp/escape/out"},
+        &.{"--prefix-lib-dir=/tmp/escape"},
+        // System-integration flags that take a path operand also escape.
+        &.{ "--search-prefix", "/tmp/escape" },
+        &.{ "--sysroot", "/tmp/escape" },
+        &.{"--libc=/tmp/escape/libc.txt"},
+        &.{ "--libc-runtimes", "/tmp/escape" },
+        &.{ "--system", "/tmp/escape/pkgs" },
+    };
+    for (denied) |extra| {
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build", null, null, extra),
+        );
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build-test", null, null, extra),
+        );
+    }
+
+    // Benign build options are preserved verbatim with no `--` separator (which
+    // would otherwise carry run-step semantics for `zig build`).
+    {
+        var argv = try buildZigArgv(allocator, context, "build", null, null, &.{"-Doptimize=ReleaseSafe"});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 3), argv.items.len);
+        try std.testing.expectEqualStrings("zig", argv.items[0]);
+        try std.testing.expectEqualStrings("build", argv.items[1]);
+        try std.testing.expectEqualStrings("-Doptimize=ReleaseSafe", argv.items[2]);
+        try std.testing.expect(!argvHasToken(argv.items, "--"));
+    }
+
+    // `zig test`: a `--` separator is inserted before user tokens, so even a
+    // build-system flag is handed inert to the test binary instead of the
+    // compiler. Pre-fix the token followed `zig test <file>` directly.
+    {
+        var argv = try buildZigArgv(allocator, context, "test", "src/util.zig", null, &.{"-femit-bin=/tmp/escape"});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 5), argv.items.len);
+        try std.testing.expectEqualStrings("zig", argv.items[0]);
+        try std.testing.expectEqualStrings("test", argv.items[1]);
+        try std.testing.expectEqualStrings("/repo/src/util.zig", argv.items[2]);
+        try std.testing.expectEqualStrings("--", argv.items[3]);
+        try std.testing.expectEqualStrings("-femit-bin=/tmp/escape", argv.items[4]);
+    }
+}
+
+test "buildZigArgv denies -p prefix alias and --build-runner override" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var runtime = AllocationRuntime{};
+    const context = runtime.context();
+
+    // Residual deny-list gap on the `zig build` family: `-p` is the documented
+    // short alias of `--prefix` (redirects install output), and `--build-runner`
+    // points the build at an arbitrary Zig file (arbitrary code execution
+    // outside the workspace, strictly worse than the already-denied
+    // `--build-file`). Both must fail closed in every operand form Zig accepts:
+    // `-p` only takes a space-separated operand, while `--build-runner` accepts
+    // both the space- and `=`-separated forms.
+    const denied = [_][]const []const u8{
+        &.{ "-p", "/tmp/escape" },
+        &.{ "--build-runner", "/tmp/x.zig" },
+        &.{"--build-runner=/tmp/x.zig"},
+    };
+    for (denied) |extra| {
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build", null, null, extra),
+        );
+        try std.testing.expectError(
+            error.UnsafeBuildFlag,
+            buildZigArgv(allocator, context, "build-test", null, null, extra),
+        );
+    }
+
+    // The benign short build option `-Doptimize=ReleaseSafe` still passes
+    // through untouched; the new `-p` entry must not over-match `-D*` tokens.
+    {
+        var argv = try buildZigArgv(allocator, context, "build", null, null, &.{"-Doptimize=ReleaseSafe"});
+        defer argv.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 3), argv.items.len);
+        try std.testing.expectEqualStrings("-Doptimize=ReleaseSafe", argv.items[2]);
+    }
+}
+
+/// Returns true when `argv` contains an exact token match for `needle`.
+fn argvHasToken(argv: []const []const u8, needle: []const u8) bool {
+    for (argv) |arg| {
+        if (std.mem.eql(u8, arg, needle)) return true;
+    }
+    return false;
 }
 
 /// Implements sweep allocation failures workflow logic using caller-owned inputs.

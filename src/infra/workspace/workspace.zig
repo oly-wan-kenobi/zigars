@@ -57,18 +57,43 @@ pub const Workspace = struct {
     }
 
     /// Reads a workspace-relative file with a caller-supplied byte limit.
+    ///
+    /// The final component is opened relative to the canonicalized parent
+    /// directory with symlink-following disabled, so a path that resolves
+    /// inside the root during `resolve` but is swapped for an
+    /// outside-pointing symlink before the open is rejected by the kernel
+    /// rather than followed (TOCTOU containment).
     pub fn readFileAlloc(self: Workspace, io: std.Io, path: []const u8, max_bytes: usize) ![]u8 {
         const resolved = try self.resolve(path);
         defer self.allocator.free(resolved);
-        return std.Io.Dir.cwd().readFileAlloc(io, resolved, self.allocator, .limited(max_bytes));
+
+        var contained = try openContainedFinalComponent(io, self.root, resolved, false);
+        defer contained.parent.close(io);
+        var file = contained.openFileNoFollow(io) catch |err| return err;
+        defer file.close(io);
+
+        var file_reader = file.reader(io, &.{});
+        return file_reader.interface.allocRemaining(self.allocator, .limited(max_bytes)) catch |err| switch (err) {
+            error.ReadFailed => return file_reader.err.?,
+            error.OutOfMemory, error.StreamTooLong => |e| return e,
+        };
     }
 
     /// Atomically writes a workspace-relative output file, creating parents as needed.
+    ///
+    /// The atomic file is created relative to the canonicalized parent
+    /// directory and materialized with a rename, which replaces an
+    /// outside-pointing final-component symlink instead of writing through
+    /// it. Containment is therefore enforced against the canonical parent
+    /// inode rather than a re-walked path string.
     pub fn writeFile(self: Workspace, io: std.Io, path: []const u8, bytes: []const u8) !void {
         const resolved = try self.resolveOutput(path);
         defer self.allocator.free(resolved);
-        var atomic = try std.Io.Dir.cwd().createFileAtomic(io, resolved, .{
-            .make_path = true,
+
+        var contained = try openContainedFinalComponent(io, self.root, resolved, true);
+        defer contained.parent.close(io);
+
+        var atomic = try contained.parent.createFileAtomic(io, contained.name, .{
             .replace = true,
         });
         defer atomic.deinit(io);
@@ -96,17 +121,28 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
         try std.fs.path.resolve(allocator, &.{path})
     else
         try std.fs.path.resolve(allocator, &.{ root, path });
-    var resolved_owned = true;
-    defer if (resolved_owned) allocator.free(resolved);
+    defer allocator.free(resolved);
 
     if (!isInside(root, resolved)) {
         return WorkspaceError.PathOutsideWorkspace;
     }
     const real = realPathFileAbsoluteOwned(allocator, io, resolved) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
+        // The full path could not be canonicalized (typically a not-yet-existing
+        // final component). Do NOT degrade to the unresolved lexical string:
+        // canonicalize the parent and re-check containment so an
+        // outside-pointing symlink in the parent chain is still rejected.
+        // A genuinely missing file then surfaces as FileNotFound on open,
+        // matching prior behavior, but containment is never lexical-only.
         else => {
-            resolved_owned = false;
-            return resolved;
+            const parent = std.fs.path.dirname(resolved) orelse root;
+            const real_parent = try canonicalOutputParent(allocator, io, root, parent);
+            defer allocator.free(real_parent);
+            std.debug.assert(isInside(root, real_parent));
+            const name = std.fs.path.basename(resolved);
+            const real_input = try std.fs.path.join(allocator, &.{ real_parent, name });
+            std.debug.assert(isInside(root, real_input));
+            return real_input;
         },
     };
     if (!isInside(root, real)) {
@@ -185,6 +221,53 @@ fn realPathFileAbsoluteOwned(allocator: std.mem.Allocator, io: std.Io, absolute_
     return try allocator.dupe(u8, sentinel_path[0..sentinel_path.len]);
 }
 
+/// A final path component pinned to an opened, contained parent directory.
+///
+/// `parent` is the already-canonicalized parent directory opened as a handle;
+/// the handle pins that inode so subsequent `openat`/atomic-create operations
+/// resolve relative to it rather than re-walking a path string. `name`
+/// borrows the final component from the caller-owned canonical path.
+const ContainedTarget = struct {
+    parent: std.Io.Dir,
+    name: []const u8,
+
+    /// Opens the final component relative to the pinned parent without
+    /// following a final-component symlink, so a swap to an outside-pointing
+    /// symlink after canonicalization is rejected at open time.
+    fn openFileNoFollow(self: ContainedTarget, io: std.Io) !std.Io.File {
+        return self.parent.openFile(io, self.name, .{
+            .follow_symlinks = false,
+            // Belt-and-suspenders on operating systems that enforce it
+            // (e.g. FreeBSD); ignored elsewhere, where `follow_symlinks`
+            // plus the canonical parent provides containment.
+            .resolve_beneath = true,
+        });
+    }
+};
+
+/// Opens the canonicalized parent of `resolved` and pins its final component.
+///
+/// `resolved` must already be a canonical absolute path inside `root` (as
+/// produced by `resolve`/`resolveOutput`). The parent directory is opened as a
+/// handle and re-verified to live inside `root`, which both pins intermediate
+/// components against a TOCTOU swap and rejects a path whose parent escapes the
+/// workspace (for example the workspace root itself, whose parent is outside).
+///
+/// When `create_parents` is set, the canonical (already inside-verified) parent
+/// chain is created before opening, preserving `make_path` semantics for writes
+/// without ever materializing directories outside the root.
+fn openContainedFinalComponent(io: std.Io, root: []const u8, resolved: []const u8, create_parents: bool) !ContainedTarget {
+    const parent_path = std.fs.path.dirname(resolved) orelse return WorkspaceError.PathOutsideWorkspace;
+    if (!isInside(root, parent_path)) return WorkspaceError.PathOutsideWorkspace;
+    const name = std.fs.path.basename(resolved);
+    if (name.len == 0) return WorkspaceError.EmptyPath;
+    if (create_parents) {
+        try std.Io.Dir.cwd().createDirPath(io, parent_path);
+    }
+    const parent = try std.Io.Dir.openDirAbsolute(io, parent_path, .{});
+    return .{ .parent = parent, .name = name };
+}
+
 /// True when `path` is exactly `root` or a descendant separated by a path separator.
 pub fn isInside(root: []const u8, path: []const u8) bool {
     if (std.mem.eql(u8, root, path)) return true;
@@ -194,12 +277,25 @@ pub fn isInside(root: []const u8, path: []const u8) bool {
 }
 
 test "resolve keeps paths inside workspace" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const root = try std.fs.path.resolve(arena.allocator(), &.{"/tmp/zigars-root"});
-    const child = try resolveInsideRoot(arena.allocator(), std.testing.io, root, "src/main.zig");
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root/src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/main.zig", .data = "pub fn main() void {}\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    const root = try std.fs.path.join(allocator, &.{ base_z[0..], "root" });
+
+    const child = try resolveInsideRoot(allocator, io, root, "src/main.zig");
     try std.testing.expect(isInside(root, child));
-    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, resolveInsideRoot(arena.allocator(), std.testing.io, root, "../outside.zig"));
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, resolveInsideRoot(allocator, io, root, "../outside.zig"));
 }
 
 test "resolve propagates allocation failure while canonicalizing existing files" {
@@ -234,4 +330,60 @@ test "resolve propagates allocation failure while canonicalizing existing files"
     }
     try std.testing.expect(saw_success);
     try std.testing.expect(saw_oom);
+}
+
+test "contained open rejects a final component swapped to an outside symlink after resolve" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    // A real file inside the root, and an attacker-controlled target outside it.
+    try tmp.dir.createDirPath(io, "root/src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/main.zig", .data = "pub const internal = true;\n" });
+    try tmp.dir.createDirPath(io, "outside");
+    try tmp.dir.writeFile(io, .{ .sub_path = "outside/evil.zig", .data = "pub const escaped = true;\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const target_inside = try std.fs.path.join(allocator, &.{ root, "src", "main.zig" });
+    defer allocator.free(target_inside);
+    const outside_file = try std.fs.path.join(allocator, &.{ base, "outside", "evil.zig" });
+    defer allocator.free(outside_file);
+
+    // Time-of-check: canonicalize while the path is still a real inside file.
+    const canonical = try resolveInsideRoot(allocator, io, root, "src/main.zig");
+    defer allocator.free(canonical);
+    try std.testing.expectEqualStrings(target_inside, canonical);
+
+    // Time-of-use swap: the final component is replaced with a symlink that
+    // points outside the workspace, simulating a racing attacker winning the
+    // TOCTOU window between resolve and open.
+    try std.Io.Dir.cwd().deleteFile(io, canonical);
+    try std.Io.Dir.symLinkAbsolute(io, outside_file, canonical, .{});
+
+    // Post-fix containment: opening the final component relative to the pinned
+    // canonical parent with symlink-following disabled rejects the swap instead
+    // of reading the outside file.
+    var contained = try openContainedFinalComponent(io, root, canonical, false);
+    defer contained.parent.close(io);
+    try std.testing.expectError(error.SymLinkLoop, contained.openFileNoFollow(io));
+
+    // Control proving the pre-fix open strategy was exploitable: re-walking the
+    // canonical string with symlink-following enabled (the old behavior) follows
+    // the swapped symlink straight out of the workspace. If `readFileAlloc` is
+    // ever reverted to that strategy this divergence is the regression signal.
+    var followed = try std.Io.Dir.cwd().openFile(io, canonical, .{});
+    defer followed.close(io);
+    var reader = followed.reader(io, &.{});
+    const leaked = try reader.interface.allocRemaining(allocator, .limited(4096));
+    defer allocator.free(leaked);
+    try std.testing.expectEqualStrings("pub const escaped = true;\n", leaked);
 }

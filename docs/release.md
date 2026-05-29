@@ -135,15 +135,25 @@ floors, and floor pass/fail fields.
 
 `release-check` includes `zig build artifact-hygiene`, which fails if known
 generated directories such as `.zig-cache/`, `zig-out/`, `zig-pkg/`, `dist/`, or
-`coverage/` are tracked by git.
+`coverage/` are tracked by git. The tracked-artifact gate scopes `dist/` to the
+top-level release-asset directory. The npm package output
+`packages/@zigars/mcp/dist/*.js` is a deliberate exception: it is compiled from
+the package TypeScript `src/` and committed so the shim runs via `npx`/`bunx`
+without a build step. `packages/@zigars/mcp/.gitignore` keeps `node_modules/`
+and `dist/test/` untracked while tracking the runtime `dist/` output, and the
+hygiene gate does not flag this package `dist/`.
 
 `artifact-hygiene` is broader than generated-file detection. Its policy tables
 live in `tools/release/release_rules.zig`, and its checker lives in
 `tools/release/release_checks.zig`. The hygiene gate also enforces:
 
 - line budgets and required headroom for large or trust-critical files;
-- pure-Zig project-owned trees by rejecting Python files under `.github`,
-  `docs`, `examples`, `scripts`, `src`, `tests`, and `tools`;
+- pure-Zig project-owned trees by rejecting tracked `.py` files under `.github`,
+  `docs`, `examples`, `scripts`, `src`, `tests`, and `tools`. The gate matches
+  the `.py` extension only and intentionally does not cover the npm `packages/`
+  tree, which is JS/TS by design. Vetted inline Python inside
+  `.github/scripts/*.sh` conformance heredocs is CI-only embedded scripting, not
+  a shipped `.py` file, so it is out of scope for this gate (see AGENTS.md);
 - forbidden global/runtime/logging tokens and known stale-code tokens;
 - ignored-error hygiene for LSP, smoke, fixture, fake-backend, release-check,
   and CLI helper paths;
@@ -246,6 +256,15 @@ repository. User-owned private repositories cannot persist GitHub attestations,
 so the workflow skips that step there and the release notes must not claim
 provenance attestations. GitHub Actions are pinned to commit SHAs in the
 workflow; update the adjacent tag comments when bumping an action.
+
+The manual `Release Readiness`, `Backend Conformance`, and `ZLS Conformance`
+workflows expose an optional `setup_command` `workflow_dispatch` input that is
+interpolated directly into a `run:` step (arbitrary command execution by
+design). This is an accepted risk: those workflows are manual-dispatch only,
+runnable only by write-access actors, and execute under a `contents: read`
+token. The decision is to keep the input as-is (documented with an inline
+comment at each `Optional … setup` step). Do not connect this input to an
+untrusted trigger such as `pull_request`.
 
 A workflow-published version is public only after the tag workflow finishes and
 the GitHub release contains all expected archives, `zigars-checksums.txt`, and

@@ -1048,12 +1048,11 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
 }
 
 fn containsWordIgnoreCase(haystack: []const u8, needle: []const u8) bool {
-    var buffer: [128]u8 = undefined;
-    if (needle.len > buffer.len) return false;
-    const lowered_needle = std.ascii.lowerString(buffer[0..needle.len], needle);
+    // Compare case-insensitively without a fixed-size buffer so needles longer
+    // than 128 bytes (e.g. a long caller-supplied topic) are not silently dropped.
     var i: usize = 0;
     while (i + needle.len <= haystack.len) : (i += 1) {
-        if (std.ascii.eqlIgnoreCase(haystack[i .. i + needle.len], lowered_needle)) return true;
+        if (std.ascii.eqlIgnoreCase(haystack[i .. i + needle.len], needle)) return true;
     }
     return false;
 }
@@ -1154,4 +1153,17 @@ test "safety catalog ignores obvious comments and strings" {
     const sites = value.object.get("sites").?.array;
     try std.testing.expectEqual(@as(usize, 1), sites.items.len);
     try std.testing.expectEqualStrings("catch_unreachable", sites.items[0].object.get("kind").?.string);
+}
+
+test "containsWordIgnoreCase matches needles longer than 128 bytes" {
+    // A topic token longer than the former 128-byte buffer ceiling must still
+    // match case-insensitively rather than silently returning false.
+    const needle = "Aa" ** 80; // 160 bytes, > 128
+    try std.testing.expect(needle.len > 128);
+
+    var haystack: [256]u8 = undefined;
+    const lowered = std.ascii.lowerString(haystack[0..needle.len], needle);
+    try std.testing.expect(containsWordIgnoreCase(lowered, needle));
+    try std.testing.expect(containsWordIgnoreCase("prefix/" ++ ("aA" ** 80), needle));
+    try std.testing.expect(!containsWordIgnoreCase("short", needle));
 }

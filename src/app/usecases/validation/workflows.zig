@@ -455,10 +455,19 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
         for (request.changed_paths) |path| {
             if (!std.mem.endsWith(u8, path, ".zig")) continue;
             if (!workspacePathExists(allocator, context, path)) continue;
+            // Embed the workspace-resolved path in the argv (matching buildZigArgv)
+            // rather than the raw caller-supplied path. The path already passed the
+            // sandboxed workspacePathExists probe, so any escape was dropped above;
+            // a resolve error here (e.g. OutOfMemory) propagates rather than masking.
+            const resolved = try context.workspace_store.resolve(allocator, .{
+                .path = path,
+                .provenance = "zigars_validation_plan source phase",
+            });
+            defer resolved.deinit(allocator);
             try appendPhase(allocator, &phases, .{
                 .id = "format_check",
                 .kind = .command,
-                .argv = &.{ context.tool_paths.zig, "fmt", "--check", path },
+                .argv = &.{ context.tool_paths.zig, "fmt", "--check", resolved.path },
                 .reason = "Touched Zig source requires formatting verification.",
                 .required = true,
                 .risk = "project_code",
@@ -466,7 +475,7 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
             try appendPhase(allocator, &phases, .{
                 .id = "ast_check",
                 .kind = .command,
-                .argv = &.{ context.tool_paths.zig, "ast-check", path },
+                .argv = &.{ context.tool_paths.zig, "ast-check", resolved.path },
                 .reason = "Touched Zig source requires compiler syntax validation.",
                 .required = true,
                 .risk = "project_code",
@@ -1784,6 +1793,65 @@ test "validation workflow consumes owned workspace reads" {
     try clock.verify();
 }
 
+test "plan embeds the workspace-resolved changed path in source-phase argv" {
+    const fakes = @import("../../../testing/fakes/root.zig");
+    const allocator = std.testing.allocator;
+
+    var command = fakes.FakeCommandRunner.init(allocator);
+    defer command.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(allocator);
+    defer workspace.deinit();
+    var clock = fakes.FakeClockAndIds.init(allocator);
+    defer clock.deinit();
+
+    // The probe accepts the raw caller path; resolve returns a different value to
+    // prove the resolved path (not the raw input) is what lands in the argv.
+    try workspace.expectRead(.{
+        .path = "src/main.zig",
+        .max_bytes = 0,
+        .provenance = "zigars_validation_plan path probe",
+    }, "");
+    try workspace.expectResolve(.{
+        .path = "src/main.zig",
+        .provenance = "zigars_validation_plan source phase",
+    }, "resolved/main.zig");
+
+    const context = app_context.ValidationContext{
+        .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
+        .tool_paths = .{ .zig = "zig" },
+        .timeouts = .{ .command_ms = 30_000, .zls_ms = 30_000 },
+        .command_runner = command.port(),
+        .workspace_store = workspace.port(),
+        .clock_and_ids = clock.port(),
+    };
+
+    var result = try plan(allocator, context, .{
+        .mode = "quick",
+        .changed_paths = &.{"src/main.zig"},
+        .include_semantic = false,
+    });
+    defer result.deinit(allocator);
+
+    var saw_format = false;
+    var saw_ast = false;
+    for (result.phases) |phase| {
+        const argv = phase.argv orelse continue;
+        if (std.mem.eql(u8, phase.id, "format_check")) {
+            saw_format = true;
+            try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+            try std.testing.expectEqualStrings("resolved/main.zig", argv.items[3]);
+        } else if (std.mem.eql(u8, phase.id, "ast_check")) {
+            saw_ast = true;
+            try std.testing.expectEqual(@as(usize, 3), argv.items.len);
+            try std.testing.expectEqualStrings("resolved/main.zig", argv.items[2]);
+        }
+    }
+    try std.testing.expect(saw_format);
+    try std.testing.expect(saw_ast);
+
+    try workspace.verify();
+}
+
 test "validation workflow cleans partial allocations across planning running and history helpers" {
     const fakes = @import("../../../testing/fakes/root.zig");
     var fail_index: usize = 0;
@@ -1804,6 +1872,10 @@ test "validation workflow cleans partial allocations across planning running and
                 .max_bytes = 0,
                 .provenance = "zigars_validation_plan path probe",
             }, "");
+            try workspace.expectResolve(.{
+                .path = "src/main.zig",
+                .provenance = "zigars_validation_plan source phase",
+            }, "src/main.zig");
             const context = app_context.ValidationContext{
                 .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
                 .tool_paths = .{ .zig = "zig" },
@@ -1868,6 +1940,10 @@ test "validation workflow cleans partial allocations across planning running and
                 .max_bytes = 0,
                 .provenance = "zigars_validation_plan path probe",
             }, "");
+            try workspace.expectResolve(.{
+                .path = "src/main.zig",
+                .provenance = "zigars_validation_plan source phase",
+            }, "src/main.zig");
             try workspace.expectRead(.{
                 .path = "history.jsonl",
                 .max_bytes = history_max_bytes,

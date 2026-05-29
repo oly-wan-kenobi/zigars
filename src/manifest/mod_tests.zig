@@ -78,7 +78,9 @@ test "static analysis product tools expose capability tiers" {
     try std.testing.expectEqual(StaticAnalysisTier.zwanzig_backed, staticAnalysisTierFor(.zig_lint).?);
 }
 test "risk metadata distinguishes read-only annotations from code execution" {
-    try std.testing.expect(find("zig_profile_run").?.read_only);
+    // A user-command executor cannot be raw read-only: validateDefinition rejects
+    // that combination and the declaration was flipped to read_only=false.
+    try std.testing.expect(!find("zig_profile_run").?.read_only);
     const profile_risk = riskFor(.zig_profile_run);
     try std.testing.expect(profile_risk.executes_user_command);
     try std.testing.expectEqualStrings("high", riskLevel(profile_risk));
@@ -103,8 +105,12 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     const fmt = find("zig_format").?;
     try std.testing.expect(riskFor(.zig_format).writes_require_apply);
     try std.testing.expect(riskFor(.zig_format).writes_artifacts);
-    try std.testing.expect(riskFor(.zig_format).mutates_lsp_state);
-    try std.testing.expect(!destructiveHintFor(fmt));
+    // zig_format runs `zig fmt` via CoreCommandContext and never touches ZLS, so
+    // it must not advertise LSP-state mutation in its raw risk flags.
+    try std.testing.expect(!riskFor(.zig_format).mutates_lsp_state);
+    // zig_format writes source, so capability dominates the apply-gate preview:
+    // destructiveHint must be true even though the tool previews by default.
+    try std.testing.expect(destructiveHintFor(fmt));
     try std.testing.expect(!readOnlyHintFor(fmt));
 
     const hover = find("zig_hover").?;

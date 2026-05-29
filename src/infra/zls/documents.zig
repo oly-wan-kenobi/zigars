@@ -5,6 +5,7 @@ const logging = @import("../observability/logging.zig");
 const lsp_types = @import("types.zig");
 const uri_util = @import("uri.zig");
 const Mutex = @import("../process/sync.zig").Mutex;
+const retained = @import("document_retained.zig");
 
 /// Tracks which documents are open in the LSP session.
 /// Sends didOpen/didClose notifications as needed.
@@ -192,7 +193,7 @@ pub const DocumentState = struct {
         const stored_content: ?[]u8 = if (retain_content) try self.allocator.dupe(u8, content) else null;
         var content_moved = false;
         errdefer if (!content_moved) {
-            if (stored_content) |retained| self.allocator.free(retained);
+            if (stored_content) |retained_bytes| self.allocator.free(retained_bytes);
         };
         const retained_len: usize = if (retain_content) content.len else 0;
         const notification: Notification = blk: {
@@ -202,7 +203,7 @@ pub const DocumentState = struct {
             defer self.mutex.unlock();
             break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
                 const previous = info.*;
-                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, contentLen(previous), retained_len) orelse return error.RetainedContentLimitExceeded;
+                const next_retained = retained.retainedBytesAfterReplace(self.retained_content_bytes, retained.contentLen(previous.content), retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 self.retained_content_bytes = next_retained;
                 info.version += 1;
@@ -213,7 +214,7 @@ pub const DocumentState = struct {
                 break :existing Notification{ .method = "textDocument/didChange", .version = info.version, .did_open = false, .previous = previous };
             } else new_doc: {
                 if (self.open_docs.count() >= self.max_open_documents) return error.OpenDocumentLimitExceeded;
-                const next_retained = retainedBytesAfterReplace(self.retained_content_bytes, 0, retained_len) orelse return error.RetainedContentLimitExceeded;
+                const next_retained = retained.retainedBytesAfterReplace(self.retained_content_bytes, 0, retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 try self.open_docs.ensureUnusedCapacity(self.allocator, 1);
                 const stored_uri = try self.allocator.dupe(u8, file_uri);
@@ -284,7 +285,7 @@ pub const DocumentState = struct {
             .version = info.version,
             .content_hash = info.content_hash,
             .dirty = info.dirty,
-            .content_bytes = contentLen(info),
+            .content_bytes = retained.contentLen(info.content),
             .retained_content_bytes = self.retained_content_bytes,
             .open_documents = self.open_docs.count(),
             .max_document_bytes = self.max_document_bytes,
@@ -318,7 +319,7 @@ pub const DocumentState = struct {
     pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
         self.mutex.lock();
         const removed = self.open_docs.fetchRemove(file_uri);
-        if (removed) |kv| self.retained_content_bytes -= contentLen(kv.value);
+        if (removed) |kv| retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(kv.value.content));
         self.mutex.unlock();
 
         if (removed) |kv| {
@@ -439,7 +440,7 @@ pub const DocumentState = struct {
         defer self.mutex.unlock();
         if (self.open_docs.fetchRemove(file_uri)) |kv| {
             self.allocator.free(kv.key);
-            self.retained_content_bytes -= contentLen(kv.value);
+            retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(kv.value.content));
             if (kv.value.content) |content| self.allocator.free(content);
         }
     }
@@ -449,7 +450,8 @@ pub const DocumentState = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         if (self.open_docs.getPtr(file_uri)) |current| {
-            self.retained_content_bytes = self.retained_content_bytes - contentLen(current.*) + contentLen(info);
+            retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(current.*.content));
+            self.retained_content_bytes +|= retained.contentLen(info.content);
             if (current.content) |content| {
                 if (info.content == null or content.ptr != info.content.?.ptr) self.allocator.free(content);
             }
@@ -468,17 +470,6 @@ pub const DocumentState = struct {
         self.retained_content_bytes = 0;
     }
 };
-
-/// Calculates the byte length of cached document content.
-fn contentLen(info: DocumentState.DocInfo) usize {
-    return if (info.content) |content| content.len else 0;
-}
-
-/// Computes retained cache bytes after replacing one document body.
-fn retainedBytesAfterReplace(retained: usize, old_len: usize, new_len: usize) ?usize {
-    if (old_len > retained) return null;
-    return std.math.add(usize, retained - old_len, new_len) catch null;
-}
 
 test "DocumentState removes reserved document entries" {
     const alloc = std.testing.allocator;

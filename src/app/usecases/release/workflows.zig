@@ -1298,6 +1298,9 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
     defer a.workspace.allocator.free(artifact_abs);
     const identity = try support.artifacts.identityFromBytes(allocator, path, artifact_abs, bytes);
     defer allocator.free(identity.sha256);
+    // Best-effort registry indexing: the artifact bytes are already written and
+    // verified above, so a failure to record provenance metadata must not fail
+    // the write. Indexing errors are intentionally swallowed here.
     support.recordWrittenArtifact(a, allocator, .{
         .identity = identity,
         .provenance = .{
@@ -1495,7 +1498,10 @@ fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![
     return out.toOwnedSlice(allocator);
 }
 
-/// Removes XML markup from text before summary extraction.
+/// Intentional pass-through: the JUnit `<failure>` markup is preserved verbatim
+/// in the extracted summary `message` so raw failure evidence is not lost. The
+/// fully-structured raw payload is also retained on the sibling `raw` field
+/// (see `parseFailures`), so no XML stripping is applied here.
 fn stripXml(input: []const u8) []const u8 {
     return input;
 }

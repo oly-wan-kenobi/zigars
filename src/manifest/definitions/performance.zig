@@ -44,10 +44,14 @@ const coverage_merge_schema = schema(&.{
     .{ "min_changed_line_rate_bp", "integer", false },
     .{ "changed_files", "string", false },
 });
-/// Input schema reused by coverage compare tool definitions.
-const coverage_compare_schema = schema(&.{
+/// Input schema for coverage diff: only `current`/`baseline` evidence are read.
+const coverage_diff_schema = schema(&.{
     .{ "current", "string", false },
     .{ "baseline", "string", false },
+});
+/// Input schema for coverage budget check: only `coverage` evidence plus budget
+/// thresholds and changed-file scope are read.
+const coverage_budget_schema = schema(&.{
     .{ "coverage", "string", false },
     .{ "min_line_rate_bp", "integer", false },
     .{ "min_changed_line_rate_bp", "integer", false },
@@ -73,13 +77,13 @@ const bench_run_schema = schema(&.{
     .{ "apply", "boolean", false },
     .{ "timeout_ms", "integer", false },
 });
-/// Input schema for benchmark comparison evidence and threshold settings.
+/// Input schema for benchmark comparison evidence and threshold settings. The
+/// handler reads only `current`/`baseline` evidence and the regression
+/// `threshold_pct`.
 const bench_compare_schema = schema(&.{
-    .{ "results", "string", false },
     .{ "current", "string", false },
     .{ "baseline", "string", false },
     .{ "threshold_pct", "integer", false },
-    .{ "limit", "integer", false },
 });
 /// Input schema for profiler commands, profile content, and backend options.
 const profiler_schema = schemaWithHints(&.{
@@ -146,11 +150,11 @@ pub const zig_coverage_map = tool(.{ .description = "Map LCOV or zigars coverage
 /// Merge two coverage evidence maps into one normalized coverage map.
 pub const zig_coverage_merge = tool(.{ .description = "Merge two coverage evidence maps into one normalized coverage map.", .input_schema = coverage_merge_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes merged coverage artifacts only with apply=true." } });
 /// Compare current coverage against a baseline and report rate deltas.
-pub const zig_coverage_diff = tool(.{ .description = "Compare current coverage against a baseline and report rate deltas.", .input_schema = coverage_compare_schema, .group = group, .plan = .{ .pure_analysis = "Compares supplied coverage evidence without running tests." } });
+pub const zig_coverage_diff = tool(.{ .description = "Compare current coverage against a baseline and report rate deltas.", .input_schema = coverage_diff_schema, .group = group, .plan = .{ .pure_analysis = "Compares supplied coverage evidence without running tests." } });
 /// Create or preview a coverage baseline artifact with identity metadata.
 pub const zig_coverage_baseline = tool(.{ .description = "Create or preview a coverage baseline artifact with identity metadata.", .input_schema = coverage_artifact_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes coverage baseline artifacts only with apply=true." } });
 /// Evaluate line-rate and changed-file coverage budgets from normalized coverage evidence.
-pub const zig_coverage_budget_check = tool(.{ .description = "Evaluate line-rate and changed-file coverage budgets from normalized coverage evidence.", .input_schema = coverage_compare_schema, .group = group, .plan = .{ .pure_analysis = "Checks supplied coverage evidence against caller thresholds." } });
+pub const zig_coverage_budget_check = tool(.{ .description = "Evaluate line-rate and changed-file coverage budgets from normalized coverage evidence.", .input_schema = coverage_budget_schema, .group = group, .plan = .{ .pure_analysis = "Checks supplied coverage evidence against caller thresholds." } });
 /// Discover likely benchmark suites and runnable commands in the workspace.
 pub const zig_bench_discover = tool(.{ .description = "Discover likely benchmark suites and runnable commands in the workspace.", .input_schema = schema(&.{.{ "limit", "integer", false }}), .group = group, .plan = .{ .pure_analysis = "Scans workspace files for benchmark conventions." } });
 /// Run or preview a benchmark command and normalize timing output.

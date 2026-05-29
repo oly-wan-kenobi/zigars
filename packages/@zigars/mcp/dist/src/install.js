@@ -40,6 +40,8 @@ exports.InstallError = void 0;
 exports.userCacheRoot = userCacheRoot;
 exports.installDirFor = installDirFor;
 exports.verifiedCachedExecutable = verifiedCachedExecutable;
+exports.isContainedWithin = isContainedWithin;
+exports.assertContainedRegularFile = assertContainedRegularFile;
 exports.installZigars = installZigars;
 const childProcess = __importStar(require("node:child_process"));
 const node_fs_1 = __importDefault(require("node:fs"));
@@ -77,6 +79,12 @@ function installDirFor(cacheRoot, version, target) {
 function markerPath(installDir) {
     return node_path_1.default.join(installDir, "install.json");
 }
+// Re-hashes the cached binary at rest against its install marker before reuse, so a
+// poisoned cache forces a fresh, checksum-verified download. A residual verify->exec
+// window remains: a local attacker with write access to the cache dir could swap the
+// file between this check and the spawn in cli.ts. The cache dir is therefore a trust
+// boundary equivalent to any local binary on PATH; defending it further is out of scope
+// for a shim that ultimately execs a file from disk.
 async function verifiedCachedExecutable(installDir, version, target, fsp = node_fs_1.default.promises) {
     const executablePath = node_path_1.default.join(installDir, target.executableName);
     try {
@@ -133,6 +141,28 @@ async function findExecutable(root, executableName, fsp = node_fs_1.default.prom
         }
     }
     return null;
+}
+function isContainedWithin(child, parent) {
+    const resolvedParent = node_path_1.default.resolve(parent);
+    const resolvedChild = node_path_1.default.resolve(child);
+    if (resolvedChild === resolvedParent) {
+        return false;
+    }
+    const relative = node_path_1.default.relative(resolvedParent, resolvedChild);
+    return relative.length > 0 && !relative.startsWith("..") && !node_path_1.default.isAbsolute(relative);
+}
+async function assertContainedRegularFile(candidate, containerDir, fsp = node_fs_1.default.promises) {
+    if (!isContainedWithin(candidate, containerDir)) {
+        throw new InstallError(`Archive contents escaped the extraction directory`, {
+            code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
+        });
+    }
+    const stat = await fsp.lstat(candidate);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw new InstallError(`Archive executable ${node_path_1.default.basename(candidate)} is not a regular file`, {
+            code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
+        });
+    }
 }
 function extractArchive(archivePath, destination, spawnSyncImpl = childProcess.spawnSync) {
     const result = spawnSyncImpl("tar", ["-xzf", archivePath, "-C", destination], {
@@ -192,6 +222,7 @@ async function installZigars(target, options = {}) {
                 code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
             });
         }
+        await assertContainedRegularFile(extractedExecutable, extractedDir, fsp);
         const stagedExecutable = node_path_1.default.join(stagedDir, target.executableName);
         await fsp.copyFile(extractedExecutable, stagedExecutable);
         if (target.platform !== "win32") {

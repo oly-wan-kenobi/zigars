@@ -222,9 +222,12 @@ pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path:
     while (lines.next()) |line_raw| {
         const line = std.mem.trim(u8, line_raw, " \t\r\n");
         if (line.len == 0) continue;
-        var parsed = try std.json.parseFromSlice(std.json.Value, allocator, line, .{});
+        // Skip malformed lines so one corrupt entry cannot disable all artifact writes.
+        var parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch continue;
         defer parsed.deinit();
-        try registry.entries.append(allocator, try ownedEntryFromValue(allocator, parsed.value));
+        var entry = ownedEntryFromValue(allocator, parsed.value) catch continue;
+        errdefer entry.deinit(allocator);
+        try registry.entries.append(allocator, entry);
     }
     registry_owned = false;
     return registry;
@@ -364,7 +367,9 @@ fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Own
     var owned = emptyOwnedEntry();
     var owned_guard = true;
     defer if (owned_guard) owned.deinit(allocator);
-    owned.bytes = @intCast(integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry);
+    const bytes_field = integerField(obj, "bytes") orelse return error.InvalidArtifactRegistryEntry;
+    // Reject negative or out-of-range sizes so a tampered registry cannot trap the @intCast in ReleaseSafe.
+    owned.bytes = std.math.cast(usize, bytes_field) orelse return error.InvalidArtifactRegistryEntry;
     owned.indexed_at_unix_ms = integerField(obj, "indexed_at_unix_ms") orelse 0;
     owned.path = try dupStringField(allocator, obj, "path");
     owned.abs_path = try dupStringField(allocator, obj, "abs_path");

@@ -191,13 +191,10 @@ pub const State = struct {
 
     /// Creates a subscription, overwriting the oldest slot after capacity.
     pub fn subscribe(self: *State, uri: []const u8) *Subscription {
-        var slot: *Subscription = undefined;
-        if (self.subscription_count < self.subscriptions.len) {
-            slot = &self.subscriptions[self.subscription_count];
-            self.subscription_count += 1;
-        } else {
-            slot = &self.subscriptions[0];
-        }
+        // Rotate slots via the about-to-be-assigned monotonic number so the
+        // oldest subscription is evicted once the buffer fills (same ring as jobs).
+        const slot = &self.subscriptions[ringIndex(self.next_subscription_number, max_subscriptions)];
+        if (self.subscription_count < self.subscriptions.len) self.subscription_count += 1;
         const sub_number = self.next_subscription_number;
         self.next_subscription_number += 1;
         self.sequence += 1;
@@ -275,14 +272,13 @@ pub const State = struct {
         self.event_count = sequence;
     }
 
-    /// Allocates or reuses a runtime job slot under the state mutex.
+    /// Reserves the next runtime job slot, overwriting the oldest after capacity.
     fn reserveJobSlot(self: *State) *JobRecord {
-        if (self.job_count < self.jobs.len) {
-            const slot = &self.jobs[self.job_count];
-            self.job_count += 1;
-            return slot;
-        }
-        return &self.jobs[0];
+        // Mirror the event ring: the about-to-be-assigned monotonic number maps
+        // to a rotating slot so the oldest job is evicted once the buffer fills.
+        const slot = &self.jobs[ringIndex(self.next_job_number, max_jobs)];
+        if (self.job_count < self.jobs.len) self.job_count += 1;
+        return slot;
     }
 
     /// Stores a runtime root entry at the requested index.
@@ -443,4 +439,72 @@ test "runtime rings overwrite oldest jobs and subscriptions" {
     var expected_sub_id: [32]u8 = undefined;
     const expected = try std.fmt.bufPrint(&expected_sub_id, "sub-{d}", .{max_subscriptions + 1});
     try std.testing.expectEqualStrings(expected, state.subscriptions[0].id.slice());
+}
+
+test "runtime job ring evicts the oldest after max_jobs + 2 and keeps the newest retrievable" {
+    var state: State = .{};
+
+    // Push two past capacity. The pre-fix slot-0 churn loses job-33 (clobbered by
+    // job-34) and never evicts the genuinely oldest entries.
+    var i: usize = 0;
+    while (i < max_jobs + 2) : (i += 1) {
+        _ = state.startJob("job", "zig build", 100);
+    }
+    try std.testing.expectEqual(@as(usize, max_jobs), state.job_count);
+
+    // Oldest two (job-1, job-2) are evicted; everything newer survives.
+    try std.testing.expect(state.jobById("job-1") == null);
+    try std.testing.expect(state.jobById("job-2") == null);
+    var n: usize = 3;
+    while (n <= max_jobs + 2) : (n += 1) {
+        var id_buf: [32]u8 = undefined;
+        const id = try std.fmt.bufPrint(&id_buf, "job-{d}", .{n});
+        try std.testing.expect(state.jobById(id) != null);
+    }
+
+    // The 33rd and 34th jobs (first two past capacity) remain retrievable by id.
+    try std.testing.expect(state.jobById("job-33") != null);
+    try std.testing.expect(state.jobById("job-34") != null);
+
+    // created_sequence must be strictly increasing in job-number order, so a
+    // tasks/list projection sorted by created_sequence yields oldest-to-newest.
+    var previous_sequence: u64 = 0;
+    n = 3;
+    while (n <= max_jobs + 2) : (n += 1) {
+        var id_buf: [32]u8 = undefined;
+        const id = try std.fmt.bufPrint(&id_buf, "job-{d}", .{n});
+        const job = state.jobById(id).?;
+        try std.testing.expect(job.created_sequence > previous_sequence);
+        previous_sequence = job.created_sequence;
+    }
+}
+
+test "runtime subscription ring evicts the oldest after max_subscriptions + 2" {
+    var state: State = .{};
+
+    var i: usize = 0;
+    while (i < max_subscriptions + 2) : (i += 1) {
+        _ = state.subscribe("zigars://jobs");
+    }
+    try std.testing.expectEqual(@as(usize, max_subscriptions), state.subscription_count);
+
+    // Slot 1 now holds the newest subscription (sub-66), not a frozen old one;
+    // the pre-fix slot-0 churn would clobber sub-65 and leave sub-2 pinned here.
+    var expected_sub_id: [32]u8 = undefined;
+    const expected = try std.fmt.bufPrint(&expected_sub_id, "sub-{d}", .{max_subscriptions + 2});
+    try std.testing.expectEqualStrings(expected, state.subscriptions[1].id.slice());
+
+    // The two slots that wrapped hold the two newest ids; the genuinely oldest
+    // subscriptions (sub-1, sub-2) are gone rather than pinned forever.
+    for (state.subscriptions[0..state.subscription_count]) |sub| {
+        try std.testing.expect(!std.mem.eql(u8, sub.id.slice(), "sub-1"));
+        try std.testing.expect(!std.mem.eql(u8, sub.id.slice(), "sub-2"));
+    }
+    var sub65_buf: [32]u8 = undefined;
+    const sub65 = try std.fmt.bufPrint(&sub65_buf, "sub-{d}", .{max_subscriptions + 1});
+    var found_sub65 = false;
+    for (state.subscriptions[0..state.subscription_count]) |sub| {
+        if (std.mem.eql(u8, sub.id.slice(), sub65)) found_sub65 = true;
+    }
+    try std.testing.expect(found_sub65);
 }

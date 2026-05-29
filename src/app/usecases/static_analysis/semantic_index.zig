@@ -527,13 +527,14 @@ fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source:
     var findings = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = findings };
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
-    const raw = findingsArray(parsed.value);
+    defer parsed.deinit();
+    const raw = findingsArray(allocator, parsed.value);
     for (raw.items) |item| try findings.append(try normalizeFindingValue(allocator, item, source));
     return .{ .array = findings };
 }
 
 /// Implements findings array workflow logic using caller-owned inputs.
-fn findingsArray(value: std.json.Value) std.json.Array {
+fn findingsArray(allocator: std.mem.Allocator, value: std.json.Value) std.json.Array {
     switch (value) {
         .array => |array| return array,
         .object => |obj| {
@@ -543,7 +544,7 @@ fn findingsArray(value: std.json.Value) std.json.Array {
         },
         else => {},
     }
-    return std.json.Array.init(std.heap.page_allocator);
+    return std.json.Array.init(allocator);
 }
 
 /// Serializes normalize finding fields into an allocator-owned JSON value; allocation failures propagate.
@@ -825,3 +826,103 @@ test "semantic helper fallbacks normalize lint evidence and serialize primitives
     var fail_fba = std.heap.FixedBufferAllocator.init(&fail_buf);
     try std.testing.expectError(error.OutOfMemory, serializeAlloc(fail_fba.allocator(), .{ .string = "too long" }));
 }
+
+test "normalizeFindingsText frees the input parse handle (non-arena leak guard)" {
+    // normalizeFindingsText is arena-masked in production: it intentionally leaks its
+    // partial output on OOM. To isolate the `defer parsed.deinit()` fix we run the
+    // success path under a tracking allocator, free only the builder-owned output,
+    // then assert nothing remains live. Without the deinit, the parse arena chunks
+    // stay live and the final assertion fails.
+    var tracker = TrackingAllocator.init(std.testing.allocator);
+    defer tracker.deinit();
+    const allocator = tracker.allocator();
+
+    const findings = try normalizeFindingsText(allocator,
+        \\{"findings":[{"rule":"r1","severity":"error","path":"src/a.zig","line":3,"column":2,"message":"m"}]}
+    , "zlint");
+    try std.testing.expectEqual(@as(usize, 1), findings.array.items.len);
+    tracker.freeJsonValue(findings);
+
+    const fallback = try normalizeFindingsText(allocator, "42", "zlint");
+    try std.testing.expectEqual(@as(usize, 0), fallback.array.items.len);
+    tracker.freeJsonValue(fallback);
+
+    try std.testing.expectEqual(@as(usize, 0), tracker.liveCount());
+}
+
+/// Test allocator that tracks live allocations so a JSON output tree can be freed
+/// without touching borrowed/static string slices, isolating internal parse leaks.
+const TrackingAllocator = struct {
+    backing: std.mem.Allocator,
+    live: std.AutoHashMap(usize, void),
+
+    fn init(backing: std.mem.Allocator) TrackingAllocator {
+        return .{ .backing = backing, .live = std.AutoHashMap(usize, void).init(backing) };
+    }
+
+    fn deinit(self: *TrackingAllocator) void {
+        self.live.deinit();
+    }
+
+    fn allocator(self: *TrackingAllocator) std.mem.Allocator {
+        return .{ .ptr = self, .vtable = &.{ .alloc = alloc, .resize = resize, .remap = remap, .free = free } };
+    }
+
+    fn liveCount(self: *TrackingAllocator) usize {
+        return self.live.count();
+    }
+
+    /// Frees a JSON value tree, freeing only string slices this allocator handed out.
+    fn freeJsonValue(self: *TrackingAllocator, value: std.json.Value) void {
+        switch (value) {
+            .array => |array| {
+                for (array.items) |item| self.freeJsonValue(item);
+                var owned = array;
+                owned.deinit();
+            },
+            .object => |object| {
+                var owned = object;
+                var it = owned.iterator();
+                while (it.next()) |entry| self.freeJsonValue(entry.value_ptr.*);
+                owned.deinit(self.allocator());
+            },
+            .string => |string| {
+                if (string.len != 0 and self.live.contains(@intFromPtr(string.ptr))) {
+                    self.allocator().free(string);
+                }
+            },
+            else => {},
+        }
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
+        const ptr = self.backing.rawAlloc(len, alignment, ret_addr) orelse return null;
+        self.live.put(@intFromPtr(ptr), {}) catch {
+            self.backing.rawFree(ptr[0..len], alignment, ret_addr);
+            return null;
+        };
+        return ptr;
+    }
+
+    fn resize(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+        const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
+        return self.backing.rawResize(buf, alignment, new_len, ret_addr);
+    }
+
+    fn remap(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
+        const new_ptr = self.backing.rawRemap(buf, alignment, new_len, ret_addr) orelse return null;
+        if (new_ptr != buf.ptr) {
+            _ = self.live.remove(@intFromPtr(buf.ptr));
+            self.live.put(@intFromPtr(new_ptr), {}) catch {};
+        }
+        return new_ptr;
+    }
+
+    fn free(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+        const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
+        _ = self.live.remove(@intFromPtr(buf.ptr));
+        self.backing.rawFree(buf, alignment, ret_addr);
+    }
+};
