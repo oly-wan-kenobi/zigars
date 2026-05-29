@@ -1376,14 +1376,16 @@ fn parseVersionPrefix(value: []const u8) ?[2]u32 {
     var index: usize = 0;
     while (index < value.len and std.ascii.isDigit(value[index])) : (index += 1) {
         seen_digit = true;
-        major = major * 10 + value[index] - '0';
+        const digit: u32 = value[index] - '0';
+        major = std.math.add(u32, std.math.mul(u32, major, 10) catch return null, digit) catch return null;
     }
     if (!seen_digit or index >= value.len or value[index] != '.') return null;
     index += 1;
     seen_digit = false;
     while (index < value.len and std.ascii.isDigit(value[index])) : (index += 1) {
         seen_digit = true;
-        minor = minor * 10 + value[index] - '0';
+        const digit: u32 = value[index] - '0';
+        minor = std.math.add(u32, std.math.mul(u32, minor, 10) catch return null, digit) catch return null;
     }
     if (!seen_digit) return null;
     return .{ major, minor };
@@ -1633,6 +1635,13 @@ test "environment version and compatibility helpers classify release lines" {
     try std.testing.expectEqual(@as(u32, 16), parsed[1]);
     try std.testing.expect(parseVersionPrefix("dev-0.16") == null);
     try std.testing.expect(parseVersionPrefix("0.x") == null);
+    // Pre-fix `major = major * 10 + digit` over the (untrimmed) backend stdout
+    // trapped on a u32 overflow for a >=10-digit component. Malformed backend
+    // output must yield null (status "unknown") instead of aborting the server.
+    try std.testing.expect(parseVersionPrefix("99999999999.0") == null);
+    try std.testing.expect(parseVersionPrefix("0.99999999999") == null);
+    try std.testing.expect(parseVersionPrefix("4294967296.0") == null); // u32 max + 1
+    try std.testing.expectEqualStrings("unknown", compatibilityStatus("99999999999.0", "0.16.0"));
 
     try std.testing.expectEqualStrings("match", compatibilityStatus("0.16.0-dev", "0.16.1"));
     try std.testing.expectEqualStrings("mismatch", compatibilityStatus("0.15.0", "0.16.0"));

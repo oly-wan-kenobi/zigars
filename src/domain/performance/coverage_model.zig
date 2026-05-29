@@ -50,10 +50,11 @@ pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet
     return merged;
 }
 
-/// Converts covered/total counts to basis points.
+/// Converts covered/total counts to basis points, capped at 100% (10000 bp).
 pub fn rateBp(covered: usize, total: usize) usize {
     if (total == 0) return 0;
-    return @intCast(@divTrunc(covered * 10000, total));
+    const num = @as(u128, covered) * 10000;
+    return @intCast(@min(@as(u128, 10000), num / total));
 }
 
 /// Totals coverage for the supplied changed-file paths only.
@@ -61,9 +62,9 @@ pub fn changedCoverage(set: CoverageSet, changed_files: []const []const u8) Chan
     var out: ChangedCoverage = .{};
     for (changed_files) |path| {
         if (findFile(set, path)) |file| {
-            out.total += file.total;
-            out.covered += file.covered;
-            out.count += 1;
+            out.total +|= file.total;
+            out.covered +|= file.covered;
+            out.count +|= 1;
         }
     }
     return out;
@@ -164,10 +165,10 @@ fn appendFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8,
     if (path.len == 0) return;
     for (set.files.items) |*existing| {
         if (std.mem.eql(u8, existing.path, path)) {
-            existing.total += total;
-            existing.covered += @min(covered, total);
-            set.total += total;
-            set.covered += @min(covered, total);
+            existing.total +|= total;
+            existing.covered +|= @min(covered, total);
+            set.total +|= total;
+            set.covered +|= @min(covered, total);
             return;
         }
     }
@@ -176,8 +177,8 @@ fn appendFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8,
         .total = total,
         .covered = @min(covered, total),
     });
-    set.total += total;
-    set.covered += @min(covered, total);
+    set.total +|= total;
+    set.covered +|= @min(covered, total);
 }
 
 /// Reads an integer field from a JSON object when it has integer shape.
@@ -221,4 +222,33 @@ test "coverage model integer fields accept float and number string values" {
     try std.testing.expect(intField(obj, "huge_float") == null);
     try std.testing.expect(intField(obj, "nan_float") == null);
     try std.testing.expect(intField(obj, "bad") == null);
+}
+
+test "rateBp does not overflow on huge counts and caps at 100 percent" {
+    // Pre-fix `covered * 10000` overflowed usize and trapped in ReleaseSafe once
+    // covered exceeded ~1.84e15; JSON counts are clamped lower-bound only so they
+    // reach i64 max. Widen to u128 and cap at 10000 bp instead of trapping.
+    const huge: usize = 2_000_000_000_000_000; // 2e15, > usize_max / 10000
+    try std.testing.expectEqual(@as(usize, 10000), rateBp(huge, huge));
+    try std.testing.expectEqual(@as(usize, 5000), rateBp(huge / 2, huge));
+    try std.testing.expectEqual(@as(usize, 0), rateBp(0, huge));
+    try std.testing.expectEqual(@as(usize, 0), rateBp(huge, 0));
+    // covered > total must never exceed 100% (10000 bp).
+    try std.testing.expectEqual(@as(usize, 10000), rateBp(std.math.maxInt(usize), 1));
+}
+
+test "appendFile saturates totals on huge coverage counts" {
+    // The exact DoS payload: huge JSON coverage counts parsed via the JSON files
+    // array. Each component is near i64 max (clamped lower-bound only), and three
+    // duplicate paths fold into one entry, so pre-fix the `existing.total += total`
+    // / `set.total += total` accumulation overflowed usize and trapped. Saturating
+    // adds keep totals finite and the derived rate stays capped at 100%.
+    const evidence =
+        \\{"files":[{"path":"a.zig","total_lines":9000000000000000000,"covered_lines":9000000000000000000},{"path":"a.zig","total_lines":9000000000000000000,"covered_lines":9000000000000000000},{"path":"a.zig","total_lines":9000000000000000000,"covered_lines":9000000000000000000}]}
+    ;
+    var set = try parse(std.testing.allocator, evidence, "content", "auto");
+    defer set.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, std.math.maxInt(usize)), set.total);
+    try std.testing.expect(set.covered <= set.total);
+    try std.testing.expectEqual(@as(usize, 10000), rateBp(set.covered, set.total));
 }
