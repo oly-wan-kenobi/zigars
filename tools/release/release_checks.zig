@@ -155,16 +155,16 @@ fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
             continue;
         };
         defer allocator.free(bytes);
-        const lines = lineCount(bytes);
+        const lines = codeLineCount(bytes);
         if (lines > budget.max_lines) {
-            try stderrPrint(io, "line budget exceeded: {s} has {d} lines, max {d} ({s})\n", .{ budget.path, lines, budget.max_lines, budget.reason });
+            try stderrPrint(io, "line budget exceeded: {s} has {d} code lines, max {d} ({s})\n", .{ budget.path, lines, budget.max_lines, budget.reason });
             ok = false;
             continue;
         }
         const headroom = budget.max_lines - lines;
         const required_headroom = minLineBudgetHeadroom(budget.max_lines);
         if (headroom < required_headroom) {
-            try stderrPrint(io, "line budget headroom too small: {s} has {d} lines, max {d}, headroom {d}, required {d} ({s})\n", .{ budget.path, lines, budget.max_lines, headroom, required_headroom, budget.reason });
+            try stderrPrint(io, "line budget headroom too small: {s} has {d} code lines, max {d}, headroom {d}, required {d} ({s})\n", .{ budget.path, lines, budget.max_lines, headroom, required_headroom, budget.reason });
             ok = false;
         }
     }
@@ -435,13 +435,22 @@ fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) !
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
 }
 
-fn lineCount(bytes: []const u8) usize {
-    if (bytes.len == 0) return 0;
+/// Counts source lines of code, excluding blank lines and whole-line comments
+/// (`//`, `///`, and `//!`). Line budgets bound how much *code* a reviewer must
+/// audit, so documentation and comments must never count against a budget:
+/// adding explanatory docs should improve auditability, not incur a penalty.
+/// A code line with a trailing comment still counts as code. Zig has only line
+/// comments, so a trimmed line starting with `//` is wholly a comment, while
+/// multi-line string content (`\\`-prefixed) is code and is counted.
+fn codeLineCount(bytes: []const u8) usize {
     var count: usize = 0;
-    for (bytes) |byte| {
-        if (byte == '\n') count += 1;
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        if (trimmed.len == 0) continue;
+        if (std.mem.startsWith(u8, trimmed, "//")) continue;
+        count += 1;
     }
-    if (bytes[bytes.len - 1] != '\n') count += 1;
     return count;
 }
 
@@ -452,12 +461,22 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
-test "lineCount handles empty trailing and unterminated text" {
-    try std.testing.expectEqual(@as(usize, 0), lineCount(""));
-    try std.testing.expectEqual(@as(usize, 1), lineCount("one"));
-    try std.testing.expectEqual(@as(usize, 1), lineCount("one\n"));
-    try std.testing.expectEqual(@as(usize, 2), lineCount("one\ntwo"));
-    try std.testing.expectEqual(@as(usize, 2), lineCount("one\ntwo\n"));
+test "codeLineCount ignores blank lines and whole-line comments" {
+    // Pure code matches a naive newline count for these baseline cases.
+    try std.testing.expectEqual(@as(usize, 0), codeLineCount(""));
+    try std.testing.expectEqual(@as(usize, 1), codeLineCount("one"));
+    try std.testing.expectEqual(@as(usize, 1), codeLineCount("one\n"));
+    try std.testing.expectEqual(@as(usize, 2), codeLineCount("one\ntwo"));
+    try std.testing.expectEqual(@as(usize, 2), codeLineCount("one\ntwo\n"));
+    // Blank and whitespace-only lines never count.
+    try std.testing.expectEqual(@as(usize, 2), codeLineCount("one\n\n  \t\ntwo\n"));
+    // Whole-line comments never count, including /// and //! doc comments.
+    try std.testing.expectEqual(@as(usize, 0), codeLineCount("// a\n/// b\n//! c\n"));
+    try std.testing.expectEqual(@as(usize, 1), codeLineCount("    // indented\n    return;\n"));
+    // Code followed by a trailing comment is still one code line.
+    try std.testing.expectEqual(@as(usize, 1), codeLineCount("const x = 1; // set x\n"));
+    // Multi-line string content (\\-prefixed) is code even when it embeds `//`.
+    try std.testing.expectEqual(@as(usize, 2), codeLineCount("const s =\n    \\\\ http://x\n"));
 }
 
 test "line budget headroom scales for small and large files" {

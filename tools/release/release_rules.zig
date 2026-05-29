@@ -21,10 +21,13 @@ pub const ToolErrorContractToken = struct {
     reason: []const u8,
 };
 
-// Central release hygiene policy. Budgets intentionally include required
-// headroom so growth triggers splitting before files become hard to audit.
-// Oversized legacy modules are re-baselined with narrow headroom and reasons
-// that name the next split target instead of disabling future growth checks.
+// Central release hygiene policy. Budgets count source lines of code only:
+// blank lines and whole-line comments (`//`, `///`, `//!`) are excluded by
+// codeLineCount in release_checks.zig, so documentation and comments never
+// count against a budget. Budgets intentionally include required headroom so
+// growth triggers splitting before files become hard to audit. Oversized
+// legacy modules are re-baselined with narrow headroom and reasons that name
+// the next split target instead of disabling future growth checks.
 
 pub const line_budgets = [_]LineBudget{
     .{
