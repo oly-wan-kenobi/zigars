@@ -213,8 +213,8 @@ pub fn zigCoverageBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.
     var budget = coverage_usecase.budget(allocator, .{
         .coverage = .{ .bytes = input.bytes, .source_kind = input.source_kind },
         .changed_files = changed.items,
-        .min_line_rate_bp = @intCast(argInt(args, "min_line_rate_bp", 8000)),
-        .min_changed_line_rate_bp = @intCast(argInt(args, "min_changed_line_rate_bp", 0)),
+        .min_line_rate_bp = @intCast(@max(0, argInt(args, "min_line_rate_bp", 8000))),
+        .min_changed_line_rate_bp = @intCast(@max(0, argInt(args, "min_changed_line_rate_bp", 0))),
     }) catch |err| return performanceToolError(allocator, "zig_coverage_budget_check", "coverage_budget", err);
     defer budget.deinit(allocator);
     const value = coverageBudgetValue(arena.allocator(), a, budget) catch return error.OutOfMemory;
@@ -336,7 +336,7 @@ pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
     var comparison = benchmark_usecase.compare(allocator, .{
         .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
         .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
-        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+        .threshold_pct = @max(0, argInt(args, "threshold_pct", 5)),
     }) catch |err| return performanceToolError(allocator, "zig_bench_compare", "compare_benchmarks", err);
     defer comparison.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -354,7 +354,7 @@ pub fn zigBenchRegressionGate(a: *App, allocator: std.mem.Allocator, args: ?std.
     var comparison = benchmark_usecase.compare(allocator, .{
         .current = .{ .bytes = current_input.bytes, .source_kind = current_input.source_kind },
         .baseline = .{ .bytes = baseline_input.bytes, .source_kind = baseline_input.source_kind },
-        .threshold_pct = @intCast(argInt(args, "threshold_pct", 5)),
+        .threshold_pct = @max(0, argInt(args, "threshold_pct", 5)),
     }) catch |err| return performanceToolError(allocator, "zig_bench_regression_gate", "compare_benchmarks", err);
     defer comparison.deinit(allocator);
 
@@ -1513,6 +1513,70 @@ test "bench regression gate is preview-only unless apply is set" {
     try std.testing.expect(!result.value.object.get("applied").?.bool);
     try std.testing.expect(result.value.object.get("requires_apply").?.bool);
     try std.testing.expectEqualStrings(".zigars-cache/sessions/bench_regression_gate/gate-1.jsonl", result.value.object.get("session_path").?.string);
+    try workspace.verify();
+    try commands.verify();
+}
+
+test "coverage budget check tolerates negative thresholds and huge coverage counts" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    // DoS payload: a negative budget bp traps on the unsigned `@intCast` pre-fix,
+    // while huge JSON line counts overflow the `covered * 10000` rate multiply.
+    // zig_coverage_budget_check is read-only (no apply gate).
+    var args = try parsedArgs(allocator,
+        \\{"coverage":"{\"files\":[{\"path\":\"a.zig\",\"total_lines\":2000000000000000,\"covered_lines\":2000000000000000}]}","min_line_rate_bp":-1,"min_changed_line_rate_bp":-1}
+    );
+    defer args.deinit();
+    const result = try zigCoverageBudgetCheck(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    // Negative minimums clamp to 0, so full coverage trivially passes.
+    try std.testing.expect(result.value.object.get("passed").?.bool);
+    try std.testing.expectEqual(@as(i64, 0), result.value.object.get("min_line_rate_bp").?.integer);
+    try std.testing.expectEqual(@as(i64, 10000), result.value.object.get("line_rate_bp").?.integer);
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "bench regression gate clamps negative threshold so it does not invert" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(std.testing.allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator);
+    defer workspace.deinit();
+    var scanner = fakes.FakeWorkspaceScanner.init(std.testing.allocator);
+    defer scanner.deinit();
+    const context = performanceTestContext(&commands, &workspace, &scanner, null, null, .{});
+    var app = App.init(context, allocator);
+
+    // DoS/logic payload: a negative threshold makes `pct > threshold` true for an
+    // unchanged benchmark (0 > -5), flagging it as a regression and inverting the
+    // gate to "failed". Clamping to 0 keeps an unchanged bench passing.
+    var args = try parsedArgs(allocator,
+        \\{"current":"parse 100 ns\n","baseline":"parse 100 ns\n","threshold_pct":-5,"session_id":"gate-neg","apply":false}
+    );
+    defer args.deinit();
+    const result = try zigBenchRegressionGate(&app, allocator, args.value);
+    try std.testing.expect(!result.is_error);
+    // A passing one-shot gate reports envelope status "completed".
+    try std.testing.expectEqualStrings("completed", result.value.object.get("status").?.string);
+    const validation = result.value.object.get("validation").?.object;
+    try std.testing.expect(validation.get("passed").?.bool);
+    try std.testing.expectEqual(@as(i64, 0), validation.get("threshold_pct").?.integer);
+    try std.testing.expectEqual(@as(i64, 0), validation.get("regression_count").?.integer);
     try workspace.verify();
     try commands.verify();
 }
