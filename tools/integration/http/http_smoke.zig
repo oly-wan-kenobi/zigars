@@ -46,21 +46,17 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     const expected = try parseJsonFile(allocator, io, options.expect);
     defer expected.deinit();
 
-    const port = smoke.pickPort(io);
     var scenarios: usize = 0;
-    var port_buf: [16]u8 = undefined;
-    const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
-    var server_argv = try httpServerArgv(allocator, options, port_text);
-    defer server_argv.deinit(allocator);
-    var child = try std.process.spawn(io, .{
-        .argv = server_argv.items,
-        .stdout = .ignore,
-        .stderr = .ignore,
-    });
+    // Reserve a verified-free loopback port (LOW-9): the port is derived
+    // deterministically from the process id rather than the wall clock, and is
+    // bind-checked at selection time so a lingering socket from a previous run is
+    // skipped instead of flaking. A bounded spawn retry absorbs the residual
+    // bind/rebind race between releasing the probe socket and the child binding.
+    const started = try startHttpServer(allocator, io, options);
+    const port = started.port;
+    var child = started.child;
     var child_done = false;
     defer if (!child_done) child.kill(io);
-
-    try waitForInitialize(allocator, io, port, &child);
     try assertRequiredTools(allocator, io, port, expected.value);
     scenarios += 1;
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"resources/read\",\"params\":{\"uri\":\"zigars://trust/manifest\"}}", "zigars_trust_manifest", &scenarios);
@@ -207,6 +203,48 @@ fn termOk(term: std.process.Child.Term) bool {
         else => false,
     };
 }
+/// A spawned HTTP server bound to a verified-free loopback port.
+const StartedServer = struct {
+    child: std.process.Child,
+    port: u16,
+};
+
+/// Spawns the HTTP server on a verified-free loopback port (LOW-9). The port is
+/// derived deterministically from the process id rather than the wall clock, and
+/// `reserveLoopbackPort` bind-checks it so a lingering socket from a previous run
+/// is skipped at selection time. Should the freshly released probe port be taken
+/// by another process before the child rebinds (a narrow race surfacing as the
+/// child exiting and `waitForInitialize` timing out), the whole spawn is retried
+/// on a new port. The terminal attempt keeps the original 30s diagnostic wait so
+/// a genuine startup failure still surfaces the child's stderr.
+fn startHttpServer(allocator: std.mem.Allocator, io: Io, options: HttpSmokeOptions) !StartedServer {
+    const max_attempts: usize = 3;
+    var attempt: usize = 0;
+    while (true) : (attempt += 1) {
+        const last_attempt = attempt + 1 >= max_attempts;
+        const port = try smoke.reserveLoopbackPort(io);
+        var port_buf: [16]u8 = undefined;
+        const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
+        var server_argv = try httpServerArgv(allocator, options, port_text);
+        defer server_argv.deinit(allocator);
+        var child = try std.process.spawn(io, .{
+            .argv = server_argv.items,
+            .stdout = .ignore,
+            .stderr = .ignore,
+        });
+        // Run the full initialize handshake + assertions (serverInfo, trust
+        // manifest URI). On a non-terminal attempt a startup failure (e.g. the
+        // child lost the rebind race) is absorbed by retrying on a new port; the
+        // terminal attempt propagates the diagnostic error.
+        if (waitForInitialize(allocator, io, port, &child)) |_| {
+            return .{ .child = child, .port = port };
+        } else |err| {
+            child.kill(io);
+            if (last_attempt) return err;
+        }
+    }
+}
+
 fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child) !void {
     const deadline = smoke.nowNs(io) + 30 * std.time.ns_per_s;
     while (true) {
