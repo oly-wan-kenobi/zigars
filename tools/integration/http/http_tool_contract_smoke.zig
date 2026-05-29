@@ -18,8 +18,28 @@ pub fn runStaticAnalysisAssertions(
     expected: JsonValue,
     scenarios: *usize,
 ) !void {
-    try assertToolPaths(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected, "argument_error_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 26, "zig_format", "{\"file\":\"missing.zig\"}", expected, "format_missing_file_paths", scenarios);
+    // Error-path fixtures additionally assert the MCP `isError` envelope flag.
+    // The server reports tool failures as a `result` with `isError:true`, so a
+    // regression that flips success<->error while leaving the structured `kind`
+    // payload intact would otherwise pass every fixture (MEDIUM-4).
+    try assertToolPathsIsError(allocator, io, port, 5, "zig_check", "{\"file\":42}", expected, "argument_error_paths", true, scenarios);
+    try assertToolPathsIsError(allocator, io, port, 26, "zig_format", "{\"file\":\"missing.zig\"}", expected, "format_missing_file_paths", true, scenarios);
+    // Sandbox-escape rejection: an out-of-workspace path must be refused, not
+    // read. Path-safety was previously only described in a text field, never
+    // exercised (MEDIUM-5 / coverage-gap 4). The reusable read tool resolves the
+    // path against the workspace and rejects it with a structured
+    // workspace_path_error + isError:true. Expectations are inline (not in the
+    // shared expect.json) to keep this fixture self-contained.
+    try assertSandboxEscapeRejected(allocator, io, port, 27, "zigars_artifact_read", "{\"path\":\"../../etc/passwd\"}", scenarios);
+    try assertSandboxEscapeRejected(allocator, io, port, 29, "zigars_artifact_read", "{\"path\":\"/etc/passwd\"}", scenarios);
+    // Control: an ordinary successful result must report isError:false, proving
+    // the flag actually discriminates and is not hard-coded.
+    {
+        const ok = try smoke.callHttpTool(allocator, io, port, 28, "zig_toolchain_resolve", "{\"probe_managers\":false}");
+        defer ok.deinit(allocator);
+        try smoke.expectToolIsError(io, ok, false, "zig_toolchain_resolve isError");
+        scenarios.* += 1;
+    }
     try assertToolPaths(allocator, io, port, 6, "zig_compile_error_index", "{\"text\":\"src/main.zig:1:2: error: fixture failure\\nsrc/main.zig:1:2: note: fixture note\\n\"}", expected, "compile_error_index_paths", scenarios);
     try assertToolPaths(allocator, io, port, 7, "zig_target_matrix_plan", "{\"targets\":\"native wasm32-freestanding\",\"steps\":\"build\"}", expected, "target_matrix_paths", scenarios);
     try assertToolPaths(allocator, io, port, 8, "zig_toolchain_resolve", "{\"probe_managers\":false}", expected, "toolchain_paths", scenarios);
@@ -130,6 +150,64 @@ pub fn assertToolPaths(
         };
         try smoke.expectJsonEq(io, actual, entry.value_ptr.*, entry.key_ptr.*);
     }
+    scenario_count.* += 1;
+}
+
+/// Like `assertToolPaths`, but also asserts the MCP `isError` envelope flag for
+/// error-path fixtures (MEDIUM-4). Decodes the result through `callHttpTool`,
+/// which guards the JSON-RPC `error` envelope and fails cleanly on malformed
+/// results instead of panicking (LOW-8).
+pub fn assertToolPathsIsError(
+    allocator: std.mem.Allocator,
+    io: Io,
+    port: u16,
+    id: i64,
+    tool_name: []const u8,
+    args_json: []const u8,
+    expected_root: JsonValue,
+    expected_key: []const u8,
+    expect_is_error: bool,
+    scenario_count: *usize,
+) !void {
+    const result = try smoke.callHttpTool(allocator, io, port, id, tool_name, args_json);
+    defer result.deinit(allocator);
+    try smoke.expectToolIsError(io, result, expect_is_error, tool_name);
+    const parsed = try std.json.parseFromSlice(JsonValue, allocator, result.json, .{});
+    defer parsed.deinit();
+    const expected_paths = expected_root.object.get(expected_key).?.object;
+    var it = expected_paths.iterator();
+    while (it.next()) |entry| {
+        const actual = valueAt(parsed.value, entry.key_ptr.*) orelse {
+            try stderrPrint(io, "{s}: missing path {s}\n", .{ tool_name, entry.key_ptr.* });
+            return error.AssertionFailed;
+        };
+        try smoke.expectJsonEq(io, actual, entry.value_ptr.*, entry.key_ptr.*);
+    }
+    scenario_count.* += 1;
+}
+
+/// Asserts that a path-taking tool rejects an out-of-workspace path with a
+/// structured workspace_path_error and the MCP isError flag set (MEDIUM-5 /
+/// coverage-gap 4). Expectations are inline so the sandbox-escape contract is
+/// exercised without depending on the shared expect.json.
+fn assertSandboxEscapeRejected(
+    allocator: std.mem.Allocator,
+    io: Io,
+    port: u16,
+    id: i64,
+    tool_name: []const u8,
+    args_json: []const u8,
+    scenario_count: *usize,
+) !void {
+    const result = try smoke.callHttpTool(allocator, io, port, id, tool_name, args_json);
+    defer result.deinit(allocator);
+    try smoke.expectToolIsError(io, result, true, tool_name);
+    const parsed = try std.json.parseFromSlice(JsonValue, allocator, result.json, .{});
+    defer parsed.deinit();
+    const kind = valueAt(parsed.value, "kind") orelse return error.AssertionFailed;
+    try smoke.expectJsonEq(io, kind, .{ .string = "workspace_path_error" }, "kind");
+    const code = valueAt(parsed.value, "code") orelse return error.AssertionFailed;
+    try smoke.expectJsonEq(io, code, .{ .string = "path_outside_workspace" }, "code");
     scenario_count.* += 1;
 }
 
