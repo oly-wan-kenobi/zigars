@@ -10,15 +10,20 @@ import { run, type RunOptions } from "../src/cli";
 async function captureRun(argv: string[], options: RunOptions = {}) {
   let stdout = "";
   let stderr = "";
-  const code = await run(argv, {
-    platform: "linux",
-    arch: "x64",
-    ...options,
-    stdout: { write: (chunk: string | Uint8Array) => { stdout += chunk.toString(); return true; } },
-    stderr: { write: (chunk: string | Uint8Array) => { stderr += chunk.toString(); return true; } },
-  });
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => { stdout += chunk.toString(); return true; }) as typeof process.stdout.write;
+  try {
+    const code = await run(argv, {
+      platform: "linux",
+      arch: "x64",
+      ...options,
+      stderr: { write: (chunk: string | Uint8Array) => { stderr += chunk.toString(); return true; } },
+    });
 
-  return { code, stdout, stderr };
+    return { code, stdout, stderr };
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+  }
 }
 
 function createChild({ code = 0, signal = null }: { code?: number | null; signal?: NodeJS.Signals | null } = {}) {
