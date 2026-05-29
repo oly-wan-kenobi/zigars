@@ -599,22 +599,44 @@ fn checkFileBytes(allocator: Allocator, io: Io, source_path: []const u8, bytes: 
     // cannot unguard later production code (HIGH-2).
     const has_tests = fileHasTestBlock(bytes);
     const leading_end = leadingImportBlockEnd(bytes);
+    // Once a production-path file has opened its first top-level `test { … }`
+    // block, the remainder of the file is its trailing test region: the test
+    // blocks, their helpers, and the test-support `const X = struct { … }`
+    // doubles that those tests construct. A module-scope declaration there whose
+    // *name* marks it as test support (a `*Test*`-named struct/fn) is test
+    // scaffolding, so the effect/boundary walls do not apply inside its body.
+    // Anchoring on the first test block — never on a heuristic import line —
+    // and gating on a test-support *name* keeps this from latching real
+    // production code that merely follows a tail testing import (HIGH-2): a
+    // plain `pub fn` after such an import is not test-named and stays guarded.
+    const trailing_region_start = firstTopLevelTestBlockLine(bytes);
 
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var line_no: usize = 1;
     var test_depth: isize = 0;
+    var depth: isize = 0;
+    var test_support_depth: isize = 0;
     while (lines.next()) |raw_line| : (line_no += 1) {
         const line = withoutLineComment(raw_line);
         const enters_test_block = testBlockStarts(line);
         // A trailing test-support import declaration is exempt on its own line
         // only — it never latches later lines into test context.
         const test_support_decl = isTrailingTestSupportImport(line, line_no, leading_end, has_tests);
+        // A `*Test*`-named module-scope declaration opened at depth 0 inside the
+        // trailing test region opens a test-support body. The brace scope of
+        // that one declaration is test context; it never latches sibling
+        // declarations because it ends when its own braces close.
+        const enters_test_support_decl = test_support_depth == 0 and test_depth == 0 and depth == 0 and
+            inTrailingTestRegion(line_no, trailing_region_start) and
+            isTestSupportNamedDeclStart(line);
         var line_scan = scan;
         // Test context is the whole-file `_tests.zig`/`src/testing/**` flag, a
-        // real `test { … }` brace scope, or a trailing test-support import.
-        line_scan.is_test_file = scan.is_test_file or test_depth > 0 or enters_test_block or test_support_decl;
+        // real `test { … }` brace scope, a trailing test-support import, or the
+        // body of a trailing-region test-support declaration.
+        line_scan.is_test_file = scan.is_test_file or test_depth > 0 or enters_test_block or test_support_decl or
+            test_support_depth > 0 or enters_test_support_decl;
         ok = (try checkRootPublicAliasInLine(io, line_scan, line, line_no)) and ok;
-        ok = (try checkTransitionalSurfaceInLine(io, line_scan, raw_line, line_no)) and ok;
+        ok = (try checkTransitionalSurfaceInLine(io, line_scan, line, line_no)) and ok;
         ok = (try checkImportsInLine(allocator, io, &line_scan, line, line_no, module_map, graph, !line_scan.is_test_file)) and ok;
         scan.imports_adapter = scan.imports_adapter or line_scan.imports_adapter;
         scan.imports_infra = scan.imports_infra or line_scan.imports_infra;
@@ -624,6 +646,12 @@ fn checkFileBytes(allocator: Allocator, io: Io, source_path: []const u8, bytes: 
             test_depth += braceDelta(line);
             if (test_depth < 0) test_depth = 0;
         }
+        if (enters_test_support_decl or test_support_depth > 0) {
+            test_support_depth += braceDelta(line);
+            if (test_support_depth < 0) test_support_depth = 0;
+        }
+        depth += braceDelta(line);
+        if (depth < 0) depth = 0;
     }
 
     // Composition wiring is a production concern; test scaffolding legitimately
@@ -806,14 +834,56 @@ fn checkRootPublicAliasInLine(io: Io, scan: FileScan, line: []const u8, line_no:
     return reportViolation(io, .root_public_alias, scan.source_path, line_no, name, "src/root.zig may expose only package-owner roots.");
 }
 
-fn checkTransitionalSurfaceInLine(io: Io, scan: FileScan, raw_line: []const u8, line_no: usize) !bool {
+fn checkTransitionalSurfaceInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
     if (scan.is_test_file or !isTargetLayer(scan.layer)) return true;
+    // Multiline-string content (`\\…`) is prose/data, never a retired code
+    // surface, and string-literal occurrences of a retired word describe live
+    // features rather than retired terminology. Both are skipped so this check
+    // gets the same string/comment awareness as the import and effect checks
+    // (LOW-7): the caller already passes the comment-stripped `line`.
+    if (isMultilineStringLiteralLine(line)) return true;
     var ok = true;
     for (retired_surface_tokens) |token| {
-        if (std.mem.indexOf(u8, raw_line, token.token) == null) continue;
+        if (!containsTokenInCode(line, token.token)) continue;
         ok = (try reportViolation(io, .no_retired_surface, scan.source_path, line_no, token.token, token.reason)) and ok;
     }
     return ok;
+}
+
+/// True when `token` appears in `line` outside any `"…"` string literal. A
+/// match that lives entirely inside a string literal — e.g. the word `shim`
+/// inside `"npm shim downloads release archives"` describing the live npm shim
+/// — is data, not a retired code surface, and is not reported. If the token
+/// occurs both in code and inside a string on the same line, the code
+/// occurrence still reports. Mirrors the string state machine used by
+/// `ImportScanner`/`withoutLineComment`.
+fn containsTokenInCode(line: []const u8, token: []const u8) bool {
+    if (token.len == 0) return false;
+    var in_string = false;
+    var escaped = false;
+    var i: usize = 0;
+    while (i < line.len) : (i += 1) {
+        const c = line[i];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (in_string) {
+            if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (c == '"') {
+            in_string = true;
+            continue;
+        }
+        // Code context: a token starting here is a genuine retired surface.
+        if (std.mem.startsWith(u8, line[i..], token)) return true;
+    }
+    return false;
 }
 
 fn checkMcpResultBoundaryInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
@@ -1103,6 +1173,81 @@ fn fileHasTestBlock(bytes: []const u8) bool {
         if (depth == 0 and testBlockStarts(line)) return true;
         depth += braceDelta(line);
         if (depth < 0) depth = 0;
+    }
+    return false;
+}
+
+/// 1-based line of the file's *first* top-level `test { … }` block, or 0 when
+/// the file has none. Everything after this line is the trailing test region:
+/// the test blocks, their helpers, and the test-support doubles they construct.
+/// Anchoring the trailing-region exemption on a real test block (never on a
+/// heuristic import line) keeps it from latching production code that merely
+/// follows a tail testing import (HIGH-2).
+fn firstTopLevelTestBlockLine(bytes: []const u8) usize {
+    var depth: isize = 0;
+    var line_no: usize = 0;
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    while (lines.next()) |raw_line| {
+        line_no += 1;
+        const line = withoutLineComment(raw_line);
+        if (depth == 0 and testBlockStarts(line)) return line_no;
+        depth += braceDelta(line);
+        if (depth < 0) depth = 0;
+    }
+    return 0;
+}
+
+/// True when `line_no` sits strictly after the start of the trailing test
+/// region (`region_start != 0`). The `test { … }` opener line itself is handled
+/// by the existing `enters_test_block` path, so the region for *declarations*
+/// begins on the following line.
+fn inTrailingTestRegion(line_no: usize, region_start: usize) bool {
+    return region_start != 0 and line_no > region_start;
+}
+
+/// True when `line` opens a module-scope declaration (`const`/`fn`, optionally
+/// `pub`) whose declared identifier is marked as test support — its name
+/// contains `Test`/`test`, e.g. `ResourceTestProvider` or `resourceTestContext`.
+/// Used only inside the trailing test region and only at depth 0, so it
+/// recognizes test-support doubles/builders while leaving production
+/// declarations (`artifactResource`, a plain `sneaky`) guarded. Gating on the
+/// declared *name* — not mere position — is what prevents a HIGH-2 latch.
+fn isTestSupportNamedDeclStart(line: []const u8) bool {
+    const name = moduleScopeDeclName(line) orelse return false;
+    return identifierIsTestSupport(name);
+}
+
+/// The declared identifier of a module-scope `const`/`fn` declaration line
+/// (`const Foo = …` → "Foo", `pub fn bar(` → "bar"), or null when the line is
+/// not such a declaration. Only depth-0 declaration openers are passed in.
+fn moduleScopeDeclName(line: []const u8) ?[]const u8 {
+    var trimmed = std.mem.trim(u8, line, " \t");
+    if (std.mem.startsWith(u8, trimmed, "pub ")) trimmed = std.mem.trimStart(u8, trimmed["pub ".len..], " \t");
+    const keyword: []const u8 = if (std.mem.startsWith(u8, trimmed, "const "))
+        "const "
+    else if (std.mem.startsWith(u8, trimmed, "fn "))
+        "fn "
+    else
+        return null;
+    const rest = std.mem.trimStart(u8, trimmed[keyword.len..], " \t");
+    var end: usize = 0;
+    while (end < rest.len) : (end += 1) {
+        const c = rest[end];
+        if (!std.ascii.isAlphanumeric(c) and c != '_') break;
+    }
+    if (end == 0) return null;
+    return rest[0..end];
+}
+
+/// True when an identifier names test support — it contains the substring
+/// `test` case-insensitively (covers `Test`, `test`, `TestProvider`,
+/// `testContext`). Deliberately narrow: it keys on the conventional test
+/// naming a production identifier would not carry.
+fn identifierIsTestSupport(name: []const u8) bool {
+    if (name.len < 4) return false;
+    var i: usize = 0;
+    while (i + 4 <= name.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(name[i .. i + 4], "test")) return true;
     }
     return false;
 }
@@ -1782,4 +1927,154 @@ test "S5 MEDIUM-6 production import cycle is detected, test-aggregation is not" 
         _ = try checkFileBytes(std.testing.allocator, test_io, "src/manifest/invariants_tests.zig", invariants_src, &map, &graph);
         try std.testing.expect(try graph.reportCycles(test_io));
     }
+}
+
+// --- False-positive soundness self-tests (FP) ----------------------------
+//
+// These pin the two false-positive fixes against the real per-file pipeline.
+// Each fixture FAILS on the pre-fix guard (which scanned `raw_line` with a
+// naive `indexOf` for retired surfaces, and never recognized a trailing-region
+// test-support struct) and PASSES after, while the matching control proves a
+// genuine violation in the same family is still caught — so the fix removes the
+// false positive without widening into a hole.
+
+test "FP no-retired-surface skips a retired word inside a string literal but catches a code token" {
+    var map = ModuleMap.empty(std.testing.allocator);
+    defer map.deinit();
+
+    // Mirrors src/app/usecases/environment/trust.zig:294,378: the retired word
+    // `shim` appears only inside string-literal values that describe the LIVE
+    // `@zigars/mcp` npm shim (a current feature). The pre-fix check scanned the
+    // raw line with `std.mem.indexOf` and flagged it; the string-aware check
+    // does not.
+    const string_literal_src =
+        \\const std = @import("std");
+        \\pub fn manifest(obj: anytype) void {
+        \\    obj.put("name", .{ .string = "npm_shim_downloads" });
+        \\    obj.put("npm_shim", .{ .string = "The npm shim downloads zigars-checksums.txt and verifies the archive SHA-256." });
+        \\}
+    ;
+    try std.testing.expect(try runGuardOnBytes("src/app/usecases/environment/trust.zig", string_literal_src, &map));
+
+    // A `//` comment that mentions the retired word is likewise inert (the
+    // caller passes the comment-stripped line).
+    const comment_src =
+        \\const std = @import("std");
+        \\pub fn manifest() void {} // documents the npm shim download flow
+    ;
+    try std.testing.expect(try runGuardOnBytes("src/app/usecases/environment/trust.zig", comment_src, &map));
+
+    // Control: the SAME retired word as a bare code token (an identifier) is
+    // still a retired surface and is caught — the fix narrows to string/comment
+    // context only, it does not stop flagging retired code.
+    const code_token_src =
+        \\const std = @import("std");
+        \\pub fn shimBridge() void {}
+    ;
+    try std.testing.expect(!try runGuardOnBytes("src/app/usecases/environment/trust.zig", code_token_src, &map));
+}
+
+test "FP trailing-region test-support struct is exempt while a real production effect stays caught" {
+    var map = ModuleMap.empty(std.testing.allocator);
+    defer map.deinit();
+
+    // Mirrors src/adapters/mcp/resources.zig: a top-level `test { … }` block and
+    // a trailing test-support `@import`, then a module-scope `*TestProvider`
+    // struct whose body touches the forbidden `context.workspace_store` effect.
+    // The struct is test scaffolding declared in the trailing test region, so it
+    // is exempt. The pre-fix guard (no trailing-region recognition) flagged the
+    // struct line as an MCP-adapter business effect.
+    const test_support_struct_src =
+        \\const std = @import("std");
+        \\const mcp = @import("mcp");
+        \\const app_context = @import("../../app/context.zig");
+        \\pub fn registerResources(server: anytype) !void {
+        \\    _ = server;
+        \\}
+        \\test {
+        \\    _ = registerResources;
+        \\}
+        \\const test_fakes = @import("../../testing/fakes/root.zig");
+        \\const ResourceTestProvider = struct {
+        \\    context: app_context.RuntimeUxContext,
+        \\    fn artifactContext(self: *ResourceTestProvider) app_context.ArtifactContext {
+        \\        return .{ .workspace_store = self.context.workspace_store };
+        \\    }
+        \\};
+    ;
+    try std.testing.expect(try runGuardOnBytes("src/adapters/mcp/resources.zig", test_support_struct_src, &map));
+
+    // Control: the SAME effect inside a real production function declared BEFORE
+    // any test block is a genuine MCP-adapter business effect and stays flagged
+    // (resources.zig:289,299 in the live tree). This proves the trailing-region
+    // exemption is scoped to the test-support declaration and never latches the
+    // file, so production effects remain caught.
+    const production_effect_src =
+        \\const std = @import("std");
+        \\const mcp = @import("mcp");
+        \\pub fn artifactResource(context: anytype) !void {
+        \\    const resolved = try context.workspace_store.resolve(.{});
+        \\    _ = resolved;
+        \\}
+    ;
+    try std.testing.expect(!try runGuardOnBytes("src/adapters/mcp/resources.zig", production_effect_src, &map));
+
+    // No-latch guard: a production effect BEFORE the test block must still be
+    // caught even though a trailing-region test-support struct follows it in the
+    // same file — the exemption must not reach back over the production code.
+    const production_then_struct_src =
+        \\const std = @import("std");
+        \\const app_context = @import("../../app/context.zig");
+        \\pub fn artifactResource(context: anytype) !void {
+        \\    const resolved = try context.workspace_store.resolve(.{});
+        \\    _ = resolved;
+        \\}
+        \\test {
+        \\    _ = artifactResource;
+        \\}
+        \\const ResourceTestProvider = struct {
+        \\    context: app_context.RuntimeUxContext,
+        \\    fn ctx(self: *ResourceTestProvider) void {
+        \\        _ = self.context.workspace_store;
+        \\    }
+        \\};
+    ;
+    try std.testing.expect(!try runGuardOnBytes("src/adapters/mcp/resources.zig", production_then_struct_src, &map));
+}
+
+test "FP trailing-region helpers classify declarations precisely" {
+    // The string-aware token scan: code occurrence reports, pure string
+    // occurrence does not, and a code occurrence still wins when both appear.
+    try std.testing.expect(containsTokenInCode("pub fn shimBridge() void {}", "shim"));
+    try std.testing.expect(!containsTokenInCode("    .string = \"npm shim downloads\",", "shim"));
+    try std.testing.expect(containsTokenInCode("shim_path = \"value with shim inside\";", "shim"));
+
+    // Trailing region anchors only on a real top-level test block.
+    const with_test =
+        \\const std = @import("std");
+        \\pub fn work() void {}
+        \\test {
+        \\    _ = work;
+        \\}
+        \\const HelperTestProvider = struct {};
+    ;
+    try std.testing.expectEqual(@as(usize, 3), firstTopLevelTestBlockLine(with_test));
+    const no_test =
+        \\const std = @import("std");
+        \\pub fn work() void {}
+    ;
+    try std.testing.expectEqual(@as(usize, 0), firstTopLevelTestBlockLine(no_test));
+    try std.testing.expect(inTrailingTestRegion(4, 3));
+    try std.testing.expect(!inTrailingTestRegion(3, 3));
+    try std.testing.expect(!inTrailingTestRegion(5, 0));
+
+    // Test-support naming: a `*Test*` declaration is recognized, a plain
+    // production declaration is not.
+    try std.testing.expect(isTestSupportNamedDeclStart("const ResourceTestProvider = struct {"));
+    try std.testing.expect(isTestSupportNamedDeclStart("fn resourceTestContext() void {"));
+    try std.testing.expect(!isTestSupportNamedDeclStart("pub fn artifactResource(context: anytype) !void {"));
+    try std.testing.expect(!isTestSupportNamedDeclStart("pub fn sneaky() void {"));
+    try std.testing.expect(!isTestSupportNamedDeclStart("    .workspace_store = self.context.workspace_store,"));
+    try std.testing.expectEqualStrings("ResourceTestProvider", moduleScopeDeclName("const ResourceTestProvider = struct {").?);
+    try std.testing.expectEqualStrings("artifactResource", moduleScopeDeclName("pub fn artifactResource(context: anytype) !void {").?);
 }
