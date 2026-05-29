@@ -25,6 +25,7 @@ test {
     _ = @import("testing/manifest/static_analysis_contracts.zig");
     _ = @import("testing/infra/backend_probe_tests.zig");
     _ = @import("infra/zls/documents_tests.zig");
+    _ = @import("infra/zls/document_retained_tests.zig");
     _ = @import("infra/zls/client_tests.zig");
     _ = @import("testing/fakes/root.zig");
 }
