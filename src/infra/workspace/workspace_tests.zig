@@ -293,6 +293,91 @@ test "workspace allows output below symlinked parent inside root" {
     try std.testing.expectEqualStrings(expected, output);
 }
 
+test "workspace readFileAlloc follows an inside symlink but rejects an outside one" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root/src");
+    try tmp.dir.writeFile(io, .{ .sub_path = "root/src/main.zig", .data = "pub const internal = true;\n" });
+    try tmp.dir.createDirPath(io, "outside");
+    try tmp.dir.writeFile(io, .{ .sub_path = "outside/evil.zig", .data = "pub const escaped = true;\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const inside_target = try std.fs.path.join(allocator, &.{ root, "src", "main.zig" });
+    defer allocator.free(inside_target);
+    const outside_target = try std.fs.path.join(allocator, &.{ base, "outside", "evil.zig" });
+    defer allocator.free(outside_target);
+    const inside_link = try std.fs.path.join(allocator, &.{ root, "inside-link.zig" });
+    defer allocator.free(inside_link);
+    const outside_link = try std.fs.path.join(allocator, &.{ root, "outside-link.zig" });
+    defer allocator.free(outside_link);
+
+    try std.Io.Dir.symLinkAbsolute(io, inside_target, inside_link, .{});
+    try std.Io.Dir.symLinkAbsolute(io, outside_target, outside_link, .{});
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+
+    // Currently-correct behavior preserved: a symlink resolving inside the root
+    // is read through to its canonical target.
+    const inside_bytes = try ws.readFileAlloc(io, "inside-link.zig", 4096);
+    defer allocator.free(inside_bytes);
+    try std.testing.expectEqualStrings("pub const internal = true;\n", inside_bytes);
+
+    // An outside-pointing symlink must never yield the outside file's contents.
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.readFileAlloc(io, "outside-link.zig", 4096));
+}
+
+test "workspace writeFile does not clobber through an outside symlink" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.createDirPath(io, "root");
+    try tmp.dir.createDirPath(io, "outside");
+    try tmp.dir.writeFile(io, .{ .sub_path = "outside/secret.txt", .data = "original\n" });
+
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const base = base_z[0..];
+    const root = try std.fs.path.join(allocator, &.{ base, "root" });
+    defer allocator.free(root);
+    const outside_target = try std.fs.path.join(allocator, &.{ base, "outside", "secret.txt" });
+    defer allocator.free(outside_target);
+    const link_file = try std.fs.path.join(allocator, &.{ root, "report.txt" });
+    defer allocator.free(link_file);
+
+    // A pre-existing final-component symlink inside the root that points out.
+    try std.Io.Dir.symLinkAbsolute(io, outside_target, link_file, .{});
+
+    var ws = try Workspace.init(allocator, io, root, null);
+    defer ws.deinit();
+
+    // The resolved output canonicalizes the symlink and rejects it; the write
+    // must not reach the outside file.
+    try std.testing.expectError(WorkspaceError.PathOutsideWorkspace, ws.writeFile(io, "report.txt", "overwritten\n"));
+
+    // The outside file is untouched.
+    const after = try std.Io.Dir.cwd().readFileAlloc(io, outside_target, allocator, .limited(4096));
+    defer allocator.free(after);
+    try std.testing.expectEqualStrings("original\n", after);
+}
+
 test "workspace allows existing output symlink inside root" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
