@@ -43,7 +43,6 @@ type SpawnImpl = (
 
 export interface RunOptions extends InstallOptions {
   stderr?: Writable;
-  stdout?: Writable;
   arch?: NodeJS.Architecture | string;
   installZigars?: (target: Readonly<HostTarget>, options: InstallOptions) => Promise<string>;
   spawn?: SpawnImpl;

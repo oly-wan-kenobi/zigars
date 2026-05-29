@@ -78,6 +78,12 @@ function markerPath(installDir: string): string {
   return path.join(installDir, "install.json");
 }
 
+// Re-hashes the cached binary at rest against its install marker before reuse, so a
+// poisoned cache forces a fresh, checksum-verified download. A residual verify->exec
+// window remains: a local attacker with write access to the cache dir could swap the
+// file between this check and the spawn in cli.ts. The cache dir is therefore a trust
+// boundary equivalent to any local binary on PATH; defending it further is out of scope
+// for a shim that ultimately execs a file from disk.
 export async function verifiedCachedExecutable(
   installDir: string,
   version: string,
@@ -143,6 +149,34 @@ async function findExecutable(root: string, executableName: string, fsp: FsPromi
     }
   }
   return null;
+}
+
+export function isContainedWithin(child: string, parent: string): boolean {
+  const resolvedParent = path.resolve(parent);
+  const resolvedChild = path.resolve(child);
+  if (resolvedChild === resolvedParent) {
+    return false;
+  }
+  const relative = path.relative(resolvedParent, resolvedChild);
+  return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+export async function assertContainedRegularFile(
+  candidate: string,
+  containerDir: string,
+  fsp: FsPromises = fs.promises,
+): Promise<void> {
+  if (!isContainedWithin(candidate, containerDir)) {
+    throw new InstallError(`Archive contents escaped the extraction directory`, {
+      code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
+    });
+  }
+  const stat = await fsp.lstat(candidate);
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new InstallError(`Archive executable ${path.basename(candidate)} is not a regular file`, {
+      code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
+    });
+  }
 }
 
 function extractArchive(
@@ -215,6 +249,7 @@ export async function installZigars(target: Readonly<HostTarget>, options: Insta
         code: "ERR_ZIGARS_ARCHIVE_CONTENTS",
       });
     }
+    await assertContainedRegularFile(extractedExecutable, extractedDir, fsp);
 
     const stagedExecutable = path.join(stagedDir, target.executableName);
     await fsp.copyFile(extractedExecutable, stagedExecutable);
