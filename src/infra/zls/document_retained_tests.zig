@@ -20,7 +20,7 @@ test "DocumentState retained-byte subtraction clamps at zero on accounting desyn
     ds.retained_content_bytes = 3; // under-counted vs the 8-byte body
 
     const info = ds.open_docs.get("file:///tmp/main.zig") orelse return error.TestUnexpectedResult;
-    document_retained.subtractRetainedBytesLocked(&ds, document_retained.contentLen(info));
+    document_retained.subtractRetainedBytesLocked(&ds.retained_content_bytes, document_retained.contentLen(info.content));
 
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
@@ -31,10 +31,10 @@ test "DocumentState subtractRetainedBytesLocked never underflows" {
     defer ds.deinit();
 
     ds.retained_content_bytes = 10;
-    document_retained.subtractRetainedBytesLocked(&ds, 4);
+    document_retained.subtractRetainedBytesLocked(&ds.retained_content_bytes, 4);
     try std.testing.expectEqual(@as(usize, 6), ds.retained_content_bytes);
     // Over-subtraction clamps to zero rather than wrapping.
-    document_retained.subtractRetainedBytesLocked(&ds, 100);
+    document_retained.subtractRetainedBytesLocked(&ds.retained_content_bytes, 100);
     try std.testing.expectEqual(@as(usize, 0), ds.retained_content_bytes);
 }
 

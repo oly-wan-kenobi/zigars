@@ -203,7 +203,7 @@ pub const DocumentState = struct {
             defer self.mutex.unlock();
             break :blk if (self.open_docs.getPtr(file_uri)) |info| existing: {
                 const previous = info.*;
-                const next_retained = retained.retainedBytesAfterReplace(self.retained_content_bytes, retained.contentLen(previous), retained_len) orelse return error.RetainedContentLimitExceeded;
+                const next_retained = retained.retainedBytesAfterReplace(self.retained_content_bytes, retained.contentLen(previous.content), retained_len) orelse return error.RetainedContentLimitExceeded;
                 if (next_retained > self.max_retained_content_bytes) return error.RetainedContentLimitExceeded;
                 self.retained_content_bytes = next_retained;
                 info.version += 1;
@@ -285,7 +285,7 @@ pub const DocumentState = struct {
             .version = info.version,
             .content_hash = info.content_hash,
             .dirty = info.dirty,
-            .content_bytes = retained.contentLen(info),
+            .content_bytes = retained.contentLen(info.content),
             .retained_content_bytes = self.retained_content_bytes,
             .open_documents = self.open_docs.count(),
             .max_document_bytes = self.max_document_bytes,
@@ -319,7 +319,7 @@ pub const DocumentState = struct {
     pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
         self.mutex.lock();
         const removed = self.open_docs.fetchRemove(file_uri);
-        if (removed) |kv| retained.subtractRetainedBytesLocked(self, retained.contentLen(kv.value));
+        if (removed) |kv| retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(kv.value.content));
         self.mutex.unlock();
 
         if (removed) |kv| {
@@ -440,7 +440,7 @@ pub const DocumentState = struct {
         defer self.mutex.unlock();
         if (self.open_docs.fetchRemove(file_uri)) |kv| {
             self.allocator.free(kv.key);
-            retained.subtractRetainedBytesLocked(self, retained.contentLen(kv.value));
+            retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(kv.value.content));
             if (kv.value.content) |content| self.allocator.free(content);
         }
     }
@@ -450,8 +450,8 @@ pub const DocumentState = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         if (self.open_docs.getPtr(file_uri)) |current| {
-            retained.subtractRetainedBytesLocked(self, retained.contentLen(current.*));
-            self.retained_content_bytes +|= retained.contentLen(info);
+            retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(current.*.content));
+            self.retained_content_bytes +|= retained.contentLen(info.content);
             if (current.content) |content| {
                 if (info.content == null or content.ptr != info.content.?.ptr) self.allocator.free(content);
             }
