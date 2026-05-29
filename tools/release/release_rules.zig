@@ -258,6 +258,21 @@ pub const line_budgets = [_]LineBudget{
         .reason = "HTTP tool contract smoke assertions should stay grouped by tool family",
     },
     .{
+        .path = "tools/integration/http/http_tool_contract_smoke_b.zig",
+        .max_lines = 140,
+        .reason = "static-analysis tool-family contract scenarios should stay a focused fixture list, splitting by sub-family if they grow further",
+    },
+    .{
+        .path = "tools/integration/http/http_tool_contract_support.zig",
+        .max_lines = 90,
+        .reason = "shared HTTP tool-result contract assertions should stay a small helper module separate from the per-family scenario lists",
+    },
+    .{
+        .path = "tools/integration/http/http_smoke_tools_list.zig",
+        .max_lines = 60,
+        .reason = "tools/list presence and schema-path assertions should stay separate from the HTTP transport-level smoke entrypoint",
+    },
+    .{
         .path = "tools/integration/http/http_performance_smoke.zig",
         .max_lines = 120,
         .reason = "performance HTTP smoke coverage should stay a focused fixture module",
@@ -286,6 +301,21 @@ pub const line_budgets = [_]LineBudget{
         .path = "tools/integration/smoke_support.zig",
         .max_lines = 184,
         .reason = "shared smoke-test utilities should remain a small helper module",
+    },
+    .{
+        .path = "tools/integration/common/smoke_http.zig",
+        .max_lines = 170,
+        .reason = "no-panic HTTP request and tools/call envelope helpers should stay a focused shared module",
+    },
+    .{
+        .path = "tools/integration/common/smoke_assert.zig",
+        .max_lines = 100,
+        .reason = "shared smoke assertion, path, and filesystem-gating helpers should stay compact",
+    },
+    .{
+        .path = "tools/integration/common/smoke_port.zig",
+        .max_lines = 80,
+        .reason = "deterministic loopback-port selection should stay a small focused helper",
     },
     .{
         .path = "tools/release/release_targets.zig",
