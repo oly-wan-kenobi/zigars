@@ -53,6 +53,7 @@ pub const ParseError = error{
     InvalidTransport,
     InvalidAuditLogMode,
     InvalidAuditLogPath,
+    EmptyFlagValue,
     UnsafeHttpHost,
 };
 
@@ -89,6 +90,10 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
             try replaceOwned(allocator, &result.host, raw_args, &i);
         } else if (std.mem.eql(u8, arg, "--cache-dir")) {
             const value = try dupeNext(allocator, raw_args, &i);
+            if (value.len == 0) {
+                allocator.free(value);
+                return ParseError.EmptyFlagValue;
+            }
             if (result.cache_dir) |old| allocator.free(old);
             result.cache_dir = value;
         } else if (std.mem.eql(u8, arg, "--audit-log")) {
@@ -176,8 +181,13 @@ fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
 }
 
 /// Replaces an owned string field with the next argv value, freeing the old value.
+/// Empty values are rejected so path-like flags fail at startup rather than at first use.
 fn replaceOwned(allocator: std.mem.Allocator, field: *[]const u8, args: []const []const u8, index: *usize) !void {
     const value = try dupeNext(allocator, args, index);
+    if (value.len == 0) {
+        allocator.free(value);
+        return ParseError.EmptyFlagValue;
+    }
     allocator.free(field.*);
     field.* = value;
 }

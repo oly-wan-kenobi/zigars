@@ -91,6 +91,39 @@ test "parse audit log defaults to metadata and rejects invalid audit inputs" {
     });
     try std.testing.expectEqual(.full, full.audit_log_mode);
 }
+test "parse rejects empty path-like flag values" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try std.testing.expectError(ParseError.EmptyFlagValue, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--zig-path",
+        "",
+    }));
+    try std.testing.expectError(ParseError.EmptyFlagValue, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--zls-path",
+        "",
+    }));
+    try std.testing.expectError(ParseError.EmptyFlagValue, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--workspace",
+        "",
+    }));
+    try std.testing.expectError(ParseError.EmptyFlagValue, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--cache-dir",
+        "",
+    }));
+
+    // A non-empty path-like value still parses and is owned by the config.
+    const cfg = try parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--zig-path",
+        "/opt/zig",
+    });
+    try std.testing.expectEqualStrings("/opt/zig", cfg.zig_path);
+}
 test "parse rejects removed strict workspace flag" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

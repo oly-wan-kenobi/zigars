@@ -76,6 +76,44 @@ test "zon dependency edits reject fields that would escape generated literals" {
     try std.testing.expectError(error.InvalidDependencyField, zon.upgradeDependency(std.testing.allocator, model, "alpha", "https://example.invalid/new\n.tar.gz", null));
 }
 
+test "zon dependency fields ignore lookalikes in comments and other values" {
+    const commented =
+        \\.{
+        \\    .name = .fixture,
+        \\    .dependencies = .{
+        \\        .alpha = .{
+        \\            // legacy mirror was .url = "https://old.invalid/alpha.tar.gz" with .hash = "DO_NOT_TOUCH"
+        \\            .url = "https://example.invalid/alpha.tar.gz",
+        \\            .hash = "realhash",
+        \\        },
+        \\    },
+        \\}
+        \\
+    ;
+
+    var model = try zon.parse(std.testing.allocator, commented);
+    defer model.deinit(std.testing.allocator);
+
+    // The token-aware scan must locate the real fields, not the commented lookalikes.
+    const alpha = model.find("alpha").?;
+    try std.testing.expectEqualStrings("https://example.invalid/alpha.tar.gz", alpha.url.?.value);
+    try std.testing.expectEqualStrings("realhash", alpha.hash.?.value);
+
+    const updated = try zon.replaceHash(std.testing.allocator, model, "alpha", "newhash");
+    defer std.testing.allocator.free(updated);
+
+    // Only the real hash field is rewritten; the comment text stays byte-for-byte intact.
+    try std.testing.expect(std.mem.indexOf(u8, updated, ".hash = \"newhash\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "DO_NOT_TOUCH") != null);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "// legacy mirror was .url = \"https://old.invalid/alpha.tar.gz\" with .hash = \"DO_NOT_TOUCH\"") != null);
+    // The URL line is untouched and the manifest still re-parses with the new hash.
+    try std.testing.expect(std.mem.indexOf(u8, updated, ".url = \"https://example.invalid/alpha.tar.gz\"") != null);
+
+    var reparsed = try zon.parse(std.testing.allocator, updated);
+    defer reparsed.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("newhash", reparsed.find("alpha").?.hash.?.value);
+}
+
 test "zon dependency model reports unsupported or missing shapes as diagnostics" {
     var missing = try zon.parse(std.testing.allocator, ".{ .name = .fixture }\n");
     defer missing.deinit(std.testing.allocator);
