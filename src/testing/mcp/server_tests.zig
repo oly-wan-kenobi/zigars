@@ -413,7 +413,11 @@ test "Server routes JSON-RPC methods and serializes registered surfaces" {
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"structuredContent\":true") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"_meta\":{\"dev.zigars/correlation\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_link\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "ExecutionFailed") != null);
+    // LOW-1 regression guard: the tool-handler `anyerror` fallback must NOT leak
+    // the raw Zig `@errorName` (here `ExecutionFailed`) into client-visible
+    // content or structuredContent. Only the coarsened `error_kind` and the safe
+    // coarsened content text are exposed; `@errorName` stays in stderr only.
+    try std.testing.expect(std.mem.indexOf(u8, sent, "ExecutionFailed") == null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_tool_handler_error") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"error_kind\":\"execution_failed\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "Tool not found") != null);
@@ -598,10 +602,15 @@ test "Server returns structured internal errors for resource and prompt handler 
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"code\":-32603") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_resource_handler_error") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"resource_uri\":\"file:///fails\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "ReadFailed") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "unexpected_prompt_handler_error") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "\"prompt\":\"fails\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "GenerationFailed") != null);
+    // LOW-1 regression guard: the resource- and prompt-handler `anyerror`
+    // fallbacks must not leak the raw Zig `@errorName` (`ReadFailed`,
+    // `GenerationFailed`) into client-visible structuredContent. Only the
+    // coarsened `error_kind` survives; both coarsen to `execution_failed`.
+    try std.testing.expect(std.mem.indexOf(u8, sent, "ReadFailed") == null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "GenerationFailed") == null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "\"error_kind\":\"execution_failed\"") != null);
 }
 
 test "Server rejects unsupported subscriptions and invalid log levels" {

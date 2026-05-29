@@ -1,4 +1,5 @@
 const std = @import("std");
+const ports = @import("../../app/ports.zig");
 
 /// Fixed tool-stat capacity retained for process-local metrics.
 pub const max_tool_stats = 64;
@@ -449,6 +450,44 @@ pub const State = struct {
             return &self.method_stats[index];
         }
         return null;
+    }
+
+    /// Projects this state as the app-side observability recorder port. The MCP
+    /// adapter holds only the port and never imports this infra module.
+    pub fn recorder(self: *State) ports.ObservabilityRecorder {
+        return .{ .ptr = self, .vtable = &recorder_vtable };
+    }
+
+    const recorder_vtable: ports.ObservabilityRecorder.VTable = .{
+        .record_mcp_request = recorderRecordMcpRequest,
+        .record_cancellation = recorderRecordCancellation,
+        .record_startup_phase = recorderRecordStartupPhase,
+        .record_audit_write_ok = recorderRecordAuditWriteOk,
+        .record_audit_write_error = recorderRecordAuditWriteError,
+    };
+
+    fn recorderRecordMcpRequest(ptr: *anyopaque, method: []const u8, latency_ms: u64, is_error: bool) void {
+        recorderState(ptr).recordMcpRequest(method, latency_ms, is_error);
+    }
+
+    fn recorderRecordCancellation(ptr: *anyopaque, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void {
+        recorderState(ptr).recordCancellation(status, request_id_type, request_id_value, method);
+    }
+
+    fn recorderRecordStartupPhase(ptr: *anyopaque, name: []const u8, start_ms: u64, duration_ms: u64) void {
+        recorderState(ptr).recordStartupPhase(name, start_ms, duration_ms);
+    }
+
+    fn recorderRecordAuditWriteOk(ptr: *anyopaque) void {
+        recorderState(ptr).recordAuditWriteOk();
+    }
+
+    fn recorderRecordAuditWriteError(ptr: *anyopaque, err_name: []const u8) void {
+        recorderState(ptr).recordAuditWriteError(err_name);
+    }
+
+    fn recorderState(ptr: *anyopaque) *State {
+        return @ptrCast(@alignCast(ptr));
     }
 };
 

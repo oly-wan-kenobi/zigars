@@ -18,11 +18,8 @@ const protocol_client = @import("server/protocol_client.zig");
 const resource_subscriptions = @import("server/resource_subscriptions.zig");
 const tasks_ext = @import("server/tasks.zig");
 const app_ports = @import("../../app/ports.zig");
-const audit = @import("../../infra/observability/audit.zig");
 const cancellation = @import("cancellation");
 const correlation = @import("correlation.zig");
-const logging = @import("../../infra/observability/logging.zig");
-const observability_mod = @import("../../infra/observability/state.zig");
 const tool_errors = @import("errors.zig");
 
 /// Deinitializer for tool results whose payload storage is owned by request allocators.
@@ -98,8 +95,8 @@ pub const Server = struct {
     completed_request_count: u64 = 0,
     startup_started_ns: ?i128 = null,
     first_initialize_recorded: bool = false,
-    audit_writer: ?*audit.Writer = null,
-    observability: ?*observability_mod.State = null,
+    audit_sink: ?app_ports.AuditSink = null,
+    observability: ?app_ports.ObservabilityRecorder = null,
     transport_name: []const u8 = "unknown",
     next_request_id: i64 = 1,
     pending_requests: std.AutoHashMap(i64, PendingRequest),
@@ -279,14 +276,14 @@ pub const Server = struct {
         self.dynamic_resource_deinit = deinit_content;
     }
 
-    /// Attaches an opt-in audit writer; server stdout remains reserved for JSON-RPC.
-    pub fn setAuditWriter(self: *Self, writer: *audit.Writer) void {
-        self.audit_writer = writer;
+    /// Attaches an opt-in audit sink; server stdout remains reserved for JSON-RPC.
+    pub fn setAuditSink(self: *Self, sink: app_ports.AuditSink) void {
+        self.audit_sink = sink;
     }
 
-    /// Attaches process-local observability state for adapter-level events.
-    pub fn setObservability(self: *Self, state: *observability_mod.State) void {
-        self.observability = state;
+    /// Attaches the observability recorder port for adapter-level events.
+    pub fn setObservability(self: *Self, recorder: app_ports.ObservabilityRecorder) void {
+        self.observability = recorder;
     }
 
     /// Carries the monotonic bootstrap start time for startup timing records.
@@ -325,7 +322,7 @@ pub const Server = struct {
                 try self.messageLoop(io, allocator);
             },
             .http => |config| {
-                try http_runner.run(self, io, allocator, config);
+                try http_runner.serve(self, io, allocator, config);
             },
         }
     }
@@ -410,8 +407,8 @@ pub const Server = struct {
         defer {
             const ended_ns = monotonicNowNs(io);
             self.rememberCompletedRequest(request_correlation.request_id, request.method);
-            if (self.observability) |observability| {
-                observability.recordMcpRequest(request.method, elapsedMs(started_ns, ended_ns), request_is_error);
+            if (self.observability) |recorder| {
+                recorder.recordMcpRequest(request.method, elapsedMs(started_ns, ended_ns), request_is_error);
             }
             if (std.mem.eql(u8, request.method, "initialize") and !self.first_initialize_recorded) {
                 self.first_initialize_recorded = true;
@@ -775,7 +772,10 @@ pub const Server = struct {
         const response_allocator = response_arena.allocator();
 
         var content_array: std.json.Array = .init(response_allocator);
-        try json_helpers.appendToolContentValue(response_allocator, &content_array, .{ .text = .{ .text = @errorName(err) } });
+        // Client-visible content carries the coarsened, protocol-stable error
+        // kind, never the raw Zig `@errorName` (LOW-1). The raw name stays in the
+        // stderr log only (logged by the caller before this fallback runs).
+        try json_helpers.appendToolContentValue(response_allocator, &content_array, .{ .text = .{ .text = tool_errors.kindForError(err) } });
 
         var result: std.json.ObjectMap = .empty;
         try result.put(response_allocator, "content", .{ .array = content_array });
@@ -789,7 +789,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed tool callback.
     fn toolHandlerErrorValue(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) !std.json.Value {
-        return tool_errors.valueFromError(allocator, .{
+        return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = tool_name,
             .operation = "dispatch_tool",
             .phase = "tool_handler",
@@ -912,7 +912,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed resource callback.
     fn resourceHandlerErrorValue(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) !std.json.Value {
-        return tool_errors.valueFromError(allocator, .{
+        return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = "resources/read",
             .operation = "read_resource",
             .phase = "resource_handler",
@@ -1083,7 +1083,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed prompt callback.
     fn promptHandlerErrorValue(allocator: std.mem.Allocator, prompt_name: []const u8, err: anyerror) !std.json.Value {
-        return tool_errors.valueFromError(allocator, .{
+        return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = "prompts/get",
             .operation = "get_prompt",
             .phase = "prompt_handler",
@@ -1180,8 +1180,16 @@ pub const Server = struct {
             .payload = raw_payload,
         });
         if (std.mem.eql(u8, notification.method, "notifications/initialized")) {
-            self.state = .ready;
-            self.logWithCorrelation(io, &notification_correlation, "Server initialized and ready");
+            // Honor the lifecycle transition only from .initializing (LOW-2). A
+            // notifications/initialized that arrives before a successful
+            // initialize (state == .uninitialized) — or after shutdown — must not
+            // force the server to .ready with default client_info/capabilities.
+            if (self.state == .initializing) {
+                self.state = .ready;
+                self.logWithCorrelation(io, &notification_correlation, "Server initialized and ready");
+            } else {
+                self.logWithCorrelation(io, &notification_correlation, "Ignoring notifications/initialized outside initializing state");
+            }
         } else if (std.mem.eql(u8, notification.method, "notifications/cancelled")) {
             self.handleCancellationNotification(io, notification, &notification_correlation);
             self.logWithCorrelation(io, &notification_correlation, "Cancellation notification received");
@@ -1370,17 +1378,17 @@ pub const Server = struct {
     }
 
     /// Appends an audit record when audit logging is enabled; audit failures never touch stdout or fail the request.
-    fn appendAudit(self: *Self, allocator: std.mem.Allocator, event: audit.Event) void {
-        const writer = self.audit_writer orelse return;
-        writer.append(allocator, event) catch |err| {
-            if (self.observability) |observability| observability.recordAuditWriteError(@errorName(err));
+    fn appendAudit(self: *Self, allocator: std.mem.Allocator, event: app_ports.AuditEvent) void {
+        const sink = self.audit_sink orelse return;
+        sink.append(allocator, event) catch |err| {
+            if (self.observability) |recorder| recorder.recordAuditWriteError(@errorName(err));
             return;
         };
-        if (self.observability) |observability| observability.recordAuditWriteOk();
+        if (self.observability) |recorder| recorder.recordAuditWriteOk();
     }
 
     /// Builds the audit record for an outbound JSON-RPC message after serialization.
-    fn auditEventForOutboundMessage(self: *Self, message: jsonrpc.Message, payload: []const u8) audit.Event {
+    fn auditEventForOutboundMessage(self: *Self, message: jsonrpc.Message, payload: []const u8) app_ports.AuditEvent {
         const active = self.active_correlation;
         const corr = if (active) |context| auditCorrelation(context) else null;
         return switch (message) {
@@ -1472,18 +1480,18 @@ pub const Server = struct {
         return null;
     }
 
-    /// Records a cancellation event into observability state when available.
+    /// Records a cancellation event through the observability recorder when present.
     fn recordCancellationEvent(self: *Self, status: []const u8, request_id: correlation.RequestId, method: ?[]const u8) void {
-        if (self.observability) |observability| {
-            observability.recordCancellation(status, request_id.typeName(), request_id.valueString(), method);
+        if (self.observability) |recorder| {
+            recorder.recordCancellation(status, request_id.typeName(), request_id.valueString(), method);
         }
     }
 
     /// Records a startup phase range relative to the bootstrap start time.
     pub fn recordStartupPhaseRange(self: *Self, name: []const u8, phase_start_ns: i128, phase_end_ns: i128) void {
-        const observability = self.observability orelse return;
+        const recorder = self.observability orelse return;
         const startup_start_ns = self.startup_started_ns orelse phase_start_ns;
-        observability.recordStartupPhase(name, elapsedMs(startup_start_ns, phase_start_ns), elapsedMs(phase_start_ns, phase_end_ns));
+        recorder.recordStartupPhase(name, elapsedMs(startup_start_ns, phase_start_ns), elapsedMs(phase_start_ns, phase_end_ns));
     }
 
     /// Allocates the next process-local request correlation context.
@@ -1494,14 +1502,8 @@ pub const Server = struct {
     /// Writes request-scoped diagnostics with compact correlation fields.
     fn logWithCorrelation(self: *Self, io: std.Io, context: *const correlation.Context, message: []const u8) void {
         var request_id_buffer: [64]u8 = undefined;
-        const request_id = context.request_id.compactValue(&request_id_buffer);
         var prefix_buffer: [256]u8 = undefined;
-        const prefix = logging.formatCorrelationPrefix(&prefix_buffer, .{
-            .trace_id = context.compactTrace(),
-            .request_id = request_id,
-            .method = context.mcp_method,
-            .tool_name = context.tool_name,
-        });
+        const prefix = context.formatLogPrefix(&prefix_buffer, &request_id_buffer);
         var line_buffer: [768]u8 = undefined;
         const line = std.fmt.bufPrint(&line_buffer, "[{s}] {s}", .{ prefix, message }) catch message;
         self.log(io, line);
@@ -1565,8 +1567,8 @@ fn requestIdEqual(left: correlation.RequestId, right: correlation.RequestId) boo
     };
 }
 
-/// Captures adapter correlation metadata for the audit writer.
-fn auditCorrelation(context: *const correlation.Context) audit.Correlation {
+/// Captures adapter correlation metadata for the audit sink.
+fn auditCorrelation(context: *const correlation.Context) app_ports.AuditCorrelation {
     return .{
         .schema_version = 1,
         .mcp_request_id_type = context.request_id.typeName(),

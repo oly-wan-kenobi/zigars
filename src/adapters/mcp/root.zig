@@ -36,6 +36,7 @@ test {
     _ = @import("../../testing/mcp/adapters/mcp/result_tests.zig");
     _ = @import("../../testing/mcp/adapters/mcp/root_tests.zig");
     _ = @import("../../testing/mcp/adapters/mcp/schema_tests.zig");
+    _ = @import("../../testing/mcp/adapters/mcp/server/http_runner_tests.zig");
     _ = @import("../../testing/mcp/adapters/mcp/server/http_transport_tests.zig");
     _ = @import("../../testing/mcp/adapters/mcp/server/pagination_tests.zig");
     _ = @import("../../testing/mcp/adapters/mcp/tools/all_tests.zig");

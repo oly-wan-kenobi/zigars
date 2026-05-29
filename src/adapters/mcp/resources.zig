@@ -286,30 +286,23 @@ fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactC
     } else {
         return resourceFailure(allocator, uri, artifactResourceFailure("lookup_artifact", "artifact_resource_not_found", "Run zigars_artifact_index or regenerate the producing workflow so the artifact is registered."), error.FileNotFound);
     };
-    const resolved = context.workspace_store.resolve(scratch, .{
-        .path = entry.path,
-        .for_output = false,
-        .provenance = "artifacts.resource.resolve",
-    }) catch |err| switch (err) {
+    // Route the artifact resolve+read through the app use case rather than
+    // touching the workspace port directly, mirroring how other resource
+    // handlers read through use cases. The use case validates the path inside
+    // the workspace sandbox and returns the artifact content. The read uses the
+    // scratch arena (so the use case's transient resolve/hash allocations are
+    // reclaimed); the returned content is duped into the request allocator,
+    // which owns the resource `.text` for `deinitResourceContent`.
+    const read = artifact_registry.readArtifact(scratch, context, entry.path, artifact_registry.default_read_limit) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
         else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigars_artifact_read for a structured tool error."), err),
     };
-    resolved.deinit(scratch);
-    const read = context.workspace_store.read(allocator, .{
-        .path = entry.path,
-        .max_bytes = artifact_registry.default_read_limit,
-        .for_output = false,
-        .provenance = "artifacts.resource.content",
-    }) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        error.PathOutsideWorkspace, error.EmptyPath, error.FileNotFound, error.AccessDenied, error.PermissionDenied => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_unavailable", "Confirm the registered artifact still exists inside the workspace, then retry."), err),
-        else => return resourceFailure(allocator, uri, artifactResourceFailure("read_artifact", "artifact_resource_failed", "Inspect the artifact registry entry and retry with zigars_artifact_read for a structured tool error."), err),
-    };
+    const owned_text = allocator.dupe(u8, read.content) catch return error.OutOfMemory;
     return .{
         .uri = uri,
         .mimeType = artifactMimeType(entry.path),
-        .text = read.bytes,
+        .text = owned_text,
     };
 }
 
@@ -756,8 +749,11 @@ test "MCP dynamic resource handler maps success and app-layer errors" {
     const artifact_uri = try std.fmt.allocPrint(allocator, "zigars://artifacts/{s}", .{artifact_hash});
     const registry_line = try resourceArtifactRegistryLine(allocator, "zig-out/artifact.txt", "artifact text");
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, registry_line);
-    try workspace.expectResolve(.{ .path = "zig-out/artifact.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, "/repo/zig-out/artifact.txt");
-    try workspace.expectRead(.{ .path = "zig-out/artifact.txt", .max_bytes = artifact_registry.default_read_limit, .for_output = false, .provenance = "artifacts.resource.content" }, "artifact text");
+    // The artifact resource now reads through the artifact_registry.readArtifact
+    // use case, so its resolve/read provenance is the use case's, not the
+    // adapter's former inline strings.
+    try workspace.expectResolve(.{ .path = "zig-out/artifact.txt", .for_output = false, .provenance = "artifacts.read.resolve" }, "/repo/zig-out/artifact.txt");
+    try workspace.expectRead(.{ .path = "zig-out/artifact.txt", .max_bytes = artifact_registry.default_read_limit, .for_output = false, .provenance = "artifacts.read.content" }, "artifact text");
     const artifact = try handler(&provider, std.testing.io, allocator, artifact_uri);
     try std.testing.expectEqualStrings("artifact text", artifact.text.?);
 
@@ -774,7 +770,7 @@ test "MCP dynamic resource handler maps success and app-layer errors" {
     const outside_uri = try std.fmt.allocPrint(allocator, "zigars://artifacts/{s}", .{outside_hash});
     const outside_registry = try resourceArtifactRegistryLine(allocator, "../secret.txt", "outside");
     try workspace.expectRead(.{ .path = artifact_registry.default_registry_path, .max_bytes = artifact_registry.max_registry_bytes, .for_output = true, .provenance = "artifacts.registry.load" }, outside_registry);
-    try workspace.expectResolveError(.{ .path = "../secret.txt", .for_output = false, .provenance = "artifacts.resource.resolve" }, error.PathOutsideWorkspace);
+    try workspace.expectResolveError(.{ .path = "../secret.txt", .for_output = false, .provenance = "artifacts.read.resolve" }, error.PathOutsideWorkspace);
     const outside_artifact = try handler(&provider, std.testing.io, allocator, outside_uri);
     try std.testing.expect(std.mem.indexOf(u8, outside_artifact.text.?, "artifact_resource_unavailable") != null);
 

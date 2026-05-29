@@ -1402,6 +1402,105 @@ pub const ObservabilityReader = struct {
     }
 };
 
+/// Write-only observability recorder used by the MCP server adapter to record
+/// adapter-level lifecycle events without depending on a concrete metrics
+/// implementation. All calls are infallible best-effort sinks (counters/rings);
+/// the borrowed slices are valid only for the duration of the call.
+pub const ObservabilityRecorder = struct {
+    ptr: *anyopaque,
+    vtable: *const VTable,
+
+    /// Adapter callbacks implementing best-effort observability recording.
+    pub const VTable = struct {
+        record_mcp_request: *const fn (*anyopaque, method: []const u8, latency_ms: u64, is_error: bool) void,
+        record_cancellation: *const fn (*anyopaque, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void,
+        record_startup_phase: *const fn (*anyopaque, name: []const u8, start_ms: u64, duration_ms: u64) void,
+        record_audit_write_ok: *const fn (*anyopaque) void,
+        record_audit_write_error: *const fn (*anyopaque, err_name: []const u8) void,
+    };
+
+    /// Records per-MCP-method request latency and error counters.
+    pub fn recordMcpRequest(self: ObservabilityRecorder, method: []const u8, latency_ms: u64, is_error: bool) void {
+        self.vtable.record_mcp_request(self.ptr, method, latency_ms, is_error);
+    }
+
+    /// Records one inbound cancellation notification outcome.
+    pub fn recordCancellation(self: ObservabilityRecorder, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void {
+        self.vtable.record_cancellation(self.ptr, status, request_id_type, request_id_value, method);
+    }
+
+    /// Records one monotonic startup phase timing.
+    pub fn recordStartupPhase(self: ObservabilityRecorder, name: []const u8, start_ms: u64, duration_ms: u64) void {
+        self.vtable.record_startup_phase(self.ptr, name, start_ms, duration_ms);
+    }
+
+    /// Records one successful audit append.
+    pub fn recordAuditWriteOk(self: ObservabilityRecorder) void {
+        self.vtable.record_audit_write_ok(self.ptr);
+    }
+
+    /// Records one failed audit append.
+    pub fn recordAuditWriteError(self: ObservabilityRecorder, err_name: []const u8) void {
+        self.vtable.record_audit_write_error(self.ptr, err_name);
+    }
+};
+
+/// Correlation snapshot carried with one audit event. Slices are borrowed for
+/// the duration of the `AuditSink.append` call.
+pub const AuditCorrelation = struct {
+    schema_version: u8 = 1,
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: ?[]const u8 = null,
+    mcp_method: []const u8 = "",
+    tool_name: ?[]const u8 = null,
+    trace_id: []const u8 = "",
+    span_id: []const u8 = "",
+    parent_span_id: ?[]const u8 = null,
+    tool_call_id: []const u8 = "",
+};
+
+/// One audit event the adapter emits to the audit sink. Slices are borrowed for
+/// the duration of the `AuditSink.append` call.
+pub const AuditEvent = struct {
+    event: []const u8,
+    direction: []const u8,
+    transport: []const u8,
+    mcp_method: ?[]const u8 = null,
+    mcp_request_id_type: []const u8 = "null",
+    mcp_request_id_value: ?[]const u8 = null,
+    correlation: ?AuditCorrelation = null,
+    tool_name: ?[]const u8 = null,
+    duration_ms: ?u64 = null,
+    ok: ?bool = null,
+    is_error: bool = false,
+    payload: ?[]const u8 = null,
+};
+
+/// Vtable-backed opt-in audit sink. The adapter never learns whether audit is
+/// enabled; a disabled sink is simply absent. Append failures are swallowed by
+/// the implementation and must never reach stdout or fail a request.
+pub const AuditSink = struct {
+    ptr: *anyopaque,
+    vtable: *const VTable,
+
+    /// Adapter callbacks implementing audit event persistence.
+    pub const VTable = struct {
+        append: *const fn (*anyopaque, Allocator, AuditEvent) AuditError!void,
+    };
+
+    /// Errors raised by an audit append; callers swallow them best-effort.
+    pub const AuditError = error{
+        AuditDisabled,
+        OutOfMemory,
+        WriteFailed,
+    };
+
+    /// Appends one audit event through the configured writer.
+    pub fn append(self: AuditSink, allocator: Allocator, event: AuditEvent) AuditError!void {
+        return self.vtable.append(self.ptr, allocator, event);
+    }
+};
+
 /// Wall-clock and monotonic timestamp pair.
 pub const Instant = struct {
     unix_ms: i64,
