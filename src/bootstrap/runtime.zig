@@ -227,6 +227,7 @@ fn cliConfigExitCode(err: anyerror) cli_adapter.ExitCode {
         error.InvalidTransport,
         error.InvalidAuditLogMode,
         error.InvalidAuditLogPath,
+        error.EmptyFlagValue,
         error.UnsafeHttpHost,
         => .invalid_args,
         else => .fatal_internal,

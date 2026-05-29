@@ -72,6 +72,59 @@ test "artifact registry upserts and loads jsonl entries" {
     try std.testing.expectEqualStrings("zflame", loaded.entries.items[0].backend_name);
 }
 
+test "artifact registry load skips malformed and negative-size lines but keeps good entries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    // Produce one canonical good JSONL line via the public writer so the fixture cannot drift.
+    var good_registry: Registry = .{};
+    defer good_registry.deinit(allocator);
+    const data = "profile data\n";
+    const identity = try identityFromBytes(allocator, "zig-out/profile.svg", "/workspace/zig-out/profile.svg", data);
+    defer allocator.free(identity.sha256);
+    try upsert(&good_registry, allocator, .{
+        .identity = identity,
+        .provenance = .{
+            .producer = "zig_flamegraph",
+            .artifact_kind = "profile_svg",
+            .toolchain = .{ .zig_path = "zig" },
+        },
+        .indexed_at_unix_ms = 1234,
+    });
+    const rel_base = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", tmp.sub_path[0..] });
+    defer allocator.free(rel_base);
+    const base_z = try std.Io.Dir.cwd().realPathFileAlloc(io, rel_base, allocator);
+    defer allocator.free(base_z);
+    const good_path = try std.fs.path.join(allocator, &.{ base_z[0..], "good.jsonl" });
+    defer allocator.free(good_path);
+    try writeRegistry(allocator, io, good_path, good_registry);
+    const good_line_raw = try std.Io.Dir.cwd().readFileAlloc(io, good_path, allocator, .limited(64 * 1024));
+    defer allocator.free(good_line_raw);
+    const good_line = std.mem.trim(u8, good_line_raw, " \t\r\n");
+
+    // A negative byte count is corrupt/tampered; the @intCast must not trap and the line is dropped.
+    const negative_bytes_line = try std.mem.replaceOwned(u8, allocator, good_line, "\"bytes\":13", "\"bytes\":-1");
+    defer allocator.free(negative_bytes_line);
+    try std.testing.expect(!std.mem.eql(u8, negative_bytes_line, good_line));
+
+    // Compose a registry: one good line, one syntactically broken line, one negative-size line.
+    const composed = try std.fmt.allocPrint(allocator, "{s}\n{{ this is not json\n{s}\n", .{ good_line, negative_bytes_line });
+    defer allocator.free(composed);
+    const composed_path = try std.fs.path.join(allocator, &.{ base_z[0..], "registry.jsonl" });
+    defer allocator.free(composed_path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = composed_path, .data = composed });
+
+    var loaded = try loadRegistry(allocator, io, composed_path);
+    defer loaded.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), loaded.entries.items.len);
+    try std.testing.expectEqualStrings("zig-out/profile.svg", loaded.entries.items[0].path);
+    try std.testing.expectEqual(@as(usize, data.len), loaded.entries.items[0].bytes);
+}
+
 test "artifact registry prunes missing and changed entries without deleting files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

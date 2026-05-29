@@ -1,7 +1,6 @@
 pub const client = @import("client.zig");
 pub const diagnostics_cache = @import("diagnostics_cache.zig");
 pub const documents = @import("documents.zig");
-pub const edits = @import("edits.zig");
 pub const gateway = @import("gateway.zig");
 pub const json_rpc = @import("json_rpc.zig");
 pub const process = @import("process.zig");
@@ -12,7 +11,6 @@ pub const uri = @import("uri.zig");
 
 const diagnostics_cache_tests = @import("diagnostics_cache_tests.zig");
 const client_internal_tests = @import("client_internal_tests.zig");
-const edits_tests = @import("edits_tests.zig");
 const gateway_tests = @import("gateway_tests.zig");
 const json_rpc_tests = @import("json_rpc_tests.zig");
 const process_tests = @import("process_tests.zig");
@@ -25,7 +23,6 @@ test {
     _ = client;
     _ = diagnostics_cache;
     _ = documents;
-    _ = edits;
     _ = gateway;
     _ = json_rpc;
     _ = process;
@@ -35,7 +32,6 @@ test {
     _ = uri;
     _ = client_internal_tests;
     _ = diagnostics_cache_tests;
-    _ = edits_tests;
     _ = gateway_tests;
     _ = json_rpc_tests;
     _ = process_tests;
