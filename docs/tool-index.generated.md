@@ -276,8 +276,8 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_deps_add`: required `dependency: string`; optional `manifest_path: string`, `manifest: string`, `url: string`, `hash: string`, `path: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
 - `zig_deps_remove`: required `dependency: string`; optional `manifest_path: string`, `manifest: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
 - `zig_deps_upgrade`: required `dependency: string`, `url: string`; optional `manifest_path: string`, `manifest: string`, `hash: string`, `apply: boolean`, `expected_preimage_sha256: string`, `expected_preimage_bytes: integer`
-- `zig_diagnostics`: required `file: string`; optional `content: string`, `wait_ms: integer`
-- `zig_diagnostics_all`: required `file: string`; optional `content: string`, `wait_ms: integer`, `timeout_ms: integer`
+- `zig_diagnostics`: required `file: string`; optional `content: string`
+- `zig_diagnostics_all`: required `file: string`; optional `content: string`
 - `zig_doc_example_check`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_docs_index_build`: optional `scope: string`, `limit: integer`
 - `zig_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`

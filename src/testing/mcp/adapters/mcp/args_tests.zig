@@ -158,10 +158,13 @@ test "advertised timeout_ms is honored on backend-spawning static tools" {
     }
 }
 
-test "advertised wait_ms and timeout_ms are honored on diagnostics tools" {
-    try std.testing.expect(try advertisedArgAccepted("zig_diagnostics", "wait_ms", .{ .integer = 500 }));
-    try std.testing.expect(try advertisedArgAccepted("zig_diagnostics_all", "wait_ms", .{ .integer = 500 }));
-    try std.testing.expect(try advertisedArgAccepted("zig_diagnostics_all", "timeout_ms", .{ .integer = 1000 }));
+test "removed diagnostics wait_ms and timeout_ms are rejected as unknown" {
+    // M2f: the diagnostics handler (zigDiagnostics/zigDiagnosticsAll -> fileOnlyTool)
+    // reads only file + content, so these advertised-but-unread fields were removed
+    // from the schemas and must now be rejected as unknown arguments.
+    try std.testing.expect(try unknownArgRejected("zig_diagnostics", "wait_ms", .{ .integer = 500 }));
+    try std.testing.expect(try unknownArgRejected("zig_diagnostics_all", "wait_ms", .{ .integer = 500 }));
+    try std.testing.expect(try unknownArgRejected("zig_diagnostics_all", "timeout_ms", .{ .integer = 1000 }));
 }
 
 test "advertised autodoc is honored on both docs query tools" {
