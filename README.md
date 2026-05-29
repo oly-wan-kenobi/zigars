@@ -502,7 +502,7 @@ optional-backend support is claimed only from a release evidence artifact.
   `zig_file_owner`, `zig_import_resolve`, `zig_test_discover`,
   `zig_ast_tests`,
   `zig_test_map`, `zig_test_select`, `zig_public_api_diff`,
-  `zig_changed_files_plan`, `zig_dependency_inspect`,
+  `zig_changed_files_plan`, `zig_dependency_inspect`, `zig_zon_dep_sync`,
   `zig_target_matrix_plan`, `zig_test_failure_triage`,
   `zig_workspace_symbol_cache`, `zig_package_cache_doctor`,
   `zig_semantic_index_build`, `zig_semantic_index_status`,

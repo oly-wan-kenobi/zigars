@@ -32,6 +32,11 @@ jobs:
           version: 0.16.0
 
       - name: Optional ZLS setup
+        # Accepted risk: this interpolates a manual workflow_dispatch input into
+        # run:, i.e. arbitrary command execution by design. Bounded — manual
+        # dispatch only, restricted to write-access actors, under a
+        # contents: read token. Left as-is intentionally; do not wire untrusted
+        # (e.g. pull_request) triggers into this input.
         if: ${{ inputs.setup_command != '' }}
         run: ${{ inputs.setup_command }}
 

@@ -96,6 +96,7 @@ for (request.changed_paths) |path| {
 
 - **Impact:** Unlike #1/#2, the raw path is gated by `workspacePathExists` → port `exists` → `resolve`, which returns `.exists=false` for any `..`/absolute escape (`filesystem.zig:158-163`), so the path is dropped before reaching argv. A surviving path resolves inside root, and the subprocess opens the same relative path against `cwd=root` with identical realpath semantics — no divergence. So there is **no practical escape**; this is a consistency defect (should use the resolved path like `buildZigArgv`), not an exploitable one.
 - **Fix:** Resolve each path via `workspace_store.resolve` and embed the resolved path, matching `buildZigArgv`.
+- **Adjudication note (S14):** Codex pushed back claiming the argv is "only a returned plan, not a server-side spawn." That rationale is **wrong** — the argv built in `plan()` is spawned server-side by `run()` (`workflows.zig:563`). The finding is still **not exploitable**, but for the correct reason: read-probe gating (`workspacePathExists` → `workspace_store` `exists`/`resolve`) drops any out-of-workspace path before it reaches the spawned argv. Safety comes from the probe, not from "it's just a plan."
 
 ### 5. `parseAst` leaks the source buffer on `Ast.parse` OOM
 - **Severity: Low** · **VERIFIED** · `src/domain/zig/analysis.zig:264-267`

@@ -113,7 +113,16 @@ set.covered += @min(covered, total);
 
 ---
 
-### 4. MEDIUM — VERIFIED — `read_only=true` may coexist with execution capabilities (source-of-truth field lies)
+### 4. LOW (adjudicated, was MEDIUM) — VERIFIED — `read_only=true` may coexist with execution capabilities
+
+> **Adjudication (S14):** downgraded MEDIUM → **LOW**. The raw `meta.read_only`
+> field is *not* the MCP source of truth; the externally-advertised
+> `readOnlyHint` is derived by `readOnlyHintFor` (which ANDs in all five
+> `!`-risk flags) and surfaced as `mcp_read_only_hint` via `riskValue`. The MCP
+> surface is therefore safe and cannot mislead a client. The residual risk is
+> only a hypothetical future consumer reading the raw field directly — internal
+> hygiene, not a live external defect. Tracked as LOW (optional comptime-guard
+> hardening); no code change shipped in S14.
 
 **File:** `src/manifest/aggregate.zig:81` — `validateDefinition` guards only the `writes_source` case:
 
@@ -248,10 +257,10 @@ The guard asserts the `writes_require_apply` bool but never verifies the `input_
 | 1 | HIGH | VERIFIED | `manifest/mod.zig:172` | 15 command-execution tools advertise `destructiveHint=false` |
 | 2 | MEDIUM | VERIFIED | `manifest/invariants_tests.zig:35` | Destructive invariant test reproduces Finding 1 |
 | 3 | MEDIUM | VERIFIED | `domain/performance/coverage_model.zig:54` | Coverage int overflow → ReleaseSafe panic (DoS) |
-| 4 | MEDIUM | VERIFIED | `manifest/aggregate.zig:81` | `read_only=true` coexists with execution caps |
+| 4 | LOW (was MEDIUM) | VERIFIED | `manifest/aggregate.zig:81` | `read_only=true` coexists with execution caps — adjudicated LOW (raw field is not the MCP source of truth; `readOnlyHintFor`/`mcp_read_only_hint` is) |
 | 5 | LOW | VERIFIED | `manifest/mod.zig:161` | `idempotentHintFor` is dead logic |
 | 6 | LOW | VERIFIED | `domain/zig/zon_dependencies.zig:276` | `fieldInEntry` substring match can splice wrong span |
 | 7 | LOW | VERIFIED | `manifest/aggregate.zig:75` | Apply-gate checks flag, not schema (latent) |
 | 8 | LOW | VERIFIED | `bootstrap/config.zig:76` | Empty path flags accepted → deferred spawn failure |
 
-One HIGH (trust-annotation) issue worth fixing before release, a handful of Medium/Low correctness items, and good defensive hygiene elsewhere. The ZON-injection known-open should be reclassified as fixed.
+One HIGH (trust-annotation) issue worth fixing before release, a handful of Medium/Low correctness items, and good defensive hygiene elsewhere. The ZON-injection known-open (`CODE_REVIEW.md` M6) is now **fixed** — `addDependency` validates the name and `url`/`hash`/`path` via `requireSafeDependencyName` / `requireSafeStringLiteralField` before interpolation. Finding 4 (`read_only` coexistence) was adjudicated down to **LOW** (the MCP-facing hint is derived, not the raw field).
