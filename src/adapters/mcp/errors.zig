@@ -66,6 +66,17 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
     return result_value;
 }
 
+/// Like `valueFromError` but omits the raw `@errorName`, exposing only the
+/// coarsened, protocol-stable `error_kind`. Used by the server's tool/resource/
+/// prompt handler `anyerror` fallbacks so an unexpected internal Zig error name
+/// never reaches client-visible content/structuredContent (LOW-1); the raw name
+/// stays in the stderr log only.
+pub fn valueFromErrorKindOnly(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !std.json.Value {
+    var result_value = try value(allocator, spec);
+    try result_value.object.put(allocator, "error_kind", .{ .string = kindForError(err) });
+    return result_value;
+}
+
 /// Builds a structured argument-validation failure.
 pub fn argument(
     allocator: std.mem.Allocator,

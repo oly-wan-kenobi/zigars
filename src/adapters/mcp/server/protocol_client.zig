@@ -8,6 +8,12 @@ const mcp_result = @import("../result.zig");
 const jsonrpc = mcp.jsonrpc;
 const types = mcp.types;
 
+/// Default deadline applied to a server→client protocol request when the caller
+/// leaves `timeout_ms` unset. The serial transport means a silent or streaming
+/// client would otherwise wedge the whole server (MEDIUM-2); this bounds the
+/// wait. 30s is generous for an interactive elicitation/sampling reply.
+pub const default_timeout_ms: u64 = 30_000;
+
 /// Stable classifications for protocol-helper peer responses.
 pub const ResponseStatus = enum {
     accepted,
@@ -103,7 +109,23 @@ pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.All
     const json_request = jsonrpc.createRequest(.{ .integer = id }, request.method, request.params);
     try server.sendResponse(io, allocator, .{ .request = json_request });
 
+    // Honor a deadline so a silent or non-matching-frame-streaming client cannot
+    // wedge/live-lock the serial server (MEDIUM-2). `timeout_ms` is the caller's
+    // value or a sane default; the deadline is checked before each receive so a
+    // client that keeps sending non-matching frames still terminates the wait.
+    // (A client that blocks the read syscall indefinitely cannot be preempted by
+    // a userspace check; the deadline bounds the live-lock case.)
+    const timeout_ms = request.timeout_ms orelse default_timeout_ms;
+    const start_ms = nowMs(io);
+    const deadline_ms = start_ms +| timeout_ms;
+
     while (true) {
+        if (nowMs(io) >= deadline_ms) return .{
+            .supported = true,
+            .used = false,
+            .status = .timeout,
+            .unavailable_reason = "client protocol response was not received before the configured timeout",
+        };
         const message_data = server.transport.?.receive(io, allocator) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.EndOfStream => return .{
@@ -245,6 +267,14 @@ fn unavailableReason(status: ResponseStatus) []const u8 {
         .malformed => "client protocol helper response had an unsupported shape",
         .timeout => "client protocol helper response was not available",
     };
+}
+
+/// Current wall-clock milliseconds as an unsigned saturating value for deadline
+/// comparison. Negative/garbage clock values clamp to 0.
+fn nowMs(io: std.Io) u64 {
+    const ns = std.Io.Clock.now(.real, io).nanoseconds;
+    const ms = @divTrunc(ns, std.time.ns_per_ms);
+    return std.math.cast(u64, ms) orelse 0;
 }
 
 fn matchesRequestId(response_id: types.RequestId, expected: i64) bool {

@@ -125,9 +125,9 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
         .trustManifestUri = trust_usecase.trust_manifest_uri,
     });
     defer server.deinit();
-    server.setObservability(&runtime.observability);
+    server.setObservability(runtime.observability.recorder());
     server.setStartupStart(startup.started_ns);
-    if (audit_writer) |*writer| server.setAuditWriter(writer);
+    if (audit_writer) |*writer| server.setAuditSink(writer.sink());
     startup.end("server_state_init", server_started);
     runtime.observability.recordStartupPhase("server_state_init", startup.lastStartMs(), startup.lastDurationMs());
 

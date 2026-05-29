@@ -1,6 +1,7 @@
 //! Append-only JSONL audit writer for opt-in forensic operation.
 const std = @import("std");
 const Mutex = @import("../process/sync.zig").Mutex;
+const ports = @import("../../app/ports.zig");
 
 /// Audit payload retention mode.
 pub const Mode = enum {
@@ -21,34 +22,12 @@ pub const AuditError = error{
     AuditDisabled,
 } || std.mem.Allocator.Error || std.Io.File.OpenError || std.Io.Dir.CreateDirPathError || std.Io.File.WritePositionalError || std.Io.File.LengthError;
 
-/// Correlation snapshot supplied by the MCP adapter without importing adapter types.
-pub const Correlation = struct {
-    schema_version: u8 = 1,
-    mcp_request_id_type: []const u8 = "null",
-    mcp_request_id_value: ?[]const u8 = null,
-    mcp_method: []const u8 = "",
-    tool_name: ?[]const u8 = null,
-    trace_id: []const u8 = "",
-    span_id: []const u8 = "",
-    parent_span_id: ?[]const u8 = null,
-    tool_call_id: []const u8 = "",
-};
+/// Correlation snapshot supplied by the MCP adapter through the audit sink port.
+pub const Correlation = ports.AuditCorrelation;
 
-/// One audit event rendered as a single JSONL record.
-pub const Event = struct {
-    event: []const u8,
-    direction: []const u8,
-    transport: []const u8,
-    mcp_method: ?[]const u8 = null,
-    mcp_request_id_type: []const u8 = "null",
-    mcp_request_id_value: ?[]const u8 = null,
-    correlation: ?Correlation = null,
-    tool_name: ?[]const u8 = null,
-    duration_ms: ?u64 = null,
-    ok: ?bool = null,
-    is_error: bool = false,
-    payload: ?[]const u8 = null,
-};
+/// One audit event rendered as a single JSONL record; defined by the app audit
+/// sink port so the MCP adapter constructs events without importing infra.
+pub const Event = ports.AuditEvent;
 
 /// Append-only audit log writer. The file path is resolved by bootstrap policy.
 pub const Writer = struct {
@@ -106,6 +85,23 @@ pub const Writer = struct {
         const offset = try file.length(self.io);
         try file.writePositionalAll(self.io, line, offset);
         self.records_written +|= 1;
+    }
+
+    /// Projects this writer as the app-side audit sink port. The adapter holds
+    /// only the port and never imports this infra module.
+    pub fn sink(self: *Writer) ports.AuditSink {
+        return .{ .ptr = self, .vtable = &sink_vtable };
+    }
+
+    const sink_vtable: ports.AuditSink.VTable = .{ .append = sinkAppend };
+
+    fn sinkAppend(ptr: *anyopaque, allocator: std.mem.Allocator, event: ports.AuditEvent) ports.AuditSink.AuditError!void {
+        const self: *Writer = @ptrCast(@alignCast(ptr));
+        self.append(allocator, event) catch |err| return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.AuditDisabled => error.AuditDisabled,
+            else => error.WriteFailed,
+        };
     }
 };
 

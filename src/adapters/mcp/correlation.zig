@@ -165,6 +165,27 @@ pub const Context = struct {
         errdefer deinitMetaValue(allocator, meta);
         try result.put(allocator, "_meta", meta);
     }
+
+    /// Formats a compact request correlation prefix for stderr diagnostics into
+    /// `prefix_buffer`. `request_id_buffer` backs the compact request-id slice.
+    /// Adapter-local so the MCP server logs correlation without importing infra.
+    pub fn formatLogPrefix(self: *const Context, prefix_buffer: []u8, request_id_buffer: *[64]u8) []const u8 {
+        const request_id = self.request_id.compactValue(request_id_buffer);
+        const trace = self.compactTrace();
+        if (self.tool_name) |tool_name| {
+            return std.fmt.bufPrint(prefix_buffer, "trace={s} req={s} method={s} tool={s}", .{
+                trace,
+                request_id,
+                self.mcp_method,
+                tool_name,
+            }) catch "trace=unavailable req=unavailable method=unavailable";
+        }
+        return std.fmt.bufPrint(prefix_buffer, "trace={s} req={s} method={s}", .{
+            trace,
+            request_id,
+            self.mcp_method,
+        }) catch "trace=unavailable req=unavailable method=unavailable";
+    }
 };
 
 /// Monotonic process-local correlation generator.

@@ -5,7 +5,6 @@ const ports = @import("../../ports.zig");
 const workflows = @import("workflows.zig");
 const support = @import("../usecase_support.zig");
 const fakes = @import("../../../testing/fakes/root.zig");
-const manifest_catalog = @import("../../../bootstrap/manifest_catalog.zig");
 
 const manifest =
     \\.{
@@ -88,7 +87,7 @@ const Fixture = struct {
     workspace: fakes.FakeWorkspaceStore,
     scanner: fakes.FakeWorkspaceScanner,
     clock: fakes.FakeClockAndIds,
-    catalog: manifest_catalog.Catalog,
+    catalog: fakes.FakeToolManifestCatalog,
 
     fn init() !Fixture {
         return .{
