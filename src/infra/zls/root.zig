@@ -1,6 +1,7 @@
 pub const client = @import("client.zig");
 pub const diagnostics_cache = @import("diagnostics_cache.zig");
 pub const documents = @import("documents.zig");
+pub const document_retained = @import("document_retained.zig");
 pub const gateway = @import("gateway.zig");
 pub const json_rpc = @import("json_rpc.zig");
 pub const process = @import("process.zig");
@@ -23,6 +24,7 @@ test {
     _ = client;
     _ = diagnostics_cache;
     _ = documents;
+    _ = document_retained;
     _ = gateway;
     _ = json_rpc;
     _ = process;

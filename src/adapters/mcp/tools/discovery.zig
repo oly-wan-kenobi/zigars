@@ -7,6 +7,11 @@ const app_context = @import("../../../app/context.zig");
 const discovery = @import("../../../app/usecases/discovery/workflows.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
+const args_mod = @import("discovery_args.zig");
+
+const argString = args_mod.argString;
+const argBool = args_mod.argBool;
+const argInt = args_mod.argInt;
 
 /// Handles MCP `zigars_capabilities` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsCapabilities(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
@@ -141,42 +146,6 @@ fn portToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
         .category = "discovery",
         .resolution = "Retry after confirming workspace, configured backend paths, and runtime ports with zigars_doctor.",
     }, err);
-}
-
-/// Reads a string argument when it is present with the expected type.
-fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
-    const obj = switch (args orelse return null) {
-        .object => |o| o,
-        else => return null,
-    };
-    return switch (obj.get(name) orelse return null) {
-        .string => |s| s,
-        else => null,
-    };
-}
-
-/// Reads a bool argument when it is present with the expected type.
-fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
-    const obj = switch (args orelse return default) {
-        .object => |o| o,
-        else => return default,
-    };
-    return switch (obj.get(name) orelse return default) {
-        .bool => |b| b,
-        else => default,
-    };
-}
-
-/// Reads an int argument when it is present with the expected type.
-fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
-    const obj = switch (args orelse return default) {
-        .object => |o| o,
-        else => return default,
-    };
-    return switch (obj.get(name) orelse return default) {
-        .integer => |i| i,
-        else => default,
-    };
 }
 
 test "discovery adapter planning errors map to structured MCP errors" {
