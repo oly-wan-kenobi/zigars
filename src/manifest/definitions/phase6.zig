@@ -150,7 +150,7 @@ pub const zig_docs_index_build = tool(.{
 /// Query the local docs index across workspace docs, README, source comments, stdlib, and language-reference evidence.
 pub const zig_docs_query = tool(.{
     .description = "Query the local docs index across workspace docs, README, source comments, stdlib, and language-reference evidence.",
-    .input_schema = schemaWithHints(&.{ .{ "query", "string", true }, .{ "scope", "string", false }, .{ "limit", "integer", false } }, &.{docs_scope_hint}),
+    .input_schema = schemaWithHints(&.{ .{ "query", "string", true }, .{ "scope", "string", false }, .{ "autodoc", "string", false }, .{ "limit", "integer", false } }, &.{docs_scope_hint}),
     .read_only = true,
     .group = .docs,
     .plan = .{ .pure_analysis = docs_plan },
@@ -326,7 +326,12 @@ pub const zig_zon_dep_sync = tool(.{
     .output_schema = outputSchema(.patch_session),
     .read_only = false,
     .group = .dependency_security,
-    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
+    // `zig fetch <url>` runs the zig toolchain against a caller-supplied URL with
+    // network access and package-cache writes. `executes_backend` covers running
+    // zig; `executes_user_command` marks the user-URL-driven, network-effecting
+    // fetch. ToolRisk has no dedicated network marker, so this is the closest
+    // honest flag. Net risk level stays "high" via writes_source.
+    .risk = .{ .writes_source = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_user_command = true },
     .plan = .{ .apply_gated_mutation = dependency_mutation_plan },
 });
 

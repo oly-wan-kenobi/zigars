@@ -124,17 +124,31 @@ pub fn jobStatusValue(allocator: std.mem.Allocator, context: app_context.Runtime
 /// Serializes job result fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: JobResultRequest) RuntimeUxError!std.json.Value {
     const job = try context.runtime_session.jobById(request.job_id);
+    // "compact" is a distinct, leaner projection than "standard": it drops the
+    // inline event page and the stdout/stderr tail bodies (truncation flags are
+    // kept so callers still know output exists) and points at zigars_run_events
+    // for the omitted detail. "standard" returns tails plus the event page;
+    // "deep" returns everything with no omissions.
+    const compact = std.mem.eql(u8, request.mode, "compact");
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_job_result" });
     try obj.put(allocator, "ok", .{ .bool = job.ok });
     try obj.put(allocator, "job", try jobValue(allocator, job));
-    try obj.put(allocator, "stdout_tail", .{ .string = job.stdout_tail });
-    try obj.put(allocator, "stderr_tail", .{ .string = job.stderr_tail });
+    if (!compact) {
+        try obj.put(allocator, "stdout_tail", .{ .string = job.stdout_tail });
+        try obj.put(allocator, "stderr_tail", .{ .string = job.stderr_tail });
+    }
     try obj.put(allocator, "stdout_truncated", .{ .bool = job.stdout_truncated });
     try obj.put(allocator, "stderr_truncated", .{ .bool = job.stderr_truncated });
-    try obj.put(allocator, "events", try eventsPageValue(allocator, context, job.id, request.cursor, request.limit));
-    try obj.put(allocator, "omitted_sections", try omittedSectionsValue(allocator, request.mode, &.{ "full_stdout", "full_stderr", "live_process_handle" }));
+    if (!compact) {
+        try obj.put(allocator, "events", try eventsPageValue(allocator, context, job.id, request.cursor, request.limit));
+        try obj.put(allocator, "omitted_sections", try omittedSectionsValue(allocator, request.mode, &.{ "full_stdout", "full_stderr", "live_process_handle" }));
+    } else {
+        try obj.put(allocator, "events_available", .{ .bool = true });
+        try obj.put(allocator, "next_tools", try stringArrayValue(allocator, &.{"zigars_run_events"}));
+        try obj.put(allocator, "omitted_sections", try stringArrayValue(allocator, &.{ "stdout_tail", "stderr_tail", "events", "full_stdout", "full_stderr", "live_process_handle" }));
+    }
     try obj.put(allocator, "limitations", try runtimeLimitationsValue(allocator));
     return .{ .object = obj };
 }

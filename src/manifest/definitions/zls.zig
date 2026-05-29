@@ -42,7 +42,7 @@ pub const zig_document_status = tool(.{
 /// Open a Zig file in ZLS and return the latest publishDiagnostics notification when available, with ast-check fallback.
 pub const zig_diagnostics = tool(.{
     .description = "Open a Zig file in ZLS and return the latest publishDiagnostics notification when available, with ast-check fallback.",
-    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "wait_ms", "integer", false } }),
+    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false } }),
     .read_only = true,
     .group = .zls,
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },
@@ -51,7 +51,7 @@ pub const zig_diagnostics = tool(.{
 /// Return diagnostics for one file using the same ZLS/ast-check fallback path as `zig_diagnostics`.
 pub const zig_diagnostics_all = tool(.{
     .description = "Return diagnostics for one file using the same ZLS/ast-check fallback path as `zig_diagnostics`.",
-    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false }, .{ "wait_ms", "integer", false }, .{ "timeout_ms", "integer", false } }),
+    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "content", "string", false } }),
     .read_only = true,
     .group = .zls,
     .risk = .{ .mutates_lsp_state = true, .executes_backend = true },

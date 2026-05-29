@@ -66,17 +66,28 @@ const callgrind_schema = schemaWithHints(&.{
     fieldHint("path", .{ .description = "Workspace-relative callgrind report path.", .path_kind = "input_file" }),
     fieldHint("valgrind_path", .{ .description = "Optional Valgrind executable path for this call only." }),
 });
-/// Workspace-relative fuzz corpus directory.
-const fuzz_run_schema = schemaWithHints(&.{
+/// Input schema for AFL++ runs: seed corpus, output dir, optional afl-fuzz path,
+/// and a target hint, all of which the handler reads.
+const afl_run_schema = schemaWithHints(&.{
     .{ "command", "string", true },
     .{ "corpus", "string", false },
     .{ "output", "string", false },
+    .{ "target", "string", false },
     .{ "apply", "boolean", false },
     .{ "timeout_ms", "integer", false },
     .{ "afl_path", "string", false },
 }, &.{
     fieldHint("corpus", .{ .description = "Workspace-relative fuzz corpus directory.", .path_kind = "input_path" }),
     fieldHint("afl_path", .{ .description = "Optional AFL++ afl-fuzz executable path for this call only." }),
+});
+/// Input schema for libFuzzer runs. libFuzzer takes its corpus/dictionary inside
+/// the caller-provided `command`, so the handler reads only the command, output
+/// path, apply gate, and timeout (no AFL-specific `corpus`/`afl_path`).
+const libfuzzer_run_schema = schema(&.{
+    .{ "command", "string", true },
+    .{ "output", "string", false },
+    .{ "apply", "boolean", false },
+    .{ "timeout_ms", "integer", false },
 });
 /// Workspace-relative baseline binary path.
 const binary_schema = schemaWithHints(&.{
@@ -151,9 +162,9 @@ pub const zig_callgrind_report = tool(.{ .description = "Summarize callgrind out
 /// Plan AFL++ or libFuzzer harness execution, corpus layout, limits, and crash handling.
 pub const zig_fuzz_plan = tool(.{ .description = "Plan AFL++ or libFuzzer harness execution, corpus layout, limits, and crash handling.", .input_schema = evidence_schema, .group = group, .plan = .{ .pure_analysis = "Builds a fuzzing plan without running a fuzzer." } });
 /// Preview or run AFL++ with caller-provided command and corpus paths.
-pub const zig_afl_run = tool(.{ .description = "Preview or run AFL++ with caller-provided command and corpus paths.", .input_schema = fuzz_run_schema, .read_only = false, .group = group, .risk = backend_run_risk, .plan = .{ .apply_gated_mutation = "Runs afl-fuzz and writes fuzz evidence only with apply=true." } });
+pub const zig_afl_run = tool(.{ .description = "Preview or run AFL++ with caller-provided command and corpus paths.", .input_schema = afl_run_schema, .read_only = false, .group = group, .risk = backend_run_risk, .plan = .{ .apply_gated_mutation = "Runs afl-fuzz and writes fuzz evidence only with apply=true." } });
 /// Preview or run a libFuzzer-enabled binary command and normalize result evidence.
-pub const zig_libfuzzer_run = tool(.{ .description = "Preview or run a libFuzzer-enabled binary command and normalize result evidence.", .input_schema = fuzz_run_schema, .read_only = false, .group = group, .risk = command_run_risk, .plan = .{ .apply_gated_mutation = "Runs the caller-provided libFuzzer command and writes evidence only with apply=true." } });
+pub const zig_libfuzzer_run = tool(.{ .description = "Preview or run a libFuzzer-enabled binary command and normalize result evidence.", .input_schema = libfuzzer_run_schema, .read_only = false, .group = group, .risk = command_run_risk, .plan = .{ .apply_gated_mutation = "Runs the caller-provided libFuzzer command and writes evidence only with apply=true." } });
 /// Plan deterministic minimization for AFL++ or libFuzzer crash inputs.
 pub const zig_fuzz_crash_minimize = tool(.{ .description = "Plan deterministic minimization for AFL++ or libFuzzer crash inputs.", .input_schema = evidence_schema, .group = group, .plan = .{ .pure_analysis = "Returns minimization argv plans without running minimizers." } });
 /// Summarize workspace fuzz corpus file count, bytes, and bounded identity metadata.
