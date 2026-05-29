@@ -158,26 +158,30 @@ pub fn readOnlyHintFor(spec: ToolMeta) bool {
 }
 
 /// Returns whether the tool can be treated as idempotent by planners.
+///
+/// Policy: idempotent iff externally read-only. `readOnlyHintFor` already
+/// requires all five capability flags (`writes_source`, `writes_artifacts`,
+/// `mutates_lsp_state`, `executes_project_code`, `executes_user_command`) to be
+/// clear, so re-ANDing them here never changed the result. The redundancy is
+/// collapsed; the emitted `idempotentHint` value is unchanged for every tool. If
+/// a read-only-but-non-idempotent operation ever needs to be expressed, this is
+/// the single place to relax the equivalence.
 pub fn idempotentHintFor(spec: ToolMeta) bool {
-    const risk_value = riskFor(spec.id);
-    return readOnlyHintFor(spec) and
-        !risk_value.writes_source and
-        !risk_value.writes_artifacts and
-        !risk_value.mutates_lsp_state and
-        !risk_value.executes_project_code and
-        !risk_value.executes_user_command;
+    return readOnlyHintFor(spec);
 }
 
 /// Returns whether the tool has destructive-risk markers.
+///
+/// Capability dominates the default-preview convenience: a tool that writes
+/// source or executes project/user code is destructive even when it is
+/// apply-gated, because the apply gate is a runtime guard, not a reason to tell
+/// an agent the operation is only additive. Only after capability has been ruled
+/// out does the apply-preview default suppress the destructive hint.
 pub fn destructiveHintFor(spec: ToolMeta) bool {
     const risk_value = riskFor(spec.id);
+    if (risk_value.writes_source or risk_value.executes_project_code or risk_value.executes_user_command) return true;
     if (risk_value.writes_require_apply and risk_value.preview_by_default) return false;
-    return risk_value.writes_source or
-        risk_value.writes_artifacts or
-        risk_value.mutates_lsp_state or
-        risk_value.executes_project_code or
-        risk_value.executes_user_command or
-        !spec.read_only;
+    return risk_value.writes_artifacts or risk_value.mutates_lsp_state or !spec.read_only;
 }
 
 /// Builds the group-keyword lookup table at comptime from group specs.

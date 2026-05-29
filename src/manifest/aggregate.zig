@@ -39,6 +39,10 @@ pub const specs = buildSpecs();
 
 /// Materializes definition declarations into runtime metadata tables at comptime.
 fn buildEntries() [definition_count]ToolEntry {
+    // validateDefinition runs per tool and now scans each apply-gated schema for an
+    // `apply` boolean via byte-wise comptime string compares; raise the eval branch
+    // budget so the cumulative comptime work across every definition stays in bounds.
+    @setEvalBranchQuota(10_000);
     var result: [definition_count]ToolEntry = undefined;
     comptime var index: usize = 0;
     inline for (definition_groups) |group| {
@@ -78,8 +82,43 @@ fn validateDefinition(comptime name: []const u8, comptime definition: types.Tool
     if (definition.risk.writes_source and !definition.risk.preview_by_default) {
         @compileError(name ++ ": source-writing tools must preview by default");
     }
-    if (definition.risk.writes_source and definition.read_only) {
+    // The raw `read_only` field is internal source-of-truth, not the MCP hint
+    // (`readOnlyHintFor` derives the external value from risk flags). Keep the raw
+    // field internally consistent for the two capabilities that unambiguously make
+    // a tool non-read-only at the source level: writing source, and executing a
+    // caller-supplied command. Reject those combinations at comptime rather than
+    // relying on the derived hint to paper over the contradiction.
+    //
+    // SCOPE NOTE: the review's Finding 4 also lists `writes_artifacts`,
+    // `mutates_lsp_state`, and `executes_project_code`. Those are deliberately NOT
+    // guarded here. The manifest sets raw `read_only = true` on ~24 tools that
+    // carry one of those flags (e.g. `zig_hover`/`zig_code_actions` mutate LSP
+    // document state, `zig_build`/`zig_test` execute project code and write build
+    // artifacts) and existing tests assert that raw value. The MCP surface is
+    // already correct because `readOnlyHintFor` ANDs in all five `!`-flags.
+    // Widening this guard to those three capabilities would require flipping 24
+    // declarations across files outside this change's scope and contradict the
+    // tested raw-field convention, so it is reported as a follow-up rather than
+    // applied here.
+    if (definition.read_only and definition.risk.writes_source) {
         @compileError(name ++ ": source-writing tools cannot be read-only");
+    }
+    if (definition.read_only and definition.risk.executes_user_command) {
+        @compileError(name ++ ": user-command-executing tools cannot be read-only");
+    }
+    // Apply-gate invariant must bind to the wire contract, not just the risk
+    // flag: if a tool advertises `writes_require_apply` it must accept an `apply`
+    // boolean in its input schema, otherwise the runtime gate is unreachable from
+    // the client. Scan the declared schema for an `apply: boolean` field.
+    //
+    // Note on `writes_artifacts`: it is deliberately NOT forced to be
+    // apply-gated. `zig_matrix_check` writes build/test artifacts as an
+    // intentional side effect of running configured binaries and ships ungated;
+    // forcing an apply gate there would break that intended behavior. Only
+    // `writes_source` and explicit `writes_require_apply` carry the apply
+    // contract.
+    if (definition.risk.writes_require_apply and !schemaHasApplyBoolean(definition.input_schema)) {
+        @compileError(name ++ ": apply-gated tools must declare an `apply` boolean input field");
     }
     switch (definition.plan) {
         .apply_gated_mutation => {
@@ -106,6 +145,17 @@ fn validateDefinition(comptime name: []const u8, comptime definition: types.Tool
     if (!needs_static_tier and definition.static_analysis_tier != null) {
         @compileError(name ++ ": only static-analysis tools may declare a capability tier");
     }
+}
+
+/// Returns whether a schema declares an `apply` boolean field.
+///
+/// `SchemaField` is the tuple `(name, json_type, required)`; the apply gate is
+/// only reachable from a client when the schema exposes `apply` typed `boolean`.
+fn schemaHasApplyBoolean(comptime input_schema: types.tooling.SchemaSpec) bool {
+    inline for (input_schema.fields) |field| {
+        if (std.mem.eql(u8, field[0], "apply") and std.mem.eql(u8, field[1], "boolean")) return true;
+    }
+    return false;
 }
 
 /// Projects the full entry table into the public metadata table.
