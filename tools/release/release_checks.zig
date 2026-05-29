@@ -412,7 +412,7 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
-fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, extension: []const u8) !bool {
+pub fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, extension: []const u8) !bool {
     var dir = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return true,
         else => return err,
@@ -425,7 +425,7 @@ fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, extens
     while (try walker.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.path, extension)) continue;
-        try stderrPrint(io, "pure Zig hygiene rejected {s}/{s}: Python files do not belong in project-owned source, tools, tests, scripts, examples, docs, or CI\n", .{ root, entry.path });
+        try stderrPrint(io, "pure Zig hygiene rejected {s}/{s}: Python files do not belong in the pure-Zig project roots (.github, docs, examples, scripts, src, tests, tools); the npm packages/ tree is JS/TS by design and is intentionally out of scope\n", .{ root, entry.path });
         ok = false;
     }
     return ok;
@@ -461,6 +461,8 @@ test "lineCount handles empty trailing and unterminated text" {
 }
 
 test "line budget headroom scales for small and large files" {
+    // Pull in the split-out pure-Zig-gate tests so they run with this suite.
+    _ = @import("release_checks_tests.zig");
     try std.testing.expectEqual(@as(usize, 10), minLineBudgetHeadroom(80));
     try std.testing.expectEqual(@as(usize, 18), minLineBudgetHeadroom(180));
     try std.testing.expectEqual(@as(usize, 50), minLineBudgetHeadroom(800));

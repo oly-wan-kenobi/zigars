@@ -94,7 +94,21 @@ Because `is_test_file` is computed *before* the import check, the arming line **
 - **Impact:** a one-line "disable the guard for this file" primitive; also a realistic *accidental* footgun (moving a testing import to the top silently unguards the rest).
 - **Fix:** the loop already tracks real `test_depth` — scope test-context to brace depth (`test_depth > 0`) and drop the irreversible latch, or reset it when `test_depth` returns to 0. Don't treat a heuristic import line as equivalent to a `test {` block.
 
-### MEDIUM-3 — The "pure Zig / no-.py" release gate can pass while its stated property is violated (VERIFIED)
+### MEDIUM-3 → LOW (adjudicated) — The "pure Zig / no-.py" release gate can pass while its stated property is violated (VERIFIED)
+
+> **Adjudication (S14):** downgraded MEDIUM → **LOW**. The gate is *correctly
+> scoped*: `docs/release.md` and `AGENTS.md` both limit the pure-Zig roots to
+> `.github, docs, examples, scripts, src, tests, tools`, and the npm `packages/`
+> tree is JS/TS by design (intentionally excluded). This is documentation/false-
+> assurance hardening, not a security hole — no `.py` is tracked. **Resolved in
+> S14:** the gate's rejection message was tightened so it can no longer be read
+> as covering `packages/`; AGENTS.md and `docs/release.md` were scoped to the
+> `.py`-extension behavior the gate actually enforces; and a negative-path test
+> (`tools/release/release_checks.zig`, "pure-Zig tree gate rejects a planted .py
+> and passes when absent") now plants a `.py` under a scoped root and asserts the
+> gate fails. The "derive roots from tracked top-level dirs" and ".sh heredoc
+> token scan" suggestions below are deliberately *not* adopted — the hand list is
+> the intended policy surface and the inline CI Python is vetted (see LOW-10).
 
 The gate walks a hand-maintained root list and matches only the `.py` *extension*:
 
@@ -208,7 +222,14 @@ Wall-clock-derived port contradicts the project's determinism goal; concurrent r
 
 - **Fix:** bind port 0 and read back the assignment, or retry on `AddrInUse`.
 
-### LOW-10 — Policy/enforcement drift: Python in CI vs. AGENTS.md "pure Zig" (VERIFIED)
+### LOW-10 — Policy/enforcement drift: Python in CI vs. AGENTS.md "pure Zig" (VERIFIED, RESOLVED S14)
+
+> **Resolution (S14):** reworded AGENTS.md to scope the Python ban to the
+> shipped Zig tree (the `.py`-extension gate), explicitly acknowledging the
+> vetted inline Python inside `.github/scripts/*.sh` conformance heredocs as
+> CI-only embedded scripting rather than a shipped `.py` file. `docs/release.md`
+> carries the matching scope note. The inline Python was not ported to Zig (it is
+> safe: quoted heredocs, env-passed data, list-argv `subprocess`).
 
 `.github/scripts/*` embed substantial inline Python via `python3 <<'PY'`, directly contradicting AGENTS.md:44 ("no Python … under … CI paths"):
 
@@ -223,7 +244,14 @@ The usage itself is **safe** (all heredocs quoted, data passed via `env:`/`os.en
 
 - **Fix:** reword AGENTS.md to scope the ban to the shipped Zig tree (matching the gate's real behavior), or port the inline Python to Zig.
 
-### LOW-11 — `workflow_dispatch` input interpolated into `run:` (VERIFIED, accepted risk)
+### LOW-11 — `workflow_dispatch` input interpolated into `run:` (VERIFIED, ACCEPTED RISK, documented S14)
+
+> **Resolution (S14):** accepted risk, left as-is by decision. Each of the three
+> `Optional … setup` steps (`release-readiness.yml`, `backend-conformance.yml`,
+> `zls-conformance.yml`) now carries an inline comment recording the accepted
+> risk (manual dispatch only, write-access actors, `contents: read`), and
+> `docs/release.md` documents the decision. The `env:` + vetted-script
+> alternative was considered but not adopted.
 
 ```yaml
 # .github/workflows/release-readiness.yml:59-60
@@ -234,9 +262,18 @@ The usage itself is **safe** (all heredocs quoted, data passed via `env:`/`os.en
 
 Arbitrary command execution by design, but only via manual `workflow_dispatch` (write-access actors) under a `contents: read` token. Bounded. Cleaner to pass via `env:` and invoke a vetted script.
 
-### Informational — committed build outputs
+### Informational — committed build outputs (CONFIRMED INTENTIONAL, documented S14)
 
 `packages/@zigars/mcp/dist/*.js` (compiled TypeScript build outputs) are tracked in git — worth confirming that's intentional given AGENTS.md's "do not commit build outputs" guidance.
+
+> **Resolution (S14):** confirmed **intentional**. The npm shim must run via
+> `npx`/`bunx` without a TypeScript build step, so the prebuilt JS is committed.
+> `packages/@zigars/mcp/.gitignore` keeps `node_modules/` and `dist/test/`
+> untracked while deliberately tracking the runtime `dist/` output, and the
+> `artifact-hygiene` tracked-artifact gate only covers the top-level generated
+> dirs (so it does not flag the package `dist/`). Documented as an explicit
+> exception in both AGENTS.md ("Generated And Artifact Hygiene") and
+> `docs/release.md`.
 
 ---
 
@@ -280,4 +317,4 @@ Arbitrary command execution by design, but only via manual `workflow_dispatch` (
 
 ## Bottom line
 
-The gates that *lie* are the **architecture guard** (defeatable via the project's normal named-module idiom, and via a one-line test-tail latch) and the **pure-Zig/no-.py gate** (scope + extension-only false-negatives). The packaging, checksum, dispatch, and CI-pinning surfaces are genuinely fail-closed.
+The gate that *lies* is the **architecture guard** (defeatable via the project's normal named-module idiom, and via a one-line test-tail latch). The **pure-Zig/no-.py gate** was adjudicated **LOW**: it is correctly scoped to the seven pure-Zig roots (npm `packages/` is JS/TS by design), and S14 tightened its message, scoped the docs to the enforced behavior, and added a negative-path test — so the false-assurance gap is closed. The packaging, checksum, dispatch, and CI-pinning surfaces are genuinely fail-closed.

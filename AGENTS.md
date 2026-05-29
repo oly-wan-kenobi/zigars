@@ -41,8 +41,16 @@ The project is primarily Zig:
 - Keep stdout reserved for MCP JSON-RPC. Send logs and diagnostics to stderr.
 - Prefer structured MCP results with JSON-native `structuredContent` and a text
   fallback.
-- Keep the project pure Zig. Do not add Python helper scripts under source,
-  tools, tests, scripts, examples, docs, or CI paths.
+- Keep the project pure Zig. Do not add Python (`.py`) helper scripts under the
+  pure-Zig project roots — `.github`, `docs`, `examples`, `scripts`, `src`,
+  `tests`, and `tools`. This is enforced by `zig build artifact-hygiene` (the
+  pure-Zig-tree gate in `tools/release/release_checks.zig`), which rejects any
+  tracked `.py` file under those roots. A small amount of vetted inline Python
+  remains inside `.github/scripts/*.sh` conformance heredocs (quoted `<<'PY'`,
+  data passed via `env:`/`os.environ`, list-argv `subprocess`); the ban targets
+  shipped/standalone Python source files, not these CI-only embedded snippets.
+  The npm `packages/` tree is JS/TS by design and is intentionally outside the
+  pure-Zig scope.
 - Keep `src/main.zig` as a small startup/lifecycle entrypoint.
 - Keep `tools/zigars_tools.zig` as a dispatcher; move large helper logic into
   focused Zig modules.
@@ -112,6 +120,14 @@ bun run test:bun
 
 - Do not commit build outputs, local caches, coverage output, `zig-out/`, or
   generated release artifacts unless the repository explicitly tracks them.
+- Documented exception: `packages/@zigars/mcp/dist/*.js` (compiled from the
+  package's TypeScript `src/`) is intentionally tracked. The npm shim must run
+  via `npx`/`bunx` without a TypeScript build step, so the prebuilt JS ships in
+  the package. `packages/@zigars/mcp/.gitignore` keeps `node_modules/` and
+  `dist/test/` untracked while deliberately committing the runtime `dist/`
+  output; the `artifact-hygiene` tracked-artifact gate only covers the top-level
+  generated dirs (`zig-out/`, `.zig-cache/`, `zig-pkg/`, `.zigars-cache/`,
+  `coverage/`, top-level `dist/`) and does not flag the npm package `dist/`.
 - Run `zig build artifact-hygiene` or `zig build release-check` when changing
   release, packaging, or generated-artifact workflows.
 
