@@ -105,7 +105,9 @@ test "risk metadata distinguishes read-only annotations from code execution" {
     const fmt = find("zig_format").?;
     try std.testing.expect(riskFor(.zig_format).writes_require_apply);
     try std.testing.expect(riskFor(.zig_format).writes_artifacts);
-    try std.testing.expect(riskFor(.zig_format).mutates_lsp_state);
+    // zig_format runs `zig fmt` via CoreCommandContext and never touches ZLS, so
+    // it must not advertise LSP-state mutation in its raw risk flags.
+    try std.testing.expect(!riskFor(.zig_format).mutates_lsp_state);
     // zig_format writes source, so capability dominates the apply-gate preview:
     // destructiveHint must be true even though the tool previews by default.
     try std.testing.expect(destructiveHintFor(fmt));

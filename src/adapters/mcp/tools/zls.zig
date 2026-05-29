@@ -125,7 +125,9 @@ pub fn zigCodeActions(allocator: std.mem.Allocator, context: app_context.Context
 
 /// Handles MCP `zig_code_action_apply` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCodeActionApply(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    if (argBool(args, "apply", false)) return sourceWriteUnsupported(allocator, "zig_code_action_apply", "Code-action source writes are not transaction-safe yet; call without apply to preview the selected action.");
+    // This tool is preview-only and does not register an `apply` argument, so it
+    // never writes source. Central validation rejects an `apply` argument before
+    // the handler runs, so no apply-gate guard is needed here.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "file", "string");
     const start_line = argIntRequired(args, "start_line") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "start_line", "integer");
     const start_char = argIntRequired(args, "start_char") orelse return mcp_errors.missingArgument(allocator, "zig_code_action_apply", "start_char", "integer");
@@ -151,7 +153,9 @@ pub fn zigCodeActionApply(allocator: std.mem.Allocator, context: app_context.Con
 
 /// Handles MCP `zig_rename` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigRename(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    if (argBool(args, "apply", false)) return sourceWriteUnsupported(allocator, "zig_rename", "Rename source writes are not transaction-safe yet; call without apply to preview the workspace edit.");
+    // This tool is preview-only and does not register an `apply` argument, so it
+    // never writes source. Central validation rejects an `apply` argument before
+    // the handler runs, so no apply-gate guard is needed here.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "file", "string");
     const line = argIntRequired(args, "line") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "line", "integer");
     const character = argIntRequired(args, "character") orelse return mcp_errors.missingArgument(allocator, "zig_rename", "character", "integer");
@@ -339,20 +343,6 @@ fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capab
     try obj.put(allocator, "category", .{ .string = "lsp_capability" });
     try obj.put(allocator, "error", .{ .string = "ZLS did not advertise this capability" });
     try obj.put(allocator, "resolution", .{ .string = "Upgrade or reconfigure ZLS, or choose a tool that does not require this LSP capability." });
-    return mcp_result.structured(allocator, .{ .object = obj });
-}
-
-/// Returns a structured result when a requested source write is not implemented safely.
-fn sourceWriteUnsupported(allocator: std.mem.Allocator, tool_name: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
-    var obj = std.json.ObjectMap.empty;
-    defer obj.deinit(allocator);
-    try obj.put(allocator, "ok", .{ .bool = false });
-    try obj.put(allocator, "kind", .{ .string = "zls_source_write_unsupported" });
-    try obj.put(allocator, "tool", .{ .string = tool_name });
-    try obj.put(allocator, "applied", .{ .bool = false });
-    try obj.put(allocator, "requires_apply", .{ .bool = false });
-    try obj.put(allocator, "error", .{ .string = "This ZLS workspace edit is available as a preview only." });
-    try obj.put(allocator, "resolution", .{ .string = resolution });
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 

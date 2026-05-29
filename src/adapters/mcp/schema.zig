@@ -77,9 +77,20 @@ fn applyFieldHint(
 ) !void {
     const hint = tooling.hintFor(spec, field);
     try property.put(allocator, "description", .{ .string = hint.description });
-    if (hint.default_bool) |value| try property.put(allocator, "default", .{ .bool = value });
-    if (hint.default_int) |value| try property.put(allocator, "default", .{ .integer = value });
-    if (hint.default_string) |value| try property.put(allocator, "default", .{ .string = value });
+    // The three typed defaults are mutually exclusive; a field declares at most
+    // one JSON default. Assert that invariant so a future hint that sets two
+    // defaults fails loudly instead of silently letting the last writer win.
+    const default_count = @as(u2, @intFromBool(hint.default_bool != null)) +
+        @intFromBool(hint.default_int != null) +
+        @intFromBool(hint.default_string != null);
+    std.debug.assert(default_count <= 1);
+    if (hint.default_bool) |value| {
+        try property.put(allocator, "default", .{ .bool = value });
+    } else if (hint.default_int) |value| {
+        try property.put(allocator, "default", .{ .integer = value });
+    } else if (hint.default_string) |value| {
+        try property.put(allocator, "default", .{ .string = value });
+    }
     if (hint.path_kind) |value| try property.put(allocator, "x-zigars-path-kind", .{ .string = value });
     if (hint.minimum) |value| try property.put(allocator, "minimum", .{ .integer = value });
     if (hint.maximum) |value| try property.put(allocator, "maximum", .{ .integer = value });

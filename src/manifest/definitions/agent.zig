@@ -8,7 +8,7 @@ const fieldHint = types.fieldHint;
 /// Return a compact deterministic Zig project context pack for agent orientation.
 pub const zigars_context_pack = tool(.{
     .description = "Return a compact deterministic Zig project context pack for agent orientation.",
-    .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "token_budget", "integer", false }, .{ "include", "string", false } }, &.{
+    .input_schema = schemaWithHints(&.{ .{ "mode", "string", false }, .{ "token_budget", "integer", false } }, &.{
         fieldHint("mode", .{ .description = "Context-pack depth.", .default_string = "standard", .enum_values = &.{ "tiny", "standard", "deep" } }),
     }),
     .read_only = true,
@@ -47,7 +47,7 @@ pub const zigars_validate_patch = tool(.{
 /// Fuse compiler/test output, primary failure data, impact hints, and suggested zigars tools.
 pub const zigars_failure_fusion = tool(.{
     .description = "Fuse compiler/test output, primary failure data, impact hints, and suggested zigars tools.",
-    .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false }, .{ "summarize", "boolean", false } }, &.{
+    .input_schema = schemaWithHints(&.{ .{ "text", "string", false }, .{ "command", "string", false }, .{ "file", "string", false }, .{ "filter", "string", false }, .{ "args", "string", false }, .{ "timeout_ms", "integer", false }, .{ "summarize", "boolean", false } }, &.{
         fieldHint("command", .{ .description = "Focused Zig command mode.", .enum_values = &.{ "check", "test", "build", "build-test", "fmt-check" } }),
         fieldHint("summarize", .{ .description = "When true and the client supports MCP sampling, request a client-generated summary alongside deterministic evidence.", .default_bool = false }),
     }),

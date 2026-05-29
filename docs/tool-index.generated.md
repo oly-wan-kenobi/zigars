@@ -211,9 +211,9 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 ## Compact Argument Hints
 
 - `zig_abi_layout_diff`: optional `path: string`, `limit: integer`, `measure: boolean`, `targets: string`, `allow_project_comptime: boolean`, `timeout_ms: integer`
-- `zig_afl_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
+- `zig_afl_run`: required `command: string`; optional `corpus: string`, `output: string`, `target: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
 - `zig_allocations`: required `file: string`
-- `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`
+- `zig_analysis_graphs`: required `mode: string`, `path: string`, `output: string`; optional `args: string`, `timeout_ms: integer`
 - `zig_api_baseline_init`: optional `file: string`, `content: string`, `output: string`, `apply: boolean`, `limit: integer`
 - `zig_api_check`: optional `file: string`, `content: string`, `baseline: string`, `baseline_path: string`, `limit: integer`
 - `zig_api_diff_baseline`: optional `file: string`, `content: string`, `baseline: string`, `baseline_path: string`, `limit: integer`
@@ -223,7 +223,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_ast_tests`: required `file: string`
 - `zig_autodoc_ingest`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_bench_baseline`: optional `command: string`, `results: string`, `current: string`, `baseline: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `threshold_pct: integer`, `limit: integer`
-- `zig_bench_compare`: optional `results: string`, `current: string`, `baseline: string`, `threshold_pct: integer`, `limit: integer`
+- `zig_bench_compare`: optional `current: string`, `baseline: string`, `threshold_pct: integer`
 - `zig_bench_discover`: optional `limit: integer`
 - `zig_bench_regression_gate`: required `current: string`, `baseline: string`; optional `threshold_pct: integer`, `session_id: string`, `apply: boolean`
 - `zig_bench_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`
@@ -252,8 +252,8 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_comptime_diagnose`: optional `text: string`, `path: string`, `diagnostic: string`, `limit: integer`
 - `zig_core_inspect`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
 - `zig_coverage_baseline`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `limit: integer`
-- `zig_coverage_budget_check`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
-- `zig_coverage_diff`: optional `current: string`, `baseline: string`, `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
+- `zig_coverage_budget_check`: optional `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
+- `zig_coverage_diff`: optional `current: string`, `baseline: string`
 - `zig_coverage_map`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_coverage_merge`: optional `current: string`, `baseline: string`, `left: string`, `right: string`, `output: string`, `apply: boolean`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
 - `zig_coverage_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `target: string`, `coverage_backend: string`, `coverage_artifacts: string`
@@ -280,7 +280,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_diagnostics_all`: required `file: string`; optional `content: string`, `wait_ms: integer`, `timeout_ms: integer`
 - `zig_doc_example_check`: optional `path: string`, `content: string`, `limit: integer`
 - `zig_docs_index_build`: optional `scope: string`, `limit: integer`
-- `zig_docs_query`: required `query: string`; optional `scope: string`, `limit: integer`
+- `zig_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`
 - `zig_document_change`: required `file: string`, `content: string`
 - `zig_document_close`: required `file: string`
 - `zig_document_open`: required `file: string`, `content: string`
@@ -296,7 +296,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_flamegraph`: required `format: string`, `input: string`, `output: string`; optional `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_flamegraph_diff`: required `before: string`, `after: string`, `output: string`; optional `intermediate: string`, `title: string`, `subtitle: string`, `colors: string`, `width: integer`, `min_width: integer`, `hash: boolean`
 - `zig_flash_plan`: optional `board: string`, `target: string`, `image: string`, `flash_tool: string`, `probe_backend: boolean`, `timeout_ms: integer`, `limit: integer`
-- `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`
+- `zig_format`: required `file: string`; optional `apply: boolean`, `content: string`, `timeout_ms: integer`
 - `zig_format_check`: required `path: string`; optional `timeout_ms: integer`
 - `zig_fuzz_corpus_summary`: required `path: string`; optional `limit: integer`
 - `zig_fuzz_crash_minimize`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
@@ -318,14 +318,15 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_lang_ref_search_json`: required `query: string`; optional `limit: integer`
 - `zig_langref_item`: required `query: string`; optional `limit: integer`
 - `zig_leak_triage`: optional `text: string`, `path: string`, `limit: integer`
-- `zig_libfuzzer_run`: required `command: string`; optional `corpus: string`, `output: string`, `apply: boolean`, `timeout_ms: integer`, `afl_path: string`
-- `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
+- `zig_libfuzzer_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`
+- `zig_lint`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`, `timeout_ms: integer`
 - `zig_lint_baseline`: required `findings: string`; optional `baseline: string`, `output: string`, `apply: boolean`
 - `zig_lint_compare`: optional `zlint_findings: string`, `zwanzig_findings: string`
 - `zig_lint_fix_plan`: required `findings: string`
 - `zig_lint_gate`: required `findings: string`; optional `profile: string`, `max_warnings: integer`, `allow_warnings: boolean`
 - `zig_lint_profile`: optional `profile: string`
-- `zig_lint_sarif`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`
+- `zig_lint_rules`: optional `timeout_ms: integer`
+- `zig_lint_sarif`: optional `path: string`, `rules_do: string`, `rules_skip: string`, `config: string`, `args: string`, `timeout_ms: integer`
 - `zig_lint_suppressions`: required `findings: string`; optional `suppressions: string`
 - `zig_lint_trend`: required `before: string`, `after: string`
 - `zig_lldb_backtrace`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
@@ -368,12 +369,12 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_sanitizer_fusion`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
 - `zig_sbom`: optional `manifest: string`, `output: string`, `apply: boolean`
 - `zig_scip_export`: optional `output: string`, `apply: boolean`, `limit: integer`, `refresh: boolean`
-- `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`
+- `zig_semantic_callers`: required `symbol: string`; optional `limit: integer`, `timeout_ms: integer`
 - `zig_semantic_decl`: required `symbol: string`; optional `limit: integer`, `refresh: boolean`
 - `zig_semantic_index_build`: optional `refresh: boolean`, `limit: integer`
 - `zig_semantic_index_refresh`: optional `limit: integer`
 - `zig_semantic_query`: required `query: string`; optional `kind: string`, `limit: integer`, `refresh: boolean`
-- `zig_semantic_refs`: required `symbol: string`; optional `limit: integer`
+- `zig_semantic_refs`: required `symbol: string`; optional `limit: integer`, `timeout_ms: integer`
 - `zig_semver_suggest`: optional `api_diff: string`, `changelog: string`, `current_version: string`, `release_notes: string`
 - `zig_signature_help`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_snippet_check`: required `content: string`
@@ -441,7 +442,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_client_guide`: optional `client: string`, `task: string`
 - `zigars_command_provenance`: optional `tool: string`
 - `zigars_conformance_report`: optional `input: string`, `content: string`, `backend: string`, `output: string`, `apply: boolean`
-- `zigars_context_pack`: optional `mode: string`, `token_budget: integer`, `include: string`
+- `zigars_context_pack`: optional `mode: string`, `token_budget: integer`
 - `zigars_decision_record`: required `title: string`, `decision: string`; optional `rationale: string`, `category: string`, `path: string`, `apply: boolean`
 - `zigars_dev_env_generate`: optional `kind: string`, `output: string`, `apply: boolean`
 - `zigars_docs_drift_check`: optional `mode: string`
@@ -449,7 +450,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_edit_policy_check`: optional `files: string`, `patch: string`
 - `zigars_env_export`: optional `output: string`, `apply: boolean`, `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
 - `zigars_env_pack`: optional `probe_backends: boolean`, `include_hashes: boolean`, `timeout_ms: integer`
-- `zigars_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `args: string`, `timeout_ms: integer`, `summarize: boolean`
+- `zigars_failure_fusion`: optional `text: string`, `command: string`, `file: string`, `filter: string`, `args: string`, `timeout_ms: integer`, `summarize: boolean`
 - `zigars_generated_route`: required `path: string`; optional `goal: string`
 - `zigars_handoff_pack`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigars_impact`: optional `files: string`, `symbols: string`, `limit: integer`

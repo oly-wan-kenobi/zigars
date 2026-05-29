@@ -8,10 +8,10 @@ const fieldHint = types.fieldHint;
 /// Format a Zig file.
 pub const zig_format = tool(.{
     .description = "Format a Zig file or supplied buffer. Returns preview by default; writes the source file only with apply=true.",
-    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "apply", "boolean", false }, .{ "content", "string", false } }),
+    .input_schema = schema(&.{ .{ "file", "string", true }, .{ "apply", "boolean", false }, .{ "content", "string", false }, .{ "timeout_ms", "integer", false } }),
     .read_only = false,
     .group = .formatting_and_edits,
-    .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .mutates_lsp_state = true, .executes_backend = true },
+    .risk = .{ .writes_source = true, .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true },
     .plan = .{ .apply_gated_mutation = "Preview-first workspace mutation; writes only when apply=true and reports risk metadata before changes." },
 });
 /// Run `zig fmt --check` on a workspace file or directory.
