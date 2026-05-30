@@ -24,6 +24,7 @@ pub const Workspace = struct {
     /// address. cache_input defaults to ".zigars-cache" inside root_input.
     /// Fails with PathOutsideWorkspace if cache_input resolves outside root.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, root_input: []const u8, cache_input: ?[]const u8) !Workspace {
+        // Capture all required dependencies up front so later calls can stay predictable.
         var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd_len = try std.process.currentPath(io, &cwd_buf);
         const cwd = cwd_buf[0..cwd_len];
@@ -78,6 +79,7 @@ pub const Workspace = struct {
     /// outside-pointing symlink before the open is rejected by the kernel
     /// rather than followed (TOCTOU containment).
     pub fn readFileAlloc(self: Workspace, io: std.Io, path: []const u8, max_bytes: usize) ![]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const resolved = try self.resolve(path);
         defer self.allocator.free(resolved);
 
@@ -101,6 +103,7 @@ pub const Workspace = struct {
     /// it. Containment is therefore enforced against the canonical parent
     /// inode rather than a re-walked path string.
     pub fn writeFile(self: Workspace, io: std.Io, path: []const u8, bytes: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const resolved = try self.resolveOutput(path);
         defer self.allocator.free(resolved);
 
@@ -172,6 +175,7 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
 /// Parent directories are canonicalized recursively so a symlinked ancestor
 /// that escapes the root is still rejected. Returned slice is allocator-owned.
 fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
         try std.fs.path.resolve(allocator, &.{path})
@@ -209,6 +213,7 @@ fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []con
 /// tree until a real directory is found, then re-checking containment.
 /// Returns PathOutsideWorkspace when no ancestor is inside root.
 fn canonicalOutputParent(allocator: std.mem.Allocator, io: std.Io, root: []const u8, parent: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const real = realPathFileAbsoluteOwned(allocator, io, parent) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => null,
@@ -279,6 +284,7 @@ const ContainedTarget = struct {
 /// chain is created before opening, preserving `make_path` semantics for writes
 /// without ever materializing directories outside the root.
 fn openContainedFinalComponent(io: std.Io, root: []const u8, resolved: []const u8, create_parents: bool) !ContainedTarget {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parent_path = std.fs.path.dirname(resolved) orelse return WorkspaceError.PathOutsideWorkspace;
     if (!isInside(root, parent_path)) return WorkspaceError.PathOutsideWorkspace;
     const name = std.fs.path.basename(resolved);
