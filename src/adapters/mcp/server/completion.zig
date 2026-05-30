@@ -32,6 +32,7 @@ const CompletionSet = struct {
 
     /// Appends a unique prefix-matched candidate or records that more values exist.
     fn append(self: *CompletionSet, prefix: []const u8, value: []const u8) !void {
+        // Append in deterministic order so completion and snapshot output remain stable.
         if (prefix.len > 0 and !std.mem.startsWith(u8, value, prefix)) return;
         if (self.seen.contains(value)) return;
         try self.seen.put(value, {});
@@ -116,6 +117,7 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
 /// spec is consulted; with an empty name every spec is scanned so an
 /// untargeted completion can still surface matching enum/dynamic values.
 fn appendManifestArgumentCompletions(server: anytype, completions: *CompletionSet, tool_name: []const u8, arg_name: []const u8, prefix: []const u8) !bool {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var handled = false;
     if (tool_name.len > 0) {
         if (manifest.find(tool_name)) |spec| {
@@ -132,6 +134,7 @@ fn appendManifestArgumentCompletions(server: anytype, completions: *CompletionSe
 
 /// Appends one tool spec's manifest-backed argument completions.
 fn appendSpecArgumentCompletions(server: anytype, completions: *CompletionSet, spec: manifest.ToolMeta, arg_name: []const u8, prefix: []const u8) !bool {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (spec.input_schema.fields) |field| {
         if (!std.mem.eql(u8, field[0], arg_name)) continue;
         const hint = tooling.hintFor(spec.input_schema, field);
