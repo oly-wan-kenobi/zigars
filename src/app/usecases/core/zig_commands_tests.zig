@@ -13,6 +13,7 @@ const fake_workspace = @import("../../../testing/fakes/workspace_store.zig");
 
 /// Returns a typed context backed by this fixture or runtime state.
 fn context(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
+    // Derive context values from one source so audit and response metadata do not diverge.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
