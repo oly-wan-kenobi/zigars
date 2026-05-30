@@ -78,6 +78,7 @@ fn structured(allocator: std.mem.Allocator, value: std.json.Value) mcp.tools.Too
 
 /// Parses catalog JSON and returns both structuredContent and a text fallback.
 fn catalogStructured(allocator: std.mem.Allocator, tool_name: []const u8, bytes: []u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     defer allocator.free(bytes);
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch |err| {
         if (err == error.OutOfMemory) return error.OutOfMemory;
@@ -97,6 +98,7 @@ fn catalogStructured(allocator: std.mem.Allocator, tool_name: []const u8, bytes:
 /// Parse permissive JSON args and clamp timeout at the adapter boundary so
 /// downstream planning code receives normalized request values.
 fn planRequest(context: app_context.Context, args: ?std.json.Value) discovery.PlanRequest {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .tool = argString(args, "tool"),
         .file = argString(args, "file"),
@@ -108,6 +110,7 @@ fn planRequest(context: app_context.Context, args: ?std.json.Value) discovery.Pl
 
 /// Map discovery/use-case failures to protocol-stable MCP error codes.
 fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.MissingTool => mcp_errors.missingArgument(allocator, tool_name, "tool", "registered tool name"),
         error.UnknownTool => mcp_errors.invalidArgument(allocator, tool_name, "tool", "registered tool name", argString(args, "tool") orelse "", "Call zigars_capabilities or zigars_schema to inspect the registered tool names, then retry with one of those names."),
@@ -123,6 +126,7 @@ fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.jso
 /// Structured missing-argument error for the command/tool planning handlers,
 /// pointing the caller at zig_tool_plan for tools that have no argv to produce.
 fn missingPlanningArgument(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return mcp_errors.result(allocator, .{
         .kind = "tool_error",
         .tool = tool_name,
@@ -141,6 +145,7 @@ fn missingPlanningArgument(allocator: std.mem.Allocator, tool_name: []const u8, 
 
 /// Maps port tool error failures to structured MCP errors.
 fn portToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
