@@ -672,6 +672,7 @@ pub const BackendAvailability = struct {
 
     /// Frees backend availability fields when owned by the result.
     pub fn deinit(self: BackendAvailability, allocator: Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         if (!self.owns_memory) return;
         allocator.free(self.backend);
         if (self.version) |value| allocator.free(value);
@@ -1383,6 +1384,7 @@ pub const ObservabilitySnapshot = struct {
 
     /// Frees snapshot slices when owned by the result.
     pub fn deinit(self: ObservabilitySnapshot, allocator: Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         if (!self.owns_memory) return;
         allocator.free(self.tool_stats);
         allocator.free(self.method_stats);
