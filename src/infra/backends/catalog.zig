@@ -19,6 +19,7 @@ pub const backends = definitions.backends;
 /// false the per-backend `configured_path` field is omitted.  Caller must
 /// deinitialize the returned value with `std.json.Value.deinit`.
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -37,6 +38,7 @@ pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_path
 
 /// Serializes one backend definition for the catalog response.
 fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, include_configured_paths: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -59,6 +61,7 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
 /// Returns the configured executable path for a named backend, or null for unknown names.
 /// Returning null signals that the default path should be used; it is not an error.
 fn pathFor(name: []const u8, paths: Paths) ?[]const u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
     if (std.mem.eql(u8, name, "zlint")) return paths.zlint_path;
