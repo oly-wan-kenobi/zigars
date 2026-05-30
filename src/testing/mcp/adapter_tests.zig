@@ -249,6 +249,7 @@ test "zig_tool_plan exposes broad planning support for ZLS tools" {
 
 /// Checks whether a JSON array contains the requested string value.
 fn jsonArrayContainsString(array: std.json.Array, needle: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     for (array.items) |item| {
         switch (item) {
             .string => |value| if (std.mem.eql(u8, value, needle)) return true,
