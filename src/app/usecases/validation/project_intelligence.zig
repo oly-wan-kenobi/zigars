@@ -202,6 +202,7 @@ pub fn contextPackValue(
 
 /// Serializes agent guide fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentGuideValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_agent_guide" });
@@ -222,6 +223,7 @@ pub fn validatePatchValue(
     context: app_context.ProjectIntelligenceContext,
     request: ValidatePatchRequest,
 ) !std.json.Value {
+    // Reject incompatible inputs early so callers get a precise failure reason.
     var paths = try changedPathList(allocator, context, request.changed_files, request.timeout_ms);
     defer paths.deinit(allocator);
 
@@ -284,6 +286,7 @@ pub fn failureFusionFromCommandValue(
     context: app_context.ProjectIntelligenceContext,
     request: FailureFusionRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (request.text) |raw_text| return failureFusionValue(allocator, raw_text, "", &.{ "zig", "build", "test" }, false);
     var argv = try buildExplainArgv(allocator, context, request);
     defer argv.deinit(allocator);
@@ -384,6 +387,7 @@ pub fn projectProfileValue(
     context: app_context.ProjectIntelligenceContext,
     request: ProjectProfileRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const generated = if (request.content) |content| blk: {
         var parsed = try std.json.parseFromSlice(std.json.Value, allocator, content, .{});
         defer parsed.deinit();
@@ -426,6 +430,7 @@ pub fn patchGuardValue(
     context: app_context.ProjectIntelligenceContext,
     request: PatchGuardRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var paths = std.ArrayList([]const u8).empty;
     defer paths.deinit(allocator);
     defer freeStringList(allocator, paths.items);
@@ -572,6 +577,7 @@ pub fn testSelectSemanticValue(
     context: app_context.ProjectIntelligenceContext,
     request: SemanticImpactRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const impact = try semanticImpactValue(allocator, context, request, "zig_test_select_semantic");
     const impact_obj = switch (impact) {
         .object => |o| o,
@@ -605,6 +611,7 @@ pub fn testSelectSemanticValue(
 
 /// Serializes validation plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn validationPlanValueFromUsecase(allocator: std.mem.Allocator, result: workflows.PlanResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_validation_plan" });
@@ -625,6 +632,7 @@ pub fn validationPlanValueFromUsecase(allocator: std.mem.Allocator, result: work
 
 /// Serializes validation run fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn validationRunValue(allocator: std.mem.Allocator, report: workflows.RunReport) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var phases = std.json.Array.init(allocator);
     for (report.phases) |phase_run| try phases.append(try validationPhaseRunValue(allocator, phase_run));
     var obj = std.json.ObjectMap.empty;
@@ -651,6 +659,7 @@ pub fn validationHistoryToolValue(
     tool_name: []const u8,
     result: workflows.HistoryResult,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (result.view) {
         .runs => validationRunsHistoryValue(allocator, tool_name, result),
         .flakes => validationFlakeHistoryValue(allocator, tool_name, result),
@@ -660,6 +669,7 @@ pub fn validationHistoryToolValue(
 
 /// Serializes validation runs history fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationRunsHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: workflows.HistoryResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -676,6 +686,7 @@ fn validationRunsHistoryValue(allocator: std.mem.Allocator, tool_name: []const u
 
 /// Serializes validation flake history fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationFlakeHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: workflows.HistoryResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -689,6 +700,7 @@ fn validationFlakeHistoryValue(allocator: std.mem.Allocator, tool_name: []const 
 
 /// Serializes validation failure history fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationFailureHistoryValue(allocator: std.mem.Allocator, tool_name: []const u8, result: workflows.HistoryResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -706,6 +718,7 @@ pub fn commandEventsValue(
     tool_name: []const u8,
     request: CommandEventsRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (request.text) |text| return buildEventsValue(allocator, tool_name, text, "", &.{}, false, "captured_text");
     var argv = try buildEventArgv(allocator, context, request);
     defer argv.deinit(allocator);
@@ -724,6 +737,7 @@ pub fn commandEventsValue(
 
 /// Serializes test timing fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn testTimingValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zig_test_timing" });
@@ -740,6 +754,7 @@ pub fn sessionSnapshotValue(
     context: app_context.ProjectIntelligenceContext,
     request: SessionSnapshotRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var paths = std.ArrayList([]const u8).empty;
     defer paths.deinit(allocator);
     defer freeStringList(allocator, paths.items);
@@ -769,6 +784,7 @@ pub fn handoffPackValue(
     context: app_context.ProjectIntelligenceContext,
     request: SessionSnapshotRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const snapshot = try sessionSnapshotValue(allocator, context, .{
         .kind = "zigars_handoff_pack",
         .goal = request.goal,
@@ -801,6 +817,7 @@ pub fn decisionRecordValue(
     context: app_context.ProjectIntelligenceContext,
     request: DecisionRecordRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const record = try decisionRecordDataValue(allocator, context, request.title, request.decision, request.rationale, request.category);
     const preimage = preimageIdentityForPath(allocator, context, request.path) catch .null;
     if (request.apply) {
@@ -844,6 +861,7 @@ pub fn projectMemoryValue(
     context: app_context.ProjectIntelligenceContext,
     request: ProjectMemoryRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const notes = try loadJsonLines(allocator, context, request.content, request.path, request.limit);
     const filtered = try filterRecords(allocator, notes, request.query, request.category, request.limit);
     var obj = std.json.ObjectMap.empty;
@@ -865,6 +883,7 @@ pub fn capabilityMatchValue(
     limit: usize,
     entries: []const CapabilityEntry,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const lower = try std.ascii.allocLowerString(allocator, goal);
     var matches = std.json.Array.init(allocator);
     for (entries) |entry| {
@@ -886,6 +905,7 @@ pub fn capabilityMatchValue(
 
 /// Serializes tool sequence plan fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn toolSequencePlanValue(allocator: std.mem.Allocator, goal: []const u8, changed_files: ?[]const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const lower = try std.ascii.allocLowerString(allocator, goal);
     var steps = std.json.Array.init(allocator);
     if (std.mem.indexOf(u8, lower, "test") != null or std.mem.indexOf(u8, lower, "fail") != null) {
@@ -917,6 +937,7 @@ pub fn toolSequencePlanValue(allocator: std.mem.Allocator, goal: []const u8, cha
 
 /// Serializes context workspace fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn contextWorkspaceValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Derive context values from one source so audit and response metadata do not diverge.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "root", .{ .string = context.workspace.root });
@@ -932,6 +953,7 @@ pub fn contextWorkspaceValue(allocator: std.mem.Allocator, context: app_context.
 
 /// Serializes project type fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn projectTypeValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const graph = project_values.buildWorkspaceValue(allocator, context.staticAnalysis()) catch .null;
     const build_obj = project_values.buildZigObject(graph);
     const artifact_count = if (build_obj) |o| jsonArrayLen(o.get("artifacts") orelse .null) else 0;
@@ -958,6 +980,7 @@ pub fn projectTypeValue(allocator: std.mem.Allocator, context: app_context.Proje
 
 /// Serializes dependency context fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn dependencyContextValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const read_result = context.workspace_store.read(allocator, .{
         .path = "build.zig.zon",
         .max_bytes = 1024 * 1024,
@@ -969,6 +992,7 @@ pub fn dependencyContextValue(allocator: std.mem.Allocator, context: app_context
 
 /// Serializes source map fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn sourceMapValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, limit: usize) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     var dirs = std.json.Array.init(allocator);
     var seen_dirs = std.ArrayList([]const u8).empty;
@@ -1000,6 +1024,7 @@ pub fn sourceMapValue(allocator: std.mem.Allocator, context: app_context.Project
 
 /// Serializes quality commands fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn qualityCommandsValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var commands = std.json.Array.init(allocator);
     try appendWorkspaceFormatCheckCommand(allocator, context, &commands);
     try appendUniqueCommand(allocator, &commands, "zig build test");
@@ -1023,6 +1048,7 @@ pub fn contextLimitsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes agent rules fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentRulesValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var rules = std.json.Array.init(allocator);
     try rules.append(try ownedString(allocator, "Call zigars_context_pack first when entering an unfamiliar Zig workspace."));
     try rules.append(try ownedString(allocator, "Use zig_format or zig_format_check for formatting; do not fall back to raw zig fmt unless zigars is unavailable."));
@@ -1039,6 +1065,7 @@ pub fn agentRulesValue(allocator: std.mem.Allocator, client: []const u8, task: [
 
 /// Serializes agent workflow hints fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentWorkflowHintsValue(allocator: std.mem.Allocator, task: []const u8) !std.json.Value {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var workflows_array = std.json.Array.init(allocator);
     try workflows_array.append(try workflowHintValue(allocator, "orientation", &.{ "zigars_context_pack", "zigars_next_action" }));
     try workflows_array.append(try workflowHintValue(allocator, "compile_error", &.{ "zig_compile_error_index", "zigars_failure_fusion", "zigars_impact" }));
@@ -1060,6 +1087,7 @@ pub fn workflowHintValue(allocator: std.mem.Allocator, name: []const u8, tools: 
 
 /// Serializes agent tool aliases fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentToolAliasesValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "fmt", .{ .string = "zig_format" });
@@ -1082,6 +1110,7 @@ pub fn workflowContractValue(
     stop_condition: []const u8,
     tools: []const []const u8,
 ) !std.json.Value {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var next_tools = std.json.Array.init(allocator);
     for (tools) |tool| try next_tools.append(try ownedString(allocator, tool));
     var obj = std.json.ObjectMap.empty;
@@ -1148,6 +1177,7 @@ pub fn toolStepValue(allocator: std.mem.Allocator, tool: []const u8, reason: []c
 
 /// Serializes validation next action fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn validationNextActionValue(allocator: std.mem.Allocator, ok: bool, phases: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     if (ok) {
@@ -1180,6 +1210,7 @@ pub fn validationNextActionValue(allocator: std.mem.Allocator, ok: bool, phases:
 
 /// Serializes failure fusion fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn failureFusionValue(allocator: std.mem.Allocator, stderr: []const u8, stdout: []const u8, argv: []const []const u8, ok: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const compiler = try project_values.compilerErrorIndexValue(allocator, stderr, stdout, argv);
     const tests = try project_values.testFailureTriageValue(allocator, stderr, stdout, argv, ok);
     var suggested = std.json.Array.init(allocator);
@@ -1202,6 +1233,7 @@ pub fn failureFusionValue(allocator: std.mem.Allocator, stderr: []const u8, stdo
 
 /// Serializes primary failure fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn primaryFailureValue(_: std.mem.Allocator, compiler: std.json.Value, tests: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const compiler_obj = switch (compiler) {
         .object => |o| o,
         else => return .null,
@@ -1250,6 +1282,7 @@ pub fn looksLikeTestFile(path: []const u8) bool {
 
 /// Appends public decls for file data into caller-provided storage, propagating allocation failures.
 pub fn appendPublicDeclsForFile(allocator: std.mem.Allocator, out: *std.json.Array, file: []const u8, contents: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, contents, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -1269,6 +1302,7 @@ pub fn appendPublicDeclsForFile(allocator: std.mem.Allocator, out: *std.json.Arr
 
 /// Serializes generated project profile fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedProjectProfileValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "schema_version", .{ .integer = 1 });
@@ -1291,6 +1325,7 @@ pub fn generatedDirsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes validation risk fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationRiskValue(allocator: std.mem.Allocator, risk: workflows.Risk) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "changed_file_count", .{ .integer = @intCast(risk.changed_file_count) });
@@ -1310,6 +1345,7 @@ fn validationPhasesValue(allocator: std.mem.Allocator, phases: []const workflows
 
 /// Serializes validation phase fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationPhaseValue(allocator: std.mem.Allocator, phase: workflows.Phase) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "id", try ownedString(allocator, phase.id));
@@ -1324,6 +1360,7 @@ fn validationPhaseValue(allocator: std.mem.Allocator, phase: workflows.Phase) !s
 
 /// Serializes skipped phases fields into an allocator-owned JSON value; allocation failures propagate.
 fn skippedPhasesValue(allocator: std.mem.Allocator, skipped: []const workflows.SkippedPhase) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (skipped) |item| {
         var obj = std.json.ObjectMap.empty;
@@ -1336,6 +1373,7 @@ fn skippedPhasesValue(allocator: std.mem.Allocator, skipped: []const workflows.S
 
 /// Serializes validation phase run fields into an allocator-owned JSON value; allocation failures propagate.
 fn validationPhaseRunValue(allocator: std.mem.Allocator, phase: workflows.PhaseRun) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "name", try ownedString(allocator, phase.name));
@@ -1347,6 +1385,7 @@ fn validationPhaseRunValue(allocator: std.mem.Allocator, phase: workflows.PhaseR
 
 /// Serializes phase command fields into an allocator-owned JSON value; allocation failures propagate.
 fn phaseCommandValue(allocator: std.mem.Allocator, phase: workflows.PhaseRun) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (phase.outcome) {
         .result => |result| try commandResultValue(allocator, phase.name, phase.argv.items, phase.cwd, phase.timeout_ms, .{
             .exit_code = result.exit_code,
@@ -1377,6 +1416,7 @@ fn historyRecordValueFromUsecase(
     phases: []const workflows.PhaseRun,
     skipped: []const workflows.SkippedPhase,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var failures = std.json.Array.init(allocator);
     for (record.failures) |failure| {
         var obj = std.json.ObjectMap.empty;
@@ -1443,6 +1483,7 @@ fn historyRunJsonValue(allocator: std.mem.Allocator, run_item: workflows.History
 
 /// Serializes failure groups fields into an allocator-owned JSON value; allocation failures propagate.
 fn failureGroupsValueFromUsecase(allocator: std.mem.Allocator, groups: []const workflows.FailureGroup) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (groups) |group| {
         var obj = std.json.ObjectMap.empty;
@@ -1469,6 +1510,7 @@ fn commandResultValue(
     timeout_ms: i64,
     result: ports.CommandResult,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     const term = result.effectiveTerm();
@@ -1502,6 +1544,7 @@ fn commandResultValue(
 
 /// Serializes command error fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "command_error" });
@@ -1527,6 +1570,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []co
 
 /// Serializes failure summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = ok });
@@ -1555,6 +1599,7 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
 
 /// Serializes command error summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -1571,6 +1616,7 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: [
 
 /// Serializes likely failure scope fields into an allocator-owned JSON value; allocation failures propagate.
 fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const primary_obj = switch (primary) {
         .object => |o| o,
         else => return .{ .string = "none" },
@@ -1583,6 +1629,7 @@ fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value
 
 /// Serializes build events fields into an allocator-owned JSON value; allocation failures propagate.
 fn buildEventsValue(allocator: std.mem.Allocator, tool_name: []const u8, stderr: []const u8, stdout: []const u8, argv: []const []const u8, ok: bool, basis: []const u8) !std.json.Value {
+    // Construct this value in a single path so required fields cannot drift.
     var events = std.json.Array.init(allocator);
     try collectLineEvents(allocator, &events, stderr, "stderr");
     try collectLineEvents(allocator, &events, stdout, "stdout");
@@ -1624,6 +1671,7 @@ fn buildEventsValue(allocator: std.mem.Allocator, tool_name: []const u8, stderr:
 
 /// Serializes command error events fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorEventsValue(allocator: std.mem.Allocator, tool_name: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", try ownedString(allocator, tool_name));
@@ -1638,6 +1686,7 @@ fn commandErrorEventsValue(allocator: std.mem.Allocator, tool_name: []const u8, 
 
 /// Collects line events data into caller-provided output storage without taking ownership of inputs.
 fn collectLineEvents(allocator: std.mem.Allocator, events: *std.json.Array, text_value: []const u8, stream: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text_value, '\n');
     var line_no: usize = 1;
     while (lines.next()) |raw| : (line_no += 1) {
@@ -1666,6 +1715,7 @@ fn classifyEventLine(line: []const u8) []const u8 {
 
 /// Serializes timing fields into an allocator-owned JSON value; allocation failures propagate.
 fn timingValue(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var timings = std.json.Array.init(allocator);
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |raw| {
@@ -1857,6 +1907,7 @@ fn appendExtraArgs(
     command_name: []const u8,
     extra_args: []const []const u8,
 ) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     if (extra_args.len == 0) return;
     if (std.mem.eql(u8, command_name, "test")) {
         try appendOwnedArg(allocator, list, "--");
@@ -1883,6 +1934,7 @@ fn appendValidationPhase(
     argv: []const []const u8,
     timeout_ms: i64,
 ) !bool {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var result = context.command_runner.run(allocator, .{
         .argv = argv,
         .cwd = context.workspace.root,
@@ -1918,6 +1970,7 @@ fn appendWorkspaceFormatCheckPhase(
     ok: *bool,
     stop_on_failure: bool,
 ) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const candidates = [_][]const u8{ "build.zig", "build.zig.zon", "src" };
     var argv_list: std.ArrayList([]const u8) = .empty;
     defer argv_list.deinit(allocator);
@@ -1940,6 +1993,7 @@ fn appendWorkspaceFormatCheckPhase(
 
 /// Appends workspace format check command data into caller-provided storage, propagating allocation failures.
 fn appendWorkspaceFormatCheckCommand(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, commands: *std.json.Array) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const candidates = [_][]const u8{ "build.zig", "build.zig.zon", "src" };
     var command_text: std.ArrayList(u8) = .empty;
     defer command_text.deinit(allocator);
@@ -1971,6 +2025,7 @@ fn skippedStepValue(allocator: std.mem.Allocator, name: []const u8, reason: []co
 
 /// Appends unique file object data into caller-provided storage, propagating allocation failures.
 fn appendUniqueFileObject(allocator: std.mem.Allocator, out: *std.json.Array, file: []const u8, reason: []const u8, confidence: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (out.items) |item| {
         const obj = switch (item) {
             .object => |o| o,
@@ -1987,6 +2042,7 @@ fn appendUniqueFileObject(allocator: std.mem.Allocator, out: *std.json.Array, fi
 
 /// Collects importers for file data into caller-provided output storage without taking ownership of inputs.
 fn collectImportersForFile(allocator: std.mem.Allocator, imports_value: std.json.Value, out: *std.json.Array, target: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const imports = switch (imports_value) {
         .array => |a| a,
         else => return,
@@ -2005,6 +2061,7 @@ fn collectImportersForFile(allocator: std.mem.Allocator, imports_value: std.json
 
 /// Collects tests for file data into caller-provided output storage without taking ownership of inputs.
 fn collectTestsForFile(allocator: std.mem.Allocator, tests_value: std.json.Value, out: *std.json.Array, target: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const tests = switch (tests_value) {
         .array => |a| a,
         else => return,
@@ -2023,6 +2080,7 @@ fn collectTestsForFile(allocator: std.mem.Allocator, tests_value: std.json.Value
 
 /// Collects public api for file data into caller-provided output storage without taking ownership of inputs.
 fn collectPublicApiForFile(allocator: std.mem.Allocator, decls_value: std.json.Value, out: *std.json.Array, target: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const decls = switch (decls_value) {
         .array => |a| a,
         else => return,
@@ -2040,6 +2098,7 @@ fn collectPublicApiForFile(allocator: std.mem.Allocator, decls_value: std.json.V
 
 /// Collects declarations for symbol data into caller-provided output storage without taking ownership of inputs.
 fn collectDeclarationsForSymbol(allocator: std.mem.Allocator, decls_value: std.json.Value, out: *std.json.Array, symbol: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const decls = switch (decls_value) {
         .array => |a| a,
         else => return,
@@ -2058,6 +2117,7 @@ fn collectDeclarationsForSymbol(allocator: std.mem.Allocator, decls_value: std.j
 
 /// Collects tests for symbol data into caller-provided output storage without taking ownership of inputs.
 fn collectTestsForSymbol(allocator: std.mem.Allocator, tests_value: std.json.Value, out: *std.json.Array, symbol: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const tests = switch (tests_value) {
         .array => |a| a,
         else => return,
@@ -2076,6 +2136,7 @@ fn collectTestsForSymbol(allocator: std.mem.Allocator, tests_value: std.json.Val
 
 /// Appends impact match data into caller-provided storage, propagating allocation failures.
 fn appendImpactMatch(allocator: std.mem.Allocator, out: *std.json.Array, file: []const u8, target: []const u8, reason: []const u8, source: []const u8, confidence: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (out.items) |item| {
         const obj = switch (item) {
             .object => |o| o,
@@ -2094,6 +2155,7 @@ fn appendImpactMatch(allocator: std.mem.Allocator, out: *std.json.Array, file: [
 
 /// Appends commands from matches data into caller-provided storage, propagating allocation failures.
 fn appendCommandsFromMatches(allocator: std.mem.Allocator, commands: *std.json.Array, matches: std.json.Array) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (matches.items) |item| {
         const obj = switch (item) {
             .object => |o| o,
@@ -2106,6 +2168,7 @@ fn appendCommandsFromMatches(allocator: std.mem.Allocator, commands: *std.json.A
 
 /// Appends commands for impact data into caller-provided storage, propagating allocation failures.
 fn appendCommandsForImpact(allocator: std.mem.Allocator, commands: *std.json.Array, reasons: *std.json.Array, value: std.json.Value, reason: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const array = switch (value) {
         .array => |a| a,
         else => return,
@@ -2134,6 +2197,7 @@ fn importMatchesTarget(imported: []const u8, target: []const u8) bool {
 
 /// Serializes profile state fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileStateValue(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "profile_v2_path", .{ .string = ".zigars/profile.v2.json" });
@@ -2157,6 +2221,7 @@ fn decisionRecordDataValue(
     rationale: ?[]const u8,
     category: []const u8,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const instant = try context.clock_and_ids.now();
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -2172,6 +2237,7 @@ fn decisionRecordDataValue(
 
 /// Builds preimage identity metadata for the requested workspace path.
 fn preimageIdentityForPath(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, path: []const u8) !std.json.Value {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = 8 * 1024 * 1024,
@@ -2200,6 +2266,7 @@ fn parseJsonValueOrString(allocator: std.mem.Allocator, text: []const u8) !std.j
 
 /// Reads json lines data from the provided context without taking ownership of inputs.
 fn loadJsonLines(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, content: ?[]const u8, path: []const u8, limit: usize) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (content) |text| return .{ .array = try parseJsonLinesOrArray(allocator, text, limit) };
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -2215,6 +2282,7 @@ fn loadJsonLines(allocator: std.mem.Allocator, context: app_context.ProjectIntel
 
 /// Parses json lines or array input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseJsonLinesOrArray(allocator: std.mem.Allocator, text: []const u8, limit: usize) !std.json.Array {
+    // Normalize input here so downstream paths can rely on validated shape.
     var out = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return out;
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
@@ -2247,6 +2315,7 @@ fn parseJsonLinesOrArray(allocator: std.mem.Allocator, text: []const u8, limit: 
 /// (case-insensitive substring over title/decision/rationale/category), capped
 /// at `limit`. Returns an allocator-owned JSON array of cloned matches.
 fn filterRecords(allocator: std.mem.Allocator, records: std.json.Value, query: ?[]const u8, category: ?[]const u8, limit: usize) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const array = switch (records) {
         .array => |a| a,
         else => return .{ .array = std.json.Array.init(allocator) },
@@ -2300,6 +2369,7 @@ fn policyValue(allocator: std.mem.Allocator, name: []const u8, policy: []const u
 
 /// Scores a capability match against the requested task text.
 fn matchScore(allocator: std.mem.Allocator, lower_goal: []const u8, entry: CapabilityEntry) !i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var score: i64 = 0;
     const lower_name = try std.ascii.allocLowerString(allocator, entry.name);
     if (std.mem.indexOf(u8, lower_goal, lower_name) != null) score += 10;
@@ -2319,6 +2389,7 @@ fn matchScore(allocator: std.mem.Allocator, lower_goal: []const u8, entry: Capab
 
 /// Appends capability match data into caller-provided storage, propagating allocation failures.
 fn appendCapabilityMatch(allocator: std.mem.Allocator, matches: *std.json.Array, entry: CapabilityEntry, score: i64) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "tool", try ownedString(allocator, entry.name));
     try obj.put(allocator, "score", .{ .integer = score });
@@ -2332,6 +2403,7 @@ fn appendCapabilityMatch(allocator: std.mem.Allocator, matches: *std.json.Array,
 
 /// Serializes risk fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskValue(allocator: std.mem.Allocator, risk: ToolRisk) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "level", .{ .string = risk.level });
@@ -2379,6 +2451,7 @@ fn sequenceStepValue(allocator: std.mem.Allocator, tool: []const u8, reason: []c
 /// result, branching on whether the tool is impact or test-selection. Keeps
 /// these results honest: parser-backed yet advisory, never a skip-tests proof.
 fn putSemanticMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const select = std.mem.eql(u8, tool_name, "zig_test_select_semantic");
     const analysis_kind = if (select) "parser_backed_semantic_test_selection" else "parser_backed_semantic_impact";
     try obj.put(allocator, "analysis_kind", .{ .string = analysis_kind });
@@ -2405,6 +2478,7 @@ const semantic_select_verify_with = &.{ "zig ast-check on selected test files", 
 
 /// Serializes semantic evidence basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticEvidenceBasisValue(allocator: std.mem.Allocator, analysis_kind: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "analysis_kind", .{ .string = analysis_kind });
@@ -2429,6 +2503,7 @@ fn semanticCrossCheckValue(allocator: std.mem.Allocator, verify_with: []const []
 /// argument plus paths parsed out of a unified `patch`. Returns an
 /// allocator-owned PathList the caller must deinit.
 pub fn pathListFromTextAndPatch(allocator: std.mem.Allocator, text: ?[]const u8, patch: ?[]const u8) !PathList {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var paths = std.ArrayList([]const u8).empty;
     errdefer {
         freeStringList(allocator, paths.items);
@@ -2444,6 +2519,7 @@ pub fn pathListFromTextAndPatch(allocator: std.mem.Allocator, text: ?[]const u8,
 /// dropping generated/vendored paths. A git failure yields an empty list rather
 /// than an error. Returns an allocator-owned PathList the caller must deinit.
 fn changedPathList(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, explicit_files: ?[]const u8, timeout_ms: i64) !PathList {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var list = std.ArrayList([]const u8).empty;
     errdefer {
         freeStringList(allocator, list.items);
@@ -2482,6 +2558,7 @@ fn appendPathTokens(allocator: std.mem.Allocator, list: *std.ArrayList([]const u
 
 /// Appends patch paths data into caller-provided storage, propagating allocation failures.
 fn appendPatchPaths(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), patch_text: ?[]const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const patch = patch_text orelse return;
     var lines = std.mem.splitScalar(u8, patch, '\n');
     while (lines.next()) |line| {
@@ -2516,6 +2593,7 @@ fn appendUniqueString(allocator: std.mem.Allocator, list: *std.ArrayList([]const
 
 /// Appends unique command data into caller-provided storage, propagating allocation failures.
 fn appendUniqueCommand(allocator: std.mem.Allocator, commands: *std.json.Array, command_text: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (commands.items) |item| {
         const existing = switch (item) {
             .string => |s| s,
@@ -2568,6 +2646,7 @@ const SafeText = struct {
 
 /// Copies bounded text into allocator-owned storage for result payloads.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
             .text = try allocator.dupe(u8, bytes),
@@ -2611,6 +2690,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
 
 /// Classifies command failures into stable result categories.
 fn commandErrorKind(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
         error.StreamTooLong, error.OutputLimitExceeded => "output_limit",
@@ -2624,6 +2704,7 @@ fn commandErrorKind(err: anyerror) []const u8 {
 
 /// Serializes backend error fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -2706,6 +2787,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
 
 /// Serializes clone fields into an allocator-owned JSON value; allocation failures propagate.
 fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (value) {
         .null => .null,
         .bool => |b| .{ .bool = b },
@@ -2959,6 +3041,7 @@ fn argvHasToken(argv: []const []const u8, needle: []const u8) bool {
 /// FailingAllocator that fails at each index (capped at 32), asserting every
 /// failure surfaces as OutOfMemory with no leak — an OOM-cleanup fuzz harness.
 fn sweepAllocationFailures(comptime scenario: fn (std.mem.Allocator) anyerror!void) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const allocation_count = blk: {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
@@ -3130,6 +3213,7 @@ fn nonAllocationFailureScenario(allocator: std.mem.Allocator) !void {
 const AllocationRuntime = struct {
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *AllocationRuntime) app_context.ProjectIntelligenceContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
