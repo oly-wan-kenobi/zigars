@@ -45,6 +45,7 @@ pub const ToolErrorContractToken = struct {
 // legacy modules are re-baselined with narrow headroom and reasons that name
 // the next split target instead of disabling future growth checks.
 
+/// Per-file source-line budgets enforced by artifact hygiene.
 pub const line_budgets = [_]LineBudget{
     .{
         .path = "src/main.zig",
@@ -403,6 +404,7 @@ pub const line_budgets = [_]LineBudget{
     },
 };
 
+/// Hard-banned substrings for files where the token would violate a core rule.
 pub const forbidden_tokens = [_]ForbiddenToken{
     .{
         .path = "src/main.zig",
@@ -431,6 +433,7 @@ pub const forbidden_tokens = [_]ForbiddenToken{
     },
 };
 
+/// Temporary stale-code tripwires that keep known cleanup findings from returning.
 pub const code_hygiene_tokens = [_]HygieneToken{
     .{
         .path = "src/infra/zls/session.zig",
@@ -439,6 +442,7 @@ pub const code_hygiene_tokens = [_]HygieneToken{
     },
 };
 
+/// Error-swallowing patterns that must stay absent from high-risk code paths.
 pub const ignored_error_hygiene_tokens = [_]HygieneToken{
     .{
         .path = "src/infra/zls/client.zig",
@@ -487,6 +491,7 @@ pub const ignored_error_hygiene_tokens = [_]HygieneToken{
     },
 };
 
+/// MCP tool adapter files that must use structured expected-error payloads.
 pub const tool_error_contract_paths = [_][]const u8{
     "src/adapters/mcp/registry.zig",
     "src/adapters/mcp/tools/artifacts.zig",
@@ -494,6 +499,7 @@ pub const tool_error_contract_paths = [_][]const u8{
     "src/adapters/mcp/tools/runtime_metrics.zig",
 };
 
+/// Disallowed shortcut patterns for the MCP tool expected-error contract.
 pub const tool_error_contract_tokens = [_]ToolErrorContractToken{
     .{
         .token = "mcp.tools.errorResult",
@@ -533,11 +539,13 @@ pub const tool_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+/// MCP resource and prompt files covered by the expected-error contract.
 pub const resource_error_contract_paths = [_][]const u8{
     "src/adapters/mcp/server.zig",
     "src/adapters/mcp/resources.zig",
 };
 
+/// Disallowed shortcut patterns for resource and prompt expected errors.
 pub const resource_error_contract_tokens = [_]ToolErrorContractToken{
     .{
         .token = "return error.Unknown",
@@ -557,10 +565,12 @@ pub const resource_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+/// Developer CLI entrypoints covered by actionable argument-error diagnostics.
 pub const cli_error_contract_paths = [_][]const u8{
     "tools/zigars_tools.zig",
 };
 
+/// Disallowed shortcut patterns for helper CLI argument and diagnostic failures.
 pub const cli_error_contract_tokens = [_]ToolErrorContractToken{
     .{
         .token = "std.debug.print",
@@ -583,6 +593,7 @@ pub const WorkflowPermissionRule = struct {
     required: []const []const u8,
 };
 
+/// Workflow permission requirements enforced for least-privilege CI.
 pub const workflow_permission_rules = [_]WorkflowPermissionRule{
     .{
         .path = ".github/workflows/ci.yml",
