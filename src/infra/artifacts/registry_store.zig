@@ -35,6 +35,7 @@ pub const Store = struct {
 
     /// Exposes this store through the ArtifactStore vtable.
     pub fn port(self: *Self) ports.ArtifactStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -106,6 +107,7 @@ pub const Store = struct {
     /// prefix so callers cannot read arbitrary workspace source files.
     /// The limit is `default_read_limit` (64 KiB).  Caller must deinit the result.
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ArtifactReadRequest) ports.PortError!ports.ArtifactReadResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (!safeArtifactId(request.id)) return error.InvalidRequest;
         const resolved = self.workspace.resolve(request.id) catch |err| return mapPortError(err);
@@ -237,6 +239,7 @@ fn safeArtifactIdPart(index: usize, part: []const u8) bool {
 
 /// Rejects path components that could escape the artifact root.
 fn safeRelativeComponent(value: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (value.len == 0) return false;
     if (std.fs.path.isAbsolute(value)) return false;
     var start: usize = 0;
@@ -263,6 +266,7 @@ fn unixMs(io: std.Io) i64 {
 /// Unknown errors collapse to `Unavailable`; callers should treat that as a
 /// non-actionable infrastructure failure distinct from user-visible argument errors.
 pub fn mapPortError(err: anyerror) ports.PortError {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
         error.FileNotFound => error.FileNotFound,
