@@ -204,6 +204,7 @@ pub const Command = struct {
 /// Maps an LSP symbol kind number to a human-readable name, returning "Unknown"
 /// for any value not defined in the LSP 3.x specification.
 pub fn symbolKindName(kind: u32) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (kind) {
         1 => "File",
         2 => "Module",
@@ -237,6 +238,7 @@ pub fn symbolKindName(kind: u32) []const u8 {
 
 /// Maps an LSP diagnostic severity number (1–4) to its name; null and unknowns return "Unknown".
 pub fn severityName(severity: ?u32) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (severity orelse 0) {
         1 => "Error",
         2 => "Warning",
@@ -248,6 +250,7 @@ pub fn severityName(severity: ?u32) []const u8 {
 
 /// Maps an LSP completion item kind number (1–25) to its name; null and unknowns return "Unknown".
 pub fn completionKindName(kind: ?u32) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (kind orelse 0) {
         1 => "Text",
         2 => "Method",
