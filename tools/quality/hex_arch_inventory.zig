@@ -63,6 +63,7 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
 
 /// Parses the inventory command flags.
 fn parseOptions(io: Io, args: []const []const u8) !Options {
+    // Normalize input here so downstream paths can rely on validated shape.
     var options: Options = .{};
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--strict-root-files")) {
@@ -86,6 +87,7 @@ pub fn scan(allocator: Allocator, io: Io, options: Options) !Inventory {
 
 /// Walks `src/` and updates inventory counters in place.
 fn scanSrcTree(allocator: Allocator, io: Io, options: Options, inventory: *Inventory) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var dir = Io.Dir.cwd().openDir(io, "src", .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
@@ -128,6 +130,7 @@ fn checkRetiredToolsImport(io: Io, source_path: []const u8, bytes: []const u8, i
 
 /// Counts MCP adapter imports that reach retired root-level surfaces.
 fn checkAdapterRootImports(io: Io, source_path: []const u8, bytes: []const u8, inventory: *Inventory) !void {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     if (!std.mem.startsWith(u8, source_path, "src/adapters/mcp/")) return;
     if (std.mem.startsWith(u8, source_path, "src/adapters/mcp/server.zig")) return;
     if (std.mem.startsWith(u8, source_path, "src/adapters/mcp/server/")) return;
@@ -141,6 +144,7 @@ fn checkAdapterRootImports(io: Io, source_path: []const u8, bytes: []const u8, i
 
 /// Writes the one-line inventory summary to stdout.
 fn printSummary(io: Io, inventory: Inventory, options: Options) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var buffer: [1024]u8 = undefined;
     var writer = Io.File.stdout().writer(io, &buffer);
     try writer.interface.print(
