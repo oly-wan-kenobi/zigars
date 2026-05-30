@@ -1,3 +1,8 @@
+//! ToolchainEnv port implementation that resolves Zig toolchain settings by
+//! running `zig env` and parsing its ZON-like output. This is the only place
+//! the `zig env` command is invoked; callers get a stable port interface
+//! regardless of Zig version differences in the output format.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -14,6 +19,7 @@ pub const Env = struct {
     const Self = @This();
 
     /// Stores borrowed paths and timeout defaults used for each env lookup.
+    /// All slices must outlive this struct; no copies are made.
     pub fn init(io: std.Io, cwd: []const u8, zig_path: []const u8, timeout_ms: i64) Self {
         return .{
             .io = io,
@@ -33,11 +39,16 @@ pub const Env = struct {
         };
     }
 
-    /// Reads the requested environment value through this port implementation.
+    /// Runs `zig env`, parses the ZON-like output for `request.key`, and
+    /// returns a caller-owned copy of the quoted value (`owns_value = true`).
+    /// Returns `error.NotFound` if the key is absent from the output.
+    /// The result must be freed via `deinit` when `owns_value` is set.
     fn get(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
         const self: *Self = @ptrCast(@alignCast(ptr));
         var result = command.run(allocator, self.io, self.cwd, &.{ self.zig_path, "env" }, self.timeout_ms) catch |err| return mapPortError(err);
         defer result.deinit(allocator);
+        // `zig env` output uses ZON field syntax: `.key = "value"`.
+        // We locate the opening quote of the value by searching for `.key = "`.
         const needle = std.fmt.allocPrint(allocator, ".{s} = \"", .{request.key}) catch return error.OutOfMemory;
         defer allocator.free(needle);
         const start_needle = std.mem.indexOf(u8, result.stdout, needle) orelse return error.NotFound;
@@ -50,7 +61,9 @@ pub const Env = struct {
     }
 };
 
-/// Maps port error into the port-facing representation without taking ownership unless documented by the result.
+/// Maps command-run errors to the port error vocabulary.
+/// Unknown errors collapse to `error.Unavailable` to keep the port surface
+/// stable across Zig toolchain version changes.
 fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

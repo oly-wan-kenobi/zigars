@@ -1,3 +1,5 @@
+//! Pins the contract: counter starts at caller-supplied value, IDs are
+//! `{prefix}{counter}`, and each call increments the counter exactly once.
 const std = @import("std");
 const clock_mod = @import("clock_and_ids.zig");
 

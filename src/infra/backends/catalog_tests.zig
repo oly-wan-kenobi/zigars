@@ -1,3 +1,6 @@
+//! Tests that the backend catalog enforces the configurability and
+//! probability contracts: every backend has a path flag, a non-empty
+//! default path, at least one probe argv, and at least one verify needle.
 const std = @import("std");
 const catalog_mod = @import("catalog.zig");
 

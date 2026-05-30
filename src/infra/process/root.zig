@@ -1,3 +1,6 @@
+//! Re-exports the process subsystem: subprocess execution (command),
+//! CommandRunner port adapter (command_runner), and synchronization helpers
+//! (sync). Import this module to access all process primitives at once.
 pub const command_runner = @import("command_runner.zig");
 pub const command = @import("command.zig");
 pub const sync = @import("sync.zig");

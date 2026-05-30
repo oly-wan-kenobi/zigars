@@ -1,3 +1,6 @@
+//! Smoke-tests that the infra/backends re-export shim correctly forwards the
+//! domain catalog: at least one backend is defined and the Zig version string
+//! is non-empty.
 const std = @import("std");
 const definitions = @import("definitions.zig");
 

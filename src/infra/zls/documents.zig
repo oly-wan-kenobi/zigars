@@ -1,3 +1,8 @@
+//! Document lifecycle management for the ZLS LSP session.
+//! Tracks which files are open in ZLS, sends didOpen/didChange/didClose
+//! notifications, enforces per-document and aggregate retained-byte limits,
+//! and replays retained unsaved content when the session reconnects.
+//! Logs go to the project logger (never to the raw debug output channel).
 const std = @import("std");
 const LspClient = @import("client.zig").LspClient;
 const LspTransport = @import("transport.zig").LspTransport;
@@ -7,8 +12,9 @@ const uri_util = @import("uri.zig");
 const Mutex = @import("../process/sync.zig").Mutex;
 const retained = @import("document_retained.zig");
 
-/// Tracks which documents are open in the LSP session.
-/// Sends didOpen/didClose notifications as needed.
+/// Mutable document tracking state for a single ZLS session.
+/// Access to open_docs and retained_content_bytes is guarded by `mutex`.
+/// Caller owns the allocator and workspace_path for the lifetime of this value.
 pub const DocumentState = struct {
     /// Maximum bytes read or retained for one document.
     pub const default_max_document_bytes: usize = 10 * 1024 * 1024;
@@ -30,6 +36,8 @@ pub const DocumentState = struct {
     last_reopen: ReopenSummary = .{},
 
     /// Metadata retained for a document currently open in ZLS.
+    /// `content` is non-null only for dirty (unsaved) documents; clean
+    /// disk-backed documents store null to avoid holding a full copy in memory.
     pub const DocInfo = struct {
         version: i64,
         content_hash: u64,
@@ -97,9 +105,10 @@ pub const DocumentState = struct {
         self.logger = logger;
     }
 
-    /// Ensure a file is open in ZLS. Reads file content and sends didOpen if not already open.
-    /// `file_path` can be relative (resolved against workspace) or absolute.
-    /// Returns a URI allocated with `ret_allocator` (caller must free).
+    /// Ensures a file is open in ZLS, reading it from disk and sending didOpen if needed.
+    /// `file_path` may be relative (resolved against workspace) or absolute.
+    /// Returns an allocator-owned URI; caller must free.
+    /// Errors: OpenDocumentLimitExceeded, DocumentTooLarge, FileNotFound, FileReadError, NotConnected.
     pub fn ensureOpen(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
         const abs_path = try uri_util.resolvePath(self.allocator, self.workspace_path, file_path);
         defer self.allocator.free(abs_path);
@@ -161,20 +170,26 @@ pub const DocumentState = struct {
         return try ret_allocator.dupe(u8, file_uri);
     }
 
-    /// Open or replace an in-memory document in ZLS.
-    /// This is used by MCP clients that want diagnostics/hover/code actions for
-    /// unsaved text while still keeping all paths scoped to the workspace.
+    /// Opens or replaces a dirty in-memory document in ZLS.
+    /// Used when MCP clients supply unsaved text for diagnostics/hover/code actions.
+    /// The content bytes are retained in memory until the document is closed or replaced.
+    /// Returns an allocator-owned URI; caller must free.
     pub fn syncText(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
         return self.syncTextInternal(lsp_client, file_path, content, ret_allocator, true);
     }
 
-    /// Open or replace a document in ZLS using the current disk text without
-    /// retaining that text as an unsaved buffer.
+    /// Opens or replaces a clean document in ZLS from the supplied disk snapshot
+    /// without retaining the bytes as an in-memory unsaved buffer.
+    /// Useful for notifying ZLS of the current file state without inflating
+    /// the retained-content accounting for a document that is not dirty.
+    /// Returns an allocator-owned URI; caller must free.
     pub fn syncDiskText(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator) ![]const u8 {
         return self.syncTextInternal(lsp_client, file_path, content, ret_allocator, false);
     }
 
-    /// Applies document text changes while preserving cache ownership.
+    /// Common implementation for syncText and syncDiskText.
+    /// `retain_content` true → content is duped and held in DocInfo.content;
+    /// false → content is forwarded to ZLS but not stored locally (clean/disk mode).
     fn syncTextInternal(self: *DocumentState, lsp_client: *LspClient, file_path: []const u8, content: []const u8, ret_allocator: std.mem.Allocator, retain_content: bool) ![]const u8 {
         if (content.len > self.max_document_bytes) return error.DocumentTooLarge;
 
@@ -336,7 +351,9 @@ pub const DocumentState = struct {
         }
     }
 
-    /// Reopen all tracked documents in a new ZLS session (after reconnect).
+    /// Replays all tracked documents into a fresh ZLS session after reconnect.
+    /// Dirty (unsaved) documents send their retained content; clean ones re-read from disk.
+    /// Best-effort: individual failures increment the failed counter without aborting others.
     pub fn reopenAll(self: *DocumentState, lsp_client: *LspClient) ReopenSummary {
         const ReopenDoc = struct {
             uri: []u8,
@@ -422,7 +439,9 @@ pub const DocumentState = struct {
         return reopen_summary;
     }
 
-    /// Loads an uncached document from disk into allocator-owned memory.
+    /// Reads a document from disk into allocator-owned memory.
+    /// Normalizes file system errors to FileNotFound, DocumentTooLarge, or FileReadError.
+    /// Errors when `io` is null (state created via init rather than initWithIo).
     fn readDiskDocument(self: *DocumentState, path: []const u8) ![]u8 {
         const io = self.io orelse return error.FileReadError;
         return std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(self.max_document_bytes)) catch |err| {
@@ -434,7 +453,8 @@ pub const DocumentState = struct {
         };
     }
 
-    /// Removes a reserved document slot during rollback or cleanup.
+    /// Removes a previously reserved document slot on error rollback.
+    /// Frees the stored URI key and any retained content; adjusts the byte counter.
     fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -445,7 +465,9 @@ pub const DocumentState = struct {
         }
     }
 
-    /// Restores a document entry after a failed sync update.
+    /// Restores the previous DocInfo for a URI after a failed didChange transport write.
+    /// Frees the new content if it differs from the saved content pointer, then
+    /// replaces the in-memory entry with the saved snapshot and adjusts the byte counter.
     fn restoreDoc(self: *DocumentState, file_uri: []const u8, info: DocInfo) void {
         self.mutex.lock();
         defer self.mutex.unlock();

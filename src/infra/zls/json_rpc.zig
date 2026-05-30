@@ -1,3 +1,6 @@
+//! JSON-RPC 2.0 message building blocks: request ID type, message envelope,
+//! error object, standard error codes, and serialization helpers.
+//! All write* functions return allocator-owned slices; the caller frees them.
 const std = @import("std");
 
 /// JSON-RPC 2.0 request ID — can be integer, string, or null.
@@ -6,7 +9,8 @@ pub const RequestId = union(enum) {
     string: []const u8,
     none,
 
-    /// Parses JSON into allocator-owned values using the JSON-RPC allocator contract.
+    /// Parse a JSON token into a RequestId; integers are parsed first, strings
+    /// that look numeric are stored as string variants to preserve their type.
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !RequestId {
         _ = allocator;
         _ = options;
@@ -19,7 +23,7 @@ pub const RequestId = union(enum) {
         };
     }
 
-    /// Serializes JSON-RPC payloads with allocator-owned output.
+    /// Write the ID as a JSON integer, quoted string, or null.
     pub fn jsonStringify(self: RequestId, jw: anytype) !void {
         switch (self) {
             .integer => |i| try jw.write(i),
@@ -65,20 +69,21 @@ pub const ErrorObject = struct {
     data: ?std.json.Value = null,
 };
 
-/// Standard JSON-RPC error codes.
+/// Standard JSON-RPC error codes plus MCP/LSP-specific extensions.
 pub const ErrorCode = struct {
     pub const parse_error: i64 = -32700;
     pub const invalid_request: i64 = -32600;
     pub const method_not_found: i64 = -32601;
     pub const invalid_params: i64 = -32602;
     pub const internal_error: i64 = -32603;
-    // MCP/LSP custom
+    // MCP/LSP custom codes in the implementation-defined range (-32000..-32099)
     pub const server_not_initialized: i64 = -32002;
     pub const request_timeout: i64 = -32001;
     pub const zls_not_running: i64 = -32000;
 };
 
-/// Write a JSON-RPC response with the given ID and result value.
+/// Serialize a success response `{"jsonrpc":"2.0","id":...,"result":...}`.
+/// Returns an allocator-owned slice; the caller frees it.
 pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -100,7 +105,9 @@ pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytyp
     return bytes;
 }
 
-/// Write a JSON-RPC error response.
+/// Serialize an error response `{"jsonrpc":"2.0","id":...,"error":{"code":...,"message":...}}`.
+/// `id` may be null when the error occurs before the request ID can be parsed.
+/// Returns an allocator-owned slice; the caller frees it.
 pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, message: []const u8) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -131,7 +138,8 @@ pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, messa
     return bytes;
 }
 
-/// Write a JSON-RPC notification (no id).
+/// Serialize a notification `{"jsonrpc":"2.0","method":...,"params":...}` (no id field).
+/// Returns an allocator-owned slice; the caller frees it.
 pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, params: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -153,7 +161,8 @@ pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, param
     return bytes;
 }
 
-/// Write a JSON-RPC request (with id).
+/// Serialize a request `{"jsonrpc":"2.0","id":...,"method":...,"params":...}`.
+/// Returns an allocator-owned slice; the caller frees it.
 pub fn writeRequest(allocator: std.mem.Allocator, id: RequestId, method: []const u8, params: anytype) ![]const u8 {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;

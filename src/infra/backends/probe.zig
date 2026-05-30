@@ -1,3 +1,7 @@
+//! BackendProbe port implementation.  Executes a backend's probe command via
+//! the CommandRunner port and maps process exit status to BackendAvailability.
+//! Probe failures are never fatal: a non-zero exit or missing binary yields
+//! `available = false` with an actionable `unavailable_reason`.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -11,6 +15,9 @@ pub const Runner = struct {
     const Self = @This();
 
     /// Stores borrowed command runner and default process settings.
+    /// `default_cwd` is used when a probe request omits `cwd`; it must remain
+    /// valid for the lifetime of the Runner.  `default_timeout_ms` is clamped
+    /// to at least 1 ms so @intCast cannot produce 0.
     pub fn init(command_runner: ports.CommandRunner, default_cwd: []const u8, default_timeout_ms: i64) Self {
         return .{
             .command_runner = command_runner,
@@ -28,6 +35,10 @@ pub const Runner = struct {
     }
 
     /// Invokes the configured backend command and maps process failures to availability.
+    /// Returns an owned `BackendAvailability` (caller must deinit).  An empty
+    /// `request.argv` is rejected without spawning a process.  Command errors
+    /// and non-zero exits both produce `available = false`; only a successful
+    /// exit produces `available = true`.
     fn check(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (request.argv.len == 0) return unavailable(allocator, request.backend, "missing probe argv", "backend probe request did not include an argv");
@@ -61,6 +72,8 @@ pub const Runner = struct {
 };
 
 /// Builds an owned unavailable result so callers can deinit uniformly.
+/// Allocates copies of all three strings; on failure the already-allocated
+/// copies are freed before propagating the error.
 fn unavailable(allocator: std.mem.Allocator, backend: []const u8, reason: []const u8, basis: []const u8) ports.PortError!ports.BackendAvailability {
     const owned_backend = try allocator.dupe(u8, backend);
     var backend_owned = true;

@@ -1,3 +1,8 @@
+//! Bounded in-memory cache of raw `textDocument/publishDiagnostics` notifications
+//! keyed by file URI. Retains the most recently received payload per file up to
+//! a configurable byte budget, evicting oldest entries (by insertion sequence)
+//! when the budget is exceeded. Oversized single messages are dropped without
+//! evicting existing entries. All operations are thread-safe.
 const std = @import("std");
 const Mutex = @import("../process/sync.zig").Mutex;
 
@@ -64,7 +69,7 @@ pub const DiagnosticsCache = struct {
         self.retained_bytes = 0;
     }
 
-    /// Updates the retained byte budget and evicts oldest entries until it fits.
+    /// Shrink or grow the byte budget at runtime, evicting immediately if needed.
     pub fn setMaxBytes(self: *DiagnosticsCache, max_bytes: usize) void {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -73,7 +78,10 @@ pub const DiagnosticsCache = struct {
         self.evictUntilFitsLocked(0);
     }
 
-    /// Stores a publishDiagnostics notification, replacing existing data for the URI.
+    /// Store a raw publishDiagnostics payload for the URI found in `obj.params.uri`.
+    /// Replaces any existing entry for the same URI and evicts the oldest entry
+    /// if the budget is exceeded. A payload larger than max_bytes alone is dropped
+    /// (dropped_oversized is incremented) without displacing existing entries.
     pub fn storeNotification(self: *DiagnosticsCache, obj: std.json.ObjectMap, data: []const u8) !void {
         const params = switch (obj.get("params") orelse return) {
             .object => |o| o,
@@ -111,7 +119,7 @@ pub const DiagnosticsCache = struct {
         self.retained_bytes += value.len;
     }
 
-    /// Returns an owned cached payload for `uri`.
+    /// Returns an allocator-owned copy of the stored payload for `uri`, or null if absent.
     pub fn get(self: *DiagnosticsCache, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -120,7 +128,8 @@ pub const DiagnosticsCache = struct {
         return try allocator.dupe(u8, stored.value);
     }
 
-    /// Returns owned cached payloads sorted by insertion sequence.
+    /// Return all retained payloads sorted by insertion sequence (oldest first).
+    /// The outer slice and each inner slice are allocator-owned; the caller frees both.
     pub fn snapshot(self: *DiagnosticsCache, allocator: std.mem.Allocator) ![]const []const u8 {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -155,7 +164,7 @@ pub const DiagnosticsCache = struct {
         return result;
     }
 
-    /// Returns cache counters without transferring ownership.
+    /// Return a snapshot of cache size and eviction counters; no allocation.
     pub fn status(self: *DiagnosticsCache) Status {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -170,7 +179,9 @@ pub const DiagnosticsCache = struct {
         };
     }
 
-    /// Subtracts cached byte usage while the diagnostics mutex is held.
+    /// Subtract `bytes` from retained_bytes, clamping to zero on underflow.
+    /// Underflow is possible when entries are removed outside the normal store path
+    /// (e.g. in tests that manipulate entries directly).
     fn subtractBytesLocked(self: *DiagnosticsCache, bytes: usize) void {
         if (bytes <= self.retained_bytes) {
             self.retained_bytes -= bytes;
@@ -179,14 +190,16 @@ pub const DiagnosticsCache = struct {
         }
     }
 
-    /// Evicts diagnostics until the cache can hold the requested byte count.
+    /// Remove oldest entries until there is room for `incoming_bytes`.
+    /// Uses saturating subtraction so a very large `incoming_bytes` saturates to 0.
     fn evictUntilFitsLocked(self: *DiagnosticsCache, incoming_bytes: usize) void {
         while (self.retained_bytes > self.max_bytes -| incoming_bytes) {
             if (!self.evictOldestLocked()) return;
         }
     }
 
-    /// Evicts the oldest diagnostic entry while the mutex is held.
+    /// Remove the entry with the smallest sequence number. Returns false when the cache is empty.
+    /// Linear scan is acceptable because the expected file count is small (< hundreds).
     fn evictOldestLocked(self: *DiagnosticsCache) bool {
         var oldest_key: ?[]const u8 = null;
         var oldest_sequence: u64 = 0;
@@ -207,7 +220,8 @@ pub const DiagnosticsCache = struct {
         return true;
     }
 
-    /// Releases allocator-owned fields held by the cloned entry locked.
+    /// Free the key and value slices belonging to `entry` and update retained_bytes.
+    /// Caller must hold the mutex.
     fn freeEntryLocked(self: *DiagnosticsCache, key: []const u8, entry: DiagnosticEntry) void {
         self.subtractBytesLocked(entry.value.len);
         self.allocator.free(key);
@@ -215,7 +229,8 @@ pub const DiagnosticsCache = struct {
     }
 };
 
-/// Builds a bounded in-memory I/O fixture for tests.
+// Unit tests inline with the module pin the byte-accounting and clamping behavior.
+
 fn testIo() std.Io {
     var threaded: std.Io.Threaded = .init(std.heap.smp_allocator, .{});
     return threaded.io();

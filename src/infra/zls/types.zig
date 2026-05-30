@@ -1,3 +1,7 @@
+//! LSP type vocabulary for ZLS communication.
+//! Contains the subset of LSP 3.x types used by this server for document sync,
+//! hover, diagnostics, completion, code actions, and workspace symbols.
+//! Numeric kind codes follow the LSP specification numbering exactly.
 const std = @import("std");
 
 /// LSP Position (0-based line and character).
@@ -147,6 +151,8 @@ pub const SymbolInformation = struct {
 };
 
 /// LSP WorkspaceEdit.
+/// `changes` maps document URIs to arrays of TextEdit; kept as raw JSON
+/// because the uri-keyed map shape is awkward to parse into a typed struct.
 pub const WorkspaceEdit = struct {
     changes: ?std.json.Value = null, // uri -> TextEdit[]
     documentChanges: ?std.json.Value = null,
@@ -173,6 +179,8 @@ pub const SignatureInformation = struct {
 };
 
 /// Function parameter label and optional documentation from signature help.
+/// `label` is either a plain string name or a [startOffset, endOffset] pair into
+/// the containing SignatureInformation label; kept as raw JSON to handle both shapes.
 pub const ParameterInformation = struct {
     label: std.json.Value, // string or [number, number]
     documentation: ?std.json.Value = null,
@@ -193,7 +201,8 @@ pub const Command = struct {
     arguments: ?std.json.Value = null,
 };
 
-/// Map symbol kind number to a human-readable string.
+/// Maps an LSP symbol kind number to a human-readable name, returning "Unknown"
+/// for any value not defined in the LSP 3.x specification.
 pub fn symbolKindName(kind: u32) []const u8 {
     return switch (kind) {
         1 => "File",
@@ -226,7 +235,7 @@ pub fn symbolKindName(kind: u32) []const u8 {
     };
 }
 
-/// Map diagnostic severity number to string.
+/// Maps an LSP diagnostic severity number (1–4) to its name; null and unknowns return "Unknown".
 pub fn severityName(severity: ?u32) []const u8 {
     return switch (severity orelse 0) {
         1 => "Error",
@@ -237,7 +246,7 @@ pub fn severityName(severity: ?u32) []const u8 {
     };
 }
 
-/// Map completion item kind to string.
+/// Maps an LSP completion item kind number (1–25) to its name; null and unknowns return "Unknown".
 pub fn completionKindName(kind: ?u32) []const u8 {
     return switch (kind orelse 0) {
         1 => "Text",

@@ -1,3 +1,8 @@
+//! ZLS session management: start, restart, and readiness gating.
+//! Owns the lifecycle of ZlsProcess, LspClient, and DocumentState through
+//! caller-provided optional slots so runtime composition retains ownership.
+//! Individual std-library bindings are imported directly by name to avoid
+//! a top-level namespace alias that release hygiene forbids in this file.
 const logging = @import("../observability/logging.zig");
 const observability = @import("../observability/state.zig");
 const uri_util = @import("uri.zig");
@@ -12,13 +17,15 @@ const Io = @import("std").Io;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-/// Optional storage slots that let runtime composition own ZLS objects.
+/// Optional storage pointers that let runtime composition own the ZLS objects.
+/// A nil slot means the caller has not provided that storage; any session
+/// function that needs it returns NotConnected.
 pub const Slots = struct {
     process: ?*?ZlsProcess = null,
     client: ?*?LspClient = null,
     documents: ?*?DocumentState = null,
 
-    /// Marks a ZLS capability as required by the session.
+    /// Asserts that all three slots are non-nil; returns NotConnected otherwise.
     fn require(self: Slots) !RequiredSlots {
         return .{
             .process = self.process orelse return error.NotConnected,
@@ -28,14 +35,15 @@ pub const Slots = struct {
     }
 };
 
-/// Tracks which capabilities must be present before a session is ready.
+/// Unwrapped slot pointers after require() confirms all three are present.
 const RequiredSlots = struct {
     process: *?ZlsProcess,
     client: *?LspClient,
     documents: *?DocumentState,
 };
 
-/// Startup configuration and observers for ZLS sessions.
+/// Startup configuration and optional observer hooks for ZLS sessions.
+/// All fields are read-only after `start`; the allocator must outlive the session.
 pub const Config = struct {
     allocator: Allocator,
     io: Io,
@@ -46,7 +54,8 @@ pub const Config = struct {
     observability: ?*observability.State = null,
 };
 
-/// Current ZLS process/client/document state and last startup response.
+/// Borrowed pointers to the live ZLS process, client, and document state.
+/// The initialize_response is the only allocation owned by State; free it via deinit.
 pub const State = struct {
     process: ?*ZlsProcess = null,
     client: ?*LspClient = null,
@@ -68,14 +77,18 @@ pub const State = struct {
     }
 };
 
-/// Drops borrowed runtime pointers without deinitializing their owners.
+/// Zeros the borrowed process/client/documents pointers without deinitializing them.
+/// Called at the start of `start` to avoid dangling references during slot replacement.
 pub fn clear(state: *State) void {
     state.process = null;
     state.client = null;
     state.documents = null;
 }
 
-/// Starts ZLS, initializes LSP, and creates or replays document state.
+/// Starts a fresh ZLS session: spawns the process, connects the LSP client, and
+/// creates or replays document state. On error, slots are restored to null.
+/// If a DocumentState already exists in its slot, reopenAll is called after connect
+/// to replay retained documents into the new session.
 pub fn start(state: *State, slots: Slots, config: Config) !void {
     const required_slots = try slots.require();
     clear(state);
@@ -123,7 +136,8 @@ pub fn start(state: *State, slots: Slots, config: Config) !void {
     }
 }
 
-/// Tears down current process/client and starts a fresh ZLS session.
+/// Tears down the current process and client, then starts a fresh ZLS session.
+/// On start failure the status is set to the error name and the failure is re-returned.
 pub fn restart(state: *State, slots: Slots, config: Config) !void {
     const required_slots = try slots.require();
 
@@ -144,7 +158,8 @@ pub fn restart(state: *State, slots: Slots, config: Config) !void {
     };
 }
 
-/// Restarts ZLS when the current client is absent or no longer running.
+/// Restarts ZLS if the session client is absent or its running flag is clear.
+/// Returns immediately without error when the client reports it is still running.
 pub fn ensureReady(state: *State, slots: Slots, config: Config) !void {
     if (state.client) |client| {
         if (client.isRunning()) return;
@@ -152,7 +167,7 @@ pub fn ensureReady(state: *State, slots: Slots, config: Config) !void {
     try restart(state, slots, config);
 }
 
-/// Records the observed ZLS capability status.
+/// Pushes the current status, last failure, and restart count to the observability hook.
 fn recordStatus(state: *const State, config: Config) void {
     if (config.observability) |target| {
         target.recordZlsStatus(state.status, state.last_failure, state.restart_attempts);

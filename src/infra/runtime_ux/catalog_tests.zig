@@ -1,3 +1,5 @@
+//! Pins the catalog port contract: rendered text must include the expected
+//! manifest keys so a caller can rely on a stable JSON structure.
 const std = @import("std");
 const catalog_mod = @import("catalog.zig");
 

@@ -1,3 +1,8 @@
+//! Black-box integration tests for LspClient using in-process pipes and FakeZls.
+//! Pins: init state, NotConnected errors on disconnected client, timeout recording,
+//! pending-entry cleanup, EOF/transport-error stop behavior, malformed JSON resilience,
+//! stderr drain, disconnect idempotency, teardown-timeout vs request-timeout, and
+//! a full initialize/hover/diagnostics roundtrip against the fake ZLS double.
 const std = @import("std");
 const client_mod = @import("client.zig");
 const support = @import("client_test_support.zig");

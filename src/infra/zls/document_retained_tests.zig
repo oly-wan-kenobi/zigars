@@ -1,3 +1,7 @@
+//! Tests for retained in-memory document byte accounting.
+//! Pins the clamping, overflow-safe subtract, and replacement-desync
+//! invariants that prevent the retained counter from underflowing to
+//! ~usize.MAX and spuriously triggering RetainedContentLimitExceeded.
 const std = @import("std");
 const documents = @import("documents.zig");
 const document_retained = @import("document_retained.zig");

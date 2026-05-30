@@ -1,3 +1,5 @@
+//! Tests for ZlsProcess lifecycle: init state, pipe access, kill, detach,
+//! and the max-restart enforcement logic (without spawning real binaries).
 const std = @import("std");
 const process_mod = @import("process.zig");
 

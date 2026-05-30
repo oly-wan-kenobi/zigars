@@ -1,3 +1,5 @@
+//! Tests for sync.Mutex: pins basic lock/unlock round-trip and threaded
+//! contention safety for the zero-initialized (spin) fallback path.
 const std = @import("std");
 const sync = @import("sync.zig");
 

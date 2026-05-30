@@ -1,3 +1,7 @@
+//! Tests for DocumentState document lifecycle and LSP notification contracts.
+//! Covers open/change/close notification sequencing, budget enforcement
+//! (per-document bytes, retained-content bytes, open-document count),
+//! rollback behaviour on transport failures, and session-reconnect reopen.
 const std = @import("std");
 const documents = @import("documents.zig");
 const LspClient = @import("client.zig").LspClient;

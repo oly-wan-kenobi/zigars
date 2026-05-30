@@ -1,3 +1,6 @@
+//! Synchronization helpers for the process subsystem.
+//! Provides a Mutex that uses std.Io-backed futex semantics when an Io handle
+//! is available and falls back to an atomic spin lock otherwise.
 const std = @import("std");
 
 /// Compatibility mutex for code that needs a simple lock/unlock API.

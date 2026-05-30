@@ -1,3 +1,6 @@
+//! Re-exports the workspace subsystem: sandbox path resolution, filesystem
+//! store, and directory scanner. Import this module to access all workspace
+//! primitives from a single entry point.
 pub const filesystem = @import("filesystem.zig");
 pub const scanner = @import("scanner.zig");
 pub const workspace = @import("workspace.zig");

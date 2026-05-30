@@ -1,3 +1,5 @@
+//! Tests for the ZLS type vocabulary: kind-name mapping, JSON parsing, and
+//! the HoverContents union (string vs MarkupContent JSON roundtrip).
 const std = @import("std");
 const types = @import("types.zig");
 

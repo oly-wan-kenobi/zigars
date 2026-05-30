@@ -1,3 +1,7 @@
+//! Tests for the ZLS Gateway port facade.
+//! Pins capability probing from the cached initialize response, sync
+//! routing (dirty vs disk-open), raw request forwarding, and the
+//! Unavailable error path when no client is connected.
 const std = @import("std");
 const Gateway = @import("gateway.zig").Gateway;
 const zls_session = @import("session.zig");

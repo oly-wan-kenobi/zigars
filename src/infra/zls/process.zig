@@ -1,3 +1,6 @@
+//! ZLS child process lifecycle: spawn, kill, pipe hand-off, and restart.
+//! The process owns its stdin/stdout/stderr pipes until `detachPipes` transfers
+//! them to an LspClient. After detach, `deinit`/`kill` no longer close those handles.
 const std = @import("std");
 
 /// Manages ZLS child process lifecycle: spawn, health check, restart.
@@ -20,7 +23,8 @@ pub const ZlsProcess = struct {
         };
     }
 
-    /// Spawn the ZLS child process with piped stdin/stdout/stderr.
+    /// Spawns ZLS with piped stdin/stdout/stderr. Kills any existing child first.
+    /// After a successful spawn the pipes are owned by this ZlsProcess until `detachPipes`.
     pub fn spawn(self: *ZlsProcess) !void {
         if (self.child != null) {
             self.kill();
@@ -37,30 +41,30 @@ pub const ZlsProcess = struct {
         self.child = child;
     }
 
-    /// Get the stdin pipe for writing to ZLS.
+    /// Returns the ZLS stdin pipe, or null if not yet spawned or already detached.
     pub fn getStdin(self: *ZlsProcess) ?std.Io.File {
         const child = self.child orelse return null;
         return child.stdin;
     }
 
-    /// Get the stdout pipe for reading from ZLS.
+    /// Returns the ZLS stdout pipe, or null if not yet spawned or already detached.
     pub fn getStdout(self: *ZlsProcess) ?std.Io.File {
         const child = self.child orelse return null;
         return child.stdout;
     }
 
-    /// Get the stderr pipe for reading ZLS stderr.
+    /// Returns the ZLS stderr pipe, or null if not yet spawned or already detached.
     pub fn getStderr(self: *ZlsProcess) ?std.Io.File {
         const child = self.child orelse return null;
         return child.stderr;
     }
 
-    /// Check if ZLS is currently alive.
+    /// Reports whether a child process slot is present (does not probe the OS).
     pub fn isAlive(self: *ZlsProcess) bool {
         return self.child != null;
     }
 
-    /// Kill the ZLS child process.
+    /// Kills the ZLS child process and clears the child slot. No-op when not alive.
     pub fn kill(self: *ZlsProcess) void {
         if (self.child) |*child| {
             child.kill(self.io);
@@ -68,8 +72,8 @@ pub const ZlsProcess = struct {
         }
     }
 
-    /// Mark pipe handles as externally owned (e.g., by LspClient).
-    /// Prevents double-close during deinit.
+    /// Transfers pipe handle ownership to an external owner (typically LspClient).
+    /// Nulls out stdin/stdout/stderr so kill/deinit no longer close them.
     pub fn detachPipes(self: *ZlsProcess) void {
         if (self.child) |*child| {
             child.stdin = null;
@@ -78,7 +82,9 @@ pub const ZlsProcess = struct {
         }
     }
 
-    /// Attempt to restart ZLS. Returns false if max restarts exceeded.
+    /// Kills the current child and spawns a replacement, incrementing restart_count.
+    /// Returns false (without error) when max_restarts is already reached, or when the
+    /// spawn attempt fails — in the latter case restart_count is still incremented.
     pub fn restart(self: *ZlsProcess) !bool {
         if (self.restart_count >= self.max_restarts) {
             return false;

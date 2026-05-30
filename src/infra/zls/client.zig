@@ -1,3 +1,10 @@
+//! LSP client over ZLS: drives JSON-RPC request/response correlation and
+//! retains publishDiagnostics notifications in a bounded in-memory cache.
+//!
+//! Lifecycle: init -> connect -> [send*] -> disconnect/deinit.
+//! Reader and stderr background threads are joined in disconnect.
+//! All errors are propagated to callers or recorded via rememberLastError;
+//! no error is silently discarded.
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
 const diagnostics_cache = @import("diagnostics_cache.zig");
@@ -80,7 +87,8 @@ pub const LspClient = struct {
         self.logger = logger;
     }
 
-    /// Connect to ZLS pipes and start reader thread.
+    /// Attach ZLS pipe handles and start the background reader (and optional stderr) threads.
+    /// The caller transfers ownership of the file handles; disconnect closes them.
     pub fn connect(self: *LspClient, stdin: std.Io.File, stdout: std.Io.File, stderr: ?std.Io.File) !void {
         self.zls_stdin = stdin;
         self.zls_stdout = stdout;
@@ -96,7 +104,8 @@ pub const LspClient = struct {
     }
 
     /// Send an LSP request and block until the response arrives.
-    /// Returns owned response JSON body, or error on timeout/failure.
+    /// Returns allocator-owned response JSON body; caller frees.
+    /// Errors: NotConnected, RequestTimeout, NoResponse, or write failure.
     pub fn sendRequest(self: *LspClient, allocator: std.mem.Allocator, method: []const u8, params: anytype) ![]const u8 {
         const id = self.next_id.fetchAdd(1, .monotonic);
         const msg = try json_rpc.writeRequest(allocator, .{ .integer = id }, method, params);
@@ -104,7 +113,8 @@ pub const LspClient = struct {
         return self.sendRawRequest(allocator, id, msg);
     }
 
-    /// Send an LSP request and cooperatively emit `$/cancelRequest` if the token is cancelled while waiting.
+    /// Send an LSP request, emitting `$/cancelRequest` and returning error.Cancelled if the token fires.
+    /// The cancel notification is best-effort; ZLS may still deliver the response.
     pub fn sendRequestCancellable(self: *LspClient, allocator: std.mem.Allocator, method: []const u8, params: anytype, token: cancellation.Token) ![]const u8 {
         if (token.isCancelled()) return error.Cancelled;
         const id = self.next_id.fetchAdd(1, .monotonic);
@@ -126,7 +136,9 @@ pub const LspClient = struct {
         try self.writeMessage(stdin, msg);
     }
 
-    /// Send a notification with empty params object (avoids [] vs {} serialization issue).
+    /// Send a notification with an empty params object `{}`.
+    /// Use instead of sendNotification(.{}) when the spec requires an object,
+    /// not an empty array, to avoid LSP server parse errors.
     pub fn sendRawNotification(self: *LspClient, allocator: std.mem.Allocator, method: []const u8) !void {
         const stdin = self.zls_stdin orelse return error.NotConnected;
         var aw: std.Io.Writer.Allocating = .init(allocator);
@@ -139,7 +151,9 @@ pub const LspClient = struct {
         try self.writeMessage(stdin, msg);
     }
 
-    /// Send LSP initialize request and initialized notification.
+    /// Perform the LSP handshake: send `initialize` then `initialized`.
+    /// `workspace_uri` is JSON-escaped inline; the response body is allocator-owned.
+    /// Must be called once after connect and before any other requests.
     pub fn initialize(self: *LspClient, allocator: std.mem.Allocator, workspace_uri: []const u8) ![]const u8 {
         const id = self.next_id.fetchAdd(1, .monotonic);
 
@@ -170,17 +184,20 @@ pub const LspClient = struct {
         return response;
     }
 
-    /// Send a pre-serialized LSP request message and wait for the response.
+    /// Send a pre-serialized LSP message and wait for the response using the configured timeout.
     fn sendRawRequest(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8) ![]const u8 {
         return self.sendRawRequestWithTimeout(allocator, id, msg, self.request_timeout_ms, "RequestTimeout");
     }
 
-    /// Sends an LSP request and waits for its response before the deadline.
+    /// Send a pre-serialized LSP message and wait up to `timeout_ms` milliseconds.
+    /// `timeout_label` is stored as the last error when the deadline expires.
     fn sendRawRequestWithTimeout(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8) ![]const u8 {
         return self.sendRawRequestWithCancellation(allocator, id, msg, timeout_ms, timeout_label, null);
     }
 
-    /// Sends an LSP request and waits for its response, polling a cancellation token when present.
+    /// Core send-and-wait: registers a pending slot, writes the message, then polls
+    /// the event with 50 ms slices until the response arrives, the deadline passes,
+    /// or the optional cancellation token fires.
     fn sendRawRequestWithCancellation(self: *LspClient, allocator: std.mem.Allocator, id: i64, msg: []const u8, timeout_ms: i64, timeout_label: []const u8, token: ?cancellation.Token) ![]const u8 {
         const stdin = self.zls_stdin orelse return error.NotConnected;
 
@@ -237,7 +254,9 @@ pub const LspClient = struct {
         return try allocator.dupe(u8, response);
     }
 
-    /// Best-effort LSP cancellation notification for an already-sent request.
+    /// Emit `$/cancelRequest` for an in-flight request.
+    /// Failures are logged at debug level and do not propagate;
+    /// the caller is responsible for removing the pending slot on cancellation.
     fn sendCancelRequestNotification(self: *LspClient, id: i64) void {
         const stdin = self.zls_stdin orelse return;
         var aw: std.Io.Writer.Allocating = .init(self.allocator);
@@ -258,7 +277,10 @@ pub const LspClient = struct {
         };
     }
 
-    /// Background thread: reads LSP messages from ZLS stdout, dispatches responses.
+    /// Background thread entry point: reads framed LSP messages from ZLS stdout.
+    /// Dispatches responses to waiting sendRequest callers and stores diagnostics
+    /// notifications in the cache. Sets running=false and signals all pending slots
+    /// on any unrecoverable read error or EOF so blocked callers unblock promptly.
     fn readerLoop(self: *LspClient) void {
         const stdout = self.zls_stdout orelse return;
         var reader = LspTransport.Reader.init(stdout, self.io);
@@ -318,12 +340,13 @@ pub const LspClient = struct {
         }
     }
 
-    /// Returns an owned cached publishDiagnostics message for a URI, when present.
+    /// Returns an allocator-owned copy of the latest publishDiagnostics payload for `uri`, or null.
     pub fn getDiagnostics(self: *LspClient, allocator: std.mem.Allocator, uri: []const u8) !?[]const u8 {
         return self.diagnostics.get(allocator, uri);
     }
 
-    /// Returns owned cached diagnostics messages in receipt order.
+    /// Returns all retained diagnostics payloads sorted by insertion sequence.
+    /// The slice and each element are allocator-owned; the caller frees both.
     pub fn diagnosticsSnapshot(self: *LspClient, allocator: std.mem.Allocator) ![]const []const u8 {
         return self.diagnostics.snapshot(allocator);
     }
@@ -333,7 +356,8 @@ pub const LspClient = struct {
         return self.diagnostics.status();
     }
 
-    /// Returns an owned copy of the last reader/shutdown error label.
+    /// Returns an allocator-owned copy of the most recent error label, or null if none.
+    /// The label names the failed operation (e.g. "RequestTimeout", "EndOfStream").
     pub fn lastError(self: *LspClient, allocator: std.mem.Allocator) !?[]const u8 {
         self.last_error_mutex.lock();
         defer self.last_error_mutex.unlock();
@@ -341,7 +365,8 @@ pub const LspClient = struct {
         return try allocator.dupe(u8, value);
     }
 
-    /// Continuously records ZLS stderr output until the process exits.
+    /// Background thread entry point: drains ZLS stderr and forwards each chunk to the logger.
+    /// Exits when the pipe is closed or an unrecoverable read error occurs.
     fn stderrLoop(self: *LspClient) void {
         const stderr = self.zls_stderr orelse return;
         var buf: [4096]u8 = undefined;
@@ -355,7 +380,8 @@ pub const LspClient = struct {
         }
     }
 
-    /// Signal all pending requests (e.g., when ZLS crashes).
+    /// Wake every waiting sendRequest caller so they can observe running=false.
+    /// Called when ZLS crashes or the reader hits an unrecoverable error.
     fn signalAllPending(self: *LspClient) void {
         self.pending_mutex.lock();
         defer self.pending_mutex.unlock();
@@ -365,7 +391,8 @@ pub const LspClient = struct {
         }
     }
 
-    /// Takes ownership of a pending request slot by ID.
+    /// Removes and returns the pending slot for `id`, or null if not found.
+    /// The caller takes ownership and must destroy the returned pointer.
     fn takePending(self: *LspClient, id: i64) ?*PendingRequest {
         self.pending_mutex.lock();
         defer self.pending_mutex.unlock();
@@ -380,7 +407,10 @@ pub const LspClient = struct {
         self.allocator.destroy(pending);
     }
 
-    /// Stores a response into a pending request while the client mutex is held.
+    /// Dupes `data` into the pending slot's response buffer and signals the waiter.
+    /// If the dupe allocation fails the error is recorded and the event is still set
+    /// so the waiter unblocks and can check for a null response.
+    /// Caller must hold pending_mutex.
     fn storePendingResponseLocked(self: *LspClient, id: i64, data: []const u8) void {
         if (self.pending.get(id)) |p| {
             if (p.response) |old| {
@@ -395,14 +425,16 @@ pub const LspClient = struct {
         }
     }
 
-    /// Writes one framed JSON-RPC message to the ZLS process.
+    /// Write one Content-Length-framed JSON-RPC message under write_mutex.
+    /// write_mutex is independent of pending_mutex; never hold both simultaneously.
     fn writeMessage(self: *LspClient, stdin: std.Io.File, msg: []const u8) !void {
         self.write_mutex.lock();
         defer self.write_mutex.unlock();
         try LspTransport.writeMessage(stdin, self.io, msg);
     }
 
-    /// Gracefully shuts down when possible, closes pipes, and joins reader threads.
+    /// Graceful teardown: sends LSP shutdown using shutdown_timeout_ms, closes all
+    /// pipes, and joins reader and stderr threads. Safe to call more than once.
     pub fn disconnect(self: *LspClient) void {
         self.closing.store(true, .release);
         self.shutdownWithTimeout(self.shutdown_timeout_ms) catch |err| {
@@ -433,12 +465,15 @@ pub const LspClient = struct {
         self.closing.store(false, .release);
     }
 
-    /// Sends LSP shutdown followed by exit using the request timeout.
+    /// Send LSP `shutdown` then `exit` using the full request timeout.
+    /// For teardown prefer disconnect, which uses the shorter shutdown_timeout_ms.
     pub fn shutdown(self: *LspClient) !void {
         return self.shutdownWithTimeout(self.request_timeout_ms);
     }
 
-    /// Attempts graceful ZLS shutdown before force cleanup.
+    /// Send `shutdown` and `exit` within `timeout_ms` milliseconds.
+    /// A broken pipe or EOF during `exit` is treated as benign because ZLS may
+    /// have closed its end immediately after the shutdown response.
     fn shutdownWithTimeout(self: *LspClient, timeout_ms: i64) !void {
         if (self.zls_stdin == null or !self.running.load(.acquire)) return;
         const id = self.next_id.fetchAdd(1, .monotonic);
@@ -464,7 +499,8 @@ pub const LspClient = struct {
         self.logger.warn("lsp", "failed to send exit notification: {}", .{err});
     }
 
-    /// Disconnects and frees pending responses, diagnostics, and last-error text.
+    /// Disconnect, then free all pending response buffers, the diagnostics cache,
+    /// and the last-error string. Must be called exactly once; do not use after.
     pub fn deinit(self: *LspClient) void {
         self.disconnect();
         var it = self.pending.iterator();
@@ -484,7 +520,7 @@ pub const LspClient = struct {
         }
     }
 
-    /// Stores the latest client error for later diagnostics.
+    /// Atomically replace the stored error label with an allocator-owned copy of `value`.
     fn setLastError(self: *LspClient, value: []const u8) !void {
         self.last_error_mutex.lock();
         defer self.last_error_mutex.unlock();
@@ -492,7 +528,8 @@ pub const LspClient = struct {
         self.last_error = try self.allocator.dupe(u8, value);
     }
 
-    /// Persists an error message in allocator-owned client state.
+    /// Store an error label, logging a warning if the allocation itself fails.
+    /// Used in contexts where propagating the error is not possible (void returns).
     fn rememberLastError(self: *LspClient, value: []const u8) void {
         self.setLastError(value) catch |err| {
             self.logger.warn("lsp", "failed to record last error `{s}`: {}", .{ value, err });
@@ -500,7 +537,7 @@ pub const LspClient = struct {
     }
 };
 
-/// White-box test accessors kept out of the production client API surface.
+/// White-box accessors for internal-test files; not part of the public API.
 pub const TestAccess = struct {
     pub const Pending = PendingRequest;
 

@@ -1,4 +1,9 @@
-//! Persists artifact bytes and keeps the on-disk artifact registry in sync.
+//! ArtifactStore port backed by workspace files and the JSONL artifact registry.
+//! Artifacts are written under `.zigars-cache/artifacts/<namespace>/<name>`;
+//! the registry is then updated atomically.  Path components are validated
+//! before any write so namespace/name cannot escape the artifact root.
+//! `read` is restricted to paths that start with the canonical artifact prefix,
+//! preventing access to workspace source files through this port.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -19,6 +24,7 @@ pub const Store = struct {
     const Self = @This();
 
     /// Stores borrowed workspace pointer and toolchain metadata for future writes.
+    /// `workspace` must outlive the Store.  `toolchain` is copied by value.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io, toolchain: artifacts.Toolchain) Self {
         return .{
             .workspace = workspace,
@@ -39,7 +45,11 @@ pub const Store = struct {
         };
     }
 
-    /// Writes an artifact through this port implementation.
+    /// Writes an artifact payload and registers it in the JSONL registry.
+    /// Returns an owned `ArtifactRef` (caller must deinit).  The payload is
+    /// written before the registry entry so the registry never points to an
+    /// absent file.  On error the already-written file is left in place; the
+    /// registry will not reference it until the next successful put.
     fn put(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ArtifactWriteRequest) ports.PortError!ports.ArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const rel_path = artifactPath(allocator, request.namespace, request.name) catch |err| return mapPortError(err);
@@ -91,7 +101,10 @@ pub const Store = struct {
         };
     }
 
-    /// Reads stored data through this port implementation.
+    /// Reads stored artifact bytes through this port implementation.
+    /// Rejects IDs that do not start with the canonical `.zigars-cache/artifacts`
+    /// prefix so callers cannot read arbitrary workspace source files.
+    /// The limit is `default_read_limit` (64 KiB).  Caller must deinit the result.
     fn read(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.ArtifactReadRequest) ports.PortError!ports.ArtifactReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (!safeArtifactId(request.id)) return error.InvalidRequest;
@@ -105,7 +118,11 @@ pub const Store = struct {
         };
     }
 
-    /// Records a workspace artifact through this port implementation.
+    /// Records a pre-existing workspace artifact in the JSONL registry.
+    /// When `request.bytes` is null the file is read from disk and hashed.
+    /// When `request.bytes` is provided it is written to the workspace path
+    /// first, then hashed.  Returns an owned `WorkspaceArtifactRef`; caller
+    /// must deinit.
     fn recordWorkspace(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceArtifactRecordRequest) ports.PortError!ports.WorkspaceArtifactRef {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = if (request.bytes) |provided| provided else blk: {
@@ -118,6 +135,7 @@ pub const Store = struct {
         const owns_read = request.bytes == null;
         defer if (owns_read) allocator.free(bytes);
 
+        // Only write when bytes were provided; if null, the file already exists.
         if (request.bytes != null) {
             self.workspace.writeFile(self.io, request.path, bytes) catch |err| return mapPortError(err);
         }
@@ -174,12 +192,16 @@ pub const Store = struct {
 };
 
 /// Builds the on-disk path for an artifact payload.
+/// Validates both components before joining; rejects empty values, absolute
+/// paths, and path traversal sequences.
 fn artifactPath(allocator: std.mem.Allocator, namespace: []const u8, name: []const u8) ![]u8 {
     if (!safeRelativeComponent(namespace) or !safeRelativeComponent(name)) return error.InvalidArguments;
     return std.fs.path.join(allocator, &.{ artifact_root, namespace, name });
 }
 
-/// Validates that an artifact identifier is safe for storage paths.
+/// Validates that an artifact identifier is safe for read paths.
+/// Requires at least three segments (`.zigars-cache/artifacts/<...>`), no
+/// absolute prefix, and no `.` / `..` traversal in any segment.
 fn safeArtifactId(id: []const u8) bool {
     if (id.len == 0) return false;
     if (std.fs.path.isAbsolute(id)) return false;
@@ -194,10 +216,14 @@ fn safeArtifactId(id: []const u8) bool {
         start = index + 1;
     }
     if (!safeArtifactIdPart(part_index, id[start..])) return false;
+    // At least three segments means the id includes the canonical prefix plus
+    // one more component; part_index is the last separator-seen index (0-based).
     return part_index >= 2;
 }
 
 /// Validates one artifact identifier segment.
+/// The first two segments are pinned to the canonical prefix so callers cannot
+/// construct IDs that point outside `.zigars-cache/artifacts`.
 fn safeArtifactIdPart(index: usize, part: []const u8) bool {
     if (part.len == 0) return false;
     if (std.mem.eql(u8, part, ".") or std.mem.eql(u8, part, "..")) return false;
@@ -228,12 +254,14 @@ fn safePathPart(value: []const u8) bool {
     return !std.mem.eql(u8, value, ".") and !std.mem.eql(u8, value, "..");
 }
 
-/// Converts a timestamp to Unix milliseconds for metadata.
+/// Returns the current wall-clock time as Unix milliseconds for metadata timestamps.
 fn unixMs(io: std.Io) i64 {
     return @intCast(@divTrunc(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
 }
 
 /// Maps filesystem, registry, and validation failures to ArtifactStore port errors.
+/// Unknown errors collapse to `Unavailable`; callers should treat that as a
+/// non-actionable infrastructure failure distinct from user-visible argument errors.
 pub fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

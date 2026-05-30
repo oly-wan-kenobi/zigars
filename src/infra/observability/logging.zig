@@ -1,3 +1,6 @@
+//! Lightweight stderr logger and correlation-prefix helpers.
+//! All log output goes to stderr; stdout is reserved for MCP JSON-RPC.
+
 const std = @import("std");
 
 /// Borrowed request correlation fields used in compact diagnostic prefixes.
@@ -9,6 +12,9 @@ pub const CorrelationFields = struct {
 };
 
 /// Formats a compact request correlation prefix for stderr diagnostics.
+/// Writes into `buffer` and returns a slice of it; the slice is valid only
+/// while `buffer` is in scope.  Falls back to a static unavailable string on
+/// format overflow.
 pub fn formatCorrelationPrefix(buffer: []u8, fields: CorrelationFields) []const u8 {
     if (fields.tool_name) |tool_name| {
         return std.fmt.bufPrint(buffer, "trace={s} req={s} method={s} tool={s}", .{
@@ -26,6 +32,8 @@ pub fn formatCorrelationPrefix(buffer: []u8, fields: CorrelationFields) []const 
 }
 
 /// Log severity threshold used by the lightweight process logger.
+/// Numeric values allow monotonic comparison: a message is emitted when its
+/// level integer is >= the configured minimum.  `off` disables all output.
 pub const Level = enum(u8) {
     debug = 0,
     info = 1,
@@ -46,6 +54,8 @@ pub const Level = enum(u8) {
 };
 
 /// Small stderr/discard logger used where observability state is unavailable.
+/// This type owns no memory and is safe to copy.  All output goes to stderr;
+/// use `Sink.discard` when no I/O handle is available (e.g. in tests).
 pub const Logger = struct {
     /// Output target for formatted log lines.
     pub const Sink = enum {
@@ -94,7 +104,8 @@ pub const Logger = struct {
         self.log(.err, component, fmt, args);
     }
 
-    /// Formats and writes one log line, swallowing logging I/O failures.
+    /// Formats and writes one log line to stderr, swallowing I/O failures.
+    /// Logging must never interrupt the MCP JSON-RPC stream on stdout.
     pub fn log(self: Logger, level: Level, component: []const u8, comptime fmt: []const u8, args: anytype) void {
         if (!self.enabled(level)) return;
         if (self.sink != .stderr) return;

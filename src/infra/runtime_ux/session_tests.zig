@@ -1,3 +1,5 @@
+//! Pins the RuntimeSession port contract through the vtable boundary:
+//! job lifecycle, roots, subscriptions, events, and not-found error paths.
 const std = @import("std");
 const ports = @import("../../app/ports.zig");
 const runtime_ux = @import("state.zig");

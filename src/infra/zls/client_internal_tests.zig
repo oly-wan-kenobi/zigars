@@ -1,3 +1,7 @@
+//! White-box tests for LspClient internals accessed via TestAccess.
+//! Pins: timeout clamping, last-error replacement, duplicate-response handling,
+//! allocation-failure path in storePendingResponseLocked, signal-all-pending,
+//! exit-notification error classification, and shutdown via scripted pipe.
 const std = @import("std");
 const client_mod = @import("client.zig");
 const logging = @import("../observability/logging.zig");

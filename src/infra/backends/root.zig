@@ -1,3 +1,7 @@
+//! Public surface of the infra/backends subsystem.  Exports the catalog
+//! renderer, backend definitions shim, probe port implementation, and
+//! static analysis cache.  All backends are optional; the probe layer maps
+//! missing or failing executables to unavailable without propagating errors.
 pub const catalog = @import("catalog.zig");
 pub const definitions = @import("definitions.zig");
 pub const probe = @import("probe.zig");

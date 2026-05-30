@@ -1,3 +1,6 @@
+//! Tests for command.zig: pins arg splitting (quoting, escaping), shebang
+//! interpreter rewriting, output truncation, timeout enforcement, and
+//! cooperative cancellation before spawn.
 const std = @import("std");
 const builtin = @import("builtin");
 const command = @import("command.zig");

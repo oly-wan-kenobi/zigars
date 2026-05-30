@@ -1,7 +1,11 @@
+//! URI helpers for the ZLS LSP layer.
+//! Provides percent-encoding/decoding between file-system paths and file:// URIs,
+//! and workspace-relative path resolution. Caller owns all returned slices.
 const std = @import("std");
 
-/// Convert a file system path to a file:// URI.
-/// Caller owns the returned memory.
+/// Converts a file-system path to a percent-encoded file:// URI.
+/// Caller owns the returned slice. Absolute paths produce file:///absolute/path;
+/// the slash directly following the authority prefix is part of the path encoding.
 pub fn pathToUri(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     // file:///absolute/path
     const prefix = "file://";
@@ -31,8 +35,9 @@ pub fn pathToUri(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     return buf;
 }
 
-/// Convert a file:// URI back to a file system path.
-/// Caller owns the returned memory.
+/// Decodes a file:// URI back to a file-system path.
+/// Returns InvalidUri if the prefix is absent or a percent sequence is malformed.
+/// Caller owns the returned slice.
 pub fn uriToPath(allocator: std.mem.Allocator, uri: []const u8) ![]const u8 {
     const prefix = "file://";
     if (!std.mem.startsWith(u8, uri, prefix)) {
@@ -74,8 +79,9 @@ pub fn uriToPath(allocator: std.mem.Allocator, uri: []const u8) ![]const u8 {
     return buf[0..pos];
 }
 
-/// Make an absolute path from workspace root and relative path.
-/// Caller owns returned memory.
+/// Resolves a path against the workspace root.
+/// If `relative` is already absolute it is duped and returned unchanged;
+/// otherwise it is joined to `workspace`. Caller owns the returned slice.
 pub fn resolvePath(allocator: std.mem.Allocator, workspace: []const u8, relative: []const u8) ![]const u8 {
     if (std.fs.path.isAbsolute(relative)) {
         return allocator.dupe(u8, relative);
@@ -83,12 +89,14 @@ pub fn resolvePath(allocator: std.mem.Allocator, workspace: []const u8, relative
     return std.fs.path.join(allocator, &.{ workspace, relative });
 }
 
-/// Strip `file://` prefix from a URI for display. Does not percent-decode.
+/// Strips the file:// prefix from a URI for display purposes. Does not percent-decode.
+/// Returns the input unchanged when the prefix is absent.
 pub fn stripFilePrefix(uri: []const u8) []const u8 {
     return if (std.mem.startsWith(u8, uri, "file://")) uri[7..] else uri;
 }
 
-/// Reports whether a URI byte must be percent-encoded.
+/// Reports whether a byte must be percent-encoded in a file:// URI.
+/// Unreserved characters (RFC 3986 §2.3) plus '/' and ':' are safe unencoded.
 fn needsEncoding(c: u8) bool {
     return switch (c) {
         'A'...'Z', 'a'...'z', '0'...'9', '-', '.', '_', '~', '/', ':' => false,
@@ -96,7 +104,7 @@ fn needsEncoding(c: u8) bool {
     };
 }
 
-/// Returns the lowercase hexadecimal digit for a four-bit value.
+/// Returns the uppercase hexadecimal digit for a four-bit nibble (RFC 3986 §2.1 recommends uppercase).
 fn hexDigit(v: u8) u8 {
     return "0123456789ABCDEF"[v & 0xf];
 }

@@ -1,3 +1,10 @@
+//! Artifact registry: types, JSONL persistence, and provenance helpers.
+//! The registry lives at `.zigars-cache/artifacts/registry.jsonl`; each line
+//! is one JSON object.  Corrupt or negative-size lines are silently skipped
+//! so a single bad entry cannot block all subsequent artifact writes.
+//! `OwnedEntry` owns all strings; `RegistryEntry` / `Provenance` are borrowed
+//! views used for writing.  Callers are responsible for deinitializing owned
+//! values via the appropriate `deinit` methods.
 const std = @import("std");
 
 /// Default workspace-relative JSONL registry location.
@@ -6,6 +13,8 @@ pub const default_registry_path = ".zigars-cache/artifacts/registry.jsonl";
 pub const default_read_limit: usize = 64 * 1024;
 
 /// Tool paths recorded with artifact provenance.
+/// All fields are borrowed slices; lifetime must exceed the `RegistryEntry` or
+/// `Provenance` that holds this struct.  Optional fields default to "" (absent).
 pub const Toolchain = struct {
     zig_path: []const u8,
     zls_path: []const u8 = "",
@@ -14,6 +23,8 @@ pub const Toolchain = struct {
 };
 
 /// Borrowed provenance metadata attached to an artifact registry entry.
+/// All slice fields are borrowed; they must remain valid until the entry is
+/// serialized or cloned into an `OwnedEntry`.
 pub const Provenance = struct {
     producer: []const u8,
     artifact_kind: []const u8,
@@ -27,6 +38,9 @@ pub const Provenance = struct {
 };
 
 /// Borrowed identity for a concrete artifact file.
+/// `path` is workspace-relative; `abs_path` is the fully resolved path used
+/// during prune verification.  `sha256` must be a 64-character lowercase hex
+/// string allocated by the caller (e.g. from `sha256Hex`).
 pub const FileIdentity = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -35,6 +49,8 @@ pub const FileIdentity = struct {
 };
 
 /// Borrowed registry row ready for JSONL serialization.
+/// Use for writing; convert to `OwnedEntry` via `upsert` or `cloneEntry` when
+/// the entry must outlive the caller's borrows.
 pub const RegistryEntry = struct {
     identity: FileIdentity,
     provenance: Provenance,
@@ -44,6 +60,8 @@ pub const RegistryEntry = struct {
 };
 
 /// Heap-owned registry row loaded from disk.
+/// Every string field is individually allocated; call `deinit` to free them
+/// all.  Do not mix allocators between `cloneEntry` and `deinit`.
 pub const OwnedEntry = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -86,6 +104,8 @@ pub const OwnedEntry = struct {
 };
 
 /// In-memory artifact registry loaded from JSONL.
+/// Holds an ordered list of `OwnedEntry` values; insertion order matches the
+/// JSONL file.  Upsert replaces in-place by path, preserving order.
 pub const Registry = struct {
     entries: std.ArrayList(OwnedEntry) = .empty,
 
@@ -96,6 +116,8 @@ pub const Registry = struct {
     }
 
     /// Finds the first entry with a matching registry path.
+    /// Returns a copy of the struct (all slices still point into the Registry's
+    /// owned storage); do NOT call deinit on the returned value.
     pub fn findByPath(self: Registry, path: []const u8) ?OwnedEntry {
         for (self.entries.items) |entry| {
             if (std.mem.eql(u8, entry.path, path)) return entry;
@@ -104,6 +126,7 @@ pub const Registry = struct {
     }
 
     /// Finds the first entry with a matching SHA-256 hex digest.
+    /// Same ownership note as `findByPath`: do NOT call deinit on the result.
     pub fn findBySha256(self: Registry, sha256: []const u8) ?OwnedEntry {
         for (self.entries.items) |entry| {
             if (std.mem.eql(u8, entry.sha256, sha256)) return entry;
@@ -112,7 +135,8 @@ pub const Registry = struct {
     }
 };
 
-/// Returns an allocator-owned lowercase SHA-256 hex digest.
+/// Returns an allocator-owned lowercase SHA-256 hex digest of `data`.
+/// Caller must free the returned slice.
 pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
@@ -121,6 +145,8 @@ pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]u8 {
 }
 
 /// Builds a borrowed file identity and allocates only the checksum string.
+/// `path` and `abs_path` are borrowed; only `sha256` is heap-allocated and
+/// must be freed by the caller when no longer needed.
 pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_path: []const u8, bytes: []const u8) !FileIdentity {
     return .{
         .path = path,
@@ -148,6 +174,7 @@ pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.
 }
 
 /// Converts an owned entry into the public registry JSON shape.
+/// Delegates to `entryValue` by constructing a borrowed view on the fly.
 pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.json.Value {
     return entryValue(allocator, .{
         .identity = .{
@@ -205,7 +232,10 @@ pub fn registryValue(allocator: std.mem.Allocator, registry: Registry) !std.json
     return .{ .array = entries };
 }
 
-/// Loads newline-delimited registry entries; missing files produce an empty registry.
+/// Loads newline-delimited registry entries; a missing file produces an empty registry.
+/// Up to 16 MiB is read at once.  Malformed JSON or negative `bytes` fields
+/// are silently skipped so a single corrupt entry cannot block writes.
+/// Caller must deinit the returned Registry.
 pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !Registry {
     var registry: Registry = .{};
     var registry_owned = true;
@@ -234,6 +264,8 @@ pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path:
 }
 
 /// Inserts or replaces by path, taking an owned clone of the borrowed entry.
+/// If an existing entry with the same `path` is found its memory is freed and
+/// the slot is replaced in-place, preserving list order.
 pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: RegistryEntry) !void {
     var owned = try cloneEntry(allocator, entry);
     var owned_entry = true;
@@ -251,6 +283,8 @@ pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: Registry
 }
 
 /// Writes the registry atomically as JSONL, creating parent directories first.
+/// Builds the full JSONL payload in a heap buffer, then commits it via an
+/// atomic file replace so a partial write cannot corrupt the registry.
 pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8, registry: Registry) !void {
     const parent = std.fs.path.dirname(registry_abs_path) orelse ".";
     try std.Io.Dir.cwd().createDirPath(io, parent);
@@ -276,6 +310,9 @@ pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path
 }
 
 /// Returns a JSON identity for the registry file before an update.
+/// Used to record the pre-mutation state for audit trails.  If the file does
+/// not exist, `exists` is false and `sha256` is null.  Caller must deinit the
+/// returned value.
 pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !std.json.Value {
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, registry_abs_path, allocator, .limited(16 * 1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
@@ -288,6 +325,9 @@ pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_p
 }
 
 /// Drops registry rows whose files are missing or whose size/hash changed.
+/// Surviving entries replace the registry's list in-place.  Both size and SHA-256
+/// must match; a file that changed size without a hash change is still pruned.
+/// Unexpected read errors (not FileNotFound / StreamTooLong) are propagated.
 pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry) !PruneSummary {
     var kept: std.ArrayList(OwnedEntry) = .empty;
     var kept_owned = true;
@@ -349,6 +389,8 @@ pub fn pruneSummaryValue(allocator: std.mem.Allocator, summary: PruneSummary) !s
 }
 
 /// Deinitializes top-level JSON containers produced by this module.
+/// Only frees the outermost object or array; nested values share the same
+/// allocator and are reclaimed transitively.
 pub fn deinitValue(allocator: std.mem.Allocator, value: std.json.Value) void {
     var mutable = value;
     switch (mutable) {
@@ -359,6 +401,8 @@ pub fn deinitValue(allocator: std.mem.Allocator, value: std.json.Value) void {
 }
 
 /// Builds an owned registry entry from serialized artifact metadata.
+/// On partial failure the owned_guard defers deinit of all already-allocated
+/// strings, preventing leaks mid-construction.
 fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !OwnedEntry {
     if (value != .object) return error.InvalidArtifactRegistryEntry;
     const obj = value.object;
@@ -417,6 +461,8 @@ fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
 }
 
 /// Creates an empty owned registry entry for rollback paths.
+/// All string fields are set to "" (static literals) so deinit is safe to call
+/// even before individual fields have been allocated.
 fn emptyOwnedEntry() OwnedEntry {
     return .{
         .path = "",
@@ -440,7 +486,7 @@ fn emptyOwnedEntry() OwnedEntry {
     };
 }
 
-/// Reads the optional toolchain field from artifact metadata.
+/// Serializes a Toolchain struct into a JSON object.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -453,7 +499,7 @@ fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.
     return .{ .object = obj };
 }
 
-/// Reads the argv array from artifact metadata.
+/// Serializes a string slice as a JSON array for the `command_argv` field.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -463,7 +509,7 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
     return .{ .array = array };
 }
 
-/// Reads preimage metadata from artifact JSON.
+/// Builds the preimage JSON object; `sha256` is serialized as null when the file did not exist.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -479,7 +525,7 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
     return .{ .object = obj };
 }
 
-/// Returns an object field from artifact JSON when present.
+/// Returns the inner ObjectMap if the value is an object, otherwise null.
 fn objectValue(value: ?std.json.Value) ?std.json.ObjectMap {
     const actual = value orelse return null;
     if (actual != .object) return null;
@@ -487,18 +533,20 @@ fn objectValue(value: ?std.json.Value) ?std.json.ObjectMap {
 }
 
 /// Duplicates a required string field from artifact JSON.
+/// Returns `error.InvalidArtifactRegistryEntry` if the key is absent or not a string.
 fn dupStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ![]u8 {
     const value = obj.get(key) orelse return error.InvalidArtifactRegistryEntry;
     if (value != .string) return error.InvalidArtifactRegistryEntry;
     return allocator.dupe(u8, value.string);
 }
 
-/// Duplicates an optional string field from artifact JSON.
+/// Duplicates an optional string field from artifact JSON, defaulting to "".
 fn dupOptionalStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ![]u8 {
     return dupOptionalStringFieldDefault(allocator, obj, key, "");
 }
 
-/// Duplicates an optional string field or uses the default value.
+/// Duplicates an optional string field or returns an owned copy of `default`.
+/// A JSON null is treated the same as a missing key.
 fn dupOptionalStringFieldDefault(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8, default: []const u8) ![]u8 {
     const value = obj.get(key) orelse return allocator.dupe(u8, default);
     if (value == .null) return allocator.dupe(u8, default);

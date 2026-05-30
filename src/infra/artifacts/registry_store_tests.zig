@@ -1,3 +1,6 @@
+//! Tests the ArtifactStore port: write-then-read round-trip, provenance
+//! recording, path-traversal rejection, read scoping to the artifact prefix,
+//! and allocation-failure resilience for put and recordWorkspace operations.
 const std = @import("std");
 const registry_store = @import("registry_store.zig");
 const artifacts = @import("registry.zig");

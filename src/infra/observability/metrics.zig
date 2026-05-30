@@ -1,9 +1,16 @@
+//! Metrics reader: snapshots bounded in-memory observability state into
+//! allocator-owned port values consumed by the runtime_metrics MCP tool.
+//! All ring buffers are copied under the caller's allocator; the snapshot
+//! is independent of further state mutations after it returns.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 const observability = @import("state.zig");
 
 /// ObservabilityReader port that snapshots bounded in-memory metrics.
+/// Holds a borrowed pointer to `State`; the caller must ensure the state
+/// outlives the reader.
 pub const Reader = struct {
     state: *observability.State,
 
@@ -23,6 +30,10 @@ pub const Reader = struct {
     }
 
     /// Returns an allocator-owned snapshot of recorded metrics.
+    /// Each ring buffer is copied into a freshly allocated slice; caller must
+    /// call `ObservabilitySnapshot.deinit` with the same allocator to free them.
+    /// Returns `error.OutOfMemory` on the first allocation failure, freeing any
+    /// partially allocated slices via errdefer chains in order.
     fn snapshot(ptr: *anyopaque, allocator: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const state = self.state.*;
@@ -207,12 +218,16 @@ pub const Reader = struct {
 };
 
 /// Returns the number of retained entries in a bounded ring buffer.
+/// When `count` exceeds `capacity`, older entries have been overwritten and
+/// only `capacity` entries are still accessible.
 fn boundedLen(count: u64, capacity: usize) usize {
     const capacity_u64: u64 = @intCast(capacity);
     return @intCast(@min(count, capacity_u64));
 }
 
-/// Finds the first sequence number retained in a ring buffer.
+/// Finds the first sequence number still retained in a ring buffer.
+/// Sequence numbers are 1-based; when the ring is full the oldest retained
+/// entry has sequence `count - capacity + 1`.
 fn firstSequence(count: u64, capacity: usize) u64 {
     const capacity_u64: u64 = @intCast(capacity);
     if (count == 0) return 1;

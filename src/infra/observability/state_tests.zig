@@ -1,3 +1,7 @@
+//! Tests for observability state mutation and render output: counter accuracy,
+//! ring eviction ordering, ZLS deduplication, capacity-drop accounting,
+//! truncation flags, and the empty-ring ZLS snapshot fallback.
+
 const std = @import("std");
 const observability = @import("state.zig");
 const render = @import("state_render.zig");
