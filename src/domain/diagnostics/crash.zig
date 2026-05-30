@@ -47,6 +47,7 @@ pub fn classifySanitizer(text: []const u8) Sanitizer {
 /// Priority order is fixed: use_after_free > bounds > data_race > panic > leak > segfault.
 /// Returns .unknown when no recognized marker is found.
 pub fn classifyFailure(text: []const u8) FailureKind {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (containsAny(text, &.{ "heap-use-after-free", "use after free" })) return .use_after_free;
     if (containsAny(text, &.{ "stack-buffer-overflow", "heap-buffer-overflow", "index out of bounds" })) return .bounds;
     if (containsAny(text, &.{ "data race", "ThreadSanitizer" })) return .data_race;
@@ -60,6 +61,7 @@ pub fn classifyFailure(text: []const u8) FailureKind {
 /// Returns a borrowed slice into `text`; the caller must not free it.
 /// Returns null when no "panic:" or "thread ... panic" line is found.
 pub fn panicMessage(text: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
