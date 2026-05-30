@@ -15,6 +15,7 @@ const JsonValue = std.json.Value;
 /// `workspace` is the fixture root used to verify that file content changes
 /// after an apply and reverts correctly. The caller owns server lifecycle.
 pub fn run(client: anytype, workspace: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const create = try client.callTool("zigars_patch_session_create", "{\"goal\":\"fixture edit\",\"files\":\"src/main.zig zig-out/generated.zig\"}");
     defer client.allocator.free(create);
     try client.expectPathString(create, "kind", "zigars_patch_session_create");
@@ -109,6 +110,7 @@ fn argsWithEdits(allocator: std.mem.Allocator, edits: []const u8) ![]u8 {
 
 /// Builds the JSON argument object for patch-session apply calls.
 fn patchApplyArgs(allocator: std.mem.Allocator, session_id: []const u8, edits: []const u8, expected: []const u8, apply: bool) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "session_id", .{ .string = session_id });
