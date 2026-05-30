@@ -40,6 +40,7 @@ const ScriptTransport = struct {
     }
 
     fn transport(self: *ScriptTransport) mcp.transport.Transport {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
