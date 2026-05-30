@@ -266,6 +266,7 @@ fn mainServer(init: std.process.Init.Minimal) !void {
 /// Runs tests directly in terminal mode and prints the classic Zig test
 /// summary consumed by coverage tooling.
 fn mainTerminal(init: std.process.Init.Minimal) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     @disableInstrumentation();
     if (builtin.fuzz) @panic("fuzz test requires server");
 
@@ -358,6 +359,7 @@ pub fn log(
     comptime format: []const u8,
     args: anytype,
 ) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     @disableInstrumentation();
     if (@intFromEnum(message_level) <= @intFromEnum(std.log.Level.err)) {
         log_err_count +|= 1;
@@ -501,6 +503,7 @@ var fuzz_runner: if (builtin.fuzz) struct {
     /// Converts fuzz input polling errors into cancellation or fatal runner
     /// diagnostics.
     fn inputPoller() Io.Cancelable!void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         @disableInstrumentation();
         switch (inputPollerInner()) {
             error.Canceled => return error.Canceled,
@@ -515,6 +518,7 @@ var fuzz_runner: if (builtin.fuzz) struct {
     /// Reads fuzz input messages from the build server and forwards them to
     /// the fuzz ABI until cancellation is requested.
     fn inputPollerInner() (Io.Cancelable || Io.Reader.Error) {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         @disableInstrumentation();
         const server = fuzz_runner.server;
         var large_bytes_list: std.ArrayList(u8) = .empty;
