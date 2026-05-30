@@ -59,6 +59,7 @@ const Claim = struct {
 
 /// Executes the zigars adoption pack workflow and returns an allocator-owned structured result.
 pub fn zigarsAdoptionPack(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
     const backend = argString(args, "backend") orelse "all";
@@ -95,6 +96,7 @@ pub fn zigarsAdoptionPack(a: *App, result_allocator: std.mem.Allocator, args: ?s
 
 /// Executes the zigars client config generate workflow and returns an allocator-owned structured result.
 pub fn zigarsClientConfigGenerate(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
     const kind = argString(args, "kind") orelse defaultKindForClient(client);
@@ -151,6 +153,7 @@ pub fn zigarsClientConfigGenerate(a: *App, result_allocator: std.mem.Allocator, 
 
 /// Executes the zigars smoke plan workflow and returns an allocator-owned structured result.
 pub fn zigarsSmokePlan(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const client = argString(args, "client") orelse "generic";
     const transport = argString(args, "transport") orelse transportName(a);
     const backend = argString(args, "backend") orelse "all";
@@ -186,6 +189,7 @@ pub fn zigarsSmokePlan(a: *App, result_allocator: std.mem.Allocator, args: ?std.
 
 /// Executes the zigars conformance report workflow and returns an allocator-owned structured result.
 pub fn zigarsConformanceReport(a: *App, result_allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const backend = argString(args, "backend") orelse "all";
     const output = argString(args, "output") orelse default_conformance_output;
     const apply = argBool(args, "apply", false);
@@ -243,6 +247,7 @@ pub fn zigarsConformanceReport(a: *App, result_allocator: std.mem.Allocator, arg
 
 /// Serializes base fields into an allocator-owned JSON value; allocation failures propagate.
 fn baseValue(allocator: std.mem.Allocator, a: *App, kind: []const u8, basis: []const u8, confidence: []const u8) !std.json.ObjectMap {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = kind });
     try obj.put(allocator, "schema_version", .{ .integer = schema_version });
@@ -268,6 +273,7 @@ fn clientIdentityValue(allocator: std.mem.Allocator, a: *App, client: []const u8
 
 /// Serializes catalog snapshot fields into an allocator-owned JSON value; allocation failures propagate.
 fn catalogSnapshotValue(allocator: std.mem.Allocator, a: *App, backend: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "toolchain", try toolchainValue(allocator, a));
     try obj.put(allocator, "backend_scope", .{ .string = backend });
@@ -286,6 +292,7 @@ fn catalogSnapshotValue(allocator: std.mem.Allocator, a: *App, backend: []const 
 
 /// Serializes backend setup status fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendSetupStatusValue(allocator: std.mem.Allocator, a: *App, selected: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (backend_catalog.backends) |backend| {
         if (!backendSelected(selected, backend.name)) continue;
@@ -304,6 +311,7 @@ fn backendSetupStatusValue(allocator: std.mem.Allocator, a: *App, selected: []co
 
 /// Serializes smoke plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn smokePlanValue(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, backend: []const u8, platform: []const u8, timeout_ms: i64) !std.json.ObjectMap {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = try baseValue(allocator, a, "zigars_smoke_plan", "static manifest, client identity, backend catalog, and workspace configuration", "medium");
     try obj.put(allocator, "client_identity", try clientIdentityValue(allocator, a, client, transport));
     try obj.put(allocator, "smoke_scenario_identity", try identityValue(allocator, "smoke", &.{ a.workspace.root, client, transport, backend, platform }));
@@ -320,6 +328,7 @@ fn smokePlanValue(allocator: std.mem.Allocator, a: *App, client: []const u8, tra
 
 /// Serializes smoke scenarios fields into an allocator-owned JSON value; allocation failures propagate.
 fn smokeScenariosValue(allocator: std.mem.Allocator, backend: []const u8, transport: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     try array.append(try scenarioValue(allocator, "initialize", "Start the zigars MCP server and complete initialize/initialized.", transport, "server_identity"));
     try array.append(try scenarioValue(allocator, "tools_list", "Call tools/list and confirm the adoption tools and existing public tools are advertised.", transport, "manifest_contract"));
@@ -337,6 +346,7 @@ fn smokeScenariosValue(allocator: std.mem.Allocator, backend: []const u8, transp
 
 /// Serializes scenario fields into an allocator-owned JSON value; allocation failures propagate.
 fn scenarioValue(allocator: std.mem.Allocator, id: []const u8, description: []const u8, transport: []const u8, evidence: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = id });
     try obj.put(allocator, "description", .{ .string = description });
@@ -348,6 +358,7 @@ fn scenarioValue(allocator: std.mem.Allocator, id: []const u8, description: []co
 
 /// Serializes conformance report fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceReportValue(allocator: std.mem.Allocator, a: *App, backend: []const u8, evidence: SourceEvidence, parsed: ?std.json.Value) !std.json.ObjectMap {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = try baseValue(allocator, a, "zigars_public_conformance_report", if (evidence.available) "ingested zigars evidence JSON" else "no conformance evidence available", if (evidence.available) "medium" else "low");
     try obj.put(allocator, "conformance_report_identity", try identityValue(allocator, "conformance", &.{ a.workspace.root, backend, evidence.bytes }));
     try obj.put(allocator, "source", try conformanceSourceValue(allocator, evidence, parsed));
@@ -370,6 +381,7 @@ fn conformanceReportValue(allocator: std.mem.Allocator, a: *App, backend: []cons
 
 /// Serializes conformance source fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceSourceValue(allocator: std.mem.Allocator, evidence: SourceEvidence, parsed: ?std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "available", .{ .bool = evidence.available });
     try obj.put(allocator, "source_kind", .{ .string = evidence.source_kind });
@@ -388,6 +400,7 @@ fn conformanceSourceValue(allocator: std.mem.Allocator, evidence: SourceEvidence
 
 /// Serializes claim array fields into an allocator-owned JSON value; allocation failures propagate.
 fn claimArrayValue(allocator: std.mem.Allocator, selected: []const u8, parsed: ?std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (backend_catalog.backends) |backend| {
         if (!backendSelected(selected, backend.name)) continue;
@@ -409,6 +422,7 @@ fn claimArrayValue(allocator: std.mem.Allocator, selected: []const u8, parsed: ?
 /// or a `backends` array/object). Returns a not-observed claim when no matching
 /// record is present so absence of evidence never becomes a positive claim.
 fn observedClaim(parsed: ?std.json.Value, backend_name: []const u8) Claim {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const root = parsed orelse return notObserved(backend_name);
     if (root != .object) return notObserved(backend_name);
     if (matchObjectClaim(root.object, backend_name)) |claim| return claim;
@@ -480,6 +494,7 @@ fn statusAllowsClaim(status: []const u8) bool {
 /// `allocator` is unused: inline content borrows and file bytes use the
 /// workspace reader's allocator.
 fn readConformanceEvidence(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !SourceEvidence {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = allocator;
     if (argString(args, "content")) |content| return .{ .available = true, .source_kind = "inline_content", .bytes = content };
     const path = argString(args, "input") orelse default_conformance_input;
@@ -498,6 +513,7 @@ fn evidenceReadError(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Serializes generated config basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn generatedConfigBasisValue(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, kind: []const u8, output: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "client", .{ .string = client });
     try obj.put(allocator, "transport", .{ .string = transport });
@@ -510,6 +526,7 @@ fn generatedConfigBasisValue(allocator: std.mem.Allocator, a: *App, client: []co
 
 /// Serializes conformance basis fields into an allocator-owned JSON value; allocation failures propagate.
 fn conformanceBasisValue(allocator: std.mem.Allocator, a: *App, backend: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "backend", .{ .string = backend });
     try obj.put(allocator, "default_input", .{ .string = default_conformance_input });
@@ -567,6 +584,7 @@ fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, tran
 
 /// Implements codex toml content workflow logic using caller-owned inputs.
 fn codexTomlContent(allocator: std.mem.Allocator, a: *App, transport: []const u8, server_path: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const server = try jsonStringLiteral(allocator, server_path);
     defer allocator.free(server);
     const workspace = try jsonStringLiteral(allocator, a.workspace.root);
@@ -589,6 +607,7 @@ fn codexTomlContent(allocator: std.mem.Allocator, a: *App, transport: []const u8
 
 /// Implements markdown config content workflow logic using caller-owned inputs.
 fn markdownConfigContent(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, server_path: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return std.fmt.allocPrint(allocator,
         \\# zigars client configuration
         \\
@@ -622,6 +641,7 @@ fn verificationCommandsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes provenance fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceValue(allocator: std.mem.Allocator, producer: []const u8, artifact_kind: []const u8, argv: []const []const u8, notes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "producer", .{ .string = producer });
     try obj.put(allocator, "artifact_kind", .{ .string = artifact_kind });
@@ -657,6 +677,7 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
 
 /// Serializes artifact identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn artifactIdentityValue(allocator: std.mem.Allocator, path: []const u8, abs_path: []const u8, bytes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const identity = try artifacts.identityFromBytes(allocator, path, abs_path, bytes);
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", .{ .string = path });
@@ -668,6 +689,7 @@ fn artifactIdentityValue(allocator: std.mem.Allocator, path: []const u8, abs_pat
 
 /// Builds preimage identity metadata for the requested workspace path.
 fn preimageIdentityForPath(a: *App, allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const bytes = a.workspace.readFileAlloc(a.io, path, max_evidence_bytes) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
         else => return err,
@@ -688,6 +710,7 @@ fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha25
 
 /// Serializes toolchain fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "zig_path", .{ .string = a.config.zig_path });
     try obj.put(allocator, "zls_path", .{ .string = a.config.zls_path });
@@ -715,6 +738,7 @@ fn workspacePathExists(a: *App, path: []const u8) bool {
 
 /// Serializes identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn identityValue(allocator: std.mem.Allocator, prefix: []const u8, parts: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     hasher.update(prefix);
     for (parts) |part| {
@@ -898,6 +922,7 @@ const AdoptionHarness = struct {
 
     /// Builds a test app fixture with the ports needed by this workflow.
     fn app(self: *AdoptionHarness, allocator: std.mem.Allocator) App {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return App.init(.{
             .workspace = .{ .root = "/work", .cache_root = "/work/.zigars-cache", .transport = "http", .host = "127.0.0.1", .port = 9090 },
             .tool_paths = .{
@@ -956,6 +981,7 @@ fn expectReadWorkflowError(store: *fakes.FakeWorkspaceStore, path: []const u8, e
 
 /// Implements expect workflow write workflow logic using caller-owned inputs.
 fn expectWorkflowWrite(store: *fakes.FakeWorkspaceStore, path: []const u8, bytes: []const u8) !void {
+    // Route through a single workflow path so policy checks run in a consistent order.
     try store.expectWrite(.{
         .path = path,
         .bytes = bytes,
