@@ -127,6 +127,7 @@ pub fn readRegistrySnapshot(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
 ) ArtifactError!Registry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const read = context.workspace_store.read(allocator, .{
         .path = default_registry_path,
         .max_bytes = max_registry_bytes,
@@ -201,6 +202,7 @@ pub fn readArtifact(
     path: []const u8,
     max_bytes: usize,
 ) ports.PortError!ReadArtifactResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{
         .path = path,
         .for_output = false,
@@ -231,6 +233,7 @@ pub fn preimageIdentity(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
 ) ports.PortError!PreimageIdentity {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const read = context.workspace_store.read(allocator, .{
         .path = default_registry_path,
         .max_bytes = max_registry_bytes,
@@ -306,6 +309,7 @@ pub fn persistRegistrySnapshot(
     context: app_context.ArtifactContext,
     entries: []const RegistryEntry,
 ) ArtifactError!void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
     for (entries) |entry| {
@@ -354,6 +358,7 @@ fn collectArtifactPaths(
     root: []const u8,
     limit: usize,
 ) ports.PortError!void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     if (paths.items.len >= limit) return;
     var scan = try context.workspace_store.scanDirectory(allocator, .{
         .path = root,
@@ -379,6 +384,7 @@ fn scannedArtifact(
     path: []const u8,
     include_hashes: bool,
 ) ports.PortError!ScannedArtifact {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var result = ScannedArtifact{
         .path = path,
         .artifact_kind = artifactKind(path),
@@ -414,6 +420,7 @@ fn scannedArtifact(
 /// fails the entire parse (InvalidArtifactRegistryEntry). All strings are
 /// duplicated into `allocator`.
 fn parseRegistryJsonl(allocator: std.mem.Allocator, bytes: []const u8) ArtifactError!Registry {
+    // Normalize input here so downstream paths can rely on validated shape.
     var entries: std.ArrayList(RegistryEntry) = .empty;
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     while (lines.next()) |line_raw| {
@@ -431,6 +438,7 @@ fn parseRegistryJsonl(allocator: std.mem.Allocator, bytes: []const u8) ArtifactE
 /// negative byte count fail as InvalidArtifactRegistryEntry; optional fields
 /// fall back to their documented defaults.
 fn entryFromValue(allocator: std.mem.Allocator, value: std.json.Value) ArtifactError!RegistryEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (value != .object) return error.InvalidArtifactRegistryEntry;
     const obj = value.object;
     const provenance = objectValue(obj.get("provenance")) orelse return error.InvalidArtifactRegistryEntry;
@@ -465,6 +473,7 @@ fn entryFromValue(allocator: std.mem.Allocator, value: std.json.Value) ArtifactE
 
 /// Serializes registry entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn registryEntryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -502,6 +511,7 @@ fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.js
 
 /// Serializes toolchain fields into an allocator-owned JSON value; allocation failures propagate.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
