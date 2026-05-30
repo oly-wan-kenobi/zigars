@@ -156,6 +156,7 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
 /// document, then send the request with an empty diagnostics context. Same
 /// outcome and ownership contract as `position`.
 pub fn range(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: RangeRequest) !PositionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
         const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
@@ -189,6 +190,7 @@ pub fn range(allocator: std.mem.Allocator, context: app_context.ZlsContext, requ
 
 /// Requests a ZLS rename workspace-edit preview without applying source writes.
 pub fn rename(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: RenameRequest) !PositionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const gateway = context.zls_gateway;
     if (capabilityForMethod("textDocument/rename")) |capability| {
         const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
@@ -222,6 +224,7 @@ pub fn rename(allocator: std.mem.Allocator, context: app_context.ZlsContext, req
 
 /// Requests code actions and returns the selected action as a preview payload.
 pub fn codeActionSelection(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: CodeActionSelectionRequest) !PositionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var actions = try range(allocator, context, .{
         .method = "textDocument/codeAction",
         .file = request.file,
@@ -257,6 +260,7 @@ pub fn codeActionSelection(allocator: std.mem.Allocator, context: app_context.Zl
 /// is just the textDocument URI: capability-gate, sync, then request. Same
 /// outcome and ownership contract as `position`.
 pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: FileRequest) !PositionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
         const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
@@ -290,6 +294,7 @@ pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
 /// the sync step (the query spans the workspace, not one file) and sends the
 /// request with no URI. Same outcome and ownership contract as `position`.
 pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: WorkspaceSymbolRequest) !PositionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const gateway = context.zls_gateway;
     if (capabilityForMethod("workspace/symbol")) |capability| {
         const capability_result = gateway.capability(.{ .capability = capability }) catch |err| return .{ .err = switch (err) {
@@ -314,6 +319,7 @@ pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsCo
 /// Maps an LSP method to the ZLS server-capability key that must be advertised
 /// before it is sent; null means the method is not capability-gated here.
 pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.eql(u8, method, "textDocument/hover")) return "hoverProvider";
     if (std.mem.eql(u8, method, "textDocument/definition")) return "definitionProvider";
     if (std.mem.eql(u8, method, "textDocument/references")) return "referencesProvider";
@@ -329,6 +335,7 @@ pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
 
 /// Builds the textDocument+position LSP params JSON; caller owns the bytes.
 fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Params = struct {
         textDocument: struct { uri: []const u8 },
         position: struct { line: i64, character: i64 },
@@ -348,6 +355,7 @@ fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, cha
 /// Builds the textDocument/references LSP params JSON, adding the
 /// includeDeclaration context flag; caller owns the bytes.
 fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, include_declaration: bool) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Params = struct {
         textDocument: struct { uri: []const u8 },
         position: struct { line: i64, character: i64 },
@@ -368,6 +376,7 @@ fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, c
 
 /// Builds a range-based LSP payload with an empty diagnostics context.
 fn rangePayload(allocator: std.mem.Allocator, uri: []const u8, start_line: i64, start_character: i64, end_line: i64, end_character: i64) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Diagnostic = struct {};
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -395,6 +404,7 @@ fn rangePayload(allocator: std.mem.Allocator, uri: []const u8, start_line: i64, 
 
 /// Builds a rename LSP payload including the requested new symbol name.
 fn renamePayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, new_name: []const u8) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Params = struct {
         textDocument: struct { uri: []const u8 },
         position: struct { line: i64, character: i64 },
@@ -423,6 +433,7 @@ fn codeActionCount(allocator: std.mem.Allocator, payload: []const u8) !usize {
 
 /// Selects one code action and wraps it as an LSP-shaped result payload.
 fn selectCodeActionPayload(allocator: std.mem.Allocator, payload: []const u8, action_index: i64) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (action_index < 0) return error.InvalidActionIndex;
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, payload, .{});
     defer parsed.deinit();
@@ -443,6 +454,7 @@ fn selectCodeActionPayload(allocator: std.mem.Allocator, payload: []const u8, ac
 
 /// Returns the result array from a direct array or JSON-RPC response object.
 fn actionArray(value: std.json.Value) ?std.json.Array {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (value) {
         .array => |array| array,
         .object => |object| switch (object.get("result") orelse .null) {
@@ -456,6 +468,7 @@ fn actionArray(value: std.json.Value) ?std.json.Array {
 /// Builds an LSP params JSON carrying only the textDocument URI; caller owns the
 /// bytes.
 fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Params = struct {
         textDocument: struct { uri: []const u8 },
     };
@@ -471,6 +484,7 @@ fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Alloca
 /// Builds the workspace/symbol LSP params JSON from the query; caller owns the
 /// bytes.
 fn workspaceSymbolPayload(allocator: std.mem.Allocator, query: []const u8) std.mem.Allocator.Error![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Params = struct { query: []const u8 };
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
