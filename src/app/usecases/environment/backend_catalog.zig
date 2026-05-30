@@ -16,6 +16,7 @@ pub const backends = domain_catalog.backends;
 
 /// Serializes value data into an allocator-owned JSON value; allocation failures propagate.
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_setup_catalog" });
     try obj.put(allocator, "supported_zig_version", .{ .string = supported_zig_version });
@@ -28,6 +29,7 @@ pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_path
 
 /// Serializes backend fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, include_configured_paths: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     const configured_path = pathFor(backend.name, paths);
     try obj.put(allocator, "name", .{ .string = backend.name });
