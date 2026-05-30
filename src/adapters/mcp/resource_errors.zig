@@ -26,6 +26,7 @@ pub const Spec = struct {
 
 /// Produces a JSON error object owned by `allocator` for embedding in responses.
 pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = spec.kind });
@@ -54,6 +55,7 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
 /// `.text` is owned by `allocator` (free via `deinitResourceContent`); `uri`
 /// borrows the caller's slice. Pretty-printed with 2-space indent.
 pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
