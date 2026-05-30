@@ -24,6 +24,7 @@ test "evidence JSON builders clean up allocation failures" {
 
 /// Exercises nested evidence JSON construction under allocation-failure testing.
 fn evidenceValuesWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const sources = try evidence.sourceArrayValue(allocator, &.{ .parser, .zls });
     defer evidence.deinitOwnedValue(allocator, sources);
 
