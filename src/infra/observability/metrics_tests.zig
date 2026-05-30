@@ -9,6 +9,7 @@ const Reader = metrics.Reader;
 
 /// Builds an allocator-owned metrics snapshot for tests.
 fn snapshotWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var state = observability.State{};
     state.recordToolCall("zig_build", 4, false);
     state.recordToolCallWithCorrelation("zig_check", 5, true, .{
