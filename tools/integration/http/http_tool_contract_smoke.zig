@@ -27,6 +27,7 @@ pub fn runWorkflowAssertions(
     expected: JsonValue,
     scenarios: *usize,
 ) !void {
+    // Route through a single workflow path so policy checks run in a consistent order.
     try assertToolPaths(allocator, io, port, 14, "zig_package_cache_doctor", "{\"timeout_ms\":1000}", expected, "package_cache_doctor_paths", scenarios);
     try assertToolPaths(allocator, io, port, 15, "zigars_context_pack", "{\"mode\":\"tiny\"}", expected, "context_pack_paths", scenarios);
     try assertToolPaths(allocator, io, port, 16, "zigars_next_action", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected, "next_action_paths", scenarios);
