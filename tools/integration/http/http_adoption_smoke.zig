@@ -17,6 +17,7 @@ const evidence_arg = "{\\\"kind\\\":\\\"zigars_backend_conformance_report\\\",\\
 /// successful assertion group so the top-level minimum-count gate can verify
 /// full coverage.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try assertToolPaths(allocator, io, port, 220, "zigars_adoption_pack", "{\"client\":\"codex\",\"transport\":\"stdio\",\"backend\":\"zflame\"}", expected, "adoption_pack_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 221, "zigars_client_config_generate", "{\"client\":\"codex\",\"kind\":\"codex-toml\",\"output\":\".zigars-cache/adoption/http-codex.toml\",\"apply\":false}", expected, "client_config_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 222, "zigars_smoke_plan", "{\"client\":\"generic\",\"backend\":\"zflame\",\"platform\":\"linux\",\"timeout_ms\":1000}", expected, "smoke_plan_paths", scenario_count);
@@ -40,6 +41,7 @@ fn assertToolPaths(
     expected_key: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
