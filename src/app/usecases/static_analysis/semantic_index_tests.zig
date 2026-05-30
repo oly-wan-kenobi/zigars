@@ -29,6 +29,7 @@ fn testContext(
     scanner_fake: *fakes.FakeWorkspaceScanner,
     command_fake: ?*fakes.FakeCommandRunner,
 ) app_context.StaticAnalysisContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zlint = "zlint-bin" },
