@@ -99,6 +99,7 @@ pub const Context = struct {
 
     /// Creates correlation ids from a process-local sequence.
     pub fn init(sequence: u64, request_id: RequestId, mcp_method: []const u8, tool_name: ?[]const u8) Context {
+        // Capture all required dependencies up front so later calls can stay predictable.
         var out: Context = .{
             .request_id = request_id,
             .mcp_method = mcp_method,
@@ -144,6 +145,7 @@ pub const Context = struct {
     /// Context goes out of scope. `schema_version` lets clients version the
     /// correlation shape independently of the result payload.
     pub fn metaValue(self: *const Context, allocator: std.mem.Allocator) !std.json.Value {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var correlation_obj: std.json.ObjectMap = .empty;
         var correlation_owned = true;
         errdefer if (correlation_owned) deinitMetaValue(allocator, .{ .object = correlation_obj });
@@ -178,6 +180,7 @@ pub const Context = struct {
     /// `prefix_buffer`. `request_id_buffer` backs the compact request-id slice.
     /// Adapter-local so the MCP server logs correlation without importing infra.
     pub fn formatLogPrefix(self: *const Context, prefix_buffer: []u8, request_id_buffer: *[64]u8) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const request_id = self.request_id.compactValue(request_id_buffer);
         const trace = self.compactTrace();
         if (self.tool_name) |tool_name| {
@@ -214,6 +217,7 @@ pub const Generator = struct {
 
 /// Frees JSON containers allocated by `metaValue`; string values are borrowed.
 pub fn deinitMetaValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .array => |array| {
             var mutable = array;
@@ -243,6 +247,7 @@ fn requestIdValue(allocator: std.mem.Allocator, request_id: *const RequestId) !s
 /// Renders `value` as right-aligned, zero-padded lowercase hex filling all of
 /// `out`. Used to derive fixed-width trace/span ids from one sequence number.
 fn writeLowerHexFixed(out: []u8, value: u64) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     @memset(out, '0');
     var remaining = value;
     var index = out.len;
@@ -257,6 +262,7 @@ fn writeLowerHexFixed(out: []u8, value: u64) void {
 /// Writes a "zigars-tc-" prefix followed by the right-aligned, zero-padded
 /// decimal sequence into `out`, producing a stable per-call id of fixed width.
 fn writeToolCallId(out: []u8, sequence: u64) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const prefix = "zigars-tc-";
     @memcpy(out[0..prefix.len], prefix);
     var digits = out[prefix.len..];
