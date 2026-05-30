@@ -14,6 +14,7 @@ fn testIo() std.Io {
 
 /// Creates paired file handles for scripted transport tests.
 fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
         else => {
@@ -28,6 +29,7 @@ fn testPipe() !struct { read_end: std.Io.File, write_end: std.Io.File } {
 
 /// Reads all available bytes from a test pipe.
 fn readPipeAll(file: std.Io.File, io: std.Io, buf: []u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var total: usize = 0;
     while (total < buf.len) {
         const n = file.readStreaming(io, &.{buf[total..]}) catch |err| switch (err) {
