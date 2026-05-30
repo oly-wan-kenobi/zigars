@@ -25,6 +25,7 @@ pub const RuntimeClockAndIds = struct {
 
     /// Exposes this clock through the ClockAndIds vtable.
     pub fn port(self: *Self) ports.ClockAndIds {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
