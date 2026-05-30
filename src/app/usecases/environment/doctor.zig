@@ -146,6 +146,7 @@ pub fn report(allocator: std.mem.Allocator, input: Input) !std.json.Value {
 
 /// Classifies observed Zig version compatibility with build.zig.zon minimum_zig_version.
 pub fn zigVersionPreflight(allocator: std.mem.Allocator, input: ZigVersionPreflightInput) !ZigVersionPreflightReport {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!input.probe_enabled) return .{
         .ok = null,
         .status = "unprobed",
@@ -251,6 +252,7 @@ pub fn zigVersionPreflightValue(allocator: std.mem.Allocator, input: ZigVersionP
 
 /// Extracts build.zig.zon minimum_zig_version from caller-owned bytes.
 pub fn minimumZigVersionFromBuildZon(bytes: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     while (lines.next()) |line| {
         const trimmed = std.mem.trim(u8, line, " \t\r\n");
@@ -265,6 +267,7 @@ pub fn minimumZigVersionFromBuildZon(bytes: []const u8) ?[]const u8 {
 /// Note: prerelease/dev suffixes are ignored, so `0.16.0-dev.N` satisfies a
 /// `0.16.0` minimum once the numeric prefix matches.
 pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const active = parseVersionPrefix(active_zig) orelse return false;
     const minimum = parseVersionPrefix(minimum_zig) orelse return false;
     for (active, minimum) |active_part, minimum_part| {
@@ -276,6 +279,7 @@ pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool
 
 /// Parses the leading major.minor.patch version from Zig version strings.
 pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
+    // Normalize input here so downstream paths can rely on validated shape.
     const trimmed = std.mem.trim(u8, raw, " \t\r\n\"'");
     if (trimmed.len == 0) return null;
     var pos: usize = if (trimmed[0] == 'v') 1 else 0;
@@ -315,6 +319,7 @@ fn probeValue(allocator: std.mem.Allocator, name: []const u8, probe: Probe) !std
 
 /// Serializes Zig version preflight fields into an allocator-owned JSON value.
 fn zigVersionPreflightCheckValue(allocator: std.mem.Allocator, preflight: ZigVersionPreflightReport) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
