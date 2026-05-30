@@ -1,3 +1,9 @@
+//! Coverage orchestration for release evidence generation.
+//!
+//! Builds test binaries, runs them under kcov, merges per-suite reports, then
+//! writes `coverage/summary.json`. Cobertura parsing lives in
+//! `coverage_cobertura.zig` and summary rendering in `coverage_summary.zig`;
+//! this file owns only the orchestration glue and argument parsing.
 const std = @import("std");
 const cobertura = @import("coverage_cobertura.zig");
 const coverage_config = @import("coverage_config.zig");
@@ -12,9 +18,6 @@ const renderCoverageSummary = coverage_summary.renderCoverageSummary;
 
 const percent_scale: u32 = 100;
 
-// Runs release coverage evidence generation. Cobertura parsing and summary
-// rendering live in sibling modules to keep this file focused on orchestration.
-
 fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
@@ -27,6 +30,8 @@ fn nowNs(io: Io) i96 {
     return Io.Clock.now(.real, io).nanoseconds;
 }
 
+// All coverage thresholds default to the centrally maintained floors in
+// coverage_config.zig; flags let the CI job override them for local runs.
 const CoverageOptions = struct {
     out_dir: []const u8 = "coverage",
     zig: []const u8 = "zig",
@@ -35,11 +40,15 @@ const CoverageOptions = struct {
     no_build: bool = false,
     require_kcov: bool = false,
     allow_kcov_failure: bool = false,
+    // Line coverage floors stored in basis points (1 bp = 0.01%).
     min_line_coverage: u32 = coverage_config.min_line_coverage_basis_points,
     min_src_line_coverage: u32 = coverage_config.min_src_line_coverage_basis_points,
     min_tools_line_coverage: u32 = coverage_config.min_tools_line_coverage_basis_points,
 };
 
+// A named kcov invocation. `name` is used to name the per-binary output
+// directory under `<out_dir>/kcov/`; `argv` is the test binary path plus any
+// extra arguments. All strings are heap-owned; call `deinit` to release them.
 const KcovCommand = struct {
     name: []const u8,
     argv: []const []const u8,
@@ -68,7 +77,13 @@ const KcovCommand = struct {
     }
 };
 
-/// Runs test binaries, optional kcov collection, and writes coverage summary JSON.
+/// Parses flags from `args`, builds test binaries (unless `--no-build`),
+/// runs each under optional kcov instrumentation, merges per-suite reports,
+/// enforces configured line-coverage floors, and writes
+/// `<out_dir>/summary.json`. Returns `error.CoverageFailed` when any check
+/// fails; detailed diagnostics are embedded in the summary JSON.
+/// `self_path` is `args[0]` of the current process, used to invoke the
+/// integration smoke commands for server-side kcov collection.
 pub fn run(allocator: Allocator, io: Io, self_path: []const u8, args: []const []const u8) !void {
     var options: CoverageOptions = .{};
     var i: usize = 0;
@@ -225,6 +240,9 @@ fn freeTestResult(allocator: Allocator, result: TestResult) void {
     allocator.free(result.path);
 }
 
+// Scans combined stdout+stderr for the Zig test runner's summary line
+// "All <N> tests passed." and extracts the count. Returns null when the
+// binary did not print that line (e.g. zero tests, or a runner failure).
 fn parseTestCount(text: []const u8) ?i64 {
     const prefix = "All ";
     var start: usize = 0;
@@ -256,6 +274,9 @@ fn termExitCode(term: std.process.Child.Term) i64 {
     };
 }
 
+// Probes PATH for `name` by running `name --version`. Returns a heap-owned
+// copy of `name` when found and exit-0, or null when not found. The caller
+// must free the returned slice when non-null.
 fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
     const result = std.process.run(allocator, io, .{ .argv = &.{ name, "--version" } }) catch |err| switch (err) {
         error.FileNotFound => return null,
@@ -428,6 +449,10 @@ fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase
     error_message.* = try std.fmt.allocPrint(allocator, "{s} exited unsuccessfully: {s}", .{ phase, detail[0..limit] });
 }
 
+// All five checks must pass: total, src, and tools line floors, zero
+// uncovered lines, and zero missing tracked files. When no kcov data is
+// available, the result depends on `require_kcov` — a missing kcov is only
+// a failure when the caller required it explicitly.
 fn coverageMeetsFloors(stats: ?CoverageStats, options: CoverageOptions) bool {
     const measured = stats orelse return !options.require_kcov;
     return meetsFloor(measured.lineRateBasisPoints(), options.min_line_coverage) and

@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for the phase-6 tool family: CI ingestion, release
+//! planning, API baseline, docs querying, dependency management, SBOM, and
+//! security scanning tools (IDs 140-176). Builds JSON arguments dynamically and
+//! asserts structured result paths against the shared fixture JSON.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
@@ -48,6 +53,9 @@ const readme_commands =
 const autodoc_json = "{\"name\":\"FixtureSymbol\",\"docs\":\"FixtureSymbol docs\"}";
 const osv_report = "{\"vulns\":[{\"id\":\"CVE-2024-0001\"}]}";
 
+/// Exercises phase-6 tools through the HTTP transport and asserts structured
+/// result paths against `expected`. `scenario_count` is incremented once per
+/// successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
     try assertToolFields(allocator, io, port, 140, "zig_ci_ingest", &.{ str("content", ci_log), str("format", "log") }, expected, "phase6_ci_ingest_paths", scenario_count);
     try assertToolFields(allocator, io, port, 141, "zig_ci_repro_plan", &.{ str("content", ci_log), str("format", "log"), str("changed_files", "src/main.zig") }, expected, "phase6_ci_repro_plan_paths", scenario_count);
@@ -91,24 +99,31 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolFields(allocator, io, port, 176, "zig_dependency_migrate", &.{ str("manifest", dependency_manifest), str("dependency", "dep_a"), str("target_url", "https://example.com/dep-a-v2.tar.gz"), boolv("apply", false) }, expected, "phase6_dependency_migrate_paths", scenario_count);
 }
 
+/// Constructs a string `Field` for `argsJson`.
 fn str(key: []const u8, value: []const u8) Field {
     return .{ .key = key, .value = .{ .string = value } };
 }
 
+/// Constructs a boolean `Field` for `argsJson`.
 fn boolv(key: []const u8, value: bool) Field {
     return .{ .key = key, .value = .{ .bool = value } };
 }
 
+/// Constructs an integer `Field` for `argsJson`.
 fn intv(key: []const u8, value: i64) Field {
     return .{ .key = key, .value = .{ .integer = value } };
 }
 
+/// Serializes `fields` to a JSON object string, then delegates to
+/// `assertToolPaths`. Caller-allocated args are freed before return.
 fn assertToolFields(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, fields: []const Field, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {
     const args_json = try argsJson(allocator, fields);
     defer allocator.free(args_json);
     try assertToolPaths(allocator, io, port, id, tool_name, args_json, expected_root, expected_key, scenario_count);
 }
 
+/// Serializes `fields` to a minified JSON object string. Caller owns the
+/// returned slice and must free it.
 fn argsJson(allocator: std.mem.Allocator, fields: []const Field) ![]u8 {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -123,6 +138,9 @@ fn argsJson(allocator: std.mem.Allocator, fields: []const Field) ![]u8 {
     return cli_io.jsonStringifyAlloc(allocator, .{ .object = obj }, .{ .whitespace = .minified });
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC and asserts every JSON path in the
+/// `expected_key` sub-object of `expected_root`. Returns `error.AssertionFailed`
+/// on a missing path. Increments `scenario_count` on success.
 fn assertToolPaths(
     allocator: std.mem.Allocator,
     io: Io,

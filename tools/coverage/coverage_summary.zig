@@ -1,3 +1,8 @@
+//! Release-evidence JSON rendering for coverage results.
+//!
+//! Owns the stable schema of `coverage/summary.json`: kind, ok, timestamps,
+//! per-suite test results, and the full kcov coverage breakdown. The shape is
+//! consumed by release-check tooling and must not change without a schema bump.
 const std = @import("std");
 const cobertura = @import("coverage_cobertura.zig");
 const coverage_config = @import("coverage_config.zig");
@@ -10,8 +15,6 @@ const CoverageFileStats = cobertura.CoverageFileStats;
 const CoverageStats = cobertura.CoverageStats;
 
 const percent_scale: u32 = 100;
-
-// Owns the stable release-evidence JSON shape emitted by the coverage command.
 
 /// Per-test executable result included in the coverage summary.
 pub const TestResult = struct {
@@ -26,7 +29,9 @@ pub const TestResult = struct {
     stderr_bytes: usize,
 };
 
-/// kcov availability, execution, and parsed Cobertura state for summary output.
+/// kcov availability, execution status, and parsed Cobertura data for the
+/// coverage object in the summary JSON. All string fields are borrowed from
+/// the caller; no ownership is transferred.
 pub const KcovInput = struct {
     available: bool,
     path: ?[]const u8,
@@ -51,7 +56,10 @@ const CoverageSummaryInput = struct {
     kcov: KcovInput,
 };
 
-/// Renders release coverage evidence as deterministic JSON.
+/// Renders the full `coverage/summary.json` document as a heap-owned UTF-8
+/// slice. The output is deterministic for a given `input` except for the
+/// `generated_at_unix_ns` timestamp, which reflects real clock time.
+/// The caller owns the returned slice and must free it.
 pub fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInput) ![]u8 {
     var aw: Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -168,10 +176,12 @@ fn renderCoverageFile(writer: *Io.Writer, file: CoverageFileStats) !void {
     try writer.writeAll("]\n      }");
 }
 
+// Writes a basis-point value as a decimal percentage string (e.g. 9875 → "98.75").
 fn writePercent(writer: *Io.Writer, value: u32) !void {
     try writer.print("{d}.{d:0>2}", .{ value / percent_scale, value % percent_scale });
 }
 
+// Writes a percentage or JSON `null` when no measurement is available.
 fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
     if (value) |bp| {
         try writer.print("{d}.{d:0>2}", .{ bp / percent_scale, bp % percent_scale });

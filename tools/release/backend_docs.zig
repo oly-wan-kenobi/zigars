@@ -1,8 +1,16 @@
+//! Release gate: optional backend documentation contract.
+//! Confirms that docs/backends.md contains the required evidence vocabulary
+//! and does not contain stale CLI fragments that would mislead integrators.
 const std = @import("std");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
+/// Reads `docs/backends.md` and checks that required evidence terms are present
+/// and stale flag spellings are absent.  Errors from missing required needles
+/// and stale tokens are both reported to stderr; the function returns `false`
+/// without returning an error so the caller can aggregate multiple failures.
+/// Allocation is fully freed before returning.
 pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
     const path = "docs/backends.md";
     const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
@@ -43,6 +51,8 @@ pub fn checkOptionalBackendContracts(allocator: Allocator, io: Io) !bool {
             ok = false;
         }
     }
+    // Stale fragments were removed when the backend CLI was updated; their
+    // presence means the docs page was not refreshed alongside the change.
     const stale = [_][]const u8{
         "zflame guess",
         "--palette",

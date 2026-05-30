@@ -1,3 +1,8 @@
+//! Release gate orchestrator: artifact hygiene, source hygiene, and contract checks.
+//! Policy tables (budgets, forbidden tokens, error-contract paths) live in
+//! release_rules.zig; domain-specific checks delegate to mcp_contracts.zig,
+//! release_docs.zig, backend_docs.zig, and public_claims.zig.  This module
+//! stays execution-focused and references policy by name rather than inlining it.
 const std = @import("std");
 const zigars = @import("zigars");
 const release_docs = @import("release_docs.zig");
@@ -146,6 +151,9 @@ fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Checks every file in `line_budgets` against its code-line limit and minimum
+/// headroom.  Both an exceeded limit and insufficient headroom are failures so
+/// files must be split before they approach the cap, not after.
 fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (line_budgets) |budget| {
@@ -171,6 +179,9 @@ fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Required headroom is 10 % of max_lines, clamped to [10, 50].
+/// Small files need at least 10 free lines; large files cap at 50 so the
+/// rule stays proportional without demanding huge buffers on very large files.
 fn minLineBudgetHeadroom(max_lines: usize) usize {
     return @min(@as(usize, 50), @max(@as(usize, 10), max_lines / 10));
 }
@@ -281,6 +292,12 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies that every static-analysis and zwanzig manifest entry has a
+/// matching domain contract entry with consistent capability tier, non-empty
+/// analysis fields, and appropriate confidence/classification constraints.
+/// Advisory-tier tools must not claim high confidence or release-gating status;
+/// parser-backed tools must expose parse-status fields; release-gating tools
+/// must be compiler-, ZLint-, or zwanzig-backed.
 fn checkStaticAnalysisContracts(io: Io) !bool {
     var ok = true;
     for (zigars.manifest.entries) |entry| {
@@ -338,6 +355,9 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
     return ok;
 }
 
+/// Verifies that every `common_intents` entry in the tool catalog has a
+/// non-empty `prefer` string listing only known tool ids.  Unknown ids indicate
+/// the catalog and the manifest have drifted.
 fn checkCatalogCommonIntentPreferences(allocator: Allocator, io: Io) !bool {
     var catalog = zigars.manifest.tool_catalog_render.parsed(allocator) catch |err| {
         try stderrPrint(io, "tool catalog common-intent check could not parse catalog: {s}\n", .{@errorName(err)});
@@ -436,12 +456,12 @@ fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) !
 }
 
 /// Counts source lines of code, excluding blank lines and whole-line comments
-/// (`//`, `///`, and `//!`). Line budgets bound how much *code* a reviewer must
+/// (`//`, `///`, and `//!`).  Line budgets bound how much code a reviewer must
 /// audit, so documentation and comments must never count against a budget:
 /// adding explanatory docs should improve auditability, not incur a penalty.
-/// A code line with a trailing comment still counts as code. Zig has only line
-/// comments, so a trimmed line starting with `//` is wholly a comment, while
-/// multi-line string content (`\\`-prefixed) is code and is counted.
+/// A code line with a trailing comment still counts as code.  Zig has only
+/// line comments, so a trimmed line starting with `//` is wholly a comment,
+/// while multi-line string content (`\\`-prefixed) is code and is counted.
 fn codeLineCount(bytes: []const u8) usize {
     var count: usize = 0;
     var lines = std.mem.splitScalar(u8, bytes, '\n');

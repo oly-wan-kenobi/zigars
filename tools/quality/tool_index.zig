@@ -1,3 +1,10 @@
+//! Generator for `docs/tool-index.generated.md`.
+//!
+//! Reads `src/manifest/tool_catalog.json` via the `catalog_render` helper,
+//! then renders a Markdown document with groups, common intents, compact
+//! argument hints, planning support, and static-analysis capability tiers.
+//! The output is checked for staleness by `zig build docs-check`; run
+//! `zig build tool-index` to regenerate.
 const std = @import("std");
 
 const Io = std.Io;
@@ -22,6 +29,10 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
+/// Generates `docs/tool-index.generated.md` from the live catalog JSON.
+/// With `--check`, compares the rendered output to the file on disk and
+/// returns `error.StaleGeneratedFile` when they differ; without it, writes
+/// the rendered content to disk. The file must be committed and kept current.
 pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var check = false;
     for (args) |arg| {
@@ -53,6 +64,9 @@ pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
     try writeFile(io, output_path, rendered);
 }
 
+// Renders the full Markdown document from a parsed catalog JSON value.
+// The schema keys accessed here must stay in sync with tool_catalog.json.
+// The caller owns the returned slice and must free it.
 fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
     const obj = catalog.object;
     var out: Io.Writer.Allocating = .init(allocator);

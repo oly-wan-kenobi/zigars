@@ -1,7 +1,15 @@
+//! Dot-path traversal helpers for `std.json.Value` trees.
+//!
+//! Provides a small query DSL for inspecting JSON results in test assertions
+//! and release checks without pulling in a full JSONPath library.
 const std = @import("std");
 
 const JsonValue = std.json.Value;
 
+/// Traverses a JSON value using a dot-separated `path` (e.g. `"result.tools.1.name"`).
+/// Numeric segments index into arrays; non-numeric segments key into objects.
+/// Returns `null` for any missing key, out-of-bounds index, or type mismatch.
+/// An empty segment (consecutive dots) also yields `null`.
 pub fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
     var current = value;
     var parts = std.mem.splitScalar(u8, path, '.');
@@ -20,6 +28,8 @@ pub fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
     return current;
 }
 
+// Returns true only when every byte is an ASCII digit, so that "0", "10" etc.
+// route to array indexing while "ok", "tools" etc. route to object lookup.
 fn isDigits(text: []const u8) bool {
     if (text.len == 0) return false;
     for (text) |c| if (c < '0' or c > '9') return false;

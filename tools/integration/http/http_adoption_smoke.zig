@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for the adoption tool family (zigars_adoption_pack,
+//! zigars_client_config_generate, zigars_smoke_plan, zigars_conformance_report).
+//! Each `run` call asserts the structured-result JSON paths returned by the live
+//! HTTP server against expectations stored in the shared fixture JSON.
+
 const std = @import("std");
 const smoke = @import("../smoke_support.zig");
 
@@ -7,6 +12,10 @@ const valueAt = smoke.valueAt;
 
 const evidence_arg = "{\\\"kind\\\":\\\"zigars_backend_conformance_report\\\",\\\"compatibility_matrix\\\":[{\\\"backend\\\":\\\"zflame\\\",\\\"status\\\":\\\"passed\\\"},{\\\"backend\\\":\\\"zls\\\",\\\"status\\\":\\\"failed\\\"}]}";
 
+/// Exercises adoption tools through the HTTP transport and asserts structured
+/// result paths against `expected`. `scenario_count` is incremented once per
+/// successful assertion group so the top-level minimum-count gate can verify
+/// full coverage.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
     try assertToolPaths(allocator, io, port, 220, "zigars_adoption_pack", "{\"client\":\"codex\",\"transport\":\"stdio\",\"backend\":\"zflame\"}", expected, "adoption_pack_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 221, "zigars_client_config_generate", "{\"client\":\"codex\",\"kind\":\"codex-toml\",\"output\":\".zigars-cache/adoption/http-codex.toml\",\"apply\":false}", expected, "client_config_paths", scenario_count);
@@ -17,6 +26,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 224, "zigars_smoke_plan", "{\"platform\":\"plan9\"}", expected, "smoke_plan_unsupported_paths", scenario_count);
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC and asserts every JSON path in the
+/// `expected_key` sub-object of `expected_root`. Returns `error.AssertionFailed`
+/// on a missing path. Increments `scenario_count` on success.
 fn assertToolPaths(
     allocator: std.mem.Allocator,
     io: Io,

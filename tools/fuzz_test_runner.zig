@@ -1,4 +1,7 @@
-//! Default test runner for unit tests.
+//! Custom test runner that extends the Zig default to support kcov
+//! instrumentation and fuzzing via `std.Build.abi.fuzz`.
+//!
+//! Excluded from coverage accounting (see `isGeneratedCoveragePath`).
 const builtin = @import("builtin");
 
 const std = @import("std");

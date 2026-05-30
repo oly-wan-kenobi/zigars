@@ -1,3 +1,7 @@
+//! Release gate: MCP adapter and public-surface contracts.
+//! Three groups of checks are provided: no-patch (first-party adapter only),
+//! advertised-capability (tasks, completions, pagination, resource subscriptions),
+//! and public-surface (tool schemas, resource URIs, prompt names, report shapes).
 const std = @import("std");
 const zigars = @import("zigars");
 const backend_contract_scenarios = @import("backend_contract_scenarios.zig");
@@ -6,8 +10,9 @@ const mcp_tool_contracts = @import("mcp_tool_contracts.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
-// Release gates for MCP adapter invariants that are easiest to audit as token
-// contracts over the source tree.
+// Token-presence checks used here are intentionally coarse: they cannot catch
+// all regressions, but they do prevent silent removal of load-bearing adapter
+// surface that would break published MCP clients.
 
 /// Verifies that zigars uses its first-party MCP adapter without patch shims.
 pub fn checkNoPatchContract(allocator: Allocator, io: Io) !bool {
@@ -49,6 +54,10 @@ pub fn checkPublicSurfaceContract(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Returns `true` iff every token in `tokens` is a substring of the file at
+/// `path`.  Missing tokens and file-read errors are reported to stderr with
+/// `label` as context; `false` is returned rather than propagating an error
+/// so the caller can accumulate multiple failures.
 fn checkPresent(allocator: Allocator, io: Io, label: []const u8, path: []const u8, tokens: []const []const u8) !bool {
     const bytes = readFileAlloc(allocator, io, path, 4 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "{s} could not read {s}: {s}\n", .{ label, path, @errorName(err) });
@@ -65,6 +74,8 @@ fn checkPresent(allocator: Allocator, io: Io, label: []const u8, path: []const u
     return ok;
 }
 
+/// Returns `true` iff none of `tokens` appear in the file at `path`.
+/// Forbidden tokens and file-read errors are reported to stderr with `label`.
 fn checkAbsent(allocator: Allocator, io: Io, label: []const u8, path: []const u8, tokens: []const []const u8) !bool {
     const bytes = readFileAlloc(allocator, io, path, 4 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "{s} could not read {s}: {s}\n", .{ label, path, @errorName(err) });

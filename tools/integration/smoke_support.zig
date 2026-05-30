@@ -1,6 +1,7 @@
-//! Slim shared entrypoint for the integration smoke suite. The actual helper
-//! bodies live in focused modules under `common/` so this file stays a small,
-//! auditable facade; fixtures continue to use the same `smoke.<helper>` surface.
+//! Slim shared entrypoint for the integration smoke suite. Re-exports the
+//! focused helpers from `common/` so fixture files use a single `smoke.*`
+//! import surface. The actual logic lives in the sibling modules; only add
+//! policy here when it applies uniformly across HTTP and stdio fixtures.
 
 const json_query = @import("../common/json_query.zig");
 const smoke_assert = @import("common/smoke_assert.zig");

@@ -1,5 +1,14 @@
+//! Stdio smoke fixtures for environment and profile tool paths.
+//! Asserts project-profile lifecycle (generate, read, validate, diff,
+//! bootstrap), env-pack, ZVM probe, toolchain pin, dev-env generation,
+//! backend install plan, conformance, and evidence-pack tools over the
+//! shared `StdioClient` transport.
+
 const std = @import("std");
 
+/// Exercises environment-management and profile tool paths end-to-end.
+/// Requires a live server with the fixture workspace already configured;
+/// the caller (stdio_fixtures) owns server lifecycle and workspace setup.
 pub fn run(client: anytype) !void {
     const profile_v2 = try client.callTool("zigars_project_profile_v2", "{\"apply\":false}");
     defer client.allocator.free(profile_v2);

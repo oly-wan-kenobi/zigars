@@ -1,3 +1,7 @@
+//! Shared HTTP tool-result contract assertion helpers. Each tool-family scenario
+//! module imports these so call order and request IDs stay co-located with the
+//! expectations they enforce. Logs missing paths to stderr for diagnosability.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");

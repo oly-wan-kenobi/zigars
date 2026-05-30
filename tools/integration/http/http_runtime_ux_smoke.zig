@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for runtime UX and MCP lifecycle: workspace map, roots
+//! sync, resource reads, prompts, completions, job lifecycle (start/status/
+//! result/cancel), and tasks/list (IDs 70-99). Also exercises raw JSON-RPC
+//! method paths that sit outside the tools/call surface.
+
 const std = @import("std");
 const smoke = @import("../smoke_support.zig");
 
@@ -5,6 +10,8 @@ const Io = std.Io;
 const JsonValue = std.json.Value;
 const valueAt = smoke.valueAt;
 
+/// Exercises runtime UX tools and raw MCP methods through the HTTP transport.
+/// `scenario_count` is incremented once per successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
     try assertToolPaths(allocator, io, port, 70, "zigars_workspace_map", "{}", expected, "workspace_map_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 71, "zigars_roots_sync", "{\"roots\":\"file://src\\n\",\"apply\":false}", expected, "roots_sync_paths", scenario_count);
@@ -30,6 +37,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try smoke.assertHttpRpcContains(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"tasks/list\",\"params\":{\"limit\":5}}", "job-1", scenario_count);
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC and asserts every JSON path in the
+/// `expected_key` sub-object of `expected_root`. Returns `error.AssertionFailed`
+/// on a missing path. Increments `scenario_count` on success.
 fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);

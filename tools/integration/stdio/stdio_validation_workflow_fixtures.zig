@@ -1,3 +1,11 @@
+//! Stdio smoke fixtures for validation-workflow and session-management tools.
+//! Covers semantic impact analysis, test selection, validation plan/run/history,
+//! build and test event parsing, test timing, flake/failure history, session
+//! snapshot, handoff-pack, decision record, project notes/memory, capability
+//! match, and tool-sequence planning over the shared `StdioClient` transport.
+
+/// Exercises validation workflow, session management, and planning tool paths.
+/// Requires a live server with the fixture workspace already configured.
 pub fn run(client: anytype) !void {
     const semantic_impact = try client.callTool("zig_impact_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":10}");
     defer client.allocator.free(semantic_impact);

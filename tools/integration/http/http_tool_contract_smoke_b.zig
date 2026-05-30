@@ -1,3 +1,8 @@
+//! HTTP contract smoke for the static-analysis and code-index tool family:
+//! zig_check, zig_format, zig_compile_error_index, semantic-index tools,
+//! zlint family, and sandbox-escape rejection (IDs 5-115). Error-path fixtures
+//! additionally assert the MCP isError envelope flag.
+
 const std = @import("std");
 const support = @import("http_tool_contract_support.zig");
 const smoke = @import("../smoke_support.zig");

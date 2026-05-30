@@ -1,3 +1,9 @@
+//! HTTP smoke entrypoint: spins up a short-lived zigars server, runs the full
+//! HTTP transport assertion suite, and shuts it down cleanly. Transport-level
+//! checks (method rejection, body size limits, malformed JSON, initialize
+//! handshake, trust manifest URI) live here; per-tool-family result path checks
+//! are delegated to focused sibling modules to keep this file readable.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const coverage_config = @import("../../coverage/coverage_config.zig");
@@ -153,6 +159,10 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
     try stdoutWrite(io, "http smoke ok\n");
 }
 
+/// Builds the server argv slice, prepending kcov when `options.server_kcov_dir`
+/// is set. The ZLS and zlint paths are intentionally set to nonexistent paths so
+/// optional backends do not interfere with transport-level smoke assertions.
+/// Caller owns the returned `ArrayList` and must free it.
 fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_text: []const u8) !std.ArrayList([]const u8) {
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
@@ -185,6 +195,10 @@ fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_
     return argv;
 }
 
+/// Sends a JSON-RPC shutdown request, waits for the child to exit cleanly, and
+/// sets `child_done` so the deferred `kill` is skipped. Returns
+/// `error.AssertionFailed` if the shutdown response contains an error field or
+/// the child exits with a non-zero status.
 fn shutdownHttpServer(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child, child_done: *bool) !void {
     const response = try smoke.rpc(allocator, io, port,
         \\{"jsonrpc":"2.0","id":99999,"method":"shutdown"}
@@ -198,6 +212,8 @@ fn shutdownHttpServer(allocator: std.mem.Allocator, io: Io, port: u16, child: *s
     if (!termOk(term)) return error.AssertionFailed;
 }
 
+/// Returns true only for a clean zero-exit; signals and non-zero codes are
+/// treated as unexpected failures.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -246,6 +262,11 @@ fn startHttpServer(allocator: std.mem.Allocator, io: Io, options: HttpSmokeOptio
     }
 }
 
+/// Polls the server with an initialize request until it responds or the 30-second
+/// deadline expires. On timeout it kills the child, drains stderr (up to 64 KiB),
+/// and logs it before returning the original connection error. A retry sleep
+/// failure is also logged and propagated; the sleep error is intentionally visible
+/// rather than silently discarded.
 fn waitForInitialize(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child) !void {
     const deadline = smoke.nowNs(io) + 30 * std.time.ns_per_s;
     while (true) {

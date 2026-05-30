@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for the diagnostics tool family: debug, sanitizer, crash,
+//! heap-memory, fuzz, binary-inspection, cross-compilation, embedded, and
+//! microzig tools (IDs 194-221). Each scenario asserts the structured-result
+//! JSON paths returned by the live HTTP server against the shared fixture JSON.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
@@ -7,6 +12,9 @@ const JsonValue = std.json.Value;
 const stderrPrint = cli_io.stderrPrint;
 const valueAt = smoke.valueAt;
 
+/// Exercises diagnostic tools through the HTTP transport and asserts structured
+/// result paths against `expected`. `scenarios` is incremented once per
+/// successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenarios: *usize) !void {
     const crash = "thread 1 panic: reached unreachable code\\n#0 0x1 in parse src/main.zig:10\\n==1==ERROR: AddressSanitizer: heap-use-after-free\\n";
     const heaptrack = "peak heap memory: 1024 bytes\\nallocations: 7 allocations\\n";
@@ -51,6 +59,11 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 221, "zig_flash_plan", "{\"board\":\"rp2040\",\"image\":\"build.zig\",\"probe_backend\":false}", expected, "flash_plan_paths", scenarios);
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC with `args_json_owned_or_static` and
+/// asserts every JSON path in the `expected_key` sub-object of `expected_root`.
+/// Logs the missing path to stderr before returning `error.AssertionFailed` so
+/// failures are diagnosable without a debugger. Increments `scenario_count` on
+/// success.
 fn assertToolPaths(
     allocator: std.mem.Allocator,
     io: Io,
