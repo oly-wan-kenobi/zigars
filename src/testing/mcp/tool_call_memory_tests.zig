@@ -24,6 +24,7 @@ const CaptureTransport = struct {
 
     /// Returns the transport vtable used by this test double.
     fn transport(self: *CaptureTransport) mcp.transport.Transport {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -239,6 +240,7 @@ fn ownedResourceHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator,
 
 /// Prompt handler fixture that returns allocator-owned prompt messages.
 fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _: ?std.json.Value) mcp.prompts.PromptError![]const mcp.prompts.PromptMessage {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const messages = allocator.alloc(mcp.prompts.PromptMessage, 1) catch return error.OutOfMemory;
     var messages_owned = true;
     defer if (messages_owned) allocator.free(messages);
@@ -251,6 +253,7 @@ fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _
 /// Parses one captured JSON-RPC response frame and asserts the tool-call result shape.
 /// Checks is_error flag, structuredContent kind, correlation metadata, and numeric precision.
 fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8, expected_tool: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
 
@@ -287,6 +290,7 @@ fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: [
 
 /// Parses one captured JSON-RPC response frame and asserts the resource text content.
 fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !void {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
 
@@ -299,6 +303,7 @@ fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !
 
 /// Parses one captured JSON-RPC response frame and asserts the prompt message text.
 fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
 
@@ -314,6 +319,7 @@ fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !voi
 /// Asserts that value is approximately equal to expected regardless of JSON number encoding.
 /// Accepts .integer, .float, and .number_string variants; tolerates floating-point rounding.
 fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const actual = switch (value) {
         .float => |float| float,
         .integer => |integer| @as(f64, @floatFromInt(integer)),
@@ -327,6 +333,7 @@ fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
 /// Boolean flags guard each container so partial-failure paths free only what was
 /// successfully allocated (defer-with-flag rollback pattern).
 fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) json_result.deinitOwnedValue(allocator, .{ .object = obj });
