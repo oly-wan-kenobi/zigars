@@ -63,6 +63,7 @@ pub const FakeObservabilitySink = struct {
 
     /// Records an observability event in the fake sink.
     fn emit(ptr: *anyopaque, event: ports.ObservationEvent) ports.PortError!void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_event = try cloneEvent(self.allocator, event);
         var record_owned = false;
@@ -78,6 +79,7 @@ pub const FakeObservabilitySink = struct {
 
     /// Clones event into allocator-owned storage.
     fn cloneEvent(allocator: Allocator, event: ports.ObservationEvent) !ports.ObservationEvent {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const name = try common.dupString(allocator, event.name);
         errdefer allocator.free(name);
         const phase = try common.dupString(allocator, event.phase);
@@ -101,6 +103,7 @@ pub const FakeObservabilitySink = struct {
 
     /// Clones attributes into allocator-owned storage.
     fn cloneAttributes(allocator: Allocator, attributes: []const ports.ObservationAttribute) ![]const ports.ObservationAttribute {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const copied = try allocator.alloc(ports.ObservationAttribute, attributes.len);
         errdefer allocator.free(copied);
 
@@ -214,6 +217,7 @@ test "observability sink event cloning cleans partial allocations on failure" {
 
 /// Records an expected observability event with allocator call, cloning request data and failing on allocation errors.
 fn expectObservabilityEventWithAllocator(allocator: Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var fake = FakeObservabilitySink.init(allocator);
     defer fake.deinit();
 
