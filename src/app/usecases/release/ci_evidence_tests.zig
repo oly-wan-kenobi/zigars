@@ -209,6 +209,7 @@ test "CI workflows render command runner errors as structured results" {
 
 /// Returns a typed context backed by this fixture or runtime state.
 fn releaseWorkflowTestContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.ReleaseWorkflowContext {
+    // Route through a single workflow path so policy checks run in a consistent order.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .tool_paths = .{ .zig = "zig" },
