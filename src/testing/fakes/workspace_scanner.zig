@@ -38,6 +38,7 @@ pub const FakeWorkspaceScanner = struct {
 
         /// Releases owned file paths for successful scan outcomes.
         fn deinit(self: ExpectedScanResult, allocator: Allocator) void {
+            // Only release owned state here to avoid invalidating borrowed data.
             switch (self) {
                 .ok => |files| {
                     for (files) |file| allocator.free(file.path);
@@ -75,6 +76,7 @@ pub const FakeWorkspaceScanner = struct {
 
     /// Adds an ordered successful scan expectation and clones returned file paths.
     pub fn expectScan(self: *Self, request: ports.WorkspaceScanRequest, files: []const []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -99,6 +101,7 @@ pub const FakeWorkspaceScanner = struct {
 
     /// Adds an ordered failing scan expectation.
     pub fn expectScanError(self: *Self, request: ports.WorkspaceScanRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -120,6 +123,7 @@ pub const FakeWorkspaceScanner = struct {
         allocator: Allocator,
         request: ports.WorkspaceScanRequest,
     ) ports.PortError!ports.WorkspaceScanResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
         var record_owned = false;
@@ -147,6 +151,7 @@ pub const FakeWorkspaceScanner = struct {
 
     /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.WorkspaceScanRequest) !ports.WorkspaceScanRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path_prefix = try common.dupString(allocator, request.path_prefix);
         var path_prefix_owned = true;
         defer if (path_prefix_owned) allocator.free(path_prefix);
