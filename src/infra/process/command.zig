@@ -27,6 +27,7 @@ pub const RunResult = struct {
 
     /// Frees captured stdout and stderr buffers and clears the consumed slices.
     pub fn deinit(self: *RunResult, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.stdout);
         allocator.free(self.stderr);
         self.stdout = emptyMutableBytes();
@@ -53,6 +54,7 @@ pub fn run(
     argv: []const []const u8,
     timeout_ms: i64,
 ) !RunResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return runWithOutputLimit(allocator, io, cwd, argv, timeout_ms, output_limit, output_limit);
 }
 
@@ -66,6 +68,7 @@ pub fn runWithOutputLimit(
     stdout_limit: usize,
     stderr_limit: usize,
 ) !RunResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return runWithOutputLimitCancellable(allocator, io, cwd, argv, timeout_ms, stdout_limit, stderr_limit, null);
 }
 
@@ -174,6 +177,7 @@ const CommandDeadline = struct {
     deadline_ns: i128,
 
     fn start(io: std.Io, timeout_ms: i64) CommandDeadline {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const started_ns = monotonicNs(io);
         const clamped_timeout_ms: i128 = @max(0, @as(i128, timeout_ms));
         const timeout_ns = clamped_timeout_ms *| @as(i128, std.time.ns_per_ms);
@@ -279,6 +283,7 @@ fn takeOwnedLimited(multi_reader: *std.Io.File.MultiReader, allocator: std.mem.A
 
 /// Classifies process errors into stable user-facing categories.
 pub fn errorKind(err: anyerror) []const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.Timeout => "timeout",
         error.StreamTooLong => "output_limit",
@@ -305,6 +310,7 @@ pub fn isTimeoutError(err: anyerror) bool {
 /// Caller owns the returned slice; each element must also be freed.
 /// Returns InvalidArguments on an unclosed quote or trailing backslash.
 pub fn splitArgs(allocator: std.mem.Allocator, text: ?[]const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -371,6 +377,7 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
 
 /// Concatenates two borrowed argv lists into an owned argv slice.
 pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: []const []const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = try std.ArrayList([]const u8).initCapacity(allocator, base.len + extra.len);
     var out_owned = true;
     defer if (out_owned) out.deinit(allocator);
@@ -383,6 +390,7 @@ pub fn joinArgv(allocator: std.mem.Allocator, base: []const []const u8, extra: [
 
 /// Formats command output and captured stderr/stdout into a caller-owned text block.
 pub fn formatRunResult(allocator: std.mem.Allocator, title: []const u8, result: RunResult) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return std.fmt.allocPrint(allocator,
         \\{s}
         \\status: {s}
