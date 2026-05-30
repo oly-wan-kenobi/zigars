@@ -22,6 +22,7 @@ const start = session.start;
 
 /// Creates a minimal ZLS session configuration for tests.
 fn testConfig() Config {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .allocator = testing.allocator,
         .io = testing.io,
