@@ -6,6 +6,7 @@ const types = mcp.types;
 
 /// Appends one MCP content block as a borrowed JSON object for tools/call output.
 pub fn appendToolContentValue(allocator: std.mem.Allocator, content_array: *std.json.Array, content_item: types.ContentBlock) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var item_obj: std.json.ObjectMap = .empty;
     var item_obj_in_array = false;
     defer if (!item_obj_in_array) deinitBorrowedJsonContainers(allocator, .{ .object = item_obj });
@@ -62,6 +63,7 @@ pub fn deinitToolCallResponseObject(allocator: std.mem.Allocator, result: *std.j
 
 /// Frees only JSON arrays/objects allocated for response projection.
 pub fn deinitBorrowedJsonContainers(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .array => |array| {
             var mutable = array;
