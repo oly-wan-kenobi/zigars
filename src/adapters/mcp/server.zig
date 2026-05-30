@@ -920,10 +920,20 @@ pub const Server = struct {
             const content = handler(self.dynamic_resource_user_data, io, allocator, uri) catch |err| {
                 var response_arena = std.heap.ArenaAllocator.init(allocator);
                 defer response_arena.deinit();
-                // Template misses are treated as a not-found/invalid-params case,
-                // not an internal error: a dynamic URI that does not resolve is a
-                // client-addressing problem. The structured value is built (and
-                // discarded) only to surface allocation failure via `try`.
+                // Any dynamic-handler failure (NotFound, ReadFailed, AccessDenied,
+                // …) collapses to one invalid-params response, mirroring the
+                // no-handler "Resource not found" branch below: a URI the fallback
+                // handler cannot resolve or read is a client-addressing outcome, not
+                // an internal fault in an advertised resource (the registered path
+                // above does surface a structured internal error). Fine-grained
+                // detail is not lost where it matters — production handlers in
+                // src/adapters/mcp/resources.zig emit structured resource_error
+                // payloads as resource *content* for the failures they can describe,
+                // so only a bare miss reaches this catch. The value below is otherwise
+                // unused; it is built only so an OOM while preparing diagnostics still
+                // propagates via `try` — createInvalidParams does not allocate and
+                // sendResponse swallows serialization OOM, making this the sole
+                // OOM-propagation point on this path.
                 _ = try resourceHandlerErrorValue(response_arena.allocator(), uri, err);
                 const error_response = jsonrpc.createInvalidParams(request.id, "Dynamic resource not found or could not be read");
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
