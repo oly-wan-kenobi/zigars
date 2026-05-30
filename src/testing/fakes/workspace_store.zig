@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.WorkspaceStore` port.
+//! Simulates all sandbox filesystem operations: resolve, read, write, delete,
+//! exists, ensure-dir, and directory scan. Every operation must match an
+//! ordered expectation; `verify` asserts no write or expected call was skipped.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -433,7 +438,7 @@ pub const FakeWorkspaceStore = struct {
         request_owned = false;
     }
 
-    /// Resolves calls and returns borrowed or owned data according to the result contract.
+    /// Returns recorded resolve call snapshots owned by this fake.
     pub fn resolveCalls(self: *const Self) []const ports.WorkspaceResolveRequest {
         return self.resolve_records.items;
     }
@@ -479,7 +484,7 @@ pub const FakeWorkspaceStore = struct {
         if (self.next_scan != self.expected_scans.items.len) return error.MissingExpectedCall;
     }
 
-    /// Resolves resolve and returns borrowed or owned data according to the result contract.
+    /// Matches a resolve request against the next expectation and returns the queued path.
     fn resolve(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneResolveRequest(self.allocator, request);
@@ -802,7 +807,7 @@ pub const FakeWorkspaceStore = struct {
         allocator.free(request.provenance);
     }
 
-    /// Resolves requests equal and returns borrowed or owned data according to the result contract.
+    /// Compares resolve requests by the fields that affect behavior.
     fn resolveRequestsEqual(expected: ports.WorkspaceResolveRequest, actual: ports.WorkspaceResolveRequest) bool {
         return std.mem.eql(u8, expected.path, actual.path) and
             expected.for_output == actual.for_output and

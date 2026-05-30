@@ -1,3 +1,7 @@
+//! Fuzz test suite for text parsers that accept untrusted input.
+//! Pins the invariant that coverage_model, stacktrace, crash, path_policy, and
+//! command parsers never abort or produce undefined behavior on arbitrary bytes.
+
 const std = @import("std");
 
 const coverage_model = @import("coverage_model");
@@ -6,8 +10,8 @@ const stacktrace = @import("stacktrace");
 const crash = @import("crash");
 const command = @import("command");
 
-/// Weighted ASCII corpus keeps fuzzing near CLI-ish inputs while still allowing
-/// control bytes that stress parsers.
+// Weighted ASCII corpus keeps fuzzing near CLI-ish inputs while still allowing
+// control bytes that stress parsers.
 const ascii_weights = &.{
     std.testing.Smith.Weight.rangeAtMost(u8, 0x20, 0x7e, 8),
     std.testing.Smith.Weight.value(u8, '\n', 2),

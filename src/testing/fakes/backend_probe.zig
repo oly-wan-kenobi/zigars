@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.BackendProbe` port.
+//! Simulates availability checks for optional backends (ZLS, zflame, zwanzig).
+//! Each `expectCheck` call queues one probe response; calls consume expectations
+//! in order and return `error.UnexpectedCall` when the queue is empty.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

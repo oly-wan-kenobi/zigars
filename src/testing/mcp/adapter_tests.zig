@@ -1,3 +1,9 @@
+//! Integration fixture covering the MCP adapter contract surface:
+//! argument validation, schema shape, catalog/registry consistency,
+//! discovery tool outputs (zigars_schema, zig_command_plan, zig_tool_plan,
+//! zigars_toolchain_resolve), structured error fields, and static analysis
+//! helpers used across tool handlers.
+
 const std = @import("std");
 const zigars = @import("../../root.zig");
 

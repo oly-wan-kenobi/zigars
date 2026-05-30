@@ -1,3 +1,9 @@
+//! Tests that the MCP server correctly releases handler-owned allocations on
+//! every tools/call, resources/read, and prompts/get invocation.
+//! Pins the allocation contract: deinit_result/deinitResourceContent/
+//! deinitPromptMessages are called after each response is sent, preventing
+//! accumulation across repeated tool-call sequences.
+
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -242,7 +248,8 @@ fn ownedPromptHandler(_: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, _
     return messages;
 }
 
-/// Records an expected tool call response call, cloning request data and failing on allocation errors.
+/// Parses one captured JSON-RPC response frame and asserts the tool-call result shape.
+/// Checks is_error flag, structuredContent kind, correlation metadata, and numeric precision.
 fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: []const u8, expected_tool: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -278,7 +285,7 @@ fn expectToolCallResponse(response: []const u8, is_error: bool, expected_kind: [
     try std.testing.expect(std.mem.startsWith(u8, correlation.get("tool_call_id").?.string, "zigars-tc-"));
 }
 
-/// Records an expected resource read response call, cloning request data and failing on allocation errors.
+/// Parses one captured JSON-RPC response frame and asserts the resource text content.
 fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -290,7 +297,7 @@ fn expectResourceReadResponse(response: []const u8, expected_text: []const u8) !
     try std.testing.expectEqualStrings(expected_text, contents.items[0].object.get("text").?.string);
 }
 
-/// Records an expected prompt get response call, cloning request data and failing on allocation errors.
+/// Parses one captured JSON-RPC response frame and asserts the prompt message text.
 fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !void {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, response, .{});
     defer parsed.deinit();
@@ -304,7 +311,8 @@ fn expectPromptGetResponse(response: []const u8, expected_text: []const u8) !voi
     try std.testing.expectEqualStrings(expected_text, content.get("text").?.string);
 }
 
-/// Records an expected json number call, cloning request data and failing on allocation errors.
+/// Asserts that value is approximately equal to expected regardless of JSON number encoding.
+/// Accepts .integer, .float, and .number_string variants; tolerates floating-point rounding.
 fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
     const actual = switch (value) {
         .float => |float| float,
@@ -315,7 +323,9 @@ fn expectJsonNumber(value: std.json.Value, expected: f64) !void {
     try std.testing.expectApproxEqAbs(expected, actual, 0.000001);
 }
 
-/// Builds nested JSON test data with allocator-owned containers.
+/// Builds a nested JSON value with allocator-owned strings, arrays, and objects.
+/// Boolean flags guard each container so partial-failure paths free only what was
+/// successfully allocated (defer-with-flag rollback pattern).
 fn makeOwnedNestedValue(allocator: std.mem.Allocator, kind: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;

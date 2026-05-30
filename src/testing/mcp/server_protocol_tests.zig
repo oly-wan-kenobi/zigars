@@ -1,3 +1,9 @@
+//! Tests for server-side client-protocol request helpers (elicitation, sampling).
+//! Pins the contracts for: capability-gated fallback when the client does not
+//! advertise the feature; timeout termination when no matching response arrives;
+//! nested inbound request rejection while waiting for a response; and
+//! classifiers for accepted/declined/malformed/timeout response shapes.
+
 const std = @import("std");
 const mcp = @import("mcp");
 const server_mod = @import("../../adapters/mcp/server.zig");
@@ -6,6 +12,7 @@ const mcp_result = @import("../../adapters/mcp/result.zig");
 
 const Server = server_mod.Server;
 
+// Scripted transport: replays a fixed message slice and captures sent frames.
 const ScriptTransport = struct {
     messages: []const []const u8,
     index: usize = 0,

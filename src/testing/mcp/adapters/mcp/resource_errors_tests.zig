@@ -1,3 +1,7 @@
+//! Pins the structured resource error contract: every resource error value
+//! must carry stable fields (kind, ok, uri, resource, phase, error, error_kind)
+//! so callers can distinguish not_found and other failure classifications.
+
 const std = @import("std");
 
 const resource_errors = @import("../../../../adapters/mcp/resource_errors.zig");

@@ -1,3 +1,9 @@
+//! Internal server tests covering rollback, transport error handling, cancellation,
+//! and lifecycle state transitions.
+//! Pins that: OOM during addResource/addPrompt rolls back; transport read errors
+//! are skipped rather than fatal; cancellation tokens fire only for cancellable
+//! requests; and notifications/initialized only advances state from .initializing.
+
 const std = @import("std");
 const mcp = @import("mcp");
 const server_mod = @import("../../adapters/mcp/server.zig");

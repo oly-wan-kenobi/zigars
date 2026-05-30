@@ -1,3 +1,6 @@
+//! Pins the backend probe contract: command success and non-zero exit map to
+//! availability.available and !available respectively, via the fake command runner.
+
 const std = @import("std");
 
 const probe = @import("../../infra/backends/probe.zig");

@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.ZlsGateway` port.
+//! Simulates the ZLS (Zig Language Server) interface: capability queries,
+//! document synchronization, raw LSP requests, and diagnostics snapshots.
+//! Use `setDiagnosticsMessages` to pre-load cached diagnostics without a live server.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -426,7 +431,7 @@ pub const FakeZlsGateway = struct {
         allocator.free(result.basis);
     }
 
-    /// Clones sync result for caller into allocator-owned storage.
+    /// Clones the URI for the caller; borrows basis from the stored expectation.
     fn cloneSyncResultForCaller(allocator: Allocator, result: ports.ZlsSyncResult) ports.PortError!ports.ZlsSyncResult {
         const uri = try common.dupString(allocator, result.uri);
         return .{

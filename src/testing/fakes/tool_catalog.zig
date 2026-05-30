@@ -1,3 +1,7 @@
+//! Fake implementation of the `ports.ToolCatalog` port.
+//! Returns a caller-supplied rendered catalog text for tests that exercise
+//! catalog-text consumers without running the full manifest serialization.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

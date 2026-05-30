@@ -1,3 +1,9 @@
+//! Tests for the release MCP tool adapter projections.
+//! Pins the structured output shapes (kind, schema_version, field names) and
+//! verifies that all public tool wrappers route through their port contracts.
+//! Fake ports are exercised via expectation-driven doubles; verify() asserts
+//! that every recorded expectation was consumed exactly once.
+
 const std = @import("std");
 
 const mcp_result = @import("../../../../../adapters/mcp/result.zig");
@@ -228,26 +234,29 @@ test "release docs adapters exercise public wrappers through ports" {
     try scanner.verify();
 }
 
-/// Records an expected structured kind call, cloning request data and failing on allocation errors.
+/// Asserts that result carries a structuredContent object with the given kind string.
 fn expectStructuredKind(result: anytype, kind: []const u8) !void {
     try std.testing.expect(result.structuredContent != null);
     try std.testing.expectEqualStrings(kind, result.structuredContent.?.object.get("kind").?.string);
 }
 
-/// Records an expected no builtin env call, cloning request data and failing on allocation errors.
+/// Registers expectations that the toolchain env lacks both version and std_dir keys.
+/// Simulates an environment where the Zig toolchain is not installed on disk.
 fn expectNoBuiltinEnv(toolchain: anytype) !void {
     try toolchain.expectGetError(.{ .key = "version", .provenance = "release_docs.builtin_version" }, error.FileNotFound);
     try toolchain.expectGetError(.{ .key = "std_dir", .provenance = "release_docs.builtin_source" }, error.FileNotFound);
 }
 
-/// Records an expected std scan call, cloning request data and failing on allocation errors.
+/// Registers expectations that the scanner reads one std source file at the given provenance tag.
+/// The fake scanner returns source as the file contents for the single discovered mem.zig entry.
 fn expectStdScan(toolchain: anytype, scanner: anytype, provenance: []const u8, source: []const u8) !void {
     try toolchain.expectGet(.{ .key = "std_dir", .provenance = provenance }, "/zig/lib/std");
     try scanner.expectAbsoluteScan(.{ .root = "/zig/lib/std", .max_files = docs_domain.default_path_scan_limit, .provenance = "release_docs.std_scan" }, &.{"mem.zig"});
     try scanner.expectRead(.{ .path = "/zig/lib/std/mem.zig", .max_bytes = docs_domain.std_source_read_limit, .provenance = "release_docs.std_read" }, source);
 }
 
-/// Records an expected langref call, cloning request data and failing on allocation errors.
+/// Registers expectations for a langref probe read followed by the full HTML read.
+/// probe is returned for the short probe pass; html is returned for the full scan.
 fn expectLangref(toolchain: anytype, scanner: anytype, probe: []const u8, html: []const u8) !void {
     try toolchain.expectGet(.{ .key = "lib_dir", .provenance = "release_docs.langref" }, "/zig/lib");
     try scanner.expectRead(.{ .path = "/zig/lib/doc/langref.html", .max_bytes = docs_domain.langref_probe_read_limit, .provenance = "release_docs.langref_probe" }, probe);

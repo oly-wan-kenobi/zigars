@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.ObservabilitySink` port.
+//! Records every emitted observation event and enforces ordered expectations.
+//! Use `expectEvent` to assert that a named phase event with specific attributes
+//! arrives in sequence; `verify` confirms no expected event was skipped.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

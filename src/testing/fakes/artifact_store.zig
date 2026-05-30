@@ -1,3 +1,9 @@
+//! Fake implementation of the `ports.ArtifactStore` port.
+//! Stores named binary artifacts (SVGs, JSON, logs) and records workspace
+//! artifact metadata. Enforces ordered expectations: every put, read, and
+//! recordWorkspace call must match the next queued expectation; out-of-order
+//! or unexpected calls return `error.StaleArguments` or `error.UnexpectedCall`.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

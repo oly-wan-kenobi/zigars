@@ -4,7 +4,7 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
-/// Duplicates an optional string into allocator-owned storage.
+/// Duplicates a string slice into allocator-owned storage.
 pub fn dupString(allocator: Allocator, value: []const u8) Allocator.Error![]const u8 {
     return try allocator.dupe(u8, value);
 }

@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.ToolchainEnv` port.
+//! Simulates environment variable lookups (e.g. `std_dir`, `zig_version`) used
+//! by toolchain-aware use cases. Use `expectGetError` to inject missing-key or
+//! access-denied failures without modifying the process environment.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

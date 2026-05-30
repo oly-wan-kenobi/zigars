@@ -1,3 +1,7 @@
+//! Pins the HTTP request transport contract: each send overwrites the previous
+//! response (request/response lifecycle), receive returns null (HTTP is
+//! request-driven), and post-close sends/receives return ConnectionClosed.
+
 const std = @import("std");
 const mcp = @import("mcp");
 
