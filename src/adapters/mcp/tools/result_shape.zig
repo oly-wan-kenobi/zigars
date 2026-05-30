@@ -18,6 +18,7 @@ const mcp_result = @import("../result.zig");
 /// invalid-arguments error naming the supported values; an absent `mode`
 /// defaults to standard.
 pub fn zigarsResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
         return mcp_errors.invalidArgument(
@@ -42,6 +43,7 @@ pub fn zigarsResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mc
 /// `token_budget` and labeled with the target `tool`. Same argument contract as
 /// zigarsResultShape: invalid mode errors, omitted mode defaults to standard.
 pub fn zigarsOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
         return mcp_errors.invalidArgument(
@@ -79,6 +81,7 @@ fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.Outpu
 
 /// Build the exact top-level JSON contract shape consumed by clients.
 fn resultShapeContractValue(allocator: std.mem.Allocator, contract: result_contracts.ResultShapeContract) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -103,6 +106,7 @@ fn resultShapeContractValue(allocator: std.mem.Allocator, contract: result_contr
 
 /// Serialize budget planning outputs without exposing app-layer internals.
 fn outputBudgetPlanValue(allocator: std.mem.Allocator, plan: result_contracts.OutputBudgetPlan) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -139,6 +143,7 @@ fn supportedModesValue(allocator: std.mem.Allocator, modes: []const result_contr
 
 /// Returns an allocator-owned JSON value for mode metadata.
 fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.ModeMetadata) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -177,6 +182,7 @@ fn omittedSectionsValue(allocator: std.mem.Allocator, omitted: []const result_co
 
 /// Returns an allocator-owned JSON value for allocation.
 fn allocationValue(allocator: std.mem.Allocator, allocation: result_contracts.BudgetAllocation) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -200,6 +206,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, items: []const []const u8) !st
 
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return null;
     if (value != .object) return null;
     const field = value.object.get(key) orelse return null;
@@ -211,6 +218,7 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
 
 /// Parses optional integer arg from MCP JSON arguments.
 fn optionalIntegerArg(args: ?std.json.Value, name: []const u8) ?i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return null;
     if (value != .object) return null;
     const field = value.object.get(name) orelse return null;
