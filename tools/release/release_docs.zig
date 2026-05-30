@@ -12,6 +12,7 @@ const Allocator = std.mem.Allocator;
 /// Confirms that docs/tools.md and the generated tool-index contain the
 /// static-analysis capability-tier vocabulary and representative tool names.
 pub fn checkStaticAnalysisDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "capability_tier",
@@ -48,6 +49,7 @@ pub fn checkStaticAnalysisDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that README.md documents the shell-free execution model and that
 /// every manifest entry marked `executes_user_command` is mentioned by name.
 pub fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const path = "README.md";
     const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
         try stderrPrint(io, "command-running tool docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
@@ -68,6 +70,7 @@ pub fn checkCommandRunningToolDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/agent-workflows.md contains the required contract and
 /// workflow-elicitation vocabulary.
 pub fn checkAgentWorkflowDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/agent-workflows.md", &.{
         "workflow_contract",
         "omitted_sections",
@@ -83,6 +86,7 @@ pub fn checkAgentWorkflowDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/ci-artifacts.md documents the parser-confidence, failure
 /// summary, and GitHub Actions integration vocabulary.
 pub fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/ci-artifacts.md", &.{
         "parser_confidence",
         "parsing_basis",
@@ -96,6 +100,7 @@ pub fn checkCiArtifactDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/tools.md explains the docs-lookup provenance model and
 /// the fields that distinguish installed, source-scanned, and fallback sources.
 pub fn checkDocsLookupDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "Docs tools are intentionally split by source",
         "provenance/completeness",
@@ -118,6 +123,7 @@ pub fn checkDocsLookupDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/release.md explains the evidence block format and
 /// the requirement to cite real-backend and clean-tree evidence before claiming.
 pub fn checkReleaseEvidenceDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/release.md", &.{
         "validation evidence block",
         "real-backend validation status",
@@ -133,6 +139,7 @@ pub fn checkReleaseEvidenceDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/maturity.md covers the minimum rating (A), clean-tree
 /// requirement, and the full capability-area rubric table.
 pub fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/maturity.md", &.{
         "Minimum public-release rating: A",
         "source_tree_clean: true",
@@ -157,6 +164,7 @@ pub fn checkMaturityDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/trust.md covers the MCP operation scope, deadline policy,
 /// evidence validation, advisory orientation tier, and CI permission model.
 pub fn checkTrustDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     return checkDocNeedles(allocator, io, "docs/trust.md", &.{
         "tools/call`, `resources/read`, and",
         "prompts/get",
@@ -173,6 +181,7 @@ pub fn checkTrustDocs(allocator: Allocator, io: Io) !bool {
 /// generated tool index all reference the foundation contract tool set
 /// (artifact registry, metrics, trust report, result shape, docs-drift check).
 pub fn checkFoundationContractDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "Artifact registry and provenance",
@@ -206,6 +215,7 @@ pub fn checkFoundationContractDocs(allocator: Allocator, io: Io) !bool {
 /// Confirms that docs/tools.md and docs/agent-clients.md document the public
 /// adoption tool set and the protocol-feature fallback model.
 pub fn checkPublicAdoptionDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "docs/tools.md", &.{
         "Public Adoption Tools",
@@ -231,6 +241,7 @@ pub fn checkPublicAdoptionDocs(allocator: Allocator, io: Io) !bool {
 /// Returns `true` iff every needle in `needles` is a substring of the file at
 /// `path`.  Missing needles and read errors are reported to stderr.
 fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
         return false;
