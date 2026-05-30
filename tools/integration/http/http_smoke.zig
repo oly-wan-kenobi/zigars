@@ -165,6 +165,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, args: []const []const u8) !void
 /// optional backends do not interfere with transport-level smoke assertions.
 /// Caller owns the returned `ArrayList` and must free it.
 fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_text: []const u8) !std.ArrayList([]const u8) {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
     if (options.server_kcov_dir) |dir| {
@@ -201,6 +202,7 @@ fn httpServerArgv(allocator: std.mem.Allocator, options: HttpSmokeOptions, port_
 /// `error.AssertionFailed` if the shutdown response contains an error field or
 /// the child exits with a non-zero status.
 fn shutdownHttpServer(allocator: std.mem.Allocator, io: Io, port: u16, child: *std.process.Child, child_done: *bool) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const response = try smoke.rpc(allocator, io, port,
         \\{"jsonrpc":"2.0","id":99999,"method":"shutdown"}
     );
