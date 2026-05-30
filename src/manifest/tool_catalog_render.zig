@@ -52,6 +52,7 @@ pub fn text(allocator: std.mem.Allocator) ![]u8 {
 
 /// Builds the catalog map of tool argument schemas and risk metadata.
 pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -65,6 +66,7 @@ pub fn toolArgumentsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Builds the catalog map of tool planning contracts.
 pub fn toolPlanningValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -102,6 +104,7 @@ pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Valu
 
 /// Builds backend setup metadata, optionally including configured paths.
 pub fn backendSetupValue(allocator: std.mem.Allocator, paths: backend_catalog.Paths, include_configured_paths: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -169,6 +172,7 @@ fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, 
 
 /// Builds JSON group metadata with tool names and search keywords.
 fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var groups = std.json.Array.init(allocator);
     var groups_owned = true;
     defer if (groups_owned) groups.deinit();
@@ -188,6 +192,7 @@ fn groupsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Builds the JSON list of tool names assigned to one group.
 fn groupToolsValue(allocator: std.mem.Allocator, group: ToolGroup) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var tools = std.json.Array.init(allocator);
     var tools_owned = true;
     defer if (tools_owned) tools.deinit();
@@ -210,6 +215,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
 
 /// Builds JSON argument schema metadata for one registered tool.
 fn toolArgumentValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -241,6 +247,7 @@ fn toolRiskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
 
 /// Builds JSON planning metadata for one registered tool.
 fn planningValue(allocator: std.mem.Allocator, entry: ToolEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -336,6 +343,7 @@ fn commandPlanFor(id: aggregate.ToolId) ?CommandPlan {
 
 /// Returns the serialized planning policy kind.
 fn planKind(plan: PlanPolicy) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (plan) {
         .exact_command => "exact_command",
         .dynamic_command => "dynamic_command",
@@ -357,6 +365,7 @@ fn riskLevel(risk: ToolRisk) []const u8 {
 
 /// Builds JSON risk flags and planner hints for one registered tool.
 fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const risk_value = riskFor(spec.id);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -377,6 +386,7 @@ fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
 
 /// Returns whether manifest risk metadata allows a read-only hint.
 fn readOnlyHintFor(spec: ToolMeta) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const risk_value = riskFor(spec.id);
     return spec.read_only and
         !risk_value.writes_source and
@@ -388,6 +398,7 @@ fn readOnlyHintFor(spec: ToolMeta) bool {
 
 /// Builds JSON schema fields filtered by required or optional status.
 fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, required: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -402,6 +413,7 @@ fn schemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaS
 
 /// Builds JSON schema fields with field-level hint metadata.
 fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -414,6 +426,7 @@ fn richSchemaFieldsValue(allocator: std.mem.Allocator, input_schema: tooling.Sch
 
 /// Builds JSON metadata for one schema field and its optional hints.
 fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.SchemaSpec, field: tooling.SchemaField) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const hint = tooling.hintFor(input_schema, field);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -442,6 +455,7 @@ fn richSchemaFieldValue(allocator: std.mem.Allocator, input_schema: tooling.Sche
 
 /// Serializes a JSON value into allocator-owned bytes; allocation failures are returned.
 fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var writer_owned = true;
     defer if (writer_owned) aw.deinit();
