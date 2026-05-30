@@ -42,6 +42,7 @@ pub const Scanner = struct {
         allocator: std.mem.Allocator,
         request: ports.WorkspaceScanRequest,
     ) ports.PortError!ports.WorkspaceScanResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved_prefix = if (request.path_prefix.len == 0)
             try self.workspace.resolve(".")
