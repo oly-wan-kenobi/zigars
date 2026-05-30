@@ -107,6 +107,7 @@ pub fn parseStatusName(status: ParseStatus) []const u8 {
 
 /// Parses one Zig source file and returns owned declaration/import/test evidence.
 pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !SourceSummary {
+    // Normalize input here so downstream paths can rely on validated shape.
     var tree = try parseAst(allocator, contents);
     const parsed_source = tree.source;
     defer tree.deinit(allocator);
@@ -138,6 +139,7 @@ pub fn parseSourceSummary(allocator: std.mem.Allocator, file: []const u8, conten
 
 /// Scans source text for top-level-looking declarations without parsing Zig.
 pub fn heuristicDeclarations(allocator: std.mem.Allocator, contents: []const u8) !DeclarationList {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var declarations: std.ArrayList(Declaration) = .empty;
     errdefer {
         deinitDeclarations(allocator, declarations.items);
@@ -156,6 +158,7 @@ pub fn heuristicDeclarations(allocator: std.mem.Allocator, contents: []const u8)
 
 /// Renders heuristic declaration evidence as markdown for advisory tools.
 pub fn declarationSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# Declaration summary for {s}\n\n", .{file});
@@ -177,6 +180,7 @@ pub fn declarationSummaryText(allocator: std.mem.Allocator, file: []const u8, co
 
 /// Renders allocation keyword matches as advisory markdown.
 pub fn allocationSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return keywordSummaryText(allocator, file, contents, "allocation-related sites", &.{
         ".alloc(",
         ".create(",
@@ -189,6 +193,7 @@ pub fn allocationSummaryText(allocator: std.mem.Allocator, file: []const u8, con
 
 /// Renders error-related keyword matches as advisory markdown.
 pub fn errorSetSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
+    // Use broad keyword coverage intentionally; this view is advisory rather than parser-precise.
     return keywordSummaryText(allocator, file, contents, "error-related sites", &.{
         "error{",
         "anyerror",
@@ -200,6 +205,7 @@ pub fn errorSetSummaryText(allocator: std.mem.Allocator, file: []const u8, conte
 
 /// Renders public-looking API declarations as advisory markdown.
 pub fn publicApiSummaryText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return keywordSummaryText(allocator, file, contents, "public API declarations", &.{
         "pub const ",
         "pub var ",
@@ -211,6 +217,7 @@ pub fn publicApiSummaryText(allocator: std.mem.Allocator, file: []const u8, cont
 
 /// Renders private-looking declaration candidates that still need reference checks.
 pub fn deadDeclCandidatesText(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# Dead declaration candidates for {s}\n\n", .{file});
@@ -239,6 +246,7 @@ fn keywordSummaryText(
     keywords: []const []const u8,
     confidence_line: []const u8,
 ) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.print(allocator, "# {s} for {s}\n\n", .{ title, file });
@@ -270,6 +278,7 @@ fn parseAst(allocator: std.mem.Allocator, contents: []const u8) !std.zig.Ast {
 
 /// Converts AST diagnostics into summary completeness metadata.
 fn parseMetadata(tree: std.zig.Ast) ParseMetadata {
+    // Normalize input here so downstream paths can rely on validated shape.
     const has_errors = tree.errors.len != 0;
     return .{
         .status = if (has_errors) .syntax_errors else .ok,
@@ -286,6 +295,7 @@ fn appendAstDecls(allocator: std.mem.Allocator, tree: *const std.zig.Ast, nodes:
 
 /// Appends one AST declaration summary and descends into containers when needed.
 fn appendAstDecl(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: std.zig.Ast.Node.Index, declarations: *std.ArrayList(Declaration), depth: usize) anyerror!void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     switch (tree.nodeTag(node)) {
         .global_var_decl, .simple_var_decl, .aligned_var_decl => {
             const decl = tree.fullVarDecl(node).?;
@@ -305,6 +315,7 @@ fn appendAstDecl(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: s
 
 /// Appends child declarations from AST containers or blocks at the next depth.
 fn appendAstContainerOrBlockDecls(allocator: std.mem.Allocator, tree: *const std.zig.Ast, node: std.zig.Ast.Node.Index, declarations: *std.ArrayList(Declaration), depth: usize) anyerror!void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var container_buffer: [2]std.zig.Ast.Node.Index = undefined;
     if (tree.fullContainerDecl(&container_buffer, node)) |container| {
         try appendAstDecls(allocator, tree, container.ast.members, declarations, depth);
@@ -318,6 +329,7 @@ fn appendAstContainerOrBlockDecls(allocator: std.mem.Allocator, tree: *const std
 
 /// Builds an owned declaration summary from an AST variable declaration.
 fn astVarDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, decl: std.zig.Ast.full.VarDecl, depth: usize) !Declaration {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const kind = try allocator.dupe(u8, tree.tokenSlice(decl.ast.mut_token));
     errdefer allocator.free(kind);
     const name = try astOptionalIdentifier(allocator, tree, decl.ast.mut_token + 1);
@@ -336,6 +348,7 @@ fn astVarDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast
 
 /// Builds an owned declaration summary from an AST function declaration.
 fn astFnDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, proto: std.zig.Ast.full.FnProto, depth: usize) !Declaration {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const kind = try allocator.dupe(u8, "fn");
     errdefer allocator.free(kind);
     const name = if (proto.name_token) |token| try allocator.dupe(u8, tree.tokenSlice(token)) else null;
@@ -354,6 +367,7 @@ fn astFnDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.
 
 /// Builds an owned declaration summary from an AST test declaration.
 fn astTestDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, depth: usize) !Declaration {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const kind = try allocator.dupe(u8, "test");
     errdefer allocator.free(kind);
     const name = try astTestName(allocator, tree, node);
@@ -372,6 +386,7 @@ fn astTestDecl(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.zig.As
 
 /// Appends import evidence from AST builtin import calls; allocation failures are returned.
 fn appendAstImports(allocator: std.mem.Allocator, file: []const u8, tree: *const std.zig.Ast, imports: *std.ArrayList(Import)) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var buffer: [2]std.zig.Ast.Node.Index = undefined;
     for (0..tree.nodes.len) |node_i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
@@ -416,6 +431,7 @@ fn appendOwnedTestDecl(allocator: std.mem.Allocator, tests: *std.ArrayList(TestD
 
 /// Builds owned import evidence from an AST builtin import call.
 fn astImportDecl(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index, import_node: std.zig.Ast.Node.Index) !Import {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file_owned = try allocator.dupe(u8, file);
     errdefer allocator.free(file_owned);
     const import_owned = try astStringLiteral(allocator, tree, import_node);
@@ -434,6 +450,7 @@ fn astImportDecl(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.A
 
 /// Builds owned test evidence and a focused test command from an AST test node.
 fn astTestRun(allocator: std.mem.Allocator, file: []const u8, tree: std.zig.Ast, node: std.zig.Ast.Node.Index) !TestDecl {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file_owned = try allocator.dupe(u8, file);
     errdefer allocator.free(file_owned);
     const name = try astTestName(allocator, tree, node);
@@ -495,6 +512,7 @@ fn astOptionalIdentifier(allocator: std.mem.Allocator, tree: std.zig.Ast, token:
 
 /// Builds an owned heuristic declaration summary from one trimmed source line.
 fn declarationFromLine(allocator: std.mem.Allocator, line_no: usize, trimmed: []const u8, kind: []const u8, depth: usize, comptime_decl: bool) !Declaration {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const kind_owned = try allocator.dupe(u8, kind);
     errdefer allocator.free(kind_owned);
     const name = if (declName(trimmed, kind)) |name_value| try allocator.dupe(u8, name_value) else null;
@@ -544,6 +562,7 @@ fn deinitTests(allocator: std.mem.Allocator, tests: []TestDecl) void {
 
 /// Returns the declaration kind for a public or private source line.
 pub fn declKind(line: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const rest = if (std.mem.startsWith(u8, line, "pub ")) line["pub ".len..] else line;
     if (std.mem.startsWith(u8, rest, "const ")) return "const";
     if (std.mem.startsWith(u8, rest, "var ")) return "var";
@@ -559,6 +578,7 @@ pub fn declName(line: []const u8, kind: []const u8) ?[]const u8 {
     const prefix_len = kind.len + 1;
     if (rest.len <= prefix_len) return null;
     var name = std.mem.trim(u8, rest[prefix_len..], " \t");
+    // Stop at common declaration separators to keep the extracted token identifier-only.
     const end = std.mem.indexOfAny(u8, name, " (:=,{") orelse name.len;
     name = name[0..end];
     return if (name.len == 0) null else name;
@@ -566,6 +586,7 @@ pub fn declName(line: []const u8, kind: []const u8) ?[]const u8 {
 
 /// Shared generated/cache path filter for workspace source scans.
 pub fn skipWorkspacePath(path: []const u8) bool {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     return std.mem.startsWith(u8, path, ".zig-cache") or
         std.mem.startsWith(u8, path, ".zigars-cache") or
         std.mem.startsWith(u8, path, "zig-out") or
@@ -620,6 +641,7 @@ test "heuristic analysis builders clean up allocation failures" {
 
 /// Exercises heuristic analysis builders under allocation-failure testing.
 fn heuristicAnalysisAllocationCase(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var decls = try heuristicDeclarations(allocator,
         \\pub fn main() void {}
         \\pub const Api = struct {};
@@ -643,6 +665,7 @@ test "parseAst frees the duped source buffer on allocation failure" {
 
 /// Exercises parseAst under allocation-failure testing, freeing source + tree on success.
 fn parseAstAllocationCase(allocator: std.mem.Allocator) !void {
+    // Normalize input here so downstream paths can rely on validated shape.
     var tree = try parseAst(allocator,
         \\const std = @import("std");
         \\pub fn main() void {}
