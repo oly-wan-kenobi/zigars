@@ -84,6 +84,7 @@ pub fn builtinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseDocs
 /// scanned/skipped/walk errors alongside matches (limit floored at 1). Returns
 /// an allocator-owned result the caller must deinit.
 pub fn stdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.StdSearchResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_search");
     defer std_dir.deinit(allocator);
     var files = try collectStdFiles(allocator, context, std_dir.value);
@@ -99,6 +100,7 @@ pub fn stdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsC
 /// source matches across the installed std library (limit floored at 1). Returns
 /// an allocator-owned result the caller must deinit.
 pub fn stdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, name: []const u8, limit: usize) Error!docs_domain.StdItemResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const std_dir = try envValue(allocator, context, "std_dir", "release_docs.std_item");
     defer std_dir.deinit(allocator);
     var files = try collectStdFiles(allocator, context, std_dir.value);
@@ -116,6 +118,7 @@ pub fn stdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsCon
 /// a fallback_reason and probe tallies. Returns an allocator-owned result the
 /// caller must deinit; limit is floored at 1.
 pub fn langrefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, query: []const u8, limit: usize) Error!docs_domain.LangrefSearchResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const lib_dir = try envValue(allocator, context, "lib_dir", "release_docs.langref");
     defer lib_dir.deinit(allocator);
     var probe: docs_domain.LangrefProbe = .{};
@@ -218,6 +221,7 @@ pub fn readmeCommandCheck(allocator: std.mem.Allocator, context: app_context.Rel
 /// plus, when discoverable, the installed BuiltinFn.zig source (for drift
 /// detection). Missing version/source degrade gracefully to a bundled index.
 fn builtinIndexInput(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext) Error!docs_domain.BuiltinIndexInput {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const version = envValue(allocator, context, "version", "release_docs.builtin_version") catch null;
     errdefer if (version) |value| value.deinit(allocator);
     const std_dir = envValue(allocator, context, "std_dir", "release_docs.builtin_source") catch null;
@@ -267,6 +271,7 @@ fn envValue(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContex
 /// port, returning allocator-owned TextFiles plus skip/walk tallies. Unreadable
 /// files are skipped (counted), never fatal; the caller must deinit the result.
 fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, std_dir: []const u8) Error!OwnedTextFiles {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var scan = try context.docs_scanner.scanAbsoluteZigPaths(allocator, .{
         .root = std_dir,
         .max_files = docs_domain.default_path_scan_limit,
@@ -323,6 +328,7 @@ fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDoc
 /// sandboxed workspace_store, returning allocator-owned TextFiles plus
 /// skip/walk tallies. Unreadable files are skipped; the caller must deinit.
 fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, scope: []const u8) Error!OwnedTextFiles {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var scan = try context.docs_scanner.scanWorkspacePaths(allocator, .{
         .max_files = docs_domain.default_path_scan_limit,
         .provenance = "release_docs.workspace_docs_scan",
@@ -375,6 +381,7 @@ fn collectWorkspaceDocsFiles(allocator: std.mem.Allocator, context: app_context.
 /// error.MissingEvidence when neither is present and request.require is set;
 /// otherwise an empty source. The caller must deinit the result.
 fn readEvidence(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, request: EvidenceRequest) Error!EvidenceInput {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (request.content) |content| return .{ .bytes = content, .source_kind = "inline_content" };
     const path = request.path orelse request.default_path;
     if (path) |value| {
