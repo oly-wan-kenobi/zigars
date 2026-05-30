@@ -34,6 +34,7 @@ pub fn findTool(tools: []JsonValue, name: []const u8) ?JsonValue {
 /// `error.UnsupportedExpectation` so fixture authors get an explicit signal
 /// rather than a silent pass.
 pub fn expectJsonEq(io: Io, actual: JsonValue, expected: JsonValue, path: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (expected) {
         .string => |s| if (actual != .string or !std.mem.eql(u8, actual.string, s)) {
             try stderrPrint(io, "assertion failed at {s}: expected string {s}\n", .{ path, s });
