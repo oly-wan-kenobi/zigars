@@ -26,6 +26,7 @@ const ByteRange = struct {
 
 /// Serializes generated file trace fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_file_trace" });
     defer resolved.deinit(allocator);
     const rel = workspaceRelative(context.workspace.root, resolved.path);
@@ -47,6 +48,7 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
 /// direct editing, as an allocator-owned JSON value. `allow_direct_edit` is
 /// true only when every path is editable; mutating tools still require apply=true.
 pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var checked = std.json.Array.init(allocator);
     var blocked = std.json.Array.init(allocator);
     var allow = true;
@@ -77,6 +79,7 @@ pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const
 
 /// Serializes generated route fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8, goal: ?[]const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_route" });
     defer resolved.deinit(allocator);
     const rel = workspaceRelative(context.workspace.root, resolved.path);
@@ -109,6 +112,7 @@ pub fn organizeImportsValue(allocator: std.mem.Allocator, context: app_context.E
 
 /// Serializes update imports fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn updateImportsValue(allocator: std.mem.Allocator, context: app_context.EditingContext, files: []const []const u8, old_import: []const u8, new_import: []const u8, apply: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var replacements = std.ArrayList(Replacement).empty;
     defer replacements.deinit(allocator);
     for (files) |file| {
@@ -124,6 +128,7 @@ pub fn updateImportsValue(allocator: std.mem.Allocator, context: app_context.Edi
 
 /// Serializes move decl fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn moveDeclValue(allocator: std.mem.Allocator, context: app_context.EditingContext, source_file: []const u8, target_file: []const u8, name: []const u8, apply: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.eql(u8, source_file, target_file)) return error.InvalidArguments;
     const source = try readSnapshot(allocator, context, source_file);
     defer source.deinit(allocator);
@@ -144,6 +149,7 @@ pub fn moveDeclValue(allocator: std.mem.Allocator, context: app_context.EditingC
 
 /// Serializes extract decl fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn extractDeclValue(allocator: std.mem.Allocator, context: app_context.EditingContext, file: []const u8, target_file: []const u8, start_line: usize, end_line: usize, apply: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.eql(u8, file, target_file) or start_line == 0 or end_line < start_line) return error.InvalidArguments;
     const source = try readSnapshot(allocator, context, file);
     defer source.deinit(allocator);
@@ -164,6 +170,7 @@ pub fn extractDeclValue(allocator: std.mem.Allocator, context: app_context.Editi
 
 /// Serializes code action batch unavailable fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -262,6 +269,7 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
 
 /// Serializes format check fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn formatCheckValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, path: []const u8, timeout_ms: i64) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "editing.format_check" });
     defer resolved.deinit(allocator);
     const argv = [_][]const u8{ context.tool_paths.zig, "fmt", "--check", resolved.path };
@@ -326,6 +334,7 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
 /// `apply` is set and every file is policy-safe (`apply and safe`), so one
 /// blocked path suppresses the whole apply.
 fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.EditingContext, tool_name: []const u8, replacements: []const Replacement, apply: bool, goal: []const u8, limitation: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     var safe = true;
     for (replacements) |replacement| {
@@ -383,6 +392,7 @@ const FileSnapshot = struct {
 
 /// Reads snapshot data from the provided context without taking ownership of inputs.
 fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !FileSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = max_session_file_bytes,
@@ -401,6 +411,7 @@ fn classifyPath(path: []const u8) path_policy.PathPolicy {
 
 /// Serializes policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn policyValue(allocator: std.mem.Allocator, policy: path_policy.PathPolicy) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "classification", try ownedString(allocator, policy.classification));
     try obj.put(allocator, "direct_edit_allowed", .{ .bool = policy.direct_edit_allowed });
@@ -414,6 +425,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: path_policy.PathPolicy) !st
 
 /// Serializes identity fields into an allocator-owned JSON value; allocation failures propagate.
 fn identityValue(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var identity = try session_domain.identityFromBytes(allocator, exists, bytes);
     defer identity.deinit(allocator);
     var obj = std.json.ObjectMap.empty;
@@ -425,6 +437,7 @@ fn identityValue(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) 
 
 /// Implements organize imports text workflow logic using caller-owned inputs.
 fn organizeImportsText(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var imports = std.ArrayList([]const u8).empty;
     defer imports.deinit(allocator);
     var lines = std.mem.splitScalar(u8, source, '\n');
@@ -475,6 +488,7 @@ fn replaceImportText(allocator: std.mem.Allocator, source: []const u8, old_impor
 /// Returns an allocator-owned copy of `source` with every non-overlapping
 /// occurrence of `needle` replaced by `replacement`.
 fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const u8, replacement: []const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.ArrayList(u8).empty;
     var index: usize = 0;
     while (std.mem.indexOf(u8, source[index..], needle)) |match_rel| {
@@ -491,6 +505,7 @@ fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const 
 /// var, or fn). Returns the byte range [start, end) covering the declaration
 /// through the line before the next top-level declaration, or null when absent.
 fn findDeclarationRange(source: []const u8, name: []const u8) ?ByteRange {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, source, '\n');
     var offset: usize = 0;
     var start: ?usize = null;
@@ -545,6 +560,7 @@ fn isIdentChar(ch: u8) bool {
 /// Returns the byte range covering lines `start_line` through `end_line`
 /// (1-based, inclusive). Returns null if either line number is out of range.
 fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var line: usize = 1;
     var offset: usize = 0;
     var start: ?usize = null;
@@ -567,6 +583,7 @@ fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange 
 /// Returns a new allocator-owned string that is `target` with `decl_text`
 /// appended after a blank-line separator. Ensures the result ends with a newline.
 fn appendDeclText(allocator: std.mem.Allocator, target: []const u8, decl_text: []const u8) ![]const u8 {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, target);
     if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(allocator, '\n');
@@ -616,6 +633,7 @@ fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const
 
 /// Serializes command result fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
