@@ -161,6 +161,7 @@ pub fn main(init: std.process.Init) !void {
 
 /// Prints the developer CLI usage text to stderr.
 fn usage(io: Io) !void {
+    // Keep CLI help text in one place so option contracts stay aligned with tests.
     try stderrPrint(io,
         \\usage: zigars-tools <command> [options]
         \\
