@@ -90,6 +90,7 @@ pub const DocumentState = struct {
 
     /// Initializes state with filesystem I/O for reading disk documents.
     pub fn initWithIo(allocator: std.mem.Allocator, workspace_path: []const u8, io: std.Io) DocumentState {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .open_docs = .empty,
             .allocator = allocator,
@@ -293,6 +294,7 @@ pub const DocumentState = struct {
 
     /// Returns status for an open URI without transferring ownership.
     pub fn statusForUri(self: *DocumentState, file_uri: []const u8) ?DocStatus {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
         const info = self.open_docs.get(file_uri) orelse return null;
@@ -312,6 +314,7 @@ pub const DocumentState = struct {
 
     /// Returns aggregate document counts and byte limits.
     pub fn summary(self: *DocumentState) Summary {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
         var dirty_documents: usize = 0;
@@ -332,6 +335,7 @@ pub const DocumentState = struct {
 
     /// Close a document in ZLS.
     pub fn closeDoc(self: *DocumentState, lsp_client: *LspClient, file_uri: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         const removed = self.open_docs.fetchRemove(file_uri);
         if (removed) |kv| retained.subtractRetainedBytesLocked(&self.retained_content_bytes, retained.contentLen(kv.value.content));
@@ -443,6 +447,7 @@ pub const DocumentState = struct {
     /// Normalizes file system errors to FileNotFound, DocumentTooLarge, or FileReadError.
     /// Errors when `io` is null (state created via init rather than initWithIo).
     fn readDiskDocument(self: *DocumentState, path: []const u8) ![]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const io = self.io orelse return error.FileReadError;
         return std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, std.Io.Limit.limited(self.max_document_bytes)) catch |err| {
             return switch (err) {
@@ -456,6 +461,7 @@ pub const DocumentState = struct {
     /// Removes a previously reserved document slot on error rollback.
     /// Frees the stored URI key and any retained content; adjusts the byte counter.
     fn removeReserved(self: *DocumentState, file_uri: []const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
         if (self.open_docs.fetchRemove(file_uri)) |kv| {
@@ -469,6 +475,7 @@ pub const DocumentState = struct {
     /// Frees the new content if it differs from the saved content pointer, then
     /// replaces the in-memory entry with the saved snapshot and adjusts the byte counter.
     fn restoreDoc(self: *DocumentState, file_uri: []const u8, info: DocInfo) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
         if (self.open_docs.getPtr(file_uri)) |current| {
@@ -483,6 +490,7 @@ pub const DocumentState = struct {
 
     /// Frees all tracked URI keys and retained in-memory document content.
     pub fn deinit(self: *DocumentState) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         var it = self.open_docs.iterator();
         while (it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
