@@ -231,6 +231,7 @@ pub fn forTool(tool_name: []const u8) ?Contract {
 /// registration gap ever passes an unregistered name, metadata is skipped rather
 /// than panicking the serial MCP transport via `unreachable`.
 pub fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) error{OutOfMemory}!void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const contract = forTool(tool_name) orelse return;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
     try obj.put(allocator, "capability_tier", .{ .string = capabilityTierName(contract.tier) });
@@ -270,6 +271,7 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
 
 /// Builds JSON evidence-basis metadata for a static-analysis contract.
 fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
@@ -283,6 +285,7 @@ fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.jso
 
 /// Builds JSON cross-check metadata for a static-analysis contract.
 fn crossCheckValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "required_for_release_gate", .{ .bool = contract.classification == .release_gating_candidate });
