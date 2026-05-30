@@ -33,6 +33,7 @@ pub const ToolCallResult = struct {
 /// the `result`/`content`/`text` chain fails with `error.AssertionFailed`
 /// instead of an opaque unreachable.
 pub fn callHttpTool(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8) !ToolCallResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const body = try std.fmt.allocPrint(allocator,
         \\{{"jsonrpc":"2.0","id":{d},"method":"tools/call","params":{{"name":"{s}","arguments":{s}}}}}
     , .{ id, tool_name, args_json });
@@ -86,6 +87,7 @@ pub fn expectToolIsError(io: Io, result: ToolCallResult, expected: bool, label: 
 /// body. Returns `error.HttpFailure` when the status line is not `200`. The
 /// returned slice is allocated by `allocator` and must be freed by the caller.
 pub fn rpc(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const address = try Io.net.IpAddress.parse("127.0.0.1", port);
     var stream = try address.connect(io, .{
         .mode = .stream,
@@ -123,6 +125,7 @@ pub fn rpc(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8) ![
 /// use this for negative-path or malformed-request scenarios where a non-200
 /// response is the expected outcome. The returned slice is owned by the caller.
 pub fn rawHttp(allocator: std.mem.Allocator, io: Io, port: u16, request: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const address = try Io.net.IpAddress.parse("127.0.0.1", port);
     var stream = try address.connect(io, .{
         .mode = .stream,
