@@ -25,6 +25,7 @@ pub const LspTransport = struct {
         /// Read one byte from the internal buffer, refilling from the file when empty.
         /// Returns null on EOF or connection reset (not an error).
         fn readByte(self: *Reader) !?u8 {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             if (self.buf_start >= self.buf_end) {
                 const n = self.file.readStreaming(self.io, &.{&self.buf}) catch |err| switch (err) {
                     error.EndOfStream, error.ConnectionResetByPeer => return null,
@@ -122,6 +123,7 @@ pub const LspTransport = struct {
     /// Frame `data` with a Content-Length header and write both to `file`.
     /// The header is rendered into a stack buffer; no heap allocation required.
     pub fn writeMessage(file: std.Io.File, io: std.Io, data: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var header_buf: [64]u8 = undefined;
         var header_w: std.Io.Writer = .fixed(&header_buf);
         try header_w.print("Content-Length: {d}\r\n\r\n", .{data.len});
