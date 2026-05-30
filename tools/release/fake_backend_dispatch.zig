@@ -28,6 +28,7 @@ pub const Invocation = struct {
 /// Parses `args` and returns an `Invocation` if the first or second argument
 /// identifies a fake backend; returns `null` otherwise.  Does not allocate.
 pub fn detect(args: []const []const u8) ?Invocation {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (args.len > 0) {
         const invoked = cli_io.executableName(args[0]);
         if (fromExecutable(invoked)) |backend| {
