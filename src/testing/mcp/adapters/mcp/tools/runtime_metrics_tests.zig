@@ -40,6 +40,7 @@ test "metrics v2 adapter exposes observed latency and backend history" {
         };
 
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             return .{
                 .tool_stats = tool_stats[0..],
                 .tool_call_correlations = tool_call_correlations[0..],
