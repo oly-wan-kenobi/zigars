@@ -45,6 +45,7 @@ pub const State = struct {
     /// Projects this state as a borrowed token.
     /// The token must not outlive this State instance.
     pub fn token(self: *State) Token {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
