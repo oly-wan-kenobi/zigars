@@ -7,6 +7,7 @@
 /// Exercises validation workflow, session management, and planning tool paths.
 /// Requires a live server with the fixture workspace already configured.
 pub fn run(client: anytype) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const semantic_impact = try client.callTool("zig_impact_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":10}");
     defer client.allocator.free(semantic_impact);
     try client.expectPathString(semantic_impact, "kind", "zig_impact_semantic");
