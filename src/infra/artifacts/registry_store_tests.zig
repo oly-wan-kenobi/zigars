@@ -10,6 +10,7 @@ const Store = registry_store.Store;
 
 /// Replays an artifact store operation until the failing allocator stops injecting errors.
 fn exerciseAllocationFailures(comptime operation: fn (std.mem.Allocator) anyerror!void) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var saw_out_of_memory = false;
     for (0..64) |fail_index| {
         var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
@@ -24,6 +25,7 @@ fn exerciseAllocationFailures(comptime operation: fn (std.mem.Allocator) anyerro
 
 /// Writes an artifact using the supplied test allocator.
 fn putArtifactWithAllocator(operation_allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const setup_allocator = std.testing.allocator;
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{});
@@ -51,6 +53,7 @@ fn putArtifactWithAllocator(operation_allocator: std.mem.Allocator) !void {
 
 /// Records a workspace artifact using the supplied test allocator.
 fn recordWorkspaceWithAllocator(operation_allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const setup_allocator = std.testing.allocator;
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{});
