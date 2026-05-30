@@ -11,6 +11,7 @@ const code_intel = @import("code_intel.zig");
 
 /// Builds a ZlsContext backed by the caller-owned fake gateway.
 fn testContext(fake: *fake_zls_mod.FakeZlsGateway) app_context.ZlsContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo" },
         .tool_paths = .{ .zls = "/bin/zls" },
