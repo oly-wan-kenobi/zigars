@@ -168,6 +168,7 @@ pub const HistoryFileRecord = struct {
 
     /// Clones this value with caller-provided storage; allocation failures are propagated and partial copies are cleaned up.
     pub fn clone(self: HistoryFileRecord, allocator: std.mem.Allocator) !HistoryFileRecord {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const file = try allocator.dupe(u8, self.file);
         errdefer allocator.free(file);
         var preimage_identity = try self.preimage_identity.clone(allocator);
@@ -317,6 +318,7 @@ fn hasDuplicateReplacementFile(replacements: []const Replacement) bool {
 /// path is unreadable or blocked by edit policy. Never writes the workspace.
 /// Caller owns the returned result and must deinit it.
 pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext, request: CreateRequest) !CreateResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.ArrayList(CreateFile).empty;
     errdefer {
         for (files.items) |*file| file.deinit(allocator);
@@ -512,6 +514,7 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
 /// the archived preimage. Returns `.err = .not_found` when the session id is
 /// absent from history. Caller owns the outcome and must deinit it.
 pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !RevertOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var record = loadSessionRecord(allocator, context, request) catch |err| switch (err) {
         error.SessionNotFound => return .{ .err = .not_found },
         else => return err,
@@ -575,6 +578,7 @@ fn replacementResultFromParts(
     files: *std.ArrayList(ReplacementFile),
     expected: *std.ArrayList(ExpectedPreimage),
 ) !ReplacementResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_files = try files.toOwnedSlice(allocator);
     errdefer {
         for (owned_files) |*file| file.deinit(allocator);
@@ -601,6 +605,7 @@ fn replacementResultFromParts(
 
 /// Allocates an owned copy of `file` and clones `preimage` into a `.ok` CreateFile.
 fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identity, policy: PathPolicy) !CreateFile {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
     var owned_identity = try preimage.clone(allocator);
@@ -636,6 +641,7 @@ fn replacementFileFromParts(
     expected_ok: bool,
     diff: []const u8,
 ) !ReplacementFile {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
     var owned_preimage = try preimage.clone(allocator);
@@ -665,6 +671,7 @@ fn historyFileForReplacement(
     updated: Identity,
     changed: bool,
 ) !HistoryFileRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
     var owned_preimage = try preimage.clone(allocator);
@@ -697,6 +704,7 @@ const FileSnapshot = struct {
 
 /// Reads snapshot data from the provided context without taking ownership of inputs.
 fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8) !FileSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = max_session_file_bytes,
@@ -720,6 +728,7 @@ fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContex
 
 /// Builds preimage identity metadata for the requested workspace path.
 fn expectedPreimageFromIdentity(allocator: std.mem.Allocator, file: []const u8, identity: Identity) !ExpectedPreimage {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
     var owned_identity = try identity.clone(allocator);
@@ -760,6 +769,7 @@ fn sessionRecord(
     goal: ?[]const u8,
     files: []const HistoryFileRecord,
 ) !SessionRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const now = try context.clock_and_ids.now();
     const owned_files = try allocator.alloc(HistoryFileRecord, files.len);
     var initialized: usize = 0;
@@ -788,6 +798,7 @@ fn sessionRecord(
 /// the new record, then writes the result back through the workspace store so
 /// the path stays inside the sandbox.
 fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8, record: SessionRecord) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const line = try recordJsonLine(allocator, record);
     defer allocator.free(line);
     const existing_result: ?ports.WorkspaceReadResult = context.workspace_store.read(allocator, .{
@@ -818,6 +829,7 @@ fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.Editi
 /// workspace store. The read result is deferred-freed; the returned record owns
 /// its own memory independently.
 fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !SessionRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var history_read: ?ports.WorkspaceReadResult = null;
     const text = request.history orelse blk: {
         const result = try context.workspace_store.read(allocator, .{
@@ -836,6 +848,7 @@ fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingC
 /// a JSON array (legacy export format) and JSONL (one record per line). Returns
 /// `SessionNotFound` if no matching record exists. Malformed JSON propagates.
 fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id: []const u8) !SessionRecord {
+    // Normalize input here so downstream paths can rely on validated shape.
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
     if (trimmed.len == 0) return error.SessionNotFound;
     if (trimmed[0] == '[') {
@@ -861,6 +874,7 @@ fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id
 
 /// Decodes a session history record only when its session id matches the requested session.
 fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, session_id: []const u8) !?SessionRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (value) {
         .object => |object| object,
         else => return null,
@@ -902,6 +916,7 @@ fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, s
 /// Decodes one history file record from a persisted JSON object into an
 /// allocator-owned HistoryFileRecord; malformed objects yield InvalidArguments.
 fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryFileRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (value) {
         .object => |object| object,
         else => return error.InvalidArguments,
@@ -926,6 +941,7 @@ fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Hi
 /// `bytes` count (corrupt or hostile history) is clamped to 0 so the unsigned
 /// cast cannot trap. The sha256 string is duped into allocator-owned storage.
 fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Identity {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (value) {
         .object => |object| object,
         else => return error.InvalidArguments,
@@ -941,6 +957,7 @@ fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Ident
 
 /// Implements revert file preview workflow logic using caller-owned inputs.
 fn revertFilePreview(allocator: std.mem.Allocator, context: app_context.EditingContext, record_file: HistoryFileRecord) !RevertFile {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try readSnapshot(allocator, context, record_file.file);
     defer snapshot.deinit(allocator);
     var current_identity = try session_domain.identityFromBytes(allocator, snapshot.exists, snapshot.bytes);
@@ -1008,6 +1025,7 @@ fn applyRevertFile(allocator: std.mem.Allocator, context: app_context.EditingCon
 fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
+    // Emit a stable field order so JSONL records are byte-deterministic for diffing.
     try out.writer.print(
         "{{\"kind\":\"zigars_patch_session_record\",\"schema_version\":{d},\"session_id\":",
         .{schema_version},
@@ -1045,6 +1063,7 @@ fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const 
 fn writeIdentityJson(out: *std.Io.Writer.Allocating, identity: Identity) !void {
     try out.writer.print("{{\"exists\":{},\"bytes\":{d},\"sha256\":", .{ identity.exists, identity.bytes });
     if (identity.sha256) |hash| {
+        // Preserve null-vs-string distinction so restores can tell unknown hash from known digest.
         try writeJsonString(out, hash);
     } else {
         try out.writer.writeAll("null");
