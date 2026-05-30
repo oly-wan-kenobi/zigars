@@ -88,6 +88,7 @@ pub fn isInvocation(raw_args: []const []const u8) bool {
 /// is only accepted for `doctor`; any other unrecognized flag is rejected. `-h`
 /// / `--help` short-circuits to `HelpRequested`.
 pub fn parse(raw_args: []const []const u8) ParseError!Invocation {
+    // Normalize input here so downstream paths can rely on validated shape.
     if (!isInvocation(raw_args)) return ParseError.UnknownArgument;
     if (raw_args.len <= 2) return ParseError.MissingCommand;
     if (std.mem.eql(u8, raw_args[2], "--help") or std.mem.eql(u8, raw_args[2], "-h")) return ParseError.HelpRequested;
@@ -144,6 +145,7 @@ pub fn parse(raw_args: []const []const u8) ParseError!Invocation {
 /// flags through the same path as the MCP server, avoiding a second config
 /// surface. Only options the client actually supplied are appended.
 pub fn appendConfigArgs(allocator: std.mem.Allocator, out: *std.ArrayList([]const u8), invocation: Invocation) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     try out.append(allocator, "zigars");
     try appendOptional(out, allocator, "--workspace", invocation.shared.workspace);
     try appendOptional(out, allocator, "--cache-dir", invocation.shared.cache_dir);
@@ -167,6 +169,7 @@ pub fn renderValue(allocator: std.mem.Allocator, context: app_context.Context, i
 
 /// Serializes a JSON value to stable machine output with a trailing newline.
 pub fn stringifyAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
@@ -212,6 +215,7 @@ pub fn parseErrorExitCode(err: ParseError) ExitCode {
 
 /// User-facing CLI help. Successful command output still requires `--json`.
 pub fn usage() []const u8 {
+    // Keep CLI help text in one place so option contracts stay aligned with tests.
     return
     \\zigars cli - thin JSON reporting surface over selected zigars use cases
     \\
@@ -248,6 +252,7 @@ pub fn usage() []const u8 {
 }
 
 fn parseErrorMessage(err: ParseError) []const u8 {
+    // Normalize input here so downstream paths can rely on validated shape.
     return switch (err) {
         ParseError.HelpRequested => "help requested",
         ParseError.MissingCommand => "missing command",
@@ -261,6 +266,7 @@ fn parseErrorMessage(err: ParseError) []const u8 {
 }
 
 fn parseStringFlag(raw_args: []const []const u8, index: *usize, arg: []const u8, flag: []const u8) ParseError!?[]const u8 {
+    // Normalize input here so downstream paths can rely on validated shape.
     if (std.mem.eql(u8, arg, flag)) {
         index.* += 1;
         if (index.* >= raw_args.len) return ParseError.MissingValue;
