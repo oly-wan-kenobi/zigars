@@ -128,6 +128,7 @@ fn groupName(group: @import("types.zig").ToolGroup) []const u8 {
 
 /// Returns the manifest catalog group name containing a tool.
 fn catalogGroupForTool(groups: std.json.Array, tool_name: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     for (groups.items) |group_value| {
         const group = group_value.object;
         const group_name = group.get("name").?.string;
