@@ -135,6 +135,7 @@ const CapturePlanSpec = struct {
 
 /// Serializes capture plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -155,6 +156,7 @@ fn capturePlanValue(allocator: std.mem.Allocator, spec: CapturePlanSpec) !std.js
 
 /// Serializes next zigars command fields into an allocator-owned JSON value; allocation failures propagate.
 fn nextZigarsCommandValue(allocator: std.mem.Allocator, format: flamegraph_model.ZflameFormat, input: []const u8, output: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -178,6 +180,7 @@ fn recommendedPlanIdsValue(allocator: std.mem.Allocator, platform: []const u8) !
 
 /// Serializes diff workflow fields into an allocator-owned JSON value; allocation failures propagate.
 fn diffWorkflowValue(allocator: std.mem.Allocator, output_prefix: []const u8) !std.json.Value {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
