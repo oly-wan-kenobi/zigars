@@ -164,6 +164,7 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
 
 /// Executes explicit CLI mode as a one-shot JSON reporting surface over app use cases.
 fn runCli(init: std.process.Init, args: []const []const u8) !cli_adapter.ExitCode {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const allocator = init.gpa;
     const invocation = cli_adapter.parse(args) catch |err| {
         cli_adapter.writeParseDiagnostic(init.io, err) catch {};
@@ -222,6 +223,7 @@ fn configFromCli(allocator: std.mem.Allocator, io: std.Io, invocation: cli_adapt
 }
 
 fn cliConfigExitCode(err: anyerror) cli_adapter.ExitCode {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingValue,
         error.UnknownArgument,
@@ -274,6 +276,7 @@ const StartupTimeline = struct {
     }
 
     fn end(self: *StartupTimeline, name: []const u8, phase_started_ns: i128) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const now_ns = monotonicNowNs(self.io);
         const phase = Phase{
             .name = name,
@@ -317,6 +320,7 @@ fn elapsedMs(start_ns: i128, end_ns: i128) u64 {
 
 /// Emits a startup warning when the configured Zig cannot satisfy build.zig.zon.
 fn warnOnZigVersionPreflight(runtime: *App) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const build_zon = runtime.workspace.readFileAlloc(runtime.io, "build.zig.zon", 256 * 1024) catch |err| switch (err) {
         error.FileNotFound, error.PathOutsideWorkspace, error.EmptyPath => return,
         else => {
@@ -373,6 +377,7 @@ fn termName(term: std.process.Child.Term) []const u8 {
 
 /// MCP tool callbacks update runtime observability counters without crossing into app use-case logic.
 fn recordMcpToolCall(runtime: *App, name: []const u8, duration_ms: u64, is_error: bool, correlation: anytype) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (correlation) |context| {
         runtime.observability.recordToolCallWithCorrelation(name, duration_ms, is_error, .{
             .mcp_request_id_type = context.request_id.typeName(),
@@ -389,6 +394,7 @@ fn recordMcpToolCall(runtime: *App, name: []const u8, duration_ms: u64, is_error
 
 /// Config parse exits are normalized at the process boundary so transports never start on invalid startup state.
 fn handleConfigParseError(io: std.Io, err: anyerror) !cli_adapter.ExitCode {
+    // Translate internal outcomes into protocol-facing responses without leaking internal details.
     switch (err) {
         error.HelpRequested => {
             try stderrPrint(io, "{s}", .{config_mod.usage()});
