@@ -43,6 +43,7 @@ const overclaim_tokens = [_][]const u8{
 
 /// Executes the zigars docs drift check workflow and returns an allocator-owned structured result.
 pub fn zigarsDocsDriftCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode = parseModeArg(allocator, "zigars_docs_drift_check", args) catch |err| return modeError(allocator, "zigars_docs_drift_check", args, err);
     var checks = std.json.Array.init(allocator);
     var checks_owned = true;
@@ -74,6 +75,7 @@ pub fn zigarsDocsDriftCheck(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zigars release claim check workflow and returns an allocator-owned structured result.
 pub fn zigarsReleaseClaimCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode = parseModeArg(allocator, "zigars_release_claim_check", args) catch |err| return modeError(allocator, "zigars_release_claim_check", args, err);
     var checks = std.json.Array.init(allocator);
     var checks_owned = true;
@@ -174,6 +176,7 @@ const DriftResult = struct {
 
 /// Serializes drift result fields into an allocator-owned JSON value; allocation failures propagate.
 fn driftResultValue(allocator: std.mem.Allocator, input: DriftResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var omitted = std.json.Array.init(allocator);
     var omitted_owned = true;
     defer if (omitted_owned) omitted.deinit();
@@ -198,6 +201,7 @@ fn driftResultValue(allocator: std.mem.Allocator, input: DriftResult) !std.json.
 
 /// Serializes doc needle check fields into an allocator-owned JSON value; allocation failures propagate.
 fn docNeedleCheckValue(a: *App, allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var missing = std.json.Array.init(allocator);
     var missing_owned = true;
     defer if (missing_owned) missing.deinit();
@@ -230,6 +234,7 @@ fn docNeedleCheckValue(a: *App, allocator: std.mem.Allocator, path: []const u8, 
 /// docs file. Missing markers are what zigarsDocsDriftCheck reports as drift;
 /// an unknown path returns an empty set (no markers required).
 fn docNeedles(path: []const u8) []const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.eql(u8, path, "README.md")) return &.{
         "Public feature claims use evidence labels",
         "command-backed tools",
@@ -251,6 +256,7 @@ fn docNeedles(path: []const u8) []const []const u8 {
 
 /// Serializes claim check fields into an allocator-owned JSON value; allocation failures propagate.
 fn claimCheckValue(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var found = std.json.Array.init(allocator);
     var found_owned = true;
     defer if (found_owned) found.deinit();
@@ -271,6 +277,7 @@ fn claimCheckValue(allocator: std.mem.Allocator, path: []const u8, bytes: []cons
 
 /// Serializes file check error fields into an allocator-owned JSON value; allocation failures propagate.
 fn fileCheckErrorValue(allocator: std.mem.Allocator, path: []const u8, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -306,6 +313,7 @@ fn readWorkspaceFile(a: *App, allocator: std.mem.Allocator, path: []const u8) ![
 /// that to a structured argument_error via modeError). `allocator` and
 /// `tool_name` are unused but kept so the signature mirrors other arg parsers.
 fn parseModeArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value) !Mode {
+    // Normalize input here so downstream paths can rely on validated shape.
     _ = allocator;
     _ = tool_name;
     const raw = argString(args, "mode") orelse Mode.standard.name();
@@ -336,6 +344,7 @@ fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mode: 
 
 /// Serializes result shape fields into an allocator-owned JSON value; allocation failures propagate.
 fn resultShapeValue(allocator: std.mem.Allocator, mode: Mode) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -347,6 +356,7 @@ fn resultShapeValue(allocator: std.mem.Allocator, mode: Mode) !std.json.Value {
 
 /// Serializes omission fields into an allocator-owned JSON value; allocation failures propagate.
 fn omissionValue(allocator: std.mem.Allocator, section: []const u8, reason: []const u8, restore_with: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -433,6 +443,7 @@ const DriftHarness = struct {
 
     /// Builds a test app fixture with the ports needed by this workflow.
     fn app(self: *DriftHarness, allocator: std.mem.Allocator) App {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return App.init(.{
             .workspace = .{ .root = "/work", .cache_root = "/work/.zigars-cache", .transport = "stdio" },
             .tool_paths = .{},
