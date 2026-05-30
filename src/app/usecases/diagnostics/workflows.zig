@@ -72,6 +72,7 @@ const BinaryInfo = struct {
 
 /// Executes the zig debug plan workflow and returns an allocator-owned structured result.
 pub fn zigDebugPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -117,6 +118,7 @@ pub fn zigCoreInspect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
 /// Executes the zig debug frame summary workflow and returns an allocator-owned structured result.
 pub fn zigDebugFrameSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_debug_frame_summary", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_debug_frame_summary", args, "text", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -140,6 +142,7 @@ pub fn zigDebugFrameSummary(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig sanitizer fusion workflow and returns an allocator-owned structured result.
 pub fn zigSanitizerFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_sanitizer_fusion", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_sanitizer_fusion", args, "text", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -167,6 +170,7 @@ pub fn zigSanitizerFusion(a: *App, allocator: std.mem.Allocator, args: ?std.json
 
 /// Executes the zig panic trace analyze workflow and returns an allocator-owned structured result.
 pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_panic_trace_analyze", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_panic_trace_analyze", args, "text", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -193,6 +197,7 @@ pub fn zigPanicTraceAnalyze(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig crash repro plan workflow and returns an allocator-owned structured result.
 pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_crash_repro_plan", "text", "path", "content", false) catch |err| return evidenceInputError(a, allocator, "zig_crash_repro_plan", args, "text", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -218,6 +223,7 @@ pub fn zigCrashReproPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Invokes zig heaptrack run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigHeaptrackRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_heaptrack_run", "command", "non-empty command string");
     const heaptrack_path = argString(args, "heaptrack_path") orelse "heaptrack";
     const output = argString(args, "output") orelse ".zigars-cache/memory/heaptrack.gz";
@@ -254,6 +260,7 @@ pub fn zigHeaptrackSummary(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 
 /// Executes the zig valgrind memcheck workflow and returns an allocator-owned structured result.
 pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_valgrind_memcheck", "command", "non-empty command string");
     const valgrind_path = argString(args, "valgrind_path") orelse "valgrind";
     const output = argString(args, "output") orelse ".zigars-cache/memory/valgrind-memcheck.json";
@@ -281,6 +288,7 @@ pub fn zigValgrindMemcheck(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 
 /// Executes the zig callgrind report workflow and returns an allocator-owned structured result.
 pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (argString(args, "content") != null or argString(args, "path") != null or argString(args, "text") != null) {
         var input = readEvidenceInput(a, allocator, args, "zig_callgrind_report", "text", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_callgrind_report", args, "text", err);
         defer input.deinit(allocator);
@@ -316,6 +324,7 @@ pub fn zigCallgrindReport(a: *App, allocator: std.mem.Allocator, args: ?std.json
 
 /// Executes the zig fuzz plan workflow and returns an allocator-owned structured result.
 pub fn zigFuzzPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -336,6 +345,7 @@ pub fn zigFuzzPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
 
 /// Invokes zig afl run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_afl_run", "command", "fuzz target command string");
     const afl_path = argString(args, "afl_path") orelse "afl-fuzz";
     const corpus = argString(args, "corpus") orelse "corpus";
@@ -368,6 +378,7 @@ pub fn zigAflRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !
 
 /// Invokes zig libfuzzer run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigLibfuzzerRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_libfuzzer_run", "command", "libFuzzer command string");
     const output = argString(args, "output") orelse ".zigars-cache/fuzz/libfuzzer-run.json";
     const argv = splitToolArgs(allocator, command_text) catch |err| return splitToolArgsErrorResult(allocator, "zig_libfuzzer_run", "command", command_text, err);
@@ -380,6 +391,7 @@ pub fn zigLibfuzzerRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 
 /// Executes the zig fuzz crash minimize workflow and returns an allocator-owned structured result.
 pub fn zigFuzzCrashMinimize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_fuzz_crash_minimize", "text", "path", "content", false) catch |err| return evidenceInputError(a, allocator, "zig_fuzz_crash_minimize", args, "text", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -408,6 +420,7 @@ pub fn zigFuzzCorpusSummary(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig binary size workflow and returns an allocator-owned structured result.
 pub fn zigBinarySize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_binary_size", "path", "workspace binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -422,6 +435,7 @@ pub fn zigBinarySize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Executes the zig binary size diff workflow and returns an allocator-owned structured result.
 pub fn zigBinarySizeDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const after_path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_binary_size_diff", "path", "workspace current binary path");
     const before_path = argString(args, "baseline") orelse return missingArgumentResult(allocator, "zig_binary_size_diff", "baseline", "workspace baseline binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -441,6 +455,7 @@ pub fn zigBinarySizeDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig objdump summary workflow and returns an allocator-owned structured result.
 pub fn zigObjdumpSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return binaryBackendTool(a, allocator, args, .{
         .tool_name = "zig_objdump_summary",
         .backend_name = "llvm-objdump",
@@ -454,6 +469,7 @@ pub fn zigObjdumpSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig dwarfdump check workflow and returns an allocator-owned structured result.
 pub fn zigDwarfdumpCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return binaryBackendTool(a, allocator, args, .{
         .tool_name = "zig_dwarfdump_check",
         .backend_name = "llvm-dwarfdump",
@@ -467,6 +483,7 @@ pub fn zigDwarfdumpCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig symbolize workflow and returns an allocator-owned structured result.
 pub fn zigSymbolize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const addresses = argString(args, "addresses") orelse return missingArgumentResult(allocator, "zig_symbolize", "addresses", "one or more addresses");
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_symbolize", "path", "workspace binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -484,6 +501,7 @@ pub fn zigSymbolize(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 
 /// Executes the zig qemu test workflow and returns an allocator-owned structured result.
 pub fn zigQemuTest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const target = argString(args, "target") orelse "native";
     const qemu_path = argString(args, "qemu_path") orelse qemuDefaultForTarget(target);
     const command_text = argString(args, "command") orelse argString(args, "binary") orelse return missingArgumentResult(allocator, "zig_qemu_test", "command", "QEMU guest command or workspace binary path");
@@ -522,6 +540,7 @@ pub fn zigTargetRuntimePlan(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig embedded detect workflow and returns an allocator-owned structured result.
 pub fn zigEmbeddedDetect(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const value = embeddedDetectValue(arena.allocator(), a, @intCast(@max(1, argInt(args, "limit", 80)))) catch |err| return toolErrorFromError(allocator, .{
@@ -537,6 +556,7 @@ pub fn zigEmbeddedDetect(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig microzig plan workflow and returns an allocator-owned structured result.
 pub fn zigMicrozigPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -557,6 +577,7 @@ pub fn zigMicrozigPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 
 /// Executes the zig board profile workflow and returns an allocator-owned structured result.
 pub fn zigBoardProfile(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -575,6 +596,7 @@ pub fn zigBoardProfile(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 
 /// Executes the zig flash plan workflow and returns an allocator-owned structured result.
 pub fn zigFlashPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -614,6 +636,7 @@ const BackendCommandSpec = struct {
 
 /// Implements lldb capture workflow logic using caller-owned inputs.
 fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, binary: []const u8, core: ?[]const u8, command_expr: []const u8, basis: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const lldb_path = argString(args, "lldb_path") orelse "lldb";
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -655,6 +678,7 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
 /// have already rejected unsupported platforms. The probe timeout is clamped so
 /// a missing backend fails fast.
 fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, spec: BackendCommandSpec) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, spec.tool_name, spec.backend_name, spec.configured_path, spec.argv, spec.basis, if (spec.target.len > 0) spec.target else argString(args, "target"), spec.output);
     const probe = checkBackend(a, scratch, spec.backend_name, spec.probe_argv, @min(toolTimeout(a, args), 5000));
     if (!probe.ok) return backendUnavailableResult(result_allocator, spec.backend_name, spec.operation, spec.configured_path, probe.status, "Install or configure the optional backend outside zigars, then retry with the path argument; zigars never installs external tools.");
@@ -683,6 +707,7 @@ fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratc
 /// the result, and write the evidence artifact. Used for runners like libFuzzer
 /// where the command is the project's own, not a fixed backend.
 fn applyGatedUserCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, argv: []const []const u8, output: []const u8, artifact_kind: []const u8, notes: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, "project_command", "", argv, "Project command preview", argString(args, "target"), output);
     const run = runCommand(result_allocator, a, argv, toolTimeout(a, args)) catch |err| {
         const value = commandErrorValue(scratch, "project diagnostic command", argv, a.workspace.root, toolTimeout(a, args), err) catch return error.OutOfMemory;
@@ -718,6 +743,7 @@ const BinaryBackendSpec = struct {
 
 /// Implements binary backend tool workflow logic using caller-owned inputs.
 fn binaryBackendTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, spec: BinaryBackendSpec) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, spec.tool_name, "path", "workspace binary path");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -735,6 +761,7 @@ fn binaryBackendTool(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Implements binary apply gated command workflow logic using caller-owned inputs.
 fn binaryApplyGatedCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, backend_name: []const u8, operation: []const u8, configured_path: []const u8, argv: []const []const u8, path: []const u8, basis: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, backend_name, configured_path, argv, basis, argString(args, "target"), null);
     const probe = checkBackend(a, scratch, backend_name, &.{ configured_path, "--version" }, @min(toolTimeout(a, args), 5000));
     if (!probe.ok) return backendUnavailableResult(result_allocator, backend_name, operation, configured_path, probe.status, "Install the LLVM binary tools separately or pass the per-call backend path; zigars never installs them.");
@@ -758,6 +785,7 @@ fn binaryApplyGatedCommand(a: *App, result_allocator: std.mem.Allocator, scratch
 
 /// Implements preview result workflow logic using caller-owned inputs.
 fn previewResult(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, tool_name: []const u8, backend: []const u8, configured_path: []const u8, argv: []const []const u8, basis: []const u8, target: ?[]const u8, output: ?[]const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = try baseValue(scratch, a, tool_name, basis, "medium", &.{
         "The backend or project command is not executed until apply=true.",
     });
@@ -776,6 +804,7 @@ fn previewResult(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.
 
 /// Implements memory summary workflow logic using caller-owned inputs.
 fn memorySummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, input: EvidenceInput, backend: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = args;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -792,6 +821,7 @@ fn memorySummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, t
 
 /// Implements callgrind summary workflow logic using caller-owned inputs.
 fn callgrindSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, input: EvidenceInput) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = args;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -807,6 +837,7 @@ fn callgrindSummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 
 /// Implements cross plan workflow logic using caller-owned inputs.
 fn crossPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, basis: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -831,6 +862,7 @@ fn crossPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_
 /// and nothing was supplied. `allocator`/`tool_name` are unused here; the caller
 /// frees owned bytes via EvidenceInput.deinit.
 fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, primary: []const u8, path_field: ?[]const u8, content_field: ?[]const u8, required: bool) !EvidenceInput {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = allocator;
     _ = tool_name;
     if (content_field) |field| if (argString(args, field)) |content| return .{ .bytes = content, .source_kind = field };
