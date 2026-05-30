@@ -6,6 +6,7 @@ const read_model = @import("../../../app/usecases/observability/workflows.zig");
 
 /// Returns allocator-owned JSON for tool stats.
 pub fn toolStatsValue(allocator: std.mem.Allocator, stats: []const ports.ObservabilityToolStats) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (stats) |stat| {
@@ -28,6 +29,7 @@ pub fn toolStatsValue(allocator: std.mem.Allocator, stats: []const ports.Observa
 
 /// Returns allocator-owned JSON for MCP method stats.
 pub fn methodStatsValue(allocator: std.mem.Allocator, stats: []const ports.ObservabilityMethodStats) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (stats) |*stat| {
@@ -96,6 +98,7 @@ pub fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: [ports.max
 
 /// Returns allocator-owned JSON for recent MCP tool-call correlations.
 pub fn toolCallCorrelationsValue(allocator: std.mem.Allocator, correlations: []const ports.ObservabilityToolCallCorrelation) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (correlations) |*event| {
