@@ -66,6 +66,7 @@ pub const LspClient = struct {
 
     /// Initializes a disconnected client and clamps timeout to at least one millisecond.
     pub fn initWithTimeout(allocator: std.mem.Allocator, io: std.Io, request_timeout_ms: i64) LspClient {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .zls_stdin = null,
             .zls_stdout = null,
@@ -90,6 +91,7 @@ pub const LspClient = struct {
     /// Attach ZLS pipe handles and start the background reader (and optional stderr) threads.
     /// The caller transfers ownership of the file handles; disconnect closes them.
     pub fn connect(self: *LspClient, stdin: std.Io.File, stdout: std.Io.File, stderr: ?std.Io.File) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.zls_stdin = stdin;
         self.zls_stdout = stdout;
         self.zls_stderr = stderr;
@@ -140,6 +142,7 @@ pub const LspClient = struct {
     /// Use instead of sendNotification(.{}) when the spec requires an object,
     /// not an empty array, to avoid LSP server parse errors.
     pub fn sendRawNotification(self: *LspClient, allocator: std.mem.Allocator, method: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const stdin = self.zls_stdin orelse return error.NotConnected;
         var aw: std.Io.Writer.Allocating = .init(allocator);
         defer aw.deinit();
@@ -258,6 +261,7 @@ pub const LspClient = struct {
     /// Failures are logged at debug level and do not propagate;
     /// the caller is responsible for removing the pending slot on cancellation.
     fn sendCancelRequestNotification(self: *LspClient, id: i64) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const stdin = self.zls_stdin orelse return;
         var aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer aw.deinit();
@@ -368,6 +372,7 @@ pub const LspClient = struct {
     /// Background thread entry point: drains ZLS stderr and forwards each chunk to the logger.
     /// Exits when the pipe is closed or an unrecoverable read error occurs.
     fn stderrLoop(self: *LspClient) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const stderr = self.zls_stderr orelse return;
         var buf: [4096]u8 = undefined;
         while (true) {
@@ -412,6 +417,7 @@ pub const LspClient = struct {
     /// so the waiter unblocks and can check for a null response.
     /// Caller must hold pending_mutex.
     fn storePendingResponseLocked(self: *LspClient, id: i64, data: []const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.pending.get(id)) |p| {
             if (p.response) |old| {
                 self.allocator.free(old);
@@ -436,6 +442,7 @@ pub const LspClient = struct {
     /// Graceful teardown: sends LSP shutdown using shutdown_timeout_ms, closes all
     /// pipes, and joins reader and stderr threads. Safe to call more than once.
     pub fn disconnect(self: *LspClient) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.closing.store(true, .release);
         self.shutdownWithTimeout(self.shutdown_timeout_ms) catch |err| {
             self.rememberLastError(if (err == error.RequestTimeout) "ShutdownTimeout" else @errorName(err));
@@ -475,6 +482,7 @@ pub const LspClient = struct {
     /// A broken pipe or EOF during `exit` is treated as benign because ZLS may
     /// have closed its end immediately after the shutdown response.
     fn shutdownWithTimeout(self: *LspClient, timeout_ms: i64) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.zls_stdin == null or !self.running.load(.acquire)) return;
         const id = self.next_id.fetchAdd(1, .monotonic);
         const msg = try json_rpc.writeRequest(self.allocator, .{ .integer = id }, "shutdown", .{});
@@ -490,6 +498,7 @@ pub const LspClient = struct {
 
     /// Classifies exit-notification errors and records unexpected failures.
     fn handleExitNotificationError(self: *LspClient, err: anyerror) void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         if (isBenignExitNotificationError(err)) {
             self.logger.debug("lsp", "exit notification skipped after shutdown response: {}", .{err});
             self.running.store(false, .release);
@@ -502,6 +511,7 @@ pub const LspClient = struct {
     /// Disconnect, then free all pending response buffers, the diagnostics cache,
     /// and the last-error string. Must be called exactly once; do not use after.
     pub fn deinit(self: *LspClient) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         self.disconnect();
         var it = self.pending.iterator();
         while (it.next()) |entry| {
