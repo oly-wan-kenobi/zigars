@@ -37,6 +37,7 @@ fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
 /// returns `error.StaleGeneratedFile` when they differ; without it, writes
 /// the rendered content to disk. The file must be committed and kept current.
 pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var check = false;
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--check")) {
@@ -70,6 +71,7 @@ pub fn generate(allocator: Allocator, io: Io, args: []const []const u8) !void {
 /// Renders the full Markdown document from a parsed catalog JSON value.
 /// The caller owns the returned slice and must free it.
 fn renderToolIndex(allocator: Allocator, catalog: JsonValue) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = catalog.object;
     var out: Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
@@ -202,6 +204,7 @@ fn hasSchemaFields(spec: manifest.ToolMeta, required: bool) bool {
 
 /// Renders required or optional schema fields as compact argument hints.
 fn renderArgumentFields(writer: *Io.Writer, spec: manifest.ToolMeta, required: bool) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var i: usize = 0;
     for (spec.input_schema.fields) |field| {
         if (field[2] != required) continue;
