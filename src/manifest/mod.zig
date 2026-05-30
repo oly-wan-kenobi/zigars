@@ -109,6 +109,7 @@ pub fn commandPlanFor(id: ToolId) ?CommandPlan {
 
 /// Returns the serialized planning policy kind.
 pub fn planKind(plan: PlanPolicy) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (plan) {
         .exact_command => "exact_command",
         .dynamic_command => "dynamic_command",
@@ -130,6 +131,7 @@ pub fn riskLevel(risk: ToolRisk) []const u8 {
 
 /// Builds JSON risk flags and planner hints for one registered tool.
 pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const risk_value = riskFor(spec.id);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -148,6 +150,7 @@ pub fn riskValue(allocator: std.mem.Allocator, spec: ToolMeta) !std.json.Value {
 
 /// Computes the external mutability hint from both declared read_only and risk capabilities.
 pub fn readOnlyHintFor(spec: ToolMeta) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const risk_value = riskFor(spec.id);
     return spec.read_only and
         !risk_value.writes_source and
