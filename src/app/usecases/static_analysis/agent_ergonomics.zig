@@ -114,6 +114,7 @@ const WorkspaceSnapshot = struct {
     partial_files: usize,
 
     fn deinit(self: WorkspaceSnapshot, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         for (self.sources) |item| item.deinit(allocator);
         allocator.free(self.sources);
         for (self.tests) |item| item.deinit(allocator);
@@ -134,6 +135,7 @@ const GraphEdge = struct {
 /// Finds import SCCs and cycle-oriented graph metadata without applying any
 /// project-specific architecture policy.
 pub fn importCyclesValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ImportCyclesRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var graph = try workspace_scans.importGraph(allocator, context, .{ .limit = request.limit });
     defer graph.deinit(allocator);
 
@@ -206,6 +208,7 @@ pub fn importCyclesValue(allocator: std.mem.Allocator, context: app_context.Stat
 
 /// Resolves requested test filters to actual parser-backed or heuristic test names.
 pub fn testNameResolveValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestNameResolveRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.test_name_resolve");
     defer snapshot.deinit(allocator);
 
@@ -246,6 +249,7 @@ pub fn testNameResolveValue(allocator: std.mem.Allocator, context: app_context.S
 
 /// Inventories likely test helpers, fixtures, fakes, and harness utilities.
 pub fn testFixtureInventoryValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: CatalogRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.test_fixture_inventory");
     defer snapshot.deinit(allocator);
 
@@ -281,6 +285,7 @@ pub fn testFixtureInventoryValue(allocator: std.mem.Allocator, context: app_cont
 /// Catalogs safety-relevant source sites while ignoring obvious comments and
 /// string literal spans on each line.
 pub fn safetySiteCatalogValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: CatalogRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.safety_site_catalog");
     defer snapshot.deinit(allocator);
 
@@ -319,6 +324,7 @@ pub fn safetySiteCatalogValue(allocator: std.mem.Allocator, context: app_context
 
 /// Maps a symbol to likely tests using test names, source occurrences, and test-file proximity.
 pub fn testForSymbolValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SymbolRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.test_for_symbol");
     defer snapshot.deinit(allocator);
 
@@ -349,6 +355,7 @@ pub fn testForSymbolValue(allocator: std.mem.Allocator, context: app_context.Sta
 
 /// Builds a directory-level public surface aggregate.
 pub fn moduleSurfaceValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: CatalogRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.module_surface");
     defer snapshot.deinit(allocator);
     const prefix = request.path orelse "";
@@ -390,6 +397,7 @@ pub fn moduleSurfaceValue(allocator: std.mem.Allocator, context: app_context.Sta
 
 /// Returns a symbol-scoped dossier for review and planning.
 pub fn symbolDossierValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SymbolRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.symbol_dossier");
     defer snapshot.deinit(allocator);
 
@@ -427,6 +435,7 @@ pub fn symbolDossierValue(allocator: std.mem.Allocator, context: app_context.Sta
 
 /// Risk-ranks a proposed or current change set with architecture-neutral weights.
 pub fn changeRiskAuditValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ChangeRiskRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, request.limit, "static_analysis.change_risk_audit");
     defer snapshot.deinit(allocator);
 
@@ -488,6 +497,7 @@ pub fn changeRiskAuditValue(allocator: std.mem.Allocator, context: app_context.S
 /// Ranks insertion sites for a topic using local names, declarations, imports,
 /// and sibling path evidence.
 pub fn insertionSitesValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: InsertionSitesRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snapshot = try loadWorkspaceSnapshot(allocator, context, @max(request.limit * 10, default_limit), "static_analysis.insertion_sites");
     defer snapshot.deinit(allocator);
 
@@ -519,6 +529,7 @@ pub fn insertionSitesValue(allocator: std.mem.Allocator, context: app_context.St
 }
 
 fn loadWorkspaceSnapshot(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize, provenance: []const u8) ports.PortError!WorkspaceSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
         .max_files = @max(limit, 1),
         .provenance = provenance,
@@ -585,6 +596,7 @@ fn loadWorkspaceSnapshot(allocator: std.mem.Allocator, context: app_context.Stat
 }
 
 fn copyTestRecord(allocator: std.mem.Allocator, file: []const u8, line: usize, name: ?[]const u8, declaration: []const u8, command: []const u8) !TestRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .file = try allocator.dupe(u8, file),
         .line = line,
@@ -595,6 +607,7 @@ fn copyTestRecord(allocator: std.mem.Allocator, file: []const u8, line: usize, n
 }
 
 fn copyPublicDecl(allocator: std.mem.Allocator, file: []const u8, decl: zig_analysis.Declaration) !PublicDeclRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .file = try allocator.dupe(u8, file),
         .line = decl.line,
@@ -605,6 +618,7 @@ fn copyPublicDecl(allocator: std.mem.Allocator, file: []const u8, decl: zig_anal
 }
 
 fn copyHelper(allocator: std.mem.Allocator, file: []const u8, decl: zig_analysis.Declaration) !HelperRecord {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .file = try allocator.dupe(u8, file),
         .line = decl.line,
@@ -615,6 +629,7 @@ fn copyHelper(allocator: std.mem.Allocator, file: []const u8, decl: zig_analysis
 }
 
 fn appendHeuristicTests(allocator: std.mem.Allocator, tests: *std.ArrayList(TestRecord), file: []const u8, bytes: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -631,6 +646,7 @@ fn appendHeuristicTests(allocator: std.mem.Allocator, tests: *std.ArrayList(Test
 }
 
 fn appendHeuristicDecls(allocator: std.mem.Allocator, public_decls: *std.ArrayList(PublicDeclRecord), helpers: *std.ArrayList(HelperRecord), file: []const u8, bytes: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -655,6 +671,7 @@ fn appendHeuristicDecls(allocator: std.mem.Allocator, public_decls: *std.ArrayLi
 }
 
 fn workspaceImportIndex(allocator: std.mem.Allocator, files: []const workspace_scans.ImportFile, from_file: []const u8, import_name: []const u8) !?usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!std.mem.endsWith(u8, import_name, ".zig")) return null;
     const dir = std.fs.path.dirname(from_file) orelse "";
     const candidate = if (dir.len == 0)
@@ -669,6 +686,7 @@ fn workspaceImportIndex(allocator: std.mem.Allocator, files: []const workspace_s
 }
 
 fn reachable(allocator: std.mem.Allocator, count: usize, edges: []const GraphEdge, start: usize, target: usize) !bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (start == target) return true;
     var seen = try allocator.alloc(bool, count);
     defer allocator.free(seen);
@@ -697,6 +715,7 @@ fn isCycleComponent(members: []const usize, edges: []const GraphEdge) bool {
 }
 
 fn cycleComponentValue(allocator: std.mem.Allocator, files: []const workspace_scans.ImportFile, edges: []const GraphEdge, importer_counts: []const usize, members: []const usize) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var file_values = std.json.Array.init(allocator);
     var edge_values = std.json.Array.init(allocator);
     var importer_total: usize = 0;
@@ -767,6 +786,7 @@ fn testNameCount(tests: []const TestRecord, name: []const u8) usize {
 }
 
 fn testRecordObject(allocator: std.mem.Allocator, test_record: TestRecord) !std.json.ObjectMap {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var item = std.json.ObjectMap.empty;
     try item.put(allocator, "file", try ownedString(allocator, test_record.file));
     try item.put(allocator, "line", .{ .integer = @intCast(test_record.line) });
@@ -782,6 +802,7 @@ fn isHelperDecl(file: []const u8, name: ?[]const u8, signature: []const u8) bool
 }
 
 fn isHelperName(file: []const u8, name: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return containsWordIgnoreCase(file, "test") or
         containsWordIgnoreCase(file, "fixture") or
         containsWordIgnoreCase(file, "fake") or
@@ -794,6 +815,7 @@ fn isHelperName(file: []const u8, name: []const u8) bool {
 }
 
 fn symbolUseCount(sources: []const SourceRecord, symbol: []const u8, decl_file: []const u8, decl_line: usize) usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var count: usize = 0;
     for (sources) |source| {
         var lines = std.mem.splitScalar(u8, source.bytes, '\n');
@@ -807,6 +829,7 @@ fn symbolUseCount(sources: []const SourceRecord, symbol: []const u8, decl_file: 
 }
 
 fn usageSitesValue(allocator: std.mem.Allocator, sources: []const SourceRecord, symbol: []const u8, decl_file: []const u8, limit: usize) !std.json.Value {
+    // Keep CLI help text in one place so option contracts stay aligned with tests.
     var array = std.json.Array.init(allocator);
     for (sources) |source| {
         var lines = std.mem.splitScalar(u8, source.bytes, '\n');
@@ -826,6 +849,7 @@ fn usageSitesValue(allocator: std.mem.Allocator, sources: []const SourceRecord, 
 }
 
 fn sanitizeCodeLine(allocator: std.mem.Allocator, line: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = try allocator.alloc(u8, line.len);
     var in_string = false;
     var escaped = false;
@@ -848,6 +872,7 @@ fn sanitizeCodeLine(allocator: std.mem.Allocator, line: []const u8) ![]u8 {
 }
 
 fn safetyKind(line: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.indexOf(u8, line, "catch unreachable") != null) return "catch_unreachable";
     if (std.mem.indexOf(u8, line, "@panic(") != null) return "panic";
     if (std.mem.indexOf(u8, line, "unreachable") != null) return "unreachable";
@@ -860,6 +885,7 @@ fn safetyKind(line: []const u8) ?[]const u8 {
 }
 
 fn testSymbolScore(sources: []const SourceRecord, test_record: TestRecord, symbol: []const u8) usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var score: usize = 0;
     if (test_record.name) |name| {
         if (std.mem.indexOf(u8, name, symbol) != null) score += 5;
@@ -879,6 +905,7 @@ fn testSymbolReason(score: usize) []const u8 {
 }
 
 fn publicDeclObject(allocator: std.mem.Allocator, decl: PublicDeclRecord) !std.json.ObjectMap {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var item = std.json.ObjectMap.empty;
     try item.put(allocator, "file", try ownedString(allocator, decl.file));
     try item.put(allocator, "line", .{ .integer = @intCast(decl.line) });
@@ -898,6 +925,7 @@ fn sourceImportsPrefix(bytes: []const u8, prefix: []const u8) bool {
 }
 
 fn moduleRoleHintsValue(allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     if (containsWordIgnoreCase(path, "test")) try array.append(.{ .string = "test_support" });
     if (containsWordIgnoreCase(path, "domain")) try array.append(.{ .string = "domain_logic" });
@@ -913,6 +941,7 @@ fn moduleRoleHintsForSymbolValue(allocator: std.mem.Allocator, decls: []const Pu
 }
 
 fn appendSymbolLineMatches(allocator: std.mem.Allocator, out: *std.json.Array, sources: []const SourceRecord, symbol: []const u8, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     for (sources) |source| {
         var lines = std.mem.splitScalar(u8, source.bytes, '\n');
         var line_no: usize = 1;
@@ -929,6 +958,7 @@ fn appendSymbolLineMatches(allocator: std.mem.Allocator, out: *std.json.Array, s
 }
 
 fn appendFilesFromDiff(allocator: std.mem.Allocator, files: *std.ArrayList([]const u8), diff: ?[]const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const text = diff orelse return;
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
@@ -941,6 +971,7 @@ fn appendFilesFromDiff(allocator: std.mem.Allocator, files: *std.ArrayList([]con
 }
 
 fn fileRiskScore(snapshot: WorkspaceSnapshot, file: []const u8) usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var score: usize = 0;
     if (std.mem.eql(u8, file, "build.zig") or std.mem.eql(u8, file, "build.zig.zon")) score += 3;
     for (snapshot.public_decls) |decl| {
@@ -965,6 +996,7 @@ fn symbolRiskScore(snapshot: WorkspaceSnapshot, symbol: []const u8) usize {
 }
 
 fn fileRiskReasonsValue(allocator: std.mem.Allocator, snapshot: WorkspaceSnapshot, file: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     if (std.mem.eql(u8, file, "build.zig") or std.mem.eql(u8, file, "build.zig.zon")) try array.append(.{ .string = "build or dependency metadata" });
     for (snapshot.public_decls) |decl| if (std.mem.eql(u8, decl.file, file)) {
@@ -991,6 +1023,7 @@ fn riskLabel(score: usize) []const u8 {
 }
 
 fn topicScore(allocator: std.mem.Allocator, topic: []const u8, file: []const u8, bytes: []const u8) !usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var score: usize = 0;
     var tokens = std.mem.tokenizeAny(u8, topic, " .,_-/\t\r\n");
     while (tokens.next()) |token| {
@@ -1002,6 +1035,7 @@ fn topicScore(allocator: std.mem.Allocator, topic: []const u8, file: []const u8,
 }
 
 fn insertionReasonValue(allocator: std.mem.Allocator, topic: []const u8, file: []const u8, bytes: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     var tokens = std.mem.tokenizeAny(u8, topic, " .,_-/\t\r\n");
     while (tokens.next()) |token| {
