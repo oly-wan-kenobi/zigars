@@ -94,6 +94,7 @@ const Fixture = struct {
     catalog: fakes.FakeToolManifestCatalog,
 
     fn init() !Fixture {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .runner = fakes.FakeCommandRunner.init(std.testing.allocator),
             .workspace = fakes.FakeWorkspaceStore.init(std.testing.allocator),
@@ -111,6 +112,7 @@ const Fixture = struct {
     }
 
     fn context(self: *Fixture) app_context.ReleaseWorkflowContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
             .tool_paths = .{},
