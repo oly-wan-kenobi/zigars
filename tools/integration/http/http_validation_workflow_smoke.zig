@@ -14,6 +14,7 @@ const valueAt = smoke.valueAt;
 /// structured result paths against `expected`. `scenario_count` is incremented
 /// once per successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try assertToolPaths(allocator, io, port, 101, "zig_impact_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected, "semantic_impact_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 102, "zig_test_select_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected, "semantic_test_select_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 103, "zigars_validation_plan", "{\"mode\":\"quick\",\"changed_files\":\"notes.txt\"}", expected, "validation_plan_paths", scenario_count);
@@ -37,6 +38,7 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
 /// `expected_key` sub-object of `expected_root`. Returns `error.AssertionFailed`
 /// on a missing path. Increments `scenario_count` on success.
 fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
