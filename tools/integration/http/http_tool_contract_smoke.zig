@@ -12,12 +12,11 @@ const JsonValue = std.json.Value;
 
 // Groups HTTP tool-result path assertions by ownership area. The expected
 // values stay in JSON fixtures; this module only preserves call order and IDs.
-// Shared assertions live in `http_tool_contract_support.zig`; the static-analysis
-// family lives in `http_tool_contract_smoke_b.zig` and is re-exported here so the
-// HTTP smoke entrypoint keeps a single contract-smoke surface.
-
+/// Shared helper that verifies JSON paths for a successful tool response.
 pub const assertToolPaths = support.assertToolPaths;
+/// Shared helper that verifies JSON paths for an expected tool-error response.
 pub const assertToolPathsIsError = support.assertToolPathsIsError;
+/// Static-analysis contract scenarios re-exported for the HTTP smoke entrypoint.
 pub const runStaticAnalysisAssertions = static_analysis.runStaticAnalysisAssertions;
 
 /// Exercises workflow, environment, profile, and release-evidence tools.
