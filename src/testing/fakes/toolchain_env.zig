@@ -71,6 +71,7 @@ pub const FakeToolchainEnv = struct {
 
     /// Adds an ordered successful env lookup expectation.
     pub fn expectGet(self: *Self, request: ports.ToolchainEnvRequest, value: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -83,6 +84,7 @@ pub const FakeToolchainEnv = struct {
 
     /// Adds an ordered failing env lookup expectation.
     pub fn expectGetError(self: *Self, request: ports.ToolchainEnvRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -100,6 +102,7 @@ pub const FakeToolchainEnv = struct {
 
     /// Reads the requested environment value through this port implementation.
     fn get(ptr: *anyopaque, allocator: Allocator, request: ports.ToolchainEnvRequest) ports.PortError!ports.ToolchainEnvValue {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
         var call_record_owned = false;
