@@ -90,6 +90,7 @@ pub fn clear(state: *State) void {
 /// If a DocumentState already exists in its slot, reopenAll is called after connect
 /// to replay retained documents into the new session.
 pub fn start(state: *State, slots: Slots, config: Config) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const required_slots = try slots.require();
     clear(state);
     required_slots.process.* = ZlsProcess.init(config.allocator, config.io, config.workspace_root, config.zls_path);
@@ -139,6 +140,7 @@ pub fn start(state: *State, slots: Slots, config: Config) !void {
 /// Tears down the current process and client, then starts a fresh ZLS session.
 /// On start failure the status is set to the error name and the failure is re-returned.
 pub fn restart(state: *State, slots: Slots, config: Config) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const required_slots = try slots.require();
 
     if (required_slots.client.*) |*client| client.deinit();
