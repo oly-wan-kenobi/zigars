@@ -192,6 +192,7 @@ pub const Server = struct {
 
     /// Initialize a new MCP Server
     pub fn init(allocator: std.mem.Allocator, config: ServerConfig) Self {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .allocator = allocator,
             .config = config,
@@ -207,6 +208,7 @@ pub const Server = struct {
 
     /// Clean up server resources
     pub fn deinit(self: *Self) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         if (self.stdio_transport) |stdio| {
             stdio.deinit(self.allocator);
             self.allocator.destroy(stdio);
@@ -280,6 +282,7 @@ pub const Server = struct {
 
     /// Enable task-augmented tools/call support backed by zigars runtime jobs.
     pub fn enableTasks(self: *Self, state: anytype) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.task_state = tasks_ext.State.init(state);
         self.capabilities.tasks = .{
             .list = .{},
@@ -330,6 +333,7 @@ pub const Server = struct {
 
     /// Run the server with the specified transport
     pub fn run(self: *Self, io: std.Io, allocator: std.mem.Allocator, options: RunOptions) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         switch (options) {
             .stdio => {
                 self.log(io, "Server listening on STDIO");
@@ -357,6 +361,7 @@ pub const Server = struct {
 
     /// Main message processing loop
     fn messageLoop(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         while (self.state != .stopped and self.state != .shutting_down) {
             const message_data = self.transport.?.receive(io, allocator) catch |err| {
                 switch (err) {
@@ -383,6 +388,7 @@ pub const Server = struct {
     /// is answered with a JSON-RPC parse error (and audited) rather than crashing
     /// the loop, since the transport may still carry further valid frames.
     pub fn handleMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         const parsed_message = jsonrpc.parseMessage(allocator, data) catch {
             var parse_correlation = self.nextCorrelation(correlation.RequestId.absent(), "jsonrpc/parse", null);
             self.logWithCorrelation(io, &parse_correlation, "JSON-RPC parse error");
@@ -675,6 +681,7 @@ pub const Server = struct {
 
     /// Handles the tools list request and sends the JSON-RPC response or error.
     fn handleToolsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -829,6 +836,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed tool callback.
     fn toolHandlerErrorValue(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) !std.json.Value {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = tool_name,
             .operation = "dispatch_tool",
@@ -841,6 +849,7 @@ pub const Server = struct {
 
     /// Handles the resources list request and sends the JSON-RPC response or error.
     fn handleResourcesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -966,6 +975,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed resource callback.
     fn resourceHandlerErrorValue(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) !std.json.Value {
+        // Keep resource response shaping centralized so capability contracts remain stable.
         return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = "resources/read",
             .operation = "read_resource",
@@ -979,6 +989,7 @@ pub const Server = struct {
 
     /// Handles the resource templates list request and sends the JSON-RPC response or error.
     fn handleResourceTemplatesList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -1016,6 +1027,7 @@ pub const Server = struct {
 
     /// Handles the prompts list request and sends the JSON-RPC response or error.
     fn handlePromptsList(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -1067,6 +1079,7 @@ pub const Server = struct {
 
     /// Handles the prompts get request and sends the JSON-RPC response or error.
     fn handlePromptsGet(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         const prompt_name = mcp.tools.getString(request.params, "name") orelse "";
         const arguments: ?std.json.Value = if (mcp.tools.getObject(request.params, "arguments")) |object| .{ .object = object } else null;
 
@@ -1137,6 +1150,7 @@ pub const Server = struct {
 
     /// Returns the structured JSON payload for a failed prompt callback.
     fn promptHandlerErrorValue(allocator: std.mem.Allocator, prompt_name: []const u8, err: anyerror) !std.json.Value {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return tool_errors.valueFromErrorKindOnly(allocator, .{
             .tool = "prompts/get",
             .operation = "get_prompt",
@@ -1150,6 +1164,7 @@ pub const Server = struct {
 
     /// Handles the set log level request and sends the JSON-RPC response or error.
     fn handleSetLogLevel(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         const shape_error = "logging/setLevel requires params.level to be a string";
         const level_value = request.params orelse return self.sendInvalidParams(io, allocator, request.id, shape_error);
         if (level_value != .object) return self.sendInvalidParams(io, allocator, request.id, shape_error);
@@ -1174,6 +1189,7 @@ pub const Server = struct {
 
     /// Parses log level, returning null when the field is absent.
     fn parseLogLevel(level: []const u8) ?protocol.LogLevel {
+        // Normalize input here so downstream paths can rely on validated shape.
         if (std.mem.eql(u8, level, "debug")) return .debug;
         if (std.mem.eql(u8, level, "info")) return .info;
         if (std.mem.eql(u8, level, "notice")) return .notice;
@@ -1187,6 +1203,7 @@ pub const Server = struct {
 
     /// Parses the subset of client capabilities needed by protocol helper scaffolds.
     fn parseClientCapabilities(value: std.json.Value) types.ClientCapabilities {
+        // Normalize input here so downstream paths can rely on validated shape.
         if (value != .object) return .{};
         const obj = value.object;
         return .{
@@ -1263,6 +1280,7 @@ pub const Server = struct {
 
     /// Handles peer error responses by clearing pending request bookkeeping and logging.
     pub fn handleErrorResponse(self: *Self, io: std.Io, err: jsonrpc.ErrorResponse) void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         if (err.id) |id| {
             const int_id = switch (id) {
                 .integer => |i| i,
@@ -1281,6 +1299,7 @@ pub const Server = struct {
 
     /// Sends a log notification when it meets the configured level threshold.
     pub fn sendLogMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, level: protocol.LogLevel, message: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (@intFromEnum(level) < @intFromEnum(self.log_level)) return;
 
         var response_arena = std.heap.ArenaAllocator.init(allocator);
@@ -1296,6 +1315,7 @@ pub const Server = struct {
 
     /// Sends a progress notification with transient params owned by a response arena.
     pub fn sendProgress(self: *Self, io: std.Io, allocator: std.mem.Allocator, token: std.json.Value, prog: f64, total: ?f64, message: ?[]const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -1349,6 +1369,7 @@ pub const Server = struct {
 
     /// Emits the resource updated notification through the active transport.
     pub fn notifyResourceUpdated(self: *Self, io: std.Io, allocator: std.mem.Allocator, uri: []const u8) !void {
+        // Keep resource response shaping centralized so capability contracts remain stable.
         var response_arena = std.heap.ArenaAllocator.init(allocator);
         defer response_arena.deinit();
         const response_allocator = response_arena.allocator();
@@ -1370,6 +1391,7 @@ pub const Server = struct {
     /// never aborts request handling. With no transport set the message is
     /// silently dropped (e.g. during teardown).
     pub fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.transport) |t| {
             const json = jsonrpc.serializeMessage(allocator, message) catch {
                 self.logError(io, "Failed to serialize response");
@@ -1386,6 +1408,7 @@ pub const Server = struct {
 
     /// Classifies and applies an MCP cancellation notification to the currently active request.
     fn handleCancellationNotification(self: *Self, io: std.Io, notification: jsonrpc.Notification, notification_correlation: *const correlation.Context) void {
+        // Translate internal outcomes into protocol-facing responses without leaking internal details.
         _ = io;
         var target_id = cancellationTargetId(notification.params) orelse {
             self.recordCancellationEvent("malformed", correlation.RequestId.absent(), null);
@@ -1448,6 +1471,7 @@ pub const Server = struct {
 
     /// Builds the audit record for an outbound JSON-RPC message after serialization.
     fn auditEventForOutboundMessage(self: *Self, message: jsonrpc.Message, payload: []const u8) app_ports.AuditEvent {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const active = self.active_correlation;
         const corr = if (active) |context| auditCorrelation(context) else null;
         return switch (message) {
@@ -1508,6 +1532,7 @@ pub const Server = struct {
 
     /// Records a completed request id in a fixed-size ring for late cancellation classification.
     fn rememberCompletedRequest(self: *Self, request_id: correlation.RequestId, method: []const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (request_id.kind == .absent) return;
         const index: usize = @intCast(self.completed_request_count % @as(u64, self.completed_requests.len));
         const slot = &self.completed_requests[index];
@@ -1529,6 +1554,7 @@ pub const Server = struct {
 
     /// Finds the method for a recently completed request id, if still retained.
     fn completedRequestMethod(self: *Self, request_id: correlation.RequestId) ?[]const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const retained: usize = @intCast(@min(self.completed_request_count, @as(u64, self.completed_requests.len)));
         var offset: usize = 0;
         while (offset < retained) : (offset += 1) {
@@ -1598,6 +1624,7 @@ fn isCancellableMethod(method: []const u8) bool {
 
 /// Extracts the target request id from an MCP cancellation notification.
 fn cancellationTargetId(params: ?std.json.Value) ?correlation.RequestId {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = params orelse return null;
     if (value != .object) return null;
     const raw_id = value.object.get("requestId") orelse return null;
@@ -1628,6 +1655,7 @@ fn requestIdEqual(left: correlation.RequestId, right: correlation.RequestId) boo
 
 /// Captures adapter correlation metadata for the audit sink.
 fn auditCorrelation(context: *const correlation.Context) app_ports.AuditCorrelation {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .schema_version = 1,
         .mcp_request_id_type = context.request_id.typeName(),
