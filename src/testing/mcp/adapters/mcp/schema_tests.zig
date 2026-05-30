@@ -47,6 +47,7 @@ test "output schema projects shared envelope shapes" {
 
 /// Releases allocated JSON schema values built for tests.
 fn deinitInputSchema(s: *mcp.types.InputSchema) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     if (s.required) |required| std.testing.allocator.free(required);
     if (s.properties) |*properties| {
         var it = properties.object.iterator();
