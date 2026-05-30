@@ -170,6 +170,7 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
 /// Renders an `importGraph` result as advisory Markdown (one section per file).
 /// Borrows `result`; the returned text is allocator-owned and freed by the caller.
 pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
     defer if (out_owned) out.deinit(allocator);
@@ -200,6 +201,7 @@ pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) 
 /// unreadable files land in `skipped_files`. The returned result owns its slices;
 /// the caller `deinit`s it.
 pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestDiscoverRequest) ports.PortError!TestDiscoverResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(request.limit, 1);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
         .max_files = normalized_limit,
