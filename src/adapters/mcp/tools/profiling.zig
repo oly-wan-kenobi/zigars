@@ -25,6 +25,7 @@ const output_limit_mode = "truncate_on_limit";
 
 /// Handles MCP `zig_profile_plan` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigProfilePlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const value = try plan_usecase.profilePlanValue(arena.allocator(), .{
@@ -42,6 +43,7 @@ pub fn zigProfileRun(
     context: app_context.ProfilingContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const cmd = argString(args, "command") orelse return mcp_errors.missingArgument(allocator, "zig_profile_run", "command", "shell-style command string");
     const split = splitArgs(allocator, cmd) catch |err| return splitArgsError(allocator, "zig_profile_run", "command", cmd, err);
     defer freeArgList(allocator, split);
@@ -69,6 +71,7 @@ pub fn zigFlamegraph(
     context: app_context.ProfilingContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parsed = switch (try flamegraphRequestFromArgs(allocator, args)) {
         .ok => |value| value,
         .err => |result| return result,
@@ -92,6 +95,7 @@ pub fn zigFlamegraphDiff(
     context: app_context.ProfilingContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parsed = switch (try diffRequestFromArgs(allocator, args)) {
         .ok => |value| value,
         .err => |result| return result,
@@ -117,6 +121,7 @@ const FlamegraphParseResult = union(enum) {
 
 /// Parses a flamegraph request from MCP JSON arguments.
 fn flamegraphRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!FlamegraphParseResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const format_raw = argString(args, "format") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph", "format", flamegraph_model.supportedZflameFormatsText()) };
     const format = flamegraph_model.parseZflameFormat(format_raw) orelse return .{ .err = try invalidZflameFormat(allocator, "zig_flamegraph", format_raw) };
     const input = argString(args, "input") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph", "input", "workspace-relative profiler input path") };
@@ -141,6 +146,7 @@ const DiffParseResult = union(enum) {
 
 /// Parses a flamegraph diff request from MCP JSON arguments.
 fn diffRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!DiffParseResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const before = argString(args, "before") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph_diff", "before", "workspace-relative folded stack path") };
     const after = argString(args, "after") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph_diff", "after", "workspace-relative folded stack path") };
     const output = argString(args, "output") orelse return .{ .err = try mcp_errors.missingArgument(allocator, "zig_flamegraph_diff", "output", "workspace-relative SVG output path") };
@@ -165,6 +171,7 @@ const OptionsResult = union(enum) {
 
 /// Parses zflame render options from MCP JSON arguments.
 fn zflameOptionsFromArgs(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.json.Value) mcp.tools.ToolError!OptionsResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const width = switch (try positiveIntArg(allocator, tool_name, args, "width")) {
         .ok => |value| value,
         .err => |result| return .{ .err = result },
@@ -198,6 +205,7 @@ fn positiveIntArg(allocator: std.mem.Allocator, tool_name: []const u8, args: ?st
 
 /// Reports unsupported zflame output format values as a structured tool error.
 fn invalidZflameFormat(allocator: std.mem.Allocator, tool_name: []const u8, actual: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return mcp_errors.invalidArgument(
         allocator,
         tool_name,
@@ -215,6 +223,7 @@ fn renderFailureResult(
     tool_name: []const u8,
     failure: render_usecase.Failure,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (failure) {
         .workspace_path_failed => |details| mcp_errors.workspacePath(allocator, tool_name, details.path, context.workspace.root, details.err),
         .render_failed => |details| flamegraphFailureResult(allocator, details.request, details.failure),
@@ -223,6 +232,7 @@ fn renderFailureResult(
 
 /// Maps usecase error failures to structured MCP errors.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -240,6 +250,7 @@ fn diffFailureResult(
     context: app_context.ProfilingContext,
     result: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const failure = result.failure;
     return switch (failure) {
         .workspace_path_failed => |details| mcp_errors.workspacePath(allocator, "zig_flamegraph_diff", details.path, context.workspace.root, details.err),
@@ -278,6 +289,7 @@ fn diffFailureResult(
 
 /// Returns the MCP tool result for flamegraph failure.
 fn flamegraphFailureResult(allocator: std.mem.Allocator, request: flamegraph_usecase.Request, failure: flamegraph_usecase.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (failure) {
         .workspace_input_read_failed => |details| workspaceToolError(allocator, request.tool_name, request.operation, "read_workspace_input", "workspace_input_read_failed", details.path, details.abs_path, details.err, "Pass an existing readable profiler input file inside the configured workspace."),
         .backend_run_failed => |details| backendErrorResult(allocator, "zflame", "render", details.err, "confirm --zflame-path points to an executable zflame binary and that profiler input is readable"),
@@ -321,6 +333,7 @@ fn flamegraphResultValue(
     request: flamegraph_usecase.Request,
     artifact: flamegraph_usecase.Artifact,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -335,6 +348,7 @@ fn flamegraphDiffResultValue(
     context: app_context.ProfilingContext,
     artifact: flamegraph_diff_usecase.Artifact,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const render_request = flamegraph_usecase.Request{
         .tool_name = "zig_flamegraph_diff",
         .operation = "render_differential_flamegraph",
@@ -372,6 +386,7 @@ fn putFlamegraphBase(
     request: flamegraph_usecase.Request,
     artifact: flamegraph_usecase.Artifact,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try obj.put(allocator, "kind", .{ .string = request.tool_name });
     try obj.put(allocator, "backend", .{ .string = artifact.backend });
     try obj.put(allocator, "input", .{ .string = request.input });
@@ -393,6 +408,7 @@ fn putFlamegraphBase(
 
 /// Returns an allocator-owned JSON value for intermediate folded.
 fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.ProfilingContext, artifact: flamegraph_diff_usecase.Artifact) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -418,6 +434,7 @@ fn intermediateFoldedValue(allocator: std.mem.Allocator, context: app_context.Pr
 
 /// Returns an allocator-owned JSON value for backend metadata.
 fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe, name: []const u8, executable_path: []const u8, compatibility_status: []const u8, compatibility_baseline: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -434,6 +451,7 @@ fn backendMetadataValue(allocator: std.mem.Allocator, probe: app_context.CachedB
 
 /// Returns an allocator-owned JSON value for cached probe.
 fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -447,6 +465,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probe: app_context.CachedBacke
 
 /// Returns an allocator-owned JSON value for unknown version.
 fn unknownVersionValue(allocator: std.mem.Allocator, name: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -459,6 +478,7 @@ fn unknownVersionValue(allocator: std.mem.Allocator, name: []const u8) !std.json
 
 /// Returns an allocator-owned JSON value for render warnings.
 fn renderWarningsValue(allocator: std.mem.Allocator, probe: app_context.CachedBackendProbe) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var warnings = std.json.Array.init(allocator);
     var warnings_owned = true;
     defer if (warnings_owned) warnings.deinit();
@@ -490,6 +510,7 @@ const CommandFailureSpec = struct {
 
 /// Returns the MCP tool result for command failure.
 fn commandFailureResult(allocator: std.mem.Allocator, spec: CommandFailureSpec) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = commandText(allocator, spec.argv) catch return error.OutOfMemory;
     defer allocator.free(command_text);
     const stdout = safeTextAlloc(allocator, spec.stdout) catch return error.OutOfMemory;
@@ -528,6 +549,7 @@ fn commandFailureResult(allocator: std.mem.Allocator, spec: CommandFailureSpec) 
 
 /// Maps workspace tool error failures to structured MCP errors.
 fn workspaceToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, phase: []const u8, code: []const u8, path: []const u8, abs_path: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
@@ -546,6 +568,7 @@ fn workspaceToolError(allocator: std.mem.Allocator, tool_name: []const u8, opera
 
 /// Returns the MCP tool result for backend error.
 fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -563,6 +586,7 @@ fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, op
 
 /// Returns the MCP tool result for command run error.
 fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operation: []const u8, phase: []const u8, code: []const u8, failure: run_usecase.CommandRunFailure) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = commandText(allocator, failure.argv.items) catch return error.OutOfMemory;
     defer allocator.free(command_text);
     return mcp_errors.fromError(allocator, .{
@@ -583,6 +607,7 @@ fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operati
 
 /// Returns an allocator-owned JSON value for command result.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -613,6 +638,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
 
 /// Returns an allocator-owned JSON value for command term.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -642,6 +668,7 @@ fn emptyDiagnosticsValue(allocator: std.mem.Allocator) std.json.Value {
 
 /// Returns an allocator-owned JSON value for simple failure summary.
 fn simpleFailureSummaryValue(allocator: std.mem.Allocator, ok: bool, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -672,6 +699,7 @@ const SafeText = struct {
 /// otherwise invalid sequences are replaced with U+FFFD and the result is
 /// flagged invalid_utf8 with a "utf-8-lossy" encoding. Text owned by `allocator`.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.unicode.utf8ValidateSlice(bytes)) return .{
         .text = try allocator.dupe(u8, bytes),
         .invalid_utf8 = false,
@@ -733,6 +761,7 @@ fn commandText(allocator: std.mem.Allocator, argv: []const []const u8) ![]const 
 /// single/double quotes and backslash escapes. Returns error.InvalidArguments
 /// on a dangling escape or unterminated quote. Caller frees via freeArgList.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -829,6 +858,7 @@ fn toolTimeout(context: app_context.ProfilingContext, args: ?std.json.Value) i64
 /// Classifies a command error into a stable error_kind token clients can branch
 /// on without parsing the raw error name.
 fn kindForCommandError(err: anyerror) []const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.StreamTooLong => "output_limit",
@@ -841,6 +871,7 @@ fn kindForCommandError(err: anyerror) []const u8 {
 /// Maps the host OS to the profiler-platform token used as the default in
 /// zig_profile_plan when the caller does not pass an explicit platform.
 fn detectedPlatform() []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (builtin.os.tag) {
         .linux => "linux",
         .macos => "macos",
@@ -1458,6 +1489,7 @@ const profiling_svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fixture<
 
 /// Creates test profiling context from the ports required by the adapter.
 fn testProfilingContext(commands: *fakes.FakeCommandRunner, workspace: *fakes.FakeWorkspaceStore) app_context.ProfilingContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
@@ -1489,6 +1521,7 @@ fn expectDiffResolves(
     intermediate: []const u8,
     intermediate_abs: []const u8,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try workspace.expectResolve(.{ .path = before, .provenance = "profiling input path resolution" }, before_abs);
     try workspace.expectResolve(.{ .path = after, .provenance = "profiling input path resolution" }, after_abs);
     try workspace.expectResolve(.{ .path = output, .for_output = true, .provenance = "profiling output path resolution" }, output_abs);
