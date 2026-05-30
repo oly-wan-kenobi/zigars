@@ -21,6 +21,7 @@ pub fn zigarsArtifactIndex(
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode = parseModeArg(args) catch return modeError(allocator, "zigars_artifact_index", args, "Choose compact, standard, or deep.");
     const limit: usize = @intCast(@max(1, @min(argInt(args, "limit", 50), 500)));
     const include_hashes = argBool(args, "include_hashes", true);
@@ -119,6 +120,7 @@ pub fn zigarsSessionView(
     context: app_context.ArtifactContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const session_kind = argString(args, "kind") orelse return mcp_errors.missingArgument(allocator, "zigars_session_view", "kind", "session kind token");
     const session_id = argString(args, "id") orelse return mcp_errors.missingArgument(allocator, "zigars_session_view", "id", "session id token");
 
@@ -208,6 +210,7 @@ fn modeError(
     args: ?std.json.Value,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.invalidArgument(
         allocator,
         tool_name,
@@ -226,6 +229,7 @@ fn workspacePathError(
     path: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.workspacePath(allocator, tool_name, path, context.workspace.root, err);
 }
 
@@ -238,6 +242,7 @@ fn artifactError(
     err: anyerror,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
@@ -256,6 +261,7 @@ fn sessionViewError(
     session_id: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.InvalidSessionToken) {
         return mcp_errors.invalidArgument(
             allocator,
@@ -287,6 +293,7 @@ fn attachMetadata(
     mode: result_contracts.OutputMode,
     omitted: std.json.Array,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try obj.put(allocator, "mode", .{ .string = mode.name() });
     try obj.put(allocator, "result_shape", try modeMetadataValue(allocator, result_contracts.modeMetadata(mode)));
     try obj.put(allocator, "omitted_sections", .{ .array = omitted });
@@ -294,6 +301,7 @@ fn attachMetadata(
 
 /// Returns an allocator-owned JSON value for mode metadata.
 fn modeMetadataValue(allocator: std.mem.Allocator, metadata: result_contracts.ModeMetadata) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "schema_version", .{ .integer = metadata.schema_version });
@@ -332,6 +340,7 @@ fn registryValue(allocator: std.mem.Allocator, registry: artifact_registry.Regis
 
 /// Returns an allocator-owned JSON value for registry entry.
 fn registryEntryValue(allocator: std.mem.Allocator, entry: artifact_registry.RegistryEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "path", .{ .string = entry.path });
@@ -347,6 +356,7 @@ fn registryEntryValue(allocator: std.mem.Allocator, entry: artifact_registry.Reg
 
 /// Returns an allocator-owned JSON value for provenance.
 fn provenanceValue(allocator: std.mem.Allocator, provenance: artifact_registry.Provenance) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "producer", .{ .string = provenance.producer });
@@ -363,6 +373,7 @@ fn provenanceValue(allocator: std.mem.Allocator, provenance: artifact_registry.P
 
 /// Returns an allocator-owned JSON value for toolchain.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: artifact_registry.Toolchain) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig_path", .{ .string = toolchain.zig_path });
@@ -374,6 +385,7 @@ fn toolchainValue(allocator: std.mem.Allocator, toolchain: artifact_registry.Too
 
 /// Returns an allocator-owned JSON value for scanned artifacts.
 fn scannedArtifactsValue(allocator: std.mem.Allocator, artifacts: []const artifact_registry.ScannedArtifact) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (artifacts) |artifact| {
         var obj = std.json.ObjectMap.empty;
@@ -400,6 +412,7 @@ fn preimageValue(allocator: std.mem.Allocator, preimage: artifact_registry.Preim
 
 /// Returns an allocator-owned JSON value for prune summary.
 fn pruneSummaryValue(allocator: std.mem.Allocator, summary: artifact_registry.PruneSummary) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kept", .{ .integer = @intCast(summary.kept) });
@@ -426,6 +439,7 @@ fn artifactMimeType(path: []const u8) []const u8 {
 
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return null;
     if (value != .object) return null;
     const field = value.object.get(key) orelse return null;
@@ -437,6 +451,7 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
 
 /// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, key: []const u8, default: bool) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return default;
     if (value != .object) return default;
     const field = value.object.get(key) orelse return default;
@@ -448,6 +463,7 @@ fn argBool(args: ?std.json.Value, key: []const u8, default: bool) bool {
 
 /// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, key: []const u8, default: i64) i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return default;
     if (value != .object) return default;
     const field = value.object.get(key) orelse return default;
@@ -483,6 +499,7 @@ fn registryLine(allocator: std.mem.Allocator, path: []const u8, bytes: []const u
 
 /// Creates a registry entry fixture for artifact adapter tests.
 fn registryEntryFixture(allocator: std.mem.Allocator, path: []const u8, bytes: []const u8) !artifact_registry.RegistryEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .path = path,
         .abs_path = try std.fmt.allocPrint(allocator, "/workspace/{s}", .{path}),
@@ -692,6 +709,7 @@ test "artifact MCP adapters surface argument workspace and artifact errors" {
 
 /// Exercises artifact adapter helper values coverage with test fixture storage.
 fn exerciseArtifactAdapterHelperValues(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -728,6 +746,7 @@ test "artifact MCP adapter helper values clean up during allocation failures" {
 
 /// Exercises artifact adapter fixed buffer failures coverage with test fixture storage.
 fn exerciseArtifactAdapterFixedBufferFailures() !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const entry = artifact_registry.RegistryEntry{
         .path = "zig-out/helper.json",
         .abs_path = "/workspace/zig-out/helper.json",
