@@ -58,6 +58,7 @@ pub const FakeBackendProbe = struct {
 
     /// Adds an ordered probe expectation and clones request/response data.
     pub fn expectCheck(self: *Self, request: ports.BackendProbeRequest, availability: ports.BackendAvailability) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRequest(self.allocator, request);
         errdefer freeRequest(self.allocator, owned_request);
         const owned_availability = try cloneAvailability(self.allocator, availability);
@@ -81,6 +82,7 @@ pub const FakeBackendProbe = struct {
 
     /// Records and matches a backend probe request before cloning the expected response.
     fn check(ptr: *anyopaque, allocator: Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
+        // Fail fast on the first mismatch to keep diagnostics deterministic.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request);
         var record_owned = false;
@@ -97,6 +99,7 @@ pub const FakeBackendProbe = struct {
 
     /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.BackendProbeRequest) !ports.BackendProbeRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const backend = try common.dupString(allocator, request.backend);
         errdefer allocator.free(backend);
         const argv = try common.dupStringList(allocator, request.argv);
@@ -128,6 +131,7 @@ pub const FakeBackendProbe = struct {
 
     /// Clones availability into allocator-owned storage.
     fn cloneAvailability(allocator: Allocator, availability: ports.BackendAvailability) !ports.BackendAvailability {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const backend = try common.dupString(allocator, availability.backend);
         errdefer allocator.free(backend);
         const version = try common.dupOptionalString(allocator, availability.version);
@@ -242,6 +246,7 @@ test "backend probe expected checks clean partial allocations on failure" {
 
 /// Records an expected backend check with allocator call, cloning request data and failing on allocation errors.
 fn expectBackendCheckWithAllocator(allocator: Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var fake = FakeBackendProbe.init(allocator);
     defer fake.deinit();
 
