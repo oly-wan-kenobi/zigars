@@ -50,6 +50,7 @@ pub fn zigarsValidatePatch(allocator: std.mem.Allocator, context: app_context.Pr
 
 /// Handles MCP `zigars_failure_fusion` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsFailureFusion(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const extra_args = splitToolArgs(allocator, argString(args, "args")) catch |err| return splitArgsError(allocator, "zigars_failure_fusion", err);
     defer freeStringList(allocator, extra_args);
     var value = pi.failureFusionFromCommandValue(allocator, context, .{
@@ -102,6 +103,7 @@ pub fn zigTestSelectSemantic(allocator: std.mem.Allocator, context: app_context.
 
 /// Invokes the project-intelligence semantic workflow.
 fn semanticTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, select: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const request = pi.SemanticImpactRequest{
         .files = argString(args, "files"),
         .diff = argString(args, "diff"),
@@ -126,6 +128,7 @@ pub fn zigarsValidationPlan(allocator: std.mem.Allocator, context: app_context.P
 
 /// Handles MCP `zigars_validation_run` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsValidationRun(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var parsed = try validationRunRequestFromArgs(allocator, args, timeoutMs(context, args));
     defer parsed.deinit(allocator);
     var outcome = workflows.run(allocator, context.validation(), parsed.request) catch |err| return workflowError(allocator, "zigars_validation_run", "run", err);
@@ -192,6 +195,7 @@ pub fn zigFailureHistory(allocator: std.mem.Allocator, context: app_context.Proj
 
 /// Invokes the project-intelligence history workflow.
 fn historyTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, view: workflows.HistoryView) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var outcome = workflows.history(allocator, context.validation(), .{
         .view = view,
         .history_text = argString(args, "history"),
@@ -217,6 +221,7 @@ pub fn zigarsHandoffPack(allocator: std.mem.Allocator, context: app_context.Proj
 
 /// Builds the project-intelligence snapshot request from MCP arguments.
 fn snapshotRequest(args: ?std.json.Value, kind: []const u8) pi.SessionSnapshotRequest {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .kind = kind,
         .goal = argString(args, "goal"),
@@ -229,6 +234,7 @@ fn snapshotRequest(args: ?std.json.Value, kind: []const u8) pi.SessionSnapshotRe
 
 /// Handles MCP `zigars_decision_record` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsDecisionRecord(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const title = argString(args, "title") orelse return mcp_errors.missingArgument(allocator, "zigars_decision_record", "title", "short decision title");
     const decision = argString(args, "decision") orelse return mcp_errors.missingArgument(allocator, "zigars_decision_record", "decision", "decision text");
     return structured(allocator, "zigars_decision_record", "decision_record", pi.decisionRecordValue(allocator, context, .{
@@ -253,6 +259,7 @@ pub fn zigarsProjectMemory(allocator: std.mem.Allocator, context: app_context.Pr
 
 /// Invokes the project-intelligence memory workflow.
 fn projectMemoryTool(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, args: ?std.json.Value, tool_name: []const u8, include_builtins: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return structured(allocator, tool_name, "project_memory", pi.projectMemoryValue(allocator, context, .{
         .content = argString(args, "content"),
         .path = argString(args, "path") orelse pi.memory_path_default,
@@ -306,6 +313,7 @@ pub const ParsedValidationRunRequest = struct {
 /// derived from `changed_files` plus `diff` and is owned by the returned struct;
 /// the caller must deinit it. The request borrows that list's backing storage.
 pub fn validationPlanRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) !ParsedValidationPlanRequest {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const changed_paths = try pi.pathListFromTextAndPatch(allocator, argString(args, "changed_files"), argString(args, "diff"));
     return .{
         .request = .{
@@ -322,6 +330,7 @@ pub fn validationPlanRequestFromArgs(allocator: std.mem.Allocator, args: ?std.js
 /// `timeout_ms` is already adapter-clamped and is floored to at least 1ms here.
 /// The returned struct owns the embedded plan request; the caller must deinit.
 pub fn validationRunRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value, timeout_ms: i64) !ParsedValidationRunRequest {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var plan_request = try validationPlanRequestFromArgs(allocator, args);
     errdefer plan_request.deinit(allocator);
     return .{
@@ -344,6 +353,7 @@ pub fn validationRunValue(allocator: std.mem.Allocator, report: workflows.RunRep
 
 /// Normalizes context-construction failures into structured MCP tool errors.
 pub fn contextSetupError(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Derive context values from one source so audit and response metadata do not diverge.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -373,6 +383,7 @@ fn applyFailureFusionSampling(
     summarize: bool,
     value: std.json.Value,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!summarize) {
         try putSamplingMetadata(allocator, obj, .{
             .supported = false,
@@ -424,6 +435,7 @@ fn applyFailureFusionSampling(
 
 /// Builds sampling/createMessage params from deterministic failure-fusion evidence.
 fn failureFusionSamplingParams(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const evidence = try mcp_result.serializeAlloc(allocator, value);
     defer allocator.free(evidence);
     var prompt = std.ArrayList(u8).empty;
@@ -457,6 +469,7 @@ fn putSamplingMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, r
 
 /// Extracts sampled text from common MCP sampling response shapes.
 fn sampledText(result: ?std.json.Value) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = result orelse return null;
     if (value != .object) return null;
     if (value.object.get("content")) |content| {
@@ -482,6 +495,7 @@ fn sampledText(result: ?std.json.Value) ?[]const u8 {
 
 /// Stable JSON spelling for protocol helper status.
 fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .accepted => "accepted",
         .declined => "declined",
@@ -495,6 +509,7 @@ fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
 
 /// Maps workflow failures to structured MCP tool errors.
 fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.MissingFile) return mcp_errors.missingArgument(allocator, tool_name, "file", "workspace-relative Zig file for this command");
     if (err == error.InvalidCommand) return mcp_errors.invalidArgument(allocator, tool_name, "command", "one of build, build-test, test, check, fmt-check", argActual(err), "Choose an allow-listed command.");
@@ -529,6 +544,7 @@ fn splitArgsError(allocator: std.mem.Allocator, tool_name: []const u8, err: anye
 /// risk/write flags, plan kind) for goal-to-tool matching. Slice owned by
 /// `allocator`; the entry fields borrow manifest-owned static strings.
 fn capabilityEntries(allocator: std.mem.Allocator) ![]pi.CapabilityEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var entries = try allocator.alloc(pi.CapabilityEntry, manifest.entries.len);
     for (manifest.entries, 0..) |entry, index| {
         const risk = entry.risk;
@@ -580,6 +596,7 @@ fn timeoutMs(context: app_context.ProjectIntelligenceContext, args: ?std.json.Va
 /// slice. Returns error.InvalidArguments on a dangling escape or unterminated
 /// quote. Caller frees via freeStringList.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -793,6 +810,7 @@ const AdapterRuntime = struct {
 
     /// Builds the fake app context exposed by the adapter runtime fixture.
     fn context(self: *AdapterRuntime) app_context.ProjectIntelligenceContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
@@ -812,6 +830,7 @@ const AdapterRuntime = struct {
 
     /// Records fake command invocations for adapter runtime tests.
     fn commandRun(_: *anyopaque, allocator: std.mem.Allocator, _: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .exit_code = 0,
             .stdout = try allocator.dupe(u8, "ok\n"),
@@ -830,6 +849,7 @@ const AdapterRuntime = struct {
 
     /// Reads fixture workspace content for adapter runtime tests.
     fn workspaceRead(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *AdapterRuntime = @ptrCast(@alignCast(ptr));
         if (self.history_read_error) |err| {
             if (std.mem.eql(u8, request.provenance, "zigars_validation_history read")) return err;
