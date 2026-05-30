@@ -78,6 +78,7 @@ pub fn expectedMatches(expected: []const ExpectedPreimage, file: []const u8, act
 /// seeds together, then returning "session-<first-16-hex-chars>".
 /// Caller owns the returned string and must free it with the same allocator.
 pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var seed = std.ArrayList(u8).empty;
     defer seed.deinit(allocator);
     try seed.appendSlice(allocator, prefix);
