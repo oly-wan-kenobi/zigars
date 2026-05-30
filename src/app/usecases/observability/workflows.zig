@@ -111,6 +111,7 @@ pub fn metricsReport(allocator: std.mem.Allocator, context: app_context.Observab
 /// metrics into a single value. String fields borrow from `context` (not
 /// duplicated); the artifact summary allocates scratch through `allocator`.
 pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) BaseMetrics {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = context.workspace.root,
         .command_calls = if (context.counters.command_calls) |counter| counter.* else 0,
@@ -134,6 +135,7 @@ pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
 /// non-fatal: a registry or scan error is recorded in `status` (via @errorName)
 /// so the metrics report still renders. Scans are read-only and never hashed.
 fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) ArtifactMetrics {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: ArtifactMetrics = .{ .scan_limit = artifact_scan_limit };
     const artifact_context: app_context.ArtifactContext = .{
         .workspace = context.workspace,
@@ -159,6 +161,7 @@ fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
 /// shape, mapping unprobed entries to null so callers can distinguish them
 /// from probed-and-failed entries.
 fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .zig = probeSnapshot(cache.zig),
         .zls = probeSnapshot(cache.zls),
