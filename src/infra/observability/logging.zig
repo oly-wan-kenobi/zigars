@@ -16,6 +16,7 @@ pub const CorrelationFields = struct {
 /// while `buffer` is in scope.  Falls back to a static unavailable string on
 /// format overflow.
 pub fn formatCorrelationPrefix(buffer: []u8, fields: CorrelationFields) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (fields.tool_name) |tool_name| {
         return std.fmt.bufPrint(buffer, "trace={s} req={s} method={s} tool={s}", .{
             fields.trace_id,
@@ -43,6 +44,7 @@ pub const Level = enum(u8) {
 
     /// Returns the static label for this log level.
     fn label(self: Level) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .debug => "debug",
             .info => "info",
@@ -107,6 +109,7 @@ pub const Logger = struct {
     /// Formats and writes one log line to stderr, swallowing I/O failures.
     /// Logging must never interrupt the MCP JSON-RPC stream on stdout.
     pub fn log(self: Logger, level: Level, component: []const u8, comptime fmt: []const u8, args: anytype) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (!self.enabled(level)) return;
         if (self.sink != .stderr) return;
         const io = self.io orelse return;
