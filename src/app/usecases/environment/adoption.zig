@@ -554,9 +554,9 @@ fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, tran
         try server.put(allocator, "workspace", .{ .string = a.workspace.root });
         if (std.mem.eql(u8, transport, "http")) try server.put(allocator, "url", .{ .string = try std.fmt.allocPrint(allocator, "http://{s}:{d}", .{ a.config.host, a.config.port }) });
         try servers.put(allocator, "zigars", .{ .object = server });
-        // All three JSON client kinds currently nest servers under "mcpServers";
-        // the branch is a seam for a future client that needs a different key.
-        try root.put(allocator, if (std.mem.eql(u8, kind, "gemini-json")) "mcpServers" else "mcpServers", .{ .object = servers });
+        // mcp-json, claude-json, and gemini-json all nest servers under
+        // "mcpServers" (Gemini CLI's ~/.gemini/settings.json uses it too).
+        try root.put(allocator, "mcpServers", .{ .object = servers });
         try root.put(allocator, "generated_for", .{ .string = client });
         try root.put(allocator, "notes", .{ .string = "Review paths before use; zigars does not install backend tools." });
         return stringifyAlloc(allocator, .{ .object = root }, .{ .whitespace = .indent_2 });
