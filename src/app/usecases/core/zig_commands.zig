@@ -232,6 +232,7 @@ const ArgvBuilder = struct {
 /// is swallowed and reported as `zls = null` in the result; only a Zig failure
 /// short-circuits to `.err`. Caller owns the returned outcome.
 pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !VersionOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var zig_builder = ArgvBuilder.init(allocator);
     defer zig_builder.deinit();
     try zig_builder.append(context.tool_paths.zig);
@@ -298,6 +299,7 @@ pub fn build(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
 /// workspace store first), or `zig build test` for the whole project suite.
 /// An optional filter maps to `--test-filter`. Caller owns the result.
 pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: TestRequest) !CommandOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
     try builder.append(context.tool_paths.zig);
@@ -327,6 +329,7 @@ pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreComman
 /// store. Returns a workspace-path failure when the path is outside the sandbox.
 /// Caller owns the result.
 pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const resolved = try resolveWorkspacePath(allocator, context, "zig_check", request.file, "zig_check source file");
     switch (resolved) {
         .ok => |path_result| {
@@ -345,6 +348,7 @@ pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
 /// Runs `zig translate-c <file> [extra_args...]` after resolving the file path
 /// through the workspace store. Caller owns the result.
 pub fn translateC(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try resolveWorkspacePath(allocator, context, "zig_translate_c", request.file, "zig_translate_c source file");
     switch (resolved) {
         .ok => |path_result| {
@@ -451,6 +455,7 @@ fn runBuiltCommand(
     argv: OwnedArgv,
     timeout_ms: i64,
 ) !CommandOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var owned_argv = argv;
     errdefer owned_argv.deinit(allocator);
     const result = context.command_runner.run(allocator, .{
@@ -496,6 +501,7 @@ fn resolveWorkspacePath(
     path: []const u8,
     provenance: []const u8,
 ) !ResolveOutcome {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const resolved = context.workspace_store.resolve(allocator, .{
         .path = path,
         .provenance = provenance,
