@@ -9,6 +9,7 @@ const tooling = @import("../../manifest/tooling.zig");
 /// guards free every partially built map if any `put`/`append` fails midway.
 /// `required` is null (omitted) when no field is required.
 pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) !mcp.types.InputSchema {
+    // Construct this value in a single path so required fields cannot drift.
     var properties = std.json.ObjectMap.empty;
     var required = std.ArrayList([]const u8).empty;
     var schema_owned = true;
@@ -122,6 +123,7 @@ const OutputField = struct {
 /// few envelope shapes rather than each declaring a bespoke outputSchema, so the
 /// advertised result contract stays small and uniform across the catalog.
 fn outputFields(shape: tooling.OutputSchemaShape) []const OutputField {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (shape) {
         .error_envelope => &.{
             .{ .name = "kind", .type = "string", .required = true, .description = "Stable zigars result kind or error envelope kind." },
