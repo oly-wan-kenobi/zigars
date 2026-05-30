@@ -16,6 +16,7 @@ pub const BackendId = enum {
 
     /// Returns the executable/catalog name for this backend.
     pub fn name(self: BackendId) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .zig => "zig",
             .zls => "zls",
@@ -33,6 +34,7 @@ pub const BackendId = enum {
 
     /// Returns the CLI flag used to configure this backend path.
     pub fn pathFlag(self: BackendId) []const u8 {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         return switch (self) {
             .zig => "--zig-path",
             .zls => "--zls-path",
@@ -181,6 +183,7 @@ pub const ZflameOption = enum {
 
     /// Returns the manifest input field name for this option.
     pub fn fieldName(self: ZflameOption) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .title => "title",
             .subtitle => "subtitle",
@@ -192,6 +195,7 @@ pub const ZflameOption = enum {
 
     /// Returns the CLI flag prefix for argv construction.
     pub fn flagPrefix(self: ZflameOption) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .title => "--title=",
             .subtitle => "--subtitle=",
@@ -361,6 +365,7 @@ pub fn capabilityFor(tool_name: []const u8) ?CapabilityContract {
 
 /// Returns the probe argv for a backend id.
 pub fn probeArgv(id: BackendId) []const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (id) {
         .zig => zig_probe_argv[0..],
         .zls => zls_probe_argv[0..],
@@ -377,6 +382,7 @@ pub fn probeArgv(id: BackendId) []const []const u8 {
 /// `zlint_path`, `zwanzig_path`, `zflame_path`, and `diff_folded_path`.
 /// Checked at comptime by the compiler via `anytype` field access.
 pub fn configuredPath(id: BackendId, config: anytype) []const u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     return switch (id) {
         .zig => config.zig_path,
         .zls => config.zls_path,
