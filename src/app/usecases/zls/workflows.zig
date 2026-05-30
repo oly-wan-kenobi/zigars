@@ -15,6 +15,7 @@ const SeverityCounts = struct {
 
     /// Adds one LSP diagnostic severity to the aggregate.
     fn add(self: *SeverityCounts, severity: DiagnosticSeverity) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.total += 1;
         switch (severity) {
             .error_value => self.errors += 1,
@@ -55,6 +56,7 @@ const ParsedDiagnosticFile = struct {
 /// assigned URI and open state; caller owns the JSON value. tool_name is the
 /// provenance tag for the sync.
 pub fn documentSyncValue(allocator: std.mem.Allocator, context: app_context.ZlsContext, tool_name: []const u8, file: []const u8, content: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const sync = try context.zls_gateway.sync(allocator, .{ .file = file, .content = content, .provenance = tool_name });
     defer sync.deinit(allocator);
     var obj = std.json.ObjectMap.empty;
@@ -69,6 +71,7 @@ pub fn documentSyncValue(allocator: std.mem.Allocator, context: app_context.ZlsC
 
 /// Summarizes cached ZLS workspace diagnostics grouped by file and severity.
 pub fn workspaceDiagnosticsValue(allocator: std.mem.Allocator, context: app_context.ZlsContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const snapshot = try context.zls_gateway.diagnostics(allocator);
     defer snapshot.deinit(allocator);
 
@@ -104,6 +107,7 @@ pub fn workspaceDiagnosticsValue(allocator: std.mem.Allocator, context: app_cont
 /// sandbox and returns its file:// URI plus whether ZLS is running. Caller owns
 /// the JSON value.
 pub fn documentStatusValue(allocator: std.mem.Allocator, context: app_context.Context, file: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const workspace_store = try context.requireWorkspace();
     const resolved = try workspace_store.resolve(allocator, .{ .path = file, .provenance = "zls.document_status" });
     defer resolved.deinit(allocator);
@@ -124,6 +128,7 @@ fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
 
 /// Parses one cached publishDiagnostics notification into a per-file summary.
 fn parseDiagnosticFile(allocator: std.mem.Allocator, message: []const u8) !ParsedDiagnosticFile {
+    // Normalize input here so downstream paths can rely on validated shape.
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, message, .{}) catch return error.MalformedDiagnostics;
     defer parsed.deinit();
 
@@ -158,6 +163,7 @@ fn parseDiagnosticFile(allocator: std.mem.Allocator, message: []const u8) !Parse
 
 /// Reads the LSP diagnostic severity field, falling back to an unknown bucket.
 fn diagnosticSeverity(diagnostic: std.json.Value) DiagnosticSeverity {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (diagnostic) {
         .object => |object| object,
         else => return .unknown,
@@ -188,6 +194,7 @@ fn putSeverityCounts(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, cou
 
 /// Serializes diagnostics cache retention counters.
 fn diagnosticsCacheValue(allocator: std.mem.Allocator, status: ports.ZlsDiagnosticsStatus) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
