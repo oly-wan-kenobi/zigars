@@ -26,6 +26,7 @@ pub fn zigarsMetricsV2(
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -39,6 +40,7 @@ pub fn zigarsBackendHealthHistory(
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -52,6 +54,7 @@ pub fn zigarsZlsTimeline(
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -65,6 +68,7 @@ pub fn zigarsToolLatency(
     context: app_context.ObservabilityContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -74,6 +78,7 @@ pub fn zigarsToolLatency(
 
 /// Builds the top-level zigars_metrics_v2 JSON object.
 fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const base = report.base;
     const observed = report.observed;
     var obj = std.json.ObjectMap.empty;
@@ -110,6 +115,7 @@ fn metricsV2Value(allocator: std.mem.Allocator, report: read_model.MetricsReport
 
 /// Builds backend health history with current probe-cache context.
 fn backendHistoryValue(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_backend_health_history" });
@@ -123,6 +129,7 @@ fn backendHistoryValue(allocator: std.mem.Allocator, report: read_model.MetricsR
 
 /// Builds a monotonic ZLS event timeline and current status snapshot.
 fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsReport) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const base = report.base;
     const observed = report.observed;
     var obj = std.json.ObjectMap.empty;
@@ -140,6 +147,7 @@ fn zlsTimelineValue(allocator: std.mem.Allocator, report: read_model.MetricsRepo
 
 /// Builds tool latency counters in milliseconds.
 fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_tool_latency" });
@@ -157,6 +165,7 @@ fn toolLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilityS
 
 /// Builds MCP request method latency counters in milliseconds.
 fn methodLatencyValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_mcp_method_latency" });
@@ -171,6 +180,7 @@ fn methodLatencyValue(allocator: std.mem.Allocator, snapshot: ports.Observabilit
 
 /// Returns an allocator-owned JSON value for command durations.
 fn commandDurationsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_command_durations" });
@@ -185,6 +195,7 @@ fn commandDurationsValue(allocator: std.mem.Allocator, snapshot: ports.Observabi
 
 /// Builds process-local startup phase timings.
 fn startupTimingsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_startup_timings" });
@@ -199,6 +210,7 @@ fn startupTimingsValue(allocator: std.mem.Allocator, snapshot: ports.Observabili
 /// Projects audit-logging state, including the redaction mode so a client can
 /// tell how much of each MCP payload is persisted before relying on the log.
 fn auditLoggingValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_audit_logging" });
@@ -216,6 +228,7 @@ fn auditLoggingValue(allocator: std.mem.Allocator, snapshot: ports.Observability
 /// is best-effort and process-local: `uncancellable`/`unknown` reflect requests
 /// the sequential dispatcher could not interrupt, not protocol errors.
 fn cancellationValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_request_cancellation" });
@@ -232,6 +245,7 @@ fn cancellationValue(allocator: std.mem.Allocator, snapshot: ports.Observability
 
 /// Returns an allocator-owned JSON value for analysis cache.
 fn analysisCacheValue(allocator: std.mem.Allocator, cache: read_model.AnalysisCacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "present", .{ .bool = cache.present });
@@ -243,6 +257,7 @@ fn analysisCacheValue(allocator: std.mem.Allocator, cache: read_model.AnalysisCa
 
 /// Returns an allocator-owned JSON value for artifact metrics.
 fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: read_model.ArtifactMetrics) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "registry_available", .{ .bool = metrics.registry_available });
@@ -256,6 +271,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: read_model.Artifa
 
 /// Returns an allocator-owned JSON value for backend events.
 fn backendEventsValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (snapshot.backend_events) |event| {
@@ -273,6 +289,7 @@ fn backendEventsValue(allocator: std.mem.Allocator, snapshot: ports.Observabilit
 
 /// Returns an allocator-owned JSON value for command events.
 fn commandEventsValue(allocator: std.mem.Allocator, events: []const ports.ObservabilityCommandEvent) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (events) |event| {
@@ -291,6 +308,7 @@ fn commandEventsValue(allocator: std.mem.Allocator, events: []const ports.Observ
 
 /// Returns allocator-owned JSON for startup phase timing rows.
 fn startupPhasesValue(allocator: std.mem.Allocator, phases: []const ports.ObservabilityStartupPhase) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (phases) |phase| {
@@ -307,6 +325,7 @@ fn startupPhasesValue(allocator: std.mem.Allocator, phases: []const ports.Observ
 
 /// Returns allocator-owned JSON for cancellation outcome rows.
 fn cancellationEventsValue(allocator: std.mem.Allocator, events: []const ports.ObservabilityCancellationEvent) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (events) |*event| {
@@ -369,6 +388,7 @@ fn zlsEventsValue(
 
 /// Returns an allocator-owned JSON value for backend cache.
 fn backendCacheValue(allocator: std.mem.Allocator, cache: read_model.BackendProbeCacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try probeSnapshotValue(allocator, cache.zig));
@@ -381,6 +401,7 @@ fn backendCacheValue(allocator: std.mem.Allocator, cache: read_model.BackendProb
 
 /// Returns an allocator-owned JSON value for probe snapshot.
 fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?read_model.ProbeSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     if (probe) |p| {
@@ -399,6 +420,7 @@ fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?read_model.ProbeSnap
 
 /// Returns an allocator-owned JSON value for limitations.
 fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     try array.append(.{ .string = "In-memory metrics reset when the zigars process restarts." });
@@ -432,6 +454,7 @@ test "runtime metrics value builders release partial objects on allocation failu
 
         /// Test stub that returns a runtime metrics snapshot.
         fn snapshot() ports.ObservabilitySnapshot {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             return .{
                 .tool_stats = tool_stats[0..],
                 .backend_events = backend_events[0..],
@@ -448,6 +471,7 @@ test "runtime metrics value builders release partial objects on allocation failu
 
         /// Test stub that returns a runtime metrics report.
         fn report() read_model.MetricsReport {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             return .{
                 .base = .{
                     .workspace = "/workspace",
