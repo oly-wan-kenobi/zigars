@@ -12,6 +12,8 @@ const assert = std.debug.assert;
 const panic = std.debug.panic;
 const fuzz_abi = std.Build.abi.fuzz;
 
+/// Test-runner options installed before any tests execute.
+/// The custom logger counts error-level messages so logged errors fail the run.
 pub const std_options: std.Options = .{
     .logFn = log,
 };
@@ -35,6 +37,8 @@ const need_simple = switch (builtin.zig_backend) {
     else => false,
 };
 
+/// Entry point used by Zig's test harness. It selects the server protocol,
+/// terminal output, simple-backend path, or fuzz ABI path from build flags.
 pub fn main(init: std.process.Init.Minimal) void {
     @disableInstrumentation();
 
@@ -342,6 +346,8 @@ fn mainTerminal(init: std.process.Init.Minimal) void {
     }
 }
 
+/// Counts error-level log messages and mirrors enabled messages to stderr.
+/// A non-zero error-log count makes the test process fail after test execution.
 pub fn log(
     comptime message_level: std.log.Level,
     comptime scope: @EnumLiteral(),
@@ -526,6 +532,8 @@ var fuzz_runner: if (builtin.fuzz) struct {
     }
 } else void = undefined;
 
+/// Bridges `std.testing.fuzz` into Zig's fuzz ABI while keeping the runner's
+/// own bookkeeping out of coverage-guided input selection.
 pub fn fuzz(
     context: anytype,
     comptime testOne: fn (context: @TypeOf(context), *std.testing.Smith) anyerror!void,
