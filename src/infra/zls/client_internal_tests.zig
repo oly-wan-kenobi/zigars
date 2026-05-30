@@ -142,6 +142,7 @@ test "shutdown treats missing exit pipe as benign after response" {
 
     const Responder = struct {
         fn run(c: *LspClient, read_end: std.Io.File, thread_io: std.Io) void {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             defer read_end.close(thread_io);
             var reader = LspTransport.Reader.init(read_end, thread_io);
             const maybe_msg = reader.readMessage(std.heap.smp_allocator) catch return;
