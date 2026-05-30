@@ -21,6 +21,7 @@ pub const FakeToolManifestCatalog = struct {
 
     /// Exposes this implementation through its application port vtable.
     pub fn port(self: *FakeToolManifestCatalog) ports.ToolManifestCatalog {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
