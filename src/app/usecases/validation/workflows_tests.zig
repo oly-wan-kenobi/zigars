@@ -17,6 +17,7 @@ const TestPorts = struct {
 
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: TestPorts) app_context.ValidationContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
             .tool_paths = .{ .zig = "zig" },
@@ -519,6 +520,7 @@ const RecordingWorkspace = struct {
 
     /// Returns the fixture port table used by this test context.
     fn port(self: *RecordingWorkspace) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -546,6 +548,7 @@ const RecordingWorkspace = struct {
     /// Fixture write: records the path and a bounded copy of the bytes so tests
     /// can assert on the serialized history line.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *RecordingWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
         self.last_write_path = request.path;
@@ -562,6 +565,7 @@ const FailingWriteWorkspace = struct {
 
     /// Returns the fixture port table used by this test context.
     fn port(self: *FailingWriteWorkspace) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -596,6 +600,7 @@ const AppendHistoryWorkspace = struct {
 
     /// Returns the fixture port table used by this test context.
     fn port(self: *AppendHistoryWorkspace) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -631,6 +636,7 @@ const StaticHistoryWorkspace = struct {
 
     /// Returns the fixture port table used by this test context.
     fn port(self: *StaticHistoryWorkspace) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
