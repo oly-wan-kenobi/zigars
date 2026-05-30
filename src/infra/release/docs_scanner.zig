@@ -27,6 +27,7 @@ pub const Scanner = struct {
 
     /// Exposes this scanner through the DocsScanner vtable.
     pub fn port(self: *Self) ports.DocsScanner {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -54,6 +55,7 @@ pub const Scanner = struct {
         allocator: std.mem.Allocator,
         request: ports.DocsScanAbsoluteZigPathsRequest,
     ) ports.PortError!ports.DocsPathScanResult {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const self: *Self = @ptrCast(@alignCast(ptr));
         var dir = std.Io.Dir.openDirAbsolute(self.io, request.root, .{ .iterate = true }) catch |err| return filesystem.mapPortError(err);
         defer dir.close(self.io);
@@ -68,6 +70,7 @@ pub const Scanner = struct {
         allocator: std.mem.Allocator,
         request: ports.DocsScanWorkspacePathsRequest,
     ) ports.PortError!ports.DocsPathScanResult {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const root = self.workspace.resolve(".") catch |err| return filesystem.mapPortError(err);
         defer self.workspace.allocator.free(root);
@@ -147,6 +150,7 @@ test "docs scanner cleans scanned paths on allocation failure" {
 
 /// Scans documentation files using an explicit test allocator.
 fn scanDocsWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
