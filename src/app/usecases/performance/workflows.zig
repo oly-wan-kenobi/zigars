@@ -72,6 +72,7 @@ const BenchSet = benchmark_model.BenchSet;
 
 /// Invokes zig coverage run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigCoverageRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_coverage_run", "command", "non-empty command string");
     const output = argString(args, "output") orelse ".zigars-cache/coverage/run.json";
     const apply = argBool(args, "apply", false);
@@ -123,6 +124,7 @@ pub fn zigCoverageRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
 /// Executes the zig coverage map workflow and returns an allocator-owned structured result.
 pub fn zigCoverageMap(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_map", "coverage", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_map", args, "coverage", err);
     defer input.deinit(allocator);
     var set = coverage_usecase.map(allocator, .{
@@ -140,6 +142,7 @@ pub fn zigCoverageMap(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
 /// Executes the zig coverage merge workflow and returns an allocator-owned structured result.
 pub fn zigCoverageMerge(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const left_field = if (argString(args, "left") != null) "left" else "current";
     const right_field = if (argString(args, "right") != null) "right" else "baseline";
     var left_input = readEvidenceInput(a, allocator, args, "zig_coverage_merge", left_field, null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_merge", args, left_field, err);
@@ -160,6 +163,7 @@ pub fn zigCoverageMerge(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
 /// Executes the zig coverage diff workflow and returns an allocator-owned structured result.
 pub fn zigCoverageDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current_input = readEvidenceInput(a, allocator, args, "zig_coverage_diff", "current", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_diff", args, "current", err);
     defer current_input.deinit(allocator);
     var baseline_input = readEvidenceInput(a, allocator, args, "zig_coverage_diff", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_diff", args, "baseline", err);
@@ -177,6 +181,7 @@ pub fn zigCoverageDiff(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 
 /// Executes the zig coverage baseline workflow and returns an allocator-owned structured result.
 pub fn zigCoverageBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_baseline", "coverage", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_baseline", args, "coverage", err);
     defer input.deinit(allocator);
     var set = coverage_usecase.map(allocator, .{
@@ -201,6 +206,7 @@ pub fn zigCoverageBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 
 /// Executes the zig coverage budget check workflow and returns an allocator-owned structured result.
 pub fn zigCoverageBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_coverage_budget_check", "coverage", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_coverage_budget_check", args, "coverage", err);
     defer input.deinit(allocator);
     var changed = changedPathList(allocator, a, argString(args, "changed_files"), toolTimeout(a, args)) catch std.ArrayList([]const u8).empty;
@@ -231,6 +237,7 @@ pub fn zigBenchDiscover(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
 /// Invokes zig bench run with caller-owned inputs; command and allocation failures propagate.
 pub fn zigBenchRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_bench_run", "command", "non-empty command string");
     const output = argString(args, "output") orelse ".zigars-cache/benchmarks/run.json";
     const apply = argBool(args, "apply", false);
@@ -274,6 +281,7 @@ pub fn zigBenchRun(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value)
 
 /// Executes the zig bench baseline workflow and returns an allocator-owned structured result.
 pub fn zigBenchBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_bench_baseline", "results", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_baseline", args, "results", err);
     defer input.deinit(allocator);
     var set = benchmark_usecase.parse(allocator, .{
@@ -296,6 +304,7 @@ pub fn zigBenchBaseline(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
 /// Executes the zig benchmark history workflow and returns an allocator-owned structured result.
 pub fn zigBenchmarkHistory(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const path = argString(args, "path") orelse default_bench_history;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -329,6 +338,7 @@ pub fn zigBenchmarkHistory(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 
 /// Executes the zig bench compare workflow and returns an allocator-owned structured result.
 pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current_input = readEvidenceInput(a, allocator, args, "zig_bench_compare", "current", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_compare", args, "current", err);
     defer current_input.deinit(allocator);
     var baseline_input = readEvidenceInput(a, allocator, args, "zig_bench_compare", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_compare", args, "baseline", err);
@@ -347,6 +357,7 @@ pub fn zigBenchCompare(a: *App, allocator: std.mem.Allocator, args: ?std.json.Va
 
 /// Compares benchmark evidence against a regression threshold and optionally persists a one-shot gate session.
 pub fn zigBenchRegressionGate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current_input = readEvidenceInput(a, allocator, args, "zig_bench_regression_gate", "current", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_regression_gate", args, "current", err);
     defer current_input.deinit(allocator);
     var baseline_input = readEvidenceInput(a, allocator, args, "zig_bench_regression_gate", "baseline", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_bench_regression_gate", args, "baseline", err);
@@ -406,6 +417,7 @@ pub fn zigBenchRegressionGate(a: *App, allocator: std.mem.Allocator, args: ?std.
 
 /// Executes the zig perf budget check workflow and returns an allocator-owned structured result.
 pub fn zigPerfBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const input_field = if (argString(args, "comparison") != null) "comparison" else if (argString(args, "results") != null) "results" else "comparison";
     var input = readEvidenceInput(a, allocator, args, "zig_perf_budget_check", input_field, null, null, false) catch |err| return evidenceInputError(a, allocator, "zig_perf_budget_check", args, input_field, err);
     defer input.deinit(allocator);
@@ -433,6 +445,7 @@ pub fn zigPerfBudgetCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json
 
 /// Executes the zig profile regression workflow and returns an allocator-owned structured result.
 pub fn zigProfileRegression(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_profile_regression", "comparison", null, null, true) catch |err| return evidenceInputError(a, allocator, "zig_profile_regression", args, "comparison", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -461,6 +474,7 @@ pub fn zigProfileRegression(a: *App, allocator: std.mem.Allocator, args: ?std.js
 
 /// Executes the zig samply record workflow and returns an allocator-owned structured result.
 pub fn zigSamplyRecord(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "samply", "record", "Samply recording is not supported by zigars on this platform.");
     const command_text = argString(args, "command") orelse return missingArgumentResult(allocator, "zig_samply_record", "command", "non-empty command string");
     const samply_path = argString(args, "samply_path") orelse "samply";
@@ -496,6 +510,7 @@ pub fn zigSamplySummary(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 
 /// Executes the zig samply import workflow and returns an allocator-owned structured result.
 pub fn zigSamplyImport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readEvidenceInput(a, allocator, args, "zig_samply_import", "profile", "path", "content", true) catch |err| return evidenceInputError(a, allocator, "zig_samply_import", args, "profile", err);
     defer input.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -515,6 +530,7 @@ pub fn zigSamplyArtifact(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig profile open workflow and returns an allocator-owned structured result.
 pub fn zigProfileOpen(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const path = argString(args, "path") orelse return missingArgumentResult(allocator, "zig_profile_open", "path", "workspace profile artifact path");
     const resolved = a.workspace.resolve(path) catch |err| return workspacePathErrorResult(a, allocator, "zig_profile_open", path, err);
     defer a.workspace.allocator.free(resolved);
@@ -544,6 +560,7 @@ pub fn zigTracyPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 
 /// Executes the zig tracy probe workflow and returns an allocator-owned structured result.
 pub fn zigTracyProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const tracy_path = argString(args, "tracy_capture_path") orelse "tracy-capture";
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -563,6 +580,7 @@ pub fn zigTracyProbe(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Executes the zig tracy capture workflow and returns an allocator-owned structured result.
 pub fn zigTracyCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (a.context.platform.is_windows) return unsupportedBackendResult(a, allocator, "tracy-capture", "capture", "Tracy capture is not supported by zigars on this platform.");
     const tracy_path = argString(args, "tracy_capture_path") orelse "tracy-capture";
     const output = argString(args, "output") orelse default_tracy_profile;
@@ -592,6 +610,7 @@ pub fn zigTracyArtifacts(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Executes the zig tracy hints workflow and returns an allocator-owned structured result.
 pub fn zigTracyHints(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -613,6 +632,7 @@ pub fn zigTracyHints(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
 
 /// Executes the zig perf evidence pack workflow and returns an allocator-owned structured result.
 pub fn zigPerfEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -642,6 +662,7 @@ pub fn zigPerfEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 /// When not `required` and nothing is supplied, returns empty-object bytes; otherwise
 /// `error.MissingArgument`.
 fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, primary: []const u8, path_field: ?[]const u8, content_field: ?[]const u8, required: bool) !Input {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = allocator;
     _ = tool_name;
     if (content_field) |field| {
