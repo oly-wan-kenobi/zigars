@@ -124,6 +124,7 @@ fn parseJsonWithAllocator(allocator: std.mem.Allocator) !void {
 
 /// Exercises benchmark comparison under allocation-failure testing.
 fn compareBenchmarksWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current = try benchmark_model.parseEvidence(allocator,
         \\[{"name":"parse","ns_per_iter":112},{"name":"emit","ns_per_iter":80}]
     , "fixture");
