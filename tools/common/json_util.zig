@@ -8,6 +8,7 @@ const std = @import("std");
 /// escaping the six mandatory JSON control sequences and any non-printable
 /// bytes below U+0020 using `\uXXXX` notation. The writer is not flushed.
 pub fn writeString(writer: *std.Io.Writer, text: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeByte('"');
     for (text) |c| {
         switch (c) {
