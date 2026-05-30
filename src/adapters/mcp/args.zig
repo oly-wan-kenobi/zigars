@@ -74,6 +74,7 @@ fn validateFieldHint(
     field: tooling.SchemaField,
     value: std.json.Value,
 ) mcp.tools.ToolError!?mcp.tools.ToolResult {
+    // Reject incompatible inputs early so callers get a precise failure reason.
     const hint = tooling.hintFor(input_schema, field);
     switch (value) {
         .string => |actual| {
@@ -119,6 +120,7 @@ fn containsString(values: []const []const u8, needle: []const u8) bool {
 /// Builds a human-readable "one of: a, b, c" enum expectation string.
 /// Caller owns the returned bytes and must free them with `allocator`.
 fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
     defer if (out_owned) out.deinit(allocator);
@@ -134,6 +136,7 @@ fn enumExpectedString(allocator: std.mem.Allocator, values: []const []const u8) 
 
 /// Maps runtime JSON tags to schema type labels used in manifest argument specs.
 fn jsonTypeName(value: std.json.Value) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (value) {
         .null => "null",
         .bool => "boolean",
@@ -154,6 +157,7 @@ fn argumentErrorResult(
     expected: []const u8,
     actual: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return tool_errors.argument(allocator, tool_name, code, field, expected, actual);
 }
 
