@@ -1,47 +1,37 @@
-# Integration Test Ownership
+# Integration Scenario Manifests
 
-This directory owns integration scenario discovery for built-binary MCP behavior.
-The executable harnesses live under `tools/integration/` because `zig build`
-already compiles `zigars-tools` once and uses it to run smoke and fixture commands
-without adding a second helper target.
+This directory contains build-enforced integration scenario manifests. Executable
+HTTP and stdio integration harnesses live under `tools/integration/` and are
+dispatched through the existing `zigars-tools` helper binary.
 
-Default integration gate:
+Current contents:
 
-```text
-zig build integration
-```
+- `backend-contract/scenarios.zig` is the fake optional-backend scenario manifest
+  imported by `zigars-tools`.
+- `backend-contract/SCENARIOS.md` is the human-readable companion checked for
+  drift against the manifest and backend conformance scripts.
 
-Current delegation:
+Related gates:
 
-- `zig build smoke` covers HTTP MCP transport scenarios.
-- `zig build stdio-fixtures` covers stdio MCP transport scenarios and fake backend success paths.
-- `zig build backend-contract-scenarios` checks fake backend conformance
-  scenario discovery against the executable contract harnesses.
+- `zig build integration` runs the default transport integration gates:
+  `zig build smoke` and `zig build stdio-fixtures`.
+- `zig build backend-contract-scenarios` checks fake backend scenario drift.
+- `zig build backend-conformance-contract` smoke-tests the fake backend
+  conformance report contract.
+- `zig build public-contracts` includes backend scenario drift and other public
+  MCP contract checks.
+- `zig build release-asset-smoke` remains a separate packaging gate because it
+  builds and verifies release archives rather than ordinary transport behavior.
 
-Scenario floors remain enforced by `tools/coverage/coverage_config.zig`:
-
-- HTTP smoke scenarios: at least 154.
-- Stdio fixture tool calls: at least 76.
-
-`zig build release-asset-smoke` remains an explicit release packaging gate rather
-than part of the default integration alias because it builds cross-target release
-archives under `dist/assets` and verifies packaged assets instead of ordinary
-transport behavior.
-
-Public contract gate:
-
-```text
-zig build public-contracts
-```
-
-This direct gate checks MCP no-patch, advertised capability, schema, structured
-argument-error, resource/prompt fixture, scenario-manifest drift, and report
-contract invariants. It is also part of `zig build release-check`.
+HTTP smoke and stdio fixture floors are owned by
+`tools/coverage/coverage_config.zig`; avoid duplicating numeric floor values in
+this README.
 
 Rules:
 
+- Keep executable HTTP and stdio fixture code under `tools/integration/` unless
+  the build topology changes.
+- Keep this directory limited to manifests and companion docs that are checked by
+  build gates.
 - Assert public MCP schema, transport, tool-call, and artifact behavior only.
 - Do not assert internal module paths or handler implementation details.
-- Keep compatibility for existing fixture paths and build commands.
-- Raise floors only after new scenarios land; do not lower floors without a
-  reviewed companion-doc reason.
