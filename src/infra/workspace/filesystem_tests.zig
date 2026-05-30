@@ -9,6 +9,7 @@ const Store = filesystem.Store;
 
 /// Scans a directory using an explicit test allocator.
 fn scanDirectoryWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const io = std.testing.io;
