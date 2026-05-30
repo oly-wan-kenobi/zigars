@@ -102,6 +102,7 @@ fn testProfilingContext(
     commands: *fake_command.FakeCommandRunner,
     workspace: *fake_workspace.FakeWorkspaceStore,
 ) app_context.ProfilingContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
