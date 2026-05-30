@@ -60,6 +60,7 @@ pub const Result = union(enum) {
 /// through verbatim; on a port error the argv is cloned into the failure for evidence.
 /// `Result.ok` borrows the command result's buffers (caller `deinit`s the result).
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var command_result = context.command_runner.run(allocator, .{
         .argv = request.argv,
         .cwd = context.workspace.root,
@@ -89,6 +90,7 @@ fn normalizedTimeout(timeout_ms: i64) u64 {
 
 /// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const items = try allocator.alloc([]const u8, argv.len);
     var items_owned = true;
     var filled: usize = 0;
