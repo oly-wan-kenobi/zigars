@@ -27,6 +27,7 @@ pub fn assertToolPaths(
     expected_key: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
@@ -59,6 +60,7 @@ pub fn assertToolPathsIsError(
     expect_is_error: bool,
     scenario_count: *usize,
 ) !void {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     const result = try smoke.callHttpTool(allocator, io, port, id, tool_name, args_json);
     defer result.deinit(allocator);
     try smoke.expectToolIsError(io, result, expect_is_error, tool_name);
