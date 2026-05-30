@@ -62,6 +62,7 @@ const CoverageSummaryInput = struct {
 /// `generated_at_unix_ns` timestamp, which reflects real clock time.
 /// The caller owns the returned slice and must free it.
 pub fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummaryInput) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
@@ -94,6 +95,7 @@ pub fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummar
 
 /// Renders the coverage subsection of the summary JSON.
 fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeAll("  \"coverage\": {\n");
     try writer.print("    \"measured\": {},\n", .{input.stats != null});
     try writer.print("    \"available\": {},\n", .{input.available});
@@ -161,6 +163,7 @@ fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
 
 /// Renders one per-file coverage object.
 fn renderCoverageFile(writer: *Io.Writer, file: CoverageFileStats) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeAll("      {\n        \"path\": ");
     try json_util.writeString(writer, file.path);
     try writer.writeAll(",\n        \"scope\": ");
@@ -195,6 +198,7 @@ fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
 
 /// Renders one test executable result at the requested indentation level.
 fn renderTestResult(writer: *Io.Writer, result: TestResult, indent: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.print("{s}{{\n{s}  \"name\": ", .{ indent, indent });
     try json_util.writeString(writer, result.name);
     try writer.print(",\n{s}  \"path\": ", .{indent});
@@ -221,6 +225,7 @@ fn meetsFloor(actual: ?u32, minimum: u32) bool {
 
 /// Traverses a JSON value by dot path for renderer tests.
 fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current = value;
     var parts = std.mem.splitScalar(u8, path, '.');
     while (parts.next()) |part| {
