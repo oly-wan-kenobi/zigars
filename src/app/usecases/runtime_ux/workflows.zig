@@ -112,6 +112,7 @@ pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
 
 /// Serializes job status fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobStatusValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: []const u8) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const job = try context.runtime_session.jobById(job_id);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -161,6 +162,7 @@ pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.Runtime
 /// command that already finished cannot be killed (the request is still recorded
 /// for auditability).
 pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: []const u8, reason: []const u8) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const before = try context.runtime_session.jobById(job_id);
     const job = try context.runtime_session.cancelJob(job_id, reason);
     var obj = std.json.ObjectMap.empty;
@@ -177,6 +179,7 @@ pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.Runtime
 
 /// Serializes cancel status fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn cancelStatusValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: ?[]const u8) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var jobs = std.json.Array.init(allocator);
     if (job_id) |id| {
         try jobs.append(try cancellationValue(allocator, try context.runtime_session.jobById(id)));
@@ -225,6 +228,7 @@ pub fn resourceQueryValue(allocator: std.mem.Allocator, context: app_context.Run
 
 /// Serializes resource subscribe fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceSubscribeValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const sub = try context.runtime_session.subscribe(uri);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -238,6 +242,7 @@ pub fn resourceSubscribeValue(allocator: std.mem.Allocator, context: app_context
 
 /// Serializes resource unsubscribe fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, subscription_id: ?[]const u8, uri: ?[]const u8) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     if (subscription_id == null and uri == null) return error.InvalidArguments;
     const sub = try context.runtime_session.unsubscribe(subscription_id orelse "", uri);
     var obj = std.json.ObjectMap.empty;
@@ -252,6 +257,7 @@ pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_conte
 /// Roots are advisory client guidance only: they never widen file-tool path
 /// access, which stays bound to the configured workspace sandbox.
 pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, roots: []const u8, apply: bool) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const before = try context.runtime_session.rootCount();
     const preview = try rootsPreviewValue(allocator, roots, context.workspace.root);
@@ -270,6 +276,7 @@ pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.Runtime
 
 /// Serializes workspace map result fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceMapResultValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, kind: []const u8, uri: ?[]const u8) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -281,6 +288,7 @@ pub fn workspaceMapResultValue(allocator: std.mem.Allocator, context: app_contex
 
 /// Serializes workspace select fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, workspace_id: []const u8, apply: bool) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const root = try context.runtime_session.selectRoot(workspace_id, apply);
     var obj = std.json.ObjectMap.empty;
@@ -295,6 +303,7 @@ pub fn workspaceSelectValue(allocator: std.mem.Allocator, context: app_context.R
 
 /// Serializes agent guide 2 fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_agent_guide_v2" });
@@ -315,6 +324,7 @@ pub fn agentGuideV2Value(allocator: std.mem.Allocator, client: []const u8, task:
 
 /// Serializes client guide fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn clientGuideValue(allocator: std.mem.Allocator, client: []const u8, task: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_client_guide" });
@@ -333,6 +343,7 @@ pub fn clientGuideValue(allocator: std.mem.Allocator, client: []const u8, task: 
 
 /// Serializes prompt pack fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn promptPackValue(allocator: std.mem.Allocator, workflow: ?[]const u8, mode: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var workflows = std.json.Array.init(allocator);
     for (workflow_defs) |def| {
         if (workflow) |wanted| if (!std.mem.eql(u8, wanted, def.name)) continue;
@@ -350,6 +361,7 @@ pub fn promptPackValue(allocator: std.mem.Allocator, workflow: ?[]const u8, mode
 
 /// Implements workspace resource text workflow logic using caller-owned inputs.
 pub fn workspaceResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) ![]const u8 {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return std.fmt.allocPrint(allocator, "workspace={s}\ncache={s}\nzig={s}\nzwanzig={s}\nzflame={s}\ndiff_folded={s}\n", .{
         context.workspace.root,
         context.workspace.cache_root,
@@ -362,6 +374,7 @@ pub fn workspaceResourceText(allocator: std.mem.Allocator, context: app_context.
 
 /// Serializes zls status resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn zlsStatusResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "status", .{ .string = context.zls_state.status });
@@ -388,6 +401,7 @@ pub fn catalogResourceText(allocator: std.mem.Allocator, context: app_context.Ru
 /// Scans the workspace and renders the import graph as text for the static
 /// import-graph resource; caller owns the returned bytes.
 pub fn importGraphResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError![]const u8 {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var graph = try workspace_scans.importGraph(allocator, .{
         .workspace = context.workspace,
         .workspace_store = context.workspace_store,
@@ -399,6 +413,7 @@ pub fn importGraphResourceText(allocator: std.mem.Allocator, context: app_contex
 
 /// Serializes metrics resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn metricsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "command_calls", .{ .integer = if (context.counters.command_calls) |counter| @intCast(counter.*) else 0 });
@@ -417,6 +432,7 @@ pub fn metricsResourceValue(allocator: std.mem.Allocator, context: app_context.R
 
 /// Serializes jobs resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn jobsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var jobs = std.json.Array.init(allocator);
     const count = try context.runtime_session.jobCount();
     var index: usize = 0;
@@ -432,6 +448,7 @@ pub fn jobsResourceValue(allocator: std.mem.Allocator, context: app_context.Runt
 
 /// Invokes run events resource value with caller-owned inputs; command and allocation failures propagate.
 pub fn runEventsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var events = std.json.Array.init(allocator);
     const count = try context.runtime_session.eventCount();
     var sequence: u64 = 1;
@@ -450,6 +467,7 @@ pub fn runEventsResourceValue(allocator: std.mem.Allocator, context: app_context
 
 /// Serializes workspace roots resource fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     var roots = std.json.Array.init(allocator);
     const count = try context.runtime_session.rootCount();
@@ -543,6 +561,7 @@ const RunPlan = struct {
 /// InvalidArguments; file-scoped commands without a file yield MissingFile. This
 /// keyword allow-list is what keeps run tools from executing arbitrary argv.
 fn buildRunPlan(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!RunPlan {
+    // Construct this value in a single path so required fields cannot drift.
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
     try argv.append(allocator, context.tool_paths.zig);
@@ -587,6 +606,7 @@ fn checkedRelativePath(allocator: std.mem.Allocator, context: app_context.Runtim
 
 /// Serializes command error job fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, tool_name: []const u8, job: ports.RuntimeJobSnapshot, argv: []const []const u8, timeout_ms: i64, err: anyerror, include_events: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const failed = context.runtime_session.jobById(job.id) catch job;
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -606,6 +626,7 @@ fn commandErrorJobValue(allocator: std.mem.Allocator, context: app_context.Runti
 
 /// Serializes file resource query fields into an allocator-owned JSON value; allocation failures propagate.
 fn fileResourceQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8, mode: []const u8) RuntimeUxError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const dynamic = try dynamicResourceValue(allocator, context, uri);
     const obj = dynamic.object;
     var out = std.json.ObjectMap.empty;
@@ -621,6 +642,7 @@ fn fileResourceQueryValue(allocator: std.mem.Allocator, context: app_context.Run
 
 /// Serializes workspace map fields into an allocator-owned JSON value; allocation failures propagate.
 fn workspaceMapValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var roots = std.json.Array.init(allocator);
     const root_count = try context.runtime_session.rootCount();
     var index: usize = 0;
@@ -664,6 +686,7 @@ fn jobsQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxCo
 
 /// Serializes job resource fields into an allocator-owned JSON value; allocation failures propagate.
 fn jobResourceValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "job_id", .{ .string = job.id });
@@ -679,6 +702,7 @@ fn jobResourceValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot)
 
 /// Serializes job fields into an allocator-owned JSON value; allocation failures propagate.
 fn jobValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "job_id", .{ .string = job.id });
@@ -699,6 +723,7 @@ fn jobValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.js
 
 /// Serializes cancellation fields into an allocator-owned JSON value; allocation failures propagate.
 fn cancellationValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "job_id", .{ .string = job.id });
@@ -736,6 +761,7 @@ fn eventsPageValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
 
 /// Serializes event fields into an allocator-owned JSON value; allocation failures propagate.
 fn eventValue(allocator: std.mem.Allocator, event: ports.RuntimeEventSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "sequence", .{ .integer = @intCast(event.sequence) });
@@ -750,6 +776,7 @@ fn eventValue(allocator: std.mem.Allocator, event: ports.RuntimeEventSnapshot) !
 
 /// Serializes root fields into an allocator-owned JSON value; allocation failures propagate.
 fn rootValue(allocator: std.mem.Allocator, root: ports.RuntimeRootSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "id", .{ .string = root.id });
@@ -762,6 +789,7 @@ fn rootValue(allocator: std.mem.Allocator, root: ports.RuntimeRootSnapshot) !std
 
 /// Serializes subscription fields into an allocator-owned JSON value; allocation failures propagate.
 fn subscriptionValue(allocator: std.mem.Allocator, sub: ports.RuntimeSubscriptionSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "subscription_id", .{ .string = sub.id });
@@ -819,6 +847,7 @@ const workflow_defs = [_]WorkflowDef{
 
 /// Serializes workflow fields into an allocator-owned JSON value; allocation failures propagate.
 fn workflowValue(allocator: std.mem.Allocator, def: WorkflowDef) !std.json.Value {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "name", .{ .string = def.name });
@@ -846,6 +875,7 @@ fn workflowContractValue(
     stop_rule: []const u8,
     follow_up_tools: []const []const u8,
 ) !std.json.Value {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "input_basis", .{ .string = input_basis });
@@ -870,6 +900,7 @@ fn runtimeLimitationsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes diagnostics resource fields into an allocator-owned JSON value; allocation failures propagate.
 fn diagnosticsResourceValue(allocator: std.mem.Allocator, file: []const u8) !std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_file_diagnostics_resource" });
@@ -885,6 +916,7 @@ fn diagnosticsResourceValue(allocator: std.mem.Allocator, file: []const u8) !std
 
 /// Implements ast decl summary json workflow logic using caller-owned inputs.
 fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
     defer summary.deinit(allocator);
     var declarations = std.json.Array.init(allocator);
@@ -912,6 +944,7 @@ fn astDeclSummaryJson(allocator: std.mem.Allocator, file: []const u8, contents: 
 
 /// Implements ast imports json workflow logic using caller-owned inputs.
 fn astImportsJson(allocator: std.mem.Allocator, file: []const u8, contents: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var summary = try zig_analysis.parseSourceSummary(allocator, file, contents);
     defer summary.deinit(allocator);
     var imports = std.json.Array.init(allocator);
@@ -942,6 +975,7 @@ fn jsonString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
 
 /// Implements put parse metadata workflow logic using caller-owned inputs.
 fn putParseMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, parse: zig_analysis.ParseMetadata) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try obj.put(allocator, "parse_status", .{ .string = switch (parse.status) {
         .ok => "ok",
         .syntax_errors => "syntax_errors",
@@ -954,6 +988,7 @@ fn putParseMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, pars
 
 /// Serializes backend cache fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendCacheValue(allocator: std.mem.Allocator, snapshot: app_context.BackendProbeCacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try cachedProbeValue(allocator, snapshot.zig));
@@ -967,6 +1002,7 @@ fn backendCacheValue(allocator: std.mem.Allocator, snapshot: app_context.Backend
 
 /// Serializes cached probe fields into an allocator-owned JSON value; allocation failures propagate.
 fn cachedProbeValue(allocator: std.mem.Allocator, probed: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "probed", .{ .bool = probed });
@@ -978,6 +1014,7 @@ fn cachedProbeValue(allocator: std.mem.Allocator, probed: bool) !std.json.Value 
 
 /// Serializes analysis cache status fields into an allocator-owned JSON value; allocation failures propagate.
 fn analysisCacheStatusValue(allocator: std.mem.Allocator, snapshot: app_context.CacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "present", .{ .bool = snapshot.cached });
@@ -1029,6 +1066,7 @@ fn cursorString(allocator: std.mem.Allocator, cursor: anytype) ![]const u8 {
 
 /// Implements error kind workflow logic using caller-owned inputs.
 fn errorKind(err: anyerror) []const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.NotFound, error.FileNotFound => "not_found",
@@ -1070,6 +1108,7 @@ fn runtimeUxTestContext(
     runtime_session: *test_fakes.FakeRuntimeSession,
     tool_catalog: ?ports.ToolCatalog,
 ) app_context.RuntimeUxContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls", .zwanzig = "/bin/zwanzig", .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
@@ -1092,6 +1131,7 @@ fn expectRuntimeWorkspaceMapExists(workspace: *test_fakes.FakeWorkspaceStore) !v
 
 /// Implements seed runtime job workflow logic using caller-owned inputs.
 fn seedRuntimeJob(session: *test_fakes.FakeRuntimeSession) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const port = session.port();
     try port.ensureDefaultRoot("/repo");
     const job = try port.startJob("seed", "/bin/zig build", 1000);
