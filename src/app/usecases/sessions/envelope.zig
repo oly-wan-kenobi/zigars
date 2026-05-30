@@ -62,6 +62,7 @@ pub fn sessionPath(allocator: std.mem.Allocator, kind: []const u8, id: []const u
 /// Validates `kind` and `id` tokens before building; allocation failures and
 /// invalid tokens propagate. The returned value is owned by `allocator`.
 pub fn envelopeValue(allocator: std.mem.Allocator, input: EnvelopeInput) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try validateToken(input.kind);
     try validateToken(input.id);
     var obj = std.json.ObjectMap.empty;
