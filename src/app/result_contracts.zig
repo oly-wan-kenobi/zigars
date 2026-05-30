@@ -176,6 +176,7 @@ const deep_priority = [_][]const u8{ "machine_fields", "expanded_evidence", "dia
 
 /// Parses an output mode or returns a typed invalid-argument error.
 pub fn parseOutputMode(raw: []const u8) errors.Result(OutputMode) {
+    // Normalize input here so downstream paths can rely on validated shape.
     inline for (std.meta.fields(OutputMode)) |field| {
         if (std.mem.eql(u8, raw, field.name)) return .{ .ok = @field(OutputMode, field.name) };
     }
@@ -194,6 +195,7 @@ pub fn supportedModesText() []const u8 {
 
 /// Returns borrowed static metadata for one output mode.
 pub fn modeMetadata(mode: OutputMode) ModeMetadata {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .schema_version = schema_version,
         .mode = mode,
@@ -208,6 +210,7 @@ pub fn modeMetadata(mode: OutputMode) ModeMetadata {
 
 /// Builds the typed result-shape contract without allocating.
 pub fn describeResultShape(request: ResultShapeRequest) ResultShapeContract {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const metadata = modeMetadata(request.mode);
     return .{
         .schema_version = schema_version,
@@ -227,6 +230,7 @@ pub fn describeResultShape(request: ResultShapeRequest) ResultShapeContract {
 
 /// Builds a typed token budget plan without allocating.
 pub fn planOutputBudget(request: OutputBudgetPlanRequest) OutputBudgetPlan {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const default_budget = request.mode.defaultBudget();
     const requested = request.requested_token_budget orelse default_budget;
     const effective = clampTokenBudget(requested);
@@ -259,6 +263,7 @@ pub fn clampTokenBudget(value: i64) i64 {
 /// Splits the effective budget into per-section token shares by mode, using
 /// integer percentages that sum to 100 (machine + evidence + human).
 fn allocation(mode: OutputMode, effective_budget: i64) BudgetAllocation {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const machine_pct: i64 = switch (mode) {
         .compact => 55,
         .standard => 35,
