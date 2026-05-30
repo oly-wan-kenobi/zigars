@@ -35,6 +35,7 @@ const ValidationPorts = struct {
 
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: ValidationPorts) app_context.ValidationContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
             .tool_paths = .{ .zig = "zig" },
