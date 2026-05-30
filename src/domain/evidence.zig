@@ -43,6 +43,7 @@ pub fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Va
 
 /// Frees JSON values produced by this module; object keys are borrowed field names.
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .string => |text| allocator.free(text),
         .array => |array| {
@@ -96,6 +97,7 @@ pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !
 /// Zero-based line/column from parsers are promoted to 1 so downstream viewers
 /// that expect 1-based coordinates never receive an out-of-range value.
 pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
@@ -115,6 +117,7 @@ pub fn evidenceValue(
     detail: []const u8,
     verify_with: []const []const u8,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
@@ -138,6 +141,7 @@ pub fn findingValue(
     message: []const u8,
     confidence: Confidence,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
@@ -189,6 +193,7 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
 /// Creates a deterministic fingerprint key for cross-tool finding de-duplication.
 /// The key is "source:rule:file:line:message"; non-object inputs produce "unknown".
 pub fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (finding) {
         .object => |o| o,
         else => return ownedString(allocator, "unknown"),
