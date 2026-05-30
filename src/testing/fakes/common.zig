@@ -21,6 +21,7 @@ pub fn freeOptionalString(allocator: Allocator, value: ?[]const u8) void {
 
 /// Deep-copies a list of strings so fakes can safely own request snapshots.
 pub fn dupStringList(allocator: Allocator, values: []const []const u8) Allocator.Error![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const copied = try allocator.alloc([]const u8, values.len);
     errdefer allocator.free(copied);
 
