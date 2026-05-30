@@ -122,6 +122,7 @@ pub fn zigBuiltinListJson(allocator: std.mem.Allocator, context: app_context.Rel
 
 /// Handles MCP `zig_builtin_doc` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_builtin_doc", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -133,6 +134,7 @@ pub fn zigBuiltinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseD
 
 /// Handles MCP `zig_builtin_doc_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigBuiltinDocJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_builtin_doc_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -144,6 +146,7 @@ pub fn zigBuiltinDocJson(allocator: std.mem.Allocator, context: app_context.Rele
 
 /// Handles MCP `zig_std_search` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_std_search", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -156,6 +159,7 @@ pub fn zigStdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDo
 
 /// Handles MCP `zig_std_search_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_std_search_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -167,6 +171,7 @@ pub fn zigStdSearchJson(allocator: std.mem.Allocator, context: app_context.Relea
 
 /// Handles MCP `zig_std_item` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_item", "name", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -179,6 +184,7 @@ pub fn zigStdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocs
 
 /// Handles MCP `zig_std_item_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdItemJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_item_json", "name", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -190,6 +196,7 @@ pub fn zigStdItemJson(allocator: std.mem.Allocator, context: app_context.Release
 
 /// Handles MCP `zig_lang_ref_search` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangRefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_lang_ref_search", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -202,6 +209,7 @@ pub fn zigLangRefSearch(allocator: std.mem.Allocator, context: app_context.Relea
 
 /// Handles MCP `zig_lang_ref_search_json` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangRefSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_lang_ref_search_json", "query", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -235,6 +243,7 @@ pub fn zigProjectDocsQuery(allocator: std.mem.Allocator, context: app_context.Re
 
 /// Handles MCP `zig_std_signature` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigStdSignature(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_signature", "name", "stdlib item name");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -253,6 +262,7 @@ pub fn zigStdSignature(allocator: std.mem.Allocator, context: app_context.Releas
 
 /// Handles MCP `zig_langref_item` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigLangrefItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_langref_item", "query", "language reference item query");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -290,6 +300,7 @@ pub fn zigDocExampleCheck(allocator: std.mem.Allocator, context: app_context.Rel
 
 /// Handles MCP `zig_snippet_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigSnippetCheck(allocator: std.mem.Allocator, _: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, "zig_snippet_check", "content", "Zig source snippet");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -321,6 +332,7 @@ fn invokeWorkflow(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Route through a single workflow path so policy checks run in a consistent order.
     var app = workflows.App.init(context, allocator);
     const result = func(&app, allocator, args) catch |err| return workflowUsecaseError(allocator, tool_name, "release_workflow", err);
     return finishWorkflowResult(allocator, result);
@@ -334,6 +346,7 @@ fn invokeCi(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = ci_evidence.App.init(context, allocator);
     const result = func(&app, allocator, args) catch |err| return workflowUsecaseError(allocator, tool_name, "ci_evidence", err);
     return finishWorkflowResult(allocator, result);
@@ -347,6 +360,7 @@ fn invokeDrift(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = release_drift.App.init(context, allocator);
     const result = func(&app, allocator, args) catch |err| return workflowUsecaseError(allocator, tool_name, "release_drift", err);
     return finishWorkflowResult(allocator, result);
@@ -366,6 +380,7 @@ fn finishWorkflowResult(allocator: std.mem.Allocator, result: workflows.Result) 
 
 /// Maps workflow usecase error failures to structured MCP errors.
 fn workflowUsecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -389,6 +404,7 @@ fn docsQueryTool(allocator: std.mem.Allocator, context: app_context.ReleaseDocsC
 
 /// Returns an allocator-owned JSON value for source.
 fn sourceValue(allocator: std.mem.Allocator, source: docs_domain.Source) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = source.id });
     try obj.put(allocator, "label", .{ .string = source.label });
@@ -413,6 +429,7 @@ fn sourceValue(allocator: std.mem.Allocator, source: docs_domain.Source) !std.js
 
 /// Adds contract fields to an allocator-owned JSON object.
 fn putContractFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, source: docs_domain.Source, contract: docs_domain.Contract) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try obj.put(allocator, "source", try sourceValue(allocator, source));
     try obj.put(allocator, "completeness_level", .{ .string = source.completeness.text() });
     try obj.put(allocator, "query", if (contract.query) |query| .{ .string = query } else .null);
@@ -424,6 +441,7 @@ fn putContractFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, sou
 
 /// Returns an allocator-owned JSON value for builtin list.
 fn builtinListValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinListResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var items = std.json.Array.init(allocator);
     for (docs_domain.builtins) |item| try items.append(try builtinItemValue(allocator, item, null));
     var obj = std.json.ObjectMap.empty;
@@ -439,6 +457,7 @@ fn builtinListValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinLis
 
 /// Returns an allocator-owned JSON value for builtin doc.
 fn builtinDocValue(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try builtinItemValue(allocator, match.item, match.rank));
     var obj = std.json.ObjectMap.empty;
@@ -466,6 +485,7 @@ fn builtinItemValue(allocator: std.mem.Allocator, item: docs_domain.BuiltinDoc, 
 
 /// Returns an allocator-owned JSON value for builtin index metadata.
 fn builtinIndexMetadataValue(allocator: std.mem.Allocator, input: docs_domain.BuiltinIndexInput) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "index_strategy", .{ .string = "curated_builtin_index" });
     try obj.put(allocator, "completeness_mode", .{ .string = "partial_curated" });
@@ -489,6 +509,7 @@ fn builtinIndexMetadataValue(allocator: std.mem.Allocator, input: docs_domain.Bu
 
 /// Returns an allocator-owned JSON value for std search.
 fn stdSearchValue(allocator: std.mem.Allocator, result: docs_domain.StdSearchResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try stdSourceMatchValue(allocator, match));
     var obj = std.json.ObjectMap.empty;
@@ -511,6 +532,7 @@ fn stdSearchValue(allocator: std.mem.Allocator, result: docs_domain.StdSearchRes
 
 /// Returns an allocator-owned JSON value for std source match.
 fn stdSourceMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdSourceMatch) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "rank", .{ .integer = @intCast(match.rank) });
     try obj.put(allocator, "root", .{ .string = "std" });
@@ -529,6 +551,7 @@ fn stdSourceMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdSourc
 
 /// Returns an allocator-owned JSON value for std item.
 fn stdItemValue(allocator: std.mem.Allocator, result: docs_domain.StdItemResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try stdItemMatchValue(allocator, match));
     var obj = std.json.ObjectMap.empty;
@@ -575,6 +598,7 @@ fn stdItemMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdItemMat
 
 /// Returns an allocator-owned JSON value for std index metadata.
 fn stdIndexMetadataValue(allocator: std.mem.Allocator, std_dir: []const u8, metadata: docs_domain.StdIndexMetadata) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var roots = std.json.Array.init(allocator);
     try roots.append(.{ .string = std_dir });
     var obj = std.json.ObjectMap.empty;
@@ -594,6 +618,7 @@ fn stdIndexMetadataValue(allocator: std.mem.Allocator, std_dir: []const u8, meta
 
 /// Returns an allocator-owned JSON value for langref.
 fn langrefValue(allocator: std.mem.Allocator, result: docs_domain.LangrefSearchResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try langrefMatchValue(allocator, match));
     const bundled = std.mem.eql(u8, result.source.id, "bundled_langref_index");
@@ -612,6 +637,7 @@ fn langrefValue(allocator: std.mem.Allocator, result: docs_domain.LangrefSearchR
 
 /// Returns an allocator-owned JSON value for langref match.
 fn langrefMatchValue(allocator: std.mem.Allocator, match: docs_domain.LangrefMatch) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "rank", .{ .integer = @intCast(match.rank) });
     try obj.put(allocator, "title", .{ .string = match.title });
@@ -626,6 +652,7 @@ fn langrefMatchValue(allocator: std.mem.Allocator, match: docs_domain.LangrefMat
 
 /// Returns an allocator-owned JSON value for langref index metadata.
 fn langrefIndexMetadataValue(allocator: std.mem.Allocator, metadata: docs_domain.LangrefIndexMetadata) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var roots = std.json.Array.init(allocator);
     if (metadata.source_path) |path| try roots.append(.{ .string = path });
     var obj = std.json.ObjectMap.empty;
@@ -649,6 +676,7 @@ fn langrefIndexMetadataValue(allocator: std.mem.Allocator, metadata: docs_domain
 
 /// Returns an allocator-owned JSON value for docs index build.
 fn docsIndexBuildValue(allocator: std.mem.Allocator, result: docs_domain.DocsIndexResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var entries = std.json.Array.init(allocator);
     for (result.entries) |entry| try entries.append(try docsEntryValue(allocator, entry));
     var sources = std.json.Array.init(allocator);
@@ -682,6 +710,7 @@ fn docsEntryValue(allocator: std.mem.Allocator, entry: docs_domain.DocsEntry) !s
 
 /// Returns an allocator-owned JSON value for docs query.
 fn docsQueryValue(allocator: std.mem.Allocator, kind: []const u8, result: docs_domain.DocsQueryResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var matches = std.json.Array.init(allocator);
     for (result.matches) |match| try matches.append(try docsMatchValue(allocator, match));
     var obj = std.json.ObjectMap.empty;
@@ -700,6 +729,7 @@ fn docsQueryValue(allocator: std.mem.Allocator, kind: []const u8, result: docs_d
 
 /// Returns an allocator-owned JSON value for docs match.
 fn docsMatchValue(allocator: std.mem.Allocator, match: docs_domain.DocsMatch) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "path", .{ .string = match.path });
     try obj.put(allocator, "source_family", .{ .string = match.source_family });
@@ -711,6 +741,7 @@ fn docsMatchValue(allocator: std.mem.Allocator, match: docs_domain.DocsMatch) !s
 
 /// Returns an allocator-owned JSON value for autodoc ingest.
 fn autodocIngestValue(allocator: std.mem.Allocator, result: docs_domain.AutodocIngestResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var entries = std.json.Array.init(allocator);
     for (result.entries) |entry| try entries.append(try autodocEntryValue(allocator, entry));
     var obj = std.json.ObjectMap.empty;
@@ -726,6 +757,7 @@ fn autodocIngestValue(allocator: std.mem.Allocator, result: docs_domain.AutodocI
 
 /// Returns an allocator-owned JSON value for autodoc entry.
 fn autodocEntryValue(allocator: std.mem.Allocator, entry: docs_domain.AutodocEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     if (std.mem.eql(u8, entry.source_family, "autodoc_json")) {
         try obj.put(allocator, "name", if (entry.name) |value| .{ .string = value } else .null);
@@ -742,6 +774,7 @@ fn autodocEntryValue(allocator: std.mem.Allocator, entry: docs_domain.AutodocEnt
 
 /// Returns an allocator-owned JSON value for doc example check.
 fn docExampleCheckValue(allocator: std.mem.Allocator, result: docs_domain.DocExampleCheckResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snippets = std.json.Array.init(allocator);
     for (result.snippets) |snippet| try snippets.append(try snippetCheckValue(allocator, snippet));
     var obj = std.json.ObjectMap.empty;
@@ -759,6 +792,7 @@ fn docExampleCheckValue(allocator: std.mem.Allocator, result: docs_domain.DocExa
 
 /// Returns an allocator-owned JSON value for snippet check.
 fn snippetCheckValue(allocator: std.mem.Allocator, result: docs_domain.SnippetCheck) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "label", .{ .string = result.label });
     try obj.put(allocator, "parse_status", .{ .string = result.parse_status });
@@ -771,6 +805,7 @@ fn snippetCheckValue(allocator: std.mem.Allocator, result: docs_domain.SnippetCh
 
 /// Returns an allocator-owned JSON value for readme command check.
 fn readmeCommandCheckValue(allocator: std.mem.Allocator, result: docs_domain.ReadmeCommandCheckResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var commands = std.json.Array.init(allocator);
     for (result.commands) |command| try commands.append(try readmeCommandValue(allocator, command));
     var obj = std.json.ObjectMap.empty;
@@ -785,6 +820,7 @@ fn readmeCommandCheckValue(allocator: std.mem.Allocator, result: docs_domain.Rea
 
 /// Returns an allocator-owned JSON value for readme command.
 fn readmeCommandValue(allocator: std.mem.Allocator, command: docs_domain.ReadmeCommand) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "line", .{ .integer = @intCast(command.line) });
     try obj.put(allocator, "command", .{ .string = command.command });
@@ -806,6 +842,7 @@ fn rawReferenceValue(allocator: std.mem.Allocator, reference: docs_domain.RawRef
 
 /// Serializes builtin index results for text-only docs responses.
 fn builtinListText(allocator: std.mem.Allocator, result: docs_domain.BuiltinListResult) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     try appendSourceText(allocator, &out, docs_domain.curatedBuiltinsSource());
     try appendContractText(allocator, &out, .{ .result_count = docs_domain.builtins.len, .ranking = "curated builtin declaration order" });
@@ -817,6 +854,7 @@ fn builtinListText(allocator: std.mem.Allocator, result: docs_domain.BuiltinList
 
 /// Serializes builtin documentation results for text-only docs responses.
 fn builtinDocText(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocResult) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     try appendSourceText(allocator, &out, docs_domain.curatedBuiltinsSource());
     try appendContractText(allocator, &out, .{
@@ -836,6 +874,7 @@ fn builtinDocText(allocator: std.mem.Allocator, result: docs_domain.BuiltinDocRe
 
 /// Appends builtin index metadata text to the caller-provided output list.
 fn appendBuiltinIndexMetadataText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), input: docs_domain.BuiltinIndexInput) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     try out.print(allocator, "Index strategy: curated_builtin_index\nCurated entries: {d}\n", .{docs_domain.builtins.len});
     const drift = input.drift orelse docs_domain.BuiltinDriftInfo{ .status = if (input.toolchain_version == null) "toolchain_version_unavailable" else "toolchain_version_recorded_builtin_set_not_extracted", .confidence = "version_only" };
     if (input.toolchain_version) |version| {
@@ -849,6 +888,7 @@ fn appendBuiltinIndexMetadataText(allocator: std.mem.Allocator, out: *std.ArrayL
 
 /// Returns an allocator-owned JSON value for std search text from.
 fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = value.object;
     var out: std.ArrayList(u8) = .empty;
     const source_obj = obj.get("source").?.object;
@@ -870,6 +910,7 @@ fn stdSearchTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) !
 
 /// Returns an allocator-owned JSON value for std item text from.
 fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = value.object;
     var out: std.ArrayList(u8) = .empty;
     try appendSourceObjectText(allocator, &out, obj.get("source").?.object);
@@ -888,6 +929,7 @@ fn stdItemTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
 
 /// Returns an allocator-owned JSON value for langref text from.
 fn langrefTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = value.object;
     const source_obj = obj.get("source").?.object;
     var out: std.ArrayList(u8) = .empty;
@@ -918,6 +960,7 @@ fn langrefTextFromValue(allocator: std.mem.Allocator, value: std.json.Value) ![]
 
 /// Appends source text to the caller-provided output list.
 fn appendSourceText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source: docs_domain.Source) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     try out.print(allocator,
         \\Docs source: {s}
         \\Source label: {s}
@@ -936,6 +979,7 @@ fn appendSourceText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), sourc
 
 /// Appends contract text to the caller-provided output list.
 fn appendContractText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), contract: docs_domain.Contract) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     if (contract.query) |query| {
         try out.print(allocator, "Query: `{s}`\n", .{query});
     } else {
@@ -957,6 +1001,7 @@ fn appendContractText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), con
 
 /// Appends source object text to the caller-provided output list.
 fn appendSourceObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), source_obj: std.json.ObjectMap) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     try out.print(allocator,
         \\Docs source: {s}
         \\Source label: {s}
@@ -978,6 +1023,7 @@ fn appendSourceObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8),
 
 /// Appends contract object text to the caller-provided output list.
 fn appendContractObjectText(allocator: std.mem.Allocator, out: *std.ArrayList(u8), obj: std.json.ObjectMap) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const query = obj.get("query").?;
     if (query == .string) {
         try out.print(allocator, "Query: `{s}`\n", .{query.string});
@@ -1030,6 +1076,7 @@ fn structuredText(allocator: std.mem.Allocator, kind: []const u8, body: []const 
 /// resolves any path under the workspace sandbox; `require` makes absent evidence
 /// an error instead of an empty result.
 fn evidenceRequest(args: ?std.json.Value, provenance: []const u8, require: bool, default_path: ?[]const u8) docs_usecases.EvidenceRequest {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .content = argString(args, "content"),
         .path = argString(args, "path"),
@@ -1066,6 +1113,7 @@ fn docsError(
     query: []const u8,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool,
@@ -1080,6 +1128,7 @@ fn docsError(
 
 /// Maps docs tool error failures to structured MCP errors.
 fn docsToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -1093,6 +1142,7 @@ fn docsToolError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
 
 /// Maps docs backend error failures to structured MCP errors.
 fn docsBackendError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror, query: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -1110,6 +1160,7 @@ fn docsBackendError(allocator: std.mem.Allocator, tool_name: []const u8, operati
 /// latter reports the offending `path` against the workspace root), and any
 /// other read failure becomes a structured filesystem error.
 fn evidenceInputError(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.MissingEvidence => mcp_errors.missingArgument(allocator, tool_name, "content", "inline content or workspace path"),
         error.PathOutsideWorkspace, error.EmptyPath => if (argString(args, "path")) |path| mcp_errors.workspacePath(allocator, tool_name, path, context.workspace.root, err) else mcp_errors.missingArgument(allocator, tool_name, "path", "workspace-relative path"),
