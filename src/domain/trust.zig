@@ -113,6 +113,7 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
 /// `source` is the command or tool that produced the evidence (e.g. "git status --porcelain").
 /// `reference` names the specific output artifact (e.g. "stdout"). All strings are duped.
 pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference: []const u8, confidence: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) deinitOwnedValue(allocator, .{ .object = obj });
@@ -141,6 +142,7 @@ fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value 
 
 /// Frees JSON values produced by this module; object keys are borrowed field names.
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .string => |text| allocator.free(text),
         .array => |array| {
