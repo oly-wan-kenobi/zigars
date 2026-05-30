@@ -15,6 +15,7 @@ const Allocator = std.mem.Allocator;
 
 /// Checks one manifest entry against MCP schema and structured-error contracts.
 pub fn checkToolContract(allocator: Allocator, io: Io, comptime entry: zigars.manifest.ToolEntry) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const a = arena.allocator();
