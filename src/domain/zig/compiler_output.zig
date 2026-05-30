@@ -24,6 +24,7 @@ pub const CompilerLine = struct {
 /// Precedence: located `error` > located `warning` > located `note` > global
 /// `error: ` > global `warning: ` > global `note: `.
 pub fn parseCompilerLine(line: []const u8) ?CompilerLine {
+    // Normalize input here so downstream paths can rely on validated shape.
     if (parseLocatedCompilerLine(line, "error")) |parsed| return parsed;
     if (parseLocatedCompilerLine(line, "warning")) |parsed| return parsed;
     if (parseLocatedCompilerLine(line, "note")) |parsed| return parsed;
@@ -68,6 +69,7 @@ pub fn parseLocatedCompilerLine(line: []const u8, severity: []const u8) ?Compile
 /// applies heuristics in order of specificity; `compiler_error` is the catch-all
 /// when no keyword matches. Returns a borrowed static string literal.
 pub fn classifyDiagnosticMessage(message: []const u8) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.indexOf(u8, message, "expected type") != null) return "type_mismatch";
     if (std.mem.indexOf(u8, message, "expected ") != null and std.mem.indexOf(u8, message, "found ") != null) return "syntax_or_type_mismatch";
     if (std.mem.indexOf(u8, message, "expected ") != null) return "syntax_error";
