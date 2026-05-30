@@ -107,6 +107,7 @@ const TestPipe = struct { read_end: std.Io.File, write_end: std.Io.File };
 
 /// Creates paired file handles for scripted transport tests.
 fn testPipe() !TestPipe {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (@import("builtin").os.tag) {
         .windows => return error.SkipZigTest,
         else => {
