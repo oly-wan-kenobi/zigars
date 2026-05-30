@@ -54,6 +54,7 @@ fn handler(
     comptime RuntimePorts: type,
     comptime RuntimePortOptions: type,
 ) registry.ToolHandler(RuntimePtr) {
+    // Translate internal outcomes into protocol-facing responses without leaking internal details.
     return switch (ref.module) {
         .discovery => adapterHandler(mcp_tools.discovery, tool_name, ref.name, RuntimePtr, RuntimePorts, RuntimePortOptions, .{}),
         .artifacts => adapterHandler(mcp_tools.artifacts, tool_name, ref.name, RuntimePtr, RuntimePorts, RuntimePortOptions, .{ .workspace_read_resolution = .input }),
@@ -124,6 +125,7 @@ fn adapterHandler(
 
 /// Projects runtime ports into the context type required by a tool handler.
 fn buildContext(comptime ContextType: type, runtime_ports: anytype) app_context.ContextError!ContextType {
+    // Construct this value in a single path so required fields cannot drift.
     if (ContextType == app_context.Context) return runtime_ports.context();
     if (ContextType == app_context.AdoptionContext) return runtime_ports.adoptionContext();
     if (ContextType == app_context.ArtifactContext) return runtime_ports.artifactContext();
@@ -162,6 +164,7 @@ fn contextError(
 
 /// Returns the operation label used when a context projection fails.
 fn contextOperation(comptime ContextType: type) []const u8 {
+    // Derive context values from one source so audit and response metadata do not diverge.
     if (ContextType == app_context.Context) return "app_context";
     if (ContextType == app_context.AdoptionContext) return "adoption_context";
     if (ContextType == app_context.ArtifactContext) return "artifact_context";
@@ -182,6 +185,7 @@ fn contextOperation(comptime ContextType: type) []const u8 {
 
 /// Returns the structured error code used when a context projection fails.
 fn contextCode(comptime ContextType: type) []const u8 {
+    // Derive context values from one source so audit and response metadata do not diverge.
     if (ContextType == app_context.Context) return "app_context_unavailable";
     if (ContextType == app_context.AdoptionContext) return "adoption_context_unavailable";
     if (ContextType == app_context.ArtifactContext) return "artifact_context_unavailable";
@@ -202,6 +206,7 @@ fn contextCode(comptime ContextType: type) []const u8 {
 
 /// Returns the user-facing recovery hint for missing runtime context ports.
 fn contextResolution(comptime ContextType: type) []const u8 {
+    // Derive context values from one source so audit and response metadata do not diverge.
     if (ContextType == app_context.Context) return "The discovery use case requires the runtime app context projection and typed ports from the runtime bridge.";
     if (ContextType == app_context.ArtifactContext) return "The artifact registry use case requires workspace ports from the runtime bridge.";
     if (ContextType == app_context.CoreCommandContext) return "The core command use case requires command runner and workspace ports from the runtime bridge.";
