@@ -16,6 +16,7 @@ fn testContext(
     runtime_session: *fakes.FakeRuntimeSession,
     tool_catalog: *fakes.FakeToolCatalog,
 ) app_context.RuntimeUxContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig" },
