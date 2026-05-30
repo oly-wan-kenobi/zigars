@@ -106,7 +106,7 @@ pub const ReplacementOperation = enum {
     preview,
     apply,
 
-    /// Implements kind workflow logic using caller-owned inputs.
+    /// Returns the stable tool-kind string embedded in structured payloads for this operation.
     pub fn kind(self: ReplacementOperation) []const u8 {
         return switch (self) {
             .preview => "zigars_patch_session_preview",
@@ -550,7 +550,9 @@ pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext,
     } };
 }
 
-/// Implements validate workflow logic using caller-owned inputs.
+/// Delegates to the validation workflow; exposed here so MCP adapters that
+/// already depend on patch_sessions don't need a separate import. Caller owns
+/// the returned outcome and must deinit it.
 pub fn validate(
     allocator: std.mem.Allocator,
     context: app_context.ValidationContext,
@@ -559,7 +561,9 @@ pub fn validate(
     return validation_usecase.run(allocator, context, request);
 }
 
-/// Implements replacement result from parts workflow logic using caller-owned inputs.
+/// Consumes the in-progress file and expected lists (via toOwnedSlice) and
+/// assembles the final ReplacementResult. Both lists are left empty on return
+/// so their callers' errdefers do not double-free.
 fn replacementResultFromParts(
     allocator: std.mem.Allocator,
     request: ReplacementRequest,
@@ -595,7 +599,7 @@ fn replacementResultFromParts(
     };
 }
 
-/// Implements create file ok workflow logic using caller-owned inputs.
+/// Allocates an owned copy of `file` and clones `preimage` into a `.ok` CreateFile.
 fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identity, policy: PathPolicy) !CreateFile {
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
@@ -608,7 +612,8 @@ fn createFileOk(allocator: std.mem.Allocator, file: []const u8, preimage: Identi
     } };
 }
 
-/// Implements create file error workflow logic using caller-owned inputs.
+/// Allocates an owned copy of `file` and wraps the error name into a `.err` CreateFile.
+/// `error_name` is borrowed; its lifetime must exceed the returned value's use.
 fn createFileError(allocator: std.mem.Allocator, file: []const u8, error_name: []const u8) !CreateFile {
     const owned_file = try allocator.dupe(u8, file);
     errdefer allocator.free(owned_file);
@@ -618,7 +623,9 @@ fn createFileError(allocator: std.mem.Allocator, file: []const u8, error_name: [
     } };
 }
 
-/// Implements replacement file from parts workflow logic using caller-owned inputs.
+/// Allocates owned copies of `file` and `diff`, clones both identities, and
+/// assembles a ReplacementFile. `diff` ownership transfers to the result on
+/// success; the `diff_owned` flag pattern at call sites avoids double-free.
 fn replacementFileFromParts(
     allocator: std.mem.Allocator,
     file: []const u8,
@@ -646,7 +653,9 @@ fn replacementFileFromParts(
     };
 }
 
-/// Implements history file for replacement workflow logic using caller-owned inputs.
+/// Builds a HistoryFileRecord for one replacement slot. If the file changed,
+/// `preimage_content_path` is set to the deterministic artifact path that will
+/// hold the preimage bytes; if unchanged, it is null (no archive needed).
 fn historyFileForReplacement(
     allocator: std.mem.Allocator,
     session_id: []const u8,
@@ -741,7 +750,9 @@ fn freeExpectedPreimageItems(allocator: std.mem.Allocator, expected: []const Exp
     }
 }
 
-/// Implements session record workflow logic using caller-owned inputs.
+/// Clones all file records and strings into allocator-owned storage and stamps
+/// the current clock time. Partial clones are unwound by the errdefer chain,
+/// so the caller only sees a fully-initialized record or an error.
 fn sessionRecord(
     allocator: std.mem.Allocator,
     context: app_context.EditingContext,
@@ -772,7 +783,10 @@ fn sessionRecord(
     };
 }
 
-/// Appends session history data into caller-provided storage, propagating allocation failures.
+/// Appends one JSONL record to the history file. Reads the existing file first
+/// (missing is treated as empty), ensures a trailing newline separator, appends
+/// the new record, then writes the result back through the workspace store so
+/// the path stays inside the sandbox.
 fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.EditingContext, path: []const u8, record: SessionRecord) !void {
     const line = try recordJsonLine(allocator, record);
     defer allocator.free(line);
@@ -799,7 +813,10 @@ fn appendSessionHistory(allocator: std.mem.Allocator, context: app_context.Editi
     });
 }
 
-/// Reads session record data from the provided context without taking ownership of inputs.
+/// Resolves the history text: uses `request.history` inline when provided (for
+/// tests), otherwise reads the file at `request.history_path` through the
+/// workspace store. The read result is deferred-freed; the returned record owns
+/// its own memory independently.
 fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !SessionRecord {
     var history_read: ?ports.WorkspaceReadResult = null;
     const text = request.history orelse blk: {
@@ -815,7 +832,9 @@ fn loadSessionRecord(allocator: std.mem.Allocator, context: app_context.EditingC
     return parseSessionRecord(allocator, text, request.session_id);
 }
 
-/// Parses session record input using caller-provided storage; malformed input and allocation failures propagate.
+/// Scans `text` for a session record whose `session_id` matches. Supports both
+/// a JSON array (legacy export format) and JSONL (one record per line). Returns
+/// `SessionNotFound` if no matching record exists. Malformed JSON propagates.
 fn parseSessionRecord(allocator: std.mem.Allocator, text: []const u8, session_id: []const u8) !SessionRecord {
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
     if (trimmed.len == 0) return error.SessionNotFound;
@@ -982,7 +1001,10 @@ fn applyRevertFile(allocator: std.mem.Allocator, context: app_context.EditingCon
     });
 }
 
-/// Implements record json line workflow logic using caller-owned inputs.
+/// Serializes `record` into a single-line JSON object suitable for JSONL
+/// append. The result is allocator-owned; caller frees it. JSON strings are
+/// escaped through `writeJsonString` so they are safe for embedding in MCP
+/// payloads without additional sanitization.
 fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
@@ -1018,7 +1040,8 @@ fn recordJsonLine(allocator: std.mem.Allocator, record: SessionRecord) ![]const 
     return try out.toOwnedSlice();
 }
 
-/// Writes identity json fields to the provided JSON stream and propagates writer failures.
+/// Emits the three identity fields (exists, bytes, sha256) as a JSON object
+/// inline into `out`. sha256 is emitted as null when absent.
 fn writeIdentityJson(out: *std.Io.Writer.Allocating, identity: Identity) !void {
     try out.writer.print("{{\"exists\":{},\"bytes\":{d},\"sha256\":", .{ identity.exists, identity.bytes });
     if (identity.sha256) |hash| {
@@ -1029,12 +1052,14 @@ fn writeIdentityJson(out: *std.Io.Writer.Allocating, identity: Identity) !void {
     try out.writer.writeAll("}");
 }
 
-/// Writes json string fields to the provided JSON stream and propagates writer failures.
+/// Emits `text` as a quoted, escaped JSON string via std.json.Stringify.
 fn writeJsonString(out: *std.Io.Writer.Allocating, text: []const u8) !void {
     try std.json.Stringify.value(text, .{}, &out.writer);
 }
 
-/// Extracts string field data from JSON input without taking ownership of borrowed values.
+/// Returns a borrowed slice into the parsed JSON string at `field`, or null
+/// if the field is absent or not a string. The slice lifetime is bounded by
+/// `obj`'s arena; callers must dupe before the parsed value is freed.
 fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     return switch (obj.get(field) orelse .null) {
         .string => |s| s,
@@ -1042,7 +1067,7 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
-/// Extracts bool field data from JSON input without taking ownership of borrowed values.
+/// Returns the bool at `field`, or null if absent or not a bool.
 fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     return switch (obj.get(field) orelse .null) {
         .bool => |b| b,
@@ -1050,7 +1075,7 @@ fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
     };
 }
 
-/// Extracts integer field data from JSON input without taking ownership of borrowed values.
+/// Returns the i64 at `field`, or null if absent or not an integer.
 fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
     return switch (obj.get(field) orelse .null) {
         .integer => |value| value,

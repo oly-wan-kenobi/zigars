@@ -14,7 +14,11 @@ const static_project = @import("../static_analysis/project_values.zig");
 /// Error set returned by toolchain workflow failures.
 pub const ToolchainError = std.mem.Allocator.Error || ports.PortError || app_context.ContextError;
 
-/// Collects failures surfaced by plan error.
+/// Collects failures surfaced by planning operations.
+/// MissingTool: `request.tool` was null.
+/// UnknownTool: `request.tool` is not in the manifest.
+/// MissingFile/MissingPath: a required operand was absent.
+/// InvalidExtraArgs: unbalanced quoting or unterminated escape in `request.args`.
 pub const PlanError = error{
     MissingTool,
     UnknownTool,
@@ -33,6 +37,9 @@ pub const PlanRequest = struct {
 };
 
 /// Carries probe report data across use case and port boundaries.
+/// `owns_memory` marks whether `status` and `resolution` were heap-allocated by
+/// this module. Callers must call `deinit` to avoid leaks; the guard makes
+/// it safe to call unconditionally on both heap and static-string variants.
 pub const ProbeReport = struct {
     ok: bool,
     status: []const u8,
@@ -48,7 +55,8 @@ pub const ProbeReport = struct {
 };
 
 /// Renders the tool catalog as human-readable text, returned in `allocator`-owned
-/// storage. Requires a tool-catalog port; absence surfaces as a context error.
+/// storage. The caller owns the returned slice and must free it. Requires a
+/// tool-catalog port; absence surfaces as a context error.
 pub fn catalogText(allocator: std.mem.Allocator, context: app_context.Context) ![]u8 {
     const tool_catalog = try context.requireToolCatalog();
     const rendered = try tool_catalog.text(allocator);
@@ -396,7 +404,9 @@ fn toolPlanPolicyValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEn
     return .{ .object = obj };
 }
 
-/// Implements put planning base workflow logic using caller-owned inputs.
+/// Writes the fields that every plan response shares: kind, tool name,
+/// registration state, support flag, plan kind label, group, description, risk
+/// detail object, risk level, source-write flag, and read-only flag.
 fn putPlanningBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, planner_name: []const u8, entry: ports.ToolManifestEntry, supported: bool) !void {
     try obj.put(allocator, "kind", .{ .string = planner_name });
     try obj.put(allocator, "tool", .{ .string = entry.name });
@@ -411,7 +421,8 @@ fn putPlanningBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, plann
     try obj.put(allocator, "writes_source", .{ .bool = entry.risk.writes_source });
 }
 
-/// Implements put plan policy details workflow logic using caller-owned inputs.
+/// Writes plan-kind-specific policy fields into `obj`. Each branch is
+/// exclusive; exact_command entries have no extra fields beyond the base.
 fn putPlanPolicyDetails(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, entry: ports.ToolManifestEntry) !void {
     switch (entry.plan) {
         .exact_command => return,
@@ -509,7 +520,11 @@ fn freeArgList(allocator: std.mem.Allocator, list: []const []const u8) void {
     allocator.free(list);
 }
 
-/// Parses shell-like argument text into allocator-owned argument slices.
+/// Parses shell-like argument text into an allocator-owned slice of owned
+/// argument strings. Supports backslash escaping, single-quoted literals
+/// (no escaping inside), and double-quoted literals. An unterminated quote or
+/// a trailing backslash returns InvalidArguments. The caller must free the
+/// slice and each element with `freeArgList`.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -575,7 +590,7 @@ fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), cur
     arg_owned = false;
 }
 
-/// Defines the allowed zig version hint status variants accepted by this workflow.
+/// Classification of one project Zig version hint relative to the active binary.
 pub const ZigVersionHintStatus = enum {
     ignored,
     exact_match,
@@ -613,12 +628,16 @@ pub fn zigVersionHintAppliesToZig(key: []const u8) bool {
     return !std.mem.eql(u8, key, "zls");
 }
 
-/// Implements version meets minimum workflow logic using caller-owned inputs.
+/// Returns true when `active_zig` is at least `minimum_zig` (semver prefix
+/// comparison, dev-suffix-aware). Delegates to env_doctor for the comparison
+/// logic so version policy stays in one place.
 pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
     return env_doctor.versionMeetsMinimum(active_zig, minimum_zig);
 }
 
-/// Parses version prefix input using caller-provided storage; malformed input and allocation failures propagate.
+/// Parses the semver prefix (major.minor.patch) from `raw`, ignoring any dev
+/// suffix. Returns null when the string cannot be parsed as three numeric
+/// components. Exported so tests can exercise version hint classification.
 pub fn parseVersionPrefix(raw: []const u8) ?[3]u64 {
     return env_doctor.parseVersionPrefix(raw);
 }
@@ -777,7 +796,8 @@ fn probeCheckValue(allocator: std.mem.Allocator, name: []const u8, probe: ProbeR
     return checkValue(allocator, name, probe.ok, probe.status, probe.resolution);
 }
 
-/// Implements cached probe workflow logic using caller-owned inputs.
+/// Returns the cached probe entry for `id`, or null when it has never been probed.
+/// Callers that receive null must run a live probe or report the backend as unprobed.
 fn cachedProbe(context: app_context.Context, id: backend_contracts.BackendId) ?app_context.CachedBackendProbe {
     const probe = switch (id) {
         .zig => context.trust_probe_cache.zig,
@@ -845,6 +865,9 @@ fn configuredProbeArgvValue(allocator: std.mem.Allocator, id: backend_contracts.
 }
 
 /// Serializes backend capabilities fields into an allocator-owned JSON value; allocation failures propagate.
+/// `zig_flamegraph_diff` is appended a second time when id is zflame because
+/// diff-folded is a separate backend but zflame drives the diff rendering step;
+/// the duplication reflects that zflame requires both backends in that workflow.
 fn backendCapabilitiesValue(allocator: std.mem.Allocator, id: backend_contracts.BackendId) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -963,7 +986,9 @@ fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, workspace: ports.W
     }
 }
 
-/// Appends version hint data into caller-provided storage, propagating allocation failures.
+/// Appends a `{source, key, version}` hint object to `hints`. Leading/trailing
+/// whitespace and quote characters are stripped from `version_value`; an empty
+/// result is silently skipped so blank lines in config files produce no hint.
 pub fn appendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, source: []const u8, key: []const u8, version_value: []const u8) !void {
     const trimmed = std.mem.trim(u8, version_value, " \t\r\n\"'");
     if (trimmed.len == 0) return;

@@ -26,6 +26,7 @@ pub const ArtifactError = ports.PortError || error{
 };
 
 /// Carries toolchain data across use case and port boundaries.
+/// All path fields default to empty string when the backend was not configured.
 pub const Toolchain = struct {
     zig_path: []const u8,
     zls_path: []const u8 = "",
@@ -34,6 +35,7 @@ pub const Toolchain = struct {
 };
 
 /// Carries provenance data across use case and port boundaries.
+/// `producer` and `artifact_kind` are required; all other fields default to "".
 pub const Provenance = struct {
     producer: []const u8,
     artifact_kind: []const u8,
@@ -46,6 +48,8 @@ pub const Provenance = struct {
 };
 
 /// Carries registry entry data across use case and port boundaries.
+/// `path` is workspace-relative; `abs_path` is the resolved canonical path.
+/// `bytes` and `sha256` record the file identity at index time.
 pub const RegistryEntry = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -63,6 +67,9 @@ pub const Registry = struct {
 };
 
 /// Carries scanned artifact data across use case and port boundaries.
+/// `bytes` and `sha256` are null when hashing was not requested or failed.
+/// `hash_status` is always set: "not_requested", "ok", "skipped_size_limit",
+/// or the @errorName of the first read failure.
 pub const ScannedArtifact = struct {
     path: []const u8,
     artifact_kind: []const u8,
@@ -96,6 +103,8 @@ pub const PreimageIdentity = struct {
 };
 
 /// Carries prune summary data across use case and port boundaries.
+/// `pruned` is always `missing + changed` — a derived total, not a separate
+/// counter. Callers that only need the net removal count may use `pruned` alone.
 pub const PruneSummary = struct {
     kept: usize = 0,
     missing: usize = 0,
@@ -104,6 +113,8 @@ pub const PruneSummary = struct {
 };
 
 /// Carries prune result data across use case and port boundaries.
+/// `entries` is the kept subset and is owned by the caller's allocator;
+/// strings within each kept entry borrow from the input registry.
 pub const PruneResult = struct {
     entries: []RegistryEntry,
     summary: PruneSummary,
@@ -333,7 +344,9 @@ pub fn artifactKind(path: []const u8) []const u8 {
     return "workspace_artifact";
 }
 
-/// Collects artifact paths data into caller-provided output storage without taking ownership of inputs.
+/// Walks `root` under the workspace sandbox and appends up to `limit` paths to
+/// `paths`. Stops early once `paths.items.len >= limit` without error. Each
+/// appended string is workspace-relative and owned by `allocator`.
 fn collectArtifactPaths(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -396,7 +409,10 @@ fn scannedArtifact(
     return result;
 }
 
-/// Parses registry jsonl input using caller-provided storage; malformed input and allocation failures propagate.
+/// Parses JSONL registry bytes into an owned slice of RegistryEntry values.
+/// Blank and whitespace-only lines are skipped; the first malformed JSON line
+/// fails the entire parse (InvalidArtifactRegistryEntry). All strings are
+/// duplicated into `allocator`.
 fn parseRegistryJsonl(allocator: std.mem.Allocator, bytes: []const u8) ArtifactError!Registry {
     var entries: std.ArrayList(RegistryEntry) = .empty;
     var lines = std.mem.splitScalar(u8, bytes, '\n');

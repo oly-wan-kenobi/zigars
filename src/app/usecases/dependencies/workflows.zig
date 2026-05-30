@@ -23,6 +23,9 @@ const manifest_read_limit: usize = 2 * 1024 * 1024;
 const migration_session_kind = "dependency_migration";
 const dependency_elicitation_reason = "MCP elicitation is not invoked by this deterministic dependency workflow; apply=true and expected preimages remain the fallback confirmation contract.";
 
+/// Holds manifest source bytes and their origin. `owned` is non-null only when
+/// the bytes were read from disk (and must be freed); `is_inline` marks caller-
+/// supplied content that must not be freed.
 const ManifestInput = struct {
     path: []const u8,
     bytes: []const u8,
@@ -34,12 +37,14 @@ const ManifestInput = struct {
     }
 };
 
+/// The four mutation operations this module supports; each maps to a distinct MCP tool.
 const Operation = enum {
     sync,
     add,
     remove,
     upgrade,
 
+    /// Returns the MCP tool name string for structured result payloads.
     fn toolName(self: Operation) []const u8 {
         return switch (self) {
             .sync => "zig_zon_dep_sync",
@@ -224,6 +229,8 @@ pub fn zigDependencyMigrate(a: *App, allocator: std.mem.Allocator, args: ?std.js
     return support.structured(allocator, envelope);
 }
 
+/// Optional evidence fields that sync populates but add/remove/upgrade do not.
+/// Passed to `mutationResult` so it can include fetch command evidence when present.
 const MutationExtra = struct {
     command_argv: ?[]const []const u8 = null,
     timeout_ms: ?i64 = null,
@@ -381,6 +388,9 @@ fn extractFetchedHash(text: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Returns a structured failure result when `zig fetch` either failed or did
+/// not produce a usable hash. Includes the full fetch command evidence so the
+/// caller can rerun or debug without re-triggering the tool.
 fn syncCommandFailure(
     allocator: std.mem.Allocator,
     a: *App,
@@ -410,8 +420,12 @@ fn syncCommandFailure(
     return support.structured(allocator, .{ .object = obj });
 }
 
+/// Controls which registry response fields `registryResult` populates.
 const RegistryMode = enum { search, info, versions, readme };
 
+/// Builds the structured provider result for search/info/versions/readme tools.
+/// Only the "direct" provider is active; all others return `unavailable=true`
+/// to avoid unbounded external network calls from within the MCP server.
 fn registryResult(allocator: std.mem.Allocator, tool_name: []const u8, provider: []const u8, query: []const u8, offline: bool, mode: RegistryMode) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, tool_name, "dependency registry provider result", "medium");
@@ -442,6 +456,8 @@ fn registryResult(allocator: std.mem.Allocator, tool_name: []const u8, provider:
     return .{ .object = obj };
 }
 
+/// Builds the nested `provider` metadata object that describes trust basis and
+/// cache behavior so callers can assess registry result provenance.
 fn providerMetadataValue(allocator: std.mem.Allocator, provider: []const u8, query: []const u8, offline: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "id", .{ .string = provider });
@@ -452,6 +468,9 @@ fn providerMetadataValue(allocator: std.mem.Allocator, provider: []const u8, que
     return .{ .object = obj };
 }
 
+/// Builds the initial migration session envelope with a "planned" event. The
+/// envelope records the plan only; actual mutations are applied by individual
+/// dependency tools that each use patch-session preimage rollback.
 fn migrationEnvelopeValue(allocator: std.mem.Allocator, workspace_root: []const u8, now: i64, session_id: []const u8, manifest_path: []const u8, dependency: []const u8, target_url: ?[]const u8, model: zon.Model) !std.json.Value {
     var events = std.json.Array.init(allocator);
     try events.append(try sessions.eventValue(allocator, "planned", "dependency migration session planned", now));
@@ -488,10 +507,14 @@ fn migrationEnvelopeValue(allocator: std.mem.Allocator, workspace_root: []const 
     return .{ .object = obj };
 }
 
+/// Heuristically identifies a value as a URL (https, http, or git+https prefix).
 fn looksLikeUrl(value: []const u8) bool {
     return std.mem.startsWith(u8, value, "https://") or std.mem.startsWith(u8, value, "http://") or std.mem.startsWith(u8, value, "git+https://");
 }
 
+/// Extracts a display name from a URL by taking the last path segment and
+/// stripping common archive suffixes (.tar.gz, .tgz). Returns the full URL
+/// if there is no path component.
 fn packageNameFromUrl(url: []const u8) []const u8 {
     const without_query = if (std.mem.indexOfScalar(u8, url, '?')) |idx| url[0..idx] else url;
     const slash = std.mem.lastIndexOfScalar(u8, without_query, '/') orelse return without_query;
@@ -501,12 +524,16 @@ fn packageNameFromUrl(url: []const u8) []const u8 {
     return name;
 }
 
+/// Extracts a version ref from a URL using the `?ref=` query parameter or a
+/// `#fragment`. Returns null when neither is present.
 fn refFromUrl(url: []const u8) ?[]const u8 {
     if (std.mem.indexOf(u8, url, "?ref=")) |idx| return url[idx + "?ref=".len ..];
     if (std.mem.indexOf(u8, url, "#")) |idx| return url[idx + 1 ..];
     return null;
 }
 
+/// Writes the common result envelope fields (kind, ok, schema_version,
+/// evidence_source, confidence, limitations) into `obj`.
 fn putBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, kind: []const u8, evidence_source: []const u8, confidence: []const u8) !void {
     try obj.put(allocator, "kind", .{ .string = kind });
     try obj.put(allocator, "ok", .{ .bool = true });
@@ -516,6 +543,8 @@ fn putBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, kind: []const
     try obj.put(allocator, "limitations", .{ .string = "build.zig.zon edits are text-preserving for common Zig 0.16 dependency literals; unsupported computed expressions are reported as diagnostics." });
 }
 
+/// Builds the `current_manifest_entry` JSON object for a dependency. When the
+/// dependency does not exist in the manifest yet, only `name: null` is emitted.
 fn dependencyEntryValue(allocator: std.mem.Allocator, entry: ?zon.Dependency) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     if (entry) |dep| {
@@ -531,6 +560,9 @@ fn dependencyEntryValue(allocator: std.mem.Allocator, entry: ?zon.Dependency) !s
     return .{ .object = obj };
 }
 
+/// Re-parses `text` (the updated manifest) and returns the byte range that
+/// covers the named dependency entry as a JSON string. Returns `.null` when
+/// the dependency cannot be located (e.g. after a remove).
 fn replacementFragmentValue(allocator: std.mem.Allocator, text: []const u8, dependency: []const u8) !std.json.Value {
     var model = zon.parse(allocator, text) catch return .null;
     defer model.deinit(allocator);
@@ -538,6 +570,8 @@ fn replacementFragmentValue(allocator: std.mem.Allocator, text: []const u8, depe
     return .{ .string = text[dep.entry_start..dep.entry_end] };
 }
 
+/// Serializes the relevant fields from a patch session result into a compact
+/// JSON object so callers can inspect apply status and file diffs.
 fn patchSessionValue(allocator: std.mem.Allocator, patch: patch_sessions.ReplacementResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "session_id", .{ .string = patch.session_id });
@@ -561,6 +595,8 @@ fn patchSessionValue(allocator: std.mem.Allocator, patch: patch_sessions.Replace
     return .{ .object = obj };
 }
 
+/// Serializes the expected-preimage list as a JSON array for evidence in the
+/// result so callers can verify which file state the apply was guarded against.
 fn expectedPreimagesValue(allocator: std.mem.Allocator, items: []const patch_sessions.ExpectedPreimage) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (items) |item| {
@@ -572,6 +608,7 @@ fn expectedPreimagesValue(allocator: std.mem.Allocator, items: []const patch_ses
     return .{ .array = array };
 }
 
+/// Converts a domain Identity into a JSON object for result payloads.
 fn identityValue(allocator: std.mem.Allocator, identity: patch_domain.Identity) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "exists", .{ .bool = identity.exists });
@@ -580,6 +617,8 @@ fn identityValue(allocator: std.mem.Allocator, identity: patch_domain.Identity) 
     return .{ .object = obj };
 }
 
+/// Builds the `fetch_command` evidence object included in sync results so
+/// callers can rerun or debug the exact `zig fetch` invocation.
 fn commandEvidenceValue(allocator: std.mem.Allocator, cwd: []const u8, argv: []const []const u8, timeout_ms: i64, result: support.CommandRunResult) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "argv", try support.argvValue(allocator, argv));
@@ -594,6 +633,7 @@ fn commandEvidenceValue(allocator: std.mem.Allocator, cwd: []const u8, argv: []c
     return .{ .object = obj };
 }
 
+/// Serializes ZON parse diagnostics as a JSON array for inclusion in results.
 fn diagnosticsValue(allocator: std.mem.Allocator, diagnostics: []const zon.Diagnostic) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (diagnostics) |diag| {
@@ -606,12 +646,15 @@ fn diagnosticsValue(allocator: std.mem.Allocator, diagnostics: []const zon.Diagn
     return .{ .array = array };
 }
 
+/// Wraps a slice of string literals as a JSON array; strings are borrowed (not duped).
 fn stringArray(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (values) |value| try array.append(.{ .string = value });
     return .{ .array = array };
 }
 
+/// Returns a new JSON array that is a deep-clone of `existing`'s items (if an
+/// array) with `event` appended. Used to grow a session's event log.
 fn appendEventArray(allocator: std.mem.Allocator, existing: ?std.json.Value, event: std.json.Value) !std.json.Value {
     var array = std.json.Array.init(allocator);
     if (existing) |value| {
@@ -623,11 +666,15 @@ fn appendEventArray(allocator: std.mem.Allocator, existing: ?std.json.Value, eve
     return .{ .array = array };
 }
 
+/// Returns the named field from a JSON object value, or null if the value is
+/// not an object or the field is absent. Result borrows from the parent value.
 fn objectField(value: std.json.Value, name: []const u8) ?std.json.Value {
     if (value != .object) return null;
     return value.object.get(name);
 }
 
+/// Returns the i64 at `name` inside a JSON object value, or null if absent or
+/// not an integer.
 fn intField(value: std.json.Value, name: []const u8) ?i64 {
     const field = objectField(value, name) orelse return null;
     return switch (field) {
@@ -636,19 +683,25 @@ fn intField(value: std.json.Value, name: []const u8) ?i64 {
     };
 }
 
+/// Returns an empty JSON array allocated into `allocator`'s arena.
 fn emptyArray(allocator: std.mem.Allocator) std.json.Value {
     return .{ .array = std.json.Array.init(allocator) };
 }
 
+/// Returns an empty JSON object with no allocator binding (uses ObjectMap.empty).
 fn emptyObject() std.json.Value {
     return .{ .object = std.json.ObjectMap.empty };
 }
 
+/// Returns the current unix timestamp in milliseconds, or 0 when no clock is
+/// wired (e.g. contexts that do not need time-stamped events).
 fn nowMs(clock: ?ports.ClockAndIds) i64 {
     const clock_port = clock orelse return 0;
     return (clock_port.now() catch return 0).unix_ms;
 }
 
+/// Converts a CommandTerm (exit/signal/unknown) into a JSON object with `kind`
+/// and optional `exit_code` for inclusion in evidence payloads.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = term.name() });
@@ -656,6 +709,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
+/// Frees each preimage entry and the slice itself. A no-op when `expected` is empty.
 fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const patch_sessions.ExpectedPreimage) void {
     if (expected.len == 0) return;
     for (expected) |item| {
@@ -666,6 +720,9 @@ fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const patch_s
     allocator.free(expected);
 }
 
+/// Returns a structured `dependency_error` result for user-facing failures such
+/// as a missing dependency name. These are expected failures with a resolution
+/// hint, not unexpected infrastructure errors.
 fn dependencyFailure(allocator: std.mem.Allocator, tool_name: []const u8, code: []const u8, resolution: []const u8, dependency: []const u8) !Result {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "dependency_error" });
@@ -677,6 +734,9 @@ fn dependencyFailure(allocator: std.mem.Allocator, tool_name: []const u8, code: 
     return support.structuredError(allocator, .{ .object = obj });
 }
 
+/// Converts an unexpected infrastructure error into a structured tool error
+/// result with phase, category, and resolution guidance. Returns OOM only on
+/// allocation failure; all other errors become opaque result payloads.
 fn dependencyError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) !Result {
     return support.toolErrorFromError(allocator, .{
         .tool = tool_name,

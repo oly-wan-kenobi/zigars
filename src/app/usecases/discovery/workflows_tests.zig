@@ -39,7 +39,7 @@ const StaticManifest = struct {
         return self.entries[index];
     }
 
-    /// Finds find data in the provided collection without taking ownership.
+    /// Looks up a manifest entry by name; returns null when not found.
     fn find(ptr: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const self: *StaticManifest = @ptrCast(@alignCast(ptr));
         for (self.entries) |entry| {
@@ -49,6 +49,7 @@ const StaticManifest = struct {
     }
 };
 
+/// Finds a check entry by name from the doctor checks array; returns null when absent.
 fn findCheck(checks: []const std.json.Value, name: []const u8) ?std.json.Value {
     for (checks) |check| {
         const candidate = check.object.get("name") orelse continue;

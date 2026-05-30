@@ -36,6 +36,8 @@ pub const ObservabilityError = ports.PortError || error{
 };
 
 /// Carries probe snapshot data across use case and port boundaries.
+/// Strings borrow from the originating `CachedBackendProbe`; the snapshot is
+/// only valid while the source context is alive.
 pub const ProbeSnapshot = struct {
     ok: bool,
     status: []const u8,
@@ -43,6 +45,8 @@ pub const ProbeSnapshot = struct {
 };
 
 /// Carries backend probe cache snapshot data across use case and port boundaries.
+/// A null field means that backend was never probed this session, which is
+/// distinct from a probed-but-failed entry (`ok = false`).
 pub const BackendProbeCacheSnapshot = struct {
     zig: ?ProbeSnapshot = null,
     zls: ?ProbeSnapshot = null,
@@ -69,6 +73,9 @@ pub const ArtifactMetrics = struct {
 };
 
 /// Carries base metrics data across use case and port boundaries.
+/// String fields (`workspace`, `zls_status`, `zls_last_failure`) borrow from
+/// the originating context and are not duplicated; the struct is only safe to
+/// use while the context outlives it.
 pub const BaseMetrics = struct {
     workspace: []const u8,
     command_calls: usize,
@@ -148,7 +155,9 @@ fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
     return out;
 }
 
-/// Projects the per-backend trust probe cache into report snapshots.
+/// Converts the full per-backend trust probe cache into the report snapshot
+/// shape, mapping unprobed entries to null so callers can distinguish them
+/// from probed-and-failed entries.
 fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
     return .{
         .zig = probeSnapshot(cache.zig),

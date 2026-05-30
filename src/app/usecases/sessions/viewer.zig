@@ -1,10 +1,14 @@
-//! Read-only shared session inspection use case.
+//! Read-only shared session inspection use case. Wraps the envelope view with
+//! result-shape metadata (lifecycle scope, confidence, limitations) so callers
+//! get a structured `zigars_session_view` payload with no mutation side effects.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const envelope = @import("envelope.zig");
 
 /// Request for a workspace-local persistent session view.
+/// `kind` and `id` must satisfy `envelope.validateToken` (non-empty, ≤ 128 bytes,
+/// alphanumeric/`_`/`-`/`.` only, not "." or "..").
 pub const ViewRequest = struct {
     kind: []const u8,
     id: []const u8,
@@ -15,6 +19,8 @@ pub const ViewRequest = struct {
 /// limitations. Inspect-only by contract; resume/close/cancel/cleanup and any
 /// source mutation stay owned by each workflow-specific tool. The inner session
 /// value is embedded directly, so the whole result is owned by `allocator`.
+/// Propagates InvalidSessionToken when `kind` or `id` fail token validation,
+/// and any workspace read error from the underlying envelope view.
 pub fn viewValue(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,

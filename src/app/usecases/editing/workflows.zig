@@ -394,7 +394,7 @@ fn readSnapshot(allocator: std.mem.Allocator, context: app_context.EditingContex
     return .{ .file = path, .bytes = result.bytes, .exists = true, .read_result = result };
 }
 
-/// Implements classify path workflow logic using caller-owned inputs.
+/// Thin wrapper that keeps callers from importing path_policy directly.
 fn classifyPath(path: []const u8) path_policy.PathPolicy {
     return path_policy.classify(path);
 }
@@ -455,13 +455,15 @@ fn organizeImportsText(allocator: std.mem.Allocator, source: []const u8) ![]cons
     return out.toOwnedSlice(allocator);
 }
 
-/// Reports whether top level import line matches the caller-provided data.
+/// Returns true only for non-indented lines that bind a name to an @import
+/// literal. Indented (scoped) imports and non-import declarations return false.
 fn isTopLevelImportLine(line: []const u8) bool {
     if (line.len == 0 or line[0] == ' ' or line[0] == '\t') return false;
     return (std.mem.startsWith(u8, line, "const ") or std.mem.startsWith(u8, line, "pub const ")) and std.mem.indexOf(u8, line, "@import(\"") != null;
 }
 
-/// Implements replace import text workflow logic using caller-owned inputs.
+/// Rewrites every `@import("old_import")` occurrence to `@import("new_import")`
+/// without touching import names that merely contain the needle as a substring.
 fn replaceImportText(allocator: std.mem.Allocator, source: []const u8, old_import: []const u8, new_import: []const u8) ![]const u8 {
     const needle = try std.fmt.allocPrint(allocator, "@import(\"{s}\")", .{old_import});
     defer allocator.free(needle);
@@ -470,7 +472,8 @@ fn replaceImportText(allocator: std.mem.Allocator, source: []const u8, old_impor
     return replaceAll(allocator, source, needle, replacement);
 }
 
-/// Implements replace all workflow logic using caller-owned inputs.
+/// Returns an allocator-owned copy of `source` with every non-overlapping
+/// occurrence of `needle` replaced by `replacement`.
 fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const u8, replacement: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     var index: usize = 0;
@@ -484,7 +487,9 @@ fn replaceAll(allocator: std.mem.Allocator, source: []const u8, needle: []const 
     return out.toOwnedSlice(allocator);
 }
 
-/// Finds declaration range data in the provided collection without taking ownership.
+/// Scans `source` line-by-line for a top-level declaration named `name` (const,
+/// var, or fn). Returns the byte range [start, end) covering the declaration
+/// through the line before the next top-level declaration, or null when absent.
 fn findDeclarationRange(source: []const u8, name: []const u8) ?ByteRange {
     var lines = std.mem.splitScalar(u8, source, '\n');
     var offset: usize = 0;
@@ -504,7 +509,8 @@ fn findDeclarationRange(source: []const u8, name: []const u8) ?ByteRange {
     return null;
 }
 
-/// Reports whether named decl line matches the caller-provided data.
+/// Returns true if `line` starts a top-level declaration whose identifier is
+/// exactly `name` (not merely a prefix of a longer name).
 fn isNamedDeclLine(line: []const u8, name: []const u8) bool {
     if (!isTopLevelDeclLine(line)) return false;
     inline for (.{ "const ", "var ", "fn " }) |needle| {
@@ -513,14 +519,16 @@ fn isNamedDeclLine(line: []const u8, name: []const u8) bool {
     return false;
 }
 
-/// Implements decl line contains name workflow logic using caller-owned inputs.
+/// Returns true if `line` contains `marker` immediately followed by `name` as a
+/// complete identifier (not a prefix of something longer).
 fn declLineContainsName(line: []const u8, marker: []const u8, name: []const u8) bool {
     const index = std.mem.indexOf(u8, line, marker) orelse return false;
     const rest = line[index + marker.len ..];
     return std.mem.startsWith(u8, rest, name) and (rest.len == name.len or !isIdentChar(rest[name.len]));
 }
 
-/// Reports whether top level decl line matches the caller-provided data.
+/// Returns true for non-indented lines that begin a recognized Zig top-level
+/// declaration keyword (pub/private const, var, fn, export fn, extern fn).
 fn isTopLevelDeclLine(line: []const u8) bool {
     if (line.len == 0 or line[0] == ' ' or line[0] == '\t') return false;
     return std.mem.startsWith(u8, line, "pub const ") or std.mem.startsWith(u8, line, "const ") or
@@ -529,12 +537,13 @@ fn isTopLevelDeclLine(line: []const u8) bool {
         std.mem.startsWith(u8, line, "export fn ") or std.mem.startsWith(u8, line, "extern fn ");
 }
 
-/// Reports whether ident char matches the caller-provided data.
+/// Returns true if `ch` can appear inside a Zig identifier (alphanumeric or underscore).
 fn isIdentChar(ch: u8) bool {
     return std.ascii.isAlphanumeric(ch) or ch == '_';
 }
 
-/// Implements line range workflow logic using caller-owned inputs.
+/// Returns the byte range covering lines `start_line` through `end_line`
+/// (1-based, inclusive). Returns null if either line number is out of range.
 fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange {
     var line: usize = 1;
     var offset: usize = 0;
@@ -555,7 +564,8 @@ fn lineRange(source: []const u8, start_line: usize, end_line: usize) ?ByteRange 
     return null;
 }
 
-/// Appends decl text data into caller-provided storage, propagating allocation failures.
+/// Returns a new allocator-owned string that is `target` with `decl_text`
+/// appended after a blank-line separator. Ensures the result ends with a newline.
 fn appendDeclText(allocator: std.mem.Allocator, target: []const u8, decl_text: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, target);
@@ -566,7 +576,9 @@ fn appendDeclText(allocator: std.mem.Allocator, target: []const u8, decl_text: [
     return out.toOwnedSlice(allocator);
 }
 
-/// Implements concat 3 workflow logic using caller-owned inputs.
+/// Returns an allocator-owned concatenation of `a`, `b`, and `c`.
+/// Used to splice a declaration out of a source file by joining the prefix,
+/// an empty middle gap, and the suffix in one allocation.
 fn concat3(allocator: std.mem.Allocator, a: []const u8, b: []const u8, c: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, a);
@@ -575,13 +587,13 @@ fn concat3(allocator: std.mem.Allocator, a: []const u8, b: []const u8, c: []cons
     return out.toOwnedSlice(allocator);
 }
 
-/// Extracts string list contains data from JSON input without taking ownership of borrowed values.
+/// Returns true if `values` contains a string equal to `needle`.
 fn stringListContains(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| if (std.mem.eql(u8, value, needle)) return true;
     return false;
 }
 
-/// Extracts string less than data from JSON input without taking ownership of borrowed values.
+/// Comparator for std.mem.sort: lexicographic order over import line strings.
 fn stringLessThan(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
@@ -593,7 +605,8 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     return .{ .array = array };
 }
 
-/// Serializes next tool fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds a `{tool, reason}` guidance object telling callers which tool to
+/// invoke next after a refactor step completes.
 fn nextToolValue(allocator: std.mem.Allocator, tool: []const u8, reason: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "tool", try ownedString(allocator, tool));
@@ -625,12 +638,14 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
     return .{ .object = obj };
 }
 
-/// Serializes hash hex fields into an allocator-owned JSON value; allocation failures propagate.
+/// Returns a 16-hex-char Wyhash digest of `bytes` as a JSON string value.
+/// Used for change-detection identity in format/patch results; not cryptographic.
 fn hashHexValue(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Value {
     return .{ .string = try std.fmt.allocPrint(allocator, "{x:0>16}", .{std.hash.Wyhash.hash(0, bytes)}) };
 }
 
-/// Copies the provided string into allocator-owned storage.
+/// Dupes `text` into the allocator and wraps it as a JSON string value.
+/// The JSON object that holds this value takes ownership of the allocation.
 fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, text) };
 }

@@ -1,4 +1,7 @@
 //! Shared persistent session envelope and cache-local JSONL event store.
+//! Provides token validation, path construction, JSON envelope building, and
+//! bounded append+view helpers. The workspace store port enforces the sandbox;
+//! every path written here must also pass the store's sandbox check.
 const std = @import("std");
 
 const ports = @import("../../ports.zig");
@@ -13,8 +16,9 @@ pub const max_session_bytes: usize = 512 * 1024;
 /// Bounded maximum JSONL records returned by a session view.
 pub const max_records: usize = 128;
 
-/// Shared envelope creation inputs. Arrays are JSON values so individual
-/// workflow kinds can own their domain-specific item shapes.
+/// Shared envelope creation inputs. Optional fields default to empty arrays or
+/// objects in the serialized output so the schema stays stable across workflow
+/// kinds that do not use every section.
 pub const EnvelopeInput = struct {
     id: []const u8,
     kind: []const u8,
@@ -55,6 +59,8 @@ pub fn sessionPath(allocator: std.mem.Allocator, kind: []const u8, id: []const u
 }
 
 /// Builds a JSON-native session envelope with the shared required fields.
+/// Validates `kind` and `id` tokens before building; allocation failures and
+/// invalid tokens propagate. The returned value is owned by `allocator`.
 pub fn envelopeValue(allocator: std.mem.Allocator, input: EnvelopeInput) !std.json.Value {
     try validateToken(input.kind);
     try validateToken(input.id);
@@ -73,7 +79,8 @@ pub fn envelopeValue(allocator: std.mem.Allocator, input: EnvelopeInput) !std.js
     return .{ .object = obj };
 }
 
-/// Builds a compact session event object.
+/// Builds a compact `{event, message, at}` session event object.
+/// `at_ms` is a Unix epoch millisecond timestamp. Owned by `allocator`.
 pub fn eventValue(allocator: std.mem.Allocator, event: []const u8, message: []const u8, at_ms: i64) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "event", .{ .string = event });
@@ -82,9 +89,11 @@ pub fn eventValue(allocator: std.mem.Allocator, event: []const u8, message: []co
     return .{ .object = obj };
 }
 
-/// Appends one JSON snapshot line to a workspace-local session JSONL file.
-/// The write is implemented as read+rewrite because the workspace store port
-/// intentionally exposes whole-file writes only.
+/// Appends one JSON snapshot line to a workspace-local session JSONL file and
+/// returns the workspace-relative session path (owned by `allocator`; the caller
+/// must free it). The write is implemented as read+rewrite because the workspace
+/// store port intentionally exposes whole-file writes only. Fails with
+/// DocumentTooLarge when the result would exceed `max_session_bytes`.
 pub fn appendSnapshot(
     allocator: std.mem.Allocator,
     store: ports.WorkspaceStore,
@@ -211,12 +220,15 @@ fn versionOf(value: std.json.Value) ?i64 {
     };
 }
 
-/// Allocator-backed empty JSON array, used as the default for optional sections.
+/// Returns a freshly allocated empty JSON array for use in envelope optional
+/// sections. The array is backed by `allocator` and transfered into the
+/// containing object map, which owns it from that point.
 fn emptyArray(allocator: std.mem.Allocator) std.json.Value {
     return .{ .array = std.json.Array.init(allocator) };
 }
 
-/// Empty JSON object used as the default for the optional `validation` section.
+/// Returns an empty JSON object literal (no allocator needed; the map is
+/// zero-length and owns no heap memory).
 fn emptyObject() std.json.Value {
     return .{ .object = std.json.ObjectMap.empty };
 }
