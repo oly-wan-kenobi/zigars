@@ -41,6 +41,7 @@ pub const fakeDiffFolded = fake_backends.fakeDiffFolded;
 
 /// Runs all artifact, source hygiene, release-doc, and MCP contract gates.
 pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (args.len != 0) return error.InvalidArguments;
     const generated = [_][]const u8{ "zig-out", ".zig-cache", "zig-pkg", ".zigars-cache", "coverage", "dist" };
     var ok = true;
@@ -100,6 +101,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
 
 /// Reports whether git tracks `path`.
 fn isGitTracked(io: Io, path: []const u8) !bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "ls-files", "--error-unmatch", path },
         .stdout = .ignore,
@@ -114,6 +116,7 @@ fn isGitTracked(io: Io, path: []const u8) !bool {
 
 /// Reports whether git ignore rules cover `path`.
 fn isGitIgnored(io: Io, path: []const u8) !bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "check-ignore", "-q", "--", path },
         .stdout = .ignore,
@@ -138,6 +141,7 @@ fn pathExists(io: Io, path: []const u8) !bool {
 
 /// Verifies required permissions blocks in release-related workflows.
 fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (workflow_permission_rules) |rule| {
         const bytes = readFileAlloc(allocator, io, rule.path, 1024 * 1024) catch |err| {
@@ -160,6 +164,7 @@ fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
 /// headroom.  Both an exceeded limit and insufficient headroom are failures so
 /// files must be split before they approach the cap, not after.
 fn checkLineBudgets(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (line_budgets) |budget| {
         const bytes = readFileAlloc(allocator, io, budget.path, 4 * 1024 * 1024) catch |err| {
@@ -193,6 +198,7 @@ fn minLineBudgetHeadroom(max_lines: usize) usize {
 
 /// Checks repository files for high-risk forbidden text fragments.
 fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (forbidden_tokens) |rule| {
         const bytes = readFileAlloc(allocator, io, rule.path, 8 * 1024 * 1024) catch |err| {
@@ -219,6 +225,7 @@ fn checkCodeHygiene(allocator: Allocator, io: Io) !bool {
 
 /// Checks a named hygiene token table against its configured files.
 fn checkHygieneTokensAbsent(allocator: Allocator, io: Io, check_name: []const u8, rules: []const HygieneToken) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (rules) |rule| {
         const bytes = readFileAlloc(allocator, io, rule.path, 8 * 1024 * 1024) catch |err| {
@@ -237,6 +244,7 @@ fn checkHygieneTokensAbsent(allocator: Allocator, io: Io, check_name: []const u8
 
 /// Verifies source files do not bypass structured tool-error construction.
 fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (tool_error_contract_paths) |path| {
         const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
@@ -257,6 +265,7 @@ fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
 
 /// Verifies resource handlers use structured resource-error construction.
 fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (resource_error_contract_paths) |path| {
         const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
@@ -277,6 +286,7 @@ fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
 
 /// Verifies CLI-facing paths use centralized error reporting helpers.
 fn checkCliErrorContract(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (cli_error_contract_paths) |path| {
         const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
@@ -311,6 +321,7 @@ fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
 /// parser-backed tools must expose parse-status fields; release-gating tools
 /// must be compiler-, ZLint-, or zwanzig-backed.
 fn checkStaticAnalysisContracts(io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (zigars.manifest.entries) |entry| {
         if (entry.group != .static_analysis and entry.group != .zwanzig) continue;
@@ -371,6 +382,7 @@ fn checkStaticAnalysisContracts(io: Io) !bool {
 /// non-empty `prefer` string listing only known tool ids.  Unknown ids indicate
 /// the catalog and the manifest have drifted.
 fn checkCatalogCommonIntentPreferences(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var catalog = zigars.manifest.tool_catalog_render.parsed(allocator) catch |err| {
         try stderrPrint(io, "tool catalog common-intent check could not parse catalog: {s}\n", .{@errorName(err)});
         return false;
@@ -447,6 +459,7 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
 
 /// Recursively rejects tracked pure-Zig roots that contain files with `extension`.
 pub fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, extension: []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var dir = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return true,
         else => return err,
