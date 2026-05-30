@@ -93,6 +93,7 @@ pub const CoverageFileStats = struct {
 /// The caller owns the returned value and must call `stats.deinit(allocator)`.
 /// Returns `error.InvalidCoverageReport` for structurally malformed XML.
 pub fn parseCobertura(allocator: Allocator, xml: []const u8) !CoverageStats {
+    // Normalize input here so downstream paths can rely on validated shape.
     var stats: CoverageStats = .{};
     var files: std.ArrayList(CoverageFileStats) = .empty;
     var files_owned = true;
@@ -178,6 +179,7 @@ pub fn parseCobertura(allocator: Allocator, xml: []const u8) !CoverageStats {
 /// ls-files src tools`. Any tracked file absent from the report is added to
 /// `stats.missing_files`. Callers must ensure `stats` lives until `deinit`.
 pub fn addMissingTrackedFiles(allocator: Allocator, io: Io, stats: *CoverageStats) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const tracked = try trackedCoverageFiles(allocator, io);
     defer {
         for (tracked) |path| allocator.free(path);
@@ -198,6 +200,7 @@ pub fn addMissingTrackedFiles(allocator: Allocator, io: Io, stats: *CoverageStat
 
 /// Returns tracked source files that should appear in coverage accounting.
 fn trackedCoverageFiles(allocator: Allocator, io: Io) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = try std.process.run(allocator, io, .{ .argv = &.{ "git", "ls-files", "src", "tools" } });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
@@ -228,6 +231,7 @@ fn coverageFileIndex(files: []const CoverageFileStats, path: []const u8) ?usize 
 /// Converts kcov filenames to repository-relative `src/` or `tools/` paths,
 /// returning null for paths outside the measured source scopes.
 fn normalizeCoveragePath(allocator: Allocator, filename: []const u8) !?[]u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var normalized = try allocator.dupe(u8, filename);
     var normalized_owned = true;
     defer if (normalized_owned) allocator.free(normalized);
@@ -264,6 +268,7 @@ fn isTrackedCoverageFile(path: []const u8) bool {
 /// Excludes generated, cache, distribution, and intentionally skipped files
 /// from missing-file coverage checks.
 fn isGeneratedCoveragePath(path: []const u8) bool {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     if (std.mem.eql(u8, path, "tools/fuzz_test_runner.zig")) return true;
     if (std.mem.eql(u8, path, "coverage") or std.mem.startsWith(u8, path, "coverage/")) return true;
     var parts = std.mem.splitScalar(u8, path, '/');
@@ -302,6 +307,7 @@ fn isPathSep(byte: u8) bool {
 /// Extracts an XML attribute value from a single tag, avoiding substring
 /// matches and accepting either quote style.
 fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, tag, pos, name)) |idx| {
         const before_ok = idx == 0 or std.ascii.isWhitespace(tag[idx - 1]) or tag[idx - 1] == '<';
