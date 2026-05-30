@@ -427,6 +427,7 @@ test "core adapter renders command-backed compile index and explain failures" {
 /// Returns a CoreCommandContext wired to the given fake ports.
 /// Callers own the fake port objects and must call deinit/verify after use.
 fn testCoreContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
