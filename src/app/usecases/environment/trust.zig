@@ -41,6 +41,7 @@ pub const ManifestInput = struct {
 
 /// Executes the zigars trust report workflow and returns an allocator-owned structured result.
 pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const include_clean_tree = argBool(args, "include_clean_tree", false);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -71,6 +72,7 @@ pub fn zigarsTrustReport(a: *App, allocator: std.mem.Allocator, args: ?std.json.
 
 /// Builds a trust manifest from the trust tool context.
 pub fn trustManifestValueFromTrustContext(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return trustManifestValue(allocator, .{
         .workspace = a.context.workspace,
         .tool_paths = a.context.tool_paths,
@@ -82,6 +84,7 @@ pub fn trustManifestValueFromTrustContext(allocator: std.mem.Allocator, a: *App)
 
 /// Builds a trust manifest from the runtime resource context.
 pub fn trustManifestValueFromRuntimeContext(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return trustManifestValue(allocator, .{
         .workspace = context.workspace,
         .tool_paths = context.tool_paths,
@@ -113,6 +116,7 @@ pub fn zigarsCleanTreeGate(a: *App, allocator: std.mem.Allocator, args: ?std.jso
 
 /// Serializes command provenance fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn commandProvenanceValue(allocator: std.mem.Allocator, a: *App, tool_name: ?[]const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (tool_name) |name| {
         const entry = a.context.tool_manifest.find(name) orelse return error.UnknownTool;
         return provenanceEntryValue(allocator, entry);
@@ -141,6 +145,7 @@ pub fn commandProvenanceValue(allocator: std.mem.Allocator, a: *App, tool_name: 
 
 /// Serializes risk audit fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn riskAuditValue(allocator: std.mem.Allocator, a: *App, include_none: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var counts = std.json.ObjectMap.empty;
     var counts_owned = true;
     defer if (counts_owned) counts.deinit(allocator);
@@ -212,6 +217,7 @@ pub fn cleanTreeGateValue(a: *App, allocator: std.mem.Allocator, timeout_ms: i64
 
 /// Serializes workspace evidence fields into an allocator-owned JSON value; allocation failures propagate.
 fn workspaceEvidenceValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -224,6 +230,7 @@ fn workspaceEvidenceValue(allocator: std.mem.Allocator, a: *App) !std.json.Value
 
 /// Serializes path policy fields into an allocator-owned JSON value; allocation failures propagate.
 fn pathPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -239,6 +246,7 @@ fn pathPolicyValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes the connection-time trust manifest.
 fn trustManifestValue(allocator: std.mem.Allocator, input: ManifestInput) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -267,6 +275,7 @@ fn trustManifestValue(allocator: std.mem.Allocator, input: ManifestInput) !std.j
 
 /// Serializes workspace roots for manifest consumers.
 fn workspaceManifestValue(allocator: std.mem.Allocator, workspace: app_context.WorkspaceView) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -280,6 +289,7 @@ fn workspaceManifestValue(allocator: std.mem.Allocator, workspace: app_context.W
 
 /// Serializes source-write policy fields shared by report and manifest.
 fn sourceWritePolicyValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -294,6 +304,7 @@ fn sourceWritePolicyValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes subprocess classes without claiming stronger sandboxing than exists.
 fn subprocessClassesValue(allocator: std.mem.Allocator, paths: app_context.ToolPaths) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var classes = std.json.Array.init(allocator);
     var classes_owned = true;
     defer if (classes_owned) classes.deinit();
@@ -309,6 +320,7 @@ fn subprocessClassesValue(allocator: std.mem.Allocator, paths: app_context.ToolP
 
 /// Serializes one subprocess class.
 fn subprocessClassValue(allocator: std.mem.Allocator, name: []const u8, purpose: []const u8, configured_path: []const u8, optional: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -323,6 +335,7 @@ fn subprocessClassValue(allocator: std.mem.Allocator, name: []const u8, purpose:
 
 /// Serializes default process/resource/HTTP body limits.
 fn outputBodyLimitsValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -337,6 +350,7 @@ fn outputBodyLimitsValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes local-only HTTP posture.
 fn httpPostureValue(allocator: std.mem.Allocator, workspace: app_context.WorkspaceView) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -351,6 +365,7 @@ fn httpPostureValue(allocator: std.mem.Allocator, workspace: app_context.Workspa
 
 /// Serializes backend identities from app-context views.
 fn backendIdentitiesFromViewsValue(allocator: std.mem.Allocator, paths: app_context.ToolPaths, probes: app_context.TrustProbeCache) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -366,6 +381,7 @@ fn backendIdentitiesFromViewsValue(allocator: std.mem.Allocator, paths: app_cont
 
 /// Serializes audit-log availability and privacy posture.
 fn auditLogStatusValue(allocator: std.mem.Allocator, audit_log: app_context.AuditLogView) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -382,6 +398,7 @@ fn auditLogStatusValue(allocator: std.mem.Allocator, audit_log: app_context.Audi
 
 /// Serializes release/checksum/attestation posture without claiming attestation verification.
 fn releaseIntegrityValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -395,6 +412,7 @@ fn releaseIntegrityValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes timeout policy visible at connection time.
 fn timeoutPolicyValue(allocator: std.mem.Allocator, timeouts: app_context.Timeouts) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -406,6 +424,7 @@ fn timeoutPolicyValue(allocator: std.mem.Allocator, timeouts: app_context.Timeou
 
 /// Serializes backend identities fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendIdentitiesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -444,6 +463,7 @@ fn backendIdentityValue(allocator: std.mem.Allocator, configured_path: []const u
 
 /// Serializes dependency hashes fields into an allocator-owned JSON value; allocation failures propagate.
 fn dependencyHashesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const zon = a.workspace.readFileAlloc(a.io, "build.zig.zon", 1024 * 1024) catch |err| {
         var obj = std.json.ObjectMap.empty;
         var obj_owned = true;
@@ -496,6 +516,7 @@ fn dependencyHashesValue(allocator: std.mem.Allocator, a: *App) !std.json.Value 
 
 /// Serializes provenance entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -514,6 +535,7 @@ fn provenanceEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestE
 
 /// Serializes risk entry fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -528,6 +550,7 @@ fn riskEntryValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) 
 
 /// Serializes plan fields into an allocator-owned JSON value; allocation failures propagate.
 fn planValue(allocator: std.mem.Allocator, plan_kind: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -542,6 +565,7 @@ fn planValue(allocator: std.mem.Allocator, plan_kind: []const u8) !std.json.Valu
 
 /// Serializes risk fields into an allocator-owned JSON value; allocation failures propagate.
 fn riskValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -561,6 +585,7 @@ fn riskValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.
 
 /// Serializes provenance limitations fields into an allocator-owned JSON value; allocation failures propagate.
 fn provenanceLimitationsValue(allocator: std.mem.Allocator, entry: ports.ToolManifestEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.json.Array.init(allocator);
     var out_owned = true;
     defer if (out_owned) out.deinit();
@@ -583,6 +608,7 @@ fn provenanceLimitationsValue(allocator: std.mem.Allocator, entry: ports.ToolMan
 
 /// Serializes clean tree backend error fields into an allocator-owned JSON value; allocation failures propagate.
 fn cleanTreeBackendErrorValue(allocator: std.mem.Allocator, workspace_root: []const u8, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -600,6 +626,7 @@ fn cleanTreeBackendErrorValue(allocator: std.mem.Allocator, workspace_root: []co
 
 /// Serializes clean tree not run fields into an allocator-owned JSON value; allocation failures propagate.
 fn cleanTreeNotRunValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -619,6 +646,7 @@ fn incrementCount(counts: *std.json.ObjectMap, level: []const u8) void {
 
 /// Implements domain risk workflow logic using caller-owned inputs.
 fn domainRisk(risk: ports.ToolRisk) trust_domain.ToolRisk {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .writes_source = risk.writes_source,
         .writes_artifacts = risk.writes_artifacts,
@@ -696,6 +724,7 @@ const TestPorts = struct {
 
 /// Builds a test app fixture with the ports needed by this workflow.
 fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, test_ports: *TestPorts) App {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return App.init(.{
         .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{},
@@ -708,6 +737,7 @@ fn testApp(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, te
 
 /// Builds a test app fixture with the ports needed by this workflow.
 fn testAppWithPorts(allocator: std.mem.Allocator, manifest: ports.ToolManifestCatalog, command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, probe_cache: app_context.TrustProbeCache) App {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return App.init(.{
         .workspace = .{ .root = "/tmp/work", .cache_root = "/tmp/work/.zigars-cache", .transport = "stdio" },
         .tool_paths = .{
