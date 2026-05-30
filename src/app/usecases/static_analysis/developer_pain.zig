@@ -82,6 +82,7 @@ const io_mappings = [_]IoMapping{
 
 /// Finds likely Zig 0.15 -> 0.16 IO migration sites without editing source.
 pub fn ioMigrationScanValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceScanRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var sources = try loadSources(allocator, context, request, "static_analysis.io_migration_scan");
     defer sources.deinit(allocator);
 
@@ -114,6 +115,7 @@ pub fn ioMigrationScanValue(allocator: std.mem.Allocator, context: app_context.S
 
 /// Parses GPA leak stderr and groups repeated allocation traces.
 pub fn leakTriageValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TextEvidenceRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const evidence = try loadTextEvidence(allocator, context, request, "static_analysis.leak_triage");
     defer allocator.free(evidence.text);
 
@@ -140,6 +142,7 @@ pub fn leakTriageValue(allocator: std.mem.Allocator, context: app_context.Static
 
 /// Diagnoses likely comptime failures from source snippets and compiler text.
 pub fn comptimeDiagnoseValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ComptimeDiagnoseRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source_text: TextEvidence = if (request.text != null or request.path != null)
         try loadTextEvidence(allocator, context, .{ .text = request.text, .path = request.path, .limit = request.limit }, "static_analysis.comptime_diagnose")
     else
@@ -171,6 +174,7 @@ pub fn comptimeDiagnoseValue(allocator: std.mem.Allocator, context: app_context.
 
 /// Catalogs layout-sensitive declarations for review and optional ABI probing.
 pub fn memoryLayoutValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceScanRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var sources = try loadSources(allocator, context, request, "static_analysis.memory_layout");
     defer sources.deinit(allocator);
 
@@ -210,6 +214,7 @@ pub fn memoryLayoutValue(allocator: std.mem.Allocator, context: app_context.Stat
 
 /// Catalogs unsafe or boundary-sensitive Zig operations for review.
 pub fn unsafeOperationsAuditValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceScanRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var sources = try loadSources(allocator, context, request, "static_analysis.unsafe_operations_audit");
     defer sources.deinit(allocator);
 
@@ -238,6 +243,7 @@ pub fn unsafeOperationsAuditValue(allocator: std.mem.Allocator, context: app_con
 
 /// Produces a bounded ABI layout probe plan without executing compiler probes.
 pub fn abiLayoutDiffValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceScanRequest) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var sources = try loadSources(allocator, context, request, "static_analysis.abi_layout_diff");
     defer sources.deinit(allocator);
 
@@ -280,6 +286,7 @@ const TextEvidence = struct {
 };
 
 fn loadTextEvidence(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TextEvidenceRequest, provenance: []const u8) ports.PortError!TextEvidence {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (request.text) |text| return .{ .text = try allocator.dupe(u8, text), .source = "inline_text" };
     const path = request.path orelse return .{ .text = try allocator.dupe(u8, ""), .source = "empty" };
     const read = try context.workspace_store.read(allocator, .{
@@ -292,6 +299,7 @@ fn loadTextEvidence(allocator: std.mem.Allocator, context: app_context.StaticAna
 }
 
 fn loadSources(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceScanRequest, provenance: []const u8) ports.PortError!SourceSet {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (request.path) |path| {
         if (std.mem.endsWith(u8, path, ".zig")) {
             const read = try context.workspace_store.read(allocator, .{
@@ -348,6 +356,7 @@ fn loadSources(allocator: std.mem.Allocator, context: app_context.StaticAnalysis
 }
 
 fn appendIoFindings(allocator: std.mem.Allocator, findings: *std.json.Array, source: SourceRecord, limit: usize, exact_count: *usize, likely_count: *usize, manual_count: *usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, source.bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -372,6 +381,7 @@ fn appendIoFindings(allocator: std.mem.Allocator, findings: *std.json.Array, sou
 }
 
 fn appendLeakGroups(allocator: std.mem.Allocator, groups: *std.json.Array, text: []const u8, limit: usize, leak_count: *usize, malformed_count: *usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var current_key: ?[]const u8 = null;
     var current_count: usize = 0;
     var current_frames = std.json.Array.init(allocator);
@@ -398,6 +408,7 @@ fn appendLeakGroups(allocator: std.mem.Allocator, groups: *std.json.Array, text:
 }
 
 fn flushLeakGroup(allocator: std.mem.Allocator, groups: *std.json.Array, key: []const u8, count: usize, frames: std.json.Array) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     for (groups.items) |*existing| {
         if (existing.* != .object) continue;
         const existing_key = existing.object.get("allocation_site") orelse continue;
@@ -415,6 +426,7 @@ fn flushLeakGroup(allocator: std.mem.Allocator, groups: *std.json.Array, key: []
 }
 
 fn appendComptimeDiagnosticFindings(allocator: std.mem.Allocator, findings: *std.json.Array, diagnostic: []const u8, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, diagnostic, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -431,6 +443,7 @@ fn appendComptimeDiagnosticFindings(allocator: std.mem.Allocator, findings: *std
 }
 
 fn appendComptimeSourceFindings(allocator: std.mem.Allocator, findings: *std.json.Array, text: []const u8, source: []const u8, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, text, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -449,6 +462,7 @@ fn appendComptimeSourceFindings(allocator: std.mem.Allocator, findings: *std.jso
 }
 
 fn appendMemoryLayoutCandidates(allocator: std.mem.Allocator, candidates: *std.json.Array, source: SourceRecord, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, source.bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -468,6 +482,7 @@ fn appendMemoryLayoutCandidates(allocator: std.mem.Allocator, candidates: *std.j
 }
 
 fn appendUnsafeOperations(allocator: std.mem.Allocator, operations: *std.json.Array, source: SourceRecord, limit: usize, high: *usize, medium: *usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, source.bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -489,6 +504,7 @@ fn appendUnsafeOperations(allocator: std.mem.Allocator, operations: *std.json.Ar
 }
 
 fn appendAbiProbePlans(allocator: std.mem.Allocator, probes: *std.json.Array, source: SourceRecord, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, source.bytes, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -509,6 +525,7 @@ fn appendAbiProbePlans(allocator: std.mem.Allocator, probes: *std.json.Array, so
 }
 
 fn collectLayoutProbeDeclarations(allocator: std.mem.Allocator, sources: SourceSet, limit: usize, abi_only: bool) !layout_probes.DeclarationSet {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var declarations: std.ArrayList(layout_probes.LayoutDeclaration) = .empty;
     errdefer {
         for (declarations.items) |declaration| declaration.deinit(allocator);
@@ -522,6 +539,7 @@ fn collectLayoutProbeDeclarations(allocator: std.mem.Allocator, sources: SourceS
 }
 
 fn attachCompilerEvidence(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, evidence: std.json.Value, abi_diff: bool) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (evidence == .object) {
         if (evidence.object.get("backend_status")) |status| if (status == .string) {
             try obj.put(allocator, if (abi_diff) "backend_status" else "probe_status", .{ .string = status.string });
@@ -544,6 +562,7 @@ fn normalizedTimeout(timeout_ms: i64) u64 {
 }
 
 fn sanitizeCodeLine(allocator: std.mem.Allocator, line: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = try allocator.alloc(u8, line.len);
     var in_string = false;
     var escaped = false;
@@ -587,6 +606,7 @@ fn comptimeSourceCause(line: []const u8) ?[]const u8 {
 }
 
 fn runtimeTaintedOperandsValue(allocator: std.mem.Allocator, source: []const u8, diagnostic: ?[]const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     if (diagnostic) |text| {
         if (std.mem.indexOf(u8, text, "runtime") != null) try array.append(.{ .string = "compiler diagnostic mentions runtime dependency" });
@@ -602,6 +622,7 @@ fn runtimeTaintedOperandsValue(allocator: std.mem.Allocator, source: []const u8,
 }
 
 fn layoutKind(line: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.indexOf(u8, line, "extern struct") != null) return "extern_struct";
     if (std.mem.indexOf(u8, line, "packed struct") != null) return "packed_struct";
     if (std.mem.indexOf(u8, line, "extern union") != null) return "extern_union";
@@ -620,6 +641,7 @@ fn layoutSensitivity(kind: []const u8) []const u8 {
 }
 
 fn unsafeKind(line: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.indexOf(u8, line, "@setRuntimeSafety(false)") != null) return "runtime_safety_disabled";
     if (std.mem.indexOf(u8, line, "catch unreachable") != null) return "catch_unreachable";
     if (std.mem.indexOf(u8, line, "unreachable") != null) return "unreachable";
