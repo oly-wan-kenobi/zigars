@@ -106,6 +106,7 @@ fn assertSandboxEscapeRejected(
     args_json: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = try smoke.callHttpTool(allocator, io, port, id, tool_name, args_json);
     defer result.deinit(allocator);
     try smoke.expectToolIsError(io, result, true, tool_name);
