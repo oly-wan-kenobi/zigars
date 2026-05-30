@@ -26,6 +26,7 @@ pub fn checkNoPatchContract(allocator: Allocator, io: Io) !bool {
 
 /// Verifies protocol capabilities that are advertised to MCP clients.
 pub fn checkAdvertisedCapabilityContract(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     ok = (try checkPresent(allocator, io, "MCP advertised-capability contract", "src/bootstrap/runtime.zig", &.{ "enableCompletions()", "enableResourceSubscriptions()", "enableTasks(&runtime.runtime_ux)" })) and ok;
     ok = (try checkPresent(allocator, io, "MCP advertised-capability contract", "src/adapters/mcp/server.zig", &.{ "capabilities.tasks", "completion/complete", "tasks/list", "resource_subscriptions.handleSubscribe", "pagination.fromParams" })) and ok;
@@ -59,6 +60,7 @@ pub fn checkPublicSurfaceContract(allocator: Allocator, io: Io) !bool {
 /// `label` as context; `false` is returned rather than propagating an error
 /// so the caller can accumulate multiple failures.
 fn checkPresent(allocator: Allocator, io: Io, label: []const u8, path: []const u8, tokens: []const []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const bytes = readFileAlloc(allocator, io, path, 4 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "{s} could not read {s}: {s}\n", .{ label, path, @errorName(err) });
         return false;
@@ -77,6 +79,7 @@ fn checkPresent(allocator: Allocator, io: Io, label: []const u8, path: []const u
 /// Returns `true` iff none of `tokens` appear in the file at `path`.
 /// Forbidden tokens and file-read errors are reported to stderr with `label`.
 fn checkAbsent(allocator: Allocator, io: Io, label: []const u8, path: []const u8, tokens: []const []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const bytes = readFileAlloc(allocator, io, path, 4 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "{s} could not read {s}: {s}\n", .{ label, path, @errorName(err) });
         return false;
