@@ -5,6 +5,7 @@ const std = @import("std");
 
 /// Reads a string argument when it is present with the expected type.
 pub fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return null) {
         .object => |o| o,
         else => return null,
@@ -17,6 +18,7 @@ pub fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
 
 /// Reads a bool argument when it is present with the expected type.
 pub fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return default) {
         .object => |o| o,
         else => return default,
@@ -29,6 +31,7 @@ pub fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
 
 /// Reads an int argument when it is present with the expected type.
 pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return default) {
         .object => |o| o,
         else => return default,
