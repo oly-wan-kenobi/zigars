@@ -26,6 +26,7 @@ pub const ZlsProcess = struct {
     /// Spawns ZLS with piped stdin/stdout/stderr. Kills any existing child first.
     /// After a successful spawn the pipes are owned by this ZlsProcess until `detachPipes`.
     pub fn spawn(self: *ZlsProcess) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.child != null) {
             self.kill();
         }
@@ -86,6 +87,7 @@ pub const ZlsProcess = struct {
     /// Returns false (without error) when max_restarts is already reached, or when the
     /// spawn attempt fails — in the latter case restart_count is still incremented.
     pub fn restart(self: *ZlsProcess) !bool {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.restart_count >= self.max_restarts) {
             return false;
         }
