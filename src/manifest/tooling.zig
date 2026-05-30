@@ -80,6 +80,7 @@ pub fn hintFor(spec: SchemaSpec, field: SchemaField) FieldHint {
 /// Each branch covers a conventional field name used across multiple tool definitions.
 /// The final fallback emits a minimal hint so catalog rendering never receives null.
 fn defaultHintFor(field: SchemaField) FieldHint {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const name = field[0];
     if (std.mem.eql(u8, name, "file")) return .{ .description = "Workspace-relative source file path.", .path_kind = "input_file" };
     if (std.mem.eql(u8, name, "path")) return .{ .description = "Workspace-relative path.", .path_kind = "input_path" };
