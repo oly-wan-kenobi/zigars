@@ -123,6 +123,7 @@ pub const State = struct {
 
     /// Starts a job, assigns a monotonic id, and emits a started event.
     pub fn startJob(self: *State, label: []const u8, command_text: []const u8, timeout_ms: i64) *JobRecord {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const slot = self.reserveJobSlot();
         const job_number = self.next_job_number;
         self.next_job_number += 1;
@@ -143,6 +144,7 @@ pub const State = struct {
 
     /// Finalizes a job and records bounded stdout/stderr tails as events.
     pub fn finishJob(self: *State, job: *JobRecord, status: JobStatus, ok: bool, duration_ms: i64, term: []const u8, exit_code: ?i64, stdout_tail: []const u8, stderr_tail: []const u8, stdout_truncated: bool, stderr_truncated: bool) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.sequence += 1;
         job.status = status;
         job.ok = ok;
@@ -161,6 +163,7 @@ pub const State = struct {
 
     /// Marks a job failed from an infra error name.
     pub fn failJob(self: *State, job: *JobRecord, err_name: []const u8, duration_ms: i64) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.sequence += 1;
         job.status = .failed;
         job.ok = false;
@@ -173,6 +176,7 @@ pub const State = struct {
 
     /// Records cancellation intent and transitions non-terminal jobs to cancelled.
     pub fn cancelJob(self: *State, id: []const u8, reason: []const u8) ?*JobRecord {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const job = self.jobById(id) orelse return null;
         job.cancellation_requested = true;
         job.cancellation_reason.set(reason);
@@ -217,6 +221,7 @@ pub const State = struct {
 
     /// Marks a subscription inactive by id, or by uri when provided.
     pub fn unsubscribe(self: *State, id: []const u8, uri: ?[]const u8) ?*Subscription {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         for (self.subscriptions[0..self.subscription_count]) |*sub| {
             if (std.mem.eql(u8, sub.id.slice(), id) or (uri != null and std.mem.eql(u8, sub.uri.slice(), uri.?))) {
                 sub.active = false;
@@ -250,6 +255,7 @@ pub const State = struct {
 
     /// Selects a root by id or path; preview calls return a match without mutation.
     pub fn selectRoot(self: *State, root_id: []const u8, apply: bool) ?*WorkspaceRoot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         for (self.roots[0..self.root_count], 0..) |*root, index| {
             if (std.mem.eql(u8, root.id.slice(), root_id) or std.mem.eql(u8, root.path.slice(), root_id)) {
                 if (apply) {
@@ -266,6 +272,7 @@ pub const State = struct {
 
     /// Appends an event to the bounded event ring.
     pub fn appendEvent(self: *State, job_id: []const u8, event: []const u8, stream: []const u8, message: []const u8, text: []const u8, elapsed_ms: i64) void {
+        // Append in deterministic order so completion and snapshot output remain stable.
         const sequence = self.event_count + 1;
         const index = ringIndex(sequence, max_events);
         self.events[index] = .{};
