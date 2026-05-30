@@ -147,6 +147,7 @@ pub fn zigPkgReadme(_: *App, allocator: std.mem.Allocator, args: ?std.json.Value
 
 /// Builds, persists, inspects, or resumes a dependency migration session envelope.
 pub fn zigDependencyMigrate(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -243,6 +244,7 @@ const MutationExtra = struct {
 /// zon edit for `op`, and hands the before/after pair to `mutationResult` for
 /// apply-gated previewing. `.sync` is unreachable here (it has its own fetch path).
 fn directMutation(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, op: Operation) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var input = readManifest(a, allocator, args, op.toolName()) catch |err| return dependencyError(allocator, op.toolName(), "read_manifest", err);
     defer input.deinit(allocator);
     const dependency = support.argString(args, "dependency") orelse support.argString(args, "name") orelse return support.missingArgumentResult(allocator, op.toolName(), "dependency", "dependency name");
@@ -355,6 +357,7 @@ fn readManifest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, pr
 /// `expected_preimage_sha256`/`_bytes` so the apply is refused unless the file
 /// on disk still matches what the caller reviewed. Result is caller-owned.
 fn expectedPreimages(allocator: std.mem.Allocator, args: ?std.json.Value, file: []const u8, before: []const u8, apply: bool) ![]patch_sessions.ExpectedPreimage {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!apply) return &.{};
     var identity = try patch_domain.identityFromBytes(allocator, true, before);
     errdefer identity.deinit(allocator);
@@ -373,6 +376,7 @@ fn expectedPreimages(allocator: std.mem.Allocator, args: ?std.json.Value, file: 
 /// `hash: <value>` stdout form and a `.hash = "<value>"` manifest-style line.
 /// Returns a borrowed slice into `text`, or null when no hash line is present.
 fn extractFetchedHash(text: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
         const trimmed = std.mem.trim(u8, line, " \t\r\n");
@@ -402,6 +406,7 @@ fn syncCommandFailure(
     command_result: support.CommandRunResult,
     fetched_hash: ?[]const u8,
 ) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -427,6 +432,7 @@ const RegistryMode = enum { search, info, versions, readme };
 /// Only the "direct" provider is active; all others return `unavailable=true`
 /// to avoid unbounded external network calls from within the MCP server.
 fn registryResult(allocator: std.mem.Allocator, tool_name: []const u8, provider: []const u8, query: []const u8, offline: bool, mode: RegistryMode) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try putBase(allocator, &obj, tool_name, "dependency registry provider result", "medium");
     try obj.put(allocator, "query", .{ .string = query });
@@ -472,6 +478,7 @@ fn providerMetadataValue(allocator: std.mem.Allocator, provider: []const u8, que
 /// envelope records the plan only; actual mutations are applied by individual
 /// dependency tools that each use patch-session preimage rollback.
 fn migrationEnvelopeValue(allocator: std.mem.Allocator, workspace_root: []const u8, now: i64, session_id: []const u8, manifest_path: []const u8, dependency: []const u8, target_url: ?[]const u8, model: zon.Model) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var events = std.json.Array.init(allocator);
     try events.append(try sessions.eventValue(allocator, "planned", "dependency migration session planned", now));
     var validation = std.json.ObjectMap.empty;
@@ -546,6 +553,7 @@ fn putBase(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, kind: []const
 /// Builds the `current_manifest_entry` JSON object for a dependency. When the
 /// dependency does not exist in the manifest yet, only `name: null` is emitted.
 fn dependencyEntryValue(allocator: std.mem.Allocator, entry: ?zon.Dependency) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     if (entry) |dep| {
         try obj.put(allocator, "name", .{ .string = dep.name });
@@ -573,6 +581,7 @@ fn replacementFragmentValue(allocator: std.mem.Allocator, text: []const u8, depe
 /// Serializes the relevant fields from a patch session result into a compact
 /// JSON object so callers can inspect apply status and file diffs.
 fn patchSessionValue(allocator: std.mem.Allocator, patch: patch_sessions.ReplacementResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "session_id", .{ .string = patch.session_id });
     try obj.put(allocator, "applied", .{ .bool = patch.applied });
@@ -598,6 +607,7 @@ fn patchSessionValue(allocator: std.mem.Allocator, patch: patch_sessions.Replace
 /// Serializes the expected-preimage list as a JSON array for evidence in the
 /// result so callers can verify which file state the apply was guarded against.
 fn expectedPreimagesValue(allocator: std.mem.Allocator, items: []const patch_sessions.ExpectedPreimage) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (items) |item| {
         var obj = std.json.ObjectMap.empty;
@@ -620,6 +630,7 @@ fn identityValue(allocator: std.mem.Allocator, identity: patch_domain.Identity) 
 /// Builds the `fetch_command` evidence object included in sync results so
 /// callers can rerun or debug the exact `zig fetch` invocation.
 fn commandEvidenceValue(allocator: std.mem.Allocator, cwd: []const u8, argv: []const []const u8, timeout_ms: i64, result: support.CommandRunResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "argv", try support.argvValue(allocator, argv));
     try obj.put(allocator, "cwd", .{ .string = cwd });
@@ -635,6 +646,7 @@ fn commandEvidenceValue(allocator: std.mem.Allocator, cwd: []const u8, argv: []c
 
 /// Serializes ZON parse diagnostics as a JSON array for inclusion in results.
 fn diagnosticsValue(allocator: std.mem.Allocator, diagnostics: []const zon.Diagnostic) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (diagnostics) |diag| {
         var obj = std.json.ObjectMap.empty;
@@ -656,6 +668,7 @@ fn stringArray(allocator: std.mem.Allocator, values: []const []const u8) !std.js
 /// Returns a new JSON array that is a deep-clone of `existing`'s items (if an
 /// array) with `event` appended. Used to grow a session's event log.
 fn appendEventArray(allocator: std.mem.Allocator, existing: ?std.json.Value, event: std.json.Value) !std.json.Value {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var array = std.json.Array.init(allocator);
     if (existing) |value| {
         if (value == .array) {
@@ -711,6 +724,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
 
 /// Frees each preimage entry and the slice itself. A no-op when `expected` is empty.
 fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const patch_sessions.ExpectedPreimage) void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (expected.len == 0) return;
     for (expected) |item| {
         allocator.free(item.file);
@@ -724,6 +738,7 @@ fn freeExpectedPreimages(allocator: std.mem.Allocator, expected: []const patch_s
 /// as a missing dependency name. These are expected failures with a resolution
 /// hint, not unexpected infrastructure errors.
 fn dependencyFailure(allocator: std.mem.Allocator, tool_name: []const u8, code: []const u8, resolution: []const u8, dependency: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "dependency_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -738,6 +753,7 @@ fn dependencyFailure(allocator: std.mem.Allocator, tool_name: []const u8, code: 
 /// result with phase, category, and resolution guidance. Returns OOM only on
 /// allocation failure; all other errors become opaque result payloads.
 fn dependencyError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) !Result {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return support.toolErrorFromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
