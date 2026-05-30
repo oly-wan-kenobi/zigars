@@ -24,6 +24,7 @@ pub fn zigVersion(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var outcome = core_usecase.version(allocator, context, .{
         .timeout_ms = toolTimeout(context, args),
     }) catch return error.OutOfMemory;
@@ -41,6 +42,7 @@ pub fn zigEnv(
     context: app_context.CoreCommandContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var outcome = core_usecase.env(allocator, context, .{}) catch return error.OutOfMemory;
     defer outcome.deinit(allocator);
     return commandOutcomeResult(allocator, context, "zig_env", outcome);
@@ -52,6 +54,7 @@ pub fn zigTargets(
     context: app_context.CoreCommandContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var outcome = core_usecase.targets(allocator, context, .{}) catch return error.OutOfMemory;
     defer outcome.deinit(allocator);
     return commandOutcomeResult(allocator, context, "zig_targets", outcome);
@@ -63,6 +66,7 @@ pub fn zigBuild(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     const extra = splitArgs(allocator, raw_extra_args) catch |err| return splitToolArgsError(allocator, "zig_build", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
@@ -80,6 +84,7 @@ pub fn zigTest(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     const extra = splitArgs(allocator, raw_extra_args) catch |err| return splitToolArgsError(allocator, "zig_test", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
@@ -99,6 +104,7 @@ pub fn zigCheck(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_check", "file", "workspace-relative Zig source path");
     var outcome = core_usecase.check(allocator, context, .{
         .file = file,
@@ -222,6 +228,7 @@ pub fn zigExplainErrors(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     const extra = splitArgs(allocator, raw_extra_args) catch |err| return splitToolArgsError(allocator, "zig_explain_errors", "args", raw_extra_args, err);
     defer freeArgList(allocator, extra);
@@ -260,6 +267,7 @@ pub fn zigTranslateC(
     context: app_context.CoreCommandContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_translate_c", "file", "workspace-relative C source path");
     const raw_extra_args = argString(args, "args") orelse "";
     const extra = splitArgs(allocator, raw_extra_args) catch |err| return splitToolArgsError(allocator, "zig_translate_c", "args", raw_extra_args, err);
@@ -275,6 +283,7 @@ pub fn zigTranslateC(
 
 /// Returns the MCP tool result for version.
 fn versionResult(allocator: std.mem.Allocator, result: core_usecase.VersionResult) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -309,6 +318,7 @@ fn commandOutcomeResult(
     tool_name: []const u8,
     outcome: core_usecase.CommandOutcome,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (outcome) {
         .ok => |run| blk: {
             var arena = std.heap.ArenaAllocator.init(allocator);
@@ -329,6 +339,7 @@ fn explainFailureResult(
     operation: []const u8,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (failure) {
         .command_run => |command_failure| backendErrorResult(allocator, "zig", operation, command_failure.err, resolution),
         .workspace_path => |workspace_failure| mcp_errors.workspacePath(allocator, tool_name, workspace_failure.path, context.workspace.root, error.PathOutsideWorkspace),
@@ -343,6 +354,7 @@ fn commandFailureResult(
     tool_name: []const u8,
     failure: core_usecase.Failure,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (failure) {
         .argument => |app_error| appArgumentErrorResult(allocator, tool_name, app_error),
         .workspace_path => |workspace_failure| mcp_errors.workspacePath(allocator, tool_name, workspace_failure.path, context.workspace.root, workspace_failure.err),
@@ -357,6 +369,7 @@ fn commandFailureResult(
 
 /// Returns the MCP tool result for app argument error.
 fn appArgumentErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, app_error: app_errors.AppError) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const field = app_error.field orelse "argument";
     const expected = app_error.expected orelse "valid argument";
     if (std.mem.eql(u8, app_error.code, "missing_required_argument")) {
@@ -374,6 +387,7 @@ fn appArgumentErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, a
 
 /// Returns an allocator-owned JSON value for command result.
 fn commandResultValue(allocator: std.mem.Allocator, run: core_usecase.CommandRun) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     const term = run.result.effectiveTerm();
@@ -407,6 +421,7 @@ fn commandResultValue(allocator: std.mem.Allocator, run: core_usecase.CommandRun
 
 /// Returns an allocator-owned JSON value for command error.
 fn commandErrorValue(allocator: std.mem.Allocator, failure: core_usecase.CommandRunFailure) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "command_error" });
@@ -432,6 +447,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, failure: core_usecase.Command
 
 /// Returns the MCP tool result for backend error.
 fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -449,6 +465,7 @@ fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8, op
 
 /// Returns an allocator-owned JSON value for compiler insights.
 fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
     var warning_count: i64 = 0;
@@ -491,6 +508,7 @@ fn collectCompilerLines(
     warning_count: *i64,
     note_count: *i64,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text_value, '\n');
     while (lines.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, "\r");
@@ -510,6 +528,7 @@ fn collectCompilerLines(
 
 /// Returns an allocator-owned JSON value for compiler line.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "severity", .{ .string = parsed.severity });
@@ -535,6 +554,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.js
 
 /// Suggests the next command to run from the primary compiler diagnostic.
 fn compilerNextCommand(allocator: std.mem.Allocator, primary: CompilerLine, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const zig = if (argv.len > 0) argv[0] else "zig";
     const path = primary.path orelse return .{ .string = try commandString(allocator, argv) };
     if (path.len > 0 and std.mem.endsWith(u8, path, ".zig")) {
@@ -548,6 +568,7 @@ fn compilerNextCommand(allocator: std.mem.Allocator, primary: CompilerLine, argv
 
 /// Builds follow-up action hints for compiler diagnostic summaries.
 fn compilerNextActions(allocator: std.mem.Allocator, primary: CompilerLine, note_count: i64) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var actions = std.json.Array.init(allocator);
     if (primary.path) |path| {
         if (primary.line) |line_no| {
@@ -574,6 +595,7 @@ fn compilerNextActions(allocator: std.mem.Allocator, primary: CompilerLine, note
 
 /// Returns an allocator-owned JSON value for failure summary.
 fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = ok });
@@ -602,6 +624,7 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
 
 /// Returns an allocator-owned JSON value for command error summary.
 fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: ports.PortError, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -618,6 +641,7 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: ports.PortError, 
 
 /// Returns an allocator-owned JSON value for likely failure scope.
 fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const primary_obj = switch (primary) {
         .object => |o| o,
         else => return .{ .string = "none" },
@@ -633,6 +657,7 @@ fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value
 
 /// Returns an allocator-owned JSON value for command term.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     switch (term) {
@@ -651,6 +676,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
 /// otherwise invalid sequences are replaced with U+FFFD and the result is
 /// flagged invalid_utf8 with a "utf-8-lossy" encoding. Text owned by `allocator`.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !struct {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     text: []const u8,
     invalid_utf8: bool,
     encoding: []const u8,
@@ -714,6 +740,7 @@ fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value 
 
 /// Joins command argv into a display string for structured command output.
 fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -737,6 +764,7 @@ fn argvContains(argv: []const []const u8, needle: []const u8) bool {
 /// on a dangling escape or unterminated quote so the caller can surface an
 /// actionable argument error. Caller frees the slice via freeArgList.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -806,6 +834,7 @@ fn freeArgList(allocator: std.mem.Allocator, args: []const []const u8) void {
 
 /// Maps split tool args error failures to structured MCP errors.
 fn splitToolArgsError(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.InvalidArguments => mcp_errors.invalidArgument(
             allocator,
@@ -856,6 +885,7 @@ fn commandOk(result: ports.CommandResult) bool {
 /// Classifies a command port error into a stable error_kind token clients can
 /// branch on without parsing the raw error name.
 fn portErrorKind(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
         error.StreamTooLong, error.OutputLimitExceeded => "output_limit",
@@ -868,6 +898,7 @@ fn portErrorKind(err: anyerror) []const u8 {
 /// Classifies a backend error into a stable error_kind token, adding
 /// connection-failure cases on top of the command port classification.
 fn backendErrorKind(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.NotConnected, error.EndOfStream, error.BrokenPipe => "unavailable",
