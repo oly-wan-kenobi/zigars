@@ -65,6 +65,7 @@ fn requestFromHeadBytes(server: *http.Server, head_bytes: []const u8) http.Serve
 }
 
 fn receivedHeadServer() http.Server {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .reader = .{
             .in = undefined,
