@@ -13,6 +13,8 @@ pub const Target = struct {
     exe_name: []const u8 = "zigars",
 };
 
+/// Ordered publishing matrix. Order is part of the release contract because
+/// dist checks and npm archive mapping compare against these package names.
 pub const all = [_]Target{
     .{ .triple = "x86_64-linux-gnu", .package_name = "zigars-x86_64-linux-gnu" },
     .{ .triple = "aarch64-linux-gnu", .package_name = "zigars-aarch64-linux-gnu" },
