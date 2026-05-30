@@ -79,6 +79,7 @@ pub const FakeDocsScanner = struct {
 
         /// Releases owned path entries for successful scan outcomes.
         fn deinit(self: ScanResult, allocator: Allocator) void {
+            // Only release owned state here to avoid invalidating borrowed data.
             switch (self) {
                 .ok => |paths| {
                     for (paths) |path| allocator.free(path.path);
@@ -96,6 +97,7 @@ pub const FakeDocsScanner = struct {
 
     /// Frees all expected read and scan results.
     pub fn deinit(self: *Self) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         for (self.expected_reads.items) |expected| expected.deinit(self.allocator);
         self.expected_reads.deinit(self.allocator);
         for (self.expected_absolute_scans.items) |expected| expected.deinit(self.allocator);
@@ -107,6 +109,7 @@ pub const FakeDocsScanner = struct {
 
     /// Exposes this fake through the DocsScanner vtable.
     pub fn port(self: *Self) ports.DocsScanner {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -119,6 +122,7 @@ pub const FakeDocsScanner = struct {
 
     /// Adds an ordered successful absolute read expectation.
     pub fn expectRead(self: *Self, request: ports.DocsReadAbsoluteRequest, bytes: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeReadRequest(self.allocator, owned_request);
@@ -135,6 +139,7 @@ pub const FakeDocsScanner = struct {
 
     /// Records an expected read error call, cloning request data and failing on allocation errors.
     pub fn expectReadError(self: *Self, request: ports.DocsReadAbsoluteRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeReadRequest(self.allocator, owned_request);
@@ -147,6 +152,7 @@ pub const FakeDocsScanner = struct {
 
     /// Records an expected absolute scan call, cloning request data and failing on allocation errors.
     pub fn expectAbsoluteScan(self: *Self, request: ports.DocsScanAbsoluteZigPathsRequest, paths: []const []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneAbsoluteScanRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeAbsoluteScanRequest(self.allocator, owned_request);
@@ -166,6 +172,7 @@ pub const FakeDocsScanner = struct {
 
     /// Records an expected workspace scan call, cloning request data and failing on allocation errors.
     pub fn expectWorkspaceScan(self: *Self, request: ports.DocsScanWorkspacePathsRequest, paths: []const []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneWorkspaceScanRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeWorkspaceScanRequest(self.allocator, owned_request);
@@ -192,6 +199,7 @@ pub const FakeDocsScanner = struct {
 
     /// Reads bytes from an absolute path through this port.
     fn readAbsolute(ptr: *anyopaque, allocator: Allocator, request: ports.DocsReadAbsoluteRequest) ports.PortError!ports.DocsReadResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_read >= self.expected_reads.items.len) return error.UnexpectedCall;
         const expected = self.expected_reads.items[self.next_read];
@@ -205,6 +213,7 @@ pub const FakeDocsScanner = struct {
 
     /// Scans absolute Zig source paths through this port.
     fn scanAbsoluteZigPaths(ptr: *anyopaque, allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) ports.PortError!ports.DocsPathScanResult {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_absolute_scan >= self.expected_absolute_scans.items.len) return error.UnexpectedCall;
         const expected = self.expected_absolute_scans.items[self.next_absolute_scan];
@@ -218,6 +227,7 @@ pub const FakeDocsScanner = struct {
 
     /// Scans workspace-relative paths through this port.
     fn scanWorkspacePaths(ptr: *anyopaque, allocator: Allocator, request: ports.DocsScanWorkspacePathsRequest) ports.PortError!ports.DocsPathScanResult {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.next_workspace_scan >= self.expected_workspace_scans.items.len) return error.UnexpectedCall;
         const expected = self.expected_workspace_scans.items[self.next_workspace_scan];
@@ -231,6 +241,7 @@ pub const FakeDocsScanner = struct {
 
     /// Clones read request into allocator-owned storage.
     fn cloneReadRequest(allocator: Allocator, request: ports.DocsReadAbsoluteRequest) !ports.DocsReadAbsoluteRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -254,6 +265,7 @@ pub const FakeDocsScanner = struct {
 
     /// Clones absolute scan request into allocator-owned storage.
     fn cloneAbsoluteScanRequest(allocator: Allocator, request: ports.DocsScanAbsoluteZigPathsRequest) !ports.DocsScanAbsoluteZigPathsRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const root = try common.dupString(allocator, request.root);
         var root_owned = true;
         defer if (root_owned) allocator.free(root);
@@ -290,6 +302,7 @@ pub const FakeDocsScanner = struct {
 
     /// Clones paths into allocator-owned storage.
     fn clonePaths(allocator: Allocator, raw_paths: []const []const u8) ![]ports.DocsPath {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const paths = try allocator.alloc(ports.DocsPath, raw_paths.len);
         var initialized: usize = 0;
         errdefer {
@@ -305,6 +318,7 @@ pub const FakeDocsScanner = struct {
 
     /// Clones path slices into allocator-owned storage.
     fn copyPaths(allocator: Allocator, paths: []ports.DocsPath) ![]ports.DocsPath {
+        // Normalize and constrain path handling here before any downstream filesystem action.
         const copied = try allocator.alloc(ports.DocsPath, paths.len);
         var initialized: usize = 0;
         errdefer {
@@ -362,6 +376,7 @@ test "docs scanner fake expectations clean partial allocations on failure" {
 
 /// Records an expected docs scanner with allocator call, cloning request data and failing on allocation errors.
 fn expectDocsScannerWithAllocator(allocator: Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var fake = FakeDocsScanner.init(allocator);
     defer fake.deinit();
 
