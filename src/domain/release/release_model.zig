@@ -144,6 +144,7 @@ pub fn buildReleasePlan(allocator: std.mem.Allocator, inputs: []const EvidenceCh
 /// All three text inputs are scanned case-insensitively; the highest applicable bump wins.
 /// No ownership is taken; the returned SemverSuggestion borrows string literals only.
 pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes: []const u8) SemverSuggestion {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const bump: SemverBump = if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "breaking_change_risk\":true", "breaking change", "removed", "incompatible" }))
         .major
     else if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "added", "feature", "new tool", "capability" }))
@@ -166,6 +167,7 @@ pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes:
 /// Body text is capped at 1200 bytes with a trailing ellipsis on truncation.
 /// `requires_review` is always true; the draft must not be published without human review.
 pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inputs: []const ReleaseNoteInput) !ReleaseNotesDraft {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var sections: std.ArrayList(ReleaseNoteSection) = .empty;
     errdefer {
         for (sections.items) |*section| section.deinit(allocator);
@@ -205,6 +207,7 @@ pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidenceP
 
 /// Appends one evidence check, truncating supplied text for display.
 fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(EvidenceCheck), input: EvidenceCheckInput) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const observed = input.text != null and input.text.?.len > 0;
     const summary = if (input.text) |text| try shortString(allocator, text, 240) else null;
     errdefer if (summary) |text| allocator.free(text);
@@ -219,6 +222,7 @@ fn appendEvidenceCheck(allocator: std.mem.Allocator, checks: *std.ArrayList(Evid
 
 /// Appends one evidence pointer, preserving whether text was provided.
 fn appendEvidencePointer(allocator: std.mem.Allocator, evidence: *std.ArrayList(EvidencePointer), input: EvidencePointerInput) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const summary = if (input.text) |text| try shortString(allocator, text, 400) else null;
     errdefer if (summary) |text| allocator.free(text);
     try evidence.append(allocator, .{
@@ -238,6 +242,7 @@ fn hasMissingEvidence(checks: []const EvidenceCheck) bool {
 
 /// Builds allocator-owned release notes markdown from release evidence.
 fn releaseNotesMarkdown(allocator: std.mem.Allocator, version: []const u8, sections: []const ReleaseNoteSection) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.Io.Writer.Allocating = .init(allocator);
     errdefer out.deinit();
     out.writer.print("# {s}\n\n", .{version}) catch return error.OutOfMemory;
@@ -260,6 +265,7 @@ fn containsAnyIgnoreCase(haystacks: []const []const u8, needles: []const []const
 
 /// Returns the byte index of an ASCII-insensitive match when present.
 fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (needle.len == 0) return 0;
     if (needle.len > haystack.len) return null;
     var index: usize = 0;
@@ -271,6 +277,7 @@ fn indexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
 
 /// Returns an owned trimmed string, truncating with an ellipsis past limit bytes.
 fn shortString(allocator: std.mem.Allocator, input: []const u8, limit: usize) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const trimmed = std.mem.trim(u8, input, " \t\r\n");
     if (trimmed.len <= limit) return allocator.dupe(u8, trimmed);
     var out = std.ArrayList(u8).empty;
