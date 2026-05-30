@@ -20,6 +20,7 @@ pub const Mutex = struct {
 
     /// Acquires the lock, using the Io mutex when present.
     pub fn lock(self: *Mutex) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.io) |io| {
             self.io_mutex.lockUncancelable(io);
             return;
