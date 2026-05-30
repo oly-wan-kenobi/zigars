@@ -19,6 +19,7 @@ const readFileAlloc = cli_io.readFileAlloc;
 /// The `workspace` path is needed for assertions that read fixture output
 /// files created by the server (flamegraph SVG, analysis graph dot files).
 pub fn run(client: anytype, workspace: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const profile_plan = try client.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
     defer client.allocator.free(profile_plan);
     try client.expectPathString(profile_plan, "kind", "zig_profile_plan");
