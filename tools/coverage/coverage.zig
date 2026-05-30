@@ -59,6 +59,7 @@ const KcovCommand = struct {
 
     /// Duplicates the command name and argument vector for deferred execution.
     fn init(allocator: Allocator, name: []const u8, argv: []const []const u8) !KcovCommand {
+        // Capture all required dependencies up front so later calls can stay predictable.
         var owned_argv = try allocator.alloc([]const u8, argv.len);
         errdefer allocator.free(owned_argv);
         var initialized: usize = 0;
@@ -91,6 +92,7 @@ const KcovCommand = struct {
 /// `self_path` is `args[0]` of the current process, used to invoke the
 /// integration smoke commands for server-side kcov collection.
 pub fn run(allocator: Allocator, io: Io, self_path: []const u8, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var options: CoverageOptions = .{};
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
@@ -224,6 +226,7 @@ pub fn run(allocator: Allocator, io: Io, self_path: []const u8, args: []const []
 /// Executes one installed test binary and converts its process result into
 /// the stable summary schema.
 fn runTestBinary(allocator: Allocator, io: Io, path: []const u8, binary: coverage_config.TestBinary) !TestResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = try std.process.run(allocator, io, .{ .argv = &.{path} });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
@@ -252,6 +255,7 @@ fn freeTestResult(allocator: Allocator, result: TestResult) void {
 /// Scans combined stdout and stderr for the Zig test runner summary line and
 /// extracts the test count, returning null when no recognized summary exists.
 fn parseTestCount(text: []const u8) ?i64 {
+    // Normalize input here so downstream paths can rely on validated shape.
     const prefix = "All ";
     var start: usize = 0;
     while (std.mem.indexOfPos(u8, text, start, prefix)) |idx| {
@@ -287,6 +291,7 @@ fn termExitCode(term: std.process.Child.Term) i64 {
 /// Probes PATH for `name` and returns a heap-owned executable label when the
 /// backend is available; null means the executable could not be used.
 fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = std.process.run(allocator, io, .{ .argv = &.{ name, "--version" } }) catch |err| switch (err) {
         error.FileNotFound => return null,
         else => return err,
@@ -309,6 +314,7 @@ fn runKcov(
     integration_binary: ?[]const u8,
     error_message: *?[]const u8,
 ) !CoverageStats {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const kcov_root = try std.fmt.allocPrint(allocator, "{s}/kcov", .{out_dir});
     defer allocator.free(kcov_root);
     if (dirExists(io, kcov_root)) try Io.Dir.cwd().deleteTree(io, kcov_root);
@@ -383,6 +389,7 @@ fn runIntegrationKcov(
     result_dirs: *std.ArrayList([]const u8),
     error_message: *?[]const u8,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const http_dir = try std.fmt.allocPrint(allocator, "{s}/kcov/http-server", .{out_dir});
     errdefer allocator.free(http_dir);
     const http = try std.process.run(allocator, io, .{ .argv = &.{
@@ -428,6 +435,7 @@ fn runIntegrationKcov(
 
 /// Finds and reads the Cobertura XML report produced by kcov.
 fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const direct = try std.fmt.allocPrint(allocator, "{s}/cobertura.xml", .{report_dir});
     defer allocator.free(direct);
     if (Io.Dir.cwd().readFileAlloc(io, direct, allocator, .limited(32 * 1024 * 1024))) |xml| {
@@ -453,6 +461,7 @@ fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 
 /// Captures the first failing command's compact diagnostic for the JSON
 /// summary without overwriting an earlier failure.
 fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase: []const u8, stdout: []const u8, stderr: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (error_message.* != null) return;
     const stderr_text = std.mem.trim(u8, stderr, " \t\r\n");
     const stdout_text = std.mem.trim(u8, stdout, " \t\r\n");
@@ -484,6 +493,7 @@ fn meetsFloor(actual: ?u32, minimum: u32) bool {
 /// Builds the detailed failure string used when measured coverage misses a
 /// floor or completeness gate.
 fn coverageFailureMessage(allocator: Allocator, stats: ?CoverageStats, options: CoverageOptions) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const measured = stats orelse return coverageFloorMessage(allocator, options);
     return std.fmt.allocPrint(
         allocator,
@@ -503,6 +513,7 @@ fn coverageFailureMessage(allocator: Allocator, stats: ?CoverageStats, options: 
 
 /// Builds the generic floor failure message used when no measured data exists.
 fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return std.fmt.allocPrint(
         allocator,
         "line coverage did not meet configured floors: total >= {d}.{d:0>2}%, src >= {d}.{d:0>2}%, tools >= {d}.{d:0>2}%",
