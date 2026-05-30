@@ -25,6 +25,7 @@ pub const HttpRequestTransport = struct {
     /// wins: a prior captured message is freed so only the final send becomes the
     /// HTTP reply body.
     pub fn send(self: *Self, _: std.Io, allocator: std.mem.Allocator, message: []const u8) transport_mod.Transport.SendError!void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.is_closed) return transport_mod.Transport.SendError.ConnectionClosed;
 
         const owned = allocator.dupe(u8, message) catch return transport_mod.Transport.SendError.OutOfMemory;
@@ -47,6 +48,7 @@ pub const HttpRequestTransport = struct {
 
     /// Exposes this object through the generic MCP transport vtable.
     pub fn transport(self: *Self) transport_mod.Transport {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
