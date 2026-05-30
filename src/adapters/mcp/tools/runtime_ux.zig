@@ -27,6 +27,7 @@ pub fn zigarsJobStatus(allocator: std.mem.Allocator, context: app_context.Runtim
 
 /// Reads paginated job output/result details using cursor and limit args.
 pub fn zigarsJobResult(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const job_id = argString(args, "job_id") orelse return mcp_errors.missingArgument(allocator, "zigars_job_result", "job_id", "job id returned by zigars_job_start or zigars_run_stream");
     const request = runtime_ux.JobResultRequest{
         .job_id = job_id,
@@ -68,6 +69,7 @@ pub fn zigarsRunEvents(allocator: std.mem.Allocator, context: app_context.Runtim
 
 /// Reads a zigars resource URI through the runtime resource projection.
 pub fn zigarsResourceQuery(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const uri = argString(args, "uri") orelse return mcp_errors.missingArgument(allocator, "zigars_resource_query", "uri", "zigars resource URI");
     const request = runtime_ux.ResourceQueryRequest{
         .uri = uri,
@@ -92,6 +94,7 @@ pub fn zigarsResourceSubscribe(allocator: std.mem.Allocator, context: app_contex
 
 /// Removes a resource subscription by id or URI.
 pub fn zigarsResourceUnsubscribe(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const subscription_id = argString(args, "subscription_id");
     const uri = argString(args, "uri");
     if (subscription_id == null and uri == null) return mcp_errors.missingArgument(allocator, "zigars_resource_unsubscribe", "subscription_id", "subscription id or uri");
@@ -121,6 +124,7 @@ pub fn zigarsWorkspaceMap(allocator: std.mem.Allocator, context: app_context.Run
 
 /// Previews or applies selection of a known workspace root.
 pub fn zigarsWorkspaceSelect(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const workspace_id = argString(args, "workspace_id") orelse return mcp_errors.missingArgument(allocator, "zigars_workspace_select", "workspace_id", "root id or path from zigars_workspace_map");
     const apply = argBool(args, "apply", false);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -193,6 +197,7 @@ fn structuredUsecase(
     arg: []const u8,
     tool_name: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const value = func(arena.allocator(), context, arg) catch |err| return runtimeError(allocator, context, tool_name, "read_runtime_state", "runtime_state", arg, err);
@@ -209,6 +214,7 @@ fn runtimeValue(
     request: anytype,
     comptime func: fn (std.mem.Allocator, app_context.RuntimeUxContext, @TypeOf(request)) runtime_ux.RuntimeUxError!std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const value = func(arena.allocator(), context, request) catch |err| return runtimeError(allocator, context, tool_name, operation, category, "", err);
@@ -240,6 +246,7 @@ fn resourceQueryError(allocator: std.mem.Allocator, context: app_context.Runtime
 
 /// Converts runtime UX failures into structured tool errors with caller-owned context.
 fn runtimeError(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, tool_name: []const u8, operation: []const u8, category: []const u8, actual: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.NotFound and std.mem.indexOf(u8, tool_name, "job") != null) return jobNotFound(allocator, tool_name, actual);
     if (err == error.NotFound and std.mem.eql(u8, tool_name, "zigars_cancel_status")) return jobNotFound(allocator, tool_name, actual);
@@ -317,6 +324,7 @@ fn filePathFromUri(uri: []const u8) ?[]const u8 {
 /// trailing escape, which callers convert into a structured argument error.
 /// Each returned token and the slice itself are owned by `allocator`.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -664,6 +672,7 @@ fn runtimeAdapterContext(
     runtime_session: *fakes.FakeRuntimeSession,
     tool_catalog: *fakes.FakeToolCatalog,
 ) app_context.RuntimeUxContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig" },
@@ -686,6 +695,7 @@ fn expectWorkspaceMapExists(workspace: *fakes.FakeWorkspaceStore) !void {
 
 /// Exercises runtime UX arg splitting coverage with test fixture storage.
 fn exerciseRuntimeUxArgSplitting(backing_allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const args = try splitToolArgs(backing_allocator, "alpha beta");
     defer {
         for (args) |arg| backing_allocator.free(arg);
@@ -709,6 +719,7 @@ const FailingRuntimeSession = struct {
 
     /// Returns the fake runtime session port interface.
     fn port(self: *FailingRuntimeSession) ports.RuntimeSession {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
