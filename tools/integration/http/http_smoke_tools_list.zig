@@ -17,6 +17,7 @@ const valueAt = smoke.valueAt;
 /// to `assertToolsListSchemas` to check declared input-schema paths.
 /// Logs missing tool names to stderr before returning `error.AssertionFailed`.
 pub fn assertRequiredTools(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const tools_response = try smoke.rpc(allocator, io, port, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
     defer allocator.free(tools_response);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tools_response, .{});
@@ -34,6 +35,7 @@ pub fn assertRequiredTools(allocator: std.mem.Allocator, io: Io, port: u16, expe
 /// in the live `tools` response and asserts every declared schema path. Missing
 /// tools or paths are logged to stderr and cause `error.AssertionFailed`.
 fn assertToolsListSchemas(io: Io, tools: []JsonValue, expected: JsonValue) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const expected_schemas = expected.object.get("tools_list_schema_paths") orelse return;
     var tool_it = expected_schemas.object.iterator();
     while (tool_it.next()) |tool_entry| {
