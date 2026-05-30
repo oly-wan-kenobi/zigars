@@ -37,6 +37,7 @@ pub fn bindRefused(config: RunConfig) bool {
 
 /// Accepts sequential HTTP connections and routes each POST as one JSON-RPC message.
 pub fn serve(server: anytype, io: std.Io, allocator: std.mem.Allocator, config: RunConfig) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (bindRefused(config)) return error.NonLoopbackBindRefused;
     const bind_host = bindHostFor(config);
 
@@ -107,6 +108,7 @@ fn serveConnection(server: anytype, io: std.Io, allocator: std.mem.Allocator, st
 /// must also be loopback. This blocks DNS-rebinding: a rebound hostname yields a
 /// non-loopback `Host`/`Origin` and is refused.
 fn originAndHostAllowed(request: *const http.Server.Request) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var it = request.iterateHeaders();
     while (it.next()) |header| {
         if (std.ascii.eqlIgnoreCase(header.name, "origin")) {
@@ -135,6 +137,7 @@ fn hostHeaderIsLoopback(authority: []const u8) bool {
 /// Strips an optional `:port` suffix from an authority, preserving bracketed
 /// IPv6 literals (`[::1]:8080` -> `[::1]`).
 fn hostWithoutPort(authority: []const u8) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (authority.len == 0) return authority;
     if (authority[0] == '[') {
         const close = std.mem.indexOfScalar(u8, authority, ']') orelse return authority;
@@ -158,6 +161,7 @@ fn isLoopbackHost(host: []const u8) bool {
 /// captures the single response, which is then returned as the HTTP body; a
 /// request that produces no response (e.g. a notification) yields 204 No Content.
 fn handleJsonRpcRequest(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: *http.Server.Request) !void {
+    // Translate internal outcomes into protocol-facing responses without leaking internal details.
     const content_length = request.head.content_length orelse {
         try request.respond("Content-Length required", .{
             .status = .bad_request,
