@@ -128,6 +128,7 @@ pub const BudgetPlanInput = struct {
 
 /// Allocates a JSON token budget plan.
 pub fn budgetPlanValue(allocator: std.mem.Allocator, input: BudgetPlanInput) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const default_budget = input.mode.defaultBudget();
     const requested = input.requested_token_budget orelse default_budget;
     const effective = clampTokenBudget(requested);
@@ -181,6 +182,7 @@ pub fn attachMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, mo
 
 /// Serializes supported modes fields into an allocator-owned JSON value; allocation failures propagate.
 fn supportedModesValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     var array_owned = true;
     defer if (array_owned) array.deinit();
@@ -194,6 +196,7 @@ fn supportedModesValue(allocator: std.mem.Allocator) !std.json.Value {
 
 /// Serializes allocation fields into an allocator-owned JSON value; allocation failures propagate.
 fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effective_budget: i64) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const machine_pct: i64 = switch (mode) {
         .compact => 55,
         .standard => 35,
