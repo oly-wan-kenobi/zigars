@@ -67,6 +67,7 @@ pub const ProbeSnapshot = struct {
 /// caller-supplied base metrics.  Caller owns the returned value and must free
 /// all nested ObjectMaps and Arrays through its own cleanup or an arena.
 pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_metrics_v2" });
@@ -103,6 +104,7 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: B
 /// Builds the zigars_backend_health_history section: bounded probe event ring
 /// plus the current cached probe results for each known backend.
 pub fn backendHistoryValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_backend_health_history" });
@@ -118,6 +120,7 @@ pub fn backendHistoryValue(allocator: std.mem.Allocator, state: *const State, ba
 /// plus the current status from `base`.  When the ring is empty, a synthetic
 /// sequence-0 event is injected from the current base snapshot.
 pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_zls_timeline" });
@@ -134,6 +137,7 @@ pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: *const State, base:
 /// Builds the zigars_tool_latency section: per-tool call/error counters,
 /// latency percentiles, and the recent tool-call correlation ring.
 pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_tool_latency" });
@@ -156,6 +160,7 @@ pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.
 /// Builds the zigars_mcp_method_latency section: per-MCP-method request
 /// counters and latency percentiles, noting any truncated method names.
 pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_mcp_method_latency" });
@@ -174,6 +179,7 @@ pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !st
 /// Builds the zigars_command_durations section: bounded subprocess invocation
 /// history and aggregate latency percentiles.  Duration unit is milliseconds.
 pub fn commandDurationsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_command_durations" });
@@ -189,6 +195,7 @@ pub fn commandDurationsValue(allocator: std.mem.Allocator, state: *const State) 
 /// Builds the zigars_startup_timings section: monotonic-awake-clock phase
 /// timings recorded during bootstrap.  Resets when the process restarts.
 pub fn startupTimingsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_startup_timings" });
@@ -203,6 +210,7 @@ pub fn startupTimingsValue(allocator: std.mem.Allocator, state: *const State) !s
 /// Builds the zigars_audit_logging section: enabled flag, current mode and
 /// path, write counters, and the privacy notice for the configured mode.
 pub fn auditLoggingValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_audit_logging" });
@@ -219,6 +227,7 @@ pub fn auditLoggingValue(allocator: std.mem.Allocator, state: *const State) !std
 /// Builds the zigars_request_cancellation section: aggregate outcome counters
 /// and the bounded cancellation notification event ring.
 pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_request_cancellation" });
@@ -238,6 +247,7 @@ pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std
 /// Builds the zigars_observability_retention section: capacity constants,
 /// current fill counts, and all truncation/drop counters for this process.
 pub fn retentionValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_observability_retention" });
@@ -257,6 +267,7 @@ pub fn retentionValue(allocator: std.mem.Allocator, state: *const State) !std.js
 }
 
 fn analysisCacheValue(allocator: std.mem.Allocator, cache: AnalysisCacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "present", .{ .bool = cache.present });
@@ -267,6 +278,7 @@ fn analysisCacheValue(allocator: std.mem.Allocator, cache: AnalysisCacheSnapshot
 }
 
 fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: ArtifactMetrics) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "registry_available", .{ .bool = metrics.registry_available });
@@ -279,6 +291,7 @@ fn artifactMetricsValue(allocator: std.mem.Allocator, metrics: ArtifactMetrics) 
 }
 
 fn toolStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (state.tool_stats[0..state.tool_stat_count]) |stat| {
@@ -300,6 +313,7 @@ fn toolStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.V
 }
 
 fn methodStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     for (state.method_stats[0..state.method_stat_count]) |*stat| {
@@ -322,6 +336,7 @@ fn methodStatsValue(allocator: std.mem.Allocator, state: *const State) !std.json
 }
 
 fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: LatencySamples) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     const retained = samples.retained();
@@ -366,6 +381,7 @@ fn percentile(sorted: []const u64, p: u64) u64 {
 }
 
 fn toolCallCorrelationsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.tool_call_correlation_count, state_mod.max_tool_call_correlations);
@@ -398,6 +414,7 @@ fn observedRequestIdValue(allocator: std.mem.Allocator, event: *const ToolCallCo
 }
 
 fn backendEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.backend_event_count, state_mod.max_backend_events);
@@ -417,6 +434,7 @@ fn backendEventsValue(allocator: std.mem.Allocator, state: *const State) !std.js
 }
 
 fn commandEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.command_event_count, state_mod.max_command_events);
@@ -437,6 +455,7 @@ fn commandEventsValue(allocator: std.mem.Allocator, state: *const State) !std.js
 }
 
 fn startupPhasesValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.startup_phase_count, state_mod.max_startup_phases);
@@ -455,6 +474,7 @@ fn startupPhasesValue(allocator: std.mem.Allocator, state: *const State) !std.js
 }
 
 fn cancellationEventsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     const first = firstSequence(state.cancellation_event_count, state_mod.max_cancellation_events);
@@ -517,6 +537,7 @@ fn zlsEventsValue(allocator: std.mem.Allocator, state: *const State, base: BaseM
 }
 
 fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeCacheSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "zig", try probeSnapshotValue(allocator, cache.zig));
@@ -528,6 +549,7 @@ fn backendProbeCacheValue(allocator: std.mem.Allocator, cache: BackendProbeCache
 }
 
 fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?ProbeSnapshot) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     if (probe) |p| {
@@ -545,6 +567,7 @@ fn probeSnapshotValue(allocator: std.mem.Allocator, probe: ?ProbeSnapshot) !std.
 }
 
 fn limitationsValue(allocator: std.mem.Allocator) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     try array.append(.{ .string = "In-memory metrics reset when the zigars process restarts." });
