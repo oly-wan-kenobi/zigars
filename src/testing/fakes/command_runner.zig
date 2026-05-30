@@ -38,6 +38,7 @@ pub const FakeCommandRunner = struct {
 
         /// Releases owned command output for successful outcomes.
         fn deinit(self: ExpectedRunResult, allocator: Allocator) void {
+            // Only release owned state here to avoid invalidating borrowed data.
             switch (self) {
                 .ok => |result| {
                     allocator.free(result.stdout);
@@ -76,6 +77,7 @@ pub const FakeCommandRunner = struct {
 
     /// Records an expected run call, cloning request data and failing on allocation errors.
     pub fn expectRun(self: *Self, request: ports.CommandRequest, result: ports.CommandResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRequest(self.allocator, request);
         errdefer freeRequest(self.allocator, owned_request);
 
@@ -104,6 +106,7 @@ pub const FakeCommandRunner = struct {
 
     /// Records an expected run error call, cloning request data and failing on allocation errors.
     pub fn expectRunError(self: *Self, request: ports.CommandRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -169,6 +172,7 @@ pub const FakeCommandRunner = struct {
 
     /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request: ports.CommandRequest) !ports.CommandRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const argv = try common.dupStringList(allocator, request.argv);
         errdefer common.freeStringList(allocator, argv);
         const cwd = try common.dupOptionalString(allocator, request.cwd);
@@ -282,6 +286,7 @@ test "command runner expected runs clean partial allocations on failure" {
 
 /// Records an expected command runs with allocator call, cloning request data and failing on allocation errors.
 fn expectCommandRunsWithAllocator(allocator: Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var fake = FakeCommandRunner.init(allocator);
     defer fake.deinit();
 
