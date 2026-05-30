@@ -227,6 +227,7 @@ pub const command = struct {
 
 /// Runs a command through the injected command port with shared output limits.
 pub fn runCommand(allocator: std.mem.Allocator, app: anytype, argv: []const []const u8, timeout_ms: i64) !CommandRunResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = try app.context.command_runner.run(allocator, .{
         .argv = argv,
         .cwd = app.workspace.root,
@@ -325,6 +326,7 @@ pub fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
 
 /// Reads an optional integer field from object-shaped tool args.
 pub fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = argValue(args, name) orelse return default;
     return switch (value) {
         .integer => |i| i,
@@ -375,6 +377,7 @@ pub fn invalidArgumentResult(allocator: std.mem.Allocator, tool_name: []const u8
 
 /// Converts shell-style argument splitting failures into structured errors.
 pub fn splitToolArgsErrorResult(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8, actual: []const u8, err: anyerror) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (err == error.InvalidArguments) {
         return structuredError(allocator, try invalidArgumentValue(
             allocator,
@@ -397,6 +400,7 @@ pub fn splitToolArgsErrorResult(allocator: std.mem.Allocator, tool_name: []const
 
 /// Builds a structured workspace path error result.
 pub fn workspacePathErrorResult(app: anytype, allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, err: anyerror) !Result {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "workspace_path_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -415,6 +419,7 @@ pub fn workspacePathErrorResult(app: anytype, allocator: std.mem.Allocator, tool
 
 /// Allocates a human-readable workspace path error message.
 pub fn workspacePathErrorMessage(allocator: std.mem.Allocator, tool_name: []const u8, path: []const u8, root: []const u8, err: anyerror) ![]u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     if (err == error.EmptyPath) {
         return std.fmt.allocPrint(
             allocator,
@@ -448,6 +453,7 @@ pub const ToolErrorDetail = struct {
 
 /// Builds a structured tool error result from an error value.
 pub fn toolErrorFromError(allocator: std.mem.Allocator, spec: ToolErrorSpec, err: anyerror) !Result {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "tool_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -466,6 +472,7 @@ pub fn toolErrorFromError(allocator: std.mem.Allocator, spec: ToolErrorSpec, err
 
 /// Serializes argument fields into an allocator-owned JSON value; allocation failures propagate.
 fn argumentValue(allocator: std.mem.Allocator, tool_name: []const u8, code: []const u8, field: []const u8, expected: []const u8, actual: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "argument_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -491,6 +498,7 @@ fn invalidArgumentValue(allocator: std.mem.Allocator, tool_name: []const u8, fie
 
 /// Builds a structured backend-unavailable result.
 pub fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, configured_path: []const u8, status: []const u8, resolution: []const u8) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -511,6 +519,7 @@ pub fn backendErrorResult(allocator: std.mem.Allocator, backend_name: []const u8
 
 /// Allocates the JSON object used by backend error results.
 pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -526,6 +535,7 @@ pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8,
 /// tool results (timeout, unavailable, not_found, permission, output_limit,
 /// workspace_path, invalid_data); anything unmapped becomes execution_failed.
 fn kindForError(err: anyerror) []const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.NotConnected, error.EndOfStream, error.BrokenPipe => "unavailable",
@@ -540,6 +550,7 @@ fn kindForError(err: anyerror) []const u8 {
 
 /// Splits shell-style argument text into owned argv fragments.
 pub fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -626,6 +637,7 @@ pub fn commandResultValue(
     timeout_ms: i64,
     result: CommandRunResult,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "command" });
     try obj.put(allocator, "title", .{ .string = title });
@@ -652,6 +664,7 @@ pub fn commandResultValue(
 
 /// Allocates the standard JSON command error object.
 pub fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "command_error" });
     try obj.put(allocator, "title", .{ .string = title });
@@ -706,6 +719,7 @@ pub const classifyDiagnosticMessage = compiler_output.classifyDiagnosticMessage;
 
 /// Allocates a space-joined command string for reporting.
 pub fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -726,6 +740,7 @@ pub fn argvContains(argv: []const []const u8, needle: []const u8) bool {
 
 /// Allocates compiler diagnostic insight JSON from command stdout/stderr.
 pub fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
     var warning_count: i64 = 0;
@@ -762,6 +777,7 @@ fn collectCompilerLines(
     warning_count: *i64,
     note_count: *i64,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text_value, '\n');
     while (lines.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, "\r");
@@ -781,6 +797,7 @@ fn collectCompilerLines(
 
 /// Serializes compiler line fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "severity", try ownedString(allocator, parsed.severity));
     try obj.put(allocator, "message", try ownedString(allocator, parsed.message));
@@ -793,6 +810,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !std.js
 
 /// Allocates a command failure summary from compiler insights.
 pub fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = ok });
     const insights_obj = switch (insights) {
@@ -819,6 +837,7 @@ pub fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Valu
 
 /// Allocates a command failure summary when no command result exists.
 pub fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "primary", .null);
@@ -834,6 +853,7 @@ pub fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, arg
 
 /// Classifies the likely source area for a primary compiler finding.
 pub fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const primary_obj = switch (primary) {
         .object => |o| o,
         else => return .{ .string = "none" },
@@ -849,6 +869,7 @@ pub fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.V
 
 /// Returns owned changed paths from explicit input or git status.
 pub fn changedPathList(allocator: std.mem.Allocator, app: anytype, explicit_files: ?[]const u8, timeout_ms: i64) !std.ArrayList([]const u8) {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var list: std.ArrayList([]const u8) = .empty;
     errdefer {
         freeStringList(allocator, list.items);
@@ -879,6 +900,7 @@ pub fn statusLinePath(line: []const u8) []const u8 {
 
 /// Appends unique paths found in unified diff headers.
 pub fn appendPatchPaths(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), patch_text: ?[]const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const patch = patch_text orelse return;
     var lines = std.mem.splitScalar(u8, patch, '\n');
     while (lines.next()) |line| {
@@ -940,6 +962,7 @@ pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8
 
 /// Appends JSON serialization to an existing byte list.
 pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
         .bool => |b| try out.appendSlice(allocator, if (b) "true" else "false"),
@@ -973,6 +996,7 @@ pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
 
 /// Appends a JSON-escaped string to an existing byte list.
 pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
     for (value) |c| {
@@ -997,6 +1021,7 @@ pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), va
 
 /// Deep-clones a JSON value into allocator-owned storage.
 pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (value) {
         .null => .null,
         .bool => |b| .{ .bool = b },
@@ -1024,6 +1049,7 @@ pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json
 
 /// Recursively frees a JSON value produced by cloneValue or owned builders.
 pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .string => |s| allocator.free(s),
         .number_string => |s| allocator.free(s),
@@ -1108,6 +1134,7 @@ pub const artifacts = struct {
 
     /// Allocates the JSON representation of a registry entry.
     pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "path", .{ .string = entry.identity.path });
         try obj.put(allocator, "abs_path", .{ .string = entry.identity.abs_path });
@@ -1122,6 +1149,7 @@ pub const artifacts = struct {
 
     /// Serializes provenance fields into an allocator-owned JSON value; allocation failures propagate.
     fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var obj = std.json.ObjectMap.empty;
         try obj.put(allocator, "producer", .{ .string = provenance.producer });
         try obj.put(allocator, "artifact_kind", .{ .string = provenance.artifact_kind });
@@ -1148,6 +1176,7 @@ pub const artifacts = struct {
 
 /// Records an existing workspace artifact through the optional artifact port.
 pub fn recordArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifacts.RegistryEntry) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const store = app.context.artifact_store orelse return error.Unavailable;
     const ref = try store.recordWorkspace(allocator, .{
         .path = entry.identity.path,
@@ -1173,6 +1202,7 @@ pub fn recordArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifac
 
 /// Records an artifact and its bytes through the optional artifact port.
 pub fn recordWrittenArtifact(app: anytype, allocator: std.mem.Allocator, entry: artifacts.RegistryEntry, bytes: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const store = app.context.artifact_store orelse return error.Unavailable;
     const ref = try store.recordWorkspace(allocator, .{
         .path = entry.identity.path,
@@ -1273,6 +1303,7 @@ test "workflow support command and changed path helpers use command runner port"
     const Stub = struct {
         /// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
         fn run(_: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             if (!std.mem.eql(u8, "/workspace", request.cwd orelse "")) return error.StaleArguments;
             if (!std.mem.eql(u8, "arch110-workflow-command", request.provenance)) return error.StaleArguments;
             const stdout = try allocator.dupe(u8, " M src/main.zig\nR  src/old.zig -> src/new.zig\n?? .zigars-cache/tmp\n");
