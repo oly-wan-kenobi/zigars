@@ -90,6 +90,7 @@ pub fn argument(
     expected: []const u8,
     actual: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return result(allocator, .{
         .kind = "argument_error",
         .tool = tool_name,
@@ -120,6 +121,7 @@ pub fn invalidArgument(
     actual: []const u8,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return result(allocator, .{
         .kind = "argument_error",
         .tool = tool_name,
@@ -156,6 +158,7 @@ pub fn workspacePath(
     workspace: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     return result(allocator, .{
         .kind = "workspace_path_error",
         .tool = tool_name,
@@ -178,6 +181,7 @@ pub fn workspacePath(
 /// which can change as std and backend error sets evolve. Unmapped errors fall
 /// back to "execution_failed".
 pub fn kindForError(err: anyerror) []const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.NotConnected, error.EndOfStream, error.BrokenPipe => "unavailable",
