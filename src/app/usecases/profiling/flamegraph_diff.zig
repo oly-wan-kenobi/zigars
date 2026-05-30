@@ -161,6 +161,7 @@ pub const Failure = union(enum) {
 
     /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *Failure, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         switch (self.*) {
             .backend_run_failed => |*failure| failure.deinit(allocator),
             .command_failed => |*failure| failure.deinit(allocator),
@@ -398,6 +399,7 @@ const ResolveRequestResult = union(enum) {
 
 /// Resolves resolve request from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolveRequest(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !ResolveRequestResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const before_abs = resolvePath(allocator, context, request.before, false) catch |err| return .{ .err = .{ .err = err, .path = request.before } };
     errdefer allocator.free(before_abs);
     const after_abs = resolvePath(allocator, context, request.after, false) catch |err| {
@@ -454,6 +456,7 @@ fn generatedIntermediatePath(allocator: std.mem.Allocator, context: app_context.
 
 /// Resolves resolve path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext, path: []const u8, for_output: bool) ports.PortError![]const u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const resolved = try context.workspace_store.resolve(allocator, .{
         .path = path,
         .for_output = for_output,
@@ -465,6 +468,7 @@ fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingConte
 
 /// Implements ensure input readable workflow logic using caller-owned inputs.
 fn ensureInputReadable(allocator: std.mem.Allocator, context: app_context.ProfilingContext, input: []const u8, input_abs: []const u8) !?Failure {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const input_probe = context.workspace_store.read(allocator, .{
         .path = input,
         .max_bytes = 0,
@@ -487,6 +491,7 @@ fn ensureInputReadable(allocator: std.mem.Allocator, context: app_context.Profil
 
 /// Implements ensure output parent workflow logic using caller-owned inputs.
 fn ensureOutputParent(context: app_context.ProfilingContext, output: []const u8, output_abs: []const u8) !?Failure {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parent = std.fs.path.dirname(output) orelse return null;
     _ = context.workspace_store.ensureDir(.{
         .path = parent,
@@ -514,6 +519,7 @@ fn normalizedTimeout(timeout_ms: i64) u64 {
 
 /// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const items = try allocator.alloc([]const u8, argv.len);
     var filled: usize = 0;
     errdefer {
@@ -544,6 +550,7 @@ fn testProfilingContext(
     workspace: *fake_workspace.FakeWorkspaceStore,
     clock: ?ports.ClockAndIds,
 ) app_context.ProfilingContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zflame = "/bin/zflame", .diff_folded = "/bin/diff-folded" },
