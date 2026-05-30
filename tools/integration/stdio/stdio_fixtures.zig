@@ -40,6 +40,7 @@ const StdioOptions = struct {
 /// server process. Returns `error.AssertionFailed` if any protocol or tool
 /// assertion fails, or propagates the first I/O error encountered.
 pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var options: StdioOptions = .{};
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
@@ -112,6 +113,7 @@ fn stdioServerArgv(
     fake_zflame: []const u8,
     fake_diff: []const u8,
 ) !std.ArrayList([]const u8) {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
     if (options.server_kcov_dir) |dir| {
@@ -175,6 +177,7 @@ fn cleanupFixtureWorkspace(io: Io, rel: []const u8) void {
 /// Writes the source, folded-stack, and output directories used by stdio
 /// fixture assertions.
 fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var src_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const src_dir = try std.fmt.bufPrint(&src_path_buf, "{s}/src", .{workspace});
     try Io.Dir.cwd().createDirPath(io, src_dir);
@@ -212,6 +215,7 @@ fn writeJoinedFile(io: Io, workspace: []const u8, rel: []const u8, data: []const
 /// Installs a fake backend shim in `workspace/bin` and returns its absolute
 /// path, owned by the caller.
 fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u8, tool_path: []const u8, name: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const suffix = if (builtin.os.tag == .windows) ".exe" else "";
     const rel = try std.fmt.allocPrint(allocator, "{s}/bin/{s}{s}", .{ workspace, name, suffix });
     defer allocator.free(rel);
@@ -460,6 +464,7 @@ const StdioClient = struct {
     /// field returns `error.McpError`. The returned slice is allocated by the
     /// client's allocator and must be freed by the caller.
     pub fn request(self: *StdioClient, method: []const u8, params: ?[]const u8) ![]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const id = self.next_id;
         self.next_id += 1;
         const payload = if (params) |p|
@@ -497,6 +502,7 @@ const StdioClient = struct {
     /// to the first `content[0].text` string. Increments the internal
     /// `tool_calls` counter used by the coverage threshold check.
     pub fn callTool(self: *StdioClient, name: []const u8, args_json: []const u8) ![]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const params = try std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"arguments\":{s}}}", .{ name, args_json });
         defer self.allocator.free(params);
         self.tool_calls += 1;
@@ -520,6 +526,7 @@ const StdioClient = struct {
 
     /// Reads one newline-delimited JSON-RPC frame from child stdout.
     fn readLine(self: *StdioClient) ![]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const stdout = self.child.stdout orelse return error.MissingPipe;
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
@@ -565,6 +572,7 @@ const StdioClient = struct {
     /// because different ZLS tools surface unavailability through different
     /// result shapes.
     pub fn expectZlsUnavailable(self: *StdioClient, name: []const u8, args_json: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const result = try self.callTool(name, args_json);
         defer self.allocator.free(result);
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, result, .{});
