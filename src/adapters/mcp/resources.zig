@@ -124,6 +124,7 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
 
 /// Returns the connection-time trust manifest for MCP reads.
 fn trustManifestResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return trust_usecase.trustManifestValueFromRuntimeContext(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "trust_manifest",
         .operation = "read_resource",
@@ -136,6 +137,7 @@ fn trustManifestResource(allocator: std.mem.Allocator, context: app_context.Runt
 
 /// Builds the text workspace resource from runtime UX context.
 fn workspaceResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const body = runtime_ux.workspaceResourceText(allocator, context) catch |err| return resourceFailure(allocator, uri, .{
         .resource = "workspace",
         .operation = "read_resource",
@@ -180,6 +182,7 @@ fn zlsStatusResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
 
 /// Returns the tool catalog resource content for MCP reads.
 fn catalogResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const body = runtime_ux.catalogResourceText(allocator, context) catch |err| return resourceFailure(allocator, uri, .{
         .resource = "tool_catalog",
         .operation = "read_resource",
@@ -207,6 +210,7 @@ fn importGraphResource(allocator: std.mem.Allocator, context: app_context.Runtim
 
 /// Returns the runtime metrics resource content for MCP reads.
 fn metricsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return runtime_ux.metricsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "metrics",
         .operation = "read_resource",
@@ -219,6 +223,7 @@ fn metricsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxC
 
 /// Returns the runtime jobs resource content for MCP reads.
 fn jobsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return runtime_ux.jobsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "jobs",
         .operation = "read_resource",
@@ -231,6 +236,7 @@ fn jobsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
 
 /// Returns runtime event history for the events resource URI.
 fn runEventsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return runtime_ux.runEventsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "run_events",
         .operation = "read_resource",
@@ -243,6 +249,7 @@ fn runEventsResource(allocator: std.mem.Allocator, context: app_context.RuntimeU
 
 /// Returns the workspace roots resource content for MCP reads.
 fn workspaceRootsResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return runtime_ux.workspaceRootsResourceValue(allocator, context) catch |err| resourceValueFailure(allocator, uri, .{
         .resource = "workspace_roots",
         .operation = "read_resource",
@@ -388,6 +395,7 @@ fn artifactContext(comptime Provider: type, allocator: std.mem.Allocator, user_d
 
 /// Serializes JSON as owned application/json resource text.
 fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
     std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &aw.writer) catch |err| return resourceFailure(allocator, uri, .{
@@ -403,6 +411,7 @@ fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, value: std.json.Va
 
 /// Extracts result.capabilities from a parsed ZLS initialize response.
 fn serverCapabilities(value: std.json.Value) std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const result = switch (value) {
         .object => |obj| obj.get("result") orelse return .null,
         else => return .null,
@@ -427,6 +436,7 @@ const ResourceFailureSpec = struct {
 
 /// Builds serialized resource error content from an internal failure spec.
 fn resourceFailure(allocator: std.mem.Allocator, uri: []const u8, spec: ResourceFailureSpec, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return mcp_resource_errors.jsonContentFromError(allocator, .{
         .uri = uri,
         .resource = spec.resource,
@@ -442,6 +452,7 @@ fn resourceFailure(allocator: std.mem.Allocator, uri: []const u8, spec: Resource
 
 /// Builds a JSON error value for handlers that still need resource serialization.
 fn resourceValueFailure(allocator: std.mem.Allocator, uri: []const u8, spec: ResourceFailureSpec, err: anyerror) mcp.resources.ResourceError!std.json.Value {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_resource_errors.valueFromError(allocator, .{
         .uri = uri,
@@ -458,6 +469,7 @@ fn resourceValueFailure(allocator: std.mem.Allocator, uri: []const u8, spec: Res
 
 /// Normalizes missing runtime context failures for registered resource handlers.
 fn contextFailure(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
+    // Derive context values from one source so audit and response metadata do not diverge.
     return resourceFailure(allocator, uri, .{
         .resource = "registered_resource",
         .operation = "dispatch_resource",
@@ -470,6 +482,7 @@ fn contextFailure(allocator: std.mem.Allocator, uri: []const u8, err: anyerror) 
 
 /// Creates a reusable failure spec for dynamic file-resource reads.
 fn dynamicResourceFailure(phase: []const u8, code: []const u8, category: []const u8, resolution: []const u8) ResourceFailureSpec {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return .{
         .resource = "dynamic_file_resource",
         .operation = "read_resource",
@@ -482,6 +495,7 @@ fn dynamicResourceFailure(phase: []const u8, code: []const u8, category: []const
 
 /// Creates a reusable failure spec for artifact resource reads.
 fn artifactResourceFailure(phase: []const u8, code: []const u8, resolution: []const u8) ResourceFailureSpec {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return .{
         .resource = "artifact_resource",
         .operation = "read_resource",
@@ -566,6 +580,7 @@ fn resourceTestContext(
     runtime_session: *test_fakes.FakeRuntimeSession,
     tool_catalog: ?ports.ToolCatalog,
 ) app_context.RuntimeUxContext {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "/bin/zig", .zls = "/bin/zls" },
