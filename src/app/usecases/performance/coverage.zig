@@ -92,6 +92,7 @@ pub fn merge(allocator: std.mem.Allocator, request: MergeRequest) !coverage_mode
 /// On success both parsed sets are moved into the returned `CoverageDiff` (caller frees);
 /// the ownership flags ensure a mid-parse failure does not leak the first set.
 pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current = try map(allocator, request.current);
     var current_owned = true;
     defer if (current_owned) current.deinit(allocator);
@@ -111,6 +112,7 @@ pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
 /// Parses coverage evidence and computes overall and changed-file line rates (bp) against
 /// the request floors. The parsed set is moved into the returned budget (caller frees).
 pub fn budget(allocator: std.mem.Allocator, request: BudgetRequest) !CoverageBudget {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var set = try map(allocator, request.coverage);
     errdefer set.deinit(allocator);
     const changed = coverage_model.changedCoverage(set, request.changed_files);
