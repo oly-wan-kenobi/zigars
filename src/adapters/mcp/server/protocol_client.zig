@@ -215,6 +215,7 @@ pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.All
 /// Refuses an inbound request that arrives while we are blocked awaiting a
 /// client protocol reply; re-entrant dispatch on the serial transport is unsafe.
 fn rejectNestedRequest(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const error_response = jsonrpc.createErrorResponse(
         request.id,
         jsonrpc.ErrorCode.INVALID_REQUEST,
@@ -266,6 +267,7 @@ fn classifyProtocolResponse(feature: app_ports.ProtocolFeature, response: ?std.j
 }
 
 fn protocolStatus(status: ResponseStatus) app_ports.ProtocolResponseStatus {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .accepted => .accepted,
         .declined => .declined,
@@ -283,6 +285,7 @@ fn unsupportedProtocolReason(feature: app_ports.ProtocolFeature) []const u8 {
 }
 
 fn unavailableReason(status: ResponseStatus) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .accepted => "",
         .declined => "client declined the protocol helper request",
@@ -312,6 +315,7 @@ fn matchesOptionalRequestId(response_id: ?types.RequestId, expected: i64) bool {
 }
 
 fn fallbackValue(allocator: std.mem.Allocator, feature: []const u8, method: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj: std.json.ObjectMap = .empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "protocol_helper_fallback" });
@@ -326,6 +330,7 @@ fn fallbackValue(allocator: std.mem.Allocator, feature: []const u8, method: []co
 /// method, outbound `request_id`) without awaiting the reply. The id is recorded
 /// in `pending_requests` so a later response is recognized by the main loop.
 fn sendClientRequestValue(server: anytype, io: std.Io, allocator: std.mem.Allocator, feature: []const u8, method: []const u8, params: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const id = server.next_request_id;
     server.next_request_id += 1;
     try server.pending_requests.put(id, .{
