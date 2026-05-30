@@ -74,6 +74,7 @@ pub const Contract = struct {
 
 /// Returns metadata for the bundled curated builtin docs.
 pub fn curatedBuiltinsSource() Source {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = "curated_zigars_builtins",
         .label = "Curated Zig builtin documentation bundled with zigars",
@@ -85,6 +86,7 @@ pub fn curatedBuiltinsSource() Source {
 
 /// Returns metadata for local stdlib Zig source scans.
 pub fn stdlibSource(path: []const u8, version: ?[]const u8) Source {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = "local_stdlib_zig_source",
         .label = "Local Zig standard-library source files",
@@ -97,6 +99,7 @@ pub fn stdlibSource(path: []const u8, version: ?[]const u8) Source {
 
 /// Returns metadata for an installed Zig language-reference HTML file.
 pub fn installedLangrefSource(path: []const u8, version: ?[]const u8) Source {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = "installed_langref_html",
         .label = "Installed Zig language reference HTML",
@@ -109,6 +112,7 @@ pub fn installedLangrefSource(path: []const u8, version: ?[]const u8) Source {
 
 /// Returns metadata for the bundled language-reference fallback index.
 pub fn bundledLangrefSource() Source {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = "bundled_langref_index",
         .label = "Bundled Zig language-reference index",
@@ -226,6 +230,7 @@ pub fn builtinList(input: BuiltinIndexInput) BuiltinListResult {
 /// Matches when the normalized query is a substring of the builtin name or vice versa.
 /// `limit` is clamped to at least 1; the result owns `matches` and takes ownership of `input`.
 pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize, input: BuiltinIndexInput) !BuiltinDocResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -258,6 +263,7 @@ pub fn buildBuiltinIndexInput(
     active_source_path: ?[]const u8,
     active_source: ?[]const u8,
 ) !BuiltinIndexInput {
+    // Construct this value in a single path so required fields cannot drift.
     const owned_version = if (toolchain_version) |version| try allocator.dupe(u8, version) else null;
     errdefer if (owned_version) |version| allocator.free(version);
     const owned_source_path = if (active_source_path) |path| try allocator.dupe(u8, path) else null;
@@ -282,6 +288,7 @@ const max_drift_name_sample = 16;
 
 /// Fills builtin drift counts and samples from active toolchain source text.
 fn fillBuiltinDrift(allocator: std.mem.Allocator, source: []const u8, drift: *BuiltinDriftInfo) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const active_names = try parseActiveBuiltinNames(allocator, source);
     defer allocator.free(active_names);
     drift.active_count = active_names.len;
@@ -315,6 +322,7 @@ fn fillBuiltinDrift(allocator: std.mem.Allocator, source: []const u8, drift: *Bu
 
 /// Parses active builtin names from toolchain source into an owned name slice.
 fn parseActiveBuiltinNames(allocator: std.mem.Allocator, source: []const u8) ![]const []const u8 {
+    // Normalize input here so downstream paths can rely on validated shape.
     const list_start = std.mem.indexOf(u8, source, "pub const list") orelse return allocator.alloc([]const u8, 0);
     const list_end = std.mem.indexOfPos(u8, source, list_start, "});") orelse source.len;
     const list_source = source[list_start..list_end];
@@ -383,6 +391,7 @@ pub const StdSourceMatch = struct {
 
     /// Frees all owned match strings.
     fn deinit(self: StdSourceMatch, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.path);
         allocator.free(self.source_path);
         allocator.free(self.snippet);
@@ -415,6 +424,7 @@ pub const StdSearchResult = struct {
 /// Results are sorted by relative path then line; the first `limit` sorted matches are
 /// returned ranked 1..n. The total_match_count reflects all matches before truncation.
 pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []const u8, files: []const TextFile, metadata: StdIndexMetadata, limit: usize) !StdSearchResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -475,6 +485,7 @@ pub const StdItemMatch = struct {
 
     /// Frees all owned match strings.
     fn deinit(self: StdItemMatch, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.name);
         allocator.free(self.decl_name);
         allocator.free(self.path);
@@ -593,6 +604,7 @@ fn appendStdSourceMatch(
     hit_line: []const u8,
     parsed_decl: ?ParsedDecl,
 ) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var path: ?[]const u8 = null;
     var source_path: ?[]const u8 = null;
     var snippet: ?[]const u8 = null;
@@ -653,6 +665,7 @@ fn appendStdItemMatch(
     doc_comment_count: usize,
     path_hint: ?[]const u8,
 ) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var owned_name: ?[]const u8 = null;
     var decl_name: ?[]const u8 = null;
     var path: ?[]const u8 = null;
@@ -768,6 +781,7 @@ pub const LangrefProbe = struct {
 /// Explicitly rejects docs/index.html because Zig websites ship an index page at
 /// that path that is not the language reference, even though it mentions "Zig".
 pub fn looksLikeLangref(rel_path: []const u8, bytes: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.eql(u8, rel_path, "docs/index.html")) return false;
     if (std.mem.indexOf(u8, bytes, "Language Reference") != null or
         std.mem.indexOf(u8, bytes, "Zig Language Reference") != null)
@@ -849,6 +863,7 @@ pub const LangrefSearchResult = struct {
 /// Two-pass ranking: title/anchor matches come before summary/body matches so the
 /// most structurally relevant sections appear first.
 pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize, fallback: BundledFallbackMetadata) !LangrefSearchResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -887,6 +902,7 @@ pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: us
 /// skipped_heading_count. The returned result owns both the source.path and
 /// metadata.source_path strings even though both duplicate `path`.
 pub fn langrefInstalled(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize, probe: LangrefProbe) !LangrefSearchResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -961,6 +977,7 @@ const MatchPass = enum { title, body };
 
 /// Appends bundled langref matches for one ranking pass; allocation failures are returned.
 fn appendBundledMatches(allocator: std.mem.Allocator, matches: *std.ArrayList(LangrefMatch), lower_query: []const u8, limit: usize, pass: MatchPass) !usize {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var count: usize = 0;
     for (sections) |section| {
         if (count >= limit) break;
@@ -989,6 +1006,7 @@ fn sectionMatches(section: Section, lower_query: []const u8, pass: MatchPass) bo
 
 /// Performs an ASCII-insensitive containment check against lowercase query text.
 fn containsLowered(haystack: []const u8, lower_query: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (lower_query.len == 0) return true;
     if (lower_query.len > haystack.len) return false;
     var start: usize = 0;
@@ -1010,6 +1028,7 @@ const HtmlHeading = struct {
 
 /// Finds the next HTML heading and returns borrowed source slices.
 fn nextHeading(html: []const u8, start_pos: usize) ?HtmlHeading {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var pos = start_pos;
     while (std.mem.indexOfPos(u8, html, pos, "<h")) |start| {
         if (start + 2 >= html.len or !std.ascii.isDigit(html[start + 2])) {
@@ -1043,6 +1062,7 @@ fn headingAnchor(open_tag: []const u8, title_html: []const u8) ?[]const u8 {
 
 /// Extracts a quoted HTML attribute value from borrowed tag text.
 fn attrValue(text: []const u8, name: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const start = std.mem.indexOf(u8, text, name) orelse return null;
     var pos = start + name.len;
     while (pos < text.len and std.ascii.isWhitespace(text[pos])) pos += 1;
@@ -1065,6 +1085,7 @@ fn anchorHrefFragment(text: []const u8) ?[]const u8 {
 
 /// Strips HTML tags into allocator-owned text; allocation failures are returned.
 fn stripHtmlAlloc(allocator: std.mem.Allocator, html: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     var in_tag = false;
@@ -1098,6 +1119,7 @@ const Entity = struct { char: u8, len: usize };
 
 /// Decodes a supported HTML entity prefix into one ASCII character.
 fn consumeEntity(text: []const u8) ?Entity {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const entities = [_]struct { name: []const u8, char: u8 }{
         .{ .name = "&lt;", .char = '<' },
         .{ .name = "&gt;", .char = '>' },
@@ -1113,6 +1135,7 @@ fn consumeEntity(text: []const u8) ?Entity {
 
 /// Returns a bounded text window around the first lowercase query hit.
 fn snippetForQuery(text: []const u8, lower_text: []const u8, lower_query: []const u8) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const hit = std.mem.indexOf(u8, lower_text, lower_query) orelse return text[0..@min(text.len, 240)];
     var start = hit;
     while (start > 0 and text[start - 1] != '.' and text[start - 1] != '\n') start -= 1;
@@ -1192,6 +1215,7 @@ pub const DocsQueryResult = struct {
 
 /// Builds an index of documentation files within the requested scope.
 pub fn docsIndex(allocator: std.mem.Allocator, scope: []const u8, files: []const TextFile, skipped_files: usize, limit: usize) !DocsIndexResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var entries: std.ArrayList(DocsEntry) = .empty;
     errdefer {
         for (entries.items) |entry| entry.deinit(allocator);
@@ -1215,6 +1239,7 @@ pub fn docsIndex(allocator: std.mem.Allocator, scope: []const u8, files: []const
 
 /// Queries documentation files and optional autodoc text for a source match.
 pub fn docsQuery(allocator: std.mem.Allocator, query: []const u8, scope: []const u8, files: []const TextFile, autodoc_text: ?[]const u8, skipped_files: usize, limit: usize) !DocsQueryResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
     defer allocator.free(lower_query);
@@ -1255,6 +1280,7 @@ pub fn docsQuery(allocator: std.mem.Allocator, query: []const u8, scope: []const
 /// Recognized scopes: "docs" (Markdown under docs/ and README.md), "src" (.zig under src/),
 /// "all" (any .md or .zig), default (Markdown or .zig under src/).
 pub fn isDocsScopePath(scope: []const u8, path: []const u8) bool {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     if (std.mem.startsWith(u8, path, ".") or std.mem.indexOf(u8, path, "zig-cache") != null or std.mem.startsWith(u8, path, "zig-out/")) return false;
     const is_md = std.mem.endsWith(u8, path, ".md");
     const is_zig = std.mem.endsWith(u8, path, ".zig");
@@ -1306,6 +1332,7 @@ pub const RawReference = struct {
 /// The SHA-256 digest is encoded as lowercase hex into the fixed `sha256` field.
 /// All string fields are borrowed from the caller; no allocation occurs.
 pub fn rawReference(source_kind: []const u8, path: ?[]const u8, bytes: []const u8) RawReference {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
     return .{
@@ -1348,6 +1375,7 @@ pub const AutodocIngestResult = struct {
 /// JSON is walked depth-first; objects with a name, docs, or path field are collected.
 /// On JSON parse failure the input is treated as plain text and each non-empty line becomes an entry.
 pub fn autodocIngest(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !AutodocIngestResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var entries: std.ArrayList(AutodocEntry) = .empty;
     errdefer {
         for (entries.items) |entry| entry.deinit(allocator);
@@ -1367,6 +1395,7 @@ pub fn autodocIngest(allocator: std.mem.Allocator, source_kind: []const u8, path
 
 /// Collects autodoc entries from JSON into caller-owned storage; allocation failures are returned.
 fn collectJsonDocEntries(allocator: std.mem.Allocator, value: std.json.Value, entries: *std.ArrayList(AutodocEntry), limit: usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (entries.items.len >= limit) return;
     switch (value) {
         .object => |obj| {
@@ -1388,6 +1417,7 @@ fn collectJsonDocEntries(allocator: std.mem.Allocator, value: std.json.Value, en
 
 /// Appends autodoc entries found in text headings; allocation failures are returned.
 fn appendTextDocEntries(allocator: std.mem.Allocator, entries: *std.ArrayList(AutodocEntry), text: []const u8, limit: usize) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var lines = std.mem.splitScalar(u8, text, '\n');
     var line_no: usize = 1;
     while (lines.next()) |line| : (line_no += 1) {
@@ -1434,6 +1464,7 @@ pub const DocExampleCheckResult = struct {
 /// The parse is purely syntactic; the snippet is never executed.
 /// The result owns `label`; `content` is borrowed only during the call.
 pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []const u8) !SnippetCheck {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = try allocator.dupeZ(u8, content);
     var tree = try std.zig.Ast.parse(allocator, source, .zig);
     defer {
@@ -1454,6 +1485,7 @@ pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []
 /// Only ``` zig ``` and ``` zig,no_run ``` fences are checked; other languages are skipped.
 /// `ok` is true only when all extracted snippets are individually syntax-valid.
 pub fn docExampleCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !DocExampleCheckResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var snippets: std.ArrayList(SnippetCheck) = .empty;
     errdefer {
         for (snippets.items) |snippet| snippet.deinit(allocator);
@@ -1473,6 +1505,7 @@ pub fn docExampleCheck(allocator: std.mem.Allocator, source_kind: []const u8, pa
 
 /// Collects fenced Zig snippets into owned check records; allocation failures are returned.
 fn collectFencedZigSnippets(allocator: std.mem.Allocator, text: []const u8, snippets: *std.ArrayList(SnippetCheck), limit: usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text, '\n');
     var in_zig = false;
     var fence_line: usize = 0;
@@ -1535,6 +1568,7 @@ pub const ReadmeCommandCheckResult = struct {
 /// Collects "zig …" lines from fenced shell blocks and bare "zig …" lines outside fences.
 /// Commands containing "build" or "test" are classified as zig_validation_command.
 pub fn readmeCommandCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !ReadmeCommandCheckResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var commands: std.ArrayList(ReadmeCommand) = .empty;
     errdefer {
         for (commands.items) |command| command.deinit(allocator);
@@ -1593,6 +1627,7 @@ fn lastNameSegment(name: []const u8) []const u8 {
 
 /// Converts a qualified std name into an owned relative stdlib path hint when possible.
 fn qualifiedStdPathHint(allocator: std.mem.Allocator, name: []const u8) !?[]const u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const trimmed = std.mem.trim(u8, name, " \t\r\n");
     if (!std.mem.startsWith(u8, trimmed, "std.")) return null;
     const last_dot = std.mem.lastIndexOfScalar(u8, trimmed, '.') orelse return null;
@@ -1623,6 +1658,7 @@ fn declarationKind(line: []const u8, name: []const u8) ?[]const u8 {
 
 /// Parses a declaration line into borrowed declaration name and kind slices.
 fn parseDeclaration(line: []const u8) ?ParsedDecl {
+    // Normalize input here so downstream paths can rely on validated shape.
     var rest = std.mem.trim(u8, line, " \t");
     if (std.mem.startsWith(u8, rest, "pub ")) rest = rest[4..];
     while (true) {
@@ -1650,6 +1686,7 @@ fn isIdentChar(c: u8) bool {
 
 /// Builds an owned dotted documentation name from path and declaration name.
 fn qualifiedNameForDecl(allocator: std.mem.Allocator, path: []const u8, decl_name: []const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const stem = if (std.mem.endsWith(u8, path, ".zig")) path[0 .. path.len - 4] else path;
     var module: std.ArrayList(u8) = .empty;
     defer module.deinit(allocator);
@@ -1663,6 +1700,7 @@ fn qualifiedNameForDecl(allocator: std.mem.Allocator, path: []const u8, decl_nam
 
 /// Collects adjacent preceding doc comments into owned text.
 fn docCommentsBefore(allocator: std.mem.Allocator, text: []const u8, index: usize) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const start = lineStart(text, index);
     var first = start;
     while (first > 0) {
