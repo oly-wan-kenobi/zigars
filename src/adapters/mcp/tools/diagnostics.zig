@@ -159,6 +159,7 @@ fn invoke(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = workflows.App.init(context, allocator);
     const result = func(&app, allocator, args) catch |err| return usecaseError(allocator, tool_name, err);
     if (result.is_error) {
@@ -170,6 +171,7 @@ fn invoke(
 
 /// Maps usecase error failures to structured MCP errors.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -187,6 +189,7 @@ test "diagnostics adapter maps structured and thrown usecase failures" {
     const Stub = struct {
         /// Test stub that returns a structured tool failure.
         fn structuredFailure(_: *workflows.App, allocator: std.mem.Allocator, _: ?std.json.Value) !workflows.Result {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             var obj = std.json.ObjectMap.empty;
             const key = try allocator.dupe(u8, "kind");
             var key_owned = true;
