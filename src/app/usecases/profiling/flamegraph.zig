@@ -317,6 +317,7 @@ fn normalizedTimeout(timeout_ms: i64) u64 {
 
 /// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const items = try allocator.alloc([]const u8, argv.len);
     var filled: usize = 0;
     errdefer {
