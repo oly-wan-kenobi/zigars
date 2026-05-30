@@ -119,6 +119,7 @@ pub const PlanResult = struct {
 
     /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *PlanResult, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.plan_id);
         allocator.free(self.mode);
         if (self.goal) |goal| allocator.free(goal);
@@ -177,6 +178,7 @@ pub const PhaseRun = struct {
 
     /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *PhaseRun, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.name);
         self.argv.deinit(allocator);
         allocator.free(self.cwd);
@@ -262,6 +264,7 @@ pub const RunReport = struct {
 
     /// Releases allocations owned by this value; callers must not use owned slices after this returns.
     pub fn deinit(self: *RunReport, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         self.plan.deinit(allocator);
         for (self.phases) |*phase| phase.deinit(allocator);
         allocator.free(self.phases);
@@ -683,6 +686,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
 /// return a typed err), parses up to `limit` runs, and derives failure groups
 /// for the requested view. Returns an allocator-owned HistoryOutcome to deinit.
 pub fn history(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: HistoryRequest) !HistoryOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const limit = @max(@as(usize, 1), request.limit);
     var text: ?[]const u8 = request.history_text;
     var owned_text: ?[]const u8 = null;
@@ -757,6 +761,7 @@ const PhaseSpec = struct {
 
 /// Appends phase data into caller-provided storage, propagating allocation failures.
 fn appendPhase(allocator: std.mem.Allocator, phases: *std.ArrayList(Phase), spec: PhaseSpec) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const id = try allocator.dupe(u8, spec.id);
     errdefer allocator.free(id);
     const tool = if (spec.tool) |tool_value| try allocator.dupe(u8, tool_value) else null;
@@ -782,6 +787,7 @@ fn appendPhase(allocator: std.mem.Allocator, phases: *std.ArrayList(Phase), spec
 
 /// Appends skipped data into caller-provided storage, propagating allocation failures.
 fn appendSkipped(allocator: std.mem.Allocator, skipped: *std.ArrayList(SkippedPhase), name: []const u8, reason: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const owned_name = try allocator.dupe(u8, name);
     errdefer allocator.free(owned_name);
     const owned_reason = try allocator.dupe(u8, reason);
@@ -802,6 +808,7 @@ fn appendOwnedString(allocator: std.mem.Allocator, values: *std.ArrayList([]cons
 
 /// Invokes run phase with caller-owned inputs; command and allocation failures propagate.
 fn runPhase(allocator: std.mem.Allocator, context: app_context.ValidationContext, name: []const u8, argv: []const []const u8, timeout_ms: u64) !PhaseRun {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var owned_argv = try cloneArgv(allocator, argv);
     errdefer owned_argv.deinit(allocator);
     const owned_name = try allocator.dupe(u8, name);
@@ -859,6 +866,7 @@ fn buildHistoryRecord(
     phases: []const PhaseRun,
     skipped: []const SkippedPhase,
 ) !HistoryRecord {
+    // Construct this value in a single path so required fields cannot drift.
     var failures = std.ArrayList(FailureRecord).empty;
     errdefer {
         for (failures.items) |*failure| failure.deinit(allocator);
@@ -911,6 +919,7 @@ fn buildHistoryRecord(
 
 /// Builds preimage identity metadata for the requested workspace path.
 fn preimageForPath(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) !Preimage {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = history_max_bytes,
@@ -928,6 +937,7 @@ fn preimageForPath(allocator: std.mem.Allocator, context: app_context.Validation
 /// caller-owned bytes or null when the file is absent/unreadable (treated as
 /// "no prior history" rather than an error). Read stays inside the workspace.
 fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = history_max_bytes,
@@ -939,6 +949,7 @@ fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.Valid
 
 /// Reports whether the requested workspace path exists.
 fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) bool {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const result = context.workspace_store.read(allocator, .{
         .path = path,
         .max_bytes = 0,
@@ -950,6 +961,7 @@ fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.Valida
 
 /// Parses history runs input using caller-provided storage; malformed input and allocation failures propagate.
 fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize) ![]HistoryRun {
+    // Normalize input here so downstream paths can rely on validated shape.
     var out = std.ArrayList(HistoryRun).empty;
     errdefer {
         for (out.items) |*item| item.deinit(allocator);
@@ -993,6 +1005,7 @@ fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize
 /// form in raw_json and extracting ok plus per-failure fingerprints (falling
 /// back to the phase name, then "unknown"). Returns allocator-owned data.
 fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryRun {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_json = try serializeJsonValueAlloc(allocator, value);
     errdefer allocator.free(raw_json);
     const obj = switch (value) {
@@ -1038,6 +1051,7 @@ fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !His
 
 /// Constructs failure groups data from caller-owned inputs, propagating allocation failures.
 fn buildFailureGroups(allocator: std.mem.Allocator, runs: []const HistoryRun) ![]FailureGroup {
+    // Construct this value in a single path so required fields cannot drift.
     var groups = std.ArrayList(FailureGroup).empty;
     errdefer {
         for (groups.items) |*group| group.deinit(allocator);
@@ -1211,6 +1225,7 @@ fn writeCommandObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), pha
 
 /// Writes events object fields to the provided JSON stream and propagates writer failures.
 fn writeEventsObject(allocator: std.mem.Allocator, out: *std.ArrayList(u8), phase_item: *const PhaseRun) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try out.append(allocator, '{');
     try jsonFieldString(allocator, out, "kind", "validation_phase", true);
     try jsonFieldInt(allocator, out, "schema_version", schema_version, false);
@@ -1267,6 +1282,7 @@ fn writeCommandTerm(allocator: std.mem.Allocator, out: *std.ArrayList(u8), term:
 
 /// Writes command string fields to the provided JSON stream and propagates writer failures.
 fn writeCommandString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), argv: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var command = std.ArrayList(u8).empty;
     defer command.deinit(allocator);
     for (argv, 0..) |arg, index| {
@@ -1279,6 +1295,7 @@ fn writeCommandString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), arg
 /// Appends a `"key":[...]` string-array member to the manual JSON builder `out`;
 /// `first` controls whether a leading comma separator is written.
 fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, values: []const []const u8, first: bool) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
     try out.append(allocator, ':');
@@ -1295,6 +1312,7 @@ fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), k
 /// UTF-8 to U+FFFD so the JSONL history line stays valid and reports the
 /// original byte count even when bytes were replaced.
 fn jsonStreamFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name: []const u8, bytes: []const u8, first: bool) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var safe = try safeTextAlloc(allocator, bytes);
     defer safe.deinit(allocator);
     try jsonFieldString(allocator, out, name, safe.text, first);
@@ -1334,6 +1352,7 @@ const SafeText = struct {
 
 /// Copies bounded text into allocator-owned storage for result payloads.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
             .text = try allocator.dupe(u8, bytes),
@@ -1387,6 +1406,7 @@ fn writeLineEventsArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), s
 
 /// Writes line events fields to the provided JSON stream and propagates writer failures.
 fn writeLineEvents(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: []const u8, stream: []const u8, first: *bool, counts: *EventCounts) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text, '\n');
     var line_no: usize = 1;
     while (lines.next()) |raw| : (line_no += 1) {
@@ -1411,6 +1431,7 @@ fn writeLineEvents(allocator: std.mem.Allocator, out: *std.ArrayList(u8), text: 
 
 /// Writes compiler summary fields to the provided JSON stream and propagates writer failures.
 fn writeCompilerSummary(allocator: std.mem.Allocator, out: *std.ArrayList(u8), counts: EventCounts) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try out.append(allocator, '{');
     try jsonFieldInt(allocator, out, "finding_count", counts.compiler_error_count + counts.compiler_warning_count, true);
     try jsonFieldInt(allocator, out, "error_count", counts.compiler_error_count, false);
@@ -1443,6 +1464,7 @@ fn classifyEventLine(line: []const u8) []const u8 {
 
 /// Classifies command failures into stable result categories.
 fn commandErrorKind(err: ports.PortError) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
         error.StreamTooLong, error.OutputLimitExceeded => "output_limit",
@@ -1500,6 +1522,7 @@ fn serializeJsonValueAlloc(allocator: std.mem.Allocator, value: std.json.Value) 
 /// Recursively serializes a JSON value into the builder `out`. Object keys are
 /// emitted in iterator order, which is insertion order, keeping output stable.
 fn serializeJsonValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
         .bool => |b| try out.appendSlice(allocator, if (b) "true" else "false"),
@@ -1533,6 +1556,7 @@ fn serializeJsonValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
 
 /// Serializes json string data into allocator-owned JSON text.
 fn serializeJsonString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
     for (value) |c| {
@@ -1597,6 +1621,7 @@ fn saturatingI64(value: u64) i64 {
 
 /// Clones argv data into allocator-owned storage.
 fn cloneArgv(allocator: std.mem.Allocator, argv: []const []const u8) !OwnedArgv {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const items = try allocator.alloc([]const u8, argv.len);
     var filled: usize = 0;
     errdefer {
