@@ -50,6 +50,7 @@ pub fn candidatePort(attempt: u16) u16 {
 /// failed child startup as a signal to retry with a fresh port to absorb the
 /// (small) bind/rebind race.
 pub fn reserveLoopbackPort(io: Io) !u16 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const max_attempts: u16 = 64;
     var attempt: u16 = 0;
     while (attempt < max_attempts) : (attempt += 1) {
