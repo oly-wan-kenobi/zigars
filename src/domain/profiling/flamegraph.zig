@@ -66,6 +66,7 @@ pub const ZflameOption = enum {
 
     /// Returns the manifest input field name for this option.
     pub fn fieldName(self: ZflameOption) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .title => "title",
             .subtitle => "subtitle",
@@ -77,6 +78,7 @@ pub const ZflameOption = enum {
 
     /// Returns the CLI flag prefix used for owned argv construction.
     pub fn flagPrefix(self: ZflameOption) []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (self) {
             .title => "--title=",
             .subtitle => "--subtitle=",
@@ -145,6 +147,7 @@ pub const BuiltArgv = struct {
 /// like "--title=..." for each present option. The caller must deinit the result.
 /// On error, all partially built allocations are freed before returning.
 pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !BuiltArgv {
+    // Construct this value in a single path so required fields cannot drift.
     var built: BuiltArgv = .{};
     var built_owned = true;
     defer if (built_owned) built.deinit(allocator);
@@ -164,6 +167,7 @@ pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !Bu
 /// Borrows executable, before, and after from spec; allocates the "--output=..."
 /// flag string. The caller must deinit the result.
 pub fn buildDiffFoldedArgv(allocator: std.mem.Allocator, spec: DiffFoldedSpec) !BuiltArgv {
+    // Construct this value in a single path so required fields cannot drift.
     var built: BuiltArgv = .{};
     var built_owned = true;
     defer if (built_owned) built.deinit(allocator);
