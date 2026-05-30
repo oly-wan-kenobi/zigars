@@ -10,6 +10,7 @@ const std = @import("std");
 /// Requires a live server with the fixture workspace already configured;
 /// the caller (stdio_fixtures) owns server lifecycle and workspace setup.
 pub fn run(client: anytype) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const profile_v2 = try client.callTool("zigars_project_profile_v2", "{\"apply\":false}");
     defer client.allocator.free(profile_v2);
     try client.expectPathJson(profile_v2, "profile.schema_version", .{ .integer = 2 });
