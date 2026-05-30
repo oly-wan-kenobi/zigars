@@ -254,6 +254,7 @@ pub const State = struct {
 
     /// Records per-tool counters plus optional bounded request correlation.
     pub fn recordToolCallWithCorrelation(self: *State, name: []const u8, latency_ms: u64, is_error: bool, correlation: ?ToolCallCorrelationInput) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.total_tool_calls += 1;
         if (is_error) self.total_tool_errors += 1;
 
@@ -274,6 +275,7 @@ pub const State = struct {
 
     /// Records per-MCP-method request latency and error counters.
     pub fn recordMcpRequest(self: *State, method: []const u8, latency_ms: u64, is_error: bool) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.total_mcp_requests += 1;
         if (is_error) self.total_mcp_request_errors += 1;
 
@@ -292,6 +294,7 @@ pub const State = struct {
 
     /// Appends request correlation to a bounded process-local ring.
     fn recordToolCallCorrelation(self: *State, name: []const u8, is_error: bool, fields: ToolCallCorrelationInput) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const sequence = self.tool_call_correlation_count + 1;
         const index = ringIndex(sequence, max_tool_call_correlations);
         var event: ToolCallCorrelation = .{
@@ -328,6 +331,7 @@ pub const State = struct {
 
     /// Appends a backend probe result to the bounded ring.
     pub fn recordBackendProbe(self: *State, name: []const u8, ok: bool, status: []const u8, resolution: []const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const sequence = self.backend_event_count + 1;
         const index = ringIndex(sequence, max_backend_events);
         self.backend_events[index] = .{
@@ -342,6 +346,7 @@ pub const State = struct {
 
     /// Appends a command event and accumulates non-negative duration.
     pub fn recordCommand(self: *State, title: []const u8, argv: []const []const u8, duration_ms: i64, ok: bool, error_name: ?[]const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const sequence = self.command_event_count + 1;
         const index = ringIndex(sequence, max_command_events);
         const safe_duration: u64 = if (duration_ms <= 0) 0 else @intCast(duration_ms);
@@ -360,6 +365,7 @@ pub const State = struct {
 
     /// Records one monotonic startup phase timing.
     pub fn recordStartupPhase(self: *State, name: []const u8, start_ms: u64, duration_ms: u64) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const sequence = self.startup_phase_count + 1;
         const index = ringIndex(sequence, max_startup_phases);
         self.startup_phases[index] = .{
@@ -395,6 +401,7 @@ pub const State = struct {
     /// "uncancellable", "not_cancellable".  Unrecognised values only increment
     /// `cancellation_requested`; the named counters are unaffected.
     pub fn recordCancellation(self: *State, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.cancellation_requested +|= 1;
         if (std.mem.eql(u8, status, "unknown")) self.cancellation_unknown +|= 1;
         if (std.mem.eql(u8, status, "completed") or std.mem.eql(u8, status, "completed_late")) self.cancellation_completed +|= 1;
@@ -451,6 +458,7 @@ pub const State = struct {
     /// Returns null once `max_tool_stats` distinct names have been seen; the
     /// caller increments `dropped_tool_stat_observations` in that case.
     fn toolSlot(self: *State, name: []const u8) ?*ToolStats {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         for (self.tool_stats[0..self.tool_stat_count]) |*stat| {
             if (std.mem.eql(u8, stat.name, name)) return stat;
         }
@@ -467,6 +475,7 @@ pub const State = struct {
     /// new slot on first use.  Truncated names are matched by prefix against
     /// the stored prefix so they do not collide with a distinct short name.
     fn methodSlot(self: *State, name: []const u8) ?*MethodStats {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         for (self.method_stats[0..self.method_stat_count]) |*stat| {
             if (methodNameMatches(stat, name)) return stat;
         }
