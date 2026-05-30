@@ -47,6 +47,7 @@ test "static analysis contracts do not overstate evidence maturity" {
 /// Each tier has a distinct set of required fields and forbidden overstatements
 /// (e.g. advisory_orientation must not claim high confidence or release-gating).
 fn expectContractEvidenceBounded(contract: contracts.Contract) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (contract.tier) {
         .advisory_orientation => {
             try std.testing.expect(contract.confidence != .high);
