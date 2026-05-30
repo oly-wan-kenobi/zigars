@@ -1,3 +1,5 @@
+//! Public facade for all fake port implementations used in app and MCP tests.
+//! Import this module to access every `Fake*` type from a single namespace.
 pub const artifact_store = @import("artifact_store.zig");
 pub const backend_probe = @import("backend_probe.zig");
 pub const clock_and_ids = @import("clock_and_ids.zig");

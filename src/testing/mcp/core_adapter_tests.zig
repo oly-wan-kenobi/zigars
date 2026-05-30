@@ -1,3 +1,9 @@
+//! Tests for the core MCP tool adapter projections.
+//! Pins the structured output shape and error-path contracts for zig_version,
+//! zig_build, zig_check, zig_test, zig_translate_c, and zig_explain_errors.
+//! Every test uses expectation-driven fake ports; verify() asserts all
+//! expectations were consumed, catching missing or extra command invocations.
+
 const std = @import("std");
 
 const app_context = @import("../../app/context.zig");
@@ -418,7 +424,8 @@ test "core adapter renders command-backed compile index and explain failures" {
     try workspace.verify();
 }
 
-/// Builds the adapter test context with fake ports and allocator ownership.
+/// Returns a CoreCommandContext wired to the given fake ports.
+/// Callers own the fake port objects and must call deinit/verify after use.
 fn testCoreContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore) app_context.CoreCommandContext {
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },

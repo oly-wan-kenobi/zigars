@@ -1,6 +1,12 @@
+//! Shared evidence JSON builders used by analysis and trust modules.
+//! All public functions return allocator-owned std.json.Value trees;
+//! use deinitOwnedValue to free them. Object keys are borrowed string literals.
+
 const std = @import("std");
 
 /// Canonical evidence sources used in JSON findings payloads.
+/// Order reflects increasing toolchain integration depth; consensus/disagreement
+/// are meta-sources describing agreement across multiple per-tool sources.
 pub const Source = enum {
     heuristic,
     parser,
@@ -87,6 +93,8 @@ pub fn sourceArrayValue(allocator: std.mem.Allocator, sources: []const Source) !
 }
 
 /// Normalizes location coordinates to 1-based minima for external tools.
+/// Zero-based line/column from parsers are promoted to 1 so downstream viewers
+/// that expect 1-based coordinates never receive an out-of-range value.
 pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, column: usize) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -99,6 +107,7 @@ pub fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize
 }
 
 /// Builds a JSON evidence object; allocation failures are returned.
+/// `verify_with` is a list of commands callers can run to independently confirm the finding.
 pub fn evidenceValue(
     allocator: std.mem.Allocator,
     source: Source,
@@ -178,6 +187,7 @@ pub fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
 }
 
 /// Creates a deterministic fingerprint key for cross-tool finding de-duplication.
+/// The key is "source:rule:file:line:message"; non-object inputs produce "unknown".
 pub fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
     const obj = switch (finding) {
         .object => |o| o,

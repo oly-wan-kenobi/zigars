@@ -1,3 +1,6 @@
+//! Pins lint_intelligence behavior: deterministic finding normalization, zlint vs
+//! zwanzig consensus comparison, gate/profile/baseline/trend partitioning, and that
+//! backend runs stay apply-gated and go through the workspace and command ports.
 const std = @import("std");
 
 const lint_intelligence = @import("lint_intelligence.zig");

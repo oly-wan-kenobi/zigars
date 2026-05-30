@@ -1,5 +1,12 @@
+//! Low-level JSON string serialization for tool output.
+//!
+//! Complements `std.json.Stringify` with a streaming write path that works
+//! with the repo's `Io.Writer.Allocating` pattern without extra allocation.
 const std = @import("std");
 
+/// Writes `text` as a JSON string literal (with surrounding `"`) to `writer`,
+/// escaping the six mandatory JSON control sequences and any non-printable
+/// bytes below U+0020 using `\uXXXX` notation. The writer is not flushed.
 pub fn writeString(writer: *std.Io.Writer, text: []const u8) !void {
     try writer.writeByte('"');
     for (text) |c| {

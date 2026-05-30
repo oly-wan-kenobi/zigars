@@ -36,6 +36,8 @@ pub const ObservabilityError = ports.PortError || error{
 };
 
 /// Carries probe snapshot data across use case and port boundaries.
+/// Strings borrow from the originating `CachedBackendProbe`; the snapshot is
+/// only valid while the source context is alive.
 pub const ProbeSnapshot = struct {
     ok: bool,
     status: []const u8,
@@ -43,6 +45,8 @@ pub const ProbeSnapshot = struct {
 };
 
 /// Carries backend probe cache snapshot data across use case and port boundaries.
+/// A null field means that backend was never probed this session, which is
+/// distinct from a probed-but-failed entry (`ok = false`).
 pub const BackendProbeCacheSnapshot = struct {
     zig: ?ProbeSnapshot = null,
     zls: ?ProbeSnapshot = null,
@@ -69,6 +73,9 @@ pub const ArtifactMetrics = struct {
 };
 
 /// Carries base metrics data across use case and port boundaries.
+/// String fields (`workspace`, `zls_status`, `zls_last_failure`) borrow from
+/// the originating context and are not duplicated; the struct is only safe to
+/// use while the context outlives it.
 pub const BaseMetrics = struct {
     workspace: []const u8,
     command_calls: usize,
@@ -88,7 +95,9 @@ pub const MetricsReport = struct {
     observed: ports.ObservabilitySnapshot,
 };
 
-/// Implements metrics report workflow logic using caller-owned inputs.
+/// Combines the live observability ring snapshot with the derived base metrics.
+/// The returned `observed` snapshot is owned by `allocator`; the caller must
+/// call its `deinit` (this function frees it only on a later failure path).
 pub fn metricsReport(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) ObservabilityError!MetricsReport {
     const observed = try context.observability_reader.snapshot(allocator);
     errdefer observed.deinit(allocator);
@@ -98,7 +107,9 @@ pub fn metricsReport(allocator: std.mem.Allocator, context: app_context.Observab
     };
 }
 
-/// Implements base metrics workflow logic using caller-owned inputs.
+/// Snapshots process-local counters, ZLS state, cache stats, and artifact
+/// metrics into a single value. String fields borrow from `context` (not
+/// duplicated); the artifact summary allocates scratch through `allocator`.
 pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) BaseMetrics {
     return .{
         .workspace = context.workspace.root,
@@ -119,7 +130,9 @@ pub fn baseMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
     };
 }
 
-/// Implements artifact metrics workflow logic using caller-owned inputs.
+/// Summarizes the artifact registry and a bounded workspace scan. Failures are
+/// non-fatal: a registry or scan error is recorded in `status` (via @errorName)
+/// so the metrics report still renders. Scans are read-only and never hashed.
 fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.ObservabilityContext) ArtifactMetrics {
     var out: ArtifactMetrics = .{ .scan_limit = artifact_scan_limit };
     const artifact_context: app_context.ArtifactContext = .{
@@ -142,7 +155,9 @@ fn artifactMetrics(allocator: std.mem.Allocator, context: app_context.Observabil
     return out;
 }
 
-/// Implements probe cache workflow logic using caller-owned inputs.
+/// Converts the full per-backend trust probe cache into the report snapshot
+/// shape, mapping unprobed entries to null so callers can distinguish them
+/// from probed-and-failed entries.
 fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
     return .{
         .zig = probeSnapshot(cache.zig),
@@ -153,7 +168,8 @@ fn probeCache(cache: app_context.TrustProbeCache) BackendProbeCacheSnapshot {
     };
 }
 
-/// Implements probe snapshot workflow logic using caller-owned inputs.
+/// Converts a cached backend probe to a snapshot, or null when never probed so
+/// the report can distinguish "unprobed" from "probed and failed".
 fn probeSnapshot(probe: app_context.CachedBackendProbe) ?ProbeSnapshot {
     if (!probe.probed) return null;
     return .{

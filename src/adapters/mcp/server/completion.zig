@@ -6,8 +6,13 @@ const jsonrpc = mcp.jsonrpc;
 const manifest = @import("../../../manifest/mod.zig");
 const tooling = manifest.tooling;
 
+/// MCP caps a completion response at 100 values; surplus matches are counted in
+/// `total` and flagged via `hasMore` rather than returned.
 const completion_cap = 100;
 
+/// Bounded, de-duplicating accumulator of prefix-matched completion candidates.
+/// Tracks the full match `total` even past `completion_cap` so the response can
+/// report `hasMore` accurately.
 const CompletionSet = struct {
     allocator: std.mem.Allocator,
     values: std.json.Array,
@@ -76,6 +81,10 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
         }
     }
 
+    // Dispatch by completion reference: a prompt ref completes prompt names, a
+    // resource ref completes resource/template URIs, otherwise try manifest tool
+    // argument hints keyed by (tool, arg). If none of those apply, fall back to
+    // the union of prompt names and resource URIs.
     var completions = CompletionSet.init(response_allocator);
     defer completions.deinit();
     if (std.mem.eql(u8, ref_type, "ref/prompt")) {
@@ -102,7 +111,10 @@ pub fn handle(server: anytype, io: std.Io, allocator: std.mem.Allocator, request
     try server.sendResponse(io, allocator, .{ .response = response });
 }
 
-/// Appends argument completions derived from manifest field hints.
+/// Appends argument completions derived from manifest field hints, returning
+/// whether any spec supplied candidates. With a known `tool_name` only that
+/// spec is consulted; with an empty name every spec is scanned so an
+/// untargeted completion can still surface matching enum/dynamic values.
 fn appendManifestArgumentCompletions(server: anytype, completions: *CompletionSet, tool_name: []const u8, arg_name: []const u8, prefix: []const u8) !bool {
     var handled = false;
     if (tool_name.len > 0) {

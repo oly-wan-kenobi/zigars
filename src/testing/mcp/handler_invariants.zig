@@ -1,3 +1,8 @@
+//! Invariant tests for MCP handler registration.
+//! Pins that every manifest entry resolves to a named handler, every declared
+//! handler module owns at least one registered tool, and the document-change
+//! handler name stays stable across refactors.
+
 const std = @import("std");
 const tool_manifest = @import("../../manifest/mod.zig");
 const handler_refs = @import("../../adapters/mcp/handler_refs.zig");

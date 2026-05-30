@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.WorkspaceScanner` port.
+//! Simulates Zig source file enumeration within a workspace path prefix.
+//! Use `expectScanError` to inject filesystem errors (e.g. `error.AccessDenied`)
+//! and verify that callers propagate scan failures correctly.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

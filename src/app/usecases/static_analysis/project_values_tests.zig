@@ -1,3 +1,7 @@
+//! Pins project_values behavior: build.zig/build.zig.zon summaries, target/option/owner
+//! and import resolution, test mapping and failure triage, and OOM cleanup of partial
+//! objects. Also guards that public-API-diff baselines resolve through the workspace
+//! sandbox (and reject escaping paths / ref-smuggling) before any `git show`.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -724,7 +728,7 @@ test "typed static project value builders release partial objects on allocation 
     }
 }
 
-/// Implements expect build graph reads workflow logic using caller-owned inputs.
+/// Queues the build.zig and build.zig.zon reads a build-graph call expects.
 fn expectBuildGraphReads(store_fake: *workspace_store_fake.FakeWorkspaceStore, build_zig: []const u8, build_zon: []const u8) !void {
     try store_fake.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" }, build_zig);
     try store_fake.expectRead(.{ .path = "build.zig.zon", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_graph" }, build_zon);

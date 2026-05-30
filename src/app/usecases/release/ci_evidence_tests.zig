@@ -1,3 +1,6 @@
+//! Pins the CI-evidence contract: XML/JUnit/matrix projections escape command
+//! output, annotation/junit/matrix workflows run through ports, and command
+//! runner failures surface as structured results rather than thrown errors.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -1,9 +1,16 @@
+//! Static backend catalog: per-backend metadata used by setup advisories and
+//! the zigars_doctor probe. All data is comptime-constant; no allocation.
 const backend_contracts = @import("backend_contracts.zig");
 
 /// Zig release line this backend catalog is validated against.
 pub const supported_zig_version = "0.16.0";
 
-/// Backend installation and probe metadata exposed in setup catalogs.
+/// Installation and probe metadata for one backend exposed in setup catalogs.
+///
+/// All slice fields are string literals; no ownership transfer occurs.
+/// `tools` is the set of MCP tool names enabled by this backend.
+/// `probe_argv` is the argv used by zigars_doctor to check availability.
+/// `verify` lists manual smoke commands for human operators.
 pub const Backend = struct {
     name: []const u8,
     optional: bool,
@@ -17,7 +24,10 @@ pub const Backend = struct {
     verify: []const []const u8,
 };
 
-/// Configured executable paths used when rendering backend setup metadata.
+/// Resolved executable paths forwarded from server config into catalog rendering.
+///
+/// Defaults match the PATH-relative names used in probe_argv; callers override
+/// per-backend when an explicit flag or config key is provided.
 pub const Paths = struct {
     zig_path: []const u8 = "zig",
     zls_path: []const u8 = "zls",
@@ -27,7 +37,10 @@ pub const Paths = struct {
     diff_folded_path: []const u8 = "diff-folded",
 };
 
-/// Supported required and optional backends known to zigars.
+/// Ordered list of all backends known to zigars.
+///
+/// Index 0 is always the required zig backend; subsequent entries are optional.
+/// The order is stable and referenced by the zigars_doctor tool.
 pub const backends = [_]Backend{
     .{
         .name = "zig",

@@ -1,3 +1,5 @@
+//! Pins the public surface of the runtime_ux tool definitions: every declared
+//! tool must have a non-empty description and carry group/risk metadata.
 const std = @import("std");
 const subject = @import("runtime_ux.zig");
 const zigars_job_start = subject.zigars_job_start;

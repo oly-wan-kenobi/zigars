@@ -1,3 +1,7 @@
+//! Pins doctor behavior: check assembly (including optional probe checks and
+//! the tools/list schema check), the default ZLS resolution when disconnected,
+//! and Zig version preflight outcomes (compatible, incompatible, unavailable,
+//! unprobed) plus the build.zig.zon minimum-version parser.
 const std = @import("std");
 
 const doctor = @import("doctor.zig");

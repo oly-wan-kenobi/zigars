@@ -1,8 +1,16 @@
+//! Shared assertion and filesystem-gating helpers for the smoke suite.
+//! All diagnostic output goes to stderr; stdout is reserved for MCP JSON-RPC.
+//! Callers own any memory they pass in; this module never holds references
+//! beyond the current call frame.
+
 const std = @import("std");
 
 const Io = std.Io;
 const JsonValue = std.json.Value;
 
+/// Resolves `path` to an absolute path using the process working directory when
+/// relative. The returned slice is allocated by `allocator` and must be freed
+/// by the caller.
 pub fn absolutePath(allocator: std.mem.Allocator, io: Io, path: []const u8) ![]u8 {
     if (std.fs.path.isAbsolute(path)) return std.fs.path.resolve(allocator, &.{path});
     var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -10,6 +18,9 @@ pub fn absolutePath(allocator: std.mem.Allocator, io: Io, path: []const u8) ![]u
     return std.fs.path.resolve(allocator, &.{ cwd_buf[0..cwd_len], path });
 }
 
+/// Searches a `tools/list` JSON array for the entry whose `name` field equals
+/// `name`. Returns `null` when not found, so callers can distinguish "missing"
+/// from assertion failure without a separate error path.
 pub fn findTool(tools: []JsonValue, name: []const u8) ?JsonValue {
     for (tools) |tool| {
         if (std.mem.eql(u8, tool.object.get("name").?.string, name)) return tool;
@@ -17,6 +28,11 @@ pub fn findTool(tools: []JsonValue, name: []const u8) ?JsonValue {
     return null;
 }
 
+/// Asserts that `actual` equals `expected` for string, bool, and integer
+/// variants. On mismatch the failing path and expected value are written to
+/// stderr before returning `error.AssertionFailed`. The `else` branch returns
+/// `error.UnsupportedExpectation` so fixture authors get an explicit signal
+/// rather than a silent pass.
 pub fn expectJsonEq(io: Io, actual: JsonValue, expected: JsonValue, path: []const u8) !void {
     switch (expected) {
         .string => |s| if (actual != .string or !std.mem.eql(u8, actual.string, s)) {
@@ -49,6 +65,8 @@ pub fn expectFileAbsent(io: Io, rel: []const u8) !void {
     return error.AssertionFailed;
 }
 
+/// Asserts exact byte equality between `actual` and `expected`. `label` is
+/// printed on failure to locate the scenario in fixture output.
 pub fn expectStringEq(io: Io, actual: []const u8, expected: []const u8, label: []const u8) !void {
     if (!std.mem.eql(u8, actual, expected)) {
         try stderrPrint(io, "{s}: expected `{s}`, got `{s}`\n", .{ label, expected, actual });
@@ -56,12 +74,18 @@ pub fn expectStringEq(io: Io, actual: []const u8, expected: []const u8, label: [
     }
 }
 
+/// Fails with `error.AssertionFailed` when `actual` is below the minimum
+/// `expected` count, printing `label` and both values to stderr. Used to
+/// enforce that coverage thresholds are met across fixture runs.
 pub fn assertMinimumCount(io: Io, label: []const u8, actual: usize, expected: usize) !void {
     if (actual >= expected) return;
     try stderrPrint(io, "{s}: expected at least {d}, got {d}\n", .{ label, expected, actual });
     return error.AssertionFailed;
 }
 
+/// Writes a formatted diagnostic line to stderr. All fixture assertion helpers
+/// funnel failures through this so stderr output stays consistent and stdout
+/// remains reserved for MCP JSON-RPC traffic.
 pub fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

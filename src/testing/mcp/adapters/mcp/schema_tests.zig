@@ -1,3 +1,8 @@
+//! Pins the MCP JSON schema projection contract: input schemas must include
+//! discovery hints and path annotations, enum schemas must emit enum arrays,
+//! and output schemas must project the standard envelope shape with required
+//! fields and a JSON Schema dialect marker.
+
 const std = @import("std");
 const mcp = @import("mcp");
 

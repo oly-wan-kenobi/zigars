@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.StaticCache` port.
+//! Holds one allocator-owned JSON payload in memory. Use `seed` to pre-populate
+//! without counting as a store call, then assert `store_calls`/`hits` counters
+//! to verify cache-management behavior in use-case tests.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

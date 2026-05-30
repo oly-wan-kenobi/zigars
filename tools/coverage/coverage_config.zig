@@ -1,30 +1,46 @@
+//! Central configuration for coverage evidence generation.
+//!
+//! All numeric thresholds live here so the CI gate and the local coverage
+//! command share one source of truth. Tests in this file pin the values so
+//! accidental weakening fails the build.
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// Minimum test count across all suites required by the coverage gate.
 pub const min_total_tests: i64 = 500;
+/// Minimum number of HTTP smoke scenarios required by the release gate.
 pub const min_http_smoke_scenarios: usize = 155;
+/// Minimum number of stdio fixture tool calls required by the release gate.
 pub const min_stdio_fixture_tool_calls: usize = 77;
+/// kcov `--include-path` value: instrument only `src` and `tools`.
 pub const kcov_include_path = "src,tools";
+/// kcov `--exclude-path` value: skip generated caches and the fuzz runner.
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist,tools/fuzz_test_runner.zig";
 pub const kcov_exclude_line_pattern = "KCOV_EXCL_LINE";
 pub const kcov_exclude_region_pattern = "KCOV_EXCL_START:KCOV_EXCL_STOP";
 pub const kcov_exclude_line_arg = "--exclude-line=" ++ kcov_exclude_line_pattern;
 pub const kcov_exclude_region_arg = "--exclude-region=" ++ kcov_exclude_region_pattern;
+/// Line coverage floors in basis points (10000 = 100.00%).
+/// 100 % is required for release; any gap is a deliberate regression.
 pub const min_line_coverage_basis_points: u32 = 10000;
 pub const min_src_line_coverage_basis_points: u32 = 10000;
 pub const min_tools_line_coverage_basis_points: u32 = 10000;
 
+/// A test binary entry: name, platform-specific paths, and minimum test count.
 pub const TestBinary = struct {
     name: []const u8,
     unix_path: []const u8,
     windows_path: []const u8,
+    /// Coverage fails if the binary reports fewer than this many tests.
     min_tests: i64,
 
+    /// Returns the platform-appropriate binary path.
     pub fn path(self: TestBinary) []const u8 {
         return if (builtin.os.tag == .windows) self.windows_path else self.unix_path;
     }
 };
 
+/// Ordered list of test binaries that the coverage command runs and instruments.
 pub const test_binaries = [_]TestBinary{
     .{
         .name = "zigars-lib-tests",

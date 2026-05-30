@@ -1,11 +1,17 @@
-//! Semantic index use-case around symbol/reference extraction with cache and tool boundaries.
+//! Semantic index use-case: deterministic symbol, import, and test extraction from
+//! workspace sources via the static-analysis ports. Results are parser-backed where the
+//! source parses and heuristic otherwise, each entry carries source/confidence/evidence,
+//! and an optional zlint --print-ast pass can upgrade reference matches to confirmed. The
+//! index is content-keyed (see `semanticSignature`) so a cache hit only reuses a build
+//! when the scanned file set and bytes are unchanged.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 const zig_analysis = @import("../../../domain/zig/analysis.zig");
 
-/// Shared semantic format version type used by this workflow module.
+/// Index schema/version tag. Also seeds the content signature, so bumping it
+/// invalidates every cached index.
 pub const semantic_format_version = 1;
 /// Default limit used when the caller omits an explicit value.
 pub const default_limit: usize = 500;
@@ -82,18 +88,24 @@ const ParseStats = struct {
     parse_error_count: i64,
 };
 
-/// Implements status workflow logic using caller-owned inputs.
+/// Reports the semantic-index cache status without building. Requires a bound
+/// cache port; returns MissingCachePort if none is configured.
 pub fn status(context: app_context.StaticAnalysisContext) SemanticError!ports.StaticCacheStatus {
     const cache = context.semantic_index_cache orelse return error.MissingCachePort;
     return cache.status();
 }
 
-/// Constructs index data from caller-owned inputs, propagating allocation failures.
+/// Builds (or reuses) the workspace semantic index. Returns a cached index only
+/// when `refresh` is false and the stored content signature still matches the
+/// current sources; otherwise it rebuilds and re-stores. The returned value
+/// borrows the cache-owned JSON on a hit and owns freshly built JSON otherwise.
 pub fn buildIndex(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: IndexRequest) SemanticError!IndexResult {
     const cache = context.semantic_index_cache orelse return error.MissingCachePort;
     const normalized_limit = @max(request.limit, 1);
     const signature = try semanticSignature(allocator, context, normalized_limit);
     const current = try cache.status();
+    // Reuse the stored index only when the content signature is identical: any
+    // added/removed/edited scanned file changes the signature and forces a rebuild.
     if (!request.refresh and current.cached and current.signature == signature) {
         const loaded = try cache.load(allocator);
         if (loaded.bytes) |bytes| {
@@ -114,7 +126,9 @@ pub fn buildIndex(allocator: std.mem.Allocator, context: app_context.StaticAnaly
     return .{ .value = value, .cache = stored };
 }
 
-/// Implements query workflow logic using caller-owned inputs.
+/// Substring-matches the built index (declarations, imports, tests) against
+/// `request.query`, optionally filtered by `kind`, capped at `match_limit`.
+/// Returns an allocator-owned result object.
 pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: QueryRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_query" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, request.kind, @max(request.match_limit, 1));
@@ -125,7 +139,8 @@ pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisCo
     return .{ .object = obj };
 }
 
-/// Implements decl workflow logic using caller-owned inputs.
+/// Looks up declaration matches for `request.symbol` in the built index (the
+/// declaration-only slice of `query`). Returns an allocator-owned result object.
 pub fn decl(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: DeclRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_decl" });
     const matches = try semanticMatchesValue(allocator, index.value, request.symbol, "declaration", @max(request.match_limit, 1));
@@ -136,7 +151,11 @@ pub fn decl(allocator: std.mem.Allocator, context: app_context.StaticAnalysisCon
     return .{ .object = obj };
 }
 
-/// Implements source refs workflow logic using caller-owned inputs.
+/// Finds references (or, when `calls_only`, call sites) of `request.symbol` by
+/// scanning workspace sources line by line. Matches default to heuristic/medium
+/// confidence; when zlint --print-ast confirms the symbol for a file, that file's
+/// matches are upgraded to zlint/high and `semantic_confirmed`. Returns an
+/// allocator-owned result object.
 pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceRefsRequest) SemanticError!std.json.Value {
     var matches = std.json.Array.init(allocator);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -159,6 +178,9 @@ pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnaly
         defer read.deinit(allocator);
 
         var zlint_confirmed = false;
+        // Only pay for the zlint AST probe when the file's text actually mentions
+        // the symbol. The first probe failure latches zlint_disabled so the rest of
+        // the scan stops shelling out and degrades to heuristic-only matches.
         if (!zlint_disabled and std.mem.indexOf(u8, read.bytes, request.symbol) != null) {
             zlint_confirmed = zlintAstSymbolHasReferenceForFile(allocator, context, request, file.path) catch blk: {
                 zlint_ast_failures += 1;
@@ -200,7 +222,10 @@ pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnaly
     return .{ .object = obj };
 }
 
-/// Implements static fusion workflow logic using caller-owned inputs.
+/// Fuses parser index matches with caller-supplied zlint/zwanzig findings for a
+/// query. Confidence is `high` when two or more independent sources agree
+/// (consensus), `medium` for a single parser match, `low` otherwise. Malformed
+/// findings JSON fails with InvalidCache. Returns an allocator-owned result object.
 pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: FusionRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .tool_name = "zig_static_fusion" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, null, @max(request.match_limit, 1));
@@ -227,7 +252,10 @@ pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAna
     return .{ .object = obj };
 }
 
-/// Implements export index workflow logic using caller-owned inputs.
+/// Serializes the built index for export. Source-mutating: it writes to
+/// `request.output` only when `apply` is true; otherwise it returns a preview
+/// (byte count plus the artifact) and writes nothing. Returns an allocator-owned
+/// result object.
 pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ExportRequest) SemanticError!std.json.Value {
     const index = try buildIndex(allocator, context, .{ .limit = request.limit, .refresh = request.refresh, .tool_name = request.tool_name });
     var export_obj = std.json.ObjectMap.empty;
@@ -256,7 +284,9 @@ pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnal
     return .{ .object = obj };
 }
 
-/// Implements semantic signature workflow logic using caller-owned inputs.
+/// Content hash over the scanned file set (paths and bytes), seeded by the format
+/// version. Identical sources yield an identical signature, which is how the cache
+/// decides a stored index is still valid; unreadable files are skipped, not hashed.
 pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize) SemanticError!u64 {
     var hasher = std.hash.Wyhash.init(semantic_format_version);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -277,7 +307,12 @@ pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.Stat
     return hasher.final();
 }
 
-/// Serializes semantic index fields into an allocator-owned JSON value; allocation failures propagate.
+/// Scans up to `limit` workspace files and builds the full index object
+/// (declarations, imports, tests, plus per-file parse status). Files that parse
+/// contribute parser-sourced entries; files that fail or only partially parse fall
+/// back to heuristic declarations, and `partial_result`/`parse_error_count` record
+/// that the result is incomplete. Unreadable files are listed under `skipped_files`.
+/// Returns an allocator-owned result object.
 pub fn semanticIndexValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize, tool_name: []const u8) SemanticError!std.json.Value {
     var files = std.json.Array.init(allocator);
     var declarations = std.json.Array.init(allocator);
@@ -359,6 +394,9 @@ fn appendFileIndex(allocator: std.mem.Allocator, file: []const u8, contents: []c
             try tests.append(item);
         }
     }
+    // Fall back to heuristic declarations when the file did not parse at all, or
+    // when a partial parse recovered no declarations, so a broken file still
+    // contributes best-effort symbols instead of vanishing from the index.
     if (summary == null or (stats.partial_result and file_decls.items.len == 0)) {
         var decl_list = try zig_analysis.heuristicDeclarations(allocator, contents);
         defer decl_list.deinit(allocator);
@@ -441,8 +479,12 @@ fn zlintAstSymbolHasReferenceForFile(allocator: std.mem.Allocator, context: app_
     return zlintAstSymbolHasReference(allocator, result.stdout, request.symbol, request.calls_only) catch false;
 }
 
-/// Implements zlint ast symbol has reference workflow logic using caller-owned inputs.
+/// Parses zlint --print-ast JSON output and reports whether `symbol` has any
+/// reference (or, when `calls_only`, a reference flagged "call"). Tolerates the
+/// human-readable banner zlint prints before the JSON by scanning from the first
+/// `{`. Returns false on any malformed or missing structure rather than erroring.
 pub fn zlintAstSymbolHasReference(allocator: std.mem.Allocator, text: []const u8, symbol: []const u8, calls_only: bool) !bool {
+    // zlint prefixes a non-JSON banner line; start parsing at the first object brace.
     const start = std.mem.indexOfScalar(u8, text, '{') orelse return false;
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text[start..], .{});
     defer parsed.deinit();

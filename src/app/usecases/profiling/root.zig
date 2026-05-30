@@ -1,3 +1,5 @@
+//! Aggregates the profiling render use cases (flamegraph render/diff, capture
+//! planning, render facade, controlled command runner) and pulls in their tests.
 pub const flamegraph = @import("flamegraph.zig");
 pub const flamegraph_diff = @import("flamegraph_diff.zig");
 pub const plan = @import("plan.zig");

@@ -1,3 +1,5 @@
+//! Aggregates the release-evidence use cases (CI evidence, docs index, drift,
+//! release intelligence, and workflows) and wires their tests into one barrel.
 pub const ci_evidence = @import("ci_evidence.zig");
 pub const docs_index = @import("docs_index.zig");
 pub const drift = @import("drift.zig");

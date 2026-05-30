@@ -254,6 +254,10 @@ fn workspaceRootsResource(allocator: std.mem.Allocator, context: app_context.Run
 }
 
 /// Resolves zigars://file/{path}/{symbols|diagnostics|imports} URIs.
+/// The embedded path is validated against the workspace sandbox inside the use
+/// case; this handler only classifies the resulting error into a stable
+/// resource_error category (bad URI vs. path/filesystem vs. analysis failure) so
+/// a traversal attempt and a genuine read failure stay distinguishable.
 fn dynamicResource(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     if (!std.mem.startsWith(u8, uri, "zigars://file/")) return error.NotFound;
     const value = runtime_ux.dynamicResourceValue(allocator, context, uri) catch |err| switch (err) {
@@ -270,6 +274,8 @@ fn artifactResource(allocator: std.mem.Allocator, context: app_context.ArtifactC
     const prefix = "zigars://artifacts/";
     if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
     const sha = uri[prefix.len..];
+    // Reject non-canonical shas before any registry work: identities are keyed
+    // by lowercase 64-char hex, so a malformed value can never match an entry.
     if (!isSha256Hex(sha)) {
         return resourceFailure(allocator, uri, artifactResourceFailure("parse_artifact_uri", "invalid_artifact_resource_uri", "Use zigars://artifacts/{sha} with a lowercase 64-character sha256 hex digest."), error.InvalidArguments);
     }
@@ -361,6 +367,8 @@ fn dynamicResourceHandler(comptime Provider: type) *const fn (?*anyopaque, std.I
 }
 
 /// Projects opaque server user_data into a RuntimeUxContext.
+/// `allocator`/`uri` are unused but kept in the signature so every context
+/// projector shares one shape for the handler adapters below.
 fn runtimeContext(comptime Provider: type, allocator: std.mem.Allocator, user_data: ?*anyopaque, uri: []const u8) !app_context.RuntimeUxContext {
     _ = allocator;
     _ = uri;
@@ -484,7 +492,9 @@ fn artifactResourceFailure(phase: []const u8, code: []const u8, resolution: []co
     };
 }
 
-/// Returns true for lowercase sha256 hex identities accepted in artifact URIs.
+/// Returns true only for canonical sha256 identities: exactly 64 lowercase hex
+/// chars. Uppercase and short/long values are rejected to keep artifact URIs
+/// canonical and prevent lookups on non-identity input.
 fn isSha256Hex(value: []const u8) bool {
     if (value.len != 64) return false;
     for (value) |c| switch (c) {
@@ -494,14 +504,18 @@ fn isSha256Hex(value: []const u8) bool {
     return true;
 }
 
-/// Returns a conservative MIME type for artifact resources.
+/// Returns a MIME type for artifact resources from the path suffix, defaulting
+/// to text/plain. Conservative on purpose: artifact bytes are tool output, so an
+/// unrecognized extension is served as plain text rather than an active type.
 fn artifactMimeType(path: []const u8) []const u8 {
     if (std.mem.endsWith(u8, path, ".json") or std.mem.endsWith(u8, path, ".jsonl")) return "application/json";
     if (std.mem.endsWith(u8, path, ".svg")) return "image/svg+xml";
     return "text/plain";
 }
 
-/// Contract-token anchor for resource URI coverage tests.
+/// Contract-token anchor for resource URI coverage. A release gate
+/// substring-matches these URIs against this file to prove every advertised
+/// resource and template stays registered; keep in sync with `registerResources`.
 const _resource_contract_tokens = [_][]const u8{
     "zigars://trust/manifest",
     "zigars://workspace",

@@ -1,3 +1,5 @@
+//! Tests for command_runner.Runner: pins output-limit truncation, call
+//! counting, provenance tagging, timeout mapping, and port error translation.
 const std = @import("std");
 const command_runner = @import("command_runner.zig");
 

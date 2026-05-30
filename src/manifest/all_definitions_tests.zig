@@ -1,3 +1,6 @@
+//! Smoke-tests that the `all_definitions` namespace exposes valid tool
+//! metadata for a representative selection of tools from different groups.
+
 const std = @import("std");
 const subject = @import("all_definitions.zig");
 const definitions = subject.definitions;

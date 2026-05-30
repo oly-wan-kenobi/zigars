@@ -1,4 +1,7 @@
 //! Structured profile-capture planning values for supported profiling backends.
+//! Pure and deterministic: emits the external commands a caller should run plus the
+//! follow-up zigars render step. It never executes a profiler; capture stays the
+//! external tool's responsibility (see flamegraph_model.capture_semantics).
 const std = @import("std");
 
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
@@ -12,7 +15,10 @@ pub const Request = struct {
 };
 
 /// Serializes profile plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Output is a function of `request` alone (no clock, IO, or backend probes), so the
+/// same request always yields the same plan. Returned value is arena-/allocator-owned.
 pub fn profilePlanValue(allocator: std.mem.Allocator, request: Request) !std.json.Value {
+    // Explicit platform wins; otherwise fall back to the caller-detected platform.
     const selected_platform = request.platform orelse request.detected_platform;
     const svg_output = try std.fmt.allocPrint(allocator, "{s}.svg", .{request.output_prefix});
 

@@ -1,3 +1,7 @@
+//! Pins the MCP pagination cursor contract: integer cursors are accepted and
+//! produce a Page with the correct start offset; negative, string, and bool
+//! cursors are rejected as InvalidCursor.
+
 const std = @import("std");
 
 const pagination = @import("../../../../../adapters/mcp/server/pagination.zig");

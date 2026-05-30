@@ -1,3 +1,6 @@
+//! Compilation smoke test: verifies that all public MCP adapter modules
+//! compile and are reachable from the adapter root without import cycles.
+
 const args = @import("../../../../adapters/mcp/args.zig");
 const artifacts = @import("../../../../adapters/mcp/tools/artifacts.zig");
 const core = @import("../../../../adapters/mcp/tools/core.zig");

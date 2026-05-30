@@ -1,9 +1,14 @@
+//! Pins the static analysis manifest contract: every static-analysis tool must
+//! carry a tier and a domain contract, capability claims must match backing
+//! evidence maturity, and source-mutating tools must gate writes behind apply=true.
+
 const std = @import("std");
 
 const contracts = @import("../../domain/zig/static_analysis_contracts.zig");
 const tool_manifest = @import("../../manifest/mod.zig");
 
-/// Reports whether a manifest product group belongs to static analysis.
+// zwanzig belongs to the static-analysis family for contract purposes even
+// though it lives in its own tool group.
 fn isStaticAnalysisProductGroup(group: tool_manifest.ToolGroup) bool {
     return group == .static_analysis or group == .zwanzig;
 }
@@ -38,7 +43,9 @@ test "static analysis contracts do not overstate evidence maturity" {
     for (contracts.contracts) |contract| try expectContractEvidenceBounded(contract);
 }
 
-/// Records an expected contract evidence bounded call, cloning request data and failing on allocation errors.
+/// Asserts tier-specific evidence invariants for a single contract entry.
+/// Each tier has a distinct set of required fields and forbidden overstatements
+/// (e.g. advisory_orientation must not claim high confidence or release-gating).
 fn expectContractEvidenceBounded(contract: contracts.Contract) !void {
     switch (contract.tier) {
         .advisory_orientation => {

@@ -1,3 +1,7 @@
+//! Release packaging: builds per-platform archives and runs a smoke check.
+//! `buildArchives` produces deterministic tar.gz files plus a SHA-256
+//! checksum manifest; `smoke` verifies those archives are well-formed and
+//! that the native binary reports the expected version on stderr.
 const std = @import("std");
 const release_targets = @import("release_targets.zig");
 const zigars = @import("zigars");
@@ -38,10 +42,16 @@ const DistOptions = struct {
     }
 };
 
+/// Prints the zigars version string to stdout followed by a newline.
 pub fn printVersion(io: Io) !void {
     try stdoutPrint(io, "{s}\n", .{zigars.manifest.version.string});
 }
 
+/// Builds one tar.gz per `--package` flag and writes a SHA-256 checksum file.
+/// Expects `--package <name> --exe <exe_name> --binary <path>` triples for
+/// every configured release target; returns `error.InvalidArguments` when the
+/// set is incomplete, has unknown names, duplicates, or wrong executable names.
+/// The output directory is wiped and recreated unconditionally before staging.
 pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var options = try parseDistOptions(allocator, args);
     defer options.deinit(allocator);
@@ -64,6 +74,11 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
     try stdoutPrint(io, "dist ok: {d} archives for zigars {s}\n", .{ options.packages.items.len, options.version });
 }
 
+/// Verifies the dist archive set: confirms checksum count and content, checks
+/// that each archive contains required files, then extracts the native archive
+/// and runs the binary to confirm it reports the right version on stderr.
+/// Accepts `--assets-dir <dir>` and `--version <v>` flags; all other arguments
+/// return `error.InvalidArguments`.
 pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     var assets_dir: []const u8 = "dist/assets";
     var version: []const u8 = zigars.manifest.version.string;
@@ -230,6 +245,7 @@ fn writeTarGzFromDirectory(
     while (try walker.next(io)) |entry| {
         if (entry.kind == .file) try paths.append(allocator, try allocator.dupe(u8, entry.path));
     }
+    // Sort paths so archive entry order is deterministic regardless of filesystem traversal order.
     std.mem.sort([]u8, paths.items, {}, stringLessThan);
 
     var out_file = try Io.Dir.cwd().createFile(io, archive_path, .{ .truncate = true });
@@ -251,6 +267,7 @@ fn writeTarGzFromDirectory(
         defer allocator.free(normalized_rel);
         const archive_rel = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ archive_root, normalized_rel });
         defer allocator.free(archive_rel);
+        // The root-level executable gets 0o755; every other entry is 0o644.
         const is_root_exe = std.mem.indexOfScalar(u8, normalized_rel, '/') == null and std.mem.eql(u8, normalized_rel, exe_name);
         try writeTarFile(io, &tar_writer, source_path, archive_rel, if (is_root_exe) 0o755 else 0o644);
     }
@@ -259,6 +276,9 @@ fn writeTarGzFromDirectory(
     try file_writer.interface.flush();
 }
 
+/// Streams one file from `source_path` into `tar_writer` at `archive_path`.
+/// `mode` is the POSIX permission bits stored in the tar header; mtime is set
+/// to zero for deterministic output.
 fn writeTarFile(io: Io, tar_writer: *std.tar.Writer, source_path: []const u8, archive_path: []const u8, mode: u32) !void {
     var file = try Io.Dir.cwd().openFile(io, source_path, .{});
     defer file.close(io);
@@ -342,6 +362,10 @@ fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, packa
     }
 }
 
+/// Extracts the native-platform archive to a temporary scratch directory and
+/// runs the binary with `--version`.  The binary must produce no stdout output
+/// and exactly "zigars <version>" on stderr.  Silently skips unsupported host
+/// platforms (where `native()` returns null).
 fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, version: []const u8) !void {
     const package = release_targets.native() orelse return;
     const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
@@ -378,6 +402,9 @@ fn archiveSha256(allocator: Allocator, io: Io, path: []const u8) ![Sha256.digest
     return std.fmt.bytesToHex(digest, .lower);
 }
 
+/// Returns a copy of `path` with the platform separator replaced by '/'.
+/// Caller owns the returned slice and must free it with `allocator`.
+/// On POSIX hosts this is a plain dupe; the replacement only applies on Windows.
 fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     const normalized = try allocator.dupe(u8, path);
     if (std.fs.path.sep != '/') {

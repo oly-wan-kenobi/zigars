@@ -1,3 +1,7 @@
+//! Tool definitions for the `runtime_ux` group: job lifecycle (start/status/
+//! result/cancel), streaming runs, resource query/subscribe, workspace root
+//! management, and agent/client guidance tools. All writes to process-local
+//! state require no apply gate; workspace root mutations require apply=true.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -5,13 +9,16 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// Result shape depth.
+// Shared catalog hints reused across multiple tools to keep field-level
+// documentation consistent without duplicating enum values inline.
+
+/// Controls how much result data the tool returns; "compact" reduces token use.
 const mode_hint = fieldHint("mode", .{ .description = "Result shape depth.", .default_string = "standard", .enum_values = &.{ "compact", "standard", "deep" } });
-/// Bounded Zig command to run.
+/// Allow-listed Zig subcommands that jobs and streaming runs may execute.
 const command_hint = fieldHint("command", .{ .description = "Bounded Zig command to run.", .enum_values = &.{ "build", "build-test", "test", "check", "fmt-check" } });
-/// Zigars resource URI.
+/// Enables MCP completion for zigars resource URIs in supporting clients.
 const resource_uri_hint = fieldHint("uri", .{ .description = "Registered or template-backed zigars resource URI.", .completion_source = .resource_uri });
-/// Shipped workflow prompt identifier.
+/// Completion hint for the shipped prompt identifiers registered as MCP prompts.
 const workflow_hint = fieldHint("workflow", .{ .description = "Shipped zigars workflow prompt identifier.", .enum_values = &.{ "zigars_compile_error_workflow", "zigars_test_workflow", "zigars_refactor_workflow", "zigars_api_change_workflow", "zigars_release_workflow", "zigars_perf_workflow" } });
 
 /// Start a bounded zigars-managed Zig job and retain status, result, and event tails in process-local state.

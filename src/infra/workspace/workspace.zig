@@ -1,3 +1,7 @@
+//! Workspace path sandbox: every user-supplied path is canonicalized and
+//! re-checked against the workspace root before any filesystem access.
+//! Symlinks are resolved through realpath; a path whose canonical form escapes
+//! the root is rejected with PathOutsideWorkspace at resolution time.
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -15,6 +19,10 @@ pub const Workspace = struct {
     cache_root: []const u8,
 
     /// Canonicalizes the workspace and cache roots; caller must call deinit.
+    /// root_input may be relative or absolute; it is resolved and then
+    /// realpath'd so all subsequent containment checks use the canonical inode
+    /// address. cache_input defaults to ".zigars-cache" inside root_input.
+    /// Fails with PathOutsideWorkspace if cache_input resolves outside root.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, root_input: []const u8, cache_input: ?[]const u8) !Workspace {
         var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd_len = try std.process.currentPath(io, &cwd_buf);
@@ -47,11 +55,17 @@ pub const Workspace = struct {
     }
 
     /// Resolves an existing input path and rejects paths outside the workspace.
+    /// Returned slice is allocator-owned; caller must free it.
+    /// Symlinks that resolve inside the root are allowed; outside-pointing
+    /// symlinks are rejected with PathOutsideWorkspace.
     pub fn resolve(self: Workspace, path: []const u8) ![]const u8 {
         return resolveInsideRoot(self.allocator, self.io, self.root, path);
     }
 
     /// Resolves an output path whose parent may not exist yet.
+    /// The parent chain is canonicalized; a symlinked parent escaping the root
+    /// is rejected. The final component need not exist. Returned slice is
+    /// allocator-owned; caller must free it.
     pub fn resolveOutput(self: Workspace, path: []const u8) ![]const u8 {
         return resolveOutputInsideRoot(self.allocator, self.io, self.root, path);
     }
@@ -114,7 +128,9 @@ pub const Workspace = struct {
     }
 };
 
-/// Resolves inside root and returns borrowed or owned data according to the result contract.
+/// Resolves an existing input path inside root; returned slice is allocator-owned.
+/// Containment is enforced on the canonical path so symlinks that escape the
+/// root are rejected. The caller must free the returned slice.
 fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
@@ -152,7 +168,9 @@ fn resolveInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8,
     return real;
 }
 
-/// Resolves output inside root and returns borrowed or owned data according to the result contract.
+/// Resolves an output path inside root; the final component need not exist yet.
+/// Parent directories are canonicalized recursively so a symlinked ancestor
+/// that escapes the root is still rejected. Returned slice is allocator-owned.
 fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []const u8, path: []const u8) ![]const u8 {
     if (path.len == 0) return WorkspaceError.EmptyPath;
     const resolved = if (std.fs.path.isAbsolute(path))
@@ -187,7 +205,9 @@ fn resolveOutputInsideRoot(allocator: std.mem.Allocator, io: std.Io, root: []con
     return real_output;
 }
 
-/// Canonicalizes the parent directory for an output path.
+/// Canonicalizes the parent directory for an output path by walking up the
+/// tree until a real directory is found, then re-checking containment.
+/// Returns PathOutsideWorkspace when no ancestor is inside root.
 fn canonicalOutputParent(allocator: std.mem.Allocator, io: std.Io, root: []const u8, parent: []const u8) ![]u8 {
     const real = realPathFileAbsoluteOwned(allocator, io, parent) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -214,7 +234,9 @@ fn canonicalOutputParent(allocator: std.mem.Allocator, io: std.Io, root: []const
     return joined;
 }
 
-/// Returns an allocator-owned absolute real path for a file.
+/// Returns an allocator-owned canonical path; fails if the path does not exist.
+/// The extra dupe is needed because realPathFileAbsoluteAlloc may return a
+/// sentinel-terminated slice that is freed by the defer, so we take ownership.
 fn realPathFileAbsoluteOwned(allocator: std.mem.Allocator, io: std.Io, absolute_path: []const u8) ![]u8 {
     const sentinel_path = try std.Io.Dir.realPathFileAbsoluteAlloc(io, absolute_path, allocator);
     defer allocator.free(sentinel_path);

@@ -1,3 +1,8 @@
+//! No-panic HTTP request helpers and `tools/call` envelope decoders for the
+//! smoke suite. Every function that touches the network returns a typed error
+//! rather than panicking so a single bad scenario does not abort the run.
+//! Allocated responses are owned by the caller and must be freed after use.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke_assert = @import("smoke_assert.zig");
@@ -76,6 +81,9 @@ pub fn expectToolIsError(io: Io, result: ToolCallResult, expected: bool, label: 
     return error.AssertionFailed;
 }
 
+/// Sends a raw JSON-RPC POST to `127.0.0.1:port` and returns the HTTP response
+/// body. Returns `error.HttpFailure` when the status line is not `200`. The
+/// returned slice is allocated by `allocator` and must be freed by the caller.
 pub fn rpc(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8) ![]u8 {
     const address = try Io.net.IpAddress.parse("127.0.0.1", port);
     var stream = try address.connect(io, .{
@@ -109,6 +117,10 @@ pub fn rpc(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8) ![
     return allocator.dupe(u8, response_body);
 }
 
+/// Sends an arbitrary raw HTTP request byte sequence and returns the entire
+/// response including headers. Unlike `rpc`, no status check is performed —
+/// use this for negative-path or malformed-request scenarios where a non-200
+/// response is the expected outcome. The returned slice is owned by the caller.
 pub fn rawHttp(allocator: std.mem.Allocator, io: Io, port: u16, request: []const u8) ![]u8 {
     const address = try Io.net.IpAddress.parse("127.0.0.1", port);
     var stream = try address.connect(io, .{
@@ -129,6 +141,9 @@ pub fn rawHttp(allocator: std.mem.Allocator, io: Io, port: u16, request: []const
     return reader.interface.allocRemaining(allocator, .limited(8 * 1024 * 1024));
 }
 
+/// Issues `request` via `rawHttp` and asserts the response contains `needle`.
+/// Increments `scenario_count` on success so callers can track coverage across
+/// batched assertions without threading a separate counter per call.
 pub fn assertRawHttpContains(allocator: std.mem.Allocator, io: Io, port: u16, request: []const u8, needle: []const u8, scenario_count: *usize) !void {
     const response = try rawHttp(allocator, io, port, request);
     defer allocator.free(response);
@@ -136,6 +151,9 @@ pub fn assertRawHttpContains(allocator: std.mem.Allocator, io: Io, port: u16, re
     scenario_count.* += 1;
 }
 
+/// Issues `body` via `rpc` and asserts the JSON-RPC response contains `needle`.
+/// Increments `scenario_count` on success, matching the convention of
+/// `assertRawHttpContains`.
 pub fn assertHttpRpcContains(allocator: std.mem.Allocator, io: Io, port: u16, body: []const u8, needle: []const u8, scenario_count: *usize) !void {
     const response = try rpc(allocator, io, port, body);
     defer allocator.free(response);

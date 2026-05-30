@@ -18,7 +18,9 @@ pub fn zigarsCapabilities(allocator: std.mem.Allocator, context: app_context.Con
     return catalogStructured(allocator, "zigars_capabilities", discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zigars_schema` requests by delegating to app logic and shaping owned results/errors.
+/// Handles MCP `zigars_schema` requests. Returns the same catalog payload as
+/// `zigars_capabilities`; the two tool ids are kept distinct for discovery
+/// while sharing one source of truth.
 pub fn zigarsSchema(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return catalogStructured(allocator, "zigars_schema", discovery.catalogText(allocator, context) catch return error.OutOfMemory);
 }
@@ -118,7 +120,8 @@ fn planError(allocator: std.mem.Allocator, tool_name: []const u8, args: ?std.jso
     };
 }
 
-/// Returns the structured missing-argument error for environment planning tools.
+/// Structured missing-argument error for the command/tool planning handlers,
+/// pointing the caller at zig_tool_plan for tools that have no argv to produce.
 fn missingPlanningArgument(allocator: std.mem.Allocator, tool_name: []const u8, field: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     return mcp_errors.result(allocator, .{
         .kind = "tool_error",
@@ -190,7 +193,7 @@ test "discovery adapter planning errors map to structured MCP errors" {
     try expectToolErrorCode(denied, "discovery_failed");
 }
 
-/// Maps expect tool error code failures to structured MCP errors.
+/// Asserts a result is an error carrying the expected stable `code` field.
 fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
     try std.testing.expect(result.is_error);
     try std.testing.expectEqualStrings(expected, result.structuredContent.?.object.get("code").?.string);

@@ -633,7 +633,14 @@ pub fn zigPerfEvidencePack(a: *App, allocator: std.mem.Allocator, args: ?std.jso
     return maybeWriteArtifact(a, allocator, scratch, args, "zig_perf_evidence_pack", .{ .object = obj }, argString(args, "output") orelse default_perf_evidence, "performance_evidence_pack", &.{});
 }
 
-/// Reads evidence input data from the provided context without taking ownership of inputs.
+/// Resolves an evidence argument to bytes, accepting inline content or a workspace path.
+///
+/// Precedence: explicit `content_field` (inline), then explicit `path_field` (workspace
+/// file), then `primary` which is sniffed by `looksInlineEvidence` to decide inline vs.
+/// path. File reads go through the workspace sandbox and are capped at `max_evidence_bytes`;
+/// the returned `Input.owned` (set only for file reads) must be freed via `Input.deinit`.
+/// When not `required` and nothing is supplied, returns empty-object bytes; otherwise
+/// `error.MissingArgument`.
 fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, primary: []const u8, path_field: ?[]const u8, content_field: ?[]const u8, required: bool) !Input {
     _ = allocator;
     _ = tool_name;
@@ -662,7 +669,9 @@ fn evidenceInputError(a: *App, allocator: std.mem.Allocator, tool_name: []const 
     return workspacePathErrorResult(a, allocator, tool_name, path, err);
 }
 
-/// Reports whether inline evidence matches the caller-provided data.
+/// Heuristic: is `value` inline evidence rather than a workspace path to read? True for
+/// empty/JSON-looking input, multi-line text, LCOV ("SF:"), or text carrying a time unit.
+/// Deliberately permissive so plausible content is never misread as a path (and rejected).
 fn looksInlineEvidence(value: []const u8) bool {
     const trimmed = std.mem.trim(u8, value, " \t\r\n");
     return trimmed.len == 0 or trimmed[0] == '{' or trimmed[0] == '[' or std.mem.indexOfScalar(u8, trimmed, '\n') != null or std.mem.startsWith(u8, trimmed, "SF:") or containsAny(trimmed, &.{ " ns", " us", " ms", " s" });
@@ -1113,6 +1122,8 @@ fn intField(obj: std.json.ObjectMap, name: []const u8) ?i64 {
     };
 }
 
+/// Safely narrows a JSON float to i64, returning null for NaN/inf or out-of-range values
+/// so a malformed number never traps under ReleaseSafe.
 fn floatToInt(value: f64) ?i64 {
     if (!std.math.isFinite(value)) return null;
     const max: f64 = @floatFromInt(std.math.maxInt(i64));

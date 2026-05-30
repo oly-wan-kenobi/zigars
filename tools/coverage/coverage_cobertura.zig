@@ -1,11 +1,20 @@
+//! Cobertura XML parser and missing-file detector for coverage evidence.
+//!
+//! Parses the XML produced by kcov, classifies each file as `src`, `tools`,
+//! or `ignored`, and detects tracked `.zig` files absent from the report.
+//! All allocations are caller-owned; every public type exposes a `deinit`.
 const std = @import("std");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const percent_scale: u32 = 100;
 
+/// Distinguishes coverage scopes for threshold enforcement. `ignored` files
+/// are excluded from all counters (generated code, vendor, build cache).
 pub const CoverageScope = enum { src, tools, ignored };
 
+/// Aggregate coverage metrics across all tracked source files.
+/// `files` and `missing_files` are heap-allocated; call `deinit` to release.
 pub const CoverageStats = struct {
     covered_lines: u64 = 0,
     total_lines: u64 = 0,
@@ -13,7 +22,10 @@ pub const CoverageStats = struct {
     src_total_lines: u64 = 0,
     tools_covered_lines: u64 = 0,
     tools_total_lines: u64 = 0,
+    /// Per-file breakdown; populated by `parseCobertura`.
     files: []CoverageFileStats = &.{},
+    /// Paths of tracked `.zig` files absent from the kcov report;
+    /// populated by `addMissingTrackedFiles`.
     missing_files: []const []const u8 = &.{},
 
     pub fn deinit(self: *CoverageStats, allocator: Allocator) void {
@@ -23,34 +35,43 @@ pub const CoverageStats = struct {
         if (self.missing_files.len > 0) allocator.free(self.missing_files);
     }
 
+    /// Overall line coverage as basis points (10000 = 100.00%).
+    /// Returns `null` when no lines were instrumented.
     pub fn lineRateBasisPoints(self: CoverageStats) ?u32 {
         return rateBasisPoints(self.covered_lines, self.total_lines);
     }
 
+    /// `src/` subtree line coverage in basis points; null when empty.
     pub fn srcLineRateBasisPoints(self: CoverageStats) ?u32 {
         return rateBasisPoints(self.src_covered_lines, self.src_total_lines);
     }
 
+    /// `tools/` subtree line coverage in basis points; null when empty.
     pub fn toolsLineRateBasisPoints(self: CoverageStats) ?u32 {
         return rateBasisPoints(self.tools_covered_lines, self.tools_total_lines);
     }
 
+    /// Total count of uninstrumented lines across all tracked files.
     pub fn uncoveredLineCount(self: CoverageStats) u64 {
         var count: u64 = 0;
         for (self.files) |file| count += file.uncovered_lines.len;
         return count;
     }
 
+    /// Number of tracked source files absent from the kcov report.
     pub fn missingFileCount(self: CoverageStats) u64 {
         return self.missing_files.len;
     }
 };
 
+/// Per-file coverage breakdown. `path` and `uncovered_lines` are heap-owned;
+/// call `deinit` before discarding.
 pub const CoverageFileStats = struct {
     path: []const u8,
     scope: CoverageScope,
     covered_lines: u64 = 0,
     total_lines: u64 = 0,
+    /// 1-based line numbers of uninstrumented lines in this file.
     uncovered_lines: []u32 = &.{},
 
     pub fn deinit(self: *CoverageFileStats, allocator: Allocator) void {
@@ -58,11 +79,17 @@ pub const CoverageFileStats = struct {
         if (self.uncovered_lines.len > 0) allocator.free(self.uncovered_lines);
     }
 
+    /// Line coverage for this file in basis points; null when no lines tracked.
     pub fn lineRateBasisPoints(self: CoverageFileStats) ?u32 {
         return rateBasisPoints(self.covered_lines, self.total_lines);
     }
 };
 
+/// Parses a Cobertura XML `xml` buffer into a `CoverageStats` value.
+/// Paths are normalized to `src/…` or `tools/…` relative form; classes
+/// outside those scopes are silently skipped (scope `.ignored`).
+/// The caller owns the returned value and must call `stats.deinit(allocator)`.
+/// Returns `error.InvalidCoverageReport` for structurally malformed XML.
 pub fn parseCobertura(allocator: Allocator, xml: []const u8) !CoverageStats {
     var stats: CoverageStats = .{};
     var files: std.ArrayList(CoverageFileStats) = .empty;
@@ -145,6 +172,9 @@ pub fn parseCobertura(allocator: Allocator, xml: []const u8) !CoverageStats {
     return stats;
 }
 
+/// Cross-references `stats.files` against tracked `.zig` files from `git
+/// ls-files src tools`. Any tracked file absent from the report is added to
+/// `stats.missing_files`. Callers must ensure `stats` lives until `deinit`.
 pub fn addMissingTrackedFiles(allocator: Allocator, io: Io, stats: *CoverageStats) !void {
     const tracked = try trackedCoverageFiles(allocator, io);
     defer {
@@ -257,6 +287,10 @@ fn isPathSep(byte: u8) bool {
     return byte == '/' or byte == '\\';
 }
 
+// Extracts the value of an XML attribute by name from a single tag string.
+// Requires the attribute to be preceded by whitespace or `<` (to avoid
+// false matches like "otherfilename" matching a search for "filename").
+// Handles both single- and double-quoted values. Returns null when not found.
 fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, tag, pos, name)) |idx| {
@@ -275,6 +309,8 @@ fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
+// Converts a covered/total pair to basis points (0–10000). Returns null
+// when total is zero to distinguish "no data" from "zero coverage".
 fn rateBasisPoints(covered: u64, total: u64) ?u32 {
     if (total == 0) return null;
     return @intCast((covered * 100 * percent_scale) / total);

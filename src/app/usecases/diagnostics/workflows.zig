@@ -649,7 +649,11 @@ fn lldbCapture(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, too
     return structured(allocator, .{ .object = obj });
 }
 
-/// Implements apply gated backend command workflow logic using caller-owned inputs.
+/// Runs an external diagnostic backend under the apply gate: without apply=true
+/// it returns a preview (no execution); with it, it probes the backend, runs the
+/// command, serializes findings, and writes the evidence artifact. Callers must
+/// have already rejected unsupported platforms. The probe timeout is clamped so
+/// a missing backend fails fast.
 fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, spec: BackendCommandSpec) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, spec.tool_name, spec.backend_name, spec.configured_path, spec.argv, spec.basis, if (spec.target.len > 0) spec.target else argString(args, "target"), spec.output);
     const probe = checkBackend(a, scratch, spec.backend_name, spec.probe_argv, @min(toolTimeout(a, args), 5000));
@@ -674,7 +678,10 @@ fn applyGatedBackendCommand(a: *App, result_allocator: std.mem.Allocator, scratc
     return structured(result_allocator, .{ .object = obj });
 }
 
-/// Implements apply gated user command workflow logic using caller-owned inputs.
+/// Runs a user-supplied project command (already split into argv, no shell)
+/// under the apply gate: preview without apply=true, otherwise execute, capture
+/// the result, and write the evidence artifact. Used for runners like libFuzzer
+/// where the command is the project's own, not a fixed backend.
 fn applyGatedUserCommand(a: *App, result_allocator: std.mem.Allocator, scratch: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, argv: []const []const u8, output: []const u8, artifact_kind: []const u8, notes: []const u8) !Result {
     if (!argBool(args, "apply", false)) return previewResult(a, result_allocator, scratch, tool_name, "project_command", "", argv, "Project command preview", argString(args, "target"), output);
     const run = runCommand(result_allocator, a, argv, toolTimeout(a, args)) catch |err| {
@@ -816,7 +823,13 @@ fn crossPlan(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_
     return structured(allocator, .{ .object = obj });
 }
 
-/// Reads evidence input data from the provided context without taking ownership of inputs.
+/// Resolves evidence bytes from the request: an explicit `content_field` is
+/// always inline (borrowed); the `primary` field is treated as inline when it
+/// looks like evidence text, otherwise as a workspace path read through the
+/// sandboxed reader (the returned bytes are then owned). All file reads are
+/// bounded by max_evidence_bytes. Returns error.MissingArgument when `required`
+/// and nothing was supplied. `allocator`/`tool_name` are unused here; the caller
+/// frees owned bytes via EvidenceInput.deinit.
 fn readEvidenceInput(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, tool_name: []const u8, primary: []const u8, path_field: ?[]const u8, content_field: ?[]const u8, required: bool) !EvidenceInput {
     _ = allocator;
     _ = tool_name;
@@ -841,7 +854,10 @@ fn evidenceInputError(a: *App, allocator: std.mem.Allocator, tool_name: []const 
     return workspacePathErrorResult(a, allocator, tool_name, path, err);
 }
 
-/// Reports whether inline evidence matches the caller-provided data.
+/// Heuristic deciding whether a string is inline evidence text rather than a
+/// workspace path: empty, JSON-ish opener, multi-line, or containing sanitizer
+/// (`==`) or panic markers. A single-line plain path (no markers) reads false so
+/// it is loaded from the sandbox instead of being treated as literal content.
 fn looksInlineEvidence(value: []const u8) bool {
     const trimmed = std.mem.trim(u8, value, " \t\r\n");
     return trimmed.len == 0 or trimmed[0] == '{' or trimmed[0] == '[' or std.mem.indexOfScalar(u8, trimmed, '\n') != null or std.mem.indexOf(u8, trimmed, "==") != null or std.mem.indexOf(u8, trimmed, "panic") != null;
@@ -881,7 +897,10 @@ fn memoryFindingsValue(allocator: std.mem.Allocator, text: []const u8) !std.json
     return .{ .object = obj };
 }
 
-/// Parses metric before input using caller-provided storage; malformed input and allocation failures propagate.
+/// Finds the first integer on the line that contains both `line_context` and
+/// `number_context` (the number_context requirement is dropped for the
+/// "ERROR SUMMARY" line, whose count precedes "errors from"). Returns null when
+/// no such line exists. Tolerant text scan over valgrind/heaptrack output.
 fn parseMetricBefore(text: []const u8, number_context: []const u8, line_context: []const u8) ?i64 {
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
@@ -892,7 +911,8 @@ fn parseMetricBefore(text: []const u8, number_context: []const u8, line_context:
     return null;
 }
 
-/// Implements strip valgrind prefix workflow logic using caller-owned inputs.
+/// Strips a leading valgrind `==pid==` process-id prefix so the numeric scan
+/// does not pick up the pid. Lines without the prefix are returned unchanged.
 fn stripValgrindPrefix(line: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, line, " \t");
     if (!std.mem.startsWith(u8, trimmed, "==")) return line;
@@ -900,7 +920,9 @@ fn stripValgrindPrefix(line: []const u8) []const u8 {
     return trimmed[end + 2 ..];
 }
 
-/// Implements first integer workflow logic using caller-owned inputs.
+/// Parses the first run of digits on the line as an i64, ignoring embedded
+/// thousands separators (commas). Returns null when no digits are present or the
+/// number overflows.
 fn firstInteger(line: []const u8) ?i64 {
     var i: usize = 0;
     while (i < line.len) : (i += 1) {
@@ -1004,7 +1026,9 @@ fn binaryInfo(a: *App, allocator: std.mem.Allocator, path: []const u8) !BinaryIn
     };
 }
 
-/// Implements sniff binary format workflow logic using caller-owned inputs.
+/// Classifies an executable by leading magic bytes (ELF, Mach-O thin/fat, PE,
+/// Wasm). This is a hint only and does not parse the container; unknown magic
+/// returns "unknown".
 fn sniffBinaryFormat(bytes: []const u8) []const u8 {
     if (bytes.len >= 4 and std.mem.eql(u8, bytes[0..4], "\x7fELF")) return "elf";
     if (bytes.len >= 4 and (std.mem.eql(u8, bytes[0..4], "\xcf\xfa\xed\xfe") or std.mem.eql(u8, bytes[0..4], "\xca\xfe\xba\xbe"))) return "macho";

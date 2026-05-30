@@ -1,3 +1,11 @@
+//! Hexagonal architecture guard for the `src/` tree.
+//!
+//! Walks every `.zig` file under `src/`, classifies it by layer (domain, app,
+//! adapter, infra, manifest, bootstrap, testing), and enforces import walls,
+//! effect-token walls, and a whole-graph cycle check. Any violation is written
+//! to stderr; the command exits non-zero when the guard fails.
+//! The allowlist is intentionally empty: encode boundaries in ports or bootstrap
+//! wiring instead of carving out per-file exceptions.
 const std = @import("std");
 const cli_io = @import("../common/cli_io.zig");
 
@@ -503,12 +511,17 @@ const ImportGraph = struct {
     }
 };
 
+/// CLI entry point: accepts no arguments and exits with
+/// `error.ArchitectureGuardFailed` when any wall is violated.
 pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len != 0) return error.InvalidArguments;
     if (!(try check(allocator, io))) return error.ArchitectureGuardFailed;
     try cli_io.stdoutWrite(io, "architecture guard ok\n");
 }
 
+/// Runs all walls and cycle checks against the live `src/` tree.
+/// Returns `true` when all checks pass; `false` when any violation was
+/// reported (diagnostics have already been written to stderr).
 pub fn check(allocator: Allocator, io: Io) !bool {
     var module_map = ModuleMap.fromBuildFile(allocator, io);
     defer module_map.deinit();

@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.ClockAndIds` port.
+//! Returns deterministic timestamps and identifier strings from caller-supplied
+//! queues, enabling reproducible ordering and naming in use-case tests without
+//! real clock or UUID dependencies.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

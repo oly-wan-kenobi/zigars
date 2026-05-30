@@ -1,3 +1,6 @@
+//! Tests for benchmark_model: parsing (text and JSON), comparison classification,
+//! summary evaluation, and allocation-failure cleanup contracts.
+
 const std = @import("std");
 
 const benchmark_model = @import("benchmark_model.zig");

@@ -1,3 +1,7 @@
+//! Pins the discovery adapter wrapper contract: zigarsCapabilities,
+//! zigarsSchema, zigarsMetrics, and zigarsHttpStatus must each emit both a
+//! text fallback and structuredContent with the expected top-level fields.
+
 const std = @import("std");
 
 const app_context = @import("../../../../../app/context.zig");

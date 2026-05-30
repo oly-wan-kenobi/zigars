@@ -51,10 +51,11 @@ pub fn runtimeFieldConcern(name: []const u8) ?RuntimeFieldConcern {
     return null;
 }
 
-/// fromRuntime snapshots process/runtime state into app context values and read-only counters.
+/// Snapshots process/runtime state into an app-facing Context plus the supplied port bindings.
+/// The returned Context borrows string slices from runtime; it must not outlive the active call.
 pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet) app_context.Context {
-    // Borrow runtime configuration and status fields directly; the returned
-    // context is a short-lived view owned by the active runtime.
+    // String fields (roots, paths, status) are borrowed directly from the runtime.
+    // Counter pointers are passed as mutable references so the Context can increment them.
     return .{
         .workspace = .{
             .root = runtime.workspace.root,

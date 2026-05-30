@@ -1,3 +1,6 @@
+//! Tests for the metrics Reader: snapshot ordering, bounded ring eviction,
+//! and allocator-failure cleanup via checkAllAllocationFailures.
+
 const std = @import("std");
 const observability = @import("state.zig");
 const metrics = @import("metrics.zig");

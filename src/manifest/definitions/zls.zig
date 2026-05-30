@@ -1,3 +1,9 @@
+//! Tool definitions for the `zls` group: document lifecycle, diagnostics,
+//! hover, definition, references, completion, signature help, and symbol
+//! search backed by an optional ZLS 0.16 subprocess. Tools that send LSP
+//! requests carry mutates_lsp_state=true; diagnostics fall back to ast-check
+//! when ZLS is unavailable. The server operates in stateless gateway mode —
+//! every request re-syncs the relevant document rather than tracking open state.
 const types = @import("../types.zig");
 
 const schema = types.schema;

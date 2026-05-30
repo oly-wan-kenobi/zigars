@@ -64,6 +64,9 @@ const IoMapping = struct {
     note: []const u8,
 };
 
+/// Curated Zig 0.15 -> 0.16 std.io/std.Io migration table. Confidence is `exact`
+/// for pure renames, `likely` where the shape usually changes, and `manual_review`
+/// where buffer ownership or read/write strategy must be decided at the call site.
 const io_mappings = [_]IoMapping{
     .{ .pattern = "std.io.getStdOut().writer()", .replacement = "std.fs.File.stdout().writer(&buffer)", .confidence = "likely", .note = "Zig 0.16 writer construction generally requires caller-owned buffers; verify the exact buffer lifetime." },
     .{ .pattern = "std.io.getStdErr().writer()", .replacement = "std.fs.File.stderr().writer(&buffer)", .confidence = "likely", .note = "stderr writer APIs moved toward std.Io/file-backed writers with explicit buffers." },

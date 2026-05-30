@@ -1,3 +1,7 @@
+//! Black-box tests for the artifact registry workflows: verify reads and prune
+//! checks go through the workspace store port (sandbox-bounded), that the read
+//! identity is reported correctly, and that prune classifies kept vs. missing
+//! entries by re-hashing against disk.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -1,3 +1,6 @@
+//! Renders the backend setup catalog as a JSON value for setup and doctor
+//! workflows.  All backends remain optional external executables; zigars ships
+//! only metadata and probes, not the binaries themselves.
 const std = @import("std");
 const definitions = @import("definitions.zig");
 
@@ -11,6 +14,10 @@ pub const Paths = definitions.Paths;
 pub const backends = definitions.backends;
 
 /// Builds the public backend setup catalog JSON.
+/// `paths` supplies runtime-configured executable paths that override defaults;
+/// pass `.{}` to use defaults everywhere.  When `include_configured_paths` is
+/// false the per-backend `configured_path` field is omitted.  Caller must
+/// deinitialize the returned value with `std.json.Value.deinit`.
 pub fn value(allocator: std.mem.Allocator, paths: Paths, include_configured_paths: bool) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -49,7 +56,8 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
     return .{ .object = obj };
 }
 
-/// Returns the configured executable path for a backend.
+/// Returns the configured executable path for a named backend, or null for unknown names.
+/// Returning null signals that the default path should be used; it is not an error.
 fn pathFor(name: []const u8, paths: Paths) ?[]const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
@@ -71,11 +79,15 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
 }
 
 /// Builds the argv JSON value used by a backend probe.
+/// Replaces element 0 (the executable) with `configured_path` so callers
+/// see the resolved path rather than the bare binary name.
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
     defer if (array_owned) array.deinit();
     for (probe_argv, 0..) |item, index| {
+        // Index 0 is the executable; substitute the resolved path so the JSON
+        // reflects what the probe will actually invoke.
         try array.append(.{ .string = if (index == 0) configured_path else item });
     }
     array_owned = false;

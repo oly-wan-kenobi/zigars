@@ -1,3 +1,8 @@
+//! Pins the patch-session safety contract against fake ports: preview never
+//! writes, apply is refused for stale preimages and policy-blocked paths,
+//! applies archive a rollback preimage and append history, revert restores or
+//! deletes the session's own files, and create/replacement/revert all stay
+//! leak-free under injected allocation failures.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

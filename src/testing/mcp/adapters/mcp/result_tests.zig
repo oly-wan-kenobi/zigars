@@ -1,3 +1,8 @@
+//! Pins the MCP result module's ownership and serialization contracts:
+//! cloneValue deep-copies JSON trees with correct cleanup on partial failure,
+//! deinitToolResult releases all content block variants, serializeString
+//! escapes control characters, and structuredOwned releases the source value.
+
 const std = @import("std");
 const mcp = @import("mcp");
 

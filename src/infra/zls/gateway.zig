@@ -1,10 +1,16 @@
+//! ZLS gateway: port facade over the live ZLS session.
+//! Adapts the session/document/client layer to the ZlsGateway port vtable
+//! consumed by use-case code. All file arguments are resolved through the
+//! workspace sandbox before reaching the document layer.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
 const zls_session = @import("session.zig");
 const Workspace = @import("../workspace/workspace.zig").Workspace;
 
-/// ZlsGateway port facade that ensures ZLS readiness and scopes files to a workspace.
+/// Concrete ZlsGateway implementation backed by a live ZLS process and document state.
+/// All slot/state pointers are borrowed — the caller (bootstrap/runtime composition)
+/// owns the storage and must outlive the Gateway.
 pub const Gateway = struct {
     allocator: std.mem.Allocator,
     workspace: *Workspace,
@@ -53,7 +59,8 @@ pub const Gateway = struct {
         };
     }
 
-    /// Reports whether the fake ZLS gateway supports a capability.
+    /// Queries a named LSP capability from the cached initialize response.
+    /// Returns Unavailable when no client is connected or the response is absent.
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.state.client == null) return error.Unavailable;
@@ -85,7 +92,8 @@ pub const Gateway = struct {
         };
     }
 
-    /// Applies a text synchronization request through the fake ZLS gateway.
+    /// Syncs a file with ZLS: with content → syncText (dirty); without → ensureOpen (disk).
+    /// Ensures session readiness before the sync; resolves the file path through workspace.
     fn sync(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.isCancelled()) return error.Cancelled;
@@ -105,7 +113,8 @@ pub const Gateway = struct {
         };
     }
 
-    /// Sends a raw request through the fake ZLS gateway.
+    /// Forwards a raw JSON-RPC request to ZLS and returns the raw response payload.
+    /// Increments the request counter when one is configured. Supports cancellation.
     fn request(ptr: *anyopaque, allocator: std.mem.Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.isCancelled()) return error.Cancelled;
@@ -125,7 +134,7 @@ pub const Gateway = struct {
         };
     }
 
-    /// Returns cached diagnostics collected by the live ZLS client.
+    /// Returns an allocator-owned snapshot of all diagnostics collected by the live ZLS client.
     fn diagnostics(ptr: *anyopaque, allocator: std.mem.Allocator) ports.PortError!ports.ZlsDiagnosticsSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const client = self.state.client orelse return error.Unavailable;
@@ -151,7 +160,7 @@ pub const Gateway = struct {
     }
 };
 
-/// Wraps a ZLS JSON response result with its ownership state.
+/// Extracts the "result" field from a JSON-RPC response object, if present.
 fn responseResult(value: std.json.Value) ?std.json.Value {
     const obj = switch (value) {
         .object => |object| object,
@@ -160,7 +169,8 @@ fn responseResult(value: std.json.Value) ?std.json.Value {
     return obj.get("result");
 }
 
-/// Maps zls error into the port-facing representation without taking ownership unless documented by the result.
+/// Maps internal ZLS errors to the port-facing PortError set.
+/// Errors not explicitly listed collapse to Unavailable rather than leaking internal names.
 fn mapZlsError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

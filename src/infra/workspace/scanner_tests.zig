@@ -1,3 +1,6 @@
+//! Tests for Scanner: pins that .zig-cache paths are excluded, that partial
+//! results are cleaned up on allocation failure, and that the result count
+//! matches only non-skipped .zig source files.
 const std = @import("std");
 const scanner_mod = @import("scanner.zig");
 const workspace_mod = @import("workspace.zig");

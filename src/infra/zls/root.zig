@@ -1,3 +1,5 @@
+//! Public surface and test runner for the ZLS infrastructure subsystem.
+//! Re-exports all production modules and pulls in their paired test files.
 pub const client = @import("client.zig");
 pub const diagnostics_cache = @import("diagnostics_cache.zig");
 pub const documents = @import("documents.zig");

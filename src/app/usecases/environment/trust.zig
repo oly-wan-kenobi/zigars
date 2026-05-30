@@ -1,3 +1,12 @@
+//! Trust-posture reporting: the trust manifest, command provenance, risk audit,
+//! and clean-tree gate. These workflows describe zigars' own process policy
+//! (path boundary, apply-gating, subprocess classes, output limits) and the
+//! configured local toolchain; they are evidence, not an OS sandbox.
+//!
+//! Honesty invariant: a configured backend path is only an *identity* until a
+//! probe populates the trust probe cache, so identities report low confidence
+//! and never claim availability. The manifest deliberately declines to claim
+//! attestation verification that this phase does not implement.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -192,6 +201,8 @@ pub fn riskAuditValue(allocator: std.mem.Allocator, a: *App, include_none: bool)
 /// Serializes clean tree gate fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn cleanTreeGateValue(a: *App, allocator: std.mem.Allocator, timeout_ms: i64) !std.json.Value {
     const argv = &.{ "git", "status", "--porcelain" };
+    // Clean-tree evidence runs `git status` directly (no shell); the timeout is
+    // clamped so a hung or slow git can never block a trust report indefinitely.
     const result = support.runCommand(allocator, a, argv, @min(timeout_ms, 5000)) catch |err| {
         return cleanTreeBackendErrorValue(allocator, a.workspace.root, err);
     };
@@ -415,6 +426,8 @@ fn backendIdentityValue(allocator: std.mem.Allocator, configured_path: []const u
     defer if (obj_owned) obj.deinit(allocator);
     try obj.put(allocator, "configured_path", .{ .string = configured_path });
     if (probe.probed) {
+        // A successful probe earns only medium confidence: it proves the command
+        // answered, not that it is the correct or semantically compatible tool.
         try obj.put(allocator, "probe_status", .{ .string = probe.status });
         try obj.put(allocator, "probe_ok", if (probe.ok) |ok| .{ .bool = ok } else .null);
         try obj.put(allocator, "confidence", .{ .string = if (probe.ok orelse false) "medium" else "low" });

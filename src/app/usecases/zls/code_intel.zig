@@ -1,10 +1,15 @@
-//! ZLS code-intel adapter for position and workspace symbol protocol requests.
+//! ZLS code-intel use cases for position, range, file, and workspace-symbol LSP
+//! requests. Every handler runs the same contract: gate on the method's ZLS
+//! capability, sync the document through the gateway, then issue the raw LSP
+//! request. rename and codeAction return ZLS workspace-edit previews only; this
+//! layer never writes source, so it has no apply gate of its own.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
-/// Provenance tag attached to workspace reads from this workflow.
+/// Provenance tag stamped on the gateway document sync so trust/audit trails
+/// attribute the in-memory ZLS upload to this use case.
 pub const provenance = "zls.code_intel";
 
 /// Carries position request data across use case and port boundaries.
@@ -103,7 +108,11 @@ pub const PositionOutcome = union(enum) {
     }
 };
 
-/// Implements position workflow logic using caller-owned inputs.
+/// Runs a position-based LSP request (hover, definition, completion, references,
+/// ...): capability-gate, sync the document, then send the request. Returns an
+/// .err outcome for unsupported/unavailable capability, missing file, or port
+/// failure; only OutOfMemory escapes as a hard error. Caller owns the resulting
+/// payload via PositionOutcome.deinit.
 pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: PositionRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
@@ -124,6 +133,8 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     }) catch |err| return .{ .err = .{ .sync_failed = .{ .err = err, .file = file } } };
     defer sync_result.deinit(allocator);
 
+    // references needs the extra includeDeclaration context object; every other
+    // position method takes the bare textDocument+position payload.
     const payload = if (std.mem.eql(u8, request.method, "textDocument/references"))
         try referencesPayload(allocator, sync_result.uri, request.line, request.character, request.include_declaration)
     else
@@ -141,7 +152,9 @@ pub fn position(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     } };
 }
 
-/// Implements range workflow logic using caller-owned inputs.
+/// Runs a range-based LSP request (e.g. codeAction): capability-gate, sync the
+/// document, then send the request with an empty diagnostics context. Same
+/// outcome and ownership contract as `position`.
 pub fn range(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: RangeRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
@@ -240,7 +253,9 @@ pub fn codeActionSelection(allocator: std.mem.Allocator, context: app_context.Zl
     }
 }
 
-/// Implements file only workflow logic using caller-owned inputs.
+/// Runs a whole-file LSP request (e.g. documentSymbol, formatting) whose payload
+/// is just the textDocument URI: capability-gate, sync, then request. Same
+/// outcome and ownership contract as `position`.
 pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: FileRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod(request.method)) |capability| {
@@ -271,7 +286,9 @@ pub fn fileOnly(allocator: std.mem.Allocator, context: app_context.ZlsContext, r
     } };
 }
 
-/// Implements workspace symbols workflow logic using caller-owned inputs.
+/// Runs a workspace/symbol query. Unlike the per-document handlers this skips
+/// the sync step (the query spans the workspace, not one file) and sends the
+/// request with no URI. Same outcome and ownership contract as `position`.
 pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsContext, request: WorkspaceSymbolRequest) !PositionOutcome {
     const gateway = context.zls_gateway;
     if (capabilityForMethod("workspace/symbol")) |capability| {
@@ -294,7 +311,8 @@ pub fn workspaceSymbols(allocator: std.mem.Allocator, context: app_context.ZlsCo
     } };
 }
 
-/// Implements capability for method workflow logic using caller-owned inputs.
+/// Maps an LSP method to the ZLS server-capability key that must be advertised
+/// before it is sent; null means the method is not capability-gated here.
 pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, method, "textDocument/hover")) return "hoverProvider";
     if (std.mem.eql(u8, method, "textDocument/definition")) return "definitionProvider";
@@ -309,7 +327,7 @@ pub fn capabilityForMethod(method: []const u8) ?[]const u8 {
     return null;
 }
 
-/// Implements position payload workflow logic using caller-owned inputs.
+/// Builds the textDocument+position LSP params JSON; caller owns the bytes.
 fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -327,7 +345,8 @@ fn positionPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, cha
     return bytes;
 }
 
-/// Reports whether payload matches the caller-provided data.
+/// Builds the textDocument/references LSP params JSON, adding the
+/// includeDeclaration context flag; caller owns the bytes.
 fn referencesPayload(allocator: std.mem.Allocator, uri: []const u8, line: i64, character: i64, include_declaration: bool) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -434,7 +453,8 @@ fn actionArray(value: std.json.Value) ?std.json.Array {
     };
 }
 
-/// Implements file only payload workflow logic using caller-owned inputs.
+/// Builds an LSP params JSON carrying only the textDocument URI; caller owns the
+/// bytes.
 fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Allocator.Error![]u8 {
     const Params = struct {
         textDocument: struct { uri: []const u8 },
@@ -448,7 +468,8 @@ fn fileOnlyPayload(allocator: std.mem.Allocator, uri: []const u8) std.mem.Alloca
     return bytes;
 }
 
-/// Implements workspace symbol payload workflow logic using caller-owned inputs.
+/// Builds the workspace/symbol LSP params JSON from the query; caller owns the
+/// bytes.
 fn workspaceSymbolPayload(allocator: std.mem.Allocator, query: []const u8) std.mem.Allocator.Error![]u8 {
     const Params = struct { query: []const u8 };
     var aw: std.Io.Writer.Allocating = .init(allocator);

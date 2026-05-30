@@ -1,3 +1,6 @@
+//! Tests for JSON-RPC 2.0 message serialization and RequestId semantics.
+//! Pins: ID equality across all variants, JSON round-trip for integer/string/null IDs,
+//! correct envelope shapes for response/error/notification/request, and ErrorCode values.
 const std = @import("std");
 const json_rpc = @import("json_rpc.zig");
 

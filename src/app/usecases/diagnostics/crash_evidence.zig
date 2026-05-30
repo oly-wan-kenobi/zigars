@@ -1,3 +1,11 @@
+//! Turns raw crash/sanitizer/panic text into typed evidence: a sanitizer and
+//! failure-kind classification, parsed (count-bounded) stack frames, and a
+//! stable crash identity. The identity is a prefixed 64-bit SHA-256 digest of
+//! the input text, used to confirm a later reproduction yields the same crash.
+//!
+//! All returned structs own allocations; callers must call deinit. This is pure
+//! evidence extraction — no command execution and no I/O — so the structured
+//! workflows in workflows.zig can apply-gate any external tooling on top.
 const std = @import("std");
 
 const crash = @import("../../../domain/diagnostics/crash.zig");
@@ -76,7 +84,9 @@ pub const EvidenceRequest = struct {
     limit: usize,
 };
 
-/// Implements summarize frames workflow logic using caller-owned inputs.
+/// Parses up to `request.limit` stack frames from the evidence text. The
+/// returned FrameSummary records the original count even when fewer frames are
+/// retained, and owns its frames (caller must deinit).
 pub fn summarizeFrames(allocator: std.mem.Allocator, request: EvidenceRequest) !FrameSummary {
     return .{
         .source_kind = request.source_kind,
@@ -84,7 +94,9 @@ pub fn summarizeFrames(allocator: std.mem.Allocator, request: EvidenceRequest) !
     };
 }
 
-/// Implements fuse sanitizer workflow logic using caller-owned inputs.
+/// Fuses sanitizer evidence: classifies the sanitizer and failure kind, derives
+/// a crash identity keyed on the sanitizer name, and parses bounded frames.
+/// Returns an owned SanitizerFusion (caller must deinit).
 pub fn fuseSanitizer(allocator: std.mem.Allocator, request: EvidenceRequest) !SanitizerFusion {
     const sanitizer = crash.classifySanitizer(request.bytes);
     return .{
@@ -96,7 +108,10 @@ pub fn fuseSanitizer(allocator: std.mem.Allocator, request: EvidenceRequest) !Sa
     };
 }
 
-/// Implements analyze panic trace workflow logic using caller-owned inputs.
+/// Analyzes a Zig panic trace: extracts the panic message (falling back to
+/// "unknown panic" when none is found), classifies the failure kind, derives a
+/// zig_panic-keyed crash identity, and parses bounded frames. Returns an owned
+/// PanicTrace (caller must deinit).
 pub fn analyzePanicTrace(allocator: std.mem.Allocator, request: EvidenceRequest) !PanicTrace {
     return .{
         .panic_message = crash.panicMessage(request.bytes) orelse "unknown panic",
@@ -106,7 +121,9 @@ pub fn analyzePanicTrace(allocator: std.mem.Allocator, request: EvidenceRequest)
     };
 }
 
-/// Implements plan crash repro workflow logic using caller-owned inputs.
+/// Classifies the failure kind and derives a crash-keyed identity for a
+/// reproduction plan, without parsing frames. Returns an owned CrashReproPlan
+/// (caller must deinit).
 pub fn planCrashRepro(allocator: std.mem.Allocator, bytes: []const u8) !CrashReproPlan {
     return .{
         .failure_kind = crash.classifyFailure(bytes),
@@ -114,12 +131,15 @@ pub fn planCrashRepro(allocator: std.mem.Allocator, bytes: []const u8) !CrashRep
     };
 }
 
-/// Normalizes numeric input into the bounded value used by this workflow.
+/// Clamps a requested frame limit to at least 1 so parsing always keeps the top
+/// frame even when callers pass 0.
 fn normalizedLimit(limit: usize) usize {
     return @max(1, limit);
 }
 
-/// Implements identity from text workflow logic using caller-owned inputs.
+/// Builds a stable crash identity as `prefix:<first 16 hex chars of SHA-256>`.
+/// The truncated digest is enough to correlate identical crash text across runs
+/// without being a security claim. Returns allocator-owned bytes.
 fn identityFromText(allocator: std.mem.Allocator, text: []const u8, prefix: []const u8) ![]const u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(text, &digest, .{});

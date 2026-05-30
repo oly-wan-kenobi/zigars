@@ -1,3 +1,7 @@
+//! Release gate: backend contract scenario coverage.
+//! Verifies that every scenario in the generated manifest is present in the
+//! conformance script, the smoke required-tuple, and the scenario docs; a
+//! count mismatch flags a definition added without a corresponding fixture.
 const std = @import("std");
 const cli_io = @import("../common/cli_io.zig");
 const scenario_manifest = @import("backend_contract_scenarios_manifest");
@@ -10,12 +14,20 @@ const smoke_script_path = ".github/scripts/backend-conformance-contract-smoke.sh
 const docs_path = "tests/integration/backend-contract/SCENARIOS.md";
 const scenario_call_token = "add_tool_scenario(\n    \"";
 
+/// Entry point for the `backend-contract-scenarios` CLI subcommand.
+/// Accepts no arguments; returns `error.BackendContractScenarioDrift` if any
+/// scenario is missing from a required location.
 pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len != 0) return error.InvalidArguments;
     if (!(try check(allocator, io))) return error.BackendContractScenarioDrift;
     try cli_io.stdoutWrite(io, "backend contract scenarios ok\n");
 }
 
+/// Returns `true` only when every manifest scenario appears in all three
+/// required locations: the conformance script definition, the smoke
+/// required-tuple, and the scenario docs page.  Any missing entry or count
+/// mismatch is reported to stderr and causes `false` to be returned.
+/// The caller owns no allocations after this call (all buffers are freed).
 pub fn check(allocator: Allocator, io: Io) !bool {
     const contract_script = (try readContractFile(allocator, io, contract_script_path)) orelse return false;
     defer allocator.free(contract_script);
@@ -40,6 +52,8 @@ fn readContractFile(allocator: Allocator, io: Io, path: []const u8) !?[]u8 {
 
 fn checkScenarioDefinitions(io: Io, script: []const u8) !bool {
     var ok = try checkScenarioTokens(io, "backend contract scenario definition", contract_script_path, script);
+    // Count call-site occurrences as a secondary check: matching names is not
+    // enough if a scenario was duplicated or extra definitions were not removed.
     const count = countOccurrences(script, scenario_call_token);
     if (count != scenario_manifest.all.len) {
         try cli_io.stderrPrint(io, "backend contract scenario definition count mismatch: expected {d}, got {d}\n", .{ scenario_manifest.all.len, count });
@@ -77,6 +91,10 @@ fn checkScenarioTokens(io: Io, label: []const u8, path: []const u8, haystack: []
     return ok;
 }
 
+/// Extracts the body of the `required_scenarios = (...)` bash tuple from
+/// `script`, returning a slice into `script` that covers the quoted lines
+/// between the opening and closing parentheses.  Returns `null` if the
+/// tuple header or closing delimiter is absent.
 fn requiredScenarioTuple(script: []const u8) ?[]const u8 {
     const start_token = "required_scenarios = (\n";
     const start = (std.mem.indexOf(u8, script, start_token) orelse return null) + start_token.len;
@@ -94,6 +112,9 @@ fn countOccurrences(text: []const u8, needle: []const u8) usize {
     return count;
 }
 
+/// Counts lines that, after trimming whitespace and trailing commas, are
+/// enclosed in double quotes.  Used to count smoke required-scenario entries
+/// without importing a shell parser.
 fn countQuotedLines(text: []const u8) usize {
     var count: usize = 0;
     var lines = std.mem.splitScalar(u8, text, '\n');

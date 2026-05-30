@@ -1,3 +1,7 @@
+//! Pins the definitions facade contract: the base group is present and
+//! the total group count satisfies the minimum expected by the aggregation
+//! pipeline.
+
 const std = @import("std");
 const subject = @import("definitions.zig");
 const definitions = subject.definitions;

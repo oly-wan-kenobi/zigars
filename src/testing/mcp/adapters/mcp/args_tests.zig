@@ -1,3 +1,8 @@
+//! Pins the argument validation contract for the MCP adapter layer:
+//! required/optional presence, type checking, enum values, integer bounds,
+//! and the M1/M2 reachability invariant (advertised fields must be accepted;
+//! removed or inapplicable fields must be rejected as unknown_argument).
+
 const std = @import("std");
 
 const args = @import("../../../../adapters/mcp/args.zig");

@@ -1,3 +1,8 @@
+//! Tool definitions for the `agent_workflows` and `static_analysis` groups'
+//! validation sub-family: semantic impact analysis, validation planning and
+//! execution, build/test event parsing, history triage, session handoff, and
+//! project memory tools. Execution tools require allow-listed Zig subcommands;
+//! history write requires apply=true.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -5,16 +10,20 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// Validation depth.
+// Shared plan strings for the three validation tool families.
+// Planning tools return explicit runnable and skipped phases without executing.
 const validation_plan = "Risk-aware validation planning that inspects supplied diff/file facts and returns explicit runnable and skipped phases.";
+// Execution tools run bounded Zig commands; history artifact writes require apply=true.
 const validation_run = "Executes allow-listed Zig validation command phases without a shell and optionally writes history only when apply=true.";
+// Output parsing tools accept pre-captured text or run a bounded Zig command.
 const validation_parse = "Parses captured or executed Zig build/test output into structured event, failure, and timing evidence.";
+// State reader tools read workspace-local records without asserting run status.
 const workflow_state = "Reads or packages workspace-local workflow state without claiming unrun validation passed.";
+// Decision record and project notes tools; apply=true triggers the disk write.
 const project_memory = "Preview-first workspace-local project memory; writes only when apply=true.";
 
-/// Validation depth.
+// Shared catalog hints for validation and command tools.
 const mode_hint = fieldHint("mode", .{ .description = "Validation depth.", .default_string = "standard", .enum_values = &.{ "quick", "standard", "full" } });
-/// Bounded Zig command to run when text is omitted.
 const validation_command_hint = fieldHint("command", .{ .description = "Bounded Zig command to run when text is omitted.", .enum_values = &.{ "build", "build-test", "test", "check", "fmt-check" } });
 
 /// Use the semantic index to map changed files, symbols, or diff text to affected importers, declarations, tests, public API, and recommended checks.

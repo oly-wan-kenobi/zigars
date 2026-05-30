@@ -1,3 +1,8 @@
+//! Stdio smoke fixtures for adoption and client-integration tool paths.
+//! Asserts adoption-pack, client-config generation, smoke-plan, and
+//! conformance-report tools over the shared `StdioClient` transport.
+
+/// Exercises adoption and client-integration tool paths end-to-end.
 pub fn run(client: anytype) !void {
     const pack = try client.callTool("zigars_adoption_pack", "{\"client\":\"codex\",\"backend\":\"zflame\"}");
     defer client.allocator.free(pack);

@@ -1,3 +1,12 @@
+//! Environment doctor: renders configured workspace/toolchain state plus
+//! optional backend probes as a flat list of `{name, ok, status, resolution}`
+//! checks, and classifies the configured Zig against build.zig.zon's
+//! minimum_zig_version.
+//!
+//! Probes are caller-supplied here (the use case does not run commands); every
+//! check carries an operator-facing resolution so doctor output is actionable
+//! without a second policy lookup. Version comparison is prefix-only
+//! (major.minor.patch) and treats unparseable versions as not-meeting-minimum.
 const std = @import("std");
 
 /// Carries input data across use case and port boundaries.
@@ -251,7 +260,10 @@ pub fn minimumZigVersionFromBuildZon(bytes: []const u8) ?[]const u8 {
     return null;
 }
 
-/// Implements version meets minimum workflow logic using caller-owned inputs.
+/// True when `active_zig` is at least `minimum_zig`, comparing only the leading
+/// major.minor.patch tuple. Unparseable versions fail closed (return false).
+/// Note: prerelease/dev suffixes are ignored, so `0.16.0-dev.N` satisfies a
+/// `0.16.0` minimum once the numeric prefix matches.
 pub fn versionMeetsMinimum(active_zig: []const u8, minimum_zig: []const u8) bool {
     const active = parseVersionPrefix(active_zig) orelse return false;
     const minimum = parseVersionPrefix(minimum_zig) orelse return false;

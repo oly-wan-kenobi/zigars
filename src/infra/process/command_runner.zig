@@ -1,3 +1,6 @@
+//! CommandRunner port implementation: adapts real child-process execution to
+//! the app port surface, mapping process/filesystem errors to stable port
+//! errors and optionally recording execution telemetry via observability state.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -5,6 +8,8 @@ const command = @import("command.zig");
 const observability_mod = @import("../observability/state.zig");
 
 /// Runtime options for adapting subprocess execution to the CommandRunner port.
+/// counter and state pointers are borrowed; the caller keeps them alive for
+/// the lifetime of the Runner.
 pub const Options = struct {
     io: std.Io,
     default_cwd: []const u8,
@@ -60,7 +65,9 @@ pub const Runner = struct {
         };
     }
 
-    /// Executes queued work and returns owned results or the first failure.
+    /// Spawns the requested argv, captures bounded stdout/stderr, and returns
+    /// an allocator-owned CommandResult. stdout and stderr slices are owned by
+    /// the caller; call result.deinit(allocator) to free them.
     fn run(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const cwd = request.cwd orelse self.default_cwd;
@@ -148,6 +155,8 @@ fn saturatingI64(value: u64) i64 {
 }
 
 /// Converts elapsed nanoseconds to saturated milliseconds.
+/// Uses wall-clock (.real) so the duration reflects calendar time for
+/// observability records, matching user-visible timeout semantics.
 fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
     if (duration_ns <= 0) return 0;

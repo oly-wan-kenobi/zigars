@@ -1,9 +1,19 @@
+//! Fake optional-backend fixtures used by release-gate conformance checks.
+//! Each function simulates one real external tool (zwanzig, ZLint, zflame,
+//! diff-folded) closely enough to exercise the argument contract without
+//! requiring the real tool to be installed.  Errors and diagnostic messages
+//! go to stderr; successful output goes to stdout.
 const std = @import("std");
 const zigars = @import("zigars");
 
 const Io = std.Io;
 const backend_contracts = zigars.domain.zig.backend_contracts;
 
+/// Simulates zwanzig for conformance testing.  Supports `--help`, graph-dump
+/// modes (`--dump-cfg`, `--dump-exploded-graph`, etc.), and lint modes
+/// (`--format json|sarif`).  Rejects the stale `--dot` flag and mix-ups
+/// between graph and lint invocation forms.  Returns `error.InvalidArguments`
+/// for bad usage; caller does not own any allocations from this function.
 pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake zwanzig help\n--format json|sarif\n--dump-cfg <dir> <file>\n--dump-exploded-graph <dir> <file>\n--dump-annotated-cfg <dir> <file>\n--dump-path-trace <dir> <file>\n");
@@ -46,6 +56,10 @@ pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
     }
 }
 
+/// Simulates ZLint for conformance testing.  Supports `--help`, `--print-ast`,
+/// `--rules --format json`, and `--format json [--fix|--fix-dangerously] <path>`.
+/// Returns a minimal well-formed JSON response on success.  Bad argument
+/// sequences return `error.InvalidArguments`.
 pub fn fakeZlint(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake ZLint help\n--format json\n--rules --format json\n--print-ast <file>\n--fix\n--fix-dangerously\n");
@@ -73,6 +87,10 @@ pub fn fakeZlint(io: Io, args: []const []const u8) !void {
     try stdoutWrite(io, "{\"findings\":[{\"rule\":\"fake.zlint.rule\",\"severity\":\"warning\",\"path\":\"src/main.zig\",\"line\":1,\"column\":15,\"message\":\"fake ZLint finding\"}]}\n");
 }
 
+/// Simulates zflame for conformance testing.  Accepts `--help` and the
+/// canonical form `<format> [--title=…] [--colors=…] <input>`.  Rejects
+/// stale option syntax (bare `--palette`) and validates the format string
+/// via `backend_contracts.parseZflameFormat`.  Writes a minimal SVG to stdout.
 pub fn fakeZflame(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake zflame help\nusage: zflame <format> [--title=<text>] [--colors=<palette>] <input>\n");
@@ -105,6 +123,10 @@ pub fn fakeZflame(io: Io, args: []const []const u8) !void {
     try stdoutWrite(io, "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>fake flamegraph</title></svg>\n");
 }
 
+/// Simulates diff-folded for conformance testing.  Expects exactly
+/// `--output=<path> before.folded after.folded` and writes a small folded
+/// stack sample to the output file.  Any other argument shape returns
+/// `error.InvalidArguments`.
 pub fn fakeDiffFolded(io: Io, args: []const []const u8) !void {
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake diff-folded help\nusage: diff-folded --output=<path> before.folded after.folded\n");
@@ -135,6 +157,9 @@ fn writeFakeDot(io: Io, output_dir: []const u8, mode: []const u8) !void {
     try stdoutWrite(io, "wrote fake graph\n");
 }
 
+/// Writes `message` to stderr and returns an invalid-arguments error.
+/// Any write failure propagates to the caller rather than being silenced,
+/// so diagnostic output is never silently dropped.
 fn fakeBackendUsageError(io: Io, message: []const u8) !void {
     try Io.File.stderr().writeStreamingAll(io, message);
     return error.InvalidArguments;

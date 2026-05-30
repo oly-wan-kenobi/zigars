@@ -1,3 +1,6 @@
+//! Pins the output sanitizer: valid UTF-8 is preserved with a "utf-8" tag,
+//! while invalid and truncated multibyte sequences are flagged and re-encoded
+//! with the U+FFFD replacement character so MCP payloads stay valid UTF-8.
 const std = @import("std");
 
 const command_output = @import("command_output.zig");

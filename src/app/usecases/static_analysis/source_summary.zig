@@ -48,7 +48,9 @@ pub const SourceRead = struct {
     }
 };
 
-/// Implements text summary workflow logic using caller-owned inputs.
+/// Renders an advisory-tier text summary for one source by delegating to the
+/// matching domain analyzer. `request.contents` is borrowed; the returned text
+/// is allocator-owned and the caller frees it.
 pub fn textSummary(allocator: std.mem.Allocator, kind: SourceTextKind, request: SourceRequest) ![]u8 {
     return switch (kind) {
         .decl_summary => zig_analysis.declarationSummaryText(allocator, request.file, request.contents),
@@ -64,12 +66,18 @@ pub fn parserSummary(allocator: std.mem.Allocator, request: SourceRequest) !zig_
     return zig_analysis.parseSourceSummary(allocator, request.file, request.contents);
 }
 
-/// Implements heuristic declarations workflow logic using caller-owned inputs.
+/// Recovers declarations by line heuristics (no full parse) for callers that
+/// want a best-effort list even when the source does not parse cleanly. The
+/// returned list owns its entries; the caller deinits it.
 pub fn heuristicDeclarations(allocator: std.mem.Allocator, request: SourceRequest) !zig_analysis.DeclarationList {
     return zig_analysis.heuristicDeclarations(allocator, request.contents);
 }
 
-/// Reads source data from the provided context without taking ownership of inputs.
+/// Reads one workspace file through the sandboxed store, capped at
+/// `request.max_bytes`. Generated/cache paths are refused up front with
+/// SkippedWorkspacePath so summaries never analyze build artifacts. The
+/// returned SourceRead may borrow or own its bytes (see `owns_bytes`); the
+/// caller must `deinit` it.
 pub fn readSource(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: WorkspaceSourceRequest) SourceError!SourceRead {
     if (zig_analysis.skipWorkspacePath(request.file)) return error.SkippedWorkspacePath;
     const read = try context.workspace_store.read(allocator, .{
@@ -84,7 +92,10 @@ pub fn readSource(allocator: std.mem.Allocator, context: app_context.StaticAnaly
     };
 }
 
-/// Reads parser summary data from the provided context without taking ownership of inputs.
+/// Reads a sandboxed workspace file and returns its parser summary. Parse
+/// failures other than OOM collapse to InvalidRequest so a malformed source is
+/// a caller-facing error rather than a leaked parser error. The summary is
+/// allocator-owned; the caller deinits it.
 pub fn readParserSummary(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: WorkspaceSourceRequest) SourceError!zig_analysis.SourceSummary {
     const source = try readSource(allocator, context, request);
     defer source.deinit(allocator);

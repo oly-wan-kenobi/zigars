@@ -1,3 +1,7 @@
+//! Tests for the project_intelligence MCP tool adapter.
+//! Pins the contract that changed_files argument parsing produces a
+//! ValidationRunRequest with the expected changed_paths slice.
+
 const std = @import("std");
 
 const project_intelligence = @import("../../../../../adapters/mcp/tools/project_intelligence.zig");

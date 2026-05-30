@@ -1,4 +1,9 @@
-//! Lint intelligence adapter that runs linters and reconciles normalized findings.
+//! Lint intelligence use-case: runs the optional ZLint and zwanzig backends through the
+//! command port, normalizes their output into a common finding shape, and reconciles the
+//! two into deterministic consensus/disagreement, gate, baseline, suppression, and trend
+//! views. Backend execution is apply-gated (fixes preview unless apply=true) and every
+//! backend-derived result is tagged optional_backend; failures return structured error
+//! envelopes rather than raising.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -7,9 +12,10 @@ const support = @import("../usecase_support.zig");
 const backend_contracts = @import("../../../domain/zig/backend_contracts.zig");
 const compiler_output = @import("../../../domain/zig/compiler_output.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream (stdout/stderr) capture cap for backend command output, in bytes.
 pub const command_output_limit: usize = 1024 * 1024;
-/// Command output limit mode applied when collecting workflow evidence.
+/// Reported policy when output hits the cap: the captured prefix is kept and the
+/// stream is flagged truncated rather than failing the run.
 pub const command_output_limit_mode = "truncate_on_limit";
 
 /// Error set returned by lint workflow failures.
@@ -156,7 +162,11 @@ pub fn buildZwanzigGraphArgv(allocator: std.mem.Allocator, spec: ZwanzigGraphCom
     return list.toOwnedSlice(allocator);
 }
 
-/// Invokes run zlint diagnostics with caller-owned inputs; command and allocation failures propagate.
+/// Runs ZLint diagnostics over a sandbox-resolved path and returns normalized
+/// findings (or SARIF when `request.sarif`). Backend launch failures, non-zero
+/// exits/timeouts, and unparseable output each map to a structured error value
+/// rather than an error return; only MissingCommandRunner and OOM propagate.
+/// Returns an allocator-owned result object.
 pub fn runZlintDiagnostics(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintDiagnosticsRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_config" }) else null;
@@ -186,9 +196,13 @@ pub fn runZlintDiagnostics(allocator: std.mem.Allocator, context: app_context.St
     return lintFindingsResultValue(allocator, request.tool_name, "zlint", findings.array);
 }
 
-/// Invokes run zlint rules with caller-owned inputs; command and allocation failures propagate.
+/// Fetches the ZLint rule catalog, but first probes `--help` because not every
+/// ZLint build exposes a rules flag: when unsupported it returns a capability
+/// report instead of failing. Backend failures map to structured error values.
+/// Returns an allocator-owned result object.
 pub fn runZlintRules(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintRulesRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
+    // Capability-probe --help first; older ZLint builds lack --rules entirely.
     const help_argv = [_][]const u8{ context.tool_paths.zlint, "--help" };
     const help = command_runner.run(allocator, .{
         .argv = help_argv[0..],
@@ -219,7 +233,10 @@ pub fn runZlintRules(allocator: std.mem.Allocator, context: app_context.StaticAn
     return .{ .object = obj };
 }
 
-/// Invokes run zlint fix with caller-owned inputs; command and allocation failures propagate.
+/// Applies ZLint fixes. Source-mutating: with `apply` false it returns a preview
+/// of the exact argv and never invokes the backend; with `apply` true it runs
+/// ZLint (which edits workspace files) and reports post-fix findings. `dangerous`
+/// selects --fix-dangerously over --fix. Returns an allocator-owned result object.
 pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintFixRequest) LintError!std.json.Value {
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_fix_config" }) else null;
     defer if (resolved_config) |resolved| resolved.deinit(allocator);
@@ -248,7 +265,9 @@ pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnal
     return zlintFixAppliedValue(allocator, argv, request.dangerous, result.stdout, result.stderr, findings.array);
 }
 
-/// Invokes run zwanzig lint with caller-owned inputs; command and allocation failures propagate.
+/// Runs the optional zwanzig linter over a sandbox-resolved path and returns the
+/// captured command result tagged with backend metadata. Backend failures map to
+/// structured command-error values. Returns an allocator-owned result object.
 pub fn runZwanzigLint(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigLintRequest) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zwanzig_config" }) else null;
@@ -268,13 +287,15 @@ pub fn runZwanzigLint(allocator: std.mem.Allocator, context: app_context.StaticA
     return runZwanzigCommand(allocator, context, command_runner, argv, "zwanzig lint", request.tool_name, request.timeout_ms);
 }
 
-/// Invokes run zwanzig rules with caller-owned inputs; command and allocation failures propagate.
+/// Probes zwanzig's `--help` as a stand-in rules/capability listing (zwanzig has
+/// no dedicated rules dump). Returns an allocator-owned result object.
 pub fn runZwanzigRules(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, timeout_ms: ?u64) LintError!std.json.Value {
     const command_runner = try requireCommandRunner(context);
     return runZwanzigCommand(allocator, context, command_runner, &.{ context.tool_paths.zwanzig, "--help" }, "zwanzig rules/help", "zig_lint_rules", timeout_ms);
 }
 
-/// Invokes run zwanzig command with caller-owned inputs; command and allocation failures propagate.
+/// Shared zwanzig command runner: executes `argv`, normalizes the outcome into a
+/// command result/error value, and stamps tool/backend/optional_backend metadata.
 fn runZwanzigCommand(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -307,7 +328,10 @@ fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, value: std.json.Value
     return .{ .object = obj };
 }
 
-/// Invokes run zwanzig graph with caller-owned inputs; command and allocation failures propagate.
+/// Generates zwanzig DOT graphs into a sandbox-resolved output directory, then
+/// verifies at least one `.dot` file landed there before reporting success.
+/// Returns a `GraphOutcome.value` on success or `.error_value` for backend
+/// failure, missing output, or an unreadable output dir. Allocator-owned result.
 pub fn runZwanzigGraph(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigGraphRequest) LintError!GraphOutcome {
     const command_runner = try requireCommandRunner(context);
     const resolved_path = try context.workspace_store.resolve(allocator, .{ .path = request.path, .provenance = "static_analysis.zwanzig_graph_path" });
@@ -461,7 +485,10 @@ fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, 
     return .{ .object = obj };
 }
 
-/// Normalizes findings text data into the representation consumed by this workflow.
+/// Parses backend JSON (accepting top-level array, or a `findings`/`diagnostics`/
+/// `results` array) and normalizes each entry into the common finding shape with a
+/// stable comparison_key and fingerprint. Empty/blank input yields an empty array.
+/// Returns an allocator-owned array value.
 pub fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source: FindingSource) !std.json.Value {
     var findings = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = findings };
@@ -509,7 +536,9 @@ fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, so
     return .{ .object = out };
 }
 
-/// Normalizes rules text data into the representation consumed by this workflow.
+/// Parses a ZLint rule catalog (array or `{ "rules": [...] }`) into uniform rule
+/// objects with id/severity/category/description defaults. Blank input yields an
+/// empty array. Returns an allocator-owned array value.
 pub fn normalizeRulesText(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     var rules = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = rules };
@@ -602,7 +631,10 @@ fn sarifLevel(severity: []const u8) []const u8 {
     return "note";
 }
 
-/// Serializes lint compare fields into an allocator-owned JSON value; allocation failures propagate.
+/// Reconciles normalized zlint and zwanzig findings by comparison_key into four
+/// buckets: consensus (same key and severity, high confidence), disagreements
+/// (same key, differing severity), and each backend's findings unique to it.
+/// Returns an allocator-owned result object.
 pub fn lintCompareValue(allocator: std.mem.Allocator, zlint: std.json.Array, zwanzig: std.json.Array) !std.json.Value {
     var consensus = std.json.Array.init(allocator);
     var disagreements = std.json.Array.init(allocator);
@@ -678,14 +710,18 @@ fn profileValue(allocator: std.mem.Allocator, name: []const u8, allow_warnings: 
     return .{ .object = obj };
 }
 
-/// Implements lint profile defaults workflow logic using caller-owned inputs.
+/// Returns the gate thresholds for a named profile. Unknown names fall back to
+/// the `standard` profile (warnings capped at 25, backend required).
 pub fn lintProfileDefaults(name: []const u8) LintProfile {
     if (std.mem.eql(u8, name, "advisory")) return .{ .allow_warnings = true, .max_warnings = 9999, .require_backend = false };
     if (std.mem.eql(u8, name, "strict")) return .{ .allow_warnings = false, .max_warnings = 0, .require_backend = true };
     return .{ .allow_warnings = false, .max_warnings = 25, .require_backend = true };
 }
 
-/// Serializes lint gate fields into an allocator-owned JSON value; allocation failures propagate.
+/// Evaluates findings against a gate profile. Errors are always blocking; when
+/// warnings are not allowed and their count exceeds `max_warnings`, every warning
+/// is promoted to blocking too. `passed` is true only when nothing blocks.
+/// Returns an allocator-owned result object.
 pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, profile: []const u8, allow_warnings: bool, max_warnings: i64) !std.json.Value {
     var blocking = std.json.Array.init(allocator);
     var warning_count: i64 = 0;
@@ -694,6 +730,8 @@ pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, pro
         if (std.ascii.eqlIgnoreCase(severity, "error")) try blocking.append(finding);
         if (std.ascii.eqlIgnoreCase(severity, "warning") or std.ascii.eqlIgnoreCase(severity, "warn")) warning_count += 1;
     }
+    // Over-budget warnings are all-or-nothing: exceeding the cap promotes every
+    // warning to blocking, not just the ones past the threshold.
     if (!allow_warnings and warning_count > max_warnings) for (findings.items) |finding| {
         const severity = severityOf(finding);
         if (std.ascii.eqlIgnoreCase(severity, "warning") or std.ascii.eqlIgnoreCase(severity, "warn")) try blocking.append(finding);
@@ -707,7 +745,9 @@ pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, pro
     return .{ .object = obj };
 }
 
-/// Serializes fix plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Triages findings into safe/risky/manual fix buckets by message and severity
+/// keywords. Preview-only: it never edits files and points callers at the
+/// apply-gated `zig_zlint_fix` tool. Returns an allocator-owned result object.
 pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
     var safe = std.json.Array.init(allocator);
     var risky = std.json.Array.init(allocator);
@@ -727,7 +767,9 @@ pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
     return .{ .object = obj };
 }
 
-/// Implements lint baseline workflow logic using caller-owned inputs.
+/// Diffs current findings against a stored baseline (new / accepted / resolved).
+/// Source-mutating: writes the recomputed baseline to `output` only when `apply`
+/// is true. Returns an allocator-owned result object.
 pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, findings: std.json.Array, baseline: std.json.Array, apply: bool, output: []const u8) LintError!std.json.Value {
     const value = try baselineValue(allocator, findings, baseline);
     if (apply) {
@@ -742,7 +784,9 @@ pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAna
     return value;
 }
 
-/// Serializes baseline fields into an allocator-owned JSON value; allocation failures propagate.
+/// Partitions findings vs baseline by comparison_key: `new_findings` are absent
+/// from the baseline, `accepted_findings` already in it, `resolved_findings` are
+/// baseline entries no longer present. Returns an allocator-owned result object.
 pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, baseline: std.json.Array) !std.json.Value {
     var current = std.json.Array.init(allocator);
     var accepted = std.json.Array.init(allocator);
@@ -758,7 +802,9 @@ pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, bas
     return .{ .object = obj };
 }
 
-/// Serializes suppressions fields into an allocator-owned JSON value; allocation failures propagate.
+/// Splits findings into suppressed vs active using a suppressions list (matched by
+/// comparison_key), and flags suppressions that no longer match any finding as
+/// stale. Returns an allocator-owned result object.
 pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array, suppressions_text: []const u8) !std.json.Value {
     const suppressions = normalizeFindingsText(allocator, suppressions_text, .zlint) catch std.json.Value{ .array = std.json.Array.init(allocator) };
     var suppressed = std.json.Array.init(allocator);
@@ -774,7 +820,9 @@ pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array,
     return .{ .object = obj };
 }
 
-/// Serializes trend fields into an allocator-owned JSON value; allocation failures propagate.
+/// Computes the before/after finding trend by comparison_key: `new_findings`
+/// appear only in `after`, `resolved_findings` only in `before`, the rest persist.
+/// Returns an allocator-owned result object.
 pub fn trendValue(allocator: std.mem.Allocator, before: std.json.Array, after: std.json.Array) !std.json.Value {
     var new_findings = std.json.Array.init(allocator);
     var resolved = std.json.Array.init(allocator);
@@ -1118,7 +1166,10 @@ const SafeText = struct {
     byte_count: usize,
 };
 
-/// Copies bounded text into allocator-owned storage for result payloads.
+/// Copies command output into an allocator-owned buffer that is always valid
+/// UTF-8: invalid byte sequences are replaced with U+FFFD so the result can be
+/// embedded in MCP JSON. `byte_count` is the original length and `invalid_utf8`
+/// records whether replacement happened.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{ .text = try allocator.dupe(u8, bytes), .invalid_utf8 = false, .encoding = "utf-8", .byte_count = bytes.len };

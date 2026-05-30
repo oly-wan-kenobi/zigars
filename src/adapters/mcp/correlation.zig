@@ -43,6 +43,8 @@ pub const RequestId = struct {
                     .kind = .integer,
                     .integer = value,
                 };
+                // The 32-byte buffer always holds a base-10 i64, so the format
+                // never overflows; precompute the text once for valueString.
                 const text = std.fmt.bufPrint(&out.integer_text, "{d}", .{value}) catch unreachable;
                 out.integer_text_len = text.len;
                 break :blk out;
@@ -72,7 +74,9 @@ pub const RequestId = struct {
         };
     }
 
-    /// Compact request id for stderr diagnostics.
+    /// Compact request id for stderr diagnostics. Ids longer than the 64-byte
+    /// `buffer` are truncated with a trailing "..." so a hostile or oversized
+    /// string id cannot blow up a fixed-size log line.
     pub fn compactValue(self: *const RequestId, buffer: *[64]u8) []const u8 {
         const value = self.valueString() orelse return "null";
         if (value.len <= buffer.len) return value;
@@ -134,7 +138,11 @@ pub const Context = struct {
         return self.trace_id[trace_id_len - 8 .. trace_id_len];
     }
 
-    /// Builds the value that should be stored as MCP result `_meta`.
+    /// Builds the `{ meta_key: {...} }` object stored under MCP result `_meta`.
+    /// The returned JSON containers are owned by `allocator`; string values
+    /// borrow from this Context, so free with `deinitMetaValue` before the
+    /// Context goes out of scope. `schema_version` lets clients version the
+    /// correlation shape independently of the result payload.
     pub fn metaValue(self: *const Context, allocator: std.mem.Allocator) !std.json.Value {
         var correlation_obj: std.json.ObjectMap = .empty;
         var correlation_owned = true;
@@ -192,8 +200,12 @@ pub const Context = struct {
 pub const Generator = struct {
     next_sequence: u64 = 0,
 
-    /// Returns a new correlation context. Ids are process-local and not persisted.
+    /// Returns a new correlation context. Ids are process-local and not persisted,
+    /// so they correlate logs within one server run only and are not stable across
+    /// restarts.
     pub fn next(self: *Generator, request_id: RequestId, mcp_method: []const u8, tool_name: ?[]const u8) Context {
+        // Wrapping add, then skip 0: sequence 0 would render as all-zero ids that
+        // read like "uninitialized", so it stays reserved even after wraparound.
         self.next_sequence +%= 1;
         if (self.next_sequence == 0) self.next_sequence = 1;
         return Context.init(self.next_sequence, request_id, mcp_method, tool_name);
@@ -218,6 +230,8 @@ pub fn deinitMetaValue(allocator: std.mem.Allocator, value: std.json.Value) void
     }
 }
 
+/// Builds the `{ type, value }` JSON sub-object describing the JSON-RPC request
+/// id; container owned by `allocator`, string fields borrow from `request_id`.
 fn requestIdValue(allocator: std.mem.Allocator, request_id: *const RequestId) !std.json.Value {
     var obj: std.json.ObjectMap = .empty;
     errdefer obj.deinit(allocator);
@@ -226,6 +240,8 @@ fn requestIdValue(allocator: std.mem.Allocator, request_id: *const RequestId) !s
     return .{ .object = obj };
 }
 
+/// Renders `value` as right-aligned, zero-padded lowercase hex filling all of
+/// `out`. Used to derive fixed-width trace/span ids from one sequence number.
 fn writeLowerHexFixed(out: []u8, value: u64) void {
     @memset(out, '0');
     var remaining = value;
@@ -238,6 +254,8 @@ fn writeLowerHexFixed(out: []u8, value: u64) void {
     }
 }
 
+/// Writes a "zigars-tc-" prefix followed by the right-aligned, zero-padded
+/// decimal sequence into `out`, producing a stable per-call id of fixed width.
 fn writeToolCallId(out: []u8, sequence: u64) void {
     const prefix = "zigars-tc-";
     @memcpy(out[0..prefix.len], prefix);

@@ -59,12 +59,20 @@ pub const ServerConfig = struct {
     trustManifestUri: ?[]const u8 = null,
 };
 
-/// Current state of the server
+/// MCP lifecycle state. Advances strictly forward: uninitialized -> initializing
+/// (on `initialize`) -> ready (on `notifications/initialized`) -> shutting_down
+/// -> stopped. Before `ready`, only `initialize` is accepted; the message loop
+/// exits once the state reaches `shutting_down` or `stopped`.
 pub const ServerState = enum {
+    /// No successful `initialize` yet; every other method is rejected.
     uninitialized,
+    /// `initialize` handled, awaiting the `notifications/initialized` ack.
     initializing,
+    /// Handshake complete; the full method surface is live.
     ready,
+    /// `shutdown` received or the transport closed; the loop is winding down.
     shutting_down,
+    /// Message loop has exited; no further messages are processed.
     stopped,
 };
 
@@ -89,16 +97,29 @@ pub const Server = struct {
     transport: ?transport_mod.Transport = null,
     stdio_transport: ?*transport_mod.StdioTransport = null,
     correlation_generator: correlation.Generator = .{},
+    /// Correlation of the message being serialized right now; tags outbound audit
+    /// records. Distinct from `active_request`, which tracks cancellation state.
     active_correlation: ?*const correlation.Context = null,
+    /// Inbound request currently executing, carrying its cancellation token.
     active_request: ?ActiveRequest = null,
+    /// Fixed-size ring of recently completed request ids. Lets a late
+    /// `notifications/cancelled` be classified as `completed_late` rather than
+    /// `unknown`; oldest entries are overwritten once full.
     completed_requests: [64]CompletedRequest = [_]CompletedRequest{.{}} ** 64,
     completed_request_count: u64 = 0,
     startup_started_ns: ?i128 = null,
+    /// Guards the one-shot `first_initialize` startup-phase record so only the
+    /// first `initialize` contributes a timing sample.
     first_initialize_recorded: bool = false,
     audit_sink: ?app_ports.AuditSink = null,
     observability: ?app_ports.ObservabilityRecorder = null,
     transport_name: []const u8 = "unknown",
+    /// Monotonic id allocator for server-initiated (outbound) JSON-RPC requests,
+    /// e.g. elicitation/sampling protocol helpers. Inbound request ids come from
+    /// the client and are never assigned here.
     next_request_id: i64 = 1,
+    /// Outbound requests awaiting a peer response, keyed by integer id. Cleared
+    /// when the matching response/error arrives so late replies are ignored.
     pending_requests: std.AutoHashMap(i64, PendingRequest),
     log_level: protocol.LogLevel = .info,
     /// Maximum accepted JSON-RPC POST body size for the built-in HTTP transport.
@@ -358,7 +379,9 @@ pub const Server = struct {
         self.state = .stopped;
     }
 
-    /// Handle an incoming message
+    /// Parses one framed JSON-RPC message and routes it by kind. A parse failure
+    /// is answered with a JSON-RPC parse error (and audited) rather than crashing
+    /// the loop, since the transport may still carry further valid frames.
     pub fn handleMessage(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
         const parsed_message = jsonrpc.parseMessage(allocator, data) catch {
             var parse_correlation = self.nextCorrelation(correlation.RequestId.absent(), "jsonrpc/parse", null);
@@ -385,7 +408,15 @@ pub const Server = struct {
         }
     }
 
-    /// Handle an incoming request
+    /// Routes one inbound JSON-RPC request to its method handler.
+    ///
+    /// Establishes per-request bookkeeping for the duration of the call:
+    /// correlation context, an `active_request` cancellation slot, observability
+    /// timing, and a completed-request ring entry. Enforces the lifecycle gate —
+    /// before the handshake completes only `initialize` is accepted, and a second
+    /// `initialize` is rejected — and answers an unknown method with
+    /// method-not-found. `raw_payload` is the original frame bytes, forwarded to
+    /// the audit sink only.
     pub fn handleRequest(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request, raw_payload: ?[]const u8) !void {
         const started_ns = monotonicNowNs(io);
         var request_correlation = self.nextCorrelation(correlation.RequestId.from(request.id), request.method, null);
@@ -415,6 +446,9 @@ pub const Server = struct {
                 self.recordStartupPhaseRange("first_initialize", started_ns, ended_ns);
             }
         }
+        // Declared after the recording defer so it runs first (defers unwind
+        // LIFO): an error return flips the flag before the metrics defer reads it,
+        // marking the request failed for observability.
         errdefer request_is_error = true;
 
         self.appendAudit(allocator, .{
@@ -578,6 +612,9 @@ pub const Server = struct {
                 if (requests.tools) |tools| {
                     var tools_obj: std.json.ObjectMap = .empty;
                     if (tools.call != null) try tools_obj.put(response_allocator, "call", .{ .object = .empty });
+                    // Touch the map so the optimizer keeps the (possibly empty)
+                    // nested object materialized; it must serialize as `{}` to
+                    // advertise the tasks/requests capability shape.
                     std.mem.doNotOptimizeAway(tools_obj.count());
                     try requests_obj.put(response_allocator, "tools", .{ .object = tools_obj });
                 }
@@ -739,6 +776,9 @@ pub const Server = struct {
             };
             defer if (tool.deinit_result) |deinit_result| deinit_result(tool_allocator, tool_result);
 
+            // Ownership handoff: while building, the array is freed on any early
+            // error. Once placed in `result`, `deinitToolCallResponseObject`
+            // owns its cleanup instead, so the flag disarms this fallback.
             var content_array: std.json.Array = .init(allocator);
             var content_array_in_result = false;
             defer if (!content_array_in_result) json_helpers.deinitBorrowedJsonContainers(allocator, .{ .array = content_array });
@@ -880,6 +920,10 @@ pub const Server = struct {
             const content = handler(self.dynamic_resource_user_data, io, allocator, uri) catch |err| {
                 var response_arena = std.heap.ArenaAllocator.init(allocator);
                 defer response_arena.deinit();
+                // Template misses are treated as a not-found/invalid-params case,
+                // not an internal error: a dynamic URI that does not resolve is a
+                // client-addressing problem. The structured value is built (and
+                // discarded) only to surface allocation failure via `try`.
                 _ = try resourceHandlerErrorValue(response_arena.allocator(), uri, err);
                 const error_response = jsonrpc.createInvalidParams(request.id, "Dynamic resource not found or could not be read");
                 try self.sendResponse(io, allocator, .{ .error_response = error_response });
@@ -1309,7 +1353,12 @@ pub const Server = struct {
         try self.sendNotification(io, allocator, "notifications/prompts/list_changed", null);
     }
 
-    /// Serializes and sends a JSON-RPC message through the active transport, mapping allocation failure to protocol errors.
+    /// Serializes a JSON-RPC message and writes it through the active transport.
+    ///
+    /// stdout is reserved for this JSON-RPC frame; serialize/send failures are
+    /// logged to stderr and swallowed rather than propagated, so one bad write
+    /// never aborts request handling. With no transport set the message is
+    /// silently dropped (e.g. during teardown).
     pub fn sendResponse(self: *Self, io: std.Io, allocator: std.mem.Allocator, message: jsonrpc.Message) !void {
         if (self.transport) |t| {
             const json = jsonrpc.serializeMessage(allocator, message) catch {

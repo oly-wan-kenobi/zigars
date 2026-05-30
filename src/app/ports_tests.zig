@@ -1,3 +1,7 @@
+//! Pins the port data contracts that adapters must honor: request/result structs
+//! are plain borrowed data needing no transport types, CommandTerm/effectiveTerm
+//! preserve non-exited outcomes and the scalar exit-code fallback, and clock/id
+//! requests stay deterministic value types.
 const std = @import("std");
 
 const ports = @import("ports.zig");

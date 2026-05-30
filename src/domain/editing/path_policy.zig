@@ -1,17 +1,33 @@
+//! Workspace path-resolution policy: every user-provided path is classified as
+//! source (direct edits allowed), generated, cache, vendor, or artifact before
+//! any read or write is attempted.  The invariant is that apply-gated tools only
+//! proceed when classify returns direct_edit_allowed = true.
+
 const std = @import("std");
 
 /// Classifies a workspace path and prescribes whether direct edits are allowed.
+/// All fields are string literals with static lifetime; no allocation needed.
+/// `direct_edit_allowed` is the primary gate: apply-gated tools must not write
+/// to a path unless this is true.
 pub const PathPolicy = struct {
     classification: []const u8,
     direct_edit_allowed: bool,
+    /// Machine-readable reason token explaining the classification decision.
     reason: []const u8,
+    /// Human-readable remediation route for non-editable paths.
     route: []const u8,
+    /// Canonical source inputs for regenerating this path.
     sources: []const []const u8,
+    /// Commands to regenerate or repair the classified path.
     commands: []const []const u8,
+    /// Confidence in the heuristic: "high" or "medium".
     confidence: []const u8,
 };
 
-/// Classifies a path by generated, cache, vendored, and source policy rules.
+/// Classifies `path` by applying policy rules in priority order:
+/// cache → zigars artifact → vendor → generated name → workspace skip → source.
+/// The first matching rule wins; a path that matches none is treated as editable source.
+/// Path matching is boundary-safe: "zig-out" does not accidentally match "zig-outbound".
 pub fn classify(path: []const u8) PathPolicy {
     if (isCachePath(path)) return .{
         .classification = "cache",
@@ -46,6 +62,7 @@ pub fn classify(path: []const u8) PathPolicy {
         .reason = "generated_filename",
         .route = "edit generator inputs and rerun the generator",
         .sources = &.{ "tools", "src", "build.zig" },
+        // tool-index.generated.md has its own dedicated regeneration command.
         .commands = if (std.mem.eql(u8, path, "docs/tool-index.generated.md")) &.{ "zig build tool-index", "zig build docs-check" } else &.{"zig build"},
         .confidence = "medium",
     };
@@ -107,6 +124,7 @@ fn skipWorkspacePath(path: []const u8) bool {
 }
 
 /// Prefix match that only accepts path-boundary matches (not partial segments).
+/// The '/' separator guard ensures "zig-out" does not match "zig-outbound".
 fn startsPath(path: []const u8, prefix: []const u8) bool {
     return std.mem.eql(u8, path, prefix) or (std.mem.startsWith(u8, path, prefix) and path.len > prefix.len and path[prefix.len] == '/');
 }

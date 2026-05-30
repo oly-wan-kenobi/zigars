@@ -1,3 +1,7 @@
+//! Sanitizes captured subprocess output for MCP result payloads. Zig tool
+//! stdout/stderr is arbitrary bytes, but MCP JSON strings must be valid UTF-8,
+//! so invalid sequences are replaced with U+FFFD and flagged rather than
+//! emitted raw. The byte count records the original (pre-replacement) length.
 const std = @import("std");
 
 /// Carries safe text data across use case and port boundaries.
@@ -8,7 +12,10 @@ pub const SafeText = struct {
     byte_count: usize,
 };
 
-/// Copies bounded text into allocator-owned storage for result payloads.
+/// Returns an allocator-owned UTF-8-safe copy of `bytes`. Valid input is duped
+/// verbatim (`encoding = "utf-8"`); otherwise invalid sequences become U+FFFD,
+/// `invalid_utf8` is set, and `encoding` is "utf-8-lossy". `byte_count` is
+/// always the original byte length. Caller owns and frees `.text`.
 pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
@@ -48,7 +55,10 @@ pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText 
     };
 }
 
-/// Implements put stream fields workflow logic using caller-owned inputs.
+/// Writes a sanitized output stream into `obj` as `<name>` plus the sidecar
+/// fields `<name>_invalid_utf8`, `<name>_encoding`, and `<name>_byte_count`, so
+/// consumers can tell whether the text was lossily re-encoded. Keys and the
+/// stored text are allocated into `allocator`.
 pub fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: SafeText) !void {
     try obj.put(allocator, name, .{ .string = safe.text });
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });

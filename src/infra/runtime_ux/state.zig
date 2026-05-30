@@ -1,3 +1,8 @@
+//! Bounded, allocation-free in-memory state for runtime jobs, events,
+//! subscriptions, and workspace roots. All arrays are fixed-size; once full,
+//! the oldest entry is overwritten using the same monotonic ring index so
+//! newer data always replaces older data without any heap involvement.
+
 const std = @import("std");
 
 /// Maximum active job snapshots retained in memory.
@@ -38,6 +43,8 @@ pub const JobStatus = enum {
 };
 
 /// Fixed-size record for one runtime command job.
+/// `created_sequence` and `updated_sequence` are global event counters, not
+/// per-job counters; they enable stable oldest-first ordering across the ring.
 pub const JobRecord = struct {
     id: FixedString(32) = .{},
     label: FixedString(max_label) = .{},
@@ -296,12 +303,17 @@ pub const State = struct {
     }
 };
 
-/// Maps a one-based event sequence to its ring slot.
+/// Maps a one-based event sequence number to its ring buffer slot index.
+/// Sequences are 1-based so `sequence - 1` gives the zero-based offset;
+/// the modulo wraps it into [0, capacity). Used for both event and job rings.
 pub fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % capacity);
 }
 
-/// Fixed-capacity string that records truncation instead of allocating.
+/// Inline, fixed-capacity byte buffer that truncates rather than allocating.
+/// `truncated` is set whenever input exceeds capacity so callers can surface
+/// a truncation indicator rather than silently losing bytes. The zero value
+/// represents an empty string with no truncation.
 pub fn FixedString(comptime n: usize) type {
     return struct {
         bytes: [n]u8 = [_]u8{0} ** n,
@@ -310,14 +322,15 @@ pub fn FixedString(comptime n: usize) type {
 
         const Self = @This();
 
-        /// Stores the prefix of `text` up to capacity.
+        /// Copies the first `n` bytes of `text`; sets `truncated` if longer.
         pub fn set(self: *Self, text: []const u8) void {
             self.len = @min(text.len, n);
             if (self.len > 0) @memcpy(self.bytes[0..self.len], text[0..self.len]);
             self.truncated = text.len > n;
         }
 
-        /// Stores the suffix of `text` up to capacity.
+        /// Copies the last `n` bytes of `text`; sets `truncated` if longer.
+        /// Used for stdout/stderr tails so the most recent output is retained.
         pub fn setTail(self: *Self, text: []const u8) void {
             if (text.len <= n) {
                 self.set(text);

@@ -1,9 +1,14 @@
+//! Primitive building blocks for manifest tool definitions: schema types,
+//! field hint resolution, and runtime default accessors.
+//! These types are shared by types.zig, definition files, and catalog renderers.
 const std = @import("std");
 
 /// Static catalog JSON that is enriched with generated manifest metadata.
 pub const catalog_json = @embedFile("tool_catalog.json");
 
 /// Minimal schema field tuple: name, JSON type, and required flag.
+/// Index 0 = field name, index 1 = JSON primitive type ("string"/"boolean"/"integer"),
+/// index 2 = true when the field is required in the MCP input schema.
 pub const SchemaField = struct { []const u8, []const u8, bool };
 /// Optional metadata override for one schema field.
 pub const SchemaFieldHint = struct {
@@ -72,6 +77,8 @@ pub fn hintFor(spec: SchemaSpec, field: SchemaField) FieldHint {
 }
 
 /// Supplies common defaults for shared argument names.
+/// Each branch covers a conventional field name used across multiple tool definitions.
+/// The final fallback emits a minimal hint so catalog rendering never receives null.
 fn defaultHintFor(field: SchemaField) FieldHint {
     const name = field[0];
     if (std.mem.eql(u8, name, "file")) return .{ .description = "Workspace-relative source file path.", .path_kind = "input_file" };

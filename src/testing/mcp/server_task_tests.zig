@@ -1,3 +1,8 @@
+//! Tests for MCP tasks/* method routing (tasks/list, tasks/get, tasks/result,
+//! tasks/cancel) through a server with and without task support enabled.
+//! Pins that missing task support returns a structured error, that pagination
+//! cursors advance correctly, and that cancel propagates the cancellation reason.
+
 const std = @import("std");
 const mcp = @import("mcp");
 

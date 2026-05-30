@@ -1,3 +1,5 @@
+//! Pins the contract that all core Zig tool definitions are exported and carry
+//! non-empty descriptions, confirming the public surface compiles cleanly.
 const std = @import("std");
 const subject = @import("core.zig");
 const zig_version = subject.zig_version;

@@ -1,3 +1,7 @@
+//! Pins the validation workflow (plan/run/history) to its ports: phase
+//! selection and risk levels, history writes gated on apply=true, command
+//! failures/timeouts captured as typed phase outcomes, JSONL history append and
+//! parsing, and that history reads/writes stay inside the workspace sandbox.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -530,7 +534,8 @@ const RecordingWorkspace = struct {
         return .{ .path = request.path };
     }
 
-    /// Reads read data from the provided context without taking ownership of inputs.
+    /// Fixture read: empty bytes for src/main.zig (so the source probe passes),
+    /// FileNotFound otherwise; counts the call.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *RecordingWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
@@ -538,7 +543,8 @@ const RecordingWorkspace = struct {
         return error.FileNotFound;
     }
 
-    /// Writes write fields to the provided JSON stream and propagates writer failures.
+    /// Fixture write: records the path and a bounded copy of the bytes so tests
+    /// can assert on the serialized history line.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *RecordingWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -565,14 +571,15 @@ const FailingWriteWorkspace = struct {
         };
     }
 
-    /// Reads read data from the provided context without taking ownership of inputs.
+    /// Fixture read: always FileNotFound (no prior history); counts the call.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *FailingWriteWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return error.FileNotFound;
     }
 
-    /// Writes write fields to the provided JSON stream and propagates writer failures.
+    /// Fixture write: always fails with PermissionDenied to exercise the typed
+    /// history-write-failure path.
     fn write(ptr: *anyopaque, _: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *FailingWriteWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -598,14 +605,16 @@ const AppendHistoryWorkspace = struct {
         };
     }
 
-    /// Reads read data from the provided context without taking ownership of inputs.
+    /// Fixture read: always returns the canned `existing` history bytes so the
+    /// run appends to prior content; counts the call.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *AppendHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return .{ .bytes = self.existing };
     }
 
-    /// Writes write fields to the provided JSON stream and propagates writer failures.
+    /// Fixture write: records a bounded copy of the bytes (as a replacement) so
+    /// the test can assert the new record was appended after the existing one.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         const self: *AppendHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.write_count += 1;
@@ -631,14 +640,15 @@ const StaticHistoryWorkspace = struct {
         };
     }
 
-    /// Reads read data from the provided context without taking ownership of inputs.
+    /// Fixture read: always returns the canned static history bytes (read-only
+    /// history view); counts the call.
     fn read(ptr: *anyopaque, _: std.mem.Allocator, _: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
         const self: *StaticHistoryWorkspace = @ptrCast(@alignCast(ptr));
         self.read_count += 1;
         return .{ .bytes = self.bytes };
     }
 
-    /// Writes write fields to the provided JSON stream and propagates writer failures.
+    /// Fixture write: asserts the history view never writes by failing the call.
     fn write(_: *anyopaque, _: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
         return error.UnexpectedCall;
     }

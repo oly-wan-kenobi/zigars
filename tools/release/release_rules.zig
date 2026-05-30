@@ -1,30 +1,49 @@
+//! Central release hygiene policy tables consumed by release_checks.zig.
+//! Every rule is a plain data declaration; the enforcement logic lives in the
+//! orchestrator.  Adding policy here is always safe; removing an entry from a
+//! `*_tokens` or `*_contract_*` table weakens a gate intentionally.
+//! IMPORTANT: string literals in this file are matched against source text by
+//! the hygiene checks.  Do not alter them without updating the corresponding
+//! source or test that the token describes.
+
+/// A code-line budget rule: `path` must not exceed `max_lines` non-comment,
+/// non-blank lines, and must retain at least `minLineBudgetHeadroom(max_lines)`
+/// lines of free space.
 pub const LineBudget = struct {
     path: []const u8,
     max_lines: usize,
     reason: []const u8,
 };
 
+/// A token that must NOT appear anywhere in `path`; its presence fails the gate.
 pub const ForbiddenToken = struct {
     path: []const u8,
     token: []const u8,
     reason: []const u8,
 };
 
+/// A hygiene token that must NOT appear in `path`; used for stale-code and
+/// silenced-error checks.
 pub const HygieneToken = struct {
     path: []const u8,
     token: []const u8,
     reason: []const u8,
 };
 
+/// A token pattern that must NOT appear in any of the `*_contract_paths` files;
+/// violations indicate the file uses a disallowed error-handling shortcut.
 pub const ToolErrorContractToken = struct {
     token: []const u8,
     reason: []const u8,
 };
 
-// Central release hygiene policy. Budgets intentionally include required
-// headroom so growth triggers splitting before files become hard to audit.
-// Oversized legacy modules are re-baselined with narrow headroom and reasons
-// that name the next split target instead of disabling future growth checks.
+// Central release hygiene policy. Budgets count source lines of code only:
+// blank lines and whole-line comments (`//`, `///`, `//!`) are excluded by
+// codeLineCount in release_checks.zig, so documentation and comments never
+// count against a budget. Budgets intentionally include required headroom so
+// growth triggers splitting before files become hard to audit. Oversized
+// legacy modules are re-baselined with narrow headroom and reasons that name
+// the next split target instead of disabling future growth checks.
 
 pub const line_budgets = [_]LineBudget{
     .{
@@ -557,6 +576,8 @@ pub const cli_error_contract_tokens = [_]ToolErrorContractToken{
     },
 };
 
+/// A GitHub Actions workflow file that must contain the listed permission
+/// declarations so least-privilege CI is enforced at the gate.
 pub const WorkflowPermissionRule = struct {
     path: []const u8,
     required: []const []const u8,
@@ -602,6 +623,8 @@ pub const workflow_permission_rules = [_]WorkflowPermissionRule{
     },
 };
 
+/// Directory trees that must contain no tracked `.py` files.
+/// The npm `packages/` tree is JS/TS by design and is intentionally excluded.
 pub const pure_zig_roots = [_][]const u8{
     ".github",
     "docs",

@@ -1,3 +1,6 @@
+//! Behavioral tests for trust.zig: risk-level classification, clean-tree gate
+//! parsing with generated-path evidence, and allocation-failure cleanup.
+
 const std = @import("std");
 
 const trust = @import("trust.zig");

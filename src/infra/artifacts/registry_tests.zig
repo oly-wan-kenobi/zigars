@@ -1,3 +1,6 @@
+//! Tests the artifact registry: upsert-replaces by path, JSONL round-trip,
+//! corrupt/negative-size line skipping, and prune-stale semantics (missing,
+//! size-changed, hash-changed, and error-during-prune scenarios).
 const std = @import("std");
 const artifacts = @import("registry.zig");
 

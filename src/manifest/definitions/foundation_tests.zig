@@ -1,3 +1,6 @@
+//! Contract tests for foundation.zig: pins that artifact-registry, observability,
+//! trust-safety, result-contracts, and release-drift tools expose valid metadata,
+//! and that session-view is read-only and mapped to the artifact_registry group.
 const std = @import("std");
 const subject = @import("foundation.zig");
 const zigars_artifact_index = subject.zigars_artifact_index;

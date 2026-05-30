@@ -1,3 +1,5 @@
+//! Tests for Logger level filtering and correlation-prefix formatting.
+
 const std = @import("std");
 const logging = @import("logging.zig");
 

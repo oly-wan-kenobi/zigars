@@ -1,3 +1,5 @@
+//! Pins the contract that all discovery tool definitions are exported and carry
+//! non-empty descriptions, confirming the public surface compiles cleanly.
 const std = @import("std");
 const subject = @import("discovery.zig");
 const zigars_capabilities = subject.zigars_capabilities;

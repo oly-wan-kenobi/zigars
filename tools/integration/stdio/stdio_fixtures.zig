@@ -1,3 +1,10 @@
+//! End-to-end stdio smoke fixtures for the MCP server.
+//! Spawns the server binary over stdin/stdout JSON-RPC, drives the full
+//! protocol lifecycle (initialize, tools/list, resources, prompts, tool calls),
+//! then sends shutdown and waits for a clean exit. Delegates large tool
+//! families to sibling fixture modules to keep this file focused on protocol
+//! lifecycle and overall tool-set registration assertions.
+
 const std = @import("std");
 const builtin = @import("builtin");
 const cli_io = @import("../../common/cli_io.zig");
@@ -19,6 +26,7 @@ const valueAt = smoke.valueAt;
 const writeFile = cli_io.writeFile;
 
 // Owns stdio protocol lifecycle fixtures and delegates larger tool families to sibling modules.
+// Fields match the CLI flags accepted by the zigars_tools dispatcher entry point.
 const StdioOptions = struct {
     binary: []const u8 = "zig-out/bin/zigars",
     zig_path: []const u8 = "zig",
@@ -26,6 +34,11 @@ const StdioOptions = struct {
     server_kcov_dir: ?[]const u8 = null,
 };
 
+/// Entry point called by the `zigars_tools` dispatcher for the `stdio-fixtures`
+/// command. Parses flags, builds an isolated fixture workspace, installs fake
+/// backends, and drives the full JSON-RPC lifecycle against a freshly spawned
+/// server process. Returns `error.AssertionFailed` if any protocol or tool
+/// assertion fails, or propagates the first I/O error encountered.
 pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []const []const u8) !void {
     var options: StdioOptions = .{};
     var i: usize = 0;
@@ -134,6 +147,8 @@ fn stdioServerArgv(
     return argv;
 }
 
+// Returns true only when the server exited with status 0; any other
+// termination variant (signal, stop) is treated as a fixture failure.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -141,6 +156,9 @@ fn termOk(term: std.process.Child.Term) bool {
     };
 }
 
+// Creates a timestamped temporary workspace under .zig-cache/ for this run.
+// The path is allocated and returned to the caller, which owns cleanup.
+// Using the real-clock nanosecond stamp ensures unique paths for parallel runs.
 fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     const ns = smoke.nowNs(io);
     const path = try std.fmt.allocPrint(allocator, ".zig-cache/zigars-fixtures-{d}", .{ns});
@@ -149,6 +167,9 @@ fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     return path;
 }
 
+// Best-effort workspace removal at the end of each run. Errors are reported
+// to stderr rather than silently ignored so flaky cleanup is visible in CI
+// without masking the overall fixture result.
 fn cleanupFixtureWorkspace(io: Io, rel: []const u8) void {
     Io.Dir.cwd().deleteTree(io, rel) catch |err| stderrPrint(io, "stdio-fixtures: failed to remove temporary workspace {s}: {s}\n", .{ rel, @errorName(err) }) catch return;
 }
@@ -187,6 +208,10 @@ fn writeJoinedFile(io: Io, workspace: []const u8, rel: []const u8, data: []const
     const path = try std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ workspace, rel });
     try writeFile(io, path, data);
 }
+// Installs a fake backend shim in workspace/bin/. On POSIX a small shell
+// script delegates to the zigars_tools dispatcher by name; on Windows the
+// binary is copied directly because the OS cannot execute shell scripts.
+// The returned absolute path is owned by the caller.
 fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u8, tool_path: []const u8, name: []const u8) ![]u8 {
     const suffix = if (builtin.os.tag == .windows) ".exe" else "";
     const rel = try std.fmt.allocPrint(allocator, "{s}/bin/{s}{s}", .{ workspace, name, suffix });
@@ -427,6 +452,11 @@ const StdioClient = struct {
         try smoke.assertMinimumCount(self.io, "stdio-fixtures tool calls", self.tool_calls, coverage_config.min_stdio_fixture_tool_calls);
     }
 
+    /// Sends a JSON-RPC request with the given `method` and optional `params`
+    /// JSON, then reads lines from the server's stdout until a matching `id`
+    /// is found. Notification lines (no `id`) are skipped; a JSON-RPC `error`
+    /// field returns `error.McpError`. The returned slice is allocated by the
+    /// client's allocator and must be freed by the caller.
     pub fn request(self: *StdioClient, method: []const u8, params: ?[]const u8) ![]u8 {
         const id = self.next_id;
         self.next_id += 1;
@@ -459,6 +489,10 @@ const StdioClient = struct {
         try self.write(payload);
     }
 
+    /// Issues a `tools/call` for `name` with `args_json` and returns the
+    /// decoded payload. Prefers `structuredContent` when present; falls back
+    /// to the first `content[0].text` string. Increments the internal
+    /// `tool_calls` counter used by the coverage threshold check.
     pub fn callTool(self: *StdioClient, name: []const u8, args_json: []const u8) ![]u8 {
         const params = try std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"arguments\":{s}}}", .{ name, args_json });
         defer self.allocator.free(params);
@@ -505,10 +539,14 @@ const StdioClient = struct {
         return error.AssertionFailed;
     }
 
+    /// Convenience wrapper: asserts the value at dot-separated `path` in `json`
+    /// equals the string `expected`. Delegates to `expectPathJson`.
     pub fn expectPathString(self: *StdioClient, json: []const u8, path: []const u8, expected: []const u8) !void {
         try self.expectPathJson(json, path, .{ .string = expected });
     }
 
+    /// Parses `json`, walks the dot-separated `path` (supporting array index
+    /// segments like `"items.0"`), and delegates to `smoke.expectJsonEq`.
     pub fn expectPathJson(self: *StdioClient, json: []const u8, path: []const u8, expected: JsonValue) !void {
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, json, .{});
         defer parsed.deinit();
@@ -516,6 +554,10 @@ const StdioClient = struct {
         try smoke.expectJsonEq(self.io, value, expected, path);
     }
 
+    /// Calls `name` and asserts the tool reports ZLS as unavailable. Accepts
+    /// either a `backend:"zls"` field or an `ok:false` field as evidence,
+    /// because different ZLS tools surface unavailability through different
+    /// result shapes.
     pub fn expectZlsUnavailable(self: *StdioClient, name: []const u8, args_json: []const u8) !void {
         const result = try self.callTool(name, args_json);
         defer self.allocator.free(result);
@@ -531,6 +573,8 @@ const StdioClient = struct {
     }
 };
 
+// Removes a persisted session file before the bench-regression-gate fixture
+// so the test always starts from a clean state regardless of prior runs.
 fn removeFixtureSession(io: Io, session_id: []const u8) !void {
     var path_buf: [256]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buf, ".zigars-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});

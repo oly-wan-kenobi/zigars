@@ -1,3 +1,5 @@
+//! Public surface of the runtime UX subsystem: tool catalog rendering and
+//! in-process job/event/root/subscription session management.
 pub const catalog = @import("catalog.zig");
 pub const session = @import("session.zig");
 

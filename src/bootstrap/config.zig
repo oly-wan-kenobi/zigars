@@ -1,3 +1,5 @@
+//! Parses process startup flags into an owned Config and exposes the CLI help text.
+//! All string fields are heap-allocated; callers must release them via Config.deinit.
 const std = @import("std");
 const audit = @import("../infra/observability/audit.zig");
 
@@ -149,7 +151,8 @@ pub fn isLoopbackHttpHost(host: []const u8) bool {
         std.ascii.eqlIgnoreCase(host, "localhost");
 }
 
-/// Duplicates the default config strings so parse can clean up through Config.deinit.
+/// Allocates default config string values so every field is always allocator-owned.
+/// Uniform ownership allows Config.deinit to free all fields unconditionally.
 fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
     const workspace = try allocator.dupe(u8, cwd);
     errdefer allocator.free(workspace);

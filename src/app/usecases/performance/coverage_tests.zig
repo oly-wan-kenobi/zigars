@@ -1,3 +1,6 @@
+//! Pins the coverage use case: the budget enforces the changed-file floor independently
+//! of the overall floor (both in basis points), and diff takes ownership of both parsed
+//! sets while reporting the line-rate delta in bp.
 const std = @import("std");
 
 const coverage = @import("coverage.zig");

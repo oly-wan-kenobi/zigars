@@ -94,7 +94,11 @@ pub const TestDiscoverResult = struct {
     }
 };
 
-/// Implements import graph workflow logic using caller-owned inputs.
+/// Builds an advisory import graph by scanning each workspace .zig file for
+/// string-literal `@import("...")` targets (no parse, so dynamic or aliased
+/// imports are missed). Unreadable files are recorded in `skipped_files`
+/// instead of failing the scan. The returned result owns every slice and string;
+/// the caller `deinit`s it.
 pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ImportGraphRequest) ports.PortError!ImportGraphResult {
     const normalized_limit = @max(request.limit, 1);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
@@ -103,6 +107,9 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
     });
     defer scan.deinit(allocator);
 
+    // `*_owned` flags drive the defers: while true the list (and its entries) are
+    // freed on any early error; once ownership is handed to the result they flip
+    // to false so success does not double-free what the caller now owns.
     var files: std.ArrayList(ImportFile) = .empty;
     var files_owned = true;
     defer if (files_owned) files.deinit(allocator);
@@ -160,7 +167,8 @@ pub fn importGraph(allocator: std.mem.Allocator, context: app_context.StaticAnal
     };
 }
 
-/// Implements import graph text workflow logic using caller-owned inputs.
+/// Renders an `importGraph` result as advisory Markdown (one section per file).
+/// Borrows `result`; the returned text is allocator-owned and freed by the caller.
 pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
@@ -187,7 +195,10 @@ pub fn importGraphText(allocator: std.mem.Allocator, result: ImportGraphResult) 
     return text;
 }
 
-/// Implements test discover workflow logic using caller-owned inputs.
+/// Discovers `test ...` declarations by line prefix across workspace .zig files,
+/// emitting a per-test `zig test <file>` command. Capped at `request.limit` tests;
+/// unreadable files land in `skipped_files`. The returned result owns its slices;
+/// the caller `deinit`s it.
 pub fn testDiscover(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestDiscoverRequest) ports.PortError!TestDiscoverResult {
     const normalized_limit = @max(request.limit, 1);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{

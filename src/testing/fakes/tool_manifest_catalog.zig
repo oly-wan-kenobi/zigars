@@ -1,3 +1,7 @@
+//! Fake implementation of the `ports.ToolManifestCatalog` port.
+//! Backed by a caller-supplied entry slice; defaults to empty so tests that
+//! only need to satisfy the context field can use `.{}` without extra setup.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

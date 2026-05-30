@@ -1,3 +1,8 @@
+//! Process-local observability state: bounded rings and saturating counters for
+//! tool calls, MCP requests, commands, backend probes, ZLS transitions, startup
+//! phases, cancellations, and audit accounting.  No allocation; all state fits
+//! in fixed-size arrays.  stdout is never written; this module is metrics-only.
+
 const std = @import("std");
 const ports = @import("../../app/ports.zig");
 
@@ -25,6 +30,9 @@ pub const max_startup_phases = 24;
 pub const max_cancellation_events = 32;
 
 /// Bounded latency samples used for percentile computation.
+/// Samples are stored as a circular ring; once `max_latency_samples` are
+/// recorded the ring overwrites the oldest entry.  `sample_count` continues
+/// to increment beyond the ring capacity so callers can detect eviction.
 pub const LatencySamples = struct {
     samples: [max_latency_samples]u64 = [_]u64{0} ** max_latency_samples,
     sample_count: u64 = 0,
@@ -43,6 +51,8 @@ pub const LatencySamples = struct {
 };
 
 /// Aggregated counters for one MCP tool name.
+/// `name` is a borrowed slice from the call site; tool names are expected to be
+/// static string literals with process lifetime.
 pub const ToolStats = struct {
     name: []const u8 = "",
     calls: u64 = 0,
@@ -55,6 +65,8 @@ pub const ToolStats = struct {
 };
 
 /// Aggregated counters for one MCP request method.
+/// The method name is stored inline in a fixed-length buffer; names longer than
+/// 64 bytes are truncated and `name_truncated` is set.
 pub const MethodStats = struct {
     name: [64]u8 = [_]u8{0} ** 64,
     name_len: usize = 0,
@@ -74,6 +86,8 @@ pub const MethodStats = struct {
 };
 
 /// Borrowed correlation data supplied by the MCP adapter for one tool call.
+/// All slices are borrowed; the caller retains ownership.  Fields are copied
+/// into the fixed-size `ToolCallCorrelation` ring entry during recording.
 pub const ToolCallCorrelationInput = struct {
     mcp_request_id_type: []const u8 = "null",
     mcp_request_id_value: ?[]const u8 = null,
@@ -84,6 +98,9 @@ pub const ToolCallCorrelationInput = struct {
 };
 
 /// Bounded process-local correlation event for one MCP tools/call response.
+/// Fields are stored inline with fixed capacities; values exceeding those
+/// capacities are truncated and the corresponding `_truncated` flag is set.
+/// `trace_id` and `span_id` are zero-padded to their full widths (32 and 16).
 pub const ToolCallCorrelation = struct {
     sequence: u64 = 0,
     tool_name: []const u8 = "",
@@ -186,6 +203,9 @@ pub const CancellationEvent = struct {
 };
 
 /// Process-local observability state with bounded rings and saturating totals.
+/// Zero-initializable; all fields have sensible defaults.  Not thread-safe by
+/// itself; callers that mutate state from multiple threads must add their own
+/// synchronization (the MCP adapter does this via the recorder port).
 pub const State = struct {
     tool_stats: [max_tool_stats]ToolStats = [_]ToolStats{.{}} ** max_tool_stats,
     method_stats: [max_method_stats]MethodStats = [_]MethodStats{.{}} ** max_method_stats,
@@ -364,12 +384,16 @@ pub const State = struct {
     }
 
     /// Records one failed audit append without affecting JSON-RPC stdout.
+    /// The most recent error name is retained; earlier failures are overwritten.
     pub fn recordAuditWriteError(self: *State, err_name: []const u8) void {
         self.audit_write_errors +|= 1;
         self.audit_last_error = err_name;
     }
 
     /// Records an inbound cancellation notification outcome.
+    /// `status` is one of: "unknown", "completed", "completed_late",
+    /// "uncancellable", "not_cancellable".  Unrecognised values only increment
+    /// `cancellation_requested`; the named counters are unaffected.
     pub fn recordCancellation(self: *State, status: []const u8, request_id_type: []const u8, request_id_value: ?[]const u8, method: ?[]const u8) void {
         self.cancellation_requested +|= 1;
         if (std.mem.eql(u8, status, "unknown")) self.cancellation_unknown +|= 1;
@@ -402,8 +426,12 @@ pub const State = struct {
     }
 
     /// Records ZLS status transitions, suppressing consecutive duplicates.
+    /// Deduplication keeps the timeline readable when the LSP client emits
+    /// repeated status notifications for the same state (e.g. keep-alive pings).
     pub fn recordZlsStatus(self: *State, status: []const u8, failure: ?[]const u8, restart_attempts: u64) void {
         if (self.zls_event_count > 0) {
+            // Compare against the most-recently written ring slot, not sequence 1,
+            // so the dedup check works correctly when the ring has wrapped.
             const previous = self.zls_events[ringIndex(self.zls_event_count, max_zls_events)];
             if (std.mem.eql(u8, previous.status, status) and optionalStringEqual(previous.failure, failure) and previous.restart_attempts == restart_attempts) return;
         }
@@ -420,6 +448,8 @@ pub const State = struct {
     }
 
     /// Returns the mutable metrics slot for a tool name.
+    /// Returns null once `max_tool_stats` distinct names have been seen; the
+    /// caller increments `dropped_tool_stat_observations` in that case.
     fn toolSlot(self: *State, name: []const u8) ?*ToolStats {
         for (self.tool_stats[0..self.tool_stat_count]) |*stat| {
             if (std.mem.eql(u8, stat.name, name)) return stat;
@@ -433,7 +463,9 @@ pub const State = struct {
         return null;
     }
 
-    /// Returns the mutable metrics slot for an MCP method name.
+    /// Returns the mutable metrics slot for an MCP method name, allocating a
+    /// new slot on first use.  Truncated names are matched by prefix against
+    /// the stored prefix so they do not collide with a distinct short name.
     fn methodSlot(self: *State, name: []const u8) ?*MethodStats {
         for (self.method_stats[0..self.method_stat_count]) |*stat| {
             if (methodNameMatches(stat, name)) return stat;
@@ -498,20 +530,22 @@ fn optionalStringEqual(a: ?[]const u8, b: ?[]const u8) bool {
     return std.mem.eql(u8, a.?, b.?);
 }
 
-/// Matches method stats by full name, or by retained prefix when the name was truncated.
+/// Matches method stats by full name, or by retained prefix when truncated.
+/// Prefix matching prevents long method names from creating spurious new slots
+/// after their truncated counterpart has already been recorded.
 fn methodNameMatches(stat: *const MethodStats, name: []const u8) bool {
     const retained = stat.nameSlice();
     if (!stat.name_truncated) return std.mem.eql(u8, retained, name);
     return name.len >= retained.len and std.mem.eql(u8, retained, name[0..retained.len]);
 }
 
-/// Calculates a per-thousand rate with zero-denominator protection.
-/// Maps a sequence number to its ring-buffer index.
+/// Maps a 1-based sequence number to its ring-buffer storage index.
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % @as(u64, capacity));
 }
 
-/// Copies a bounded source into a fixed destination and pads the remainder.
+/// Copies up to `dest.len` bytes from `source` into `dest`, padding the
+/// remainder with `pad`.  Used to populate fixed-width ID fields.
 fn copyFixed(dest: []u8, source: []const u8, pad: u8) void {
     const copy_len = @min(dest.len, source.len);
     @memcpy(dest[0..copy_len], source[0..copy_len]);

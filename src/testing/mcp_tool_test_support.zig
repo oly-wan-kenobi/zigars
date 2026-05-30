@@ -12,7 +12,9 @@ const workspace_mod = zigars.infra.workspace.workspace;
 
 pub const App = zigars.bootstrap.runtime_state.App;
 
-/// Creates a deterministic app fixture for command-planning tool tests.
+/// Returns an App wired to /tmp with a synthetic zig path suitable for
+/// command-planning tool fixtures that do not invoke real Zig builds.
+/// Caller owns the returned App and must call deinit when done.
 pub fn appForCommandPlanning(allocator: std.mem.Allocator) !App {
     return .{
         .allocator = allocator,
@@ -22,7 +24,9 @@ pub fn appForCommandPlanning(allocator: std.mem.Allocator) !App {
     };
 }
 
-/// Manifest fixture for the zig_explain_errors tool.
+/// Invokes zig_explain_errors through a real RuntimePorts context wired to app.
+/// non_exited_exit_code=0 ensures the fake command runner reports success for
+/// any subprocess the tool triggers.
 pub fn zigExplainErrors(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{
         .non_exited_exit_code = 0,
@@ -32,7 +36,7 @@ pub fn zigExplainErrors(app: *App, allocator: std.mem.Allocator, args: ?std.json
     return mcp_core.zigExplainErrors(allocator, context, args);
 }
 
-/// Manifest fixture for the zig_compile_error_index tool.
+/// Invokes zig_compile_error_index through a real RuntimePorts context wired to app.
 pub fn zigCompileErrorIndex(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{
         .non_exited_exit_code = 0,
@@ -42,7 +46,9 @@ pub fn zigCompileErrorIndex(app: *App, allocator: std.mem.Allocator, args: ?std.
     return mcp_core.zigCompileErrorIndex(allocator, context, args);
 }
 
-/// Manifest fixture for the zigars_failure_fusion tool.
+/// Invokes zigars_failure_fusion through a real RuntimePorts context wired to app.
+/// Context setup faults are mapped to structured tool errors rather than propagated,
+/// matching the handler's own error surfacing contract.
 pub fn zigarsFailureFusion(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     // This tool maps runtime setup faults into user-facing MCP tool errors.
@@ -50,14 +56,15 @@ pub fn zigarsFailureFusion(app: *App, allocator: std.mem.Allocator, args: ?std.j
     return mcp_project_intelligence.zigarsFailureFusion(allocator, context, args);
 }
 
-/// Manifest fixture for the zig_target_matrix_plan tool.
+/// Invokes zig_target_matrix_plan through a static-analysis context wired to app.
+/// workspace_read_resolution=.input enforces sandbox path resolution on the args.
 pub fn zigTargetMatrixPlan(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     const context = runtime_ports.context().staticAnalysis() catch return error.OutOfMemory;
     return mcp_static_analysis.zigTargetMatrixPlan(allocator, context, args);
 }
 
-/// Manifest fixture for the zig_public_api_diff tool.
+/// Invokes zig_public_api_diff through a static-analysis context wired to app.
 pub fn zigPublicApiDiff(app: *App, allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var runtime_ports = RuntimePorts.init(app, .{ .workspace_read_resolution = .input });
     const context = runtime_ports.context().staticAnalysis() catch return error.OutOfMemory;

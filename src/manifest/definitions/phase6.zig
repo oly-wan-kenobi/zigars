@@ -1,3 +1,10 @@
+//! Tool definitions for phase-6 groups: CI artifact ingestion, release
+//! intelligence (release plan, semver suggest, release notes, evidence pack),
+//! API lifecycle (baseline init, check, diff, docs-diff), documentation query,
+//! and dependency/security (update plan, fetch check, lock audit, impact,
+//! SBOM, ZAT/OSV ingestion, provenance, license summary, GitHub submit plan,
+//! ZON dep sync, deps add/remove/upgrade, pkg search/info/versions/readme,
+//! dependency migration). Write-capable tools require apply=true.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -6,36 +13,38 @@ const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// CI evidence format.
+// Plan strings shared across tool groups in this module. Each constant names
+// the planning category it represents so the planner can classify execution risk.
+/// CI ingestion plan: parses evidence locally, no commands.
 const ci_ingest_plan = "Parses caller-supplied or workspace-local CI evidence into local failure facts without running commands.";
-/// CI evidence format.
+/// Release intelligence plan: synthesizes evidence, no claims about unchecked items.
 const release_plan = "Synthesizes observed validation, CI, API, docs, dependency, and security evidence into release guidance without claiming skipped checks passed.";
-/// CI evidence format.
+/// API lifecycle plan: builds/compares evidence from workspace snapshots.
 const api_plan = "Builds or compares public API evidence from workspace source snapshots and explicit baselines.";
-/// CI evidence format.
+/// Docs plan: queries local docs evidence without network access.
 const docs_plan = "Builds/query local documentation evidence from installed Zig docs, workspace docs, autodoc artifacts, or snippets without network access.";
-/// CI evidence format.
+/// Dependency maintenance plan: inspects manifest without fetching packages.
 const dependency_plan = "Inspects build.zig.zon and caller-supplied dependency evidence to plan maintenance and security checks without fetching packages.";
-/// CI evidence format.
+/// Optional security plan: ingests caller-supplied reports or returns unavailable; no outbound network.
 const optional_security_plan = "Ingests caller-supplied scanner reports or returns an explicit optional-backend unavailable result; zigars does not contact external services.";
-/// Dependency lifecycle mutation format.
+/// Dependency mutation plan: preview-first, apply-gated, preimage-checked source writes.
 const dependency_mutation_plan = "Previews build.zig.zon dependency edits and applies them only when apply=true using patch-session preimage checks.";
-/// Dependency registry provider format.
+/// Dependency registry plan: returns provider metadata; network-backed paths return structured unavailable when unconfigured.
 const dependency_registry_plan = "Returns deterministic dependency provider metadata; network-backed providers report structured unavailable states unless bounded backends are configured.";
-/// Dependency migration format.
+/// Dependency migration plan: session-envelope over update/fetch/audit/impact/security/validation steps.
 const dependency_migration_plan = "Builds or resumes a dependency migration session envelope over update, fetch, audit, impact, security, and validation steps.";
 
-/// CI evidence format.
+/// Shared field hint for CI evidence format auto-detection.
 const ci_format_hint = fieldHint("format", .{ .description = "CI evidence format.", .default_string = "auto", .enum_values = &.{ "auto", "log", "annotations", "junit", "sarif" } });
-/// Documentation corpus to inspect.
+/// Shared field hint for the documentation corpus to inspect.
 const docs_scope_hint = fieldHint("scope", .{ .description = "Documentation corpus to inspect.", .default_string = "workspace", .enum_values = &.{ "workspace", "docs", "src", "all" } });
-/// Must be true before writing the generated artifact.
+/// Shared field hint: must be true to commit a workspace artifact write.
 const apply_hint = fieldHint("apply", .{ .description = "Must be true before writing the generated artifact.", .default_bool = false });
-/// build.zig.zon path to read or mutate.
+/// Shared field hint for the workspace-relative build.zig.zon path.
 const manifest_path_hint = fieldHint("manifest_path", .{ .description = "Workspace-relative build.zig.zon path.", .default_string = "build.zig.zon", .path_kind = "input_file" });
-/// Dependency package provider.
+/// Shared field hint for selecting a dependency package provider.
 const package_provider_hint = fieldHint("provider", .{ .description = "Dependency package provider.", .default_string = "direct", .enum_values = &.{ "direct", "zigistry" } });
-/// Migration mode selector.
+/// Shared field hint for the dependency migration session lifecycle mode.
 const migration_mode_hint = fieldHint("mode", .{ .description = "Dependency migration session mode.", .default_string = "plan", .enum_values = &.{ "plan", "inspect", "resume", "close" } });
 
 /// Ingest CI logs, annotations, JUnit, SARIF, or raw artifacts into structured local failure evidence.
@@ -219,7 +228,7 @@ pub const zig_readme_command_check = tool(.{
     .plan = .{ .pure_analysis = docs_plan },
 });
 
-/// Plan dependency updates from build.
+/// Plan dependency updates from build.zig.zon with verification commands and risk notes.
 pub const zig_dependency_update_plan = tool(.{
     .description = "Plan dependency updates from build.zig.zon with verification commands and risk notes.",
     .input_schema = schema(&.{ .{ "dependency", "string", false }, .{ "target_version", "string", false }, .{ "manifest", "string", false } }),
@@ -292,7 +301,7 @@ pub const zig_dependency_security_report = tool(.{
     .plan = .{ .pure_analysis = dependency_plan },
 });
 
-/// Report dependency origins, hashes, local paths, and provenance confidence from build.
+/// Report dependency origins, hashes, local paths, and provenance confidence from build.zig.zon.
 pub const zig_dependency_provenance = tool(.{
     .description = "Report dependency origins, hashes, local paths, and provenance confidence from build.zig.zon.",
     .input_schema = schema(&.{.{ "manifest", "string", false }}),

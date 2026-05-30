@@ -1,3 +1,5 @@
+//! Aggregates the performance use cases (coverage evidence, benchmark evidence, and
+//! the CLI-facing workflow handlers) and pulls in their unit tests.
 pub const coverage = @import("coverage.zig");
 pub const benchmark = @import("benchmark.zig");
 pub const workflows = @import("workflows.zig");

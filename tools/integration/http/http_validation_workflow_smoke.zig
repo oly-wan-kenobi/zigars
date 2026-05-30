@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for the validation-workflow tool family: semantic impact,
+//! semantic test selection, validation plan/run/history, build/test events,
+//! flake and failure history, session snapshot, handoff pack, decision record,
+//! project notes/memory, capability match, and tool sequence plan (IDs 101-117).
+
 const std = @import("std");
 const smoke = @import("../smoke_support.zig");
 
@@ -5,6 +10,9 @@ const Io = std.Io;
 const JsonValue = std.json.Value;
 const valueAt = smoke.valueAt;
 
+/// Exercises validation-workflow tools through the HTTP transport and asserts
+/// structured result paths against `expected`. `scenario_count` is incremented
+/// once per successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenario_count: *usize) !void {
     try assertToolPaths(allocator, io, port, 101, "zig_impact_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected, "semantic_impact_paths", scenario_count);
     try assertToolPaths(allocator, io, port, 102, "zig_test_select_semantic", "{\"files\":\"src/main.zig\",\"symbols\":\"main\",\"limit\":20}", expected, "semantic_test_select_paths", scenario_count);
@@ -25,6 +33,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 117, "zigars_tool_sequence_plan", "{\"goal\":\"fix failing tests\",\"changed_files\":\"src/main.zig\"}", expected, "tool_sequence_plan_paths", scenario_count);
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC and asserts every JSON path in the
+/// `expected_key` sub-object of `expected_root`. Returns `error.AssertionFailed`
+/// on a missing path. Increments `scenario_count` on success.
 fn assertToolPaths(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, tool_name: []const u8, args_json: []const u8, expected_root: JsonValue, expected_key: []const u8, scenario_count: *usize) !void {
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);

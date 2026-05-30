@@ -6,9 +6,12 @@ const app_context = @import("../../context.zig");
 const app_errors = @import("../../errors.zig");
 const ports = @import("../../ports.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream cap (1 MiB) on captured subprocess stdout/stderr; bounds memory
+/// so a runaway or hostile command cannot exhaust the host. Output past this is
+/// truncated and the result flags the truncation.
 pub const command_output_limit: usize = 1024 * 1024;
-/// Command output limit mode applied when collecting workflow evidence.
+/// Truncation policy label surfaced in results so callers know output past the
+/// limit is dropped rather than streamed.
 pub const command_output_limit_mode = "truncate_on_limit";
 
 /// Carries owned argv data across use case and port boundaries.
@@ -187,12 +190,14 @@ pub const VersionOutcome = union(enum) {
     }
 };
 
-/// Carries argv builder data across use case and port boundaries.
+/// Accumulates an owned argv vector one segment at a time. Commands are always
+/// assembled as explicit argv (never a shell string), so user-supplied values
+/// like file paths and extra args become individual arguments and are never
+/// interpreted by a shell. Each appended segment is duped into `allocator`.
 const ArgvBuilder = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList([]const u8) = .empty,
 
-    /// Initializes the fixture with caller-provided state.
     fn init(allocator: std.mem.Allocator) ArgvBuilder {
         return .{ .allocator = allocator };
     }
@@ -204,17 +209,18 @@ const ArgvBuilder = struct {
         self.* = undefined;
     }
 
-    /// Appends append data into caller-provided storage, propagating allocation failures.
+    /// Dupes `arg` into the builder's allocator and appends the copy.
     fn append(self: *ArgvBuilder, arg: []const u8) !void {
         try self.items.append(self.allocator, try self.allocator.dupe(u8, arg));
     }
 
-    /// Appends many data into caller-provided storage, propagating allocation failures.
+    /// Dupes and appends each element of `args` in order.
     fn appendMany(self: *ArgvBuilder, args: []const []const u8) !void {
         for (args) |arg| try self.append(arg);
     }
 
-    /// Implements to owned workflow logic using caller-owned inputs.
+    /// Moves the accumulated argv out of the builder into an OwnedArgv; the
+    /// builder is left in an empty-but-valid state so its deinit is a no-op.
     fn toOwned(self: *ArgvBuilder) !OwnedArgv {
         const owned = try self.items.toOwnedSlice(self.allocator);
         self.items = .empty;
@@ -222,7 +228,9 @@ const ArgvBuilder = struct {
     }
 };
 
-/// Implements version workflow logic using caller-owned inputs.
+/// Runs `zig version` and (best-effort) `zls --version`. A ZLS command error
+/// is swallowed and reported as `zls = null` in the result; only a Zig failure
+/// short-circuits to `.err`. Caller owns the returned outcome.
 pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !VersionOutcome {
     var zig_builder = ArgvBuilder.init(allocator);
     defer zig_builder.deinit();
@@ -257,7 +265,7 @@ pub fn version(allocator: std.mem.Allocator, context: app_context.CoreCommandCon
     }
 }
 
-/// Implements env workflow logic using caller-owned inputs.
+/// Runs `zig env` and returns the structured outcome. Caller owns the result.
 pub fn env(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -266,7 +274,7 @@ pub fn env(allocator: std.mem.Allocator, context: app_context.CoreCommandContext
     return runBuiltCommand(allocator, context, "zig env", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
-/// Implements targets workflow logic using caller-owned inputs.
+/// Runs `zig targets` and returns the structured outcome. Caller owns the result.
 pub fn targets(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: SimpleRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -275,7 +283,8 @@ pub fn targets(allocator: std.mem.Allocator, context: app_context.CoreCommandCon
     return runBuiltCommand(allocator, context, "zig targets", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
-/// Constructs build data from caller-owned inputs, propagating allocation failures.
+/// Runs `zig build [extra_args...]`. Extra args are appended verbatim as
+/// individual argv elements (no shell interpolation). Caller owns the result.
 pub fn build(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: ExtraArgsRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -285,7 +294,9 @@ pub fn build(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
     return runBuiltCommand(allocator, context, "zig build", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
-/// Implements test command workflow logic using caller-owned inputs.
+/// Runs `zig test <file>` when a file is provided (resolved through the
+/// workspace store first), or `zig build test` for the whole project suite.
+/// An optional filter maps to `--test-filter`. Caller owns the result.
 pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: TestRequest) !CommandOutcome {
     var builder = ArgvBuilder.init(allocator);
     defer builder.deinit();
@@ -312,7 +323,9 @@ pub fn testCommand(allocator: std.mem.Allocator, context: app_context.CoreComman
     return runBuiltCommand(allocator, context, "zig test", try builder.toOwned(), timeoutFor(context, request.timeout_ms));
 }
 
-/// Implements check workflow logic using caller-owned inputs.
+/// Runs `zig ast-check <file>` after resolving the path through the workspace
+/// store. Returns a workspace-path failure when the path is outside the sandbox.
+/// Caller owns the result.
 pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
     const resolved = try resolveWorkspacePath(allocator, context, "zig_check", request.file, "zig_check source file");
     switch (resolved) {
@@ -329,7 +342,8 @@ pub fn check(allocator: std.mem.Allocator, context: app_context.CoreCommandConte
     }
 }
 
-/// Implements translate c workflow logic using caller-owned inputs.
+/// Runs `zig translate-c <file> [extra_args...]` after resolving the file path
+/// through the workspace store. Caller owns the result.
 pub fn translateC(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: FileCommandRequest) !CommandOutcome {
     const resolved = try resolveWorkspacePath(allocator, context, "zig_translate_c", request.file, "zig_translate_c source file");
     switch (resolved) {
@@ -347,7 +361,12 @@ pub fn translateC(allocator: std.mem.Allocator, context: app_context.CoreCommand
     }
 }
 
-/// Implements explain command workflow logic using caller-owned inputs.
+/// Runs the appropriate Zig sub-command for the given explain mode and returns
+/// the result alongside the resolved mode string. `title` is used as the
+/// command provenance tag. Valid modes: check, test, build, build-test,
+/// fmt-check. Unsupported modes return `.err = .argument`. File paths are
+/// resolved through the workspace store before being added to argv. Caller
+/// owns the returned outcome.
 pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, request: ExplainRequest, title: []const u8) !ExplainOutcome {
     const mode = request.command orelse if (request.file != null) "check" else "build-test";
     var builder = ArgvBuilder.init(allocator);
@@ -422,7 +441,9 @@ pub fn explainCommand(allocator: std.mem.Allocator, context: app_context.CoreCom
     };
 }
 
-/// Invokes run built command with caller-owned inputs; command and allocation failures propagate.
+/// Takes ownership of `argv`, invokes the command runner, and returns either
+/// a `.ok` CommandRun (which owns the argv) or a `.err` CommandRunFailure
+/// (which also owns the argv for diagnostics). Callers must deinit the outcome.
 fn runBuiltCommand(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -462,7 +483,12 @@ const ResolveOutcome = union(enum) {
     err: WorkspaceFailure,
 };
 
-/// Resolves resolve workspace path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
+/// Resolves a user-supplied path through the workspace store before it is used
+/// as a command argument, enforcing the sandbox boundary. A rejection (empty or
+/// outside-workspace path) is returned as a structured `WorkspaceFailure` so the
+/// caller reports it instead of executing the command. The unused `[]const u8`
+/// parameter is the tool name, kept for call-site symmetry. `path` stays
+/// caller-owned; the returned ok result owns its resolved path.
 fn resolveWorkspacePath(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -487,12 +513,14 @@ fn resolveWorkspacePath(
     return .{ .ok = resolved };
 }
 
-/// Converts timing input into the duration unit used by result payloads.
+/// Returns `requested` when provided, otherwise falls back to the context
+/// default, then passes both through `normalizeTimeout` to clamp the value.
 pub fn timeoutFor(context: app_context.CoreCommandContext, requested: ?i64) i64 {
     return normalizeTimeout(requested orelse context.timeouts.command_ms);
 }
 
-/// Normalizes timeout data into the representation consumed by this workflow.
+/// Clamps a requested timeout to [1 ms, 1 hour] so a caller cannot disable the
+/// timeout (<= 0) or pin a subprocess open indefinitely with a huge value.
 pub fn normalizeTimeout(timeout_ms: i64) i64 {
     return @max(1, @min(timeout_ms, 60 * 60 * 1000));
 }

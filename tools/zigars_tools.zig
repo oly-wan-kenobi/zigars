@@ -1,3 +1,9 @@
+//! Dispatcher for the `zigars-tools` developer CLI.
+//!
+//! This file must stay a thin command router: parse the first argument, call
+//! the matching focused helper module, and surface argument errors through
+//! `cli_io.reportInvalidArguments`. Large helper logic belongs in focused
+//! sibling modules, not here.
 const std = @import("std");
 const architecture_guard = @import("quality/architecture_guard.zig");
 const cli_io = @import("common/cli_io.zig");
@@ -78,6 +84,9 @@ test {
     _ = tool_index;
 }
 
+/// Main entry point: detects fake-backend invocations, dispatches subcommands,
+/// and routes argument failures through the shared CLI error helpers so output
+/// stays testable. Diagnostics go to stderr; machine output goes to stdout.
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
@@ -87,6 +96,9 @@ pub fn main(init: std.process.Init) !void {
     const args_arena = args_arena_state.allocator();
     const args = try init.minimal.args.toSlice(args_arena);
 
+    // Fake-backend invocations have a distinct argv pattern detected before
+    // the normal subcommand dispatch so release checks can spin them up
+    // transparently without a separate binary.
     if (fake_backend_dispatch.detect(args)) |invocation| {
         return fake_backend_dispatch.run(io, invocation.backend, invocation.args);
     }
@@ -169,6 +181,8 @@ fn usage(io: Io) !void {
     , .{});
 }
 
+// Parses each path as JSON and discards the result; exits with an error on
+// any malformed file. Used by `zig build json-check` to verify generated JSON.
 fn checkJson(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len == 0) return failUsage(io, "check-json", "check-json <path>...", "expected at least one JSON path", .{});
     for (args) |path| {

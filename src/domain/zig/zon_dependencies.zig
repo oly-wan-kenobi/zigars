@@ -1,3 +1,10 @@
+//! Zig 0.16 build.zig.zon dependency parser and minimal text-preserving editor.
+//!
+//! The parser walks manifest text without executing or importing the build
+//! script. Edit operations (`replaceHash`, `addDependency`, `removeDependency`,
+//! `upgradeDependency`) return new owned buffers; `Model` borrows the original
+//! text and must be re-parsed after each edit. Field values are validated before
+//! being inserted to prevent quote or newline injection into the manifest.
 const std = @import("std");
 
 /// Stable diagnostic emitted by the build.zig.zon dependency model.
@@ -76,7 +83,12 @@ pub const EditError = error{
     OutOfMemory,
 };
 
-/// Parses the dependency entries from a Zig 0.16 build.zig.zon manifest.
+/// Parses the `.dependencies` block of a Zig 0.16 build.zig.zon manifest.
+///
+/// Returns a `Model` whose `entries` and `diagnostics` slices are owned by the
+/// caller; `text` is borrowed and must remain valid for the model's lifetime.
+/// A missing `.dependencies` block is not a fatal error — it is recorded as a
+/// diagnostic so callers can report it without panicking.
 pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Model {
     var entries: std.ArrayList(Dependency) = .empty;
     errdefer entries.deinit(allocator);
@@ -161,7 +173,12 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Model {
     };
 }
 
-/// Replaces or inserts the hash field for a URL dependency.
+/// Returns a new manifest with the `.hash` field of dependency `name` set to
+/// `new_hash`, inserting the field when it is absent.
+///
+/// `new_hash` must not contain `"`, `\`, control characters, or newlines.
+/// Returns `error.UnsupportedDependencyShape` for path dependencies (no URL).
+/// The returned buffer is caller-owned; `model.text` is unchanged.
 pub fn replaceHash(allocator: std.mem.Allocator, model: Model, name: []const u8, new_hash: []const u8) EditError![]u8 {
     const entry = model.find(name) orelse return error.DependencyNotFound;
     if (entry.url == null or entry.path != null) return error.UnsupportedDependencyShape;
@@ -177,7 +194,12 @@ pub fn replaceHash(allocator: std.mem.Allocator, model: Model, name: []const u8,
     return insertRange(allocator, model.text, insert_at, fragment);
 }
 
-/// Adds a direct URL or local path dependency to the dependencies block.
+/// Inserts a new dependency entry into the `.dependencies` block.
+///
+/// Exactly one of `url` or `path` must be non-null; supplying both or neither
+/// returns `error.UnsupportedDependencyShape`. `name` must match `[A-Za-z_][A-Za-z0-9_]*`.
+/// All string values are validated against injection characters before insertion.
+/// The returned buffer is caller-owned; `model.text` is unchanged.
 pub fn addDependency(
     allocator: std.mem.Allocator,
     model: Model,
@@ -203,13 +225,23 @@ pub fn addDependency(
     return insertRange(allocator, model.text, model.dependencies_end.?, fragment);
 }
 
-/// Removes one dependency entry from the dependencies block.
+/// Returns a new manifest with the named dependency entry deleted.
+///
+/// The entry span (`entry_start`..`entry_end`) is replaced with an empty
+/// string, removing the trailing comma and newline captured during parsing.
+/// The returned buffer is caller-owned; `model.text` is unchanged.
 pub fn removeDependency(allocator: std.mem.Allocator, model: Model, name: []const u8) EditError![]u8 {
     const entry = model.find(name) orelse return error.DependencyNotFound;
     return replaceRange(allocator, model.text, entry.entry_start, entry.entry_end, "");
 }
 
-/// Updates URL and optional hash fields for an existing URL dependency.
+/// Returns a new manifest with the URL (and optionally hash) of an existing
+/// URL dependency updated in place.
+///
+/// When `new_hash` is non-null the function re-parses the URL-updated text
+/// before inserting the hash, so offsets remain valid across both edits.
+/// The returned buffer is caller-owned; the intermediate buffer is freed before
+/// returning. `model.text` is unchanged.
 pub fn upgradeDependency(allocator: std.mem.Allocator, model: Model, name: []const u8, new_url: []const u8, new_hash: ?[]const u8) EditError![]u8 {
     const entry = model.find(name) orelse return error.DependencyNotFound;
     const url = entry.url orelse return error.MissingUrl;
@@ -245,6 +277,8 @@ fn findDependenciesBlock(text: []const u8) ?Block {
         cursor = skipHorizontal(text, cursor, text.len);
         if (cursor < text.len and text[cursor] == '=') {
             cursor = skipHorizontal(text, cursor + 1, text.len);
+            // Require `.{ ` immediately after `=`; bare struct literal `.{` means
+            // the dependencies value is an anonymous struct literal as expected.
             if (cursor + 1 < text.len and text[cursor] == '.' and text[cursor + 1] == '{') {
                 const open = cursor + 1;
                 if (findMatchingBrace(text, open)) |close| return .{ .open_brace = open, .close_brace = close };
@@ -258,6 +292,8 @@ fn findDependenciesBlock(text: []const u8) ?Block {
 
 fn parseName(text: []const u8, start: usize) ?ParsedName {
     if (start >= text.len or text[start] != '.') return null;
+    // Handle quoted identifier syntax `.@"gamma-dash"` used for names that
+    // contain hyphens or other characters not allowed in plain identifiers.
     if (start + 2 < text.len and text[start + 1] == '@' and text[start + 2] == '"') {
         const value_start = start + 3;
         const value_end = scanStringEnd(text, value_start) orelse return null;
@@ -421,6 +457,8 @@ fn skipSpaceAndComments(text: []const u8, start: usize, end: usize) usize {
     return cursor;
 }
 
+// Rejects names that do not match `[A-Za-z_][A-Za-z0-9_]*` to prevent the
+// generated `.name = .{ ... }` literal from being syntactically malformed.
 fn requireSafeDependencyName(name: []const u8) EditError!void {
     if (name.len == 0) return error.InvalidDependencyField;
     if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return error.InvalidDependencyField;
@@ -429,6 +467,8 @@ fn requireSafeDependencyName(name: []const u8) EditError!void {
     }
 }
 
+// Rejects control characters, DEL, double-quote, and backslash to prevent
+// quote-close or escape injection into a generated string literal field.
 fn requireSafeStringLiteralField(value: []const u8) EditError!void {
     for (value) |c| {
         if (c < 0x20 or c == 0x7f or c == '"' or c == '\\') return error.InvalidDependencyField;
@@ -449,6 +489,9 @@ fn lineStart(text: []const u8, offset: usize) usize {
     return cursor;
 }
 
+// Infers the indentation to use when inserting a new field into an existing
+// entry. Prefers the leading whitespace from the URL field line when present;
+// falls back to the entry's own indentation plus four spaces.
 fn detectFieldIndent(allocator: std.mem.Allocator, text: []const u8, entry: Dependency) ![]u8 {
     if (entry.url) |field| {
         const start = lineStart(text, field.value_start);
@@ -462,6 +505,8 @@ fn detectFieldIndent(allocator: std.mem.Allocator, text: []const u8, entry: Depe
     return std.fmt.allocPrint(allocator, "{s}    ", .{text[entry_line..end]});
 }
 
+// Infers the indentation for a new entry by reading the closing-brace line's
+// leading whitespace and adding four spaces to match the block's inner indent.
 fn detectBlockIndent(allocator: std.mem.Allocator, text: []const u8, close_brace: usize) ![]u8 {
     const block_line = lineStart(text, close_brace);
     var end = block_line;

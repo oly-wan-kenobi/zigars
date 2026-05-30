@@ -559,7 +559,11 @@ pub fn plan(allocator: std.mem.Allocator, context: app_context.ValidationContext
     };
 }
 
-/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
+/// Plans then executes the command phases (tool-only phases are recorded as
+/// skipped), building a history record and a preimage of the history file. The
+/// JSONL history is appended only when request.apply is true; a write failure
+/// returns a typed RunFailure rather than throwing. Returns an allocator-owned
+/// RunOutcome the caller must deinit.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: RunRequest) !RunOutcome {
     var planned = try plan(allocator, context, request.plan);
     errdefer planned.deinit(allocator);
@@ -634,6 +638,9 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
                 .err = err,
                 .path = request.output,
             };
+            // This early return returns a typed failure (not an error), so the
+            // errdefers above will not fire; free everything accumulated so far
+            // by hand before returning the RunFailure.
             preimage.deinit(allocator);
             history_record.deinit(allocator);
             for (phases.items) |*item| item.deinit(allocator);
@@ -671,7 +678,10 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ValidationContext,
     } };
 }
 
-/// Implements history workflow logic using caller-owned inputs.
+/// Loads validation history from inline text or the history file (a missing file
+/// is reported as history_available=false, not an error; other read failures
+/// return a typed err), parses up to `limit` runs, and derives failure groups
+/// for the requested view. Returns an allocator-owned HistoryOutcome to deinit.
 pub fn history(allocator: std.mem.Allocator, context: app_context.ValidationContext, request: HistoryRequest) !HistoryOutcome {
     const limit = @max(@as(usize, 1), request.limit);
     var text: ?[]const u8 = request.history_text;
@@ -914,7 +924,9 @@ fn preimageForPath(allocator: std.mem.Allocator, context: app_context.Validation
     };
 }
 
-/// Implements existing history bytes workflow logic using caller-owned inputs.
+/// Reads the current history file so a new run can be appended, returning
+/// caller-owned bytes or null when the file is absent/unreadable (treated as
+/// "no prior history" rather than an error). Read stays inside the workspace.
 fn existingHistoryBytes(allocator: std.mem.Allocator, context: app_context.ValidationContext, path: []const u8) ?[]const u8 {
     const read_result = context.workspace_store.read(allocator, .{
         .path = path,
@@ -977,7 +989,9 @@ fn parseHistoryRuns(allocator: std.mem.Allocator, text: []const u8, limit: usize
     return out.toOwnedSlice(allocator);
 }
 
-/// Serializes history run from fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds a HistoryRun from one parsed JSON record, preserving its serialized
+/// form in raw_json and extracting ok plus per-failure fingerprints (falling
+/// back to the phase name, then "unknown"). Returns allocator-owned data.
 fn historyRunFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryRun {
     const raw_json = try serializeJsonValueAlloc(allocator, value);
     errdefer allocator.free(raw_json);
@@ -1262,7 +1276,8 @@ fn writeCommandString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), arg
     try serializeJsonString(allocator, out, command.items);
 }
 
-/// Extracts json field string array data from JSON input without taking ownership of borrowed values.
+/// Appends a `"key":[...]` string-array member to the manual JSON builder `out`;
+/// `first` controls whether a leading comma separator is written.
 fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, values: []const []const u8, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1275,7 +1290,10 @@ fn jsonFieldStringArray(allocator: std.mem.Allocator, out: *std.ArrayList(u8), k
     try out.append(allocator, ']');
 }
 
-/// Extracts json stream fields data from JSON input without taking ownership of borrowed values.
+/// Appends a captured command stream to `out` as `<name>` plus sibling
+/// `<name>_invalid_utf8`/`_encoding`/`_byte_count` fields, sanitizing invalid
+/// UTF-8 to U+FFFD so the JSONL history line stays valid and reports the
+/// original byte count even when bytes were replaced.
 fn jsonStreamFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), name: []const u8, bytes: []const u8, first: bool) !void {
     var safe = try safeTextAlloc(allocator, bytes);
     defer safe.deinit(allocator);
@@ -1444,7 +1462,8 @@ fn isTimeoutError(err: ports.PortError) bool {
     return err == error.Timeout or err == error.RequestTimeout;
 }
 
-/// Extracts json field string data from JSON input without taking ownership of borrowed values.
+/// Appends a `"key":"value"` member to the manual JSON builder `out` (both key
+/// and value escaped); `first` controls the leading comma separator.
 fn jsonFieldString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: []const u8, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1452,7 +1471,8 @@ fn jsonFieldString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: [
     try serializeJsonString(allocator, out, value);
 }
 
-/// Extracts json field bool data from JSON input without taking ownership of borrowed values.
+/// Appends a `"key":true|false` member to the manual JSON builder `out`; `first`
+/// controls the leading comma separator.
 fn jsonFieldBool(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: bool, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1460,7 +1480,8 @@ fn jsonFieldBool(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []c
     try out.appendSlice(allocator, if (value) "true" else "false");
 }
 
-/// Extracts json field int data from JSON input without taking ownership of borrowed values.
+/// Appends a `"key":<int>` member to the manual JSON builder `out`; `first`
+/// controls the leading comma separator.
 fn jsonFieldInt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []const u8, value: i64, first: bool) !void {
     if (!first) try out.append(allocator, ',');
     try serializeJsonString(allocator, out, key);
@@ -1468,7 +1489,7 @@ fn jsonFieldInt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), key: []co
     try out.print(allocator, "{d}", .{value});
 }
 
-/// Serializes serialize json value alloc data into an allocator-owned JSON value; allocation failures propagate.
+/// Serializes a JSON value to a freshly allocated, caller-owned UTF-8 string.
 fn serializeJsonValueAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -1476,7 +1497,8 @@ fn serializeJsonValueAlloc(allocator: std.mem.Allocator, value: std.json.Value) 
     return out.toOwnedSlice(allocator);
 }
 
-/// Serializes serialize json fields into an allocator-owned JSON value; allocation failures propagate.
+/// Recursively serializes a JSON value into the builder `out`. Object keys are
+/// emitted in iterator order, which is insertion order, keeping output stable.
 fn serializeJsonValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
@@ -1541,7 +1563,8 @@ fn phaseDurationMs(phase_item: PhaseRun) i64 {
     };
 }
 
-/// Implements phase by name workflow logic using caller-owned inputs.
+/// Returns the phase run with the given name, or null; lets the history writer
+/// attach full command details to each failure record by name.
 fn phaseByName(phases: []const PhaseRun, name: []const u8) ?*const PhaseRun {
     for (phases) |*phase_item| {
         if (std.mem.eql(u8, phase_item.name, name)) return phase_item;
@@ -1549,7 +1572,8 @@ fn phaseByName(phases: []const PhaseRun, name: []const u8) ?*const PhaseRun {
     return null;
 }
 
-/// Implements last good index workflow logic using caller-owned inputs.
+/// Returns the index of the most recent passing run (last ok=true), or null if
+/// none passed; used to surface the last-known-good run in history views.
 fn lastGoodIndex(runs: []const HistoryRun) ?usize {
     var out: ?usize = null;
     for (runs, 0..) |run_item, index| {
@@ -1637,7 +1661,8 @@ fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
     };
 }
 
-/// Implements plan id workflow logic using caller-owned inputs.
+/// Derives a deterministic plan id by hashing the mode and changed-file set, so
+/// the same inputs always yield the same `validation-<hex>` identifier.
 fn planId(allocator: std.mem.Allocator, files: []const []const u8, mode: []const u8) ![]const u8 {
     var hasher = std.hash.Wyhash.init(4);
     hasher.update(mode);

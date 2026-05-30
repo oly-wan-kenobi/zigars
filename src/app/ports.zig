@@ -8,7 +8,11 @@ const Allocator = std.mem.Allocator;
 /// Borrowed cooperative cancellation token carried through runtime ports.
 pub const CancellationToken = cancellation.Token;
 
-/// Shared error set used by app ports to normalize adapter failures.
+/// Shared error set used by app ports to normalize adapter failures into one
+/// transport-neutral vocabulary. `PathOutsideWorkspace`/`EmptyPath` are the
+/// sandbox-boundary signals every path-taking adapter must raise rather than
+/// touching the path; the limit variants encode the bounded-output/retention
+/// caps adapters enforce so a usecase can never receive unbounded data.
 pub const PortError = error{
     UnexpectedCall,
     MissingExpectedCall,
@@ -81,7 +85,10 @@ pub const ProtocolClient = struct {
         request: *const fn (*anyopaque, Allocator, ProtocolRequest) PortError!ProtocolResponse,
     };
 
-    /// Sends a protocol helper request through the active MCP transport.
+    /// Sends a protocol helper request through the active MCP transport. When the
+    /// returned response has `owns_result` set, its `result` JSON value was cloned
+    /// into `allocator` and the caller owns it; unlike most port results this
+    /// struct has no `deinit`, so the caller frees it directly.
     pub fn request(self: ProtocolClient, allocator: Allocator, request_value: ProtocolRequest) PortError!ProtocolResponse {
         return self.vtable.request(self.ptr, allocator, request_value);
     }
@@ -375,7 +382,9 @@ pub const WorkspaceStore = struct {
         return self.vtable.read(self.ptr, allocator, request);
     }
 
-    /// Writes bytes through the adapter's workspace policy.
+    /// Writes bytes after the adapter resolves the path under the workspace
+    /// sandbox. This port does not enforce the source-mutation apply gate; that
+    /// is a usecase-layer decision made before any write request reaches here.
     pub fn write(self: WorkspaceStore, request: WorkspaceWriteRequest) PortError!WorkspaceWriteResult {
         return self.vtable.write(self.ptr, request);
     }

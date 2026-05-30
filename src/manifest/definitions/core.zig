@@ -1,3 +1,7 @@
+//! Tool definitions for the `core_zig` group: version introspection, env/target
+//! queries, build/test execution, AST checking, diagnostic indexing, and C
+//! translation. All tools delegate to the Zig toolchain backend and are
+//! read-only from a workspace perspective — no source files are mutated.
 const types = @import("../types.zig");
 
 const schema = types.schema;

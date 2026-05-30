@@ -50,6 +50,12 @@ pub fn methodStatsValue(allocator: std.mem.Allocator, stats: []const ports.Obser
 }
 
 /// Returns percentile fields from a bounded latency sample ring.
+///
+/// `sample_count` is the total samples ever seen; `samples` is the ring that
+/// only retains the most recent `max_observability_latency_samples`. Percentiles
+/// are withheld (status `insufficient_samples`, null p50/p95/p99) until enough
+/// samples are retained, so a brand-new process never reports misleading tail
+/// latencies from one or two data points.
 pub fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: [ports.max_observability_latency_samples]u64, sample_count: u64) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -67,6 +73,9 @@ pub fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: [ports.max
         return .{ .object = obj };
     }
 
+    // Replay only the still-retained sequence numbers back through the ring to
+    // recover their slots, then sort that copy; the ring itself stays untouched
+    // so concurrent counter updates are not disturbed by this read.
     var retained_samples: [ports.max_observability_latency_samples]u64 = undefined;
     const first = firstSampleSequence(sample_count);
     var sequence = first;
@@ -111,6 +120,8 @@ pub fn ratePerThousand(numerator: u64, denominator: u64) u64 {
     return numerator * 1000 / denominator;
 }
 
+/// Projects the originating MCP request id (type, value, truncated flag) so a
+/// correlation row can be joined back to the JSON-RPC request that produced it.
 fn observedRequestIdValue(allocator: std.mem.Allocator, event: *const ports.ObservabilityToolCallCorrelation) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -120,20 +131,27 @@ fn observedRequestIdValue(allocator: std.mem.Allocator, event: *const ports.Obse
     return .{ .object = obj };
 }
 
+/// Samples actually retained in the ring: the running total capped at capacity.
 fn retainedSampleCount(sample_count: u64) usize {
     return @intCast(@min(sample_count, @as(u64, ports.max_observability_latency_samples)));
 }
 
+/// 1-based sequence number of the oldest sample still live in the ring. Once the
+/// ring has wrapped, the earliest `sample_count - capacity` samples are gone.
 fn firstSampleSequence(sample_count: u64) u64 {
     if (sample_count == 0) return 1;
     if (sample_count <= @as(u64, ports.max_observability_latency_samples)) return 1;
     return sample_count - @as(u64, ports.max_observability_latency_samples) + 1;
 }
 
+/// Maps a 1-based sample sequence number to its slot in the capacity-sized ring.
 fn ringIndex(sequence: u64, comptime capacity: usize) usize {
     return @intCast((sequence - 1) % @as(u64, capacity));
 }
 
+/// Nearest-rank percentile over an ascending-sorted slice. `p` is a whole
+/// percent (50/95/99); rank rounds up so p99 of a short slice lands on the top
+/// element, and the result is clamped to the last index to stay in bounds.
 fn percentile(sorted: []const u64, p: u64) u64 {
     if (sorted.len == 0) return 0;
     const rank = (p * sorted.len + 99) / 100;

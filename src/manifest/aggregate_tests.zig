@@ -1,3 +1,6 @@
+//! Pins the basic shape contracts of the aggregate module: that the entries
+//! and specs tables are non-empty and share the same index space.
+
 const std = @import("std");
 const subject = @import("aggregate.zig");
 const definitions = subject.definitions;

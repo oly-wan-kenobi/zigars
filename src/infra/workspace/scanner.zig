@@ -1,3 +1,6 @@
+//! WorkspaceScanner port implementation: walks workspace directories and
+//! collects .zig source files, skipping cache and build-output paths as
+//! classified by the domain analysis policy.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -30,7 +33,10 @@ pub const Scanner = struct {
         };
     }
 
-    /// Scans Zig source files through this port implementation.
+    /// Scans Zig source files under the workspace (or a prefix sub-path) and
+    /// returns an allocator-owned result; call result.deinit(allocator) to free.
+    /// Files listed under paths excluded by zig_analysis.skipWorkspacePath are
+    /// silently omitted (e.g. .zig-cache, zig-out).
     fn scanZigFiles(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,

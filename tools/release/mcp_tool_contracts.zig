@@ -1,11 +1,17 @@
+//! Per-tool MCP schema and error contract probes.
+//! Checks that every manifest entry has a correct JSON schema, required-field
+//! count, structured invalid-input response, and apply gate for source writes.
+//! The manifest is the source of truth; the runtime validator is exercised
+//! directly so both the declaration and the runtime path are tested together.
 const std = @import("std");
 const zigars = @import("zigars");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
-// Per-tool MCP schema checks use the manifest as the source of truth and probe
-// the runtime validator so release gates catch drift in both declarations.
+// Each probe injects a deliberately unknown argument so the validator must
+// produce a structured argument_error; a missing response or wrong field values
+// indicate the tool's error contract is not wired up correctly.
 
 /// Checks one manifest entry against MCP schema and structured-error contracts.
 pub fn checkToolContract(allocator: Allocator, io: Io, comptime entry: zigars.manifest.ToolEntry) !bool {
@@ -33,6 +39,8 @@ pub fn checkToolContract(allocator: Allocator, io: Io, comptime entry: zigars.ma
     return ok;
 }
 
+/// Returns `true` when `result` is a structured error with `kind`,
+/// `tool`, and `code` fields matching the expected values.
 fn toolErrorHas(result: anytype, tool: []const u8, code: []const u8) bool {
     const sc = result.structuredContent orelse return false;
     if (!result.is_error or sc != .object) return false;
@@ -45,6 +53,7 @@ fn stringField(obj: std.json.ObjectMap, name: []const u8, expected: []const u8) 
     return value == .string and std.mem.eql(u8, value.string, expected);
 }
 
+/// Returns `true` when the input schema for `entry` contains a field named `name`.
 fn hasField(comptime entry: zigars.manifest.ToolEntry, name: []const u8) bool {
     for (entry.meta.input_schema.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return true;

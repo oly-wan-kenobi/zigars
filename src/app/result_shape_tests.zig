@@ -1,3 +1,7 @@
+//! Pins the JSON result-shape builders that adapters serialize: mode parsing,
+//! the materialized contract object exposing stable fields and per-mode omission
+//! lists, and budget plans clamping requested budgets while allocating priority
+//! order by mode. Uses an arena so allocator-owned JSON values free in bulk.
 const std = @import("std");
 
 const result_shape = @import("result_shape.zig");

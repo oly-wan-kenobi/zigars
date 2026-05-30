@@ -1,5 +1,13 @@
+//! Stdio smoke fixtures for runtime UX and protocol ergonomics.
+//! Covers resources/templates, dynamic resource reads, subscribe/unsubscribe,
+//! prompts, completion, paged tools/list, workspace-map, roots-sync,
+//! resource-query, prompt-pack, agent-guide, run-stream, job/task lifecycle,
+//! and output-schema presence assertions over the shared `StdioClient` transport.
+
 const std = @import("std");
 
+/// Exercises runtime UX, MCP protocol ergonomics, and job/task tool paths.
+/// Requires a live server with the fixture workspace already configured.
 pub fn run(client: anytype) !void {
     const resources = try client.request("resources/list", null);
     defer client.allocator.free(resources);

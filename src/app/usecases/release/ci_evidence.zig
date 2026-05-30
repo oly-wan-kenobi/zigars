@@ -50,7 +50,10 @@ pub const AnnotationParseSummary = struct {
     unlocated_diagnostics: i64 = 0,
     detail_lines: i64 = 0,
 
-    /// Implements confidence workflow logic using caller-owned inputs.
+    /// Reports parse confidence as the wire value high/medium/low: "high" only
+    /// when every annotation carried a path:line:column location, "medium" when
+    /// some did, "low" when none were parsed. Lets callers gate trust in the
+    /// CI-derived evidence without re-deriving it.
     pub fn confidence(self: AnnotationParseSummary) []const u8 {
         if (self.annotation_count == 0) return "low";
         if (self.located_diagnostics == self.annotation_count) return "high";
@@ -100,7 +103,11 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
     return structured(allocator, .{ .object = obj });
 }
 
-/// Implements try parse annotations workflow logic using caller-owned inputs.
+/// Parses Zig compiler stderr into the caller-owned `annotations` array and
+/// returns count/location tallies. Lines matching `path:line:column: severity:
+/// message` become annotations; a following non-matching line is attached as a
+/// detail (source/caret excerpt) to the most recent annotation. `default_file`
+/// labels diagnostics that parsed without an explicit path.
 pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.Array, default_file: []const u8, stderr: []const u8) !AnnotationParseSummary {
     var summary: AnnotationParseSummary = .{};
     var last_annotation: ?usize = null;
@@ -167,7 +174,9 @@ fn appendAnnotationDetail(allocator: std.mem.Allocator, annotation: *std.json.Va
     }
 }
 
-/// Implements annotation level workflow logic using caller-owned inputs.
+/// Maps a Zig diagnostic severity onto a GitHub-style annotation level: warning
+/// stays "warning", note becomes "notice", and everything else (errors,
+/// unknown) is treated as "failure" so CI never under-reports a problem.
 fn annotationLevel(severity: []const u8) []const u8 {
     if (std.mem.eql(u8, severity, "warning")) return "warning";
     if (std.mem.eql(u8, severity, "note")) return "notice";
@@ -209,7 +218,9 @@ pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     return bytes;
 }
 
-/// Reports whether xml char matches the caller-provided data.
+/// Reports whether a byte is allowed in XML 1.0 character data; disallowed
+/// control bytes are replaced with U+FFFD by xmlEscape so JUnit output stays
+/// well-formed for downstream CI parsers.
 fn isXmlChar(c: u8) bool {
     return c == 0x09 or c == 0x0a or c == 0x0d or c >= 0x20;
 }

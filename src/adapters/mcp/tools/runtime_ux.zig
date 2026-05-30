@@ -161,6 +161,9 @@ fn runJobTool(allocator: std.mem.Allocator, context: app_context.RuntimeUxContex
     const command_name = argString(args, "command") orelse return mcp_errors.missingArgument(allocator, tool_name, "command", "one of build, build-test, test, check, fmt-check");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
+    // Two distinct argument failures surface here: a malformed extra-args string
+    // (caught now) and an unknown/allow-listed command (caught from runJobValue
+    // below). Both become structured argument errors but with different fields.
     const extra_args = splitToolArgs(arena.allocator(), argString(args, "args")) catch |err| switch (err) {
         error.InvalidArguments => return mcp_errors.invalidArgument(allocator, tool_name, "args", "shell-like argument string", argString(args, "args") orelse "", "Use balanced quotes and escapes, or omit args for no extra Zig arguments."),
         error.OutOfMemory => return error.OutOfMemory,
@@ -273,12 +276,15 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
-/// Clamps requested timeout to the supported command timeout range.
+/// Clamps a requested timeout to [1ms, 1 hour], defaulting to the configured
+/// command timeout. The upper bound caps a single job so a client cannot pin a
+/// dispatch slot open indefinitely.
 fn timeoutMs(context: app_context.RuntimeUxContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
-/// Parses cursor, returning null when the field is absent.
+/// Parses an opaque pagination cursor; absent or non-numeric values restart from
+/// sequence 0 rather than erroring, so a stale cursor degrades to "from start".
 fn parseCursor(cursor: ?[]const u8) u64 {
     const text = cursor orelse return 0;
     return std.fmt.parseUnsigned(u64, text, 10) catch 0;
@@ -291,7 +297,10 @@ fn clampLimit(value: i64, min: usize, max: usize) usize {
     return @intCast(value);
 }
 
-/// Extracts a workspace-relative file path from a resource URI.
+/// Extracts the `{path}` segment from a `zigars://file/{path}/{kind}` resource
+/// URI for use in workspace-path error reporting. The trailing `/{kind}`
+/// selector is dropped at the last slash; returns null for any other URI shape.
+/// The path is still re-resolved under the sandbox by the use case before any IO.
 fn filePathFromUri(uri: []const u8) ?[]const u8 {
     const prefix = "zigars://file/";
     if (!std.mem.startsWith(u8, uri, prefix)) return null;
@@ -300,7 +309,13 @@ fn filePathFromUri(uri: []const u8) ?[]const u8 {
     return rest[0..slash];
 }
 
-/// Parses split tool args from MCP JSON arguments.
+/// Splits one shell-like argument string into argv tokens, honoring single and
+/// double quotes and backslash escapes. This runs purely at the adapter boundary
+/// so callers can accept a single `args` string; the tokens are appended to a
+/// fixed Zig command, never executed as a shell, so no metacharacters are
+/// interpreted. Returns error.InvalidArguments on an unterminated quote or a
+/// trailing escape, which callers convert into a structured argument error.
+/// Each returned token and the slice itself are owned by `allocator`.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;

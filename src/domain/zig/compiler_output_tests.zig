@@ -1,3 +1,5 @@
+//! Unit tests for compiler_output.zig: located diagnostic parsing, global
+//! diagnostic fallback, non-diagnostic line rejection, and triage classification.
 const std = @import("std");
 
 const compiler_output = @import("compiler_output.zig");

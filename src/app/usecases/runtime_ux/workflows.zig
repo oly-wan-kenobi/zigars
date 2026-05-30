@@ -52,7 +52,10 @@ pub const ResourceQueryRequest = struct {
     mode: []const u8 = "standard",
 };
 
-/// Invokes run job value with caller-owned inputs; command and allocation failures propagate.
+/// Runs one allow-listed Zig command synchronously, records it as a process-local
+/// job, and returns the job result value (bounded stdout/stderr tails plus
+/// next-tool guidance). Command failures are captured into a failed-job result
+/// rather than thrown; allocation failures propagate.
 pub fn runJobValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!std.json.Value {
     // Jobs are tracked in process-local session state; subprocess lifetime is
     // summarized into immutable tails so clients can poll deterministically.
@@ -153,7 +156,10 @@ pub fn jobResultValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
-/// Serializes job cancel fields into an allocator-owned JSON value; allocation failures propagate.
+/// Records a cancellation request for a process-local job. `cancelled` reflects
+/// the pre-cancel state: it is true only if the job was still running, since a
+/// command that already finished cannot be killed (the request is still recorded
+/// for auditability).
 pub fn jobCancelValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_id: []const u8, reason: []const u8) RuntimeUxError!std.json.Value {
     const before = try context.runtime_session.jobById(job_id);
     const job = try context.runtime_session.cancelJob(job_id, reason);
@@ -198,7 +204,9 @@ pub fn runEventsValue(allocator: std.mem.Allocator, context: app_context.Runtime
     return .{ .object = obj };
 }
 
-/// Serializes resource query fields into an allocator-owned JSON value; allocation failures propagate.
+/// Dispatches a zigars:// resource URI to the matching query builder (file
+/// symbols/imports/diagnostics, jobs, run events, workspace roots, prompts).
+/// Returns InvalidArguments for an unrecognized URI.
 pub fn resourceQueryValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: ResourceQueryRequest) RuntimeUxError!std.json.Value {
     if (std.mem.startsWith(u8, request.uri, "zigars://file/")) return fileResourceQueryValue(allocator, context, request.uri, request.mode);
     if (std.mem.eql(u8, request.uri, "zigars://jobs")) return jobsQueryValue(allocator, context, request.cursor, request.limit, request.mode);
@@ -240,7 +248,9 @@ pub fn resourceUnsubscribeValue(allocator: std.mem.Allocator, context: app_conte
     return .{ .object = obj };
 }
 
-/// Serializes roots sync fields into an allocator-owned JSON value; allocation failures propagate.
+/// Previews, and with apply=true commits, the process-local workspace-roots list.
+/// Roots are advisory client guidance only: they never widen file-tool path
+/// access, which stays bound to the configured workspace sandbox.
 pub fn rootsSyncValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, roots: []const u8, apply: bool) RuntimeUxError!std.json.Value {
     try context.runtime_session.ensureDefaultRoot(context.workspace.root);
     const before = try context.runtime_session.rootCount();
@@ -375,7 +385,8 @@ pub fn catalogResourceText(allocator: std.mem.Allocator, context: app_context.Ru
     return allocator.dupe(u8, rendered.text) catch return error.OutOfMemory;
 }
 
-/// Implements import graph resource text workflow logic using caller-owned inputs.
+/// Scans the workspace and renders the import graph as text for the static
+/// import-graph resource; caller owns the returned bytes.
 pub fn importGraphResourceText(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext) RuntimeUxError![]const u8 {
     var graph = try workspace_scans.importGraph(allocator, .{
         .workspace = context.workspace,
@@ -456,11 +467,16 @@ pub fn workspaceRootsResourceValue(allocator: std.mem.Allocator, context: app_co
     return .{ .object = obj };
 }
 
-/// Serializes dynamic resource fields into an allocator-owned JSON value; allocation failures propagate.
+/// Reads a zigars://file/<path>/<kind> resource: parses the path and kind from
+/// the URI, reads the file through the workspace store (sandbox-enforced), and
+/// returns the requested view (symbols, imports, or static diagnostics). Reads
+/// at most max_resource_read bytes.
 pub fn dynamicResourceValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, uri: []const u8) RuntimeUxError!std.json.Value {
     const prefix = "zigars://file/";
     if (!std.mem.startsWith(u8, uri, prefix)) return error.NotFound;
     const rest = uri[prefix.len..];
+    // Split on the LAST slash so the file path may contain slashes; the trailing
+    // segment is the requested resource kind.
     const slash = std.mem.lastIndexOfScalar(u8, rest, '/') orelse return error.InvalidArguments;
     const path = rest[0..slash];
     const kind = rest[slash + 1 ..];
@@ -522,7 +538,10 @@ const RunPlan = struct {
     command_text: []const u8,
 };
 
-/// Constructs run plan data from caller-owned inputs, propagating allocation failures.
+/// Translates an allow-listed command keyword (build, build-test, test, check,
+/// fmt-check) into a concrete `zig ...` argv. Unknown commands yield
+/// InvalidArguments; file-scoped commands without a file yield MissingFile. This
+/// keyword allow-list is what keeps run tools from executing arbitrary argv.
 fn buildRunPlan(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, request: RunJobRequest) RuntimeUxError!RunPlan {
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(allocator);
@@ -556,8 +575,11 @@ fn buildRunPlan(allocator: std.mem.Allocator, context: app_context.RuntimeUxCont
     return .{ .argv = owned_argv, .command_text = try commandString(allocator, owned_argv) };
 }
 
-/// Implements checked relative path workflow logic using caller-owned inputs.
+/// Validates `path` is inside the workspace sandbox, then returns the original
+/// workspace-relative path for use in the zig argv.
 fn checkedRelativePath(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, path: []const u8) RuntimeUxError![]const u8 {
+    // resolve() is the sandbox gate; we discard its absolute path and keep the
+    // relative form because the command runs with cwd set to the workspace root.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "runtime_ux.run_plan" });
     defer resolved.deinit(allocator);
     return allocator.dupe(u8, path) catch return error.OutOfMemory;
@@ -690,6 +712,9 @@ fn cancellationValue(allocator: std.mem.Allocator, job: ports.RuntimeJobSnapshot
 /// Serializes events page fields into an allocator-owned JSON value; allocation failures propagate.
 fn eventsPageValue(allocator: std.mem.Allocator, context: app_context.RuntimeUxContext, job_filter: ?[]const u8, cursor: u64, limit: usize) RuntimeUxError!std.json.Value {
     const count = try context.runtime_session.eventCount();
+    // cursor is an exclusive 0-based offset; event sequences are 1-based, so the
+    // next page starts at cursor+1. nextCursor is emitted as the last consumed
+    // sequence, ready to pass back as the cursor for the following page.
     var sequence = cursor + 1;
     var events = std.json.Array.init(allocator);
     var appended: usize = 0;

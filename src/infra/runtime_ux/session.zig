@@ -1,3 +1,7 @@
+//! RuntimeSession port facade over bounded in-memory State.
+//! All mutations go through State; this file is pure vtable dispatch and
+//! snapshot conversion — it holds no independent state of its own.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -101,6 +105,9 @@ pub const Session = struct {
     }
 
     /// Returns a runtime event by sequence number.
+    /// Sequence 0 is never valid; sequences older than the ring window (max_events)
+    /// are gone and return NotFound. The oldest retained sequence is
+    /// `event_count - max_events + 1` once the ring has wrapped.
     fn eventAtSequence(ptr: *anyopaque, sequence: u64) ports.PortError!ports.RuntimeEventSnapshot {
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (sequence == 0) return error.NotFound;
@@ -153,7 +160,9 @@ pub const Session = struct {
     }
 };
 
-/// Builds a caller-owned snapshot of a runtime job.
+/// Builds a snapshot of a runtime job from the internal record.
+/// All string fields are borrowed slices into fixed buffers inside State;
+/// they are valid only while State is alive and unmutated.
 fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
     return .{
         .id = job.id.slice(),
@@ -176,7 +185,8 @@ fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
     };
 }
 
-/// Builds a caller-owned snapshot of a runtime event.
+/// Builds a snapshot of a runtime event from the internal ring record.
+/// String slices are borrowed from the fixed-size EventRecord buffer.
 fn eventSnapshot(event: *const runtime_ux.EventRecord) ports.RuntimeEventSnapshot {
     return .{
         .sequence = event.sequence,
@@ -189,7 +199,7 @@ fn eventSnapshot(event: *const runtime_ux.EventRecord) ports.RuntimeEventSnapsho
     };
 }
 
-/// Builds a caller-owned snapshot of a subscription.
+/// Builds a snapshot of a subscription from the internal record.
 fn subscriptionSnapshot(sub: *const runtime_ux.Subscription) ports.RuntimeSubscriptionSnapshot {
     return .{
         .id = sub.id.slice(),
@@ -199,7 +209,7 @@ fn subscriptionSnapshot(sub: *const runtime_ux.Subscription) ports.RuntimeSubscr
     };
 }
 
-/// Builds an allocator-owned snapshot of a runtime root.
+/// Builds a snapshot of a workspace root from the internal record.
 fn rootSnapshot(root: *const runtime_ux.WorkspaceRoot) ports.RuntimeRootSnapshot {
     return .{
         .id = root.id.slice(),

@@ -1,5 +1,9 @@
-//! Adapter layer for core Zig command tools. This layer is responsible for
-//! argument projection, timeout normalization, and MCP result/error shaping.
+//! Adapter layer for core Zig command tools (version, env, build, test, check,
+//! translate-c, error explanation). Each handler projects MCP arguments onto an
+//! app use case, then shapes the owned result or failure into a structured MCP
+//! result. Logic lives in the app layer; this file stays a thin projection.
+//! Command output is captured under a byte limit and surfaced with truncation
+//! flags rather than rejected, so a result stays inspectable even when large.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -145,8 +149,10 @@ pub fn zigCompileErrorIndex(
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
-/// Group findings by source path so consumers can render file-local error
-/// summaries without reparsing the full finding list.
+/// Parses compiler stderr/stdout into diagnostics, then regroups findings by
+/// source path so consumers can render file-local error summaries without
+/// reparsing the full finding list. `argv` only seeds rerun-command hints.
+/// Returns a JSON value owned by `allocator` (callers pass a scratch arena).
 pub fn compilerErrorIndexValue(allocator: std.mem.Allocator, stderr: []const u8, stdout: []const u8, argv: []const []const u8) !std.json.Value {
     const insights = try compilerInsightsValue(allocator, stdout, stderr, argv);
     const insights_obj = switch (insights) {
@@ -641,7 +647,9 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
     return .{ .object = obj };
 }
 
-/// Returns a fallback marker when command output cannot be copied into JSON.
+/// Copies command output into JSON-safe text: valid UTF-8 is duped as-is,
+/// otherwise invalid sequences are replaced with U+FFFD and the result is
+/// flagged invalid_utf8 with a "utf-8-lossy" encoding. Text owned by `allocator`.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !struct {
     text: []const u8,
     invalid_utf8: bool,
@@ -691,7 +699,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
-/// Reads a value argument when it is present with the expected type.
+/// Builds a JSON string array from an argv slice; result owned by `allocator`.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -716,7 +724,7 @@ fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     return out.toOwnedSlice(allocator);
 }
 
-/// Reads a contains argument when it is present with the expected type.
+/// Returns true when argv contains an exact `needle` token (e.g. "test").
 fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     for (argv) |arg| {
         if (std.mem.eql(u8, arg, needle)) return true;
@@ -724,7 +732,10 @@ fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
-/// Parses split args from MCP JSON arguments.
+/// Tokenizes a shell-style argument string into an owned argv slice, honoring
+/// single/double quotes and backslash escapes. Returns error.InvalidArguments
+/// on a dangling escape or unterminated quote so the caller can surface an
+/// actionable argument error. Caller frees the slice via freeArgList.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -780,7 +791,7 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
-/// Parses finish arg from MCP JSON arguments.
+/// Flushes the in-progress token buffer as one owned argv entry and resets it.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);
@@ -830,7 +841,9 @@ fn argInteger(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
-/// Clamps requested tool timeout to the supported command timeout range.
+/// Clamps the requested timeout (milliseconds) to 1ms..1h, defaulting to the
+/// context command timeout, so an unbounded or non-positive request cannot hang
+/// or skip the command runner.
 fn toolTimeout(context: app_context.CoreCommandContext, args: ?std.json.Value) i64 {
     return @max(1, @min(argInteger(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
@@ -840,7 +853,8 @@ fn commandOk(result: ports.CommandResult) bool {
     return !result.effectiveTerm().failed() and !result.timed_out;
 }
 
-/// Maps port error kind failures to structured MCP errors.
+/// Classifies a command port error into a stable error_kind token clients can
+/// branch on without parsing the raw error name.
 fn portErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.Timeout, error.RequestTimeout => "timeout",
@@ -851,7 +865,8 @@ fn portErrorKind(err: anyerror) []const u8 {
     };
 }
 
-/// Maps backend error kind failures to structured MCP errors.
+/// Classifies a backend error into a stable error_kind token, adding
+/// connection-failure cases on top of the command port classification.
 fn backendErrorKind(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -863,12 +878,12 @@ fn backendErrorKind(err: anyerror) []const u8 {
     };
 }
 
-/// Maps is output limit error failures to structured MCP errors.
+/// True when the error means captured output hit the byte limit.
 fn isOutputLimitError(err: anyerror) bool {
     return err == error.StreamTooLong or err == error.OutputLimitExceeded;
 }
 
-/// Maps is timeout error failures to structured MCP errors.
+/// True when the error means the command exceeded its timeout.
 fn isTimeoutError(err: anyerror) bool {
     return err == error.Timeout or err == error.RequestTimeout;
 }

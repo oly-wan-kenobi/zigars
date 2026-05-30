@@ -1,3 +1,8 @@
+//! Tool definitions for the `runtime_diagnostics` group: debug planning, LLDB
+//! backtraces/core inspection, sanitizer/panic analysis, memory profiling,
+//! fuzzing, binary introspection, cross-target emulation, and embedded workflows.
+//! Backend-executing and source-mutating tools require apply=true; pure-analysis
+//! tools operate on caller-supplied evidence without invoking backends.
 const types = @import("../types.zig");
 const schemas = @import("diagnostics_schemas.zig");
 

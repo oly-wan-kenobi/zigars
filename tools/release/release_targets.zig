@@ -1,6 +1,12 @@
+//! Canonical release target table: the set of platforms for which zigars
+//! publishes pre-built binaries.  The `all` array drives both the build
+//! system cross-compilation step and the dist/smoke packaging checks.
 const builtin = @import("builtin");
 const std = @import("std");
 
+/// One cross-compilation release target.  `triple` is the Zig target triple;
+/// `package_name` becomes the archive directory and file base name;
+/// `exe_name` is the binary name inside the archive (`.exe` on Windows).
 pub const Target = struct {
     triple: []const u8,
     package_name: []const u8,
@@ -18,6 +24,8 @@ pub const all = [_]Target{
     .{ .triple = "aarch64-windows-gnu", .package_name = "zigars-aarch64-windows-gnu", .exe_name = "zigars.exe" },
 };
 
+/// Returns the index into `all` whose `package_name` matches `name` exactly,
+/// or `null` if no target has that name.
 pub fn indexByPackageName(name: []const u8) ?usize {
     for (all, 0..) |target, i| {
         if (std.mem.eql(u8, target.package_name, name)) return i;
@@ -25,6 +33,9 @@ pub fn indexByPackageName(name: []const u8) ?usize {
     return null;
 }
 
+/// Returns the release target that matches the current host OS and CPU arch,
+/// or `null` for unsupported platforms.  On Linux, musl is preferred because
+/// it is the default npm/runtime archive and exercises the most common user path.
 pub fn native() ?Target {
     return switch (builtin.os.tag) {
         // Prefer musl for Linux host smoke because it is the npm/default runtime archive.

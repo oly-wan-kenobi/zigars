@@ -1,3 +1,6 @@
+//! Contract tests for formatting.zig: pins that every formatting and edit tool
+//! exposes a non-empty description and that source-mutating tools carry the
+//! expected apply-gate and preview risk flags.
 const std = @import("std");
 const subject = @import("formatting.zig");
 const zig_format = subject.zig_format;

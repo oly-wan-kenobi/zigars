@@ -1,3 +1,8 @@
+//! HTTP tool-result contract smoke: groups per-tool-family JSON path assertions
+//! and re-exports the shared helper surface so http_smoke.zig has a single
+//! contract-smoke entry point. Expected values stay in JSON fixtures; this
+//! module only preserves call order and request IDs.
+
 const std = @import("std");
 const support = @import("http_tool_contract_support.zig");
 const static_analysis = @import("http_tool_contract_smoke_b.zig");

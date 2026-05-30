@@ -352,7 +352,10 @@ fn invokeDrift(
     return finishWorkflowResult(allocator, result);
 }
 
-/// Returns the MCP tool result for finish workflow.
+/// Wraps a workflow result, which owns its JSON value on `allocator`. On the
+/// error path the value is copied into a structured error and then freed here
+/// (the error envelope does not take ownership); on the success path ownership
+/// of the value transfers into the returned result.
 fn finishWorkflowResult(allocator: std.mem.Allocator, result: workflows.Result) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (result.is_error) {
         defer mcp_result.deinitOwnedValue(allocator, result.value);
@@ -564,6 +567,8 @@ fn stdItemMatchValue(allocator: std.mem.Allocator, match: docs_domain.StdItemMat
     try obj.put(allocator, "doc_comment_count", .{ .integer = @intCast(match.doc_comment_count) });
     try obj.put(allocator, "preferred_path", .{ .bool = match.preferred_path });
     try obj.put(allocator, "qualified_name", .{ .string = match.qualified_name });
+    // For a resolved std item the qualified name is the import hint, so both
+    // fields intentionally carry the same value (no separate import_hint field).
     try obj.put(allocator, "import_hint", .{ .string = match.qualified_name });
     return .{ .object = obj };
 }
@@ -1020,7 +1025,10 @@ fn structuredText(allocator: std.mem.Allocator, kind: []const u8, body: []const 
     return mcp_result.structured(allocator, .{ .object = obj });
 }
 
-/// Builds a release evidence request from MCP arguments.
+/// Builds an evidence request from `content` (inline) or `path` (workspace
+/// file), falling back to `default_path` when neither is given. The use case
+/// resolves any path under the workspace sandbox; `require` makes absent evidence
+/// an error instead of an empty result.
 fn evidenceRequest(args: ?std.json.Value, provenance: []const u8, require: bool, default_path: ?[]const u8) docs_usecases.EvidenceRequest {
     return .{
         .content = argString(args, "content"),
@@ -1041,7 +1049,8 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
     return mcp.tools.getInteger(args, name) orelse default;
 }
 
-/// Applies runtime UX default and maximum bounds to a requested result limit.
+/// Reads a result limit, applying the per-tool default and flooring at 1 so a
+/// zero or negative request never yields an empty or panicking scan.
 fn normalizedLimit(args: ?std.json.Value, name: []const u8, default: usize) usize {
     return @intCast(@max(1, argInt(args, name, @intCast(default))));
 }
@@ -1096,7 +1105,10 @@ fn docsBackendError(allocator: std.mem.Allocator, tool_name: []const u8, operati
     }, err);
 }
 
-/// Maps evidence input error failures to structured MCP errors.
+/// Maps evidence-read failures to client-facing errors: missing evidence and
+/// empty/out-of-sandbox paths become argument or workspace-path errors (the
+/// latter reports the offending `path` against the workspace root), and any
+/// other read failure becomes a structured filesystem error.
 fn evidenceInputError(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, tool_name: []const u8, args: ?std.json.Value, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (err) {
         error.MissingEvidence => mcp_errors.missingArgument(allocator, tool_name, "content", "inline content or workspace path"),

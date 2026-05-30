@@ -1,3 +1,6 @@
+//! Tests the BackendProbe port: missing argv, command errors/non-zero exits,
+//! and successful completion are each mapped correctly without the fake runner
+//! being invoked spuriously.
 const std = @import("std");
 const probe = @import("probe.zig");
 const fakes = @import("../../testing/fakes/root.zig");

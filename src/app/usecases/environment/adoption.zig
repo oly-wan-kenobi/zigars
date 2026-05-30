@@ -1,3 +1,13 @@
+//! Adoption workflows: client-config generation, smoke planning, and public
+//! conformance reporting that turn shipped tool contracts and supplied evidence
+//! into onboarding artifacts.
+//!
+//! Two contracts shape every output. Apply-gating: generated configs and
+//! reports are previewed by default and only written when apply=true, through
+//! the workspace store so paths stay inside the sandbox. Claim honesty: optional
+//! backend "support" is asserted only for backends whose supplied conformance
+//! evidence records an observed pass; configured paths, availability, and
+//! planning output are never treated as proof.
 const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
@@ -394,7 +404,10 @@ fn claimArrayValue(allocator: std.mem.Allocator, selected: []const u8, parsed: ?
     return .{ .array = array };
 }
 
-/// Implements observed claim workflow logic using caller-owned inputs.
+/// Resolves the support claim for one backend from supplied conformance JSON,
+/// tolerating several report shapes (top-level object, `compatibility_matrix`,
+/// or a `backends` array/object). Returns a not-observed claim when no matching
+/// record is present so absence of evidence never becomes a positive claim.
 fn observedClaim(parsed: ?std.json.Value, backend_name: []const u8) Claim {
     const root = parsed orelse return notObserved(backend_name);
     if (root != .object) return notObserved(backend_name);
@@ -454,12 +467,18 @@ fn notObserved(backend_name: []const u8) Claim {
     return .{ .backend = backend_name, .status = "not_observed", .claim_allowed = false, .confidence = "low", .evidence = "no matching passed conformance record" };
 }
 
-/// Implements status allows claim workflow logic using caller-owned inputs.
+/// Defines the closed set of status words (case-insensitive) that count as an
+/// observed pass. Anything else yields a low-confidence, not-allowed claim.
 fn statusAllowsClaim(status: []const u8) bool {
     return std.ascii.eqlIgnoreCase(status, "passed") or std.ascii.eqlIgnoreCase(status, "pass") or std.ascii.eqlIgnoreCase(status, "ok") or std.ascii.eqlIgnoreCase(status, "conformant");
 }
 
-/// Reads conformance evidence data from the provided context without taking ownership of inputs.
+/// Resolves the conformance evidence basis from `content` (borrowed inline
+/// bytes) or `input` (a workspace file read into `owned` bytes the caller must
+/// free via SourceEvidence.deinit). A missing default file is reported as
+/// unavailable rather than an error so the report can still describe the gap.
+/// `allocator` is unused: inline content borrows and file bytes use the
+/// workspace reader's allocator.
 fn readConformanceEvidence(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !SourceEvidence {
     _ = allocator;
     if (argString(args, "content")) |content| return .{ .available = true, .source_kind = "inline_content", .bytes = content };
@@ -519,7 +538,10 @@ fn claimMappingValue(allocator: std.mem.Allocator, claim: []const u8, evidence: 
     return .{ .object = obj };
 }
 
-/// Implements config content workflow logic using caller-owned inputs.
+/// Renders the generated client configuration for the requested kind as an
+/// allocator-owned byte slice (JSON for the *-json kinds, TOML for codex,
+/// Markdown otherwise). argv[0] is the launch command; argv[1..] become the
+/// serialized args list.
 fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, transport: []const u8, kind: []const u8, server_path: []const u8) ![]u8 {
     const argv = try generatedServerArgv(allocator, a, transport, server_path);
     if (std.mem.eql(u8, kind, "mcp-json") or std.mem.eql(u8, kind, "claude-json") or std.mem.eql(u8, kind, "gemini-json")) {
@@ -532,6 +554,8 @@ fn configContent(allocator: std.mem.Allocator, a: *App, client: []const u8, tran
         try server.put(allocator, "workspace", .{ .string = a.workspace.root });
         if (std.mem.eql(u8, transport, "http")) try server.put(allocator, "url", .{ .string = try std.fmt.allocPrint(allocator, "http://{s}:{d}", .{ a.config.host, a.config.port }) });
         try servers.put(allocator, "zigars", .{ .object = server });
+        // All three JSON client kinds currently nest servers under "mcpServers";
+        // the branch is a seam for a future client that needs a different key.
         try root.put(allocator, if (std.mem.eql(u8, kind, "gemini-json")) "mcpServers" else "mcpServers", .{ .object = servers });
         try root.put(allocator, "generated_for", .{ .string = client });
         try root.put(allocator, "notes", .{ .string = "Review paths before use; zigars does not install backend tools." });
@@ -614,6 +638,8 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
     defer a.workspace.allocator.free(resolved);
     const identity = try artifacts.identityFromBytes(allocator, path, resolved, bytes);
     defer allocator.free(identity.sha256);
+    // The file is already on disk; registry indexing is best-effort provenance,
+    // so a record failure must not turn a successful apply into an error.
     support.recordWrittenArtifact(a, allocator, .{
         .identity = identity,
         .provenance = .{

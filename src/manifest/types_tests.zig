@@ -1,3 +1,5 @@
+//! Pins the types.zig helper contract: schema construction, field hints,
+//! output schema assignment, and ToolDefinition default values.
 const std = @import("std");
 const subject = @import("types.zig");
 const tooling = subject.tooling;

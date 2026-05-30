@@ -1,5 +1,10 @@
 //! Artifact-registry MCP adapters for listing, reading, and preview-pruning
-//! workspace artifacts with result-shape metadata.
+//! workspace artifacts, plus a read-only session-JSONL viewer. Each handler
+//! projects arguments onto an app use case and attaches compact/standard/deep
+//! result-shape metadata. Invariants this layer upholds: every path resolves
+//! under the workspace sandbox (out-of-bounds paths map to a workspace-path
+//! error), reads are byte-bounded, and prune only rewrites stale registry
+//! records when apply=true — it never deletes artifact files.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -153,6 +158,8 @@ pub fn zigarsArtifactPrune(
     const pruned = artifact_registry.pruneStale(scratch, context, registry) catch |err| {
         return artifactError(allocator, "zigars_artifact_prune", "prune_registry", artifact_registry.default_registry_path, err, "Inspect registry entries and rerun after removing unreadable artifact paths.");
     };
+    // Persist only on explicit apply=true; the default preview path leaves the
+    // registry untouched so a caller can confirm the preimage identity first.
     if (apply) {
         artifact_registry.persistRegistrySnapshot(scratch, context, pruned.entries) catch |err| switch (err) {
             error.PathOutsideWorkspace, error.EmptyPath => return workspacePathError(allocator, context, "zigars_artifact_prune", artifact_registry.default_registry_path, err),

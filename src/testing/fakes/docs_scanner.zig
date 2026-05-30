@@ -1,3 +1,8 @@
+//! Fake implementation of the `ports.DocsScanner` port.
+//! Simulates reading Zig stdlib documentation files and scanning source trees
+//! for documentation paths. Supports both absolute and workspace-relative scans,
+//! and can inject read or scan errors to exercise error-handling paths.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");

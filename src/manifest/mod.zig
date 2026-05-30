@@ -185,8 +185,10 @@ pub fn destructiveHintFor(spec: ToolMeta) bool {
 }
 
 /// Builds the group-keyword lookup table at comptime from group specs.
+/// The returned array is indexed by `ToolGroup` ordinal for O(1) lookup.
 fn buildGroupKeywords() [std.meta.fields(ToolGroup).len][]const []const u8 {
     var result: [std.meta.fields(ToolGroup).len][]const []const u8 = undefined;
+    // inline for so that ToolGroup.len is a comptime constant for the array index.
     inline for (group_specs) |spec| result[@intFromEnum(spec.group)] = spec.keywords;
     return result;
 }

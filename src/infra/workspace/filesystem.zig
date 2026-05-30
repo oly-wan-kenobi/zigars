@@ -1,4 +1,6 @@
 //! Adapts workspace-relative file operations to the WorkspaceStore port.
+//! Every path is resolved through the Workspace sandbox before access;
+//! callers may not bypass containment by supplying absolute or escaping paths.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -70,7 +72,8 @@ pub const Store = struct {
         self.workspace.allocator.free(path);
     }
 
-    /// Resolves resolve and returns borrowed or owned data according to the result contract.
+    /// Resolves a workspace path through the sandbox and returns an allocator-owned copy.
+    /// Fails with PathOutsideWorkspace if the path escapes the workspace root.
     fn resolve(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)
@@ -92,7 +95,8 @@ pub const Store = struct {
         defer self.workspace.allocator.free(resolved);
         const max_bytes = request.max_bytes orelse self.default_read_limit;
         if (max_bytes == 0) {
-            // Probe openability without allocating file contents.
+            // max_bytes == 0 means the caller wants an existence/openability check
+            // without reading any bytes; open and immediately close, return empty.
             var file = std.Io.Dir.cwd().openFile(self.io, resolved, .{}) catch |err| return mapPortError(err);
             file.close(self.io);
             return .{ .bytes = "" };
@@ -213,6 +217,7 @@ pub const Store = struct {
 };
 
 /// Maps filesystem and workspace safety failures to WorkspaceStore port errors.
+/// Unrecognized errors collapse to Unavailable so callers see a stable surface.
 pub fn mapPortError(err: anyerror) ports.PortError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,

@@ -1,3 +1,7 @@
+//! ToolCatalog port implementation backed by the static manifest renderer.
+//! The catalog text is regenerated on each call from the compile-time manifest;
+//! it is never cached in this adapter.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -13,7 +17,9 @@ pub const Catalog = struct {
         };
     }
 
-    /// Returns borrowed catalog text for this entry.
+    /// Renders and returns allocator-owned catalog JSON text (`owns_text = true`).
+    /// Caller must call `deinit` on the result. Any render error other than OOM
+    /// maps to `error.Unavailable` so callers see a stable error vocabulary.
     fn text(_: *anyopaque, allocator: std.mem.Allocator) ports.PortError!ports.ToolCatalogText {
         const body = catalog_render.text(allocator) catch |err| return switch (err) {
             error.OutOfMemory => error.OutOfMemory,

@@ -1,3 +1,6 @@
+//! Tests for LspTransport framing: write path, Reader buffering across message
+//! boundaries, error cases (missing/zero Content-Length, truncated body), and
+//! large body handling that spans the internal read-ahead buffer.
 const std = @import("std");
 const transport = @import("transport.zig");
 

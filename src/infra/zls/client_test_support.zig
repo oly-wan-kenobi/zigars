@@ -1,3 +1,5 @@
+//! Shared test helpers for LspClient black-box and internal tests:
+//! in-process pipe factory and a scripted fake ZLS process.
 const std = @import("std");
 const LspTransport = @import("transport.zig").LspTransport;
 
@@ -18,14 +20,16 @@ pub fn testPipe() !TestPipe {
     }
 }
 
-/// Threaded fake ZLS process that reads requests and writes scripted responses.
+/// Scripted ZLS double: handles initialize (id=1), a generic request (id=2),
+/// a null-result request (id=3), and exits on the `exit` notification.
+/// Publishes one fake diagnostic notification immediately after the initialize response.
 pub const FakeZls = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     read_end: std.Io.File,
     write_end: std.Io.File,
 
-    /// Executes queued work and returns owned results or the first failure.
+    /// Thread entry point: reads framed requests and dispatches scripted responses.
     pub fn run(self: *FakeZls) void {
         defer self.read_end.close(self.io);
         defer self.write_end.close(self.io);

@@ -1,3 +1,6 @@
+//! Pins identity hashing, preimage matching, artifact path generation, and
+//! unified diff output for the patch-session domain.
+
 const std = @import("std");
 
 const patch_session = @import("patch_session.zig");

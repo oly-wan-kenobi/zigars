@@ -1,3 +1,8 @@
+//! LSP transport framing: reads and writes Content-Length-delimited JSON-RPC
+//! messages over a pair of Io.File handles (ZLS stdin/stdout).
+//!
+//! The Reader buffers reads to avoid per-byte syscalls while parsing headers,
+//! then reads large bodies directly into the caller-provided allocation.
 const std = @import("std");
 
 /// LSP transport: Content-Length framed JSON-RPC.
@@ -17,7 +22,8 @@ pub const LspTransport = struct {
             return .{ .file = file, .io = io };
         }
 
-        /// Read a single byte from the buffer (refills from file as needed).
+        /// Read one byte from the internal buffer, refilling from the file when empty.
+        /// Returns null on EOF or connection reset (not an error).
         fn readByte(self: *Reader) !?u8 {
             if (self.buf_start >= self.buf_end) {
                 const n = self.file.readStreaming(self.io, &.{&self.buf}) catch |err| switch (err) {
@@ -33,7 +39,8 @@ pub const LspTransport = struct {
             return byte;
         }
 
-        /// Read exactly `dest.len` bytes, draining internal buffer first.
+        /// Fill `dest` exactly, draining the internal buffer first, then reading
+        /// directly from the file. Returns false on EOF before `dest` is full.
         fn readExact(self: *Reader, dest: []u8) !bool {
             var pos: usize = 0;
             while (pos < dest.len) {
@@ -57,7 +64,10 @@ pub const LspTransport = struct {
             return true;
         }
 
-        /// Read one LSP message. Returns owned slice, or null on EOF.
+        /// Parse one LSP message from the stream.
+        /// Returns an allocator-owned body slice, or null on clean EOF.
+        /// Errors: HeaderTooLarge, MissingContentLength, MessageTooLarge, or IO error.
+        /// 10 MiB body limit guards against malformed or hostile ZLS output.
         pub fn readMessage(self: *Reader, allocator: std.mem.Allocator) !?[]const u8 {
             var content_length: ?usize = null;
             var header_buf: [4096]u8 = undefined;
@@ -109,8 +119,8 @@ pub const LspTransport = struct {
         }
     };
 
-    /// Write one LSP message to the given file (ZLS stdin pipe).
-    /// Adds Content-Length header framing.
+    /// Frame `data` with a Content-Length header and write both to `file`.
+    /// The header is rendered into a stack buffer; no heap allocation required.
     pub fn writeMessage(file: std.Io.File, io: std.Io, data: []const u8) !void {
         var header_buf: [64]u8 = undefined;
         var header_w: std.Io.Writer = .fixed(&header_buf);
@@ -121,7 +131,8 @@ pub const LspTransport = struct {
         try file.writeStreamingAll(io, data);
     }
 
-    /// Static readMessage helper for callers that do not need buffered reads.
+    /// One-shot readMessage for callers that do not retain a Reader between calls.
+    /// Allocates a temporary Reader on the stack; buffered read-ahead is discarded after return.
     pub fn readMessage(file: std.Io.File, io: std.Io, allocator: std.mem.Allocator) !?[]const u8 {
         var reader = Reader.init(file, io);
         return reader.readMessage(allocator);

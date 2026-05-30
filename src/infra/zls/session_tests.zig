@@ -1,3 +1,5 @@
+//! Tests for ZLS session lifecycle: start, restart, ensureReady, and clear.
+//! Integrates with real OS processes (cat/false) for spawn and reconnect coverage.
 const std = @import("std");
 const session = @import("session.zig");
 const observability = @import("../observability/state.zig");

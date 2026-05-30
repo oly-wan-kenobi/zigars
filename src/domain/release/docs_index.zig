@@ -1,3 +1,8 @@
+//! Docs indexing domain: curated builtins, stdlib source scans, language-reference
+//! search (bundled fallback and installed HTML), workspace docs querying, and
+//! fenced-snippet parse verification. All results carry provenance metadata so
+//! callers can surface completeness and ranking contracts to clients.
+
 const std = @import("std");
 
 /// Maximum bytes read from local stdlib source files.
@@ -27,6 +32,9 @@ const bundled_ranking = "bundled curated sections with title or anchor matches b
 const installed_ranking = "installed HTML heading order for matching language-reference sections; limit is applied after document-order ranking";
 
 /// Completeness class for a documentation source.
+/// `installed_complete` means full HTML from the local toolchain installation.
+/// `partial_curated` means bundled curated data maintained inside zigars.
+/// `source_scan` means heuristic extraction from raw .zig source files.
 pub const Completeness = enum {
     installed_complete,
     partial_curated,
@@ -43,6 +51,8 @@ pub const Completeness = enum {
 };
 
 /// Documentation source provenance attached to docs results.
+/// All string fields are borrowed from compile-time literals or from the caller;
+/// path is owned by the caller when present.
 pub const Source = struct {
     id: []const u8,
     label: []const u8,
@@ -53,6 +63,7 @@ pub const Source = struct {
 };
 
 /// Result contract metadata describing ranking and no-result state.
+/// Attached to every structured result so clients can interpret empty sets.
 pub const Contract = struct {
     query: ?[]const u8 = null,
     limit: ?usize = null,
@@ -115,6 +126,8 @@ pub const BuiltinDoc = struct {
 };
 
 /// Drift evidence comparing curated builtins with active toolchain source.
+/// Populated by `buildBuiltinIndexInput` when the toolchain source is available;
+/// a nil drift field means the toolchain source was not supplied by the caller.
 pub const BuiltinDriftInfo = struct {
     status: []const u8,
     confidence: []const u8,
@@ -127,6 +140,9 @@ pub const BuiltinDriftInfo = struct {
 };
 
 /// Optional toolchain evidence used when listing builtin docs.
+/// `owns_*` flags control deallocation in `deinitBuiltinIndexInput`; callers that
+/// build this struct directly must set owns_toolchain_version and
+/// owns_active_source_path to match which strings were heap-allocated.
 pub const BuiltinIndexInput = struct {
     toolchain_version: ?[]const u8 = null,
     owns_toolchain_version: bool = false,
@@ -207,6 +223,8 @@ pub fn builtinList(input: BuiltinIndexInput) BuiltinListResult {
 }
 
 /// Searches curated builtin docs by case-insensitive builtin name match.
+/// Matches when the normalized query is a substring of the builtin name or vice versa.
+/// `limit` is clamped to at least 1; the result owns `matches` and takes ownership of `input`.
 pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize, input: BuiltinIndexInput) !BuiltinDocResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -231,6 +249,9 @@ pub fn builtinDoc(allocator: std.mem.Allocator, query: []const u8, limit: usize,
 }
 
 /// Builds owned builtin index input and drift evidence from active source text.
+/// `active_source` should be the raw bytes of BuiltinFn.zig from the installed toolchain.
+/// When nil, drift uses version-only confidence; when parse produces zero names, the
+/// status is set to active_builtin_source_parse_failed rather than treating 0 as drift-free.
 pub fn buildBuiltinIndexInput(
     allocator: std.mem.Allocator,
     toolchain_version: ?[]const u8,
@@ -391,6 +412,8 @@ pub const StdSearchResult = struct {
 };
 
 /// Searches stdlib source files by case-insensitive text match.
+/// Results are sorted by relative path then line; the first `limit` sorted matches are
+/// returned ranked 1..n. The total_match_count reflects all matches before truncation.
 pub fn stdSearch(allocator: std.mem.Allocator, std_dir: []const u8, query: []const u8, files: []const TextFile, metadata: StdIndexMetadata, limit: usize) !StdSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -485,6 +508,9 @@ pub const StdItemResult = struct {
 };
 
 /// Finds stdlib declarations by exact final name segment.
+/// `name` may be a qualified path like "std.mem.Allocator"; the final segment after
+/// the last dot is compared against declaration names. Matches from the implied path
+/// (e.g. mem.zig for std.mem.Allocator) are ranked before matches from other files.
 pub fn stdItem(allocator: std.mem.Allocator, std_dir: []const u8, name: []const u8, files: []const TextFile, metadata: StdIndexMetadata, limit: usize) !StdItemResult {
     const normalized_limit = @max(limit, 1);
     const item_name = lastNameSegment(name);
@@ -739,6 +765,8 @@ pub const LangrefProbe = struct {
 };
 
 /// Heuristically validates that bytes look like Zig language-reference HTML.
+/// Explicitly rejects docs/index.html because Zig websites ship an index page at
+/// that path that is not the language reference, even though it mentions "Zig".
 pub fn looksLikeLangref(rel_path: []const u8, bytes: []const u8) bool {
     if (std.mem.eql(u8, rel_path, "docs/index.html")) return false;
     if (std.mem.indexOf(u8, bytes, "Language Reference") != null or
@@ -818,6 +846,8 @@ pub const LangrefSearchResult = struct {
 };
 
 /// Searches the bundled curated language-reference fallback.
+/// Two-pass ranking: title/anchor matches come before summary/body matches so the
+/// most structurally relevant sections appear first.
 pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: usize, fallback: BundledFallbackMetadata) !LangrefSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -853,6 +883,9 @@ pub fn langrefBundled(allocator: std.mem.Allocator, query: []const u8, limit: us
 }
 
 /// Searches installed language-reference HTML headings and section text.
+/// Sections without a non-empty title or anchor are skipped and counted in
+/// skipped_heading_count. The returned result owns both the source.path and
+/// metadata.source_path strings even though both duplicate `path`.
 pub fn langrefInstalled(allocator: std.mem.Allocator, path: []const u8, html: []const u8, query: []const u8, limit: usize, probe: LangrefProbe) !LangrefSearchResult {
     const normalized_limit = @max(limit, 1);
     const lower_query = try asciiLowerAlloc(allocator, query);
@@ -1218,6 +1251,9 @@ pub fn docsQuery(allocator: std.mem.Allocator, query: []const u8, scope: []const
 }
 
 /// Returns whether a path participates in a docs query scope.
+/// Paths starting with "." or containing "zig-cache" or "zig-out/" are always excluded.
+/// Recognized scopes: "docs" (Markdown under docs/ and README.md), "src" (.zig under src/),
+/// "all" (any .md or .zig), default (Markdown or .zig under src/).
 pub fn isDocsScopePath(scope: []const u8, path: []const u8) bool {
     if (std.mem.startsWith(u8, path, ".") or std.mem.indexOf(u8, path, "zig-cache") != null or std.mem.startsWith(u8, path, "zig-out/")) return false;
     const is_md = std.mem.endsWith(u8, path, ".md");
@@ -1267,6 +1303,8 @@ pub const RawReference = struct {
 };
 
 /// Computes a raw evidence reference without allocating.
+/// The SHA-256 digest is encoded as lowercase hex into the fixed `sha256` field.
+/// All string fields are borrowed from the caller; no allocation occurs.
 pub fn rawReference(source_kind: []const u8, path: ?[]const u8, bytes: []const u8) RawReference {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
@@ -1307,6 +1345,8 @@ pub const AutodocIngestResult = struct {
 };
 
 /// Ingests autodoc JSON recursively or falls back to line-oriented text entries.
+/// JSON is walked depth-first; objects with a name, docs, or path field are collected.
+/// On JSON parse failure the input is treated as plain text and each non-empty line becomes an entry.
 pub fn autodocIngest(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !AutodocIngestResult {
     var entries: std.ArrayList(AutodocEntry) = .empty;
     errdefer {
@@ -1391,6 +1431,8 @@ pub const DocExampleCheckResult = struct {
 };
 
 /// Parses one snippet with std.zig.Ast and reports syntax status.
+/// The parse is purely syntactic; the snippet is never executed.
+/// The result owns `label`; `content` is borrowed only during the call.
 pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []const u8) !SnippetCheck {
     const source = try allocator.dupeZ(u8, content);
     var tree = try std.zig.Ast.parse(allocator, source, .zig);
@@ -1409,6 +1451,8 @@ pub fn snippetCheck(allocator: std.mem.Allocator, label: []const u8, content: []
 }
 
 /// Extracts fenced Zig snippets and parse-checks them without executing code.
+/// Only ``` zig ``` and ``` zig,no_run ``` fences are checked; other languages are skipped.
+/// `ok` is true only when all extracted snippets are individually syntax-valid.
 pub fn docExampleCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !DocExampleCheckResult {
     var snippets: std.ArrayList(SnippetCheck) = .empty;
     errdefer {
@@ -1488,6 +1532,8 @@ pub const ReadmeCommandCheckResult = struct {
 };
 
 /// Extracts README shell commands for review without running them.
+/// Collects "zig …" lines from fenced shell blocks and bare "zig …" lines outside fences.
+/// Commands containing "build" or "test" are classified as zig_validation_command.
 pub fn readmeCommandCheck(allocator: std.mem.Allocator, source_kind: []const u8, path: ?[]const u8, bytes: []const u8, limit: usize) !ReadmeCommandCheckResult {
     var commands: std.ArrayList(ReadmeCommand) = .empty;
     errdefer {

@@ -1,3 +1,6 @@
+//! Pins the Scanner port contract: readAbsolute returns file bytes,
+//! scanAbsoluteZigPaths filters to .zig only, scanWorkspacePaths includes .md,
+//! and max_files truncation sets the truncated flag without returning an error.
 const std = @import("std");
 const docs_scanner = @import("docs_scanner.zig");
 const workspace_mod = @import("../workspace/workspace.zig");

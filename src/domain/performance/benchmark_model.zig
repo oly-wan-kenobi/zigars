@@ -1,3 +1,7 @@
+//! Benchmark evidence model: parsing, comparison, and budget evaluation.
+//! All timing values are in nanoseconds per iteration. Callers own allocations
+//! returned by parse and compare functions; deinit frees them.
+
 const std = @import("std");
 
 /// One normalized benchmark timing sample in nanoseconds per iteration.
@@ -80,12 +84,18 @@ pub fn parseText(allocator: std.mem.Allocator, bytes: []const u8) !BenchSet {
 }
 
 /// Compares current samples against matching baseline names.
+/// Only samples whose name appears in both sets are counted; unmatched ones are
+/// silently skipped. Samples with a zero or negative baseline are also skipped
+/// to avoid division-by-zero and meaningless infinite-regression percentages.
+/// threshold_pct is a signed integer; both regressions (positive) and
+/// improvements (negative) use the same magnitude threshold.
 pub fn compare(allocator: std.mem.Allocator, current: BenchSet, baseline: BenchSet, threshold_pct: i64) !BenchComparison {
     var out = BenchComparison{ .threshold_pct = threshold_pct, .compared_count = 0 };
     errdefer out.deinit(allocator);
     for (current.samples.items) |sample| {
         const before = findSample(baseline, sample.name) orelse continue;
         out.compared_count += 1;
+        // Skip zero/negative baselines: delta percentage is undefined.
         if (before.ns_per_iter <= 0) continue;
         const pct = ((sample.ns_per_iter - before.ns_per_iter) / before.ns_per_iter) * 100.0;
         if (pct > @as(f64, @floatFromInt(threshold_pct))) {
@@ -103,6 +113,9 @@ pub fn compare(allocator: std.mem.Allocator, current: BenchSet, baseline: BenchS
 }
 
 /// Reads a compact regression summary from JSON report evidence.
+/// Accepts two JSON shapes: a scalar regression_count field, or a regressions
+/// array whose length is counted. Negative counts are clamped to zero.
+/// Returns error.InvalidBenchmarkEvidence when the root is not a JSON object.
 pub fn compareSummaryFromJson(allocator: std.mem.Allocator, bytes: []const u8) !CompareSummary {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
     defer parsed.deinit();
@@ -120,6 +133,9 @@ pub fn compareSummaryFromJson(allocator: std.mem.Allocator, bytes: []const u8) !
 }
 
 /// Evaluates a summary against an allowed worst-regression budget.
+/// Returns true when there are no regressions, or when the worst regression
+/// stays within max_regression_pct. Both conditions allow a non-zero count
+/// paired with a small magnitude to pass CI gating.
 pub fn budgetPassed(summary: CompareSummary, max_regression_pct: f64) bool {
     return summary.regression_count == 0 or summary.worst_regression_pct <= max_regression_pct;
 }
@@ -151,6 +167,8 @@ fn parseJson(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
 }
 
 /// Selects the benchmark array root from known JSON evidence shapes.
+/// Handles {"benchmarks":[...]}, {"results":{...}}, and {"baseline":{...}}
+/// wrappers by recursing until a non-object or an unrecognized key is found.
 fn benchRoot(value: std.json.Value) std.json.Value {
     if (value == .object) {
         if (value.object.get("benchmarks")) |benchmarks| return benchmarks;
@@ -164,6 +182,10 @@ fn benchRoot(value: std.json.Value) std.json.Value {
 const Timing = struct { name: []const u8, ns_per_iter: f64 };
 
 /// Parses a text benchmark timing line into borrowed name and numeric timing fields.
+/// Uses the last numeric token on the line as the timing value, so the benchmark
+/// name may contain digits (e.g. "test_16kb: 4.5 ns" extracts 4.5).
+/// Scales the value to nanoseconds based on the unit suffix that follows it.
+/// Returns null for lines with no recognizable unit or an empty name.
 fn parseTimingLine(line: []const u8) ?Timing {
     var last_number_start: ?usize = null;
     var i: usize = 0;
@@ -179,6 +201,7 @@ fn parseTimingLine(line: []const u8) ?Timing {
     while (end < line.len and ((line[end] >= '0' and line[end] <= '9') or line[end] == '.')) end += 1;
     const value = std.fmt.parseFloat(f64, line[start..end]) catch return null;
     const unit = std.mem.trim(u8, line[end..], " \t:/");
+    // Scale multipliers convert the unit suffix to nanoseconds.
     const scale: f64 = if (std.mem.startsWith(u8, unit, "ns"))
         1.0
     else if (std.mem.startsWith(u8, unit, "us") or std.mem.startsWith(u8, unit, "micro"))

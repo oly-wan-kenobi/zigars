@@ -1,3 +1,7 @@
+//! Tests for the observability metrics workflow. Pin that the report merges
+//! counters, cache state, artifact evidence, and the observed ring snapshot,
+//! and that artifact registry/scan failures (including allocation failure)
+//! surface as a non-fatal status string rather than aborting the report.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

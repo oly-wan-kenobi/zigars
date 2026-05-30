@@ -1,3 +1,9 @@
+//! Tool definitions for the foundation groups: artifact registry lifecycle
+//! (index, read, prune, session view), runtime observability (metrics, backend
+//! health history, ZLS timeline, tool latency), trust/safety auditing (trust
+//! report, command provenance, risk audit, clean-tree gate), result-shape
+//! contracts, and release-drift checks. Only artifact_prune mutates state and
+//! requires apply=true; all others are pure-analysis or bounded reads.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -6,7 +12,7 @@ const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// Result shape depth.
+/// Shared field hint for result shape depth across foundation tools.
 const mode_hint = fieldHint("mode", .{ .description = "Result shape depth.", .default_string = "standard", .enum_values = &.{ "compact", "standard", "deep" } });
 
 /// Index registered and scanned workspace artifacts with hashes, provenance, and explicit scan limits.

@@ -1,3 +1,6 @@
+//! Full-table contract-fidelity test: every registered tool contract must
+//! produce structured evidence_basis and cross_check JSON with the correct
+//! keys, and release-gating contracts must be flagged accordingly.
 const std = @import("std");
 
 const static_analysis_contracts = @import("static_analysis_contracts.zig");

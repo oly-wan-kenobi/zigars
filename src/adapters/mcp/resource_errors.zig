@@ -50,7 +50,9 @@ pub fn valueFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) !
     return result_value;
 }
 
-/// Serializes a JSON value into owned application/json resource text.
+/// Serializes a JSON value into application/json resource content. The returned
+/// `.text` is owned by `allocator` (free via `deinitResourceContent`); `uri`
+/// borrows the caller's slice. Pretty-printed with 2-space indent.
 pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: std.json.Value) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
@@ -62,6 +64,9 @@ pub fn jsonContent(allocator: std.mem.Allocator, uri: []const u8, result_value: 
 }
 
 /// Builds and serializes a resource error unless the original failure was OOM.
+/// An OOM read failure propagates unchanged: allocating an error payload would
+/// likely fail again, and the caller should surface the allocation failure
+/// rather than a misleading serialized error.
 pub fn jsonContentFromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.resources.ResourceError!mcp.resources.ResourceContent {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     var result_value = valueFromError(allocator, spec, err) catch return error.OutOfMemory;

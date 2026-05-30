@@ -1,3 +1,7 @@
+//! Behavioral tests for docs_index: builtin drift detection, stdlib source scan,
+//! langref search (bundled and installed HTML), workspace docs querying, autodoc
+//! ingest, fenced-snippet parse verification, and allocation-failure cleanup.
+
 const std = @import("std");
 
 const docs_index = @import("docs_index.zig");

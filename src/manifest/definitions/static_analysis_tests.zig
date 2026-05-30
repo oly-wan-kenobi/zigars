@@ -1,3 +1,5 @@
+//! Pins the public surface of the static_analysis tool definitions: each tool
+//! must carry a non-empty description and the expected group/risk/tier metadata.
 const std = @import("std");
 const subject = @import("static_analysis.zig");
 const zig_import_graph = subject.zig_import_graph;

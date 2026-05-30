@@ -1,3 +1,7 @@
+//! Infrastructure layer: port adapters that back app-side use cases with
+//! real filesystem, process, LSP, clock, workspace, and toolchain behaviour.
+//! Each subsystem exposes a vtable-backed port so use cases remain testable
+//! without any of these runtime dependencies.
 pub const artifacts = @import("artifacts/root.zig");
 pub const backends = @import("backends/root.zig");
 pub const clock = @import("clock/root.zig");

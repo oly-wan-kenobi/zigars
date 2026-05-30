@@ -1,8 +1,16 @@
+//! Release gate: public claim documentation integrity.
+//! Verifies that README.md and docs/tools.md use the evidence-label vocabulary
+//! and that neither file contains overstatement tokens that would mislead
+//! users about the basis for a claimed capability.
 const std = @import("std");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
+/// Checks required evidence-label terms in README.md and docs/tools.md, then
+/// scans each `overclaim_tokens` path for forbidden overstatement fragments.
+/// Failures are reported to stderr; `false` is returned to allow the caller
+/// to collect all failures before aborting the release check.
 pub fn checkPublicClaimDocs(allocator: Allocator, io: Io) !bool {
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "README.md", &.{
@@ -44,6 +52,8 @@ fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []co
     return ok;
 }
 
+/// A forbidden overstatement entry: `token` must be absent from `path`;
+/// `replacement` is the preferred phrasing shown in the diagnostic.
 const OverclaimToken = struct {
     path: []const u8,
     token: []const u8,

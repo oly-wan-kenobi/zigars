@@ -1,3 +1,10 @@
+//! Integration tests for the MCP server adapter: JSON-RPC routing, capability
+//! negotiation, tool/resource/prompt registration, error-contract invariants,
+//! and structured-content projection.
+//! Key invariants pinned here: raw Zig error names (e.g. ExecutionFailed,
+//! ReadFailed) must never appear in client-visible output; discovery lists
+//! preserve insertion order; and repeated initialize is rejected.
+
 const std = @import("std");
 const mcp = @import("mcp");
 const server_mod = @import("../../adapters/mcp/server.zig");
@@ -80,6 +87,8 @@ fn joinedSent(allocator: std.mem.Allocator, transport: *ScriptTransport) ![]cons
     return out.toOwnedSlice(allocator);
 }
 
+// Verifies that first appears before second in the joined sent output.
+// Used to assert registration-order preservation in discovery list tests.
 fn expectBefore(haystack: []const u8, first: []const u8, second: []const u8) !void {
     const first_index = std.mem.indexOf(u8, haystack, first) orelse return error.TestExpectedEqual;
     const second_index = std.mem.indexOf(u8, haystack, second) orelse return error.TestExpectedEqual;

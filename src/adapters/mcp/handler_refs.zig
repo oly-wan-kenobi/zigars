@@ -92,6 +92,7 @@ pub fn handlerFor(id: manifest.ToolId) HandlerRef {
         .zig_board_profile => .{ .module = .diagnostics, .name = "zigBoardProfile" },
         .zig_flash_plan => .{ .module = .diagnostics, .name = "zigFlashPlan" },
         .zigars_capabilities => .{ .module = .discovery, .name = "zigarsCapabilities" },
+        // Alias: the tool-index id reuses the capabilities handler intentionally.
         .zigars_tool_index => .{ .module = .discovery, .name = "zigarsCapabilities" },
         .zigars_schema => .{ .module = .discovery, .name = "zigarsSchema" },
         .zigars_backend_catalog => .{ .module = .discovery, .name = "zigarsBackendCatalog" },

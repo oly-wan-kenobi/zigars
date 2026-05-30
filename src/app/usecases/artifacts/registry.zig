@@ -1,3 +1,9 @@
+//! Artifact registry workflows: scan workspace outputs, hash them, persist a
+//! JSONL provenance registry, and prune entries that no longer match on disk.
+//! All filesystem access goes through the workspace store port, so every path
+//! resolves under the sandbox. Returned slices and the parsed `Registry` are
+//! owned by the caller-supplied allocator; most callers pass an arena and free
+//! the whole batch at once rather than freeing fields individually.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -20,6 +26,7 @@ pub const ArtifactError = ports.PortError || error{
 };
 
 /// Carries toolchain data across use case and port boundaries.
+/// All path fields default to empty string when the backend was not configured.
 pub const Toolchain = struct {
     zig_path: []const u8,
     zls_path: []const u8 = "",
@@ -28,6 +35,7 @@ pub const Toolchain = struct {
 };
 
 /// Carries provenance data across use case and port boundaries.
+/// `producer` and `artifact_kind` are required; all other fields default to "".
 pub const Provenance = struct {
     producer: []const u8,
     artifact_kind: []const u8,
@@ -40,6 +48,8 @@ pub const Provenance = struct {
 };
 
 /// Carries registry entry data across use case and port boundaries.
+/// `path` is workspace-relative; `abs_path` is the resolved canonical path.
+/// `bytes` and `sha256` record the file identity at index time.
 pub const RegistryEntry = struct {
     path: []const u8,
     abs_path: []const u8,
@@ -57,6 +67,9 @@ pub const Registry = struct {
 };
 
 /// Carries scanned artifact data across use case and port boundaries.
+/// `bytes` and `sha256` are null when hashing was not requested or failed.
+/// `hash_status` is always set: "not_requested", "ok", "skipped_size_limit",
+/// or the @errorName of the first read failure.
 pub const ScannedArtifact = struct {
     path: []const u8,
     artifact_kind: []const u8,
@@ -90,6 +103,8 @@ pub const PreimageIdentity = struct {
 };
 
 /// Carries prune summary data across use case and port boundaries.
+/// `pruned` is always `missing + changed` — a derived total, not a separate
+/// counter. Callers that only need the net removal count may use `pruned` alone.
 pub const PruneSummary = struct {
     kept: usize = 0,
     missing: usize = 0,
@@ -98,12 +113,16 @@ pub const PruneSummary = struct {
 };
 
 /// Carries prune result data across use case and port boundaries.
+/// `entries` is the kept subset and is owned by the caller's allocator;
+/// strings within each kept entry borrow from the input registry.
 pub const PruneResult = struct {
     entries: []RegistryEntry,
     summary: PruneSummary,
 };
 
-/// Reads registry snapshot data from the provided context without taking ownership of inputs.
+/// Loads and parses the persisted JSONL registry from the workspace cache.
+/// Returns an empty registry (not an error) when the file does not exist yet.
+/// Entries are duplicated into `allocator`; malformed lines fail the whole load.
 pub fn readRegistrySnapshot(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -121,7 +140,13 @@ pub fn readRegistrySnapshot(
     return parseRegistryJsonl(allocator, read.bytes);
 }
 
-/// Implements scan artifacts workflow logic using caller-owned inputs.
+/// Walks workspace artifact roots and returns up to `limit` scanned entries,
+/// sorted by path for deterministic output. With `root_arg` null the default
+/// roots are scanned best-effort: a root that fails to resolve or walk is
+/// skipped rather than aborting the scan. With an explicit `root_arg` a resolve
+/// failure propagates. `include_hashes` opts into reading and SHA-256 hashing
+/// each file; per-file read failures are recorded in `hash_status`, not raised.
+/// The returned slice and its strings are owned by `allocator`.
 pub fn scanArtifacts(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -129,6 +154,8 @@ pub fn scanArtifacts(
     limit: usize,
     include_hashes: bool,
 ) ports.PortError!ScanResult {
+    // Always scan at least one entry so a caller-supplied limit of 0 still
+    // makes progress and limit_reached stays meaningful.
     const normalized_limit = @max(limit, 1);
     var paths: std.ArrayList([]const u8) = .empty;
     if (root_arg) |root| {
@@ -163,7 +190,11 @@ pub fn scanArtifacts(
     };
 }
 
-/// Reads artifact data from the provided context without taking ownership of inputs.
+/// Reads one workspace artifact and reports its byte length and SHA-256 hex.
+/// `path` resolves under the sandbox; `max_bytes` caps the read (StreamTooLong
+/// propagates past it). The returned `content` aliases the read buffer and
+/// `abs_path` aliases the resolved path; both, plus `sha256`, are owned by
+/// `allocator` and intentionally outlive this call (no internal deinit).
 pub fn readArtifact(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -192,7 +223,10 @@ pub fn readArtifact(
     };
 }
 
-/// Builds preimage identity metadata for the requested workspace path.
+/// Captures the on-disk identity (existence, size, SHA-256) of the registry
+/// file before a prune rewrite, so the change can be reported deterministically.
+/// A missing file yields `.exists = false` rather than an error. The `sha256`
+/// field, when present, is owned by `allocator`.
 pub fn preimageIdentity(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -214,7 +248,12 @@ pub fn preimageIdentity(
     };
 }
 
-/// Implements prune stale workflow logic using caller-owned inputs.
+/// Re-verifies each registry entry against the workspace and keeps only those
+/// whose file still exists with the recorded byte length and SHA-256. Missing
+/// files count as `missing`; size or hash drift counts as `changed`; `pruned`
+/// is their sum. The returned entries are shallow copies that borrow strings
+/// from the input `registry`, so the caller must keep `registry` alive for the
+/// lifetime of the result; the kept slice itself is owned by `allocator`.
 pub fn pruneStale(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -225,6 +264,8 @@ pub fn pruneStale(
     for (registry.entries) |entry| {
         const read = context.workspace_store.read(allocator, .{
             .path = entry.path,
+            // Read one byte past the recorded size: a file that has grown
+            // trips StreamTooLong and is classified as changed without hashing.
             .max_bytes = entry.bytes + 1,
             .for_output = false,
             .provenance = "artifacts.prune.verify",
@@ -255,7 +296,11 @@ pub fn pruneStale(
     };
 }
 
-/// Implements persist registry snapshot workflow logic using caller-owned inputs.
+/// Rewrites the registry file as one JSON object per line (JSONL), replacing
+/// the existing file and creating parent directories as needed. Each entry is
+/// serialized through a per-entry arena so transient JSON buffers are freed
+/// immediately. This is the only writer in this module; callers gate it behind
+/// the surrounding tool's apply policy.
 pub fn persistRegistrySnapshot(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -287,7 +332,9 @@ pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ports.PortError
     return allocator.dupe(u8, &hex) catch return error.OutOfMemory;
 }
 
-/// Implements artifact kind workflow logic using caller-owned inputs.
+/// Classifies an artifact by filename suffix into a coarse kind label. Returns
+/// a static string; the fallback for unrecognized suffixes is
+/// "workspace_artifact".
 pub fn artifactKind(path: []const u8) []const u8 {
     if (std.mem.endsWith(u8, path, ".svg")) return "svg";
     if (std.mem.endsWith(u8, path, ".json") or std.mem.endsWith(u8, path, ".jsonl")) return "json";
@@ -297,7 +344,9 @@ pub fn artifactKind(path: []const u8) []const u8 {
     return "workspace_artifact";
 }
 
-/// Collects artifact paths data into caller-provided output storage without taking ownership of inputs.
+/// Walks `root` under the workspace sandbox and appends up to `limit` paths to
+/// `paths`. Stops early once `paths.items.len >= limit` without error. Each
+/// appended string is workspace-relative and owned by `allocator`.
 fn collectArtifactPaths(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -320,7 +369,10 @@ fn collectArtifactPaths(
     }
 }
 
-/// Implements scanned artifact workflow logic using caller-owned inputs.
+/// Builds one scanned-artifact record for `path`. When `include_hashes` is set,
+/// reads and hashes the file; a size-limit hit records "skipped_size_limit" and
+/// any other read error records its `@errorName` in `hash_status`, so a single
+/// unreadable file never fails the surrounding scan.
 fn scannedArtifact(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,
@@ -357,7 +409,10 @@ fn scannedArtifact(
     return result;
 }
 
-/// Parses registry jsonl input using caller-provided storage; malformed input and allocation failures propagate.
+/// Parses JSONL registry bytes into an owned slice of RegistryEntry values.
+/// Blank and whitespace-only lines are skipped; the first malformed JSON line
+/// fails the entire parse (InvalidArtifactRegistryEntry). All strings are
+/// duplicated into `allocator`.
 fn parseRegistryJsonl(allocator: std.mem.Allocator, bytes: []const u8) ArtifactError!Registry {
     var entries: std.ArrayList(RegistryEntry) = .empty;
     var lines = std.mem.splitScalar(u8, bytes, '\n');
@@ -371,7 +426,10 @@ fn parseRegistryJsonl(allocator: std.mem.Allocator, bytes: []const u8) ArtifactE
     return .{ .entries = try entries.toOwnedSlice(allocator) };
 }
 
-/// Serializes entry from fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds a RegistryEntry from one parsed JSONL object, duplicating every
+/// string field into `allocator`. Missing/typed-wrong required fields or a
+/// negative byte count fail as InvalidArtifactRegistryEntry; optional fields
+/// fall back to their documented defaults.
 fn entryFromValue(allocator: std.mem.Allocator, value: std.json.Value) ArtifactError!RegistryEntry {
     if (value != .object) return error.InvalidArtifactRegistryEntry;
     const obj = value.object;
@@ -434,6 +492,8 @@ fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.js
     try obj.put(allocator, "target", .{ .string = provenance.target });
     try obj.put(allocator, "baseline_identity", .{ .string = provenance.baseline_identity });
     try obj.put(allocator, "notes", .{ .string = provenance.notes });
+    // Persist an empty command_argv so the on-disk schema stays stable; this
+    // module never records argv, but readers expect the field to be present.
     try obj.put(allocator, "command_argv", .{ .array = std.json.Array.init(allocator) });
     try obj.put(allocator, "toolchain", try toolchainValue(allocator, provenance.toolchain));
     obj_owned = false;
@@ -453,26 +513,29 @@ fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.
     return .{ .object = obj };
 }
 
-/// Serializes object fields into an allocator-owned JSON value; allocation failures propagate.
+/// Unwraps an optional JSON value to its object map, or null if absent or not
+/// an object. Used to validate required nested objects during parsing.
 fn objectValue(value: ?std.json.Value) ?std.json.ObjectMap {
     const actual = value orelse return null;
     if (actual != .object) return null;
     return actual.object;
 }
 
-/// Implements dup string field workflow logic using caller-owned inputs.
+/// Duplicates a required string field into `allocator`; a missing or non-string
+/// value is a malformed entry.
 fn dupStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ArtifactError![]u8 {
     const value = obj.get(key) orelse return error.InvalidArtifactRegistryEntry;
     if (value != .string) return error.InvalidArtifactRegistryEntry;
     return allocator.dupe(u8, value.string) catch return error.OutOfMemory;
 }
 
-/// Implements dup optional string field workflow logic using caller-owned inputs.
+/// Duplicates an optional string field, defaulting to "" when absent or null.
 fn dupOptionalStringField(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8) ArtifactError![]u8 {
     return dupOptionalStringFieldDefault(allocator, obj, key, "");
 }
 
-/// Implements dup optional string field default workflow logic using caller-owned inputs.
+/// Duplicates an optional string field into `allocator`, substituting `default`
+/// when the key is absent or JSON null. A present non-string value is malformed.
 fn dupOptionalStringFieldDefault(allocator: std.mem.Allocator, obj: std.json.ObjectMap, key: []const u8, default: []const u8) ArtifactError![]u8 {
     const value = obj.get(key) orelse return allocator.dupe(u8, default) catch return error.OutOfMemory;
     if (value == .null) return allocator.dupe(u8, default) catch return error.OutOfMemory;
@@ -480,14 +543,16 @@ fn dupOptionalStringFieldDefault(allocator: std.mem.Allocator, obj: std.json.Obj
     return allocator.dupe(u8, value.string) catch return error.OutOfMemory;
 }
 
-/// Extracts integer field data from JSON input without taking ownership of borrowed values.
+/// Reads an integer field, or null when absent or not a JSON integer.
 fn integerField(obj: std.json.ObjectMap, key: []const u8) ?i64 {
     const value = obj.get(key) orelse return null;
     if (value != .integer) return null;
     return value.integer;
 }
 
-/// Implements relative entry path workflow logic using caller-owned inputs.
+/// Rejoins a scan root with a directory-walk entry path so scanned paths stay
+/// workspace-relative. An empty or "." root returns the entry path unchanged.
+/// The result is owned by `allocator`.
 fn relativeEntryPath(allocator: std.mem.Allocator, root: []const u8, entry_path: []const u8) ports.PortError![]const u8 {
     if (root.len == 0 or std.mem.eql(u8, root, ".")) {
         return allocator.dupe(u8, entry_path) catch return error.OutOfMemory;
@@ -495,12 +560,13 @@ fn relativeEntryPath(allocator: std.mem.Allocator, root: []const u8, entry_path:
     return std.fs.path.join(allocator, &.{ root, entry_path }) catch return error.OutOfMemory;
 }
 
-/// Extracts string less than data from JSON input without taking ownership of borrowed values.
+/// Byte-order comparator used to sort scanned paths for deterministic output.
 fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
 
-/// Maps map write error data without taking ownership; allocation failures from nested values are propagated when needed.
+/// Narrows a JSON-stringify/write error into the module's error set: OutOfMemory
+/// is preserved; every other write failure collapses to Unavailable.
 fn mapWriteError(err: anyerror) ArtifactError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
@@ -626,7 +692,7 @@ test "artifact registry rejects negative persisted byte counts" {
     ));
 }
 
-/// Implements test artifact context workflow logic using caller-owned inputs.
+/// Builds a fixed test ArtifactContext backed by the given fake workspace store.
 fn testArtifactContext(workspace_store: ports.WorkspaceStore) app_context.ArtifactContext {
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },

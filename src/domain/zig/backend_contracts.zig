@@ -1,3 +1,8 @@
+//! Backend identity contracts: enumerated backend IDs, normalized failure kinds,
+//! artifact behaviors, capability contracts, probe argv constants, and format
+//! vocabulary used by the zwanzig and zflame optional backends.
+//!
+//! All data is comptime-constant. No allocations occur in this module.
 const std = @import("std");
 
 /// Backend executable identities used in config, probes, and capability maps.
@@ -342,7 +347,11 @@ pub const capabilities = [_]CapabilityContract{
     },
 };
 
-/// Looks up a backend capability contract by exact tool name.
+/// Returns the capability contract for `tool_name`, or null when not registered.
+///
+/// Callers should treat a null return as "no optional backend required" rather
+/// than a hard error, so the server degrades gracefully when a new tool name is
+/// dispatched before a matching contract entry is added.
 pub fn capabilityFor(tool_name: []const u8) ?CapabilityContract {
     for (capabilities) |capability| {
         if (std.mem.eql(u8, capability.tool, tool_name)) return capability;
@@ -362,7 +371,11 @@ pub fn probeArgv(id: BackendId) []const []const u8 {
     };
 }
 
-/// Reads the configured executable path from a config-like struct.
+/// Returns the configured executable path for `id` from a duck-typed config struct.
+///
+/// The caller's config type must expose fields named `zig_path`, `zls_path`,
+/// `zlint_path`, `zwanzig_path`, `zflame_path`, and `diff_folded_path`.
+/// Checked at comptime by the compiler via `anytype` field access.
 pub fn configuredPath(id: BackendId, config: anytype) []const u8 {
     return switch (id) {
         .zig => config.zig_path,

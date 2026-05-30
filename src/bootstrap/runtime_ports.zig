@@ -1,3 +1,5 @@
+//! Wires concrete infra adapters into the app PortSet contract for a single server lifetime.
+//! RuntimePorts borrows App state by pointer; the App must outlive all RuntimePorts values.
 const std = @import("std");
 
 const app_context = @import("../app/context.zig");
@@ -7,7 +9,8 @@ const runtime_mod = @import("runtime_state.zig");
 const app_context_bridge = @import("app_context.zig");
 const manifest_catalog = @import("manifest_catalog.zig");
 
-/// Construction knobs for concrete infra adapters exposed as app ports.
+/// Tuning knobs applied when constructing infra adapters inside RuntimePorts.
+/// Defaults are appropriate for MCP server mode; CLI callers override as needed.
 pub const Options = struct {
     workspace_read_resolution: infra.workspace.filesystem.ReadResolution = .input,
     default_read_limit: usize = @import("../infra/process/command.zig").output_limit,
@@ -60,6 +63,7 @@ pub const RuntimePorts = struct {
                 .cancellation_token = app.active_cancellation,
             }),
             .workspace_scanner = infra.workspace.scanner.Scanner.init(&app.workspace, app.io),
+            // assigned below once command_runner.port() is available
             .backend_probe = undefined,
             .analysis_cache = infra.backends.static_cache.Cache.init(app.allocator, &app.analysis_cache),
             .semantic_index_cache = infra.backends.static_cache.Cache.init(app.allocator, &app.semantic_index_cache),
@@ -99,6 +103,7 @@ pub const RuntimePorts = struct {
     }
 
     /// Rebinds ports whose dependencies can change after construction.
+    /// Currently re-initialises backend_probe so command_runner and workspace changes propagate.
     pub fn refreshDerivedPorts(self: *Self) void {
         self.backend_probe = infra.backends.probe.Runner.init(self.command_runner.port(), self.app.workspace.root, self.app.config.timeout_ms);
     }

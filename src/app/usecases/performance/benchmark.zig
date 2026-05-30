@@ -13,12 +13,16 @@ pub const EvidenceRequest = struct {
 pub const CompareRequest = struct {
     current: EvidenceRequest,
     baseline: EvidenceRequest,
+    /// Per-benchmark regression tolerance, in percent of baseline ns/iter; a sample
+    /// counts as a regression only once it slows down by more than this much.
     threshold_pct: i64 = 5,
 };
 
 /// Carries budget request data across use case and port boundaries.
 pub const BudgetRequest = struct {
+    /// Pre-computed benchmark comparison JSON (output of `compare`), parsed for a summary.
     comparison: []const u8,
+    /// Gate ceiling: a budget passes only if the worst regression is within this percent.
     max_regression_pct: f64 = 5,
 };
 
@@ -33,7 +37,7 @@ pub const BudgetResult = struct {
     summary: benchmark_model.CompareSummary,
     max_regression_pct: f64,
 
-    /// Implements passed workflow logic using caller-owned inputs.
+    /// True when the comparison's worst regression stays within `max_regression_pct`.
     pub fn passed(self: BudgetResult) bool {
         return benchmark_model.budgetPassed(self.summary, self.max_regression_pct);
     }
@@ -44,12 +48,13 @@ pub const ProfileRegressionPlan = struct {
     summary: benchmark_model.CompareSummary,
     backend: []const u8,
 
-    /// Implements needs profile workflow logic using caller-owned inputs.
+    /// True when at least one benchmark regressed, i.e. focused profiling is worthwhile.
     pub fn needsProfile(self: ProfileRegressionPlan) bool {
         return self.summary.regression_count > 0;
     }
 
-    /// Implements recommended tools workflow logic using caller-owned inputs.
+    /// Ordered zigars tool ids to drive the follow-up profiling, selected by backend
+    /// (Tracy vs. the default samply/perf path). Returns a static slice; no allocation.
     pub fn recommendedTools(self: ProfileRegressionPlan) []const []const u8 {
         if (std.mem.eql(u8, self.backend, "tracy")) {
             return &.{ "zig_tracy_plan", "zig_tracy_capture", "zig_tracy_hints" };
@@ -63,7 +68,8 @@ pub fn parse(allocator: std.mem.Allocator, request: EvidenceRequest) !benchmark_
     return benchmark_model.parseEvidence(allocator, request.bytes, request.source_kind);
 }
 
-/// Implements compare workflow logic using caller-owned inputs.
+/// Parses both evidence blobs and classifies each shared benchmark as regression or
+/// improvement against `threshold_pct`. The two parsed sets are scratch and freed here.
 pub fn compare(allocator: std.mem.Allocator, request: CompareRequest) !benchmark_model.BenchComparison {
     // Returned comparison owns allocated slices; caller deinitializes it.
     var current = try parse(allocator, request.current);
@@ -73,7 +79,8 @@ pub fn compare(allocator: std.mem.Allocator, request: CompareRequest) !benchmark
     return benchmark_model.compare(allocator, current, baseline, request.threshold_pct);
 }
 
-/// Implements budget workflow logic using caller-owned inputs.
+/// Summarizes a prior comparison JSON into pass/fail against `max_regression_pct`.
+/// Pairs the parsed summary with the threshold so `BudgetResult.passed()` can decide.
 pub fn budget(allocator: std.mem.Allocator, request: BudgetRequest) !BudgetResult {
     return .{
         .summary = try benchmark_model.compareSummaryFromJson(allocator, request.comparison),

@@ -25,8 +25,12 @@ pub const DiffRequest = struct {
 /// Carries budget request data across use case and port boundaries.
 pub const BudgetRequest = struct {
     coverage: EvidenceRequest,
+    /// Workspace-relative paths whose coverage is scored separately; only paths that
+    /// also appear in the coverage evidence contribute to the changed-file rate.
     changed_files: []const []const u8 = &.{},
+    /// Overall line-rate floor in basis points (10000 = 100%); default 8000 = 80%.
     min_line_rate_bp: usize = 8000,
+    /// Changed-file line-rate floor in basis points; 0 disables the changed-file gate.
     min_changed_line_rate_bp: usize = 0,
 };
 
@@ -34,6 +38,7 @@ pub const BudgetRequest = struct {
 pub const CoverageDiff = struct {
     current: coverage_model.CoverageSet,
     baseline: coverage_model.CoverageSet,
+    /// current minus baseline overall line rate, in basis points (signed: negative = drop).
     line_rate_delta_bp: i64,
 
     /// Releases allocations owned by this value; callers must not use owned slices after this returns.
@@ -54,7 +59,8 @@ pub const CoverageBudget = struct {
     min_line_rate_bp: usize,
     min_changed_line_rate_bp: usize,
 
-    /// Implements passed workflow logic using caller-owned inputs.
+    /// True when the overall line rate meets its floor and, unless the changed-file
+    /// floor is 0 (disabled), the changed-file line rate meets its floor too. All in bp.
     pub fn passed(self: CoverageBudget) bool {
         return self.line_rate_bp >= self.min_line_rate_bp and
             (self.min_changed_line_rate_bp == 0 or self.changed_line_rate_bp >= self.min_changed_line_rate_bp);
@@ -67,7 +73,8 @@ pub const CoverageBudget = struct {
     }
 };
 
-/// Maps map data without taking ownership; allocation failures from nested values are propagated when needed.
+/// Parses coverage evidence (LCOV or zigars coverage JSON; `format` "auto" detects) into
+/// a fresh `CoverageSet`. Borrows `request.bytes`; the returned set is owned by the caller.
 pub fn map(allocator: std.mem.Allocator, request: EvidenceRequest) !coverage_model.CoverageSet {
     return coverage_model.parse(allocator, request.bytes, request.source_kind, request.format);
 }
@@ -81,7 +88,9 @@ pub fn merge(allocator: std.mem.Allocator, request: MergeRequest) !coverage_mode
     return coverage_model.merge(allocator, left, right);
 }
 
-/// Implements diff workflow logic using caller-owned inputs.
+/// Parses current and baseline evidence and computes their overall line-rate delta (bp).
+/// On success both parsed sets are moved into the returned `CoverageDiff` (caller frees);
+/// the ownership flags ensure a mid-parse failure does not leak the first set.
 pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
     var current = try map(allocator, request.current);
     var current_owned = true;
@@ -99,7 +108,8 @@ pub fn diff(allocator: std.mem.Allocator, request: DiffRequest) !CoverageDiff {
     };
 }
 
-/// Implements budget workflow logic using caller-owned inputs.
+/// Parses coverage evidence and computes overall and changed-file line rates (bp) against
+/// the request floors. The parsed set is moved into the returned budget (caller frees).
 pub fn budget(allocator: std.mem.Allocator, request: BudgetRequest) !CoverageBudget {
     var set = try map(allocator, request.coverage);
     errdefer set.deinit(allocator);

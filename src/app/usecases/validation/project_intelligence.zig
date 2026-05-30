@@ -213,7 +213,10 @@ pub fn agentGuideValue(allocator: std.mem.Allocator, client: []const u8, task: [
     return .{ .object = obj };
 }
 
-/// Serializes validate patch fields into an allocator-owned JSON value; allocation failures propagate.
+/// Runs the patch-readiness validation phases (fmt --check, ast-check per
+/// changed Zig file, then a build test gate per mode), short-circuiting on
+/// failure when stop_on_failure is set and recording skipped phases. Returns an
+/// allocator-owned JSON result the caller must deinit.
 pub fn validatePatchValue(
     allocator: std.mem.Allocator,
     context: app_context.ProjectIntelligenceContext,
@@ -372,7 +375,10 @@ pub fn impactValue(
     return .{ .object = obj };
 }
 
-/// Serializes project profile fields into an allocator-owned JSON value; allocation failures propagate.
+/// Generates (or accepts supplied) a project profile and, only when
+/// request.apply is true, writes it to the default profile path through the
+/// sandboxed workspace. Without apply it previews and reports requires_apply.
+/// Returns an allocator-owned JSON result the caller must deinit.
 pub fn projectProfileValue(
     allocator: std.mem.Allocator,
     context: app_context.ProjectIntelligenceContext,
@@ -410,7 +416,11 @@ pub fn projectProfileValue(
     return .{ .object = obj };
 }
 
-/// Serializes patch guard fields into an allocator-owned JSON value; allocation failures propagate.
+/// Checks each candidate path (from files and/or a patch) against the workspace
+/// sandbox and the generated/vendored-path policy, marking it safe or a
+/// violation. safe=false if any path escapes the workspace or targets a
+/// generated path. Read-only: it never writes. Returns an allocator-owned JSON
+/// result the caller must deinit.
 pub fn patchGuardValue(
     allocator: std.mem.Allocator,
     context: app_context.ProjectIntelligenceContext,
@@ -782,7 +792,10 @@ pub fn handoffPackValue(
     return .{ .object = obj };
 }
 
-/// Serializes decision record fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds an architecture decision record and, only when request.apply is true,
+/// appends it as a JSONL line to the project-memory file (capturing a preimage
+/// first). Without apply it previews and reports requires_apply. Returns an
+/// allocator-owned JSON result the caller must deinit.
 pub fn decisionRecordValue(
     allocator: std.mem.Allocator,
     context: app_context.ProjectIntelligenceContext,
@@ -2109,7 +2122,9 @@ fn appendCommandsForImpact(allocator: std.mem.Allocator, commands: *std.json.Arr
     }
 }
 
-/// Implements import matches target workflow logic using caller-owned inputs.
+/// Reports whether an `@import` path likely refers to the target file: exact
+/// match, basename match, or basename-substring. Heuristic, so it can over-match
+/// (e.g. similarly named files); callers treat hits as advisory.
 fn importMatchesTarget(imported: []const u8, target: []const u8) bool {
     const base = std.fs.path.basename(target);
     return std.mem.eql(u8, imported, target) or
@@ -2228,7 +2243,9 @@ fn parseJsonLinesOrArray(allocator: std.mem.Allocator, text: []const u8, limit: 
     return out;
 }
 
-/// Implements filter records workflow logic using caller-owned inputs.
+/// Filters project-memory records by optional category (exact) and query
+/// (case-insensitive substring over title/decision/rationale/category), capped
+/// at `limit`. Returns an allocator-owned JSON array of cloned matches.
 fn filterRecords(allocator: std.mem.Allocator, records: std.json.Value, query: ?[]const u8, category: ?[]const u8, limit: usize) !std.json.Value {
     const array = switch (records) {
         .array => |a| a,
@@ -2252,7 +2269,8 @@ fn filterRecords(allocator: std.mem.Allocator, records: std.json.Value, query: ?
     return .{ .array = out };
 }
 
-/// Implements searchable record text workflow logic using caller-owned inputs.
+/// Concatenates a record's title/decision/rationale/category into one
+/// allocator-owned haystack string for substring query matching.
 fn searchableRecordText(allocator: std.mem.Allocator, obj: std.json.ObjectMap) ![]const u8 {
     return std.fmt.allocPrint(allocator, "{s} {s} {s} {s}", .{
         stringField(obj, "title") orelse "",
@@ -2356,7 +2374,10 @@ fn sequenceStepValue(allocator: std.mem.Allocator, tool: []const u8, reason: []c
     return .{ .object = obj };
 }
 
-/// Implements put semantic metadata workflow logic using caller-owned inputs.
+/// Writes the shared semantic-impact evidence envelope (analysis_kind, parser-
+/// backed confidence, coverage, limitations, verify_with, cross-checks) onto a
+/// result, branching on whether the tool is impact or test-selection. Keeps
+/// these results honest: parser-backed yet advisory, never a skip-tests proof.
 fn putSemanticMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
     const select = std.mem.eql(u8, tool_name, "zig_test_select_semantic");
     const analysis_kind = if (select) "parser_backed_semantic_test_selection" else "parser_backed_semantic_impact";
@@ -2404,7 +2425,9 @@ fn semanticCrossCheckValue(allocator: std.mem.Allocator, verify_with: []const []
     return .{ .object = obj };
 }
 
-/// Implements path list from text and patch workflow logic using caller-owned inputs.
+/// Collects a deduplicated path list from a whitespace/comma-separated `text`
+/// argument plus paths parsed out of a unified `patch`. Returns an
+/// allocator-owned PathList the caller must deinit.
 pub fn pathListFromTextAndPatch(allocator: std.mem.Allocator, text: ?[]const u8, patch: ?[]const u8) !PathList {
     var paths = std.ArrayList([]const u8).empty;
     errdefer {
@@ -2416,7 +2439,10 @@ pub fn pathListFromTextAndPatch(allocator: std.mem.Allocator, text: ?[]const u8,
     return .{ .items = try paths.toOwnedSlice(allocator) };
 }
 
-/// Implements changed path list workflow logic using caller-owned inputs.
+/// Determines the changed-file set: caller-supplied `explicit_files` win;
+/// otherwise it falls back to `git status --porcelain` (bounded timeout),
+/// dropping generated/vendored paths. A git failure yields an empty list rather
+/// than an error. Returns an allocator-owned PathList the caller must deinit.
 fn changedPathList(allocator: std.mem.Allocator, context: app_context.ProjectIntelligenceContext, explicit_files: ?[]const u8, timeout_ms: i64) !PathList {
     var list = std.ArrayList([]const u8).empty;
     errdefer {
@@ -2620,7 +2646,7 @@ fn isTimeoutError(err: anyerror) bool {
     return err == error.Timeout or err == error.RequestTimeout;
 }
 
-/// Extracts string list contains data from JSON input without taking ownership of borrowed values.
+/// Reports whether `value` is present in `list` (exact string equality).
 fn stringListContains(list: []const []const u8, value: []const u8) bool {
     for (list) |item| {
         if (std.mem.eql(u8, item, value)) return true;
@@ -2929,7 +2955,9 @@ fn argvHasToken(argv: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
-/// Implements sweep allocation failures workflow logic using caller-owned inputs.
+/// Runs `scenario` once to count its allocations, then replays it under a
+/// FailingAllocator that fails at each index (capped at 32), asserting every
+/// failure surfaces as OutOfMemory with no leak — an OOM-cleanup fuzz harness.
 fn sweepAllocationFailures(comptime scenario: fn (std.mem.Allocator) anyerror!void) !void {
     const allocation_count = blk: {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -3090,7 +3118,9 @@ fn projectIntelligenceAllocationScenario(allocator: std.mem.Allocator) !void {
     _ = changed.items.len;
 }
 
-/// Implements non allocation failure scenario workflow logic using caller-owned inputs.
+/// Negative control for sweepAllocationFailures: turns an allocation failure into
+/// a non-OOM error so the sweep is shown to surface unexpected errors rather than
+/// silently treating every failure as OutOfMemory.
 fn nonAllocationFailureScenario(allocator: std.mem.Allocator) !void {
     const bytes = allocator.alloc(u8, 1) catch return error.AccessDenied;
     defer allocator.free(bytes);

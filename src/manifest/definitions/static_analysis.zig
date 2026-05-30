@@ -1,3 +1,9 @@
+//! Tool definitions for the `static_analysis` group: heuristic and
+//! parser-backed workspace source analysis, build graph inspection, test
+//! discovery/mapping, risk ranking, refactor planning, and optional
+//! compiler-backed layout measurement. All tools are read-only from a
+//! workspace perspective unless noted (measure=true writes probe files to
+//! .zigars-cache). Confidence limits and tier labels are embedded in results.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -271,6 +277,8 @@ pub const zig_comptime_diagnose = tool(.{
     .plan = .{ .pure_analysis = "Parser-only comptime diagnosis; does not execute compiler probes or claim semantic evaluation." },
     .static_analysis_tier = .advisory_orientation,
 });
+// Shared catalog hints for the two compiler-backed layout tools (zig_memory_layout
+// and zig_abi_layout_diff). Keeping them here avoids duplicating enum text.
 const layout_measure_hint = fieldHint("measure", .{ .description = "Run optional standalone compiler-backed layout probes.", .default_bool = false });
 const layout_targets_hint = fieldHint("targets", .{ .description = "Space- or comma-separated Zig target triples for compiler-backed measurements." });
 const layout_comptime_hint = fieldHint("allow_project_comptime", .{ .description = "Opt in to compiling copied declarations that contain explicit comptime logic; project imports and build.zig remain disallowed.", .default_bool = false });

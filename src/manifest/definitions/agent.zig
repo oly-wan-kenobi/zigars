@@ -1,3 +1,8 @@
+//! Tool definitions for the `agent_workflows` group: context orientation,
+//! goal routing, client guidance, patch validation, failure fusion, impact
+//! analysis, project profiles, and workspace safety checks.
+//! Backend-executing tools (validate_patch, failure_fusion) require apply=true
+//! for any source mutations their sub-tools might trigger.
 const types = @import("../types.zig");
 
 const schema = types.schema;

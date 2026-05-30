@@ -1,3 +1,6 @@
+//! Pins the public surface of the transactional_editing tool definitions and
+//! verifies that the code-action-batch stub carries the expected read-only,
+//! zero-input, and pure_analysis metadata.
 const std = @import("std");
 const subject = @import("transactional_editing.zig");
 const zigars_patch_session_create = subject.zigars_patch_session_create;

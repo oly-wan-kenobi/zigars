@@ -1,3 +1,6 @@
+//! Contract tests for profiling.zig: pins that every profiling tool exposes a
+//! non-empty description and that backend-executing tools carry the expected
+//! executes_backend risk flag.
 const std = @import("std");
 const subject = @import("profiling.zig");
 const zig_profile_plan = subject.zig_profile_plan;

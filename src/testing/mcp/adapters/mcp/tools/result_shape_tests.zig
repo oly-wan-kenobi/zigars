@@ -1,3 +1,7 @@
+//! Tests for the result_shape MCP tool adapter.
+//! Pins the structured output field names and the structured error code returned
+//! when an unsupported mode string is supplied.
+
 const std = @import("std");
 
 const mcp_result = @import("../../../../../adapters/mcp/result.zig");

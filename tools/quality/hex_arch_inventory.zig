@@ -1,3 +1,9 @@
+//! Hexagonal architecture inventory reporter for the `src/` tree.
+//!
+//! Scans all `.zig` files under `src/` and emits counts of root-level files,
+//! retired `src/tools/` imports, and MCP adapter retired-root imports.
+//! Used as a lightweight progress tracker; the architecture guard enforces
+//! the hard import walls.
 const std = @import("std");
 const cli_io = @import("../common/cli_io.zig");
 
@@ -7,6 +13,8 @@ const Io = std.Io;
 const max_file_bytes = 4 * 1024 * 1024;
 
 const Options = struct {
+    // When true, any root Zig file outside `final_root_allowlist` is counted
+    // as a violation; default is the strict/fail-closed mode.
     strict_root_files: bool = true,
 };
 
@@ -40,6 +48,9 @@ const Inventory = struct {
     }
 };
 
+/// CLI entry point. Parses flags, scans the tree, prints a one-line summary
+/// to stdout, and returns `error.HexArchitectureInventoryFailed` when any
+/// violation counter is non-zero.
 pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     const options = try parseOptions(io, args);
     const inventory = try scan(allocator, io, options);
@@ -61,6 +72,8 @@ fn parseOptions(io: Io, args: []const []const u8) !Options {
     return options;
 }
 
+/// Walks `src/` and returns aggregated inventory counters. Exposed separately
+/// from `run` so tests can inspect counters without going through the CLI.
 pub fn scan(allocator: Allocator, io: Io, options: Options) !Inventory {
     var inventory: Inventory = .{};
     try scanSrcTree(allocator, io, options, &inventory);
@@ -99,6 +112,8 @@ fn scanSrcTree(allocator: Allocator, io: Io, options: Options, inventory: *Inven
     }
 }
 
+// `@import("tools/…")` outside `src/adapters/mcp/` or `src/tools/` is a
+// retired import pattern — the canonical path is through app/domain ports.
 fn checkRetiredToolsImport(io: Io, source_path: []const u8, bytes: []const u8, inventory: *Inventory) !void {
     if (std.mem.indexOf(u8, bytes, "@import(\"tools/") == null) return;
     if (std.mem.startsWith(u8, source_path, "src/adapters/mcp/")) return;

@@ -247,7 +247,9 @@ pub fn runCommand(allocator: std.mem.Allocator, app: anytype, argv: []const []co
     };
 }
 
-/// Checks backend availability, returning an unavailable probe when no port is bound.
+/// Checks backend availability, returning an unavailable probe (rather than an
+/// error) when no port is bound or the check itself fails. On success the
+/// caller owns the duped status/resolution strings (see Probe).
 pub fn checkBackend(app: anytype, allocator: std.mem.Allocator, name: []const u8, argv: []const []const u8, timeout_ms: i64) Probe {
     const backend_port = app.context.backend_probe orelse {
         return .{
@@ -268,6 +270,9 @@ pub fn checkBackend(app: anytype, allocator: std.mem.Allocator, name: []const u8
         .resolution = "confirm the configured backend path and executable permissions",
     };
     defer availability.deinit(allocator);
+    // Probe is not an error union, so OOM while duping out of the soon-to-be-freed
+    // availability buffers cannot be propagated; treat it as fatal rather than
+    // returning dangling borrows.
     const raw_status = availability.unavailable_reason orelse if (availability.available) "ok" else "unavailable";
     const status = allocator.dupe(u8, raw_status) catch @panic("out of memory cloning backend probe status");
     const resolution = allocator.dupe(u8, availability.basis) catch @panic("out of memory cloning backend probe resolution");
@@ -337,7 +342,8 @@ fn floatToInt(value: f64, default: i64) i64 {
     return @intFromFloat(value);
 }
 
-/// Serializes arg fields into an allocator-owned JSON value; allocation failures propagate.
+/// Looks up a named field in object-shaped tool args; returns null when args is
+/// absent, not an object, or lacks the field. Borrows from args, allocates nothing.
 fn argValue(args: ?std.json.Value, name: []const u8) ?std.json.Value {
     const root = args orelse return null;
     if (root != .object) return null;
@@ -516,7 +522,9 @@ pub fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8,
     return .{ .object = obj };
 }
 
-/// Implements kind for error workflow logic using caller-owned inputs.
+/// Maps a Zig error value to the stable error_kind string surfaced in structured
+/// tool results (timeout, unavailable, not_found, permission, output_limit,
+/// workspace_path, invalid_data); anything unmapped becomes execution_failed.
 fn kindForError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -862,6 +870,8 @@ pub fn changedPathList(allocator: std.mem.Allocator, app: anytype, explicit_file
 
 /// Extracts the path portion from a git porcelain status line.
 pub fn statusLinePath(line: []const u8) []const u8 {
+    // Porcelain prefixes each path with a 2-char status code plus a space; rename
+    // entries read "old -> new", so keep only the post-arrow destination path.
     const trimmed = std.mem.trim(u8, if (line.len > 3) line[3..] else "", " \t");
     if (std.mem.indexOf(u8, trimmed, " -> ")) |arrow| return trimmed[arrow + " -> ".len ..];
     return trimmed;
@@ -1195,7 +1205,10 @@ pub fn unixMs(app: anytype) i64 {
     return 0;
 }
 
-/// Implements relative from abs workflow logic using caller-owned inputs.
+/// Returns abs_path expressed relative to root ("." when equal), or null when
+/// abs_path is not strictly under root. The separator check rejects sibling
+/// prefixes (e.g. "/repo-other" under root "/repo"), so callers can treat null
+/// as a workspace-boundary violation.
 fn relativeFromAbs(root: []const u8, abs_path: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, root, abs_path)) return ".";
     if (!std.mem.startsWith(u8, abs_path, root)) return null;

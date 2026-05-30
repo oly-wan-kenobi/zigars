@@ -1,3 +1,7 @@
+//! Pins the flamegraph render use case against fake command/workspace ports: exact
+//! zflame argv (format subcommand, flag prefixes, resolved input path), SVG-on-stdout
+//! validation, and the typed failure arm for each error class (missing args, non-SVG
+//! output, nonzero/signal exit, backend port error, input-read and write failures).
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -1,3 +1,6 @@
+//! Pins parseFrames frame-limit and count semantics, frame symbol extraction,
+//! and the looksLikeFrame heuristic against representative debugger line shapes.
+
 const std = @import("std");
 
 const stacktrace = @import("stacktrace.zig");

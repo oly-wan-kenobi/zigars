@@ -1,3 +1,8 @@
+//! DocsScanner port implementation for release documentation reads and path
+//! scans. Reads are always bounded by the caller-supplied max_bytes/max_files
+//! limits; walk errors are counted rather than fatal so partial results can
+//! still be returned when a directory is unreadable.
+
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -12,6 +17,7 @@ pub const Scanner = struct {
     const Self = @This();
 
     /// Stores borrowed workspace and I/O references used by scan operations.
+    /// Both `workspace` and the underlying `io` handle must outlive this struct.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io) Self {
         return .{
             .workspace = workspace,
@@ -31,14 +37,18 @@ pub const Scanner = struct {
         };
     }
 
-    /// Reads bytes from an absolute path through this port.
+    /// Reads up to `request.max_bytes` bytes from an absolute path.
+    /// Returns an allocator-owned buffer (`owns_bytes = true`); caller must
+    /// call `deinit` on the result.
     fn readAbsolute(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.DocsReadAbsoluteRequest) ports.PortError!ports.DocsReadResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = std.Io.Dir.cwd().readFileAlloc(self.io, request.path, allocator, .limited(request.max_bytes)) catch |err| return filesystem.mapPortError(err);
         return .{ .bytes = bytes, .owns_bytes = true };
     }
 
-    /// Scans absolute Zig source paths through this port.
+    /// Scans `request.root` recursively for `.zig` files, up to
+    /// `request.max_files`. Returns an allocator-owned result; caller must
+    /// call `deinit`.
     fn scanAbsoluteZigPaths(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,
@@ -50,7 +60,9 @@ pub const Scanner = struct {
         return scanPaths(self.io, allocator, &dir, .zig_only, request.max_files);
     }
 
-    /// Scans workspace-relative paths through this port.
+    /// Scans the workspace root recursively for `.zig` and `.md` files, up
+    /// to `request.max_files`. The workspace root is resolved at call time;
+    /// returns an allocator-owned result.
     fn scanWorkspacePaths(
         ptr: *anyopaque,
         allocator: std.mem.Allocator,
@@ -68,7 +80,10 @@ pub const Scanner = struct {
 /// Selects which path extensions a docs scan includes.
 const PathMode = enum { zig_only, text_candidates };
 
-/// Collects files matching the requested documentation path filters.
+/// Walks `dir` and collects paths matching `mode`, stopping at `maybe_limit`.
+/// Walk errors increment the counter but do not abort the scan; the result
+/// records both `walk_errors` and `truncated` so callers can decide whether
+/// the partial set is acceptable.
 fn scanPaths(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -97,6 +112,8 @@ fn scanPaths(
         const maybe_entry = walker.next(io) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {
+                // Non-OOM walk errors (e.g. permission denied on a subdir)
+                // are counted and scanning stops; existing entries are kept.
                 walk_errors += 1;
                 break;
             },

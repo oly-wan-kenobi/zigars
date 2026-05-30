@@ -1,3 +1,10 @@
+//! Ordered alias table that flattens every per-group definition module into a
+//! single `definitions` namespace consumed by `definitions.zig` and the
+//! aggregation pipeline.
+//!
+//! Declaration order here is the stable `ToolId` enum order for the base set.
+//! Append new aliases at the end of the relevant block; never reorder.
+
 const discovery = @import("definitions/discovery.zig");
 const agent = @import("definitions/agent.zig");
 const core = @import("definitions/core.zig");
@@ -14,7 +21,10 @@ const environment_profiles = @import("definitions/environment_profiles.zig");
 const runtime_ux = @import("definitions/runtime_ux.zig");
 const validation_workflows = @import("definitions/validation_workflows.zig");
 const transactional_editing = @import("definitions/transactional_editing.zig");
-/// Definitions struct used by this domain model.
+/// Flat namespace of every base-set tool definition, aliased from the
+/// per-group modules above. Consumed by `definitions.zig` as the first
+/// entry in `definition_groups`. Extension groups (phase6, performance,
+/// diagnostics, adoption) are appended separately in that file.
 pub const definitions = struct {
     pub const zigars_capabilities = discovery.zigars_capabilities;
     pub const zigars_tool_index = discovery.zigars_tool_index;

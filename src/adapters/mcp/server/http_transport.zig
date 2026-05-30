@@ -6,7 +6,8 @@ const transport_mod = mcp.transport;
 
 /// Transport implementation that stores the last sent response for HTTP reply.
 pub const HttpRequestTransport = struct {
-    // Owned serialized JSON response returned to the HTTP layer.
+    /// Owned serialized JSON of the most recent response; the HTTP layer reads
+    /// it as the reply body. Null until the first send.
     response_message: ?[]const u8 = null,
     is_closed: bool = false,
 
@@ -20,7 +21,9 @@ pub const HttpRequestTransport = struct {
         }
     }
 
-    /// Captures an owned copy of the serialized JSON-RPC response.
+    /// Captures an owned copy of the serialized JSON-RPC response. Last write
+    /// wins: a prior captured message is freed so only the final send becomes the
+    /// HTTP reply body.
     pub fn send(self: *Self, _: std.Io, allocator: std.mem.Allocator, message: []const u8) transport_mod.Transport.SendError!void {
         if (self.is_closed) return transport_mod.Transport.SendError.ConnectionClosed;
 

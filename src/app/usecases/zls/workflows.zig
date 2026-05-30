@@ -51,7 +51,9 @@ const ParsedDiagnosticFile = struct {
     counts: SeverityCounts,
 };
 
-/// Serializes document sync fields into an allocator-owned JSON value; allocation failures propagate.
+/// Syncs a document into ZLS (in-memory didOpen, no disk write) and returns its
+/// assigned URI and open state; caller owns the JSON value. tool_name is the
+/// provenance tag for the sync.
 pub fn documentSyncValue(allocator: std.mem.Allocator, context: app_context.ZlsContext, tool_name: []const u8, file: []const u8, content: []const u8) !std.json.Value {
     const sync = try context.zls_gateway.sync(allocator, .{ .file = file, .content = content, .provenance = tool_name });
     defer sync.deinit(allocator);
@@ -98,7 +100,9 @@ pub fn workspaceDiagnosticsValue(allocator: std.mem.Allocator, context: app_cont
     return .{ .object = obj };
 }
 
-/// Serializes document status fields into an allocator-owned JSON value; allocation failures propagate.
+/// Reports a file's ZLS document status: resolves the path through the workspace
+/// sandbox and returns its file:// URI plus whether ZLS is running. Caller owns
+/// the JSON value.
 pub fn documentStatusValue(allocator: std.mem.Allocator, context: app_context.Context, file: []const u8) !std.json.Value {
     const workspace_store = try context.requireWorkspace();
     const resolved = try workspace_store.resolve(allocator, .{ .path = file, .provenance = "zls.document_status" });
@@ -197,7 +201,7 @@ fn diagnosticsCacheValue(allocator: std.mem.Allocator, status: ports.ZlsDiagnost
     return .{ .object = obj };
 }
 
-/// Serializes uri fields into an allocator-owned JSON value; allocation failures propagate.
+/// Wraps an absolute path as a file:// URI JSON string; caller owns the bytes.
 fn uriValue(allocator: std.mem.Allocator, path: []const u8) !std.json.Value {
     var out = std.ArrayList(u8).empty;
     try out.appendSlice(allocator, "file://");

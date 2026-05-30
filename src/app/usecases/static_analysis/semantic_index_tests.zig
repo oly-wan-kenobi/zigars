@@ -1,3 +1,6 @@
+//! Pins semantic_index behavior: parser-backed index build with heuristic fallback,
+//! zlint --print-ast reference confirmation that upgrades match confidence, cache
+//! signature reuse, apply-gated export writes, and fusion consensus across sources.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

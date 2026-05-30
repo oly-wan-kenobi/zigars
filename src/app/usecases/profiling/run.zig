@@ -4,7 +4,7 @@ const std = @import("std");
 const app_context = @import("../../context.zig");
 const ports = @import("../../ports.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream cap (bytes) on captured stdout/stderr from the explicit profiler command.
 pub const command_output_limit: usize = 1024 * 1024;
 
 /// Carries request data across use case and port boundaries.
@@ -55,7 +55,10 @@ pub const Result = union(enum) {
     }
 };
 
-/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
+/// Runs a pre-split profiler argv in the workspace root with no shell, so caller-supplied
+/// strings are never word-split or glob/var-expanded by zigars. `request.argv` is passed
+/// through verbatim; on a port error the argv is cloned into the failure for evidence.
+/// `Result.ok` borrows the command result's buffers (caller `deinit`s the result).
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     var command_result = context.command_runner.run(allocator, .{
         .argv = request.argv,

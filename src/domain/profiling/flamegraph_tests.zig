@@ -1,3 +1,6 @@
+//! Tests for flamegraph: zflame argv construction, all advertised input formats,
+//! diff-folded argv, and SVG output validation heuristic.
+
 const std = @import("std");
 
 const flamegraph = @import("flamegraph.zig");

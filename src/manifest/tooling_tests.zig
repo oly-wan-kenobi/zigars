@@ -1,3 +1,5 @@
+//! Pins the field-hint and schema-default contract: catalog marker presence,
+//! runtime boolean/integer defaults, and per-schema hint scoping.
 const std = @import("std");
 const subject = @import("tooling.zig");
 const catalog_json = subject.catalog_json;

@@ -1,4 +1,7 @@
-//! Fake command runner that enforces exact request matching and call ordering.
+//! Fake implementation of the `ports.CommandRunner` port.
+//! Enforces exact argv, cwd, timeout, and provenance matching in call order.
+//! Use `expectRun` for success outcomes and `expectRunError` to inject port
+//! errors; `verify` confirms every queued expectation was consumed.
 
 const std = @import("std");
 
@@ -121,7 +124,7 @@ pub const FakeCommandRunner = struct {
         if (self.next_run != self.expected_runs.items.len) return error.MissingExpectedCall;
     }
 
-    /// Executes queued work and returns owned results or the first failure.
+    /// Matches the request against the next queued expectation and returns its outcome.
     fn run(ptr: *anyopaque, allocator: Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
         const self: *Self = @ptrCast(@alignCast(ptr));
         // Keep an immutable snapshot of every attempted call, even when it fails,

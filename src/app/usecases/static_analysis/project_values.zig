@@ -41,7 +41,9 @@ pub const PublicApiDiffRequest = struct {
     baseline_ref: []const u8 = "HEAD",
 };
 
-/// Serializes build workspace fields into an allocator-owned JSON value; allocation failures propagate.
+/// Summarizes the workspace build files: reads build.zig and build.zig.zon through
+/// the port and attaches their parsed summaries (null when a file is absent or
+/// unreadable). Returns an allocator-owned result object.
 pub fn buildWorkspaceValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext) ports.PortError!std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -72,7 +74,10 @@ pub fn buildWorkspaceValue(allocator: std.mem.Allocator, context: app_context.St
     return .{ .object = obj };
 }
 
-/// Serializes build zig summary fields into an allocator-owned JSON value; allocation failures propagate.
+/// Extracts build.zig structure (modules, artifacts, tests, steps, imports,
+/// source files, suggested commands) by line-scanning for known builder calls.
+/// Heuristic, not a parse, so it tracks only a single current owner/kind at a
+/// time and misses anything spanning lines. Returns an allocator-owned object.
 pub fn buildZigSummaryValue(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Value {
     var modules = std.json.Array.init(allocator);
     var artifacts = std.json.Array.init(allocator);
@@ -142,7 +147,9 @@ pub fn buildZigSummaryValue(allocator: std.mem.Allocator, bytes: []const u8) !st
     return .{ .object = obj };
 }
 
-/// Serializes zon summary fields into an allocator-owned JSON value; allocation failures propagate.
+/// Extracts dependency names and path entries from build.zig.zon by tracking
+/// `.dependencies`/`.paths` block boundaries line by line (heuristic, not a ZON
+/// parse). Returns an allocator-owned result object.
 pub fn zonSummaryValue(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Value {
     var deps = std.json.Array.init(allocator);
     var paths = std.json.Array.init(allocator);
@@ -450,7 +457,10 @@ pub fn fileOwnerForPathValue(allocator: std.mem.Allocator, context: app_context.
     return fileOwnerValue(allocator, graph, rel);
 }
 
-/// Serializes import resolve fields into an allocator-owned JSON value; allocation failures propagate.
+/// Classifies an `@import` name against the build graph: stdlib (`std`),
+/// compiler builtin (`builtin`/`root`), a build.zig module or build.zig.zon
+/// dependency, a workspace-relative `.zig` file that exists, or unresolved — each
+/// with a next-action hint. Returns an allocator-owned result object.
 pub fn importResolveValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, graph: std.json.Value, import_name: []const u8, from: ?[]const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -559,7 +569,9 @@ pub fn relativeImportCandidate(allocator: std.mem.Allocator, from: ?[]const u8, 
     return allocator.dupe(u8, import_name);
 }
 
-/// Serializes dependency inspection fields into an allocator-owned JSON value; allocation failures propagate.
+/// Parses build.zig.zon dependency blocks and reports each dependency plus
+/// hygiene issues (url without hash, both url and path). Also surfaces the
+/// zig-pkg cache path status. Returns an allocator-owned result object.
 pub fn dependencyInspectionValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, bytes: []const u8) ports.PortError!std.json.Value {
     var deps = std.json.Array.init(allocator);
     var issues = std.json.Array.init(allocator);
@@ -610,7 +622,10 @@ pub fn dependencyInspectionFromWorkspaceValue(allocator: std.mem.Allocator, cont
     return dependencyInspectionValue(allocator, context, read.bytes);
 }
 
-/// Serializes cache path status fields into an allocator-owned JSON value; allocation failures propagate.
+/// Reports whether a cache path exists under the workspace (abs path, kind, entry
+/// count). Generated cache dirs are write targets, so a plain resolve may refuse
+/// them; this retries with `for_output` before giving up. OOM propagates, other
+/// resolve errors fall back to "absent". Returns an allocator-owned result object.
 pub fn cachePathStatusValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, path: []const u8) ports.PortError!std.json.Value {
     var resolved_for_output = false;
     const resolved: ?ports.WorkspaceResolveResult = context.workspace_store.resolve(allocator, .{
@@ -619,6 +634,8 @@ pub fn cachePathStatusValue(allocator: std.mem.Allocator, context: app_context.S
     }) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => blk: {
+            // A read-style resolve can reject generated cache dirs; retry as an
+            // output path so existing cache directories are still reported.
             resolved_for_output = true;
             break :blk context.workspace_store.resolve(allocator, .{
                 .path = path,
@@ -756,7 +773,9 @@ pub fn testMapValue(allocator: std.mem.Allocator, context: app_context.StaticAna
     return .{ .object = obj };
 }
 
-/// Serializes test failure triage fields into an allocator-owned JSON value; allocation failures propagate.
+/// Triages captured test output: extracts failure, panic, and expected/actual
+/// lines, folds in the compiler diagnostic index, and suggests rerun commands.
+/// Pure over the supplied text. Returns an allocator-owned result object.
 pub fn testFailureTriageValue(allocator: std.mem.Allocator, stderr: []const u8, stdout: []const u8, argv: []const []const u8, ok: bool) !std.json.Value {
     var failures = std.json.Array.init(allocator);
     var panics = std.json.Array.init(allocator);
@@ -779,7 +798,10 @@ pub fn testFailureTriageValue(allocator: std.mem.Allocator, stderr: []const u8, 
     return .{ .object = obj };
 }
 
-/// Serializes test failure triage from workspace fields into an allocator-owned JSON value; allocation failures propagate.
+/// Triages a test failure either from pre-captured `request.text` or by running
+/// `zig test` (per-file when `request.file` is given, else `zig build test`)
+/// through the command port. A requested file is sandbox-resolved before it
+/// reaches the argv. Returns an allocator-owned result object.
 pub fn testFailureTriageFromWorkspaceValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: TestFailureTriageRequest) StaticProjectError!std.json.Value {
     if (request.text) |raw_text| {
         return testFailureTriageValue(allocator, raw_text, "", &.{ "zig", "test" }, false);
@@ -819,7 +841,10 @@ pub fn testFailureTriageFromWorkspaceValue(allocator: std.mem.Allocator, context
     return testFailureTriageValue(allocator, run.stderr, run.stdout, argv.items, !run.effectiveTerm().failed());
 }
 
-/// Serializes changed files plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Plans focused checks from `git status --porcelain`: per changed/existing Zig
+/// file it suggests fmt/ast-check/test commands, escalating to build-level checks
+/// when build.zig(.zon) changed. Generated paths are skipped and only
+/// workspace-present paths drive commands. Returns an allocator-owned result object.
 pub fn changedFilesPlanValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, timeout_ms: ?u64) StaticProjectError!std.json.Value {
     const runner = context.command_runner orelse return error.MissingCommandRunner;
     const result = try runner.run(allocator, .{
@@ -869,7 +894,9 @@ pub fn changedFilesPlanValue(allocator: std.mem.Allocator, context: app_context.
     return .{ .object = obj };
 }
 
-/// Serializes target matrix plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Plans a target x step build-command matrix from whitespace/comma-separated
+/// target and step lists, with a per-target portability note. Plan-only: it
+/// never executes anything (see `zig_matrix_check`). Returns an allocator-owned object.
 pub fn targetMatrixPlanValue(allocator: std.mem.Allocator, targets_text: []const u8, steps_text: []const u8) !std.json.Value {
     var targets = std.mem.tokenizeAny(u8, targets_text, ", \t\r\n");
     var matrix = std.json.Array.init(allocator);
@@ -906,7 +933,9 @@ pub fn targetMatrixNote(target: []const u8) []const u8 {
     return "generic cross-target check";
 }
 
-/// Serializes workspace symbol cache fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds the workspace symbol index and attaches cache status; when `query` is
+/// given it also appends substring matches over indexed declaration names.
+/// Returns an allocator-owned result object.
 pub fn workspaceSymbolCacheValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, query: ?[]const u8, limit: usize) StaticProjectError!std.json.Value {
     const index = try workspaceSymbolIndexValue(allocator, context, limit);
     const cache = if (context.analysis_cache) |analysis_cache|
@@ -1125,7 +1154,9 @@ pub fn testSelectValue(allocator: std.mem.Allocator, context: app_context.Static
     return .{ .object = obj };
 }
 
-/// Serializes public api diff fields into an allocator-owned JSON value; allocation failures propagate.
+/// Diffs the `pub` declaration surface of two source snapshots into added,
+/// removed, and signature-changed sets, flagging `breaking_change_risk` when
+/// anything was removed or changed. Returns an allocator-owned result object.
 pub fn publicApiDiffValue(allocator: std.mem.Allocator, file: ?[]const u8, before: []const u8, after: []const u8) !std.json.Value {
     const before_decls = try publicDeclSnapshotValue(allocator, file, before);
     const after_decls = try publicDeclSnapshotValue(allocator, file, after);
@@ -1148,7 +1179,10 @@ pub fn publicApiDiffValue(allocator: std.mem.Allocator, file: ?[]const u8, befor
     return .{ .object = obj };
 }
 
-/// Serializes public api diff from workspace fields into an allocator-owned JSON value; allocation failures propagate.
+/// Diffs a file's public surface against a baseline. The "before" side defaults to
+/// the git baseline ref (sandbox-resolved before `git show`) and the "after" side
+/// to current workspace contents, unless the caller passes explicit text. Returns
+/// an allocator-owned result object.
 pub fn publicApiDiffFromWorkspaceValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: PublicApiDiffRequest) StaticProjectError!std.json.Value {
     const before_text = if (request.before) |text| text else try publicApiBaseline(allocator, context, request.file, request.baseline_ref);
     const after_text = if (request.after) |text| text else try publicApiCurrent(allocator, context, request.file);
@@ -1394,7 +1428,9 @@ pub fn compilerLineValue(allocator: std.mem.Allocator, parsed: CompilerLine) !st
     return .{ .object = obj };
 }
 
-/// Implements compiler next command workflow logic using caller-owned inputs.
+/// Suggests the next command for a diagnostic: for a `.zig` primary it picks
+/// `zig test <file>` when the run was a test, else `zig ast-check <file>`;
+/// otherwise it echoes the original argv. Returns an allocator-owned string value.
 pub fn compilerNextCommand(allocator: std.mem.Allocator, primary: CompilerLine, argv: []const []const u8) !std.json.Value {
     const zig = if (argv.len > 0) argv[0] else "zig";
     const path = primary.path orelse return .{ .string = try commandString(allocator, argv) };
@@ -1473,7 +1509,7 @@ pub fn argvContains(argv: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
-/// Extracts declaration identity data from Zig source text.
+/// Identity key for a declaration snapshot entry: its `name` field, or null.
 pub fn declKey(value: std.json.Value) ?[]const u8 {
     const obj = switch (value) {
         .object => |o| o,
@@ -1485,7 +1521,7 @@ pub fn declKey(value: std.json.Value) ?[]const u8 {
     };
 }
 
-/// Extracts declaration identity data from Zig source text.
+/// Signature string of a declaration snapshot entry: its `signature` field, or null.
 pub fn declSignature(value: std.json.Value) ?[]const u8 {
     const obj = switch (value) {
         .object => |o| o,
@@ -1633,7 +1669,9 @@ fn publicApiCurrent(allocator: std.mem.Allocator, context: app_context.StaticAna
     return allocator.dupe(u8, read.bytes);
 }
 
-/// Parses shell-like argument text into allocator-owned argument slices.
+/// Splits shell-like argument text into owned tokens, honoring single/double
+/// quotes and backslash escapes. A dangling escape or unterminated quote returns
+/// InvalidArguments. The caller frees the slice and each element.
 pub fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -1689,7 +1727,7 @@ pub fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []cons
     return list.toOwnedSlice(allocator);
 }
 
-/// Parses shell-like argument text into allocator-owned argument slices.
+/// Flushes the in-progress token buffer as the next owned argument in `list`.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     try list.ensureUnusedCapacity(allocator, 1);
     const arg = try current.toOwnedSlice(allocator);

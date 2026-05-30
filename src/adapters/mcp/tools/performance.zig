@@ -1,4 +1,8 @@
-//! Performance MCP adapters for benchmark, coverage, and regression workflows.
+//! Performance MCP adapters for coverage, benchmark, profiling-import, and
+//! regression-gate workflows. Each handler is a thin projection that forwards
+//! arguments to a performance use case and shapes the owned result or
+//! normalizes the failure into a structured MCP error; logic stays in the app
+//! layer.
 const std = @import("std");
 const mcp = @import("mcp");
 

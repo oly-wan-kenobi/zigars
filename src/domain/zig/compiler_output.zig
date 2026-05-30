@@ -1,6 +1,14 @@
+//! Zig compiler output parsing: line-level diagnostic normalization and coarse
+//! triage classification. All functions operate on borrowed slices; no
+//! allocation occurs and returned fields borrow from the input line.
 const std = @import("std");
 
-/// Borrowed compiler diagnostic line normalized into fields when possible.
+/// Normalized view of one compiler or test-runner diagnostic line.
+///
+/// All slice fields borrow from the original input; no allocation is performed.
+/// `path`, `line`, and `column` are null for global diagnostics such as
+/// `error: unable to load 'missing.zig'` that carry no file location.
+/// `raw` always equals the full original input line.
 pub const CompilerLine = struct {
     severity: []const u8,
     path: ?[]const u8 = null,
@@ -10,7 +18,11 @@ pub const CompilerLine = struct {
     raw: []const u8,
 };
 
-/// Parses Zig compiler output with or without file location fields.
+/// Tries each known severity in order and returns the first match, or null for
+/// non-diagnostic lines such as build summaries.
+///
+/// Precedence: located `error` > located `warning` > located `note` > global
+/// `error: ` > global `warning: ` > global `note: `.
 pub fn parseCompilerLine(line: []const u8) ?CompilerLine {
     if (parseLocatedCompilerLine(line, "error")) |parsed| return parsed;
     if (parseLocatedCompilerLine(line, "warning")) |parsed| return parsed;
@@ -22,12 +34,19 @@ pub fn parseCompilerLine(line: []const u8) ?CompilerLine {
 }
 
 /// Parses `path:line:column: severity: message` diagnostics for one severity.
+///
+/// Returns a result with null path/line/column when the prefix before `: severity: `
+/// does not parse as `path:N:M`; this gracefully handles Windows absolute paths
+/// (`C:\...`) or non-numeric column/line fields by degrading rather than failing.
 pub fn parseLocatedCompilerLine(line: []const u8, severity: []const u8) ?CompilerLine {
     var token_buf: [16]u8 = undefined;
     const token = std.fmt.bufPrint(&token_buf, ": {s}: ", .{severity}) catch return null;
     const severity_pos = std.mem.indexOf(u8, line, token) orelse return null;
     const prefix = line[0..severity_pos];
     const message = line[severity_pos + token.len ..];
+    // Walk back from the severity marker to extract column, then line number.
+    // lastIndexOfScalar is used so paths containing colons (e.g. Windows drives)
+    // are handled by the parseInt fallback rather than a hard failure.
     const col_sep = std.mem.lastIndexOfScalar(u8, prefix, ':') orelse return .{ .severity = severity, .message = message, .raw = line };
     const line_prefix = prefix[0..col_sep];
     const line_sep = std.mem.lastIndexOfScalar(u8, line_prefix, ':') orelse return .{ .severity = severity, .message = message, .raw = line };
@@ -43,7 +62,11 @@ pub fn parseLocatedCompilerLine(line: []const u8, severity: []const u8) ?Compile
     };
 }
 
-/// Maps compiler messages into coarse triage categories.
+/// Classifies a compiler diagnostic message into a coarse triage category.
+///
+/// Categories are stable tokens used in structured MCP results. The function
+/// applies heuristics in order of specificity; `compiler_error` is the catch-all
+/// when no keyword matches. Returns a borrowed static string literal.
 pub fn classifyDiagnosticMessage(message: []const u8) []const u8 {
     if (std.mem.indexOf(u8, message, "expected type") != null) return "type_mismatch";
     if (std.mem.indexOf(u8, message, "expected ") != null and std.mem.indexOf(u8, message, "found ") != null) return "syntax_or_type_mismatch";

@@ -1,3 +1,8 @@
+//! Pins the HTTP runner security contract (MEDIUM-3):
+//! non-loopback binds are refused without explicit opt-in, loopback host
+//! classification covers IPv4/IPv6/localhost, and the Origin/Host gate
+//! rejects cross-origin requests to prevent DNS-rebinding attacks.
+
 const std = @import("std");
 const http = std.http;
 

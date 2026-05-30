@@ -1,3 +1,6 @@
+//! Tests for DiagnosticsCache retention and eviction policy.
+//! Pins: byte-budget eviction order, oversized-drop without eviction,
+//! snapshot sequence ordering, and allocation-failure cleanup.
 const std = @import("std");
 const diagnostics_cache = @import("diagnostics_cache.zig");
 

@@ -1,3 +1,9 @@
+//! Stdio smoke fixtures for core Zig tool families.
+//! Covers ZLS-unavailable paths, static-analysis, lint (zwanzig and zlint),
+//! semantic graph, profiling, and flame-graph tools. The `client` parameter
+//! is the `StdioClient` from `stdio_fixtures`; this module is transport-only
+//! and must not spawn or terminate the server process itself.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
@@ -10,6 +16,8 @@ const readFileAlloc = cli_io.readFileAlloc;
 // is supplied by stdio_fixtures so this module stays transport-boundary only.
 
 /// Exercises core, ZLS-unavailable, lint, semantic, and profiling tool paths.
+/// The `workspace` path is needed for assertions that read fixture output
+/// files created by the server (flamegraph SVG, analysis graph dot files).
 pub fn run(client: anytype, workspace: []const u8) !void {
     const profile_plan = try client.callTool("zig_profile_plan", "{\"binary\":\"zig-out/bin/fixture\",\"platform\":\"linux\"}");
     defer client.allocator.free(profile_plan);
@@ -140,12 +148,17 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     try expectFileStartsWith(client.allocator, client.io, workspace, "diff.svg", "<svg");
 }
 
+// Allocates a workspace-relative path, reads the file, frees the path, and
+// returns the file bytes. The caller owns the returned slice.
 fn joinedRead(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8) ![]u8 {
     const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workspace, rel });
     defer allocator.free(path);
     return readFileAlloc(allocator, io, path, 1024 * 1024);
 }
 
+// Reads a workspace-relative file and asserts it starts with `prefix`.
+// Used to verify that server-generated output files (SVG, DOT) have the
+// correct format without loading the entire file into the assertion message.
 fn expectFileStartsWith(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8, prefix: []const u8) !void {
     const bytes = try joinedRead(allocator, io, workspace, rel);
     defer allocator.free(bytes);

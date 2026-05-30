@@ -100,7 +100,9 @@ pub fn zigSignatureHelp(allocator: std.mem.Allocator, context: app_context.Conte
     return positionTool(allocator, context, args, "zig_signature_help", "textDocument/signatureHelp");
 }
 
-/// Handles MCP `zig_document_symbols` requests by delegating to app logic and shaping owned results/errors.
+/// Returns document symbols from ZLS, falling back to the parser-based
+/// declaration summary when ZLS is unavailable or errors. The fallback keeps the
+/// tool useful without a configured ZLS, at lower fidelity than a live LSP.
 pub fn zigDocumentSymbols(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const result = fileOnlyTool(allocator, context, args, "zig_document_symbols", "textDocument/documentSymbol");
     return result catch static_source_adapter.zigDeclSummary(allocator, context.staticAnalysis() catch |err| return contextError(allocator, "zig_document_symbols", "static_analysis_context", err), args);
@@ -175,7 +177,10 @@ pub fn zigRename(allocator: std.mem.Allocator, context: app_context.Context, arg
     };
 }
 
-/// Handles MCP `zig_diagnostics` requests by delegating to app logic and shaping owned results/errors.
+/// Returns diagnostics from ZLS, falling back to a `zig` command-backed check
+/// when ZLS is unavailable or errors. The `file` argument is required up front so
+/// both the LSP path and the compiler fallback report the same missing-argument
+/// error rather than diverging.
 pub fn zigDiagnostics(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     _ = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_diagnostics", "file", "string");
     const zls_result = fileOnlyTool(allocator, context, args, "zig_diagnostics", "textDocument/diagnostic");
@@ -270,7 +275,11 @@ fn fileOnlyTool(allocator: std.mem.Allocator, context: app_context.Context, args
     };
 }
 
-/// Returns the MCP tool result for ZLS failure.
+/// Maps a typed ZLS code-intel failure to the matching structured MCP result:
+/// unavailable backend, unsupported LSP capability, missing-file argument,
+/// out-of-range action index, malformed payload, or a sync/request port error.
+/// Keeping this exhaustive over the Failure union forces every new failure mode
+/// to get an explicit client-facing shape.
 fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: ?[]const u8, failure: code_intel.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
     return switch (failure) {
         .unavailable => zlsUnavailable(allocator, context),
@@ -283,7 +292,10 @@ fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, 
     };
 }
 
-/// Maps ZLS gateway failures to user-facing MCP tool errors.
+/// Maps ZLS gateway port failures to user-facing MCP tool errors. Sandbox path
+/// rejections and document/retention-limit overflows are reported through the
+/// workspace-path error shape (they all stem from the file/content argument);
+/// everything else becomes a generic retryable zls_request_failed error.
 fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (err == error.Unavailable) return zlsUnavailable(allocator, context);
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath or err == error.DocumentTooLarge or err == error.OpenDocumentLimitExceeded or err == error.RetainedContentLimitExceeded) {
@@ -299,7 +311,11 @@ fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool
     }, err);
 }
 
-/// Wraps a raw LSP JSON response in the structured MCP result envelope.
+/// Normalizes a raw LSP JSON-RPC response into the stable MCP envelope
+/// `{method, ok, result|error}`. Unparseable text becomes a structured
+/// malformed-response error; a JSON-RPC `error` member sets ok=false; a
+/// non-object payload is passed through under `raw` with ok=false rather than
+/// being dropped, so unexpected backend shapes stay inspectable.
 fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return mcp_errors.fromError(allocator, .{
         .tool = method,

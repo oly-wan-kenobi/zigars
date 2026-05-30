@@ -1,3 +1,7 @@
+//! Coverage evidence model: parsing (LCOV and JSON), merging, and rate computation.
+//! Coverage rates are expressed in basis points (bp): 10000 bp = 100%.
+//! Callers own all allocations returned by parse and merge; deinit frees them.
+
 const std = @import("std");
 
 /// Normalized coverage totals for one source file.
@@ -29,6 +33,9 @@ pub const ChangedCoverage = struct {
 };
 
 /// Parses coverage evidence, using format hints and content sniffing.
+/// When format is "lcov", or the content looks like LCOV (starts with TN:/SF:
+/// or contains a newline-SF: marker), LCOV parsing is used. Otherwise JSON is
+/// attempted. Returns error.InvalidCoverageEvidence for empty or unrecognized input.
 pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []const u8, format: []const u8) !CoverageSet {
     const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
     if (trimmed.len == 0) return error.InvalidCoverageEvidence;
@@ -40,6 +47,9 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, source_kind: []con
 }
 
 /// Merges two reports, coalescing files by exact path.
+/// Duplicate paths accumulate totals in place; covered is clamped to total at
+/// each insertion so the merged rate remains well-formed. The caller must deinit
+/// the returned set; the inputs are not modified or consumed.
 pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet) !CoverageSet {
     var merged = CoverageSet{ .source_kind = "merged" };
     var merged_owned = true;
@@ -51,8 +61,11 @@ pub fn merge(allocator: std.mem.Allocator, left: CoverageSet, right: CoverageSet
 }
 
 /// Converts covered/total counts to basis points, capped at 100% (10000 bp).
+/// Widened to u128 before multiplying to avoid overflow when covered is near
+/// usize max (e.g. from saturating merges of huge JSON counts).
 pub fn rateBp(covered: usize, total: usize) usize {
     if (total == 0) return 0;
+    // u128 prevents overflow: usize_max * 10000 < u128_max.
     const num = @as(u128, covered) * 10000;
     return @intCast(@min(@as(u128, 10000), num / total));
 }
@@ -161,6 +174,9 @@ fn parseFilesArray(allocator: std.mem.Allocator, set: *CoverageSet, value: std.j
 }
 
 /// Appends an owned coverage file entry, merging duplicate paths in place.
+/// covered is clamped to total at each insertion to prevent per-file rates
+/// exceeding 100%. Saturating add (+|=) keeps aggregate totals finite when
+/// parsing huge JSON counts near the integer ceiling.
 fn appendFile(allocator: std.mem.Allocator, set: *CoverageSet, path: []const u8, total: usize, covered: usize) !void {
     if (path.len == 0) return;
     for (set.files.items) |*existing| {
@@ -192,6 +208,8 @@ fn intField(obj: std.json.ObjectMap, name: []const u8) ?i64 {
     };
 }
 
+/// Converts an f64 to i64, returning null for non-finite values or out-of-range
+/// magnitudes that would invoke undefined behavior in @intFromFloat.
 fn floatToInt(value: f64) ?i64 {
     if (!std.math.isFinite(value)) return null;
     const max: f64 = @floatFromInt(std.math.maxInt(i64));

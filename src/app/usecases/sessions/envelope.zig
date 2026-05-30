@@ -1,4 +1,7 @@
 //! Shared persistent session envelope and cache-local JSONL event store.
+//! Provides token validation, path construction, JSON envelope building, and
+//! bounded append+view helpers. The workspace store port enforces the sandbox;
+//! every path written here must also pass the store's sandbox check.
 const std = @import("std");
 
 const ports = @import("../../ports.zig");
@@ -13,8 +16,9 @@ pub const max_session_bytes: usize = 512 * 1024;
 /// Bounded maximum JSONL records returned by a session view.
 pub const max_records: usize = 128;
 
-/// Shared envelope creation inputs. Arrays are JSON values so individual
-/// workflow kinds can own their domain-specific item shapes.
+/// Shared envelope creation inputs. Optional fields default to empty arrays or
+/// objects in the serialized output so the schema stays stable across workflow
+/// kinds that do not use every section.
 pub const EnvelopeInput = struct {
     id: []const u8,
     kind: []const u8,
@@ -28,7 +32,10 @@ pub const EnvelopeInput = struct {
     validation: ?std.json.Value = null,
 };
 
-/// Validates deterministic path tokens used in cache-local session paths.
+/// Guards a session `kind`/`id` before it becomes a path segment: rejects empty,
+/// over-long, "."/".." and any character outside [A-Za-z0-9._-]. This blocks
+/// path traversal and separator injection so session files stay under
+/// `.zigars-cache/sessions` even before the workspace store re-checks the path.
 pub fn validateToken(token: []const u8) !void {
     if (token.len == 0 or token.len > 128) return error.InvalidSessionToken;
     if (std.mem.eql(u8, token, ".") or std.mem.eql(u8, token, "..")) return error.InvalidSessionToken;
@@ -52,6 +59,8 @@ pub fn sessionPath(allocator: std.mem.Allocator, kind: []const u8, id: []const u
 }
 
 /// Builds a JSON-native session envelope with the shared required fields.
+/// Validates `kind` and `id` tokens before building; allocation failures and
+/// invalid tokens propagate. The returned value is owned by `allocator`.
 pub fn envelopeValue(allocator: std.mem.Allocator, input: EnvelopeInput) !std.json.Value {
     try validateToken(input.kind);
     try validateToken(input.id);
@@ -70,7 +79,8 @@ pub fn envelopeValue(allocator: std.mem.Allocator, input: EnvelopeInput) !std.js
     return .{ .object = obj };
 }
 
-/// Builds a compact session event object.
+/// Builds a compact `{event, message, at}` session event object.
+/// `at_ms` is a Unix epoch millisecond timestamp. Owned by `allocator`.
 pub fn eventValue(allocator: std.mem.Allocator, event: []const u8, message: []const u8, at_ms: i64) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "event", .{ .string = event });
@@ -79,9 +89,11 @@ pub fn eventValue(allocator: std.mem.Allocator, event: []const u8, message: []co
     return .{ .object = obj };
 }
 
-/// Appends one JSON snapshot line to a workspace-local session JSONL file.
-/// The write is implemented as read+rewrite because the workspace store port
-/// intentionally exposes whole-file writes only.
+/// Appends one JSON snapshot line to a workspace-local session JSONL file and
+/// returns the workspace-relative session path (owned by `allocator`; the caller
+/// must free it). The write is implemented as read+rewrite because the workspace
+/// store port intentionally exposes whole-file writes only. Fails with
+/// DocumentTooLarge when the result would exceed `max_session_bytes`.
 pub fn appendSnapshot(
     allocator: std.mem.Allocator,
     store: ports.WorkspaceStore,
@@ -110,6 +122,8 @@ pub fn appendSnapshot(
         defer read.deinit(allocator);
         if (read.bytes.len >= max_session_bytes) return error.DocumentTooLarge;
         try out.appendSlice(allocator, read.bytes);
+        // Force a record boundary if the prior file lacked a trailing newline,
+        // so a partially written last line cannot merge with the new snapshot.
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(allocator, '\n');
     }
     try support.serializeValue(allocator, &out, snapshot);
@@ -125,7 +139,13 @@ pub fn appendSnapshot(
     return path;
 }
 
-/// Reads a session JSONL file into a bounded inspectable view.
+/// Reads a session JSONL file into a bounded, inspectable JSON object. Records
+/// beyond `max_records` are counted but not returned (`truncated` is set);
+/// unparseable lines bump `malformed_records` and rows with a non-matching
+/// `schema_version` bump `unsupported_versions`, neither aborting the read. The
+/// last valid object is exposed as `envelope` (latest snapshot wins). The whole
+/// returned value, including cloned records and `raw_jsonl`, is owned by
+/// `allocator`. Read-only: this never writes or mutates session state.
 pub fn view(
     allocator: std.mem.Allocator,
     store: ports.WorkspaceStore,
@@ -165,6 +185,8 @@ pub fn view(
         }
         const cloned = try support.cloneValue(allocator, parsed.value);
         if (cloned == .object) {
+            // Keep an independent copy as the running "envelope" so it can be
+            // owned separately from the records array; drop the prior candidate.
             if (last != .null) support.deinitOwnedValue(allocator, last);
             last = try support.cloneValue(allocator, cloned);
         }
@@ -187,6 +209,8 @@ pub fn view(
     return .{ .object = obj };
 }
 
+/// Returns a record's `schema_version`, or null when it is absent or not an
+/// integer, so the view can flag unsupported or unversioned rows.
 fn versionOf(value: std.json.Value) ?i64 {
     if (value != .object) return null;
     const raw = value.object.get("schema_version") orelse return null;
@@ -196,10 +220,15 @@ fn versionOf(value: std.json.Value) ?i64 {
     };
 }
 
+/// Returns a freshly allocated empty JSON array for use in envelope optional
+/// sections. The array is backed by `allocator` and transfered into the
+/// containing object map, which owns it from that point.
 fn emptyArray(allocator: std.mem.Allocator) std.json.Value {
     return .{ .array = std.json.Array.init(allocator) };
 }
 
+/// Returns an empty JSON object literal (no allocator needed; the map is
+/// zero-length and owns no heap memory).
 fn emptyObject() std.json.Value {
     return .{ .object = std.json.ObjectMap.empty };
 }

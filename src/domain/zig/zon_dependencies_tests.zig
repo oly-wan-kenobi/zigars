@@ -1,3 +1,5 @@
+//! Tests for zon_dependencies.zig: manifest parsing, text-preserving edits,
+//! injection-safe field validation, and comment/value disambiguation.
 const std = @import("std");
 
 const zon = @import("zon_dependencies.zig");

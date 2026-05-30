@@ -1,3 +1,8 @@
+//! Deterministic loopback-port selection for the smoke suite.
+//! Ports are derived from the process ID rather than the wall clock so
+//! concurrent test runs start from different offsets (LOW-9). A live bind
+//! probe confirms each candidate is free before it is returned.
+
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -8,6 +13,9 @@ const Io = std.Io;
 pub const port_base: u16 = 41000;
 pub const port_window: u16 = 8000;
 
+/// Returns the current real-clock time in nanoseconds. Used by fixture runners
+/// to stamp temporary workspace directory names so parallel runs do not
+/// collide on the same path.
 pub fn nowNs(io: Io) i96 {
     return Io.Clock.now(.real, io).nanoseconds;
 }

@@ -1,3 +1,8 @@
+//! Tests for the runtime_metrics MCP tool adapter.
+//! Pins the structured output shape for zigars_metrics_v2, backend health
+//! history, tool latency, and ZLS timeline projections.
+//! Uses in-process vtable fakes so no external backends are required.
+
 const std = @import("std");
 
 const app_context = @import("../../../../../app/context.zig");
@@ -6,7 +11,8 @@ const mcp_result = @import("../../../../../adapters/mcp/result.zig");
 const runtime_metrics = @import("../../../../../adapters/mcp/tools/runtime_metrics.zig");
 
 test "metrics v2 adapter exposes observed latency and backend history" {
-    // Fixture context shared by related test cases.
+    // Static var fields allow the vtable fn pointers to capture fixture data
+    // without an extra allocation; the test is single-threaded so this is safe.
     const TestContext = struct {
         var tool_stats = [_]ports.ObservabilityToolStats{
             .{ .name = "zig_version", .calls = 1, .total_latency_ms = 3, .max_latency_ms = 3, .last_latency_ms = 3 },
@@ -135,7 +141,7 @@ test "metrics v2 adapter exposes observed latency and backend history" {
 }
 
 test "timeline adapter returns current snapshot without recorded transitions" {
-    // Fixture context shared by related test cases.
+    // Empty snapshot simulates a fresh server that has never observed ZLS events.
     const TestContext = struct {
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
             return .{};

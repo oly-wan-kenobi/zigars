@@ -1,3 +1,5 @@
+//! Pins that the bootstrap runtime compiles with the expected lifecycle types
+//! and that the config usage string is non-empty.
 const std = @import("std");
 const config_mod = @import("config.zig");
 const App = @import("runtime_state.zig").App;

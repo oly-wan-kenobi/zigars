@@ -1,3 +1,6 @@
+//! Contract tests for performance.zig: pins that every coverage, benchmark,
+//! and profiler tool exposes a non-empty description and that write-capable
+//! tools carry the expected apply-gate risk metadata.
 const std = @import("std");
 const subject = @import("performance.zig");
 const zig_coverage_run = subject.zig_coverage_run;

@@ -14,6 +14,8 @@ const mcp = @import("mcp");
 pub fn deinitToolResult(allocator: std.mem.Allocator, result: mcp.tools.ToolResult) void {
     if (result.structuredContent) |structured_content| deinitOwnedValue(allocator, structured_content);
     for (result.content) |content_item| deinitOwnedContentBlock(allocator, content_item);
+    // An empty content slice is the `&.{}` sentinel, never a heap allocation, so
+    // only free when something was actually allocated.
     if (result.content.len > 0) allocator.free(result.content);
 }
 
@@ -95,7 +97,10 @@ pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.
     return structuredWithErrorFlag(allocator, value, true);
 }
 
-/// Maps structured with error flag failures to structured MCP errors.
+/// Builds a ToolResult carrying `value` both as serialized text content and as a
+/// cloned `structuredContent`, so clients can consume either; `is_error` sets the
+/// MCP error flag. The two are independent allocations owned by `allocator`. The
+/// errdefer chain unwinds every prior allocation if a later step fails.
 fn structuredWithErrorFlag(allocator: std.mem.Allocator, value: std.json.Value, is_error: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
     const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
     errdefer allocator.free(bytes);

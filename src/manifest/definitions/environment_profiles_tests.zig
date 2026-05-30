@@ -1,3 +1,6 @@
+//! Contract tests for environment_profiles.zig: pins that every setup/profile
+//! tool exposes a non-empty description and that write-capable tools carry the
+//! expected apply-gate risk metadata.
 const std = @import("std");
 const subject = @import("environment_profiles.zig");
 const zigars_setup_elicit = subject.zigars_setup_elicit;

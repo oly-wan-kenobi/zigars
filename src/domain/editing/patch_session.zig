@@ -1,9 +1,15 @@
+//! Patch-session domain: identity snapshots, preimage matching, stable session IDs,
+//! artifact path helpers, and unified diff generation for edit transactions.
+//! Apply-gated callers use these to verify file state before and after a patch write.
+
 const std = @import("std");
 
 /// File identity snapshot used to verify preimage and post-apply integrity.
+/// `sha256` is an owned, heap-allocated hex string when present; free via deinit.
 pub const Identity = struct {
     exists: bool,
     bytes: usize,
+    /// Lowercase hex SHA-256 of file contents; null for non-existent files.
     sha256: ?[]const u8 = null,
 
     /// Frees owned hash memory and invalidates the snapshot.
@@ -21,7 +27,9 @@ pub const Identity = struct {
         };
     }
 
-    /// Compares semantic identity, treating non-existent files as equal by absence.
+    /// Compares semantic identity: two missing files match; two existing files
+    /// match when byte count and (if both have it) SHA-256 agree.
+    /// Returns false when existence states differ or digests conflict.
     pub fn matches(self: Identity, other: Identity) bool {
         if (self.exists != other.exists) return false;
         if (!self.exists) return true;
@@ -38,7 +46,9 @@ pub const ExpectedPreimage = struct {
     identity: Identity,
 };
 
-/// Builds a file identity from existence state and bytes; allocates the digest when present.
+/// Builds a file identity from existence state and raw file bytes.
+/// Allocates an owned SHA-256 hex digest when `exists` is true; caller must call Identity.deinit.
+/// When `exists` is false, `bytes` is ignored and sha256 is null.
 pub fn identityFromBytes(allocator: std.mem.Allocator, exists: bool, bytes: []const u8) !Identity {
     if (!exists) return .{ .exists = false, .bytes = 0, .sha256 = null };
     return .{
@@ -64,7 +74,9 @@ pub fn expectedMatches(expected: []const ExpectedPreimage, file: []const u8, act
     return false;
 }
 
-/// Builds a stable session id from goal and path seed inputs.
+/// Builds a stable session ID by hashing prefix, goal, and up to three path
+/// seeds together, then returning "session-<first-16-hex-chars>".
+/// Caller owns the returned string and must free it with the same allocator.
 pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
     var seed = std.ArrayList(u8).empty;
     defer seed.deinit(allocator);
@@ -78,7 +90,9 @@ pub fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]cons
     return std.fmt.allocPrint(allocator, "session-{s}", .{hash[0..16]});
 }
 
-/// Produces a cache artifact path for persisted file preimages.
+/// Produces the cache artifact path for a persisted file preimage.
+/// Path format: `.zigars-cache/patch-sessions/<session_id>/<index>-<sanitized_file>.preimage`.
+/// Caller owns the returned string and must free it.
 pub fn preimageArtifactPath(allocator: std.mem.Allocator, session_id: []const u8, index: usize, file: []const u8) ![]const u8 {
     const safe = try sanitizePath(allocator, file);
     defer allocator.free(safe);
@@ -103,7 +117,10 @@ fn collectLines(allocator: std.mem.Allocator, text: []const u8) ![][]const u8 {
     return lines.toOwnedSlice(allocator);
 }
 
-/// Emits a single-hunk unified diff focused on the changed span plus small context.
+/// Emits a single-hunk unified diff for `path` between `before` and `after`.
+/// Returns an empty string when the inputs are identical (no allocation beyond the dupe).
+/// The hunk includes up to 3 lines of context on each side of the change.
+/// Caller owns the returned bytes and must free them.
 pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []const u8, after: []const u8) ![]u8 {
     if (std.mem.eql(u8, before, after)) return allocator.dupe(u8, "");
 
@@ -112,6 +129,7 @@ pub fn unifiedDiff(allocator: std.mem.Allocator, path: []const u8, before: []con
     const after_lines = try collectLines(allocator, after);
     defer allocator.free(after_lines);
 
+    // Walk matching lines from front and back to isolate the changed span.
     var prefix: usize = 0;
     while (prefix < before_lines.len and prefix < after_lines.len and std.mem.eql(u8, before_lines[prefix], after_lines[prefix])) : (prefix += 1) {}
 

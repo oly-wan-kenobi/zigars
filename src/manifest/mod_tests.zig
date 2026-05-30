@@ -1,3 +1,5 @@
+//! Pins the public contract of mod.zig: entry counts, name uniqueness,
+//! schema field types, planning policy invariants, and risk-hint policy.
 const std = @import("std");
 const subject = @import("mod.zig");
 const tooling = subject.tooling;
@@ -78,6 +80,9 @@ test "static analysis product tools expose capability tiers" {
     try std.testing.expectEqual(StaticAnalysisTier.zwanzig_backed, staticAnalysisTierFor(.zig_lint).?);
 }
 test "risk metadata distinguishes read-only annotations from code execution" {
+    // Spot-checks representative tools from each risk level so that mis-classified
+    // tools fail loudly rather than silently producing wrong MCP hints.
+    //
     // A user-command executor cannot be raw read-only: validateDefinition rejects
     // that combination and the declaration was flipped to read_only=false.
     try std.testing.expect(!find("zig_profile_run").?.read_only);

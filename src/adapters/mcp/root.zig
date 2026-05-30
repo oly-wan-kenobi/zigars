@@ -1,4 +1,6 @@
-//! MCP adapter surface for registration, request handling, and schema/result projection.
+//! First-party MCP adapter surface: re-exports the registration, request
+//! handling, correlation, error-mapping, schema, and result-projection modules.
+//! Subsystem invariant: stdout is reserved for MCP JSON-RPC; logs go to stderr.
 pub const args = @import("args.zig");
 pub const artifacts = @import("tools/artifacts.zig");
 pub const core = @import("tools/core.zig");

@@ -1,3 +1,6 @@
+//! Tests for Workspace: pins canonicalization, symlink sandbox enforcement
+//! (inside vs. outside root), output parent traversal, cache root rejection,
+//! and TOCTOU-aware read/write containment against swapped symlinks.
 const std = @import("std");
 const builtin = @import("builtin");
 const workspace_mod = @import("workspace.zig");

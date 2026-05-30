@@ -1,3 +1,8 @@
+//! JSON value builders for the zigars_metrics_v2 MCP response.
+//! Each public function produces an allocator-owned `std.json.Value`; callers
+//! are responsible for freeing the returned object tree.  No output goes to
+//! stdout; this module is a pure in-memory value builder.
+
 const std = @import("std");
 const state_mod = @import("state.zig");
 
@@ -6,6 +11,9 @@ const ToolCallCorrelation = state_mod.ToolCallCorrelation;
 const CancellationEvent = state_mod.CancellationEvent;
 const LatencySamples = state_mod.LatencySamples;
 
+/// Caller-supplied context that is not stored in `State` (workspace path, ZLS
+/// current status, cache snapshots, artifact counts).  Passed alongside `State`
+/// to every render function that needs live application-layer data.
 pub const BaseMetrics = struct {
     workspace: []const u8,
     command_calls: usize,
@@ -19,6 +27,8 @@ pub const BaseMetrics = struct {
     artifacts: ArtifactMetrics,
 };
 
+/// Point-in-time snapshot of static-analysis cache counters for inclusion in the
+/// metrics response; sourced from the application cache, not from `State`.
 pub const AnalysisCacheSnapshot = struct {
     present: bool = false,
     hits: usize = 0,
@@ -26,6 +36,8 @@ pub const AnalysisCacheSnapshot = struct {
     bytes: usize = 0,
 };
 
+/// Point-in-time artifact registry counters for inclusion in the metrics
+/// response; sourced from the artifact registry port, not from `State`.
 pub const ArtifactMetrics = struct {
     registry_available: bool = false,
     registry_entries: usize = 0,
@@ -34,6 +46,8 @@ pub const ArtifactMetrics = struct {
     status: []const u8 = "not_scanned",
 };
 
+/// Most-recently observed probe results for each optional backend, keyed by
+/// backend name.  Null means the backend has not been probed in this process.
 pub const BackendProbeCacheSnapshot = struct {
     zig: ?ProbeSnapshot = null,
     zls: ?ProbeSnapshot = null,
@@ -42,12 +56,16 @@ pub const BackendProbeCacheSnapshot = struct {
     diff_folded: ?ProbeSnapshot = null,
 };
 
+/// Result of a single backend availability probe.
 pub const ProbeSnapshot = struct {
     ok: bool,
     status: []const u8,
     resolution: []const u8,
 };
 
+/// Builds the top-level zigars_metrics_v2 JSON object from process state and
+/// caller-supplied base metrics.  Caller owns the returned value and must free
+/// all nested ObjectMaps and Arrays through its own cleanup or an arena.
 pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -82,6 +100,8 @@ pub fn metricsV2Value(allocator: std.mem.Allocator, state: *const State, base: B
     return .{ .object = obj };
 }
 
+/// Builds the zigars_backend_health_history section: bounded probe event ring
+/// plus the current cached probe results for each known backend.
 pub fn backendHistoryValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -94,6 +114,9 @@ pub fn backendHistoryValue(allocator: std.mem.Allocator, state: *const State, ba
     return .{ .object = obj };
 }
 
+/// Builds the zigars_zls_timeline section: deduped ZLS status transition ring
+/// plus the current status from `base`.  When the ring is empty, a synthetic
+/// sequence-0 event is injected from the current base snapshot.
 pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: *const State, base: BaseMetrics) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -108,6 +131,8 @@ pub fn zlsTimelineValue(allocator: std.mem.Allocator, state: *const State, base:
     return .{ .object = obj };
 }
 
+/// Builds the zigars_tool_latency section: per-tool call/error counters,
+/// latency percentiles, and the recent tool-call correlation ring.
 pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -128,6 +153,8 @@ pub fn toolLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.
     return .{ .object = obj };
 }
 
+/// Builds the zigars_mcp_method_latency section: per-MCP-method request
+/// counters and latency percentiles, noting any truncated method names.
 pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -144,6 +171,8 @@ pub fn methodLatencyValue(allocator: std.mem.Allocator, state: *const State) !st
     return .{ .object = obj };
 }
 
+/// Builds the zigars_command_durations section: bounded subprocess invocation
+/// history and aggregate latency percentiles.  Duration unit is milliseconds.
 pub fn commandDurationsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -157,6 +186,8 @@ pub fn commandDurationsValue(allocator: std.mem.Allocator, state: *const State) 
     return .{ .object = obj };
 }
 
+/// Builds the zigars_startup_timings section: monotonic-awake-clock phase
+/// timings recorded during bootstrap.  Resets when the process restarts.
 pub fn startupTimingsValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -169,6 +200,8 @@ pub fn startupTimingsValue(allocator: std.mem.Allocator, state: *const State) !s
     return .{ .object = obj };
 }
 
+/// Builds the zigars_audit_logging section: enabled flag, current mode and
+/// path, write counters, and the privacy notice for the configured mode.
 pub fn auditLoggingValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -183,6 +216,8 @@ pub fn auditLoggingValue(allocator: std.mem.Allocator, state: *const State) !std
     return .{ .object = obj };
 }
 
+/// Builds the zigars_request_cancellation section: aggregate outcome counters
+/// and the bounded cancellation notification event ring.
 pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -200,6 +235,8 @@ pub fn cancellationValue(allocator: std.mem.Allocator, state: *const State) !std
     return .{ .object = obj };
 }
 
+/// Builds the zigars_observability_retention section: capacity constants,
+/// current fill counts, and all truncation/drop counters for this process.
 pub fn retentionValue(allocator: std.mem.Allocator, state: *const State) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -319,6 +356,8 @@ fn latencyPercentilesValue(allocator: std.mem.Allocator, samples: LatencySamples
     return .{ .object = obj };
 }
 
+// Nearest-rank percentile on a pre-sorted slice.  The +99 makes the integer
+// ceiling division produce a 1-based rank; we clamp to valid indices.
 fn percentile(sorted: []const u64, p: u64) u64 {
     if (sorted.len == 0) return 0;
     const rank = (p * sorted.len + 99) / 100;
@@ -447,6 +486,9 @@ fn zlsEventsValue(allocator: std.mem.Allocator, state: *const State, base: BaseM
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
     if (state.zls_event_count == 0) {
+        // No transitions recorded yet (ZLS not enabled or never started).
+        // Emit a synthetic sequence-0 event from the live snapshot so callers
+        // always have at least one entry to display.
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);
         try obj.put(allocator, "sequence", .{ .integer = 0 });

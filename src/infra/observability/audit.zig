@@ -1,9 +1,14 @@
 //! Append-only JSONL audit writer for opt-in forensic operation.
+//! Output goes to the configured audit file, never to stdout.
+//! Three retention modes control payload inclusion: metadata (hash+size only),
+//! redacted (secret-like JSON fields masked), and full (raw payloads verbatim).
 const std = @import("std");
 const Mutex = @import("../process/sync.zig").Mutex;
 const ports = @import("../../app/ports.zig");
 
-/// Audit payload retention mode.
+/// Audit payload retention mode.  Controls how much of the raw MCP payload
+/// appears in each JSONL record.  Callers choose a mode at bootstrap; the
+/// Writer enforces it on every append without further input from handlers.
 pub const Mode = enum {
     metadata,
     redacted,
@@ -30,6 +35,9 @@ pub const Correlation = ports.AuditCorrelation;
 pub const Event = ports.AuditEvent;
 
 /// Append-only audit log writer. The file path is resolved by bootstrap policy.
+/// Thread-safe: append serializes concurrent writers through the internal mutex.
+/// The writer does not allocate after init; each append allocates a temporary
+/// line buffer and frees it before returning.
 pub const Writer = struct {
     io: std.Io,
     file: ?std.Io.File = null,
@@ -39,6 +47,9 @@ pub const Writer = struct {
     records_written: u64 = 0,
 
     /// Opens or creates the resolved audit file without truncating existing JSONL.
+    /// Allocates and owns a copy of `resolved_path`; caller must call `deinit`
+    /// with the same allocator to free it.  Returns `error.InvalidAuditPath` if
+    /// the path is empty or has no parent directory component.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, resolved_path: []const u8, mode: Mode) AuditError!Writer {
         if (resolved_path.len == 0) return error.InvalidAuditPath;
         const parent = std.fs.path.dirname(resolved_path) orelse return error.InvalidAuditPath;
@@ -70,7 +81,10 @@ pub const Writer = struct {
         }
     }
 
-    /// Appends one JSONL event.
+    /// Serializes `event` as one JSONL line and appends it atomically by writing
+    /// at the current file length.  The allocator is used only for the temporary
+    /// line buffer; ownership does not transfer.  Returns `error.AuditDisabled`
+    /// when the file handle has not been opened.
     pub fn append(self: *Writer, allocator: std.mem.Allocator, event: Event) !void {
         const file = self.file orelse return error.AuditDisabled;
         var aw: std.Io.Writer.Allocating = .init(allocator);
@@ -82,6 +96,8 @@ pub const Writer = struct {
 
         self.mutex.lock();
         defer self.mutex.unlock();
+        // Serialize concurrent appends: read length under lock then write at
+        // that offset so multiple callers never interleave partial lines.
         const offset = try file.length(self.io);
         try file.writePositionalAll(self.io, line, offset);
         self.records_written +|= 1;
@@ -97,6 +113,8 @@ pub const Writer = struct {
 
     fn sinkAppend(ptr: *anyopaque, allocator: std.mem.Allocator, event: ports.AuditEvent) ports.AuditSink.AuditError!void {
         const self: *Writer = @ptrCast(@alignCast(ptr));
+        // Collapse I/O-specific errors into WriteFailed so callers only need to
+        // handle the narrow port error set without importing infra types.
         self.append(allocator, event) catch |err| return switch (err) {
             error.OutOfMemory => error.OutOfMemory,
             error.AuditDisabled => error.AuditDisabled,
@@ -106,6 +124,7 @@ pub const Writer = struct {
 };
 
 /// Parses the CLI text for an audit log mode.
+/// Returns null for any value that does not match a known mode label exactly.
 pub fn parseMode(value: []const u8) ?Mode {
     if (std.mem.eql(u8, value, "metadata")) return .metadata;
     if (std.mem.eql(u8, value, "redacted")) return .redacted;
@@ -270,6 +289,9 @@ fn jsonString(writer: *std.Io.Writer, value: []const u8) !void {
     try std.json.Stringify.value(value, .{ .whitespace = .minified }, writer);
 }
 
+// Heuristic key classifier for redacted mode.  Both exact matches and
+// substring presence are checked case-insensitively so variant spellings
+// (token, api_token, API-Key, …) are caught without an exhaustive list.
 fn isSensitiveKey(key: []const u8) bool {
     const sensitive = [_][]const u8{
         "authorization",

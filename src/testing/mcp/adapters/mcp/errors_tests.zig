@@ -1,3 +1,7 @@
+//! Pins the structured tool error contract: every tool error value must
+//! carry stable fields (kind, ok, tool, operation, phase, code, category)
+//! and must be surfaced as an MCP is_error result with structuredContent.
+
 const std = @import("std");
 
 const errors = @import("../../../../adapters/mcp/errors.zig");

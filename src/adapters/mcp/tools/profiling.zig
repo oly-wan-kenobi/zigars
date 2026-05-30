@@ -1,4 +1,10 @@
-//! Profiling MCP adapters for plan/run/flamegraph workflows and artifact paths.
+//! Profiling MCP adapters: profiler-plan generation, running a command under a
+//! profiler, and rendering flamegraphs / differential flamegraphs via the
+//! zflame and diff-folded backends. Handlers project arguments onto profiling
+//! use cases and shape owned results or structured errors. Invariants: input
+//! and output paths resolve under the workspace sandbox, profiler command
+//! output is byte-bounded and surfaced with truncation flags, and missing
+//! optional backends produce explicit backend errors rather than silent skips.
 const std = @import("std");
 const builtin = @import("builtin");
 const mcp = @import("mcp");
@@ -618,6 +624,9 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
 
 /// Returns an allocator-owned JSON value for empty diagnostics.
 fn emptyDiagnosticsValue(allocator: std.mem.Allocator) std.json.Value {
+    // Callers pass a scratch arena, so these small inserts cannot fail; the
+    // catch unreachable keeps the diagnostics shape aligned with core.zig
+    // without threading an error return through the command-result builder.
     var obj = std.json.ObjectMap.empty;
     obj.put(allocator, "finding_count", .{ .integer = 0 }) catch unreachable;
     obj.put(allocator, "error_count", .{ .integer = 0 }) catch unreachable;
@@ -659,7 +668,9 @@ const SafeText = struct {
     byte_count: usize,
 };
 
-/// Returns a fallback marker when command output cannot be copied into JSON.
+/// Copies command output into JSON-safe text: valid UTF-8 is duped as-is,
+/// otherwise invalid sequences are replaced with U+FFFD and the result is
+/// flagged invalid_utf8 with a "utf-8-lossy" encoding. Text owned by `allocator`.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
     if (std.unicode.utf8ValidateSlice(bytes)) return .{
         .text = try allocator.dupe(u8, bytes),
@@ -703,7 +714,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
     try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
 }
 
-/// Reads a value argument when it is present with the expected type.
+/// Builds a JSON string array from an argv slice; result owned by `allocator`.
 fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;
@@ -718,7 +729,9 @@ fn commandText(allocator: std.mem.Allocator, argv: []const []const u8) ![]const 
     return std.mem.join(allocator, " ", argv);
 }
 
-/// Parses split args from MCP JSON arguments.
+/// Tokenizes a shell-style command string into an owned argv slice, honoring
+/// single/double quotes and backslash escapes. Returns error.InvalidArguments
+/// on a dangling escape or unterminated quote. Caller frees via freeArgList.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -772,7 +785,7 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
-/// Parses finish arg from MCP JSON arguments.
+/// Flushes the in-progress token buffer as one owned argv entry and resets it.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     var arg_owned = true;
@@ -813,7 +826,8 @@ fn toolTimeout(context: app_context.ProfilingContext, args: ?std.json.Value) i64
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
-/// Maps kind for command error failures to structured MCP errors.
+/// Classifies a command error into a stable error_kind token clients can branch
+/// on without parsing the raw error name.
 fn kindForCommandError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
@@ -824,7 +838,8 @@ fn kindForCommandError(err: anyerror) []const u8 {
     };
 }
 
-/// Reports the platform string used by profiling tests.
+/// Maps the host OS to the profiler-platform token used as the default in
+/// zig_profile_plan when the caller does not pass an explicit platform.
 fn detectedPlatform() []const u8 {
     return switch (builtin.os.tag) {
         .linux => "linux",
@@ -1489,7 +1504,7 @@ fn expectProfilingKind(result: mcp.tools.ToolResult, expected: []const u8) !void
     try std.testing.expectEqualStrings(expected, kind.string);
 }
 
-/// Maps expect tool error code failures to structured MCP errors.
+/// Asserts a result is an error carrying the expected stable `code` field.
 fn expectToolErrorCode(result: mcp.tools.ToolResult, expected: []const u8) !void {
     try std.testing.expect(result.is_error);
     const structured = result.structuredContent orelse return error.MissingStructuredContent;

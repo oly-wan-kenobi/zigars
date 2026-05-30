@@ -1,3 +1,6 @@
+//! Pins the enriched catalog contract: risk metadata presence, group
+//! membership coverage, group-to-registry consistency, and common-intent
+//! resolution for every registered tool id.
 const std = @import("std");
 const subject = @import("tool_catalog_render.zig");
 const parsed = subject.parsed;

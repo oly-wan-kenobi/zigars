@@ -1,3 +1,6 @@
+//! Manifest test harness: imports every manifest sub-test file so they run
+//! under a single `zig build test` invocation from the manifest root.
+
 test {
     _ = @import("aggregate_tests.zig");
     _ = @import("all_definitions_tests.zig");

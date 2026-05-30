@@ -1,3 +1,8 @@
+//! HTTP smoke fixture for the performance tool family: coverage, bench,
+//! performance-budget, profiling, and tracy tools (IDs 170-193). Each scenario
+//! asserts the structured-result JSON paths returned by the live HTTP server
+//! against expectations stored in the shared fixture JSON.
+
 const std = @import("std");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
@@ -7,6 +12,10 @@ const JsonValue = std.json.Value;
 const stderrPrint = cli_io.stderrPrint;
 const valueAt = smoke.valueAt;
 
+/// Exercises performance tools through the HTTP transport and asserts structured
+/// result paths against `expected`. Clears the bench-regression-gate session
+/// file before the gate tool call to ensure the assertion starts from a known
+/// state. `scenarios` is incremented once per successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenarios: *usize) !void {
     const coverage = "SF:src/main.zig\\nDA:1,1\\nDA:2,0\\nend_of_record\\n";
     const full_coverage = "SF:src/main.zig\\nDA:1,1\\nend_of_record\\n";
@@ -60,6 +69,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 193, "zig_perf_evidence_pack", "{\"coverage\":\"inline\",\"benchmarks\":\"inline\",\"apply\":false}", expected, "perf_evidence_pack_paths", scenarios);
 }
 
+/// Removes the bench-regression-gate session file for `session_id` so the gate
+/// tool starts from an empty history. `FileNotFound` is silently accepted;
+/// other errors propagate because they indicate a permission or path problem.
 fn removeFixtureSession(io: Io, session_id: []const u8) !void {
     var path_buf: [256]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buf, ".zigars-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});
@@ -69,6 +81,10 @@ fn removeFixtureSession(io: Io, session_id: []const u8) !void {
     };
 }
 
+/// Invokes `tool_name` via HTTP JSON-RPC and asserts every JSON path in the
+/// `expected_key` sub-object of `expected_root`. Logs the missing path to stderr
+/// before returning `error.AssertionFailed`. Increments `scenario_count` on
+/// success.
 fn assertToolPaths(
     allocator: std.mem.Allocator,
     io: Io,

@@ -1,3 +1,7 @@
+//! In-memory cache for the static-analysis index JSON.  Owned by runtime
+//! composition; the Cache facade exposes it through the StaticCache vtable.
+//! The signature field lets callers detect stale cache entries without
+//! comparing the full JSON payload.
 const std = @import("std");
 
 const ports = @import("../../app/ports.zig");
@@ -26,6 +30,7 @@ pub const Cache = struct {
     const Self = @This();
 
     /// Stores the allocator that owns cached bytes.
+    /// `state` must outlive this Cache; ownership remains with the caller.
     pub fn init(allocator: Allocator, state: *State) Self {
         return .{ .allocator = allocator, .state = state };
     }
@@ -59,9 +64,12 @@ pub const Cache = struct {
     }
 
     /// Stores a cached value for this implementation.
+    /// Duplicates `request.bytes` using the Cache's own allocator; frees any
+    /// previously cached bytes before replacing them so there is no leak.
     fn store(ptr: *anyopaque, _: Allocator, request: ports.StaticCacheStoreRequest) ports.PortError!ports.StaticCacheStatus {
         const self: *Self = @ptrCast(@alignCast(ptr));
         const bytes = self.allocator.dupe(u8, request.bytes) catch return error.OutOfMemory;
+        // Free before assigning; on dupe failure the old bytes are still valid.
         if (self.state.index_json) |old| self.allocator.free(old);
         self.state.index_json = bytes;
         self.state.signature = request.signature;

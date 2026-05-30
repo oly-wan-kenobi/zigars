@@ -1,3 +1,6 @@
+//! Tests for the URI helpers: path-to-URI encoding, URI-to-path decoding,
+//! percent-encoding round-trips, error cases (non-file schemes, bad escapes),
+//! and workspace-relative path resolution.
 const std = @import("std");
 const uri_mod = @import("uri.zig");
 

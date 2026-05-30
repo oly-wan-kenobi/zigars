@@ -206,6 +206,11 @@ fn monotonicNs(io: std.Io) i128 {
 }
 
 /// Converts the command argument list into argv for child process spawn.
+/// On POSIX, rewrites shebang scripts so the interpreter runs the script
+/// directly rather than passing a bare path to execve. Only relative paths
+/// containing a separator are probed (absolute and bare-name executables are
+/// left for the OS PATH lookup). OOM is propagated; other errors fall through
+/// to the original argv, preserving best-effort behavior.
 fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv: []const []const u8) ![]const []const u8 {
     // Windows command launching differs enough that shebang rewriting is skipped.
     if (argv.len == 0 or builtin.os.tag == .windows) return argv;
@@ -214,6 +219,7 @@ fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv:
         error.OutOfMemory => return error.OutOfMemory,
         else => return argv,
     };
+    // Read only the first 4 KiB — enough for any real shebang line.
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, script_path, allocator, .limited(4096)) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => return argv,
@@ -235,7 +241,10 @@ fn argvForSpawn(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8, argv:
     return spawn_argv;
 }
 
-/// Reads the executable path referenced by a shebang line.
+/// Returns the filesystem path to read for shebang detection.
+/// Bare names (no separator) are not relative paths and will be resolved by
+/// the OS via PATH at spawn time; we skip shebang rewriting for them since we
+/// cannot safely locate the binary without reimplementing PATH search.
 fn executablePathForRead(allocator: std.mem.Allocator, cwd: []const u8, executable: []const u8) ![]const u8 {
     if (std.fs.path.isAbsolute(executable)) return allocator.dupe(u8, executable);
     if (std.mem.indexOfScalar(u8, executable, std.fs.path.sep) == null) return error.SkipShebangDetection;
@@ -290,6 +299,11 @@ pub fn isTimeoutError(err: anyerror) bool {
 }
 
 /// Splits shell-like extra arguments into an owned argv list.
+/// Handles single/double quoting and backslash escaping but does NOT perform
+/// variable expansion, glob expansion, or any shell interpolation — the result
+/// is always passed directly to execve without a shell intermediary.
+/// Caller owns the returned slice; each element must also be freed.
+/// Returns InvalidArguments on an unclosed quote or trailing backslash.
 pub fn splitArgs(allocator: std.mem.Allocator, text: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;

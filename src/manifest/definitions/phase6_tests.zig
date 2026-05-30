@@ -1,3 +1,6 @@
+//! Contract tests for phase6.zig: pins that CI ingestion, release intelligence,
+//! API lifecycle, docs, and dependency/security tools expose non-empty descriptions
+//! and that write-capable tools carry the expected apply-gate risk metadata.
 const std = @import("std");
 const subject = @import("phase6.zig");
 const zig_ci_ingest = subject.zig_ci_ingest;

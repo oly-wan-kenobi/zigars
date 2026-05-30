@@ -1,9 +1,17 @@
+//! Tool definitions for the `profiling` group: workflow planning, user-command
+//! execution, and zflame/diff-folded SVG rendering. zig_profile_run executes an
+//! explicit user-supplied argv without a shell; zig_flamegraph and
+//! zig_flamegraph_diff invoke configured optional backends (zflame, diff-folded)
+//! and write workspace artifacts — both carry executes_backend risk. All write
+//! paths use explicit output paths within the workspace sandbox.
 const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
+// Format names are sourced from backend_contracts to keep allowed values in sync
+// with the zflame backend definition rather than duplicating them here.
 const backend_contracts = @import("../../domain/zig/backend_contracts.zig");
 
 /// Return structured external-capture plans and zflame rendering next steps without running profilers.

@@ -1,8 +1,16 @@
+//! Trust policy domain: tool risk classification, workspace clean-tree gating,
+//! and JSON evidence construction for release decisions. The risk level hierarchy
+//! is: high (source writes or user commands) > medium (artifact writes or project
+//! code execution) > low (LSP state or backend) > none. The clean-tree gate is a
+//! hard prerequisite for release operations; a dirty workspace must be resolved
+//! before release decisions are made, not merely acknowledged.
+
 const std = @import("std");
 
 const zig_analysis = @import("zig/analysis.zig");
 
 /// Captures behavior that affects tool safety or side-effect scope.
+/// All fields default to false; callers set only the applicable flags.
 pub const ToolRisk = struct {
     writes_source: bool = false,
     writes_artifacts: bool = false,
@@ -15,6 +23,9 @@ pub const ToolRisk = struct {
 };
 
 /// Maps risk flags to an external policy severity bucket.
+/// Priority order: writes_source / executes_user_command → high (direct workspace mutation
+/// or arbitrary command execution); executes_project_code / writes_artifacts → medium;
+/// mutates_lsp_state / executes_backend → low. No flag set returns "none".
 pub fn riskLevel(risk: ToolRisk) []const u8 {
     if (risk.writes_source or risk.executes_user_command) return "high";
     if (risk.executes_project_code or risk.writes_artifacts) return "medium";
@@ -23,6 +34,9 @@ pub fn riskLevel(risk: ToolRisk) []const u8 {
 }
 
 /// Extracts the path segment from a porcelain status line, including rename targets.
+/// Git porcelain v1 uses the first two bytes for status codes and a space; the path
+/// starts at byte 3. For renames, git formats the line as "old -> new"; we return
+/// the rename target because that is the file that will exist after the operation.
 pub fn statusLinePath(line: []const u8) []const u8 {
     const trimmed = std.mem.trim(u8, if (line.len > 3) line[3..] else "", " \t");
     if (std.mem.indexOf(u8, trimmed, " -> ")) |arrow| return trimmed[arrow + " -> ".len ..];
@@ -37,12 +51,19 @@ pub fn quotedValue(line: []const u8) ?[]const u8 {
     return rest[0..second];
 }
 
-/// Returns whether is generated or vendored is true for the supplied input.
+/// Returns whether the path is generated or vendored and should not block a clean-tree gate.
+/// Delegates to zig_analysis.skipWorkspacePath which checks well-known generated prefixes
+/// (zig-out/, .zig-cache/, etc.). Generated paths are still recorded in evidence but
+/// are counted separately so callers can apply a lenient policy if desired.
 pub fn isGeneratedOrVendored(path: []const u8) bool {
     return zig_analysis.skipWorkspacePath(path);
 }
 
-/// Builds clean tree gate from status; allocation failures are returned to the caller.
+/// Builds a clean-tree gate result from git porcelain v1 stdout.
+/// `git_ok` must be false when the git command itself failed (exit ≠ 0); in that
+/// case the gate reports unclean regardless of stdout content. Each changed path
+/// is included in the evidence so the policy decision is fully auditable. The
+/// gate is clean only when git_ok is true and no changed paths were found.
 pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []const u8, stdout: []const u8, git_ok: bool, evidence_command: []const u8) !std.json.Value {
     var paths = std.json.Array.init(allocator);
     var paths_owned = true;
@@ -50,7 +71,7 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
     var untracked: usize = 0;
     var generated_or_vendored: usize = 0;
 
-    // Preserve each changed path as evidence so policy decisions are auditable.
+    // Walk every porcelain line; short lines (< 4 bytes) have no path and are skipped.
     var lines = std.mem.splitScalar(u8, stdout, '\n');
     while (lines.next()) |line| {
         if (line.len < 4) continue;
@@ -88,7 +109,9 @@ pub fn cleanTreeGateFromStatus(allocator: std.mem.Allocator, workspace_root: []c
     return .{ .object = obj };
 }
 
-/// Builds a JSON evidence object; allocation failures are returned.
+/// Builds a JSON evidence object for trust/gate results; allocation failures are returned.
+/// `source` is the command or tool that produced the evidence (e.g. "git status --porcelain").
+/// `reference` names the specific output artifact (e.g. "stdout"). All strings are duped.
 pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference: []const u8, confidence: []const u8) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -100,7 +123,8 @@ pub fn evidenceValue(allocator: std.mem.Allocator, source: []const u8, reference
     return .{ .object = obj };
 }
 
-/// Builds string array; allocation failures are returned to the caller.
+/// Builds an owned JSON string array from borrowed string slices.
+/// Allocation failures are returned; partial arrays are freed via deinitOwnedValue.
 pub fn stringArray(allocator: std.mem.Allocator, items: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     var array_owned = true;

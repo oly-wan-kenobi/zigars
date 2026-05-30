@@ -1,3 +1,5 @@
+//! Tests the StaticCache port: store increments the refresh counter, the
+//! hit counter advances independently, and loaded bytes match what was stored.
 const std = @import("std");
 const static_cache = @import("static_cache.zig");
 

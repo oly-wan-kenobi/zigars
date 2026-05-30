@@ -1,3 +1,6 @@
+//! Tests for filesystem.Store: verifies that reads, writes, deletes, and
+//! directory scans stay inside the workspace sandbox and that symlink escapes
+//! are rejected at the port boundary.
 const std = @import("std");
 const filesystem = @import("filesystem.zig");
 const workspace_mod = @import("workspace.zig");
