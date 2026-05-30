@@ -130,6 +130,7 @@ pub fn buildIndex(allocator: std.mem.Allocator, context: app_context.StaticAnaly
 /// `request.query`, optionally filtered by `kind`, capped at `match_limit`.
 /// Returns an allocator-owned result object.
 pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: QueryRequest) SemanticError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_query" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, request.kind, @max(request.match_limit, 1));
     var obj = std.json.ObjectMap.empty;
@@ -142,6 +143,7 @@ pub fn query(allocator: std.mem.Allocator, context: app_context.StaticAnalysisCo
 /// Looks up declaration matches for `request.symbol` in the built index (the
 /// declaration-only slice of `query`). Returns an allocator-owned result object.
 pub fn decl(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: DeclRequest) SemanticError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .refresh = request.refresh, .tool_name = "zig_semantic_decl" });
     const matches = try semanticMatchesValue(allocator, index.value, request.symbol, "declaration", @max(request.match_limit, 1));
     var obj = std.json.ObjectMap.empty;
@@ -227,6 +229,7 @@ pub fn sourceRefs(allocator: std.mem.Allocator, context: app_context.StaticAnaly
 /// (consensus), `medium` for a single parser match, `low` otherwise. Malformed
 /// findings JSON fails with InvalidCache. Returns an allocator-owned result object.
 pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: FusionRequest) SemanticError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const index = try buildIndex(allocator, context, .{ .limit = request.index_limit, .tool_name = "zig_static_fusion" });
     const matches = try semanticMatchesValue(allocator, index.value, request.query, null, @max(request.match_limit, 1));
     const zlint_findings = if (request.zlint_findings) |text| normalizeFindingsText(allocator, text, "zlint") catch return error.InvalidCache else std.json.Value{ .array = std.json.Array.init(allocator) };
@@ -257,6 +260,7 @@ pub fn staticFusion(allocator: std.mem.Allocator, context: app_context.StaticAna
 /// (byte count plus the artifact) and writes nothing. Returns an allocator-owned
 /// result object.
 pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ExportRequest) SemanticError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const index = try buildIndex(allocator, context, .{ .limit = request.limit, .refresh = request.refresh, .tool_name = request.tool_name });
     var export_obj = std.json.ObjectMap.empty;
     try export_obj.put(allocator, "kind", .{ .string = request.tool_name });
@@ -288,6 +292,7 @@ pub fn exportIndex(allocator: std.mem.Allocator, context: app_context.StaticAnal
 /// version. Identical sources yield an identical signature, which is how the cache
 /// decides a stored index is still valid; unreadable files are skipped, not hashed.
 pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize) SemanticError!u64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var hasher = std.hash.Wyhash.init(semantic_format_version);
     var scan = try context.workspace_scanner.scanZigFiles(allocator, .{
         .max_files = @max(limit, 1),
@@ -314,6 +319,7 @@ pub fn semanticSignature(allocator: std.mem.Allocator, context: app_context.Stat
 /// that the result is incomplete. Unreadable files are listed under `skipped_files`.
 /// Returns an allocator-owned result object.
 pub fn semanticIndexValue(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, limit: usize, tool_name: []const u8) SemanticError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     var declarations = std.json.Array.init(allocator);
     var imports = std.json.Array.init(allocator);
@@ -422,6 +428,7 @@ fn appendFileIndex(allocator: std.mem.Allocator, file: []const u8, contents: []c
 
 /// Serializes semantic decl fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticDeclValue(allocator: std.mem.Allocator, file: []const u8, line: usize, kind: []const u8, name: ?[]const u8, public: bool, signature: []const u8, source: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
     try out.put(allocator, "line", .{ .integer = @intCast(line) });
@@ -438,6 +445,7 @@ fn semanticDeclValue(allocator: std.mem.Allocator, file: []const u8, line: usize
 
 /// Serializes semantic import fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticImportValue(allocator: std.mem.Allocator, file: []const u8, line: usize, import_name: []const u8, alias: ?[]const u8, source: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
     try out.put(allocator, "line", .{ .integer = @intCast(line) });
@@ -451,6 +459,7 @@ fn semanticImportValue(allocator: std.mem.Allocator, file: []const u8, line: usi
 
 /// Serializes semantic test fields into an allocator-owned JSON value; allocation failures propagate.
 fn semanticTestValue(allocator: std.mem.Allocator, file: []const u8, line: usize, name: ?[]const u8, command: []const u8, source: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.json.ObjectMap.empty;
     try out.put(allocator, "file", try ownedString(allocator, file));
     try out.put(allocator, "line", .{ .integer = @intCast(line) });
@@ -464,6 +473,7 @@ fn semanticTestValue(allocator: std.mem.Allocator, file: []const u8, line: usize
 
 /// Implements zlint ast symbol has reference for file workflow logic using caller-owned inputs.
 fn zlintAstSymbolHasReferenceForFile(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: SourceRefsRequest, file: []const u8) SemanticError!bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_runner = context.command_runner orelse return error.MissingCommandRunner;
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "static_analysis.zlint_ast" });
     defer resolved.deinit(allocator);
