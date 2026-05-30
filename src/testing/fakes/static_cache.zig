@@ -41,6 +41,7 @@ pub const FakeStaticCache = struct {
 
     /// Exposes this fake through the StaticCache vtable.
     pub fn port(self: *Self) ports.StaticCache {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -70,6 +71,7 @@ pub const FakeStaticCache = struct {
 
     /// Stores a cached value for this implementation.
     fn store(ptr: *anyopaque, _: Allocator, request: ports.StaticCacheStoreRequest) ports.PortError!ports.StaticCacheStatus {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned = self.allocator.dupe(u8, request.bytes) catch return error.OutOfMemory;
         if (self.bytes) |old| self.allocator.free(old);
@@ -89,6 +91,7 @@ pub const FakeStaticCache = struct {
 
     /// Returns the current cache status snapshot.
     fn currentStatus(self: *const Self) ports.StaticCacheStatus {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .cached = self.bytes != null,
             .signature = self.signature,
