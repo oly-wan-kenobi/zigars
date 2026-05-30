@@ -16,14 +16,20 @@ pub const min_stdio_fixture_tool_calls: usize = 77;
 pub const kcov_include_path = "src,tools";
 /// kcov `--exclude-path` value: skip generated caches and the fuzz runner.
 pub const kcov_exclude_path = "zig-pkg,.zig-cache,zig-out,coverage,dist,tools/fuzz_test_runner.zig";
+/// Marker for single source lines that kcov should ignore.
 pub const kcov_exclude_line_pattern = "KCOV_EXCL_LINE";
+/// Paired region markers for source ranges that kcov should ignore.
 pub const kcov_exclude_region_pattern = "KCOV_EXCL_START:KCOV_EXCL_STOP";
+/// Complete kcov argument built from the single-line exclusion marker.
 pub const kcov_exclude_line_arg = "--exclude-line=" ++ kcov_exclude_line_pattern;
+/// Complete kcov argument built from the paired-region exclusion markers.
 pub const kcov_exclude_region_arg = "--exclude-region=" ++ kcov_exclude_region_pattern;
 /// Line coverage floors in basis points (10000 = 100.00%).
 /// 100 % is required for release; any gap is a deliberate regression.
 pub const min_line_coverage_basis_points: u32 = 10000;
+/// Coverage floor for production source under `src/`, in basis points.
 pub const min_src_line_coverage_basis_points: u32 = 10000;
+/// Coverage floor for repository helper tools under `tools/`, in basis points.
 pub const min_tools_line_coverage_basis_points: u32 = 10000;
 
 /// A test binary entry: name, platform-specific paths, and minimum test count.
