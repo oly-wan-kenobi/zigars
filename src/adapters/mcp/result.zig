@@ -58,6 +58,7 @@ pub fn structuredWithResourceLink(
     value: std.json.Value,
     link: ResourceLinkSpec,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep resource response shaping centralized so capability contracts remain stable.
     const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
     errdefer allocator.free(bytes);
 
@@ -102,6 +103,7 @@ pub fn structuredError(allocator: std.mem.Allocator, value: std.json.Value) mcp.
 /// MCP error flag. The two are independent allocations owned by `allocator`. The
 /// errdefer chain unwinds every prior allocation if a later step fails.
 fn structuredWithErrorFlag(allocator: std.mem.Allocator, value: std.json.Value, is_error: bool) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const bytes = serializeAlloc(allocator, value) catch return error.OutOfMemory;
     errdefer allocator.free(bytes);
 
@@ -128,6 +130,7 @@ pub fn structuredOwned(allocator: std.mem.Allocator, value: std.json.Value) mcp.
 
 /// Deep-clones a JSON value, including object keys and string payloads.
 pub fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (value) {
         .null => .null,
         .bool => |b| .{ .bool = b },
@@ -168,6 +171,7 @@ pub fn deinitOwnedValue(allocator: std.mem.Allocator, value: std.json.Value) voi
 
 /// Frees payloads inside a content block that follows zigars-owned allocation rules.
 pub fn deinitOwnedContentBlock(allocator: std.mem.Allocator, content_item: mcp.types.ContentBlock) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (content_item) {
         .text => |text| {
             allocator.free(text.text);
@@ -207,6 +211,7 @@ fn deinitProtocolResourceContent(allocator: std.mem.Allocator, content: mcp.type
 
 /// Frees recursively cloned JSON values created for MCP result payloads.
 fn deinitClonedValue(allocator: std.mem.Allocator, value: std.json.Value) void {
+    // Only release owned state here to avoid invalidating borrowed data.
     switch (value) {
         .string => |s| allocator.free(s),
         .number_string => |s| allocator.free(s),
@@ -248,6 +253,7 @@ pub fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8
 
 /// Appends compact JSON text without taking ownership of `value`.
 pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
         .bool => |b| try out.appendSlice(allocator, if (b) "true" else "false"),
@@ -281,6 +287,7 @@ pub fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), val
 
 /// Appends a JSON string literal with required control-character escaping.
 pub fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
     for (value) |c| {
