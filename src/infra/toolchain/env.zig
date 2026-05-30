@@ -65,6 +65,7 @@ pub const Env = struct {
 /// Unknown errors collapse to `error.Unavailable` to keep the port surface
 /// stable across Zig toolchain version changes.
 fn mapPortError(err: anyerror) ports.PortError {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
         error.Timeout => error.Timeout,
