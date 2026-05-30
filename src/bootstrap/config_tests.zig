@@ -1,3 +1,5 @@
+//! Pins config parsing: defaults, explicit flags, allocation cleanup, HTTP loopback safety,
+//! audit log options, empty flag rejection, and exit-code flags (help/version/unknown).
 const std = @import("std");
 const subject = @import("config.zig");
 const Transport = subject.Transport;

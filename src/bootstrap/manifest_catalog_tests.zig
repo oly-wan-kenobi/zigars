@@ -1,3 +1,5 @@
+//! Pins that the manifest catalog port correctly exposes compile-time tool metadata
+//! including risk and plan fields for well-known registered tools.
 const std = @import("std");
 const subject = @import("manifest_catalog.zig");
 const Catalog = subject.Catalog;

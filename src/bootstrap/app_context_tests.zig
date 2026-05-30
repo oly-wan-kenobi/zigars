@@ -1,3 +1,5 @@
+//! Pins the contract that app_context.fromRuntime produces a correct read-only snapshot
+//! of bootstrap runtime state and that the runtime field inventory stays in sync with App.
 const std = @import("std");
 const runtime_mod = @import("runtime_state.zig");
 const subject = @import("app_context.zig");

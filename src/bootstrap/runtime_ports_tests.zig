@@ -1,3 +1,5 @@
+//! Pins that RuntimePorts initialises all required infra adapter port slots
+//! and correctly projects the app context from a minimal in-memory runtime.
 const std = @import("std");
 const runtime_mod = @import("runtime_state.zig");
 const subject = @import("runtime_ports.zig");

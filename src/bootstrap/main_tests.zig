@@ -1,3 +1,4 @@
+//! Pins that the binary embeds a non-empty semver version string from the manifest.
 const std = @import("std");
 const version = @import("zigars").manifest.version.string;
 

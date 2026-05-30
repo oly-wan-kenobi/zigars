@@ -18,7 +18,7 @@ pub const Catalog = struct {
         };
     }
 
-    /// Returns the number of entries exposed by this fixture.
+    /// Returns the total number of registered manifest entries.
     fn count(_: *anyopaque) usize {
         return manifest.entries.len;
     }
@@ -29,7 +29,7 @@ pub const Catalog = struct {
         return mapEntry(manifest.entries[index]);
     }
 
-    /// Finds find data in the provided collection without taking ownership.
+    /// Looks up a manifest entry by tool name; returns null when not registered.
     fn find(_: *anyopaque, name: []const u8) ?ports.ToolManifestEntry {
         const entry = manifest.findEntry(name) orelse return null;
         return mapEntry(entry);
@@ -59,7 +59,7 @@ fn mapEntry(entry: manifest.ToolEntry) ports.ToolManifestEntry {
     };
 }
 
-/// Maps map plan data without taking ownership; allocation failures from nested values are propagated when needed.
+/// Converts manifest plan policy to the stable app-facing PlanPolicy without allocation.
 fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
     return switch (plan) {
         .exact_command => |command| .{ .exact_command = mapCommandPlan(command) },
@@ -77,7 +77,7 @@ fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
     };
 }
 
-/// Maps map command plan data without taking ownership; allocation failures from nested values are propagated when needed.
+/// Converts manifest command plan variants to the stable app-facing CommandPlan without allocation.
 fn mapCommandPlan(plan: manifest.CommandPlan) ports.CommandPlan {
     return switch (plan) {
         .argv => |argv| .{ .argv = argv },

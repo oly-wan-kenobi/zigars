@@ -50,6 +50,8 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
     defer ws.deinit();
 
     // ZLS process/client/document state are infra-owned and must outlive app runtime references.
+    // The nullable optionals start nil; zls_session.start fills them on first successful connect.
+    // Slots pass pointers-to-optionals so the session layer can replace them on restart.
     var zls_proc: ?ZlsProcess = null;
     defer if (zls_proc) |*proc| proc.deinit();
     var lsp_client: ?LspClient = null;
@@ -58,6 +60,7 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
     defer if (doc_state) |*docs_state| docs_state.deinit();
 
     // App captures shared runtime state; deinit closes caches/sessions in reverse dependency order.
+    // cfg_owned tracks whether App.deinit or this scope is responsible for cfg.deinit.
     const runtime_started = startup.begin();
     var runtime = App{
         .allocator = allocator,
@@ -241,9 +244,13 @@ fn cliWorkspaceExitCode(err: anyerror) cli_adapter.ExitCode {
     };
 }
 
+// Lightweight startup phase recorder. Phases are buffered and replayed into the
+// observability state once the runtime is fully initialised, so early-startup
+// timing does not require the observability state to be ready yet.
 const StartupTimeline = struct {
     io: std.Io,
     started_ns: i128,
+    // Fixed-size ring; phases beyond the limit are silently dropped.
     phases: [16]Phase = [_]Phase{.{}} ** 16,
     phase_count: usize = 0,
     last_start_ms: u64 = 0,
@@ -300,6 +307,8 @@ fn monotonicNowNs(io: std.Io) i128 {
     return std.Io.Clock.now(.awake, io).nanoseconds;
 }
 
+// Saturates at maxInt rather than panicking; startup phases taking longer than ~584 million years
+// are treated as "very long" rather than causing an overflow trap in ReleaseSafe.
 fn elapsedMs(start_ns: i128, end_ns: i128) u64 {
     if (end_ns <= start_ns) return 0;
     const milliseconds = @divTrunc(end_ns - start_ns, std.time.ns_per_ms);
