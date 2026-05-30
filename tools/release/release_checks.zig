@@ -30,12 +30,13 @@ const cli_error_contract_tokens = release_rules.cli_error_contract_tokens;
 const workflow_permission_rules = release_rules.workflow_permission_rules;
 const pure_zig_roots = release_rules.pure_zig_roots;
 
-// Orchestrates release hygiene gates. Policy data lives in release_rules and
-// domain-specific contract checks so this module stays execution-focused.
-
+/// Fake zwanzig executable entrypoint used by backend conformance smoke tests.
 pub const fakeZwanzig = fake_backends.fakeZwanzig;
+/// Fake ZLint executable entrypoint used by backend conformance smoke tests.
 pub const fakeZlint = fake_backends.fakeZlint;
+/// Fake zflame executable entrypoint used by backend conformance smoke tests.
 pub const fakeZflame = fake_backends.fakeZflame;
+/// Fake diff-folded executable entrypoint used by backend conformance smoke tests.
 pub const fakeDiffFolded = fake_backends.fakeDiffFolded;
 
 /// Runs all artifact, source hygiene, release-doc, and MCP contract gates.
@@ -432,6 +433,7 @@ fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Recursively rejects tracked pure-Zig roots that contain files with `extension`.
 pub fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, extension: []const u8) !bool {
     var dir = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return true,
