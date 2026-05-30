@@ -118,6 +118,7 @@ pub const LintProfile = struct {
 
 /// Constructs zlint argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZlintArgv(allocator: std.mem.Allocator, spec: ZlintCommand) ![]const []const u8 {
+    // Construct this value in a single path so required fields cannot drift.
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
     try list.appendSlice(allocator, &.{ spec.executable, "--format", "json" });
@@ -130,6 +131,7 @@ pub fn buildZlintArgv(allocator: std.mem.Allocator, spec: ZlintCommand) ![]const
 
 /// Constructs zlint fix argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZlintFixArgv(allocator: std.mem.Allocator, spec: ZlintCommand, dangerous: bool) ![]const []const u8 {
+    // Construct this value in a single path so required fields cannot drift.
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
     try list.appendSlice(allocator, &.{ spec.executable, "--format", "json", if (dangerous) "--fix-dangerously" else "--fix" });
@@ -142,6 +144,7 @@ pub fn buildZlintFixArgv(allocator: std.mem.Allocator, spec: ZlintCommand, dange
 
 /// Constructs zwanzig lint argv data from caller-owned inputs, propagating allocation failures.
 pub fn buildZwanzigLintArgv(allocator: std.mem.Allocator, spec: ZwanzigLintCommand) ![]const []const u8 {
+    // Construct this value in a single path so required fields cannot drift.
     var list: std.ArrayList([]const u8) = .empty;
     errdefer list.deinit(allocator);
     try list.appendSlice(allocator, &.{ spec.executable, "--format", spec.format.name() });
@@ -168,6 +171,7 @@ pub fn buildZwanzigGraphArgv(allocator: std.mem.Allocator, spec: ZwanzigGraphCom
 /// rather than an error return; only MissingCommandRunner and OOM propagate.
 /// Returns an allocator-owned result object.
 pub fn runZlintDiagnostics(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintDiagnosticsRequest) LintError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_config" }) else null;
     defer if (resolved_config) |resolved| resolved.deinit(allocator);
@@ -238,6 +242,7 @@ pub fn runZlintRules(allocator: std.mem.Allocator, context: app_context.StaticAn
 /// ZLint (which edits workspace files) and reports post-fix findings. `dangerous`
 /// selects --fix-dangerously over --fix. Returns an allocator-owned result object.
 pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZlintFixRequest) LintError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zlint_fix_config" }) else null;
     defer if (resolved_config) |resolved| resolved.deinit(allocator);
     const resolved_path = try context.workspace_store.resolve(allocator, .{ .path = request.path, .provenance = "static_analysis.zlint_fix_path" });
@@ -269,6 +274,7 @@ pub fn runZlintFix(allocator: std.mem.Allocator, context: app_context.StaticAnal
 /// captured command result tagged with backend metadata. Backend failures map to
 /// structured command-error values. Returns an allocator-owned result object.
 pub fn runZwanzigLint(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigLintRequest) LintError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_runner = try requireCommandRunner(context);
     const resolved_config = if (request.config) |path| try context.workspace_store.resolve(allocator, .{ .path = path, .provenance = "static_analysis.zwanzig_config" }) else null;
     defer if (resolved_config) |resolved| resolved.deinit(allocator);
@@ -305,6 +311,7 @@ fn runZwanzigCommand(
     tool_name: []const u8,
     requested_timeout_ms: ?u64,
 ) LintError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const timeout_ms = commandTimeout(context, requested_timeout_ms);
     const result = command_runner.run(allocator, .{
         .argv = argv,
@@ -318,6 +325,7 @@ fn runZwanzigCommand(
 
 /// Implements zwanzig result with metadata workflow logic using caller-owned inputs.
 fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, value: std.json.Value, tool_name: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = switch (value) {
         .object => |o| o,
         else => return value,
@@ -333,6 +341,7 @@ fn zwanzigResultWithMetadata(allocator: std.mem.Allocator, value: std.json.Value
 /// Returns a `GraphOutcome.value` on success or `.error_value` for backend
 /// failure, missing output, or an unreadable output dir. Allocator-owned result.
 pub fn runZwanzigGraph(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: ZwanzigGraphRequest) LintError!GraphOutcome {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_runner = try requireCommandRunner(context);
     const resolved_path = try context.workspace_store.resolve(allocator, .{ .path = request.path, .provenance = "static_analysis.zwanzig_graph_path" });
     defer resolved_path.deinit(allocator);
@@ -383,6 +392,7 @@ pub fn zlintHelpSupportsRules(help: []const u8) bool {
 
 /// Serializes backend command failed fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendCommandFailedValue(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, stdout: []const u8, stderr: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -398,6 +408,7 @@ fn backendCommandFailedValue(allocator: std.mem.Allocator, tool_name: []const u8
 
 /// Serializes zlint rules unavailable fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintRulesUnavailableValue(allocator: std.mem.Allocator, help: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_rules" });
     try obj.put(allocator, "ok", .{ .bool = true });
@@ -413,6 +424,7 @@ fn zlintRulesUnavailableValue(allocator: std.mem.Allocator, help: []const u8) !s
 
 /// Serializes zlint capabilities fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintCapabilitiesValue(allocator: std.mem.Allocator, help: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "format_json", .{ .bool = std.mem.indexOf(u8, help, "--format") != null });
     try obj.put(allocator, "fix", .{ .bool = std.mem.indexOf(u8, help, "--fix") != null });
@@ -425,6 +437,7 @@ fn zlintCapabilitiesValue(allocator: std.mem.Allocator, help: []const u8) !std.j
 
 /// Serializes malformed backend output fields into an allocator-owned JSON value; allocation failures propagate.
 fn malformedBackendOutputValue(allocator: std.mem.Allocator, tool_name: []const u8, stdout: []const u8, stderr: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -439,6 +452,7 @@ fn malformedBackendOutputValue(allocator: std.mem.Allocator, tool_name: []const 
 
 /// Serializes lint findings result fields into an allocator-owned JSON value; allocation failures propagate.
 fn lintFindingsResultValue(allocator: std.mem.Allocator, tool_name: []const u8, backend: []const u8, findings: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = tool_name });
     try obj.put(allocator, "ok", .{ .bool = true });
@@ -453,6 +467,7 @@ fn lintFindingsResultValue(allocator: std.mem.Allocator, tool_name: []const u8, 
 
 /// Serializes zlint fix preview fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintFixPreviewValue(allocator: std.mem.Allocator, argv: []const []const u8, dangerous: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_fix" });
     try obj.put(allocator, "backend", .{ .string = "zlint" });
@@ -468,6 +483,7 @@ fn zlintFixPreviewValue(allocator: std.mem.Allocator, argv: []const []const u8, 
 
 /// Serializes zlint fix applied fields into an allocator-owned JSON value; allocation failures propagate.
 fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, dangerous: bool, stdout: []const u8, stderr: []const u8, findings: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zig_zlint_fix" });
     try obj.put(allocator, "ok", .{ .bool = true });
@@ -490,6 +506,7 @@ fn zlintFixAppliedValue(allocator: std.mem.Allocator, argv: []const []const u8, 
 /// stable comparison_key and fingerprint. Empty/blank input yields an empty array.
 /// Returns an allocator-owned array value.
 pub fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, source: FindingSource) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var findings = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = findings };
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
@@ -501,6 +518,7 @@ pub fn normalizeFindingsText(allocator: std.mem.Allocator, text: []const u8, sou
 
 /// Implements findings array workflow logic using caller-owned inputs.
 fn findingsArray(allocator: std.mem.Allocator, value: std.json.Value) std.json.Array {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (value) {
         .array => |array| return array,
         .object => |obj| {
@@ -515,6 +533,7 @@ fn findingsArray(allocator: std.mem.Allocator, value: std.json.Value) std.json.A
 
 /// Serializes normalize finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, source: FindingSource) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (value) {
         .object => |o| o,
         else => std.json.ObjectMap.empty,
@@ -540,6 +559,7 @@ fn normalizeFindingValue(allocator: std.mem.Allocator, value: std.json.Value, so
 /// objects with id/severity/category/description defaults. Blank input yields an
 /// empty array. Returns an allocator-owned array value.
 pub fn normalizeRulesText(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var rules = std.json.Array.init(allocator);
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return .{ .array = rules };
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
@@ -597,6 +617,7 @@ fn sarifResultValue(allocator: std.mem.Allocator, tool_name: []const u8, finding
 
 /// Serializes sarif finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn sarifFindingValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = finding.object;
     const loc = if (obj.get("location")) |value| switch (value) {
         .object => |o| o,
@@ -636,6 +657,7 @@ fn sarifLevel(severity: []const u8) []const u8 {
 /// (same key, differing severity), and each backend's findings unique to it.
 /// Returns an allocator-owned result object.
 pub fn lintCompareValue(allocator: std.mem.Allocator, zlint: std.json.Array, zwanzig: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var consensus = std.json.Array.init(allocator);
     var disagreements = std.json.Array.init(allocator);
     var zlint_only = std.json.Array.init(allocator);
@@ -688,6 +710,7 @@ fn compareSummaryValue(allocator: std.mem.Allocator, consensus: std.json.Array, 
 
 /// Serializes lint profile fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn lintProfileValue(allocator: std.mem.Allocator, selected: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var profiles = std.json.Array.init(allocator);
     try profiles.append(try profileValue(allocator, "advisory", true, 9999, false));
     try profiles.append(try profileValue(allocator, "standard", false, 25, true));
@@ -701,6 +724,7 @@ pub fn lintProfileValue(allocator: std.mem.Allocator, selected: []const u8) !std
 
 /// Serializes profile fields into an allocator-owned JSON value; allocation failures propagate.
 fn profileValue(allocator: std.mem.Allocator, name: []const u8, allow_warnings: bool, max_warnings: i64, require_backend: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "name", try ownedString(allocator, name));
     try obj.put(allocator, "allow_warnings", .{ .bool = allow_warnings });
@@ -749,6 +773,7 @@ pub fn lintGateValue(allocator: std.mem.Allocator, findings: std.json.Array, pro
 /// keywords. Preview-only: it never edits files and points callers at the
 /// apply-gated `zig_zlint_fix` tool. Returns an allocator-owned result object.
 pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var safe = std.json.Array.init(allocator);
     var risky = std.json.Array.init(allocator);
     var manual = std.json.Array.init(allocator);
@@ -771,6 +796,7 @@ pub fn fixPlanValue(allocator: std.mem.Allocator, findings: std.json.Array) !std
 /// Source-mutating: writes the recomputed baseline to `output` only when `apply`
 /// is true. Returns an allocator-owned result object.
 pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, findings: std.json.Array, baseline: std.json.Array, apply: bool, output: []const u8) LintError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = try baselineValue(allocator, findings, baseline);
     if (apply) {
         const bytes = try serializeAlloc(allocator, value);
@@ -788,6 +814,7 @@ pub fn lintBaseline(allocator: std.mem.Allocator, context: app_context.StaticAna
 /// from the baseline, `accepted_findings` already in it, `resolved_findings` are
 /// baseline entries no longer present. Returns an allocator-owned result object.
 pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, baseline: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current = std.json.Array.init(allocator);
     var accepted = std.json.Array.init(allocator);
     var resolved = std.json.Array.init(allocator);
@@ -806,6 +833,7 @@ pub fn baselineValue(allocator: std.mem.Allocator, findings: std.json.Array, bas
 /// comparison_key), and flags suppressions that no longer match any finding as
 /// stale. Returns an allocator-owned result object.
 pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array, suppressions_text: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const suppressions = normalizeFindingsText(allocator, suppressions_text, .zlint) catch std.json.Value{ .array = std.json.Array.init(allocator) };
     var suppressed = std.json.Array.init(allocator);
     var active = std.json.Array.init(allocator);
@@ -824,6 +852,7 @@ pub fn suppressionsValue(allocator: std.mem.Allocator, findings: std.json.Array,
 /// appear only in `after`, `resolved_findings` only in `before`, the rest persist.
 /// Returns an allocator-owned result object.
 pub fn trendValue(allocator: std.mem.Allocator, before: std.json.Array, after: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var new_findings = std.json.Array.init(allocator);
     var resolved = std.json.Array.init(allocator);
     var persistent = std.json.Array.init(allocator);
@@ -852,6 +881,7 @@ fn commandTimeout(context: app_context.StaticAnalysisContext, requested_timeout_
 
 /// Serializes backend error fields into an allocator-owned JSON value; allocation failures propagate.
 fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -865,6 +895,7 @@ fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, ope
 
 /// Implements backend error kind workflow logic using caller-owned inputs.
 fn backendErrorKind(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",
         error.FileNotFound => "executable_not_found",
@@ -877,6 +908,7 @@ fn backendErrorKind(err: anyerror) []const u8 {
 
 /// Serializes graph command failed fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphCommandFailedValue(allocator: std.mem.Allocator, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, result: ports.CommandResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = try commandString(allocator, argv);
     const stdout = try safeTextAlloc(allocator, result.stdout);
     const stderr = try safeTextAlloc(allocator, result.stderr);
@@ -925,6 +957,7 @@ fn graphOutputMissingValue(allocator: std.mem.Allocator, output: []const u8) !st
 
 /// Serializes graph output base error fields into an allocator-owned JSON value; allocation failures propagate.
 fn graphOutputBaseErrorValue(allocator: std.mem.Allocator, output: []const u8, phase: []const u8, code: []const u8, resolution: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "tool_error" });
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -941,6 +974,7 @@ fn graphOutputBaseErrorValue(allocator: std.mem.Allocator, output: []const u8, p
 
 /// Serializes command result fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, result: ports.CommandResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const term = result.effectiveTerm();
     const ok = !term.failed() and !result.timed_out;
     const stdout = try safeTextAlloc(allocator, result.stdout);
@@ -973,6 +1007,7 @@ fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []c
 
 /// Serializes command error fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: u64, err: ports.PortError) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "command_error" });
     try obj.put(allocator, "title", .{ .string = title });
@@ -994,6 +1029,7 @@ fn commandErrorValue(allocator: std.mem.Allocator, title: []const u8, argv: []co
 
 /// Serializes command term fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     switch (term) {
         .exited => |code| {
@@ -1009,6 +1045,7 @@ fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.
 
 /// Serializes compiler insights fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stderr: []const u8, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var findings = std.json.Array.init(allocator);
     var error_count: i64 = 0;
     var warning_count: i64 = 0;
@@ -1038,6 +1075,7 @@ fn compilerInsightsValue(allocator: std.mem.Allocator, stdout: []const u8, stder
 
 /// Collects compiler lines data into caller-provided output storage without taking ownership of inputs.
 fn collectCompilerLines(allocator: std.mem.Allocator, findings: *std.json.Array, text_value: []const u8, primary: *?compiler_output.CompilerLine, error_count: *i64, warning_count: *i64, note_count: *i64) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var lines = std.mem.splitScalar(u8, text_value, '\n');
     while (lines.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, "\r");
@@ -1057,6 +1095,7 @@ fn collectCompilerLines(allocator: std.mem.Allocator, findings: *std.json.Array,
 
 /// Serializes compiler line fields into an allocator-owned JSON value; allocation failures propagate.
 fn compilerLineValue(allocator: std.mem.Allocator, parsed: compiler_output.CompilerLine) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "severity", .{ .string = parsed.severity });
     try obj.put(allocator, "message", try ownedString(allocator, parsed.message));
@@ -1069,6 +1108,7 @@ fn compilerLineValue(allocator: std.mem.Allocator, parsed: compiler_output.Compi
 
 /// Implements compiler next command workflow logic using caller-owned inputs.
 fn compilerNextCommand(allocator: std.mem.Allocator, primary: compiler_output.CompilerLine, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const zig = if (argv.len > 0) argv[0] else "zig";
     const path = primary.path orelse return .{ .string = try commandString(allocator, argv) };
     if (path.len > 0 and std.mem.endsWith(u8, path, ".zig")) {
@@ -1080,6 +1120,7 @@ fn compilerNextCommand(allocator: std.mem.Allocator, primary: compiler_output.Co
 
 /// Implements compiler next actions workflow logic using caller-owned inputs.
 fn compilerNextActions(allocator: std.mem.Allocator, primary: compiler_output.CompilerLine, note_count: i64) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var actions = std.json.Array.init(allocator);
     if (primary.path) |path| {
         if (primary.line) |line_no| {
@@ -1104,6 +1145,7 @@ fn compilerNextActions(allocator: std.mem.Allocator, primary: compiler_output.Co
 
 /// Serializes failure summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, ok: bool, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = ok });
     const insights_obj = switch (insights) {
@@ -1131,6 +1173,7 @@ fn failureSummaryValue(allocator: std.mem.Allocator, insights: std.json.Value, o
 
 /// Serializes command error summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: []const []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "ok", .{ .bool = false });
     try obj.put(allocator, "primary", .null);
@@ -1146,6 +1189,7 @@ fn commandErrorSummaryValue(allocator: std.mem.Allocator, err: anyerror, argv: [
 
 /// Serializes likely failure scope fields into an allocator-owned JSON value; allocation failures propagate.
 fn likelyFailureScopeValue(allocator: std.mem.Allocator, primary: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const primary_obj = switch (primary) {
         .object => |o| o,
         else => return .{ .string = "none" },
@@ -1171,6 +1215,7 @@ const SafeText = struct {
 /// embedded in MCP JSON. `byte_count` is the original length and `invalid_utf8`
 /// records whether replacement happened.
 fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{ .text = try allocator.dupe(u8, bytes), .invalid_utf8 = false, .encoding = "utf-8", .byte_count = bytes.len };
     }
@@ -1204,6 +1249,7 @@ fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name:
 
 /// Serializes finding fields into an allocator-owned JSON value; allocation failures propagate.
 fn findingValue(allocator: std.mem.Allocator, source: []const u8, rule: []const u8, severity: []const u8, file: []const u8, line: usize, column: usize, message: []const u8, confidence: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "source", .{ .string = source });
     try obj.put(allocator, "rule", try ownedString(allocator, rule));
@@ -1217,6 +1263,7 @@ fn findingValue(allocator: std.mem.Allocator, source: []const u8, rule: []const 
 
 /// Serializes summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn summaryValue(allocator: std.mem.Allocator, findings: std.json.Array) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var errors: usize = 0;
     var warnings: usize = 0;
     var infos: usize = 0;
@@ -1247,6 +1294,7 @@ fn locationValue(allocator: std.mem.Allocator, file: []const u8, line: usize, co
 
 /// Serializes fingerprint fields into an allocator-owned JSON value; allocation failures propagate.
 fn fingerprintValue(allocator: std.mem.Allocator, finding: std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (finding) {
         .object => |o| o,
         else => return ownedString(allocator, "unknown"),
@@ -1325,6 +1373,7 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
 
 /// Formats argv entries into display command text.
 fn commandString(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (argv.len == 0) return allocator.dupe(u8, "");
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
@@ -1351,6 +1400,7 @@ fn serializeAlloc(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
 
 /// Serializes serialize fields into an allocator-owned JSON value; allocation failures propagate.
 fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: std.json.Value) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     switch (value) {
         .null => try out.appendSlice(allocator, "null"),
         .bool => |b| try out.appendSlice(allocator, if (b) "true" else "false"),
@@ -1384,6 +1434,7 @@ fn serializeValue(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: 
 
 /// Serializes string data into allocator-owned JSON text.
 fn serializeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: []const u8) !void {
+    // Keep serialization centralized so output formatting stays consistent across call sites.
     const hex = "0123456789abcdef";
     try out.append(allocator, '"');
     for (value) |c| switch (c) {
@@ -1874,6 +1925,7 @@ const TrackingAllocator = struct {
 
     /// Frees a JSON value tree, freeing only string slices this allocator handed out.
     fn freeJsonValue(self: *TrackingAllocator, value: std.json.Value) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         switch (value) {
             .array => |array| {
                 for (array.items) |item| self.freeJsonValue(item);
@@ -1896,6 +1948,7 @@ const TrackingAllocator = struct {
     }
 
     fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
         const ptr = self.backing.rawAlloc(len, alignment, ret_addr) orelse return null;
         self.live.put(@intFromPtr(ptr), {}) catch {
@@ -1911,6 +1964,7 @@ const TrackingAllocator = struct {
     }
 
     fn remap(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *TrackingAllocator = @ptrCast(@alignCast(ctx));
         const new_ptr = self.backing.rawRemap(buf, alignment, new_len, ret_addr) orelse return null;
         if (new_ptr != buf.ptr) {
@@ -1986,6 +2040,7 @@ fn testStaticContext(
     store: *workspace_store_fake.FakeWorkspaceStore,
     scanner: *workspace_scanner_fake.FakeWorkspaceScanner,
 ) app_context.StaticAnalysisContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
