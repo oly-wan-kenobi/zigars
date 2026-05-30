@@ -26,6 +26,7 @@ pub fn viewValue(
     context: app_context.ArtifactContext,
     request: ViewRequest,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const session = try envelope.view(allocator, context.workspace_store, request.kind, request.id, "sessions.view");
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigars_session_view" });
