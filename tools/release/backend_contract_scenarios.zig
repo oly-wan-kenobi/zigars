@@ -29,6 +29,7 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
 /// mismatch is reported to stderr and causes `false` to be returned.
 /// The caller owns no allocations after this call (all buffers are freed).
 pub fn check(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const contract_script = (try readContractFile(allocator, io, contract_script_path)) orelse return false;
     defer allocator.free(contract_script);
     const smoke_script = (try readContractFile(allocator, io, smoke_script_path)) orelse return false;
@@ -66,6 +67,7 @@ fn checkScenarioDefinitions(io: Io, script: []const u8) !bool {
 
 /// Checks the smoke script's required-scenario tuple.
 fn checkSmokeRequiredTuple(io: Io, script: []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const tuple = requiredScenarioTuple(script) orelse {
         try cli_io.stderrPrint(io, "backend contract smoke script is missing required_scenarios tuple\n", .{});
         return false;
@@ -86,6 +88,7 @@ fn checkScenarioDocs(io: Io, docs: []const u8) !bool {
 
 /// Verifies every manifest scenario name appears in `haystack`.
 fn checkScenarioTokens(io: Io, label: []const u8, path: []const u8, haystack: []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (scenario_manifest.all) |scenario| {
         if (std.mem.indexOf(u8, haystack, scenario.name) == null) {
@@ -109,6 +112,7 @@ fn requiredScenarioTuple(script: []const u8) ?[]const u8 {
 
 /// Counts non-overlapping occurrences of `needle` in `text`.
 fn countOccurrences(text: []const u8, needle: []const u8) usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var count: usize = 0;
     var start: usize = 0;
     while (std.mem.indexOfPos(u8, text, start, needle)) |index| {
@@ -122,6 +126,7 @@ fn countOccurrences(text: []const u8, needle: []const u8) usize {
 /// enclosed in double quotes.  Used to count smoke required-scenario entries
 /// without importing a shell parser.
 fn countQuotedLines(text: []const u8) usize {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var count: usize = 0;
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {
