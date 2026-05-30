@@ -77,6 +77,7 @@ pub fn looksLikeFrame(line: []const u8) bool {
 /// Returns a borrowed slice of `line`; returns "unknown" when no known pattern matches.
 /// Prefers ` in <name>` (GDB/sanitizer output) over backtick-quoted LLDB symbols.
 pub fn frameSymbol(line: []const u8) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.mem.indexOf(u8, line, " in ")) |idx| {
         const rest = line[idx + 4 ..];
         const end = std.mem.indexOfAny(u8, rest, " (") orelse rest.len;
