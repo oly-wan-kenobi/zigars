@@ -40,6 +40,7 @@ pub const Runner = struct {
     /// and non-zero exits both produce `available = false`; only a successful
     /// exit produces `available = true`.
     fn check(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.BackendProbeRequest) ports.PortError!ports.BackendAvailability {
+        // Fail fast on the first mismatch to keep diagnostics deterministic.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (request.argv.len == 0) return unavailable(allocator, request.backend, "missing probe argv", "backend probe request did not include an argv");
         const result = self.command_runner.run(allocator, .{
@@ -75,6 +76,7 @@ pub const Runner = struct {
 /// Allocates copies of all three strings; on failure the already-allocated
 /// copies are freed before propagating the error.
 fn unavailable(allocator: std.mem.Allocator, backend: []const u8, reason: []const u8, basis: []const u8) ports.PortError!ports.BackendAvailability {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const owned_backend = try allocator.dupe(u8, backend);
     var backend_owned = true;
     defer if (backend_owned) allocator.free(owned_backend);
