@@ -98,6 +98,7 @@ pub fn summarizeFrames(allocator: std.mem.Allocator, request: EvidenceRequest) !
 /// a crash identity keyed on the sanitizer name, and parses bounded frames.
 /// Returns an owned SanitizerFusion (caller must deinit).
 pub fn fuseSanitizer(allocator: std.mem.Allocator, request: EvidenceRequest) !SanitizerFusion {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const sanitizer = crash.classifySanitizer(request.bytes);
     return .{
         .source_kind = request.source_kind,
