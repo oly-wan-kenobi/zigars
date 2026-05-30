@@ -26,6 +26,7 @@ pub const invalid_cursor_message = "Pagination cursor must be a non-negative dec
 /// JSON forms; a malformed or negative cursor is `error.InvalidCursor`. A
 /// non-integer `limit` is ignored rather than rejected.
 pub fn fromParams(params: ?std.json.Value) ParseError!Pagination {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var page: Pagination = .{};
     const obj = switch (params orelse .null) {
         .object => |o| o,
