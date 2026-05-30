@@ -136,6 +136,7 @@ fn advertisedArgAccepted(tool_name: []const u8, field: []const u8, value: std.js
 
 /// Returns true when passing `field` to `tool` is rejected as an unknown argument.
 fn unknownArgRejected(tool_name: []const u8, field: []const u8, value: std.json.Value) !bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
