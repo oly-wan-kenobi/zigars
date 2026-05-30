@@ -4,6 +4,7 @@
 
 /// Exercises adoption and client-integration tool paths end-to-end.
 pub fn run(client: anytype) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const pack = try client.callTool("zigars_adoption_pack", "{\"client\":\"codex\",\"backend\":\"zflame\"}");
     defer client.allocator.free(pack);
     try client.expectPathString(pack, "kind", "zigars_adoption_pack");
