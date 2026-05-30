@@ -37,6 +37,7 @@ pub const Cache = struct {
 
     /// Exposes this cache through the StaticCache vtable.
     pub fn port(self: *Self) ports.StaticCache {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -92,6 +93,7 @@ pub const Cache = struct {
 
 /// Public snapshot of cache hit, miss, and storage counters.
 fn cacheStatus(cache: anytype) ports.StaticCacheStatus {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .cached = cache.index_json != null,
         .signature = cache.signature,
