@@ -97,6 +97,7 @@ pub const FakeZlsGateway = struct {
 
     /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         for (self.expected_capabilities.items) |expected| expected.deinit(self.allocator);
         self.expected_capabilities.deinit(self.allocator);
 
@@ -122,6 +123,7 @@ pub const FakeZlsGateway = struct {
 
     /// Exposes this fake through the ZlsGateway vtable.
     pub fn port(self: *Self) ports.ZlsGateway {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -135,6 +137,7 @@ pub const FakeZlsGateway = struct {
 
     /// Adds an ordered successful capability expectation.
     pub fn expectCapability(self: *Self, request_value: ports.ZlsCapabilityRequest, result: ports.ZlsCapabilityResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeCapabilityRequest(self.allocator, owned_request);
@@ -151,6 +154,7 @@ pub const FakeZlsGateway = struct {
 
     /// Records an expected capability error call, cloning request data and failing on allocation errors.
     pub fn expectCapabilityError(self: *Self, request_value: ports.ZlsCapabilityRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneCapabilityRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeCapabilityRequest(self.allocator, owned_request);
@@ -163,6 +167,7 @@ pub const FakeZlsGateway = struct {
 
     /// Records an expected sync call, cloning request data and failing on allocation errors.
     pub fn expectSync(self: *Self, request_value: ports.ZlsSyncRequest, result: ports.ZlsSyncResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeSyncRequest(self.allocator, owned_request);
@@ -179,6 +184,7 @@ pub const FakeZlsGateway = struct {
 
     /// Records an expected sync error call, cloning request data and failing on allocation errors.
     pub fn expectSyncError(self: *Self, request_value: ports.ZlsSyncRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneSyncRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeSyncRequest(self.allocator, owned_request);
@@ -191,6 +197,7 @@ pub const FakeZlsGateway = struct {
 
     /// Records an expected request call, cloning request data and failing on allocation errors.
     pub fn expectRequest(self: *Self, request_value: ports.ZlsRequest, response: ports.ZlsResponse) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -207,6 +214,7 @@ pub const FakeZlsGateway = struct {
 
     /// Records an expected request error call, cloning request data and failing on allocation errors.
     pub fn expectRequestError(self: *Self, request_value: ports.ZlsRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneRequest(self.allocator, request_value);
         var request_owned = true;
         defer if (request_owned) freeRequest(self.allocator, owned_request);
@@ -219,6 +227,7 @@ pub const FakeZlsGateway = struct {
 
     /// Replaces cached diagnostics messages returned by the diagnostics snapshot port.
     pub fn setDiagnosticsMessages(self: *Self, messages: []const []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         for (self.diagnostics_messages.items) |message| self.allocator.free(message);
         self.diagnostics_messages.clearRetainingCapacity();
         for (messages) |message| {
@@ -257,6 +266,7 @@ pub const FakeZlsGateway = struct {
 
     /// Reports whether the fake ZLS gateway supports a capability.
     fn capability(ptr: *anyopaque, request_value: ports.ZlsCapabilityRequest) ports.PortError!ports.ZlsCapabilityResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneCapabilityRequest(self.allocator, request_value);
         var record_owned = true;
@@ -276,6 +286,7 @@ pub const FakeZlsGateway = struct {
 
     /// Applies a text synchronization request through the fake ZLS gateway.
     fn sync(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsSyncRequest) ports.PortError!ports.ZlsSyncResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneSyncRequest(self.allocator, request_value);
         var record_owned = true;
@@ -295,6 +306,7 @@ pub const FakeZlsGateway = struct {
 
     /// Sends a raw request through the fake ZLS gateway.
     fn request(ptr: *anyopaque, allocator: Allocator, request_value: ports.ZlsRequest) ports.PortError!ports.ZlsResponse {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRequest(self.allocator, request_value);
         var record_owned = true;
@@ -322,6 +334,7 @@ pub const FakeZlsGateway = struct {
 
     /// Returns cloned cached diagnostics messages for the caller.
     fn diagnostics(ptr: *anyopaque, allocator: Allocator) ports.PortError!ports.ZlsDiagnosticsSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         self.diagnostics_call_count += 1;
         const messages = try allocator.alloc([]const u8, self.diagnostics_messages.items.len);
@@ -359,6 +372,7 @@ pub const FakeZlsGateway = struct {
 
     /// Clones capability result into allocator-owned storage.
     fn cloneCapabilityResult(allocator: Allocator, result: ports.ZlsCapabilityResult) !ports.ZlsCapabilityResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const capability_name = try common.dupString(allocator, result.capability);
         var capability_owned = true;
         defer if (capability_owned) allocator.free(capability_name);
@@ -382,6 +396,7 @@ pub const FakeZlsGateway = struct {
 
     /// Clones sync request into allocator-owned storage.
     fn cloneSyncRequest(allocator: Allocator, request_value: ports.ZlsSyncRequest) !ports.ZlsSyncRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const file = try common.dupString(allocator, request_value.file);
         var file_owned = true;
         defer if (file_owned) allocator.free(file);
@@ -410,6 +425,7 @@ pub const FakeZlsGateway = struct {
 
     /// Clones sync result into allocator-owned storage.
     fn cloneSyncResult(allocator: Allocator, result: ports.ZlsSyncResult) !ports.ZlsSyncResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const uri = try common.dupString(allocator, result.uri);
         var uri_owned = true;
         defer if (uri_owned) allocator.free(uri);
@@ -443,6 +459,7 @@ pub const FakeZlsGateway = struct {
 
     /// Clones request into allocator-owned storage.
     fn cloneRequest(allocator: Allocator, request_value: ports.ZlsRequest) !ports.ZlsRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const method = try common.dupString(allocator, request_value.method);
         var method_owned = true;
         defer if (method_owned) allocator.free(method);
@@ -471,6 +488,7 @@ pub const FakeZlsGateway = struct {
 
     /// Clones response into allocator-owned storage.
     fn cloneResponse(allocator: Allocator, response: ports.ZlsResponse) !ports.ZlsResponse {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const method = try common.dupString(allocator, response.method);
         var method_owned = true;
         defer if (method_owned) allocator.free(method);
