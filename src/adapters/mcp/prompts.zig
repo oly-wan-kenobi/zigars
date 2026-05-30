@@ -7,6 +7,7 @@ const mcp_result = @import("result.zig");
 
 /// Registers all deterministic zigars workflow prompts with owned message cleanup.
 pub fn registerPrompts(server: anytype, context_provider: anytype) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const Provider = @TypeOf(context_provider);
     try server.addPromptWithDeinit(.{
         .name = "zigars_profile_workflow",
@@ -55,6 +56,7 @@ fn promptHandler(comptime Provider: type, comptime name: []const u8) *const fn (
 
 /// Allows prompt arguments to override the workflow token used in the text.
 fn workflowName(default_name: []const u8, args: ?std.json.Value) []const u8 {
+    // Route through a single workflow path so policy checks run in a consistent order.
     return switch (args orelse .null) {
         .object => |obj| switch (obj.get("workflow") orelse .null) {
             .string => |s| s,
