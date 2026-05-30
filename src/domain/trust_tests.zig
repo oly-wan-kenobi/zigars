@@ -31,6 +31,7 @@ test "trust JSON builders clean up allocation failures" {
 
 /// Exercises trust JSON construction under allocation-failure testing.
 fn trustValuesWithAllocator(allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const gate = try trust.cleanTreeGateFromStatus(allocator, "/tmp/work", " M src/main.zig\n?? zig-out/bin/app\n", true, "fixture");
     defer trust.deinitOwnedValue(allocator, gate);
 
