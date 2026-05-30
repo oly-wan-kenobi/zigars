@@ -184,6 +184,7 @@ fn invokeEnvironment(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = environment.App.init(context, allocator);
     return finish(allocator, tool_name, "environment_workflow", func(&app, allocator, args));
 }
@@ -196,6 +197,7 @@ fn invokeAdoption(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = adoption.App.init(context, allocator);
     return finish(allocator, tool_name, "adoption_workflow", func(&app, allocator, args));
 }
@@ -208,6 +210,7 @@ fn invokeTrust(
     comptime tool_name: []const u8,
     comptime func: anytype,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var app = trust.App.init(context, allocator);
     return finish(allocator, tool_name, "trust_workflow", func(&app, allocator, args));
 }
@@ -227,6 +230,7 @@ fn finish(allocator: std.mem.Allocator, tool_name: []const u8, operation: []cons
 
 /// Normalizes non-OOM workflow failures into stable MCP error metadata.
 fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -383,6 +387,7 @@ test "environment adapter covers trust wrappers and raw usecase errors" {
 
 /// Creates test environment context from the ports required by the adapter.
 fn testEnvironmentContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.EnvironmentContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{
@@ -402,6 +407,7 @@ fn testEnvironmentContext(command_runner: ports.CommandRunner, workspace_store: 
 
 /// Creates test trust context from the ports required by the adapter.
 fn testTrustContext(command_runner: ports.CommandRunner, workspace_store: ports.WorkspaceStore, tool_manifest: ports.ToolManifestCatalog) app_context.TrustContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{},
