@@ -51,6 +51,7 @@ pub const Writer = struct {
     /// with the same allocator to free it.  Returns `error.InvalidAuditPath` if
     /// the path is empty or has no parent directory component.
     pub fn init(allocator: std.mem.Allocator, io: std.Io, resolved_path: []const u8, mode: Mode) AuditError!Writer {
+        // Capture all required dependencies up front so later calls can stay predictable.
         if (resolved_path.len == 0) return error.InvalidAuditPath;
         const parent = std.fs.path.dirname(resolved_path) orelse return error.InvalidAuditPath;
         try std.Io.Dir.cwd().createDirPath(io, parent);
@@ -71,6 +72,7 @@ pub const Writer = struct {
 
     /// Closes the audit file and releases the owned path.
     pub fn deinit(self: *Writer, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         if (self.file) |file| {
             file.close(self.io);
             self.file = null;
@@ -133,6 +135,7 @@ pub fn parseMode(value: []const u8) ?Mode {
 }
 
 fn writeEvent(writer: *std.Io.Writer, allocator: std.mem.Allocator, io: std.Io, mode: Mode, event: Event) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeByte('{');
     var first = true;
     try fieldName(writer, &first, "schema_version");
@@ -168,6 +171,7 @@ fn writeEvent(writer: *std.Io.Writer, allocator: std.mem.Allocator, io: std.Io, 
 }
 
 fn payloadObject(writer: *std.Io.Writer, allocator: std.mem.Allocator, mode: Mode, payload: []const u8, redaction_count: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(payload, &digest, .{});
     const digest_hex = std.fmt.bytesToHex(digest, .lower);
@@ -204,6 +208,7 @@ fn payloadObject(writer: *std.Io.Writer, allocator: std.mem.Allocator, mode: Mod
 }
 
 fn correlationObject(writer: *std.Io.Writer, corr: Correlation) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeByte('{');
     var first = true;
     try fieldName(writer, &first, "schema_version");
@@ -226,6 +231,7 @@ fn correlationObject(writer: *std.Io.Writer, corr: Correlation) !void {
 }
 
 fn requestIdObject(writer: *std.Io.Writer, kind: []const u8, value: ?[]const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeByte('{');
     var first = true;
     try fieldName(writer, &first, "type");
@@ -236,6 +242,7 @@ fn requestIdObject(writer: *std.Io.Writer, kind: []const u8, value: ?[]const u8)
 }
 
 fn redactionsArray(writer: *std.Io.Writer, mode: Mode, redaction_count: usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try writer.writeByte('[');
     if (mode == .metadata) {
         try jsonString(writer, "payload_omitted_metadata_only");
@@ -246,6 +253,7 @@ fn redactionsArray(writer: *std.Io.Writer, mode: Mode, redaction_count: usize) !
 }
 
 fn writeRedactedValue(writer: *std.Io.Writer, value: std.json.Value, redaction_count: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (value) {
         .object => |object| {
             try writer.writeByte('{');
@@ -293,6 +301,7 @@ fn jsonString(writer: *std.Io.Writer, value: []const u8) !void {
 // substring presence are checked case-insensitively so variant spellings
 // (token, api_token, API-Key, …) are caught without an exhaustive list.
 fn isSensitiveKey(key: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const sensitive = [_][]const u8{
         "authorization",
         "proxy-authorization",
@@ -320,6 +329,7 @@ fn isSensitiveKey(key: []const u8) bool {
 }
 
 fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (needle.len == 0) return true;
     if (haystack.len < needle.len) return false;
     var index: usize = 0;
