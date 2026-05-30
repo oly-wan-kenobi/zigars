@@ -110,6 +110,7 @@ pub const RuntimePorts = struct {
 
     /// Returns the app-facing port table for the current runtime state.
     pub fn portSet(self: *Self) app_context.PortSet {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.refreshDerivedPorts();
         return .{
             .command_runner = self.command_runner.port(),
