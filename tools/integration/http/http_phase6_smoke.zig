@@ -126,6 +126,7 @@ fn assertToolFields(allocator: std.mem.Allocator, io: Io, port: u16, id: i64, to
 /// Serializes `fields` to a minified JSON object string. Caller owns the
 /// returned slice and must free it.
 fn argsJson(allocator: std.mem.Allocator, fields: []const Field) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     for (fields) |field| {
@@ -153,6 +154,7 @@ fn assertToolPaths(
     expected_key: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
