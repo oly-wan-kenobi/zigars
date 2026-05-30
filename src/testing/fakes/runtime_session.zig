@@ -30,6 +30,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Exposes this implementation through its application port vtable.
     pub fn port(self: *FakeRuntimeSession) ports.RuntimeSession {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -64,6 +65,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Starts a runtime job and records its initial event.
     fn startJob(ptr: *anyopaque, label: []const u8, command_text: []const u8, timeout_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const id = try self.allocPrint("job-{d}", .{self.next_job});
         self.next_job += 1;
@@ -93,6 +95,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Marks a runtime job complete and records its event.
     fn finishJob(ptr: *anyopaque, job_id: []const u8, finish: ports.RuntimeJobFinish) ports.PortError!ports.RuntimeJobSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
         job.status = finish.status;
@@ -110,6 +113,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Marks a runtime job failed and records its event.
     fn failJob(ptr: *anyopaque, job_id: []const u8, err_name: []const u8, duration_ms: i64) ports.PortError!ports.RuntimeJobSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
         job.status = .failed;
@@ -122,6 +126,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Cancels a runtime job and records its event.
     fn cancelJob(ptr: *anyopaque, job_id: []const u8, reason: []const u8) ports.PortError!ports.RuntimeJobSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         const job = self.jobPtr(job_id) orelse return error.NotFound;
         job.cancellation_requested = true;
@@ -175,6 +180,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Removes a runtime event subscription.
     fn unsubscribe(ptr: *anyopaque, id: []const u8, uri: ?[]const u8) ports.PortError!ports.RuntimeSubscriptionSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         for (self.subscriptions.items) |*sub| {
             if ((id.len > 0 and std.mem.eql(u8, sub.id, id)) or (uri != null and std.mem.eql(u8, sub.uri, uri.?))) {
@@ -207,6 +213,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Selects the active runtime root.
     fn selectRoot(ptr: *anyopaque, root_id: []const u8, apply: bool) ports.PortError!ports.RuntimeRootSnapshot {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *FakeRuntimeSession = @ptrCast(@alignCast(ptr));
         for (self.roots.items, 0..) |*root, index| {
             if (std.mem.eql(u8, root.id, root_id) or std.mem.eql(u8, root.path, root_id)) {
@@ -250,6 +257,7 @@ pub const FakeRuntimeSession = struct {
 
     /// Appends a lifecycle event and assigns its sequence number.
     fn appendEvent(self: *FakeRuntimeSession, job_id: []const u8, event: []const u8, stream: []const u8, message: []const u8, text: []const u8) ports.PortError!void {
+        // Append in deterministic order so completion and snapshot output remain stable.
         try self.events.append(std.testing.allocator, .{
             .sequence = @intCast(self.events.items.len + 1),
             .job_id = job_id,
