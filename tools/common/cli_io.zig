@@ -20,6 +20,7 @@ pub fn failUsage(
     comptime fmt: []const u8,
     args: anytype,
 ) anyerror {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     stderrPrint(io, "zigars-tools {s}: ", .{command}) catch |err| return err;
     stderrPrint(io, fmt ++ "\n", args) catch |err| return err;
     if (usage_hint.len > 0) {
@@ -51,6 +52,7 @@ pub fn flagValue(
     flag: []const u8,
     usage_hint: []const u8,
 ) anyerror![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     index.* += 1;
     if (index.* >= args.len) return missingFlagValue(io, command, flag, usage_hint);
     return args[index.*];
@@ -67,6 +69,7 @@ pub fn reportInvalidArguments(
     usage_hint: []const u8,
     err: anyerror,
 ) anyerror {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (err == error.InvalidArguments) {
         stderrPrint(io, "zigars-tools {s}: invalid arguments\n", .{command}) catch |print_err| return print_err;
         if (usage_hint.len > 0) {
