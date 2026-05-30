@@ -69,6 +69,7 @@ pub const FakeArtifactStore = struct {
 
     /// Frees expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         for (self.expected_puts.items) |expected| expected.deinit(self.allocator);
         self.expected_puts.deinit(self.allocator);
 
@@ -91,6 +92,7 @@ pub const FakeArtifactStore = struct {
 
     /// Exposes this fake through the ArtifactStore vtable.
     pub fn port(self: *Self) ports.ArtifactStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -103,6 +105,7 @@ pub const FakeArtifactStore = struct {
 
     /// Adds an ordered write expectation and clones all borrowed request data.
     pub fn expectPut(self: *Self, request: ports.ArtifactWriteRequest, ref: ports.ArtifactRef) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeWriteRequest(self.allocator, owned_request);
@@ -120,6 +123,7 @@ pub const FakeArtifactStore = struct {
 
     /// Adds an ordered read expectation and clones the returned bytes.
     pub fn expectRead(self: *Self, request: ports.ArtifactReadRequest, bytes: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeReadRequest(self.allocator, owned_request);
@@ -137,6 +141,7 @@ pub const FakeArtifactStore = struct {
 
     /// Adds an ordered workspace-record expectation and clones returned metadata.
     pub fn expectRecordWorkspace(self: *Self, request: ports.WorkspaceArtifactRecordRequest, ref: ports.WorkspaceArtifactRef) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneRecordRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeRecordRequest(self.allocator, owned_request);
@@ -176,6 +181,7 @@ pub const FakeArtifactStore = struct {
 
     /// Writes an artifact through this port implementation.
     fn put(ptr: *anyopaque, allocator: Allocator, request: ports.ArtifactWriteRequest) ports.PortError!ports.ArtifactRef {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneWriteRequest(self.allocator, request);
         var record_owned = true;
@@ -192,6 +198,7 @@ pub const FakeArtifactStore = struct {
 
     /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: Allocator, request: ports.ArtifactReadRequest) ports.PortError!ports.ArtifactReadResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneReadRequest(self.allocator, request);
         var record_owned = true;
@@ -210,6 +217,7 @@ pub const FakeArtifactStore = struct {
 
     /// Records a workspace artifact through this port implementation.
     fn recordWorkspace(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceArtifactRecordRequest) ports.PortError!ports.WorkspaceArtifactRef {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneRecordRequest(self.allocator, request);
         var record_owned = true;
@@ -226,6 +234,7 @@ pub const FakeArtifactStore = struct {
 
     /// Clones write request into allocator-owned storage.
     fn cloneWriteRequest(allocator: Allocator, request: ports.ArtifactWriteRequest) !ports.ArtifactWriteRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const namespace = try common.dupString(allocator, request.namespace);
         var namespace_owned = true;
         defer if (namespace_owned) allocator.free(namespace);
@@ -362,6 +371,7 @@ pub const FakeArtifactStore = struct {
 
     /// Releases allocator-owned fields held by the cloned record request.
     fn freeRecordRequest(allocator: Allocator, request: ports.WorkspaceArtifactRecordRequest) void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         allocator.free(request.path);
         common.freeOptionalString(allocator, request.bytes);
         allocator.free(request.producer);
@@ -381,6 +391,7 @@ pub const FakeArtifactStore = struct {
 
     /// Clones ref into allocator-owned storage.
     fn cloneRef(allocator: Allocator, ref: ports.ArtifactRef) !ports.ArtifactRef {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const id = try common.dupString(allocator, ref.id);
         var id_owned = true;
         defer if (id_owned) allocator.free(id);
@@ -404,6 +415,7 @@ pub const FakeArtifactStore = struct {
 
     /// Clones workspace ref into allocator-owned storage.
     fn cloneWorkspaceRef(allocator: Allocator, ref: ports.WorkspaceArtifactRef) !ports.WorkspaceArtifactRef {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, ref.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -442,6 +454,7 @@ pub const FakeArtifactStore = struct {
 
     /// Compares record requests by the fields that affect behavior.
     fn recordRequestsEqual(expected: ports.WorkspaceArtifactRecordRequest, actual: ports.WorkspaceArtifactRecordRequest) bool {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return std.mem.eql(u8, expected.path, actual.path) and
             common.optionalStringsEqual(expected.bytes, actual.bytes) and
             std.mem.eql(u8, expected.producer, actual.producer) and
