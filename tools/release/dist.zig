@@ -57,6 +57,7 @@ pub fn printVersion(io: Io) !void {
 /// set is incomplete, has unknown names, duplicates, or wrong executable names.
 /// The output directory is wiped and recreated unconditionally before staging.
 pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !void {
+    // Construct this value in a single path so required fields cannot drift.
     var options = try parseDistOptions(allocator, args);
     defer options.deinit(allocator);
     if (options.packages.items.len == 0) return error.InvalidArguments;
@@ -84,6 +85,7 @@ pub fn buildArchives(allocator: Allocator, io: Io, args: []const []const u8) !vo
 /// Accepts `--assets-dir <dir>` and `--version <v>` flags; all other arguments
 /// return `error.InvalidArguments`.
 pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var assets_dir: []const u8 = "dist/assets";
     var version: []const u8 = zigars.manifest.version.string;
     var i: usize = 0;
@@ -111,6 +113,7 @@ pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
 
 /// Validates that package inputs exactly match the configured release targets.
 fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
+    // Reject incompatible inputs early so callers get a precise failure reason.
     if (packages.len != release_targets.all.len) {
         if (io) |output| try stderrPrint(output, "dist expected {d} release packages, got {d}\n", .{ release_targets.all.len, packages.len });
         return error.InvalidArguments;
@@ -137,6 +140,7 @@ fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
 
 /// Parses archive-builder CLI flags into a `DistOptions` value.
 fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions {
+    // Normalize input here so downstream paths can rely on validated shape.
     var options: DistOptions = .{};
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
@@ -170,6 +174,7 @@ fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions
 
 /// Stages one package directory with the binary and all release items.
 fn stagePackage(allocator: Allocator, io: Io, package_dir: []const u8, package: PackageInput) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const root = try std.fs.path.join(allocator, &.{ package_dir, package.name });
     defer allocator.free(root);
     try Io.Dir.cwd().createDirPath(io, root);
@@ -200,6 +205,7 @@ fn copyFile(allocator: Allocator, io: Io, source: []const u8, dest: []const u8) 
 
 /// Recursively copies a repository-relative directory into the package tree.
 fn copyDirectory(allocator: Allocator, io: Io, source: []const u8, dest: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var dir = try Io.Dir.cwd().openDir(io, source, .{ .iterate = true });
     defer dir.close(io);
     var walker = try dir.walk(allocator);
@@ -226,6 +232,7 @@ fn copyDirectory(allocator: Allocator, io: Io, source: []const u8, dest: []const
 
 /// Writes one staged package directory as a compressed tar archive.
 fn archivePackage(allocator: Allocator, io: Io, package_dir: []const u8, assets_dir: []const u8, package: PackageInput) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const root = try std.fs.path.join(allocator, &.{ package_dir, package.name });
     defer allocator.free(root);
     const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.name});
@@ -301,6 +308,7 @@ fn writeTarFile(io: Io, tar_writer: *std.tar.Writer, source_path: []const u8, ar
 
 /// Writes the checksum manifest for all release archives.
 fn writeChecksums(allocator: Allocator, io: Io, assets_dir: []const u8, packages: []const PackageInput) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
     for (packages) |package| {
@@ -318,6 +326,7 @@ fn writeChecksums(allocator: Allocator, io: Io, assets_dir: []const u8, packages
 
 /// Verifies checksum count and content against the current release target set.
 fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigars-checksums.txt" });
     defer allocator.free(checksums_path);
     const checksums = try readFileAlloc(allocator, io, checksums_path, 1024 * 1024);
@@ -346,6 +355,7 @@ fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
 
 /// Verifies that one release archive contains the required package files.
 fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, package: release_targets.Target) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
     defer allocator.free(archive_name);
     const archive_path = try std.fs.path.join(allocator, &.{ assets_dir, archive_name });
@@ -381,6 +391,7 @@ fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, packa
 /// and exactly "zigars <version>" on stderr.  Silently skips unsupported host
 /// platforms (where `native()` returns null).
 fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, version: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const package = release_targets.native() orelse return;
     const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
     defer allocator.free(archive_name);
