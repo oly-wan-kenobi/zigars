@@ -11,12 +11,16 @@ const ports = @import("../../../app/ports.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
-/// Combines read source error failures returned by this adapter boundary.
+/// Error set for source reads at this adapter boundary: the use case's
+/// SourceError (sandbox and IO failures) plus MissingFile for an absent `file`
+/// argument, which the adapter reports as a structured missing-argument error.
 pub const ReadSourceError = source_summary_usecase.SourceError || error{
     MissingFile,
 };
 
-/// Handles MCP `zig_decl_summary` requests by delegating to app logic and shaping owned results/errors.
+/// Returns a human-readable, heuristic declaration summary as `text`. This is
+/// the line-scan family (text output); the `_json` variant below is parser-backed
+/// and machine-shaped. Reads `file` through the workspace sandbox.
 pub fn zigDeclSummary(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -59,7 +63,9 @@ pub fn zigAstImports(
     return mcp_result.structured(allocator, astImportsValue(arena.allocator(), source.file, summary) catch return error.OutOfMemory);
 }
 
-/// Handles MCP `zig_ast_decl_summary` requests by delegating to app logic and shaping owned results/errors.
+/// Returns a parser-backed declaration summary (std.zig.Ast) as structured JSON,
+/// including per-decl name/kind/depth/comptime and parser-fidelity metadata. A
+/// hard parse failure surfaces as an analysis error rather than a partial list.
 pub fn zigAstDeclSummary(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -141,7 +147,11 @@ pub fn zigAstTests(
     return mcp_result.structured(allocator, astTestsValue(arena.allocator(), source.file, summary) catch return error.OutOfMemory);
 }
 
-/// Reads source text from MCP arguments using the workspace port and caller-owned allocator.
+/// Reads the `file` argument's source text through the workspace port. The path
+/// is resolved under the workspace sandbox by the use case, so traversal outside
+/// the workspace surfaces as PathOutsideWorkspace/EmptyPath. Returns MissingFile
+/// when no `file` argument is present. The returned SourceRead owns its bytes on
+/// `allocator` and must be deinit-ed by the caller.
 pub fn readSourceFromArgs(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -278,7 +288,10 @@ pub fn astTestsValue(
     return .{ .object = obj };
 }
 
-/// Adds parser provenance and limitation metadata to a summary result object.
+/// Stamps parser-fidelity fields onto a summary result so clients can tell
+/// whether the declarations/imports/tests are trustworthy: `parse_status` plus
+/// `partial_result`/`result_complete` flag when std.zig.Ast hit syntax errors
+/// and the listing may be incomplete, and `parse_error_count` quantifies it.
 fn putParseMetadata(
     allocator: std.mem.Allocator,
     obj: *std.json.ObjectMap,

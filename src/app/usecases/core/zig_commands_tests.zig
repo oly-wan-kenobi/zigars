@@ -1,3 +1,8 @@
+//! Pins the core Zig command contract against fake ports: exact argv, cwd,
+//! normalized timeout, and output limits per command; out-of-workspace and
+//! empty paths are rejected before any subprocess runs; an unavailable ZLS is
+//! tolerated; and command-runner errors surface as typed failures that keep the
+//! argv and timeout for diagnostics.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

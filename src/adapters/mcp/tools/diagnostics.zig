@@ -1,4 +1,8 @@
-//! Diagnostics and crash-analysis MCP adapters over app-layer diagnostic workflows.
+//! Diagnostics and crash-analysis MCP adapters (debug planning, backtraces,
+//! sanitizer/fuzz fusion, binary inspection, cross-target and embedded plans).
+//! Every handler is a thin projection: it forwards arguments to a diagnostics
+//! use case and shapes the owned result or normalizes the failure into a
+//! structured MCP error. Analysis logic lives in the app layer, not here.
 const std = @import("std");
 const mcp = @import("mcp");
 

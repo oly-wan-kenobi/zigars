@@ -1,3 +1,6 @@
+//! Pins the render facade's path-resolution boundary: input-resolution failures abort
+//! before the backend, and a later output-resolution failure still frees the
+//! already-resolved input path (no leak). `for_output` flags which side failed.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

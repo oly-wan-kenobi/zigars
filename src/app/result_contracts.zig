@@ -1,4 +1,9 @@
 //! Typed, non-JSON result contracts used internally before transport encoding.
+//! Guarantees the result-shape policy: a fixed set of output modes, clamped
+//! token budgets, and the omission contract that every dropped or truncated
+//! section be named with a reason and recovery path. `result_shape.zig` is the
+//! parallel JSON projection of this same policy; the two must stay in lockstep
+//! (shared schema_version, mode set, budgets, and omission vocabulary).
 const std = @import("std");
 
 const errors = @import("errors.zig");
@@ -251,7 +256,8 @@ pub fn clampTokenBudget(value: i64) i64 {
     return @max(min_token_budget, @min(value, max_token_budget));
 }
 
-/// Implements allocation workflow logic using caller-owned inputs.
+/// Splits the effective budget into per-section token shares by mode, using
+/// integer percentages that sum to 100 (machine + evidence + human).
 fn allocation(mode: OutputMode, effective_budget: i64) BudgetAllocation {
     const machine_pct: i64 = switch (mode) {
         .compact => 55,
@@ -277,7 +283,7 @@ fn allocation(mode: OutputMode, effective_budget: i64) BudgetAllocation {
     };
 }
 
-/// Implements stable machine fields workflow logic using caller-owned inputs.
+/// Returns the static list of machine fields guaranteed present in this mode.
 fn stableMachineFields(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_machine_fields[0..],
@@ -286,7 +292,7 @@ fn stableMachineFields(mode: OutputMode) []const []const u8 {
     };
 }
 
-/// Implements included sections workflow logic using caller-owned inputs.
+/// Returns the static list of response sections this mode includes.
 fn includedSections(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_included_sections[0..],
@@ -295,7 +301,8 @@ fn includedSections(mode: OutputMode) []const []const u8 {
     };
 }
 
-/// Implements omitted by default workflow logic using caller-owned inputs.
+/// Returns the static list of sections this mode drops by default, which the
+/// contract requires be named back in omitted_sections.
 fn omittedByDefault(mode: OutputMode) []const []const u8 {
     return switch (mode) {
         .compact => compact_omitted_by_default[0..],

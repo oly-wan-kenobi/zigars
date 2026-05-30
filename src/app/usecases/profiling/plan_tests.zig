@@ -1,3 +1,6 @@
+//! Pins the deterministic profile-capture plan: the six external capture plans, the
+//! advertised zflame format list and canonical diff backend, and the platform-specific
+//! ordering of `recommended_plan_ids` (including the always-present folded fallback).
 const std = @import("std");
 
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");

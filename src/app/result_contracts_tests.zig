@@ -1,3 +1,7 @@
+//! Pins the typed (non-JSON) result-shape contract: describeResultShape and
+//! planOutputBudget return borrowed static data (ownsMemory false), budgets clamp
+//! to [min,max] with clamp_applied tracking, per-mode allocation splits are
+//! stable, and an unknown mode yields a typed argument AppError, not a raw string.
 const std = @import("std");
 
 const errors = @import("errors.zig");

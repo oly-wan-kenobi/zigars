@@ -52,6 +52,10 @@ pub fn addTool(
 }
 
 /// Wraps adapter handlers with runtime lookup, arg validation, and call recording.
+/// `record_call` is invoked on every exit path -- validation rejection, thrown
+/// handler error, and success -- so latency and error counters never miss a
+/// dispatch. Expected argument problems return an error-flagged ToolResult;
+/// only unexpected failures propagate as a thrown error.
 fn mcpHandler(
     comptime RuntimePtr: type,
     comptime spec: manifest.ToolMeta,
@@ -74,6 +78,10 @@ fn mcpHandler(
                 record_call(runtime, spec.name, elapsedMs(io, started_ns), validation_error.is_error, server.active_correlation);
                 return validation_error;
             }
+            // Expose this call's protocol client and cancellation token on the
+            // runtime only for the handler's duration, then restore the prior
+            // value. The save/restore keeps the binding request-scoped so a
+            // handler that itself re-enters the server does not leak its token.
             var protocol_adapter = mcp_server.ProtocolClientAdapter.init(server, io);
             if (comptime runtimeHasProtocolClient(RuntimePtr)) {
                 const previous_protocol_client = runtime.protocol_client;
@@ -95,21 +103,24 @@ fn mcpHandler(
     }.call;
 }
 
-/// Returns true when the registered runtime can accept a per-call MCP protocol client port.
+/// Returns true when the registered runtime can accept a per-call MCP protocol
+/// client port. Duck-typed on the field so test runtimes can opt out by omitting it.
 fn runtimeHasProtocolClient(comptime RuntimePtr: type) bool {
     const info = @typeInfo(RuntimePtr);
     if (info != .pointer) return false;
     return @hasField(info.pointer.child, "protocol_client");
 }
 
-/// Returns true when the registered runtime accepts a per-call cancellation token.
+/// Returns true when the registered runtime accepts a per-call cancellation
+/// token. Duck-typed on the field so test runtimes can opt out by omitting it.
 fn runtimeHasActiveCancellation(comptime RuntimePtr: type) bool {
     const info = @typeInfo(RuntimePtr);
     if (info != .pointer) return false;
     return @hasField(info.pointer.child, "active_cancellation");
 }
 
-/// Returns non-negative elapsed wall time in milliseconds.
+/// Returns non-negative elapsed wall time in milliseconds. The real clock is not
+/// guaranteed monotonic, so a backward jump clamps to 0 instead of underflowing.
 fn elapsedMs(io: std.Io, started_ns: anytype) u64 {
     const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
     if (duration_ns <= 0) return 0;

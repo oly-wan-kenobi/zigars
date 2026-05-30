@@ -42,6 +42,11 @@ pub fn handlerFor(
 }
 
 /// Returns an MCP callback that invokes a typed tool adapter handler.
+/// The per-module `RuntimePortOptions` literal encodes that module's runtime
+/// policy: `workspace_read_resolution` (.input resolves the user-supplied path;
+/// .output resolves write/generated targets), `record_command_observability`
+/// (whether calls feed latency/metrics), and read-byte limits. These choices
+/// are deliberate per tool family, not defaults.
 fn handler(
     comptime tool_name: []const u8,
     comptime ref: handler_refs.HandlerRef,
@@ -78,6 +83,10 @@ fn handler(
 }
 
 /// Adapts two- or three-parameter tool helpers to the MCP callback signature.
+/// Helper arity selects the calling convention: a two-parameter helper takes
+/// only (allocator, args) and ignores the runtime; a three-parameter helper
+/// also receives a typed app context synthesized from the runtime ports. The
+/// context type is read from the helper's own signature via reflection.
 fn adapterHandler(
     comptime module: type,
     comptime tool_name: []const u8,
@@ -203,6 +212,8 @@ fn contextResolution(comptime ContextType: type) []const u8 {
 }
 
 /// Selects runtime port options required by core command handlers.
+/// zigVersion is excluded from command counting/observability: it does not run a
+/// project command and would otherwise inflate command-call metrics.
 fn coreOptions(comptime RuntimePortOptions: type, comptime name: []const u8) RuntimePortOptions {
     const records_command = !std.mem.eql(u8, name, "zigVersion");
     return .{
@@ -213,6 +224,8 @@ fn coreOptions(comptime RuntimePortOptions: type, comptime name: []const u8) Run
 }
 
 /// Enables runtime UX state ports for handlers that read jobs, events, or roots.
+/// Only the two handlers that actually launch background work (job start and run
+/// stream) record command observability; the rest just read process-local state.
 fn runtimeUxOptions(comptime RuntimePortOptions: type, comptime name: []const u8) RuntimePortOptions {
     return .{
         .workspace_read_resolution = .input,

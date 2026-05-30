@@ -47,7 +47,8 @@ pub const ProbeReport = struct {
     }
 };
 
-/// Implements catalog text workflow logic using caller-owned inputs.
+/// Renders the tool catalog as human-readable text, returned in `allocator`-owned
+/// storage. Requires a tool-catalog port; absence surfaces as a context error.
 pub fn catalogText(allocator: std.mem.Allocator, context: app_context.Context) ![]u8 {
     const tool_catalog = try context.requireToolCatalog();
     const rendered = try tool_catalog.text(allocator);
@@ -275,7 +276,11 @@ pub fn toolchainResolveValue(
     return .{ .object = obj };
 }
 
-/// Serializes command plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds the `zig_command_plan` result: an exact argv/cwd/timeout plan for
+/// command-backed tools, or an "unsupported" payload pointing at `zig_tool_plan`
+/// for every other plan kind. Plans only: no command is executed here. Returns
+/// MissingTool when `request.tool` is null and UnknownTool when it is not
+/// registered. The value is owned by `allocator`.
 pub fn commandPlanValue(allocator: std.mem.Allocator, context: app_context.Context, request: PlanRequest) PlanError!std.json.Value {
     const tool_name = request.tool orelse return error.MissingTool;
     const catalog = try context.requireToolManifest();
@@ -286,7 +291,10 @@ pub fn commandPlanValue(allocator: std.mem.Allocator, context: app_context.Conte
     };
 }
 
-/// Serializes tool plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds the `zig_tool_plan` result: an exact argv plan for command-backed
+/// tools, otherwise a typed policy describing how the tool is dispatched (ZLS
+/// request, apply-gated mutation, workspace artifact, pure analysis, or not
+/// plannable). Same MissingTool/UnknownTool semantics as `commandPlanValue`.
 pub fn toolPlanValue(allocator: std.mem.Allocator, context: app_context.Context, request: PlanRequest) PlanError!std.json.Value {
     const tool_name = request.tool orelse return error.MissingTool;
     const catalog = try context.requireToolManifest();
@@ -297,7 +305,11 @@ pub fn toolPlanValue(allocator: std.mem.Allocator, context: app_context.Context,
     };
 }
 
-/// Serializes exact command plan fields into an allocator-owned JSON value; allocation failures propagate.
+/// Assembles the exact argv (zig path first), cwd, and clamped timeout for a
+/// command-backed tool. Any file/path operand is resolved through the workspace
+/// store so the planned argv only references sandbox-relative paths; a missing
+/// required operand yields MissingFile/MissingPath and unbalanced extra-arg
+/// quoting yields InvalidExtraArgs. The value is owned by `allocator`.
 fn exactCommandPlanValue(
     allocator: std.mem.Allocator,
     context: app_context.Context,
@@ -474,7 +486,9 @@ fn riskValue(allocator: std.mem.Allocator, risk: ports.ToolRisk) !std.json.Value
     return .{ .object = obj };
 }
 
-/// Implements risk level workflow logic using caller-owned inputs.
+/// Collapses the structured risk flags into a coarse high/medium/low label:
+/// source writes (or apply-gated writes) are high; anything that runs code,
+/// writes artifacts, or mutates LSP state is medium; everything else is low.
 fn riskLevel(risk: ports.ToolRisk) []const u8 {
     if (risk.writes_source or risk.writes_require_apply) return "high";
     if (risk.executes_project_code or risk.executes_user_command or risk.writes_artifacts or risk.mutates_lsp_state) return "medium";
@@ -551,7 +565,8 @@ fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8
     return list.toOwnedSlice(allocator);
 }
 
-/// Parses shell-like argument text into allocator-owned argument slices.
+/// Moves the in-progress token into the argument list, transferring ownership
+/// of the token bytes to `list` (freed by the caller on error via errdefer).
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     var arg_owned = true;
@@ -569,7 +584,10 @@ pub const ZigVersionHintStatus = enum {
     unknown,
 };
 
-/// Executes the zig version hint status workflow and returns an allocator-owned structured result.
+/// Classifies one project version hint against the active Zig version. Hints
+/// keyed for ZLS are `.ignored`; a `minimum_zig_version` hint is satisfied when
+/// the active version is at least the minimum, otherwise mismatched; any other
+/// key requires an exact string match. Unparseable versions yield `.unknown`.
 pub fn zigVersionHintStatus(active_zig: []const u8, hint_obj: std.json.ObjectMap) ZigVersionHintStatus {
     const key = switch (hint_obj.get("key") orelse .null) {
         .string => |s| s,
@@ -590,7 +608,7 @@ pub fn zigVersionHintStatus(active_zig: []const u8, hint_obj: std.json.ObjectMap
     return .mismatch;
 }
 
-/// Executes the zig version hint applies to zig workflow and returns an allocator-owned structured result.
+/// Reports whether a version hint keyed by `key` constrains Zig rather than ZLS.
 pub fn zigVersionHintAppliesToZig(key: []const u8) bool {
     return !std.mem.eql(u8, key, "zls");
 }
@@ -887,7 +905,9 @@ fn cacheStatusValue(allocator: std.mem.Allocator, cache: app_context.CacheSnapsh
     return .{ .object = obj };
 }
 
-/// Implements try append version hint workflow logic using caller-owned inputs.
+/// Best-effort: reads `path` and appends the first non-empty, non-comment line
+/// as a version hint. A missing/unreadable file or allocation failure is
+/// swallowed so version discovery degrades gracefully.
 fn tryAppendVersionHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array, path: []const u8, key: []const u8, source: []const u8) void {
     const read = workspace.read(allocator, .{ .path = path, .max_bytes = 64 * 1024, .provenance = "discovery.version_hint" }) catch return;
     defer read.deinit(allocator);
@@ -900,7 +920,8 @@ fn tryAppendVersionHint(allocator: std.mem.Allocator, workspace: ports.Workspace
     }
 }
 
-/// Implements try append tool versions hint workflow logic using caller-owned inputs.
+/// Best-effort: parses `.tool-versions` and appends hints for the `zig` and
+/// `zls` rows only, ignoring unrelated tools. Failures are swallowed.
 fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = ".tool-versions", .max_bytes = 64 * 1024, .provenance = "discovery.tool_versions_hint" }) catch return;
     defer read.deinit(allocator);
@@ -914,7 +935,8 @@ fn tryAppendToolVersionsHint(allocator: std.mem.Allocator, workspace: ports.Work
     }
 }
 
-/// Implements try append mise hint workflow logic using caller-owned inputs.
+/// Best-effort: extracts the quoted `zig = "..."` value from `mise.toml`.
+/// Failures are swallowed.
 fn tryAppendMiseHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = "mise.toml", .max_bytes = 128 * 1024, .provenance = "discovery.mise_hint" }) catch return;
     defer read.deinit(allocator);
@@ -927,7 +949,8 @@ fn tryAppendMiseHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceSto
     }
 }
 
-/// Implements try append build zon minimum hint workflow logic using caller-owned inputs.
+/// Best-effort: extracts the quoted `minimum_zig_version` value from
+/// `build.zig.zon`. Failures are swallowed.
 fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, workspace: ports.WorkspaceStore, hints: *std.json.Array) void {
     const read = workspace.read(allocator, .{ .path = "build.zig.zon", .max_bytes = 256 * 1024, .provenance = "discovery.build_zon_hint" }) catch return;
     defer read.deinit(allocator);

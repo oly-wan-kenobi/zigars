@@ -1,3 +1,6 @@
+//! Pins the benchmark use case: compare buckets samples into regressions/improvements
+//! against the threshold, budget fails when the worst regression exceeds its ceiling,
+//! and the profiling plan picks backend-aware tool ids only when a regression exists.
 const std = @import("std");
 
 const benchmark = @import("benchmark.zig");

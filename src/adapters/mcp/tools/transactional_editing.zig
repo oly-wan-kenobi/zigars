@@ -1,5 +1,13 @@
 //! Transactional-editing MCP adapters for patch sessions, previews, commits,
 //! rollback, and edit history.
+//!
+//! Source mutation is gated three ways: apply=true is required, the caller must
+//! echo back the expected_preimages captured during preview (a hash check that
+//! refuses the write if the file changed underneath, guarding against TOCTOU),
+//! and apply additionally requests MCP elicitation so the client can confirm.
+//! When elicitation is unavailable the apply=true + expected_preimages pair
+//! remains the fallback safety contract. Generated/vendored paths are routed,
+//! not edited.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -12,6 +20,9 @@ const validation_adapter = @import("project_intelligence.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
+/// Reason text surfaced when a client lacks MCP elicitation: apply still proceeds
+/// under the apply=true + expected_preimages contract, so this explains why no
+/// interactive confirmation was requested rather than signaling a blocked apply.
 const elicitation_apply_fallback_reason = "MCP elicitation was unavailable; apply=true and expected_preimages remain the fallback safety contract.";
 
 /// Handles MCP `zigars_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
@@ -165,12 +176,17 @@ pub fn zigExtractDecl(allocator: std.mem.Allocator, context: app_context.Context
     return structuredScratch(allocator, scratch, editing_workflows.extractDeclValue(scratch, context.editing() catch |err| return transactionalError(allocator, "zig_extract_decl", "build_app_context", err), file, target_file, @intCast(start_line), @intCast(end_line), argBool(args, "apply", false)) catch |err| return transactionalError(allocator, "zig_extract_decl", "run_workflow", err));
 }
 
-/// Handles MCP `zig_code_action_batch` requests by delegating to app logic and shaping owned results/errors.
+/// Reports that batched ZLS code-action application is not yet supported. A
+/// stopped ZLS returns a backend_error; a running ZLS still returns an
+/// `unsupported_state` result, since the batch workflow is intentionally unwired
+/// rather than performing edits.
 pub fn zigCodeActionBatch(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     if (!context.zls_state.running) return backendUnavailableResult(allocator, "zls", "zig_code_action_batch", context.tool_paths.zls, context.zls_state.status, "Start or repair ZLS, then retry code action batching.");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
+    // Even with ZLS running this returns the unavailable/unsupported value: batch
+    // code-action application is deliberately not implemented (no source writes).
     return structuredScratch(allocator, scratch, editing_workflows.codeActionBatchUnavailableValue(scratch) catch |err| return transactionalError(allocator, "zig_code_action_batch", "run_workflow", err));
 }
 
@@ -190,6 +206,10 @@ fn patchSessionReplacementTool(allocator: std.mem.Allocator, context: app_contex
     const session_id_value = if (argString(args, "session_id")) |id| id else try sessionId(scratch, tool_name, argString(args, "goal"), null, null, raw_edits);
     var elicitation_response: ?ports.ProtocolResponse = null;
     if (apply) {
+        // Ask the client to confirm before any write. Only a positive decision
+        // proceeds; a decline/cancel/timeout returns a non-applied result so the
+        // source files are never touched. An absent client falls through (the
+        // expected_preimages check is then the sole guard).
         elicitation_response = requestApplyElicitation(scratch, editing_context.protocol_client, session_id_value, replacements.items.len);
         if (elicitationBlocksApply(elicitation_response.?)) {
             return structuredScratch(allocator, scratch, try applyDeclinedValue(scratch, session_id_value, expected, elicitation_response.?));
@@ -394,13 +414,20 @@ fn applyDeclinedValue(allocator: std.mem.Allocator, session_id: []const u8, expe
     return .{ .object = obj };
 }
 
-/// Returns true when an elicitation response should prevent patch-session apply.
+/// Decides whether an elicitation response should block the apply. When the
+/// client does not support elicitation we do NOT block (the expected_preimages
+/// contract still guards the write); when it is supported, only an explicit
+/// `accepted` proceeds, so a malformed/timed-out/declined response blocks.
 fn elicitationBlocksApply(response: ports.ProtocolResponse) bool {
     if (!response.supported or response.status == .unsupported) return false;
     return response.status != .accepted;
 }
 
-/// Requests client confirmation for a source-mutating patch-session apply.
+/// Requests client confirmation for a source-mutating patch-session apply via
+/// MCP elicitation/create. A null client returns an `unsupported` response
+/// (apply falls back to the preimage contract). Any failure while building the
+/// request returns a `malformed` response, which blocks the apply: confirmation
+/// failures fail closed rather than silently proceeding with the write.
 fn requestApplyElicitation(allocator: std.mem.Allocator, client: ?ports.ProtocolClient, session_id: []const u8, file_count: usize) ports.ProtocolResponse {
     const protocol_client = client orelse return .{
         .supported = false,
@@ -439,7 +466,9 @@ fn requestApplyElicitation(allocator: std.mem.Allocator, client: ?ports.Protocol
     };
 }
 
-/// Returns a deterministic response for local allocation/adapter failures.
+/// Fail-closed response for local allocation/construction failures: status
+/// `.malformed` with `supported = true` so elicitationBlocksApply blocks the
+/// apply instead of letting a build error open an unconfirmed write path.
 fn protocolFailureResponse() ports.ProtocolResponse {
     return .{
         .supported = true,
@@ -477,7 +506,9 @@ fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
     };
 }
 
-/// Parses expected preimages, returning null when the field is absent.
+/// Parses the caller's expected_preimages JSON (file + identity hash per entry)
+/// used to detect drift before apply. Absent input yields an empty slice;
+/// anything that is not an array of objects is rejected as InvalidArguments.
 fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]const editing.ExpectedPreimage {
     const text = raw orelse return &.{};
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
@@ -572,7 +603,9 @@ fn appendPathTokens(allocator: std.mem.Allocator, paths: *std.ArrayList([]const 
     while (it.next()) |path| try appendUniqueString(allocator, paths, path);
 }
 
-/// Appends patch paths to the caller-provided output list.
+/// Extracts touched file paths from a unified diff by reading its `+++ b/` and
+/// `--- a/` header lines (the 6-char prefix is stripped). Used to learn which
+/// files a patch affects so they can be policy-checked before any edit.
 fn appendPatchPaths(allocator: std.mem.Allocator, paths: *std.ArrayList([]const u8), maybe_patch: ?[]const u8) !void {
     const patch = maybe_patch orelse return;
     var lines = std.mem.splitScalar(u8, patch, '\n');
@@ -588,7 +621,9 @@ fn appendUniqueString(allocator: std.mem.Allocator, values: *std.ArrayList([]con
     try values.append(allocator, try allocator.dupe(u8, value));
 }
 
-/// Derives a stable session id from the request goal and edit inputs.
+/// Derives a deterministic session id by hashing the prefix plus goal and edit
+/// inputs, so an unchanged request yields the same id across calls without the
+/// server retaining session state. Used only when the caller omits session_id.
 fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
     var seed = std.ArrayList(u8).empty;
     defer seed.deinit(allocator);

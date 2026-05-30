@@ -1,3 +1,7 @@
+//! Pins ZLS code-intel handlers to their gateway contract: every request gates
+//! on capability, syncs the document, then issues the LSP call with the exact
+//! JSON payload shape clients depend on, and maps each port failure to a
+//! distinct Failure variant.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -5,7 +9,7 @@ const ports = @import("../../ports.zig");
 const fake_zls_mod = @import("../../../testing/fakes/zls_gateway.zig");
 const code_intel = @import("code_intel.zig");
 
-/// Returns a typed context backed by this fixture or runtime state.
+/// Builds a ZlsContext backed by the caller-owned fake gateway.
 fn testContext(fake: *fake_zls_mod.FakeZlsGateway) app_context.ZlsContext {
     return .{
         .workspace = .{ .root = "/repo" },

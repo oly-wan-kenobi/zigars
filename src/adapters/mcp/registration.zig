@@ -7,6 +7,9 @@ const registry = @import("registry.zig");
 const resources = @import("resources.zig");
 
 /// Registers every manifest-listed tool using compile-time handler resolution.
+/// `runtime.allocator` backs the projected schemas, which the server retains for
+/// its whole lifetime, so it must be a long-lived allocator. `record_call` is
+/// the per-invocation metrics hook threaded through to each handler.
 pub fn registerTools(
     server: *mcp_server.Server,
     runtime: anytype,

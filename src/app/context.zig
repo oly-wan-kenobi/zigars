@@ -381,6 +381,9 @@ pub const StaticAnalysisContext = struct {
     workspace: WorkspaceView,
     tool_paths: ToolPaths = .{},
     timeouts: Timeouts = .{},
+    // Optional here (unlike profiling/performance contexts) because the core
+    // scans are pure parser + workspace reads; the runner only gates the
+    // opt-in backend-linter path, so analysis still works without it.
     command_runner: ?ports.CommandRunner = null,
     workspace_store: ports.WorkspaceStore,
     workspace_scanner: ports.WorkspaceScanner,
@@ -484,7 +487,11 @@ pub const ProjectIntelligenceContext = struct {
     }
 };
 
-/// Top-level app context with borrowed config snapshots and optional capability ports.
+/// Top-level app context with borrowed config snapshots and optional capability
+/// ports. The narrowing accessors below are the boundary's fail-closed contract:
+/// each projects a usecase-specific context and returns ContextError.MissingPort
+/// when a port that usecase treats as mandatory was never bound, so usecases
+/// never see a half-wired context.
 pub const Context = struct {
     workspace: WorkspaceView = .{},
     tool_paths: ToolPaths = .{},
@@ -717,6 +724,8 @@ pub const Context = struct {
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
             .timeouts = self.timeouts,
+            // Passed through optional, not required: a missing runner only
+            // disables the backend-linter path, it does not fail the narrowing.
             .command_runner = self.ports.command_runner,
             .workspace_store = try self.requireWorkspace(),
             .workspace_scanner = try self.requireWorkspaceScanner(),

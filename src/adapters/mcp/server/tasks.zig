@@ -5,7 +5,9 @@ const mcp = @import("mcp");
 const jsonrpc = mcp.jsonrpc;
 const pagination = @import("pagination.zig");
 
-/// Borrowed view of a runtime job exposed through MCP task endpoints.
+/// Borrowed snapshot of a runtime job for MCP task endpoints. All slices point
+/// into runtime-owned job storage; copy anything that must outlive the handler
+/// call, since the backing ring slot may be reused by later jobs.
 pub const JobView = struct {
     id: []const u8,
     label: []const u8,
@@ -193,7 +195,10 @@ fn taskIdFromParams(params: ?std.json.Value) ?[]const u8 {
     };
 }
 
-/// Builds the MCP task JSON object for status polling.
+/// Builds the MCP task JSON object for status polling. Timestamps are reported
+/// as synthetic `process-sequence-{n}` strings rather than wall-clock values:
+/// jobs are tracked by monotonic sequence, keeping output deterministic.
+/// `pollInterval` is a fixed client hint (ms) and `ttl` is left null (no expiry).
 fn taskValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
     var obj: std.json.ObjectMap = .empty;
     try obj.put(allocator, "taskId", .{ .string = job.id });

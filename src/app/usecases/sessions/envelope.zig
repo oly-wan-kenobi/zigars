@@ -28,7 +28,10 @@ pub const EnvelopeInput = struct {
     validation: ?std.json.Value = null,
 };
 
-/// Validates deterministic path tokens used in cache-local session paths.
+/// Guards a session `kind`/`id` before it becomes a path segment: rejects empty,
+/// over-long, "."/".." and any character outside [A-Za-z0-9._-]. This blocks
+/// path traversal and separator injection so session files stay under
+/// `.zigars-cache/sessions` even before the workspace store re-checks the path.
 pub fn validateToken(token: []const u8) !void {
     if (token.len == 0 or token.len > 128) return error.InvalidSessionToken;
     if (std.mem.eql(u8, token, ".") or std.mem.eql(u8, token, "..")) return error.InvalidSessionToken;
@@ -110,6 +113,8 @@ pub fn appendSnapshot(
         defer read.deinit(allocator);
         if (read.bytes.len >= max_session_bytes) return error.DocumentTooLarge;
         try out.appendSlice(allocator, read.bytes);
+        // Force a record boundary if the prior file lacked a trailing newline,
+        // so a partially written last line cannot merge with the new snapshot.
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(allocator, '\n');
     }
     try support.serializeValue(allocator, &out, snapshot);
@@ -125,7 +130,13 @@ pub fn appendSnapshot(
     return path;
 }
 
-/// Reads a session JSONL file into a bounded inspectable view.
+/// Reads a session JSONL file into a bounded, inspectable JSON object. Records
+/// beyond `max_records` are counted but not returned (`truncated` is set);
+/// unparseable lines bump `malformed_records` and rows with a non-matching
+/// `schema_version` bump `unsupported_versions`, neither aborting the read. The
+/// last valid object is exposed as `envelope` (latest snapshot wins). The whole
+/// returned value, including cloned records and `raw_jsonl`, is owned by
+/// `allocator`. Read-only: this never writes or mutates session state.
 pub fn view(
     allocator: std.mem.Allocator,
     store: ports.WorkspaceStore,
@@ -165,6 +176,8 @@ pub fn view(
         }
         const cloned = try support.cloneValue(allocator, parsed.value);
         if (cloned == .object) {
+            // Keep an independent copy as the running "envelope" so it can be
+            // owned separately from the records array; drop the prior candidate.
             if (last != .null) support.deinitOwnedValue(allocator, last);
             last = try support.cloneValue(allocator, cloned);
         }
@@ -187,6 +200,8 @@ pub fn view(
     return .{ .object = obj };
 }
 
+/// Returns a record's `schema_version`, or null when it is absent or not an
+/// integer, so the view can flag unsupported or unversioned rows.
 fn versionOf(value: std.json.Value) ?i64 {
     if (value != .object) return null;
     const raw = value.object.get("schema_version") orelse return null;
@@ -196,10 +211,12 @@ fn versionOf(value: std.json.Value) ?i64 {
     };
 }
 
+/// Allocator-backed empty JSON array, used as the default for optional sections.
 fn emptyArray(allocator: std.mem.Allocator) std.json.Value {
     return .{ .array = std.json.Array.init(allocator) };
 }
 
+/// Empty JSON object used as the default for the optional `validation` section.
 fn emptyObject() std.json.Value {
     return .{ .object = std.json.ObjectMap.empty };
 }

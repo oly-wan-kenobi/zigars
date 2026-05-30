@@ -7,7 +7,8 @@ const ports = @import("../../ports.zig");
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
 const flamegraph = @import("flamegraph.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream cap (bytes) on captured diff-folded stdout/stderr and on the
+/// intermediate folded file re-read before it is handed to zflame for rendering.
 pub const command_output_limit: usize = 1024 * 1024;
 
 /// Carries request data across use case and port boundaries.
@@ -197,6 +198,13 @@ pub const Result = union(enum) {
 };
 
 /// Produces a folded-stack diff, renders it as an SVG flamegraph, and returns both artifacts.
+///
+/// Two backend stages: diff-folded writes the intermediate folded file, then the
+/// nested flamegraph use case renders it as a `.recursive` SVG. The intermediate is
+/// re-read through workspace ports (not trusted from the backend's exit code) and
+/// rejected if empty. Every failure arm after path resolution carries the resolved
+/// request so callers see normalized paths. `Result.ok` owns both artifacts and the
+/// resolved request; the caller must `deinit` it.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     var resolved = switch (try resolveRequest(allocator, context, request)) {
         .ok => |value| value,
@@ -434,7 +442,9 @@ fn resolveRequest(allocator: std.mem.Allocator, context: app_context.ProfilingCo
     } };
 }
 
-/// Implements generated intermediate path workflow logic using caller-owned inputs.
+/// Mints a unique `.zigars-cache/profile/diff-<id>.folded` path for the intermediate
+/// when the caller supplies none. Requires the clock/id port so the id is stable and
+/// collision-free; returns InvalidRequest if no clock is wired. Caller owns the slice.
 fn generatedIntermediatePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext) ![]const u8 {
     const clock = context.clock_and_ids orelse return error.InvalidRequest;
     const base = try clock.nextId(allocator, .{ .prefix = ".zigars-cache/profile/diff-" });

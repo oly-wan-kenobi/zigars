@@ -6,9 +6,12 @@ const app_context = @import("../../context.zig");
 const app_errors = @import("../../errors.zig");
 const ports = @import("../../ports.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream cap (1 MiB) on captured subprocess stdout/stderr; bounds memory
+/// so a runaway or hostile command cannot exhaust the host. Output past this is
+/// truncated and the result flags the truncation.
 pub const command_output_limit: usize = 1024 * 1024;
-/// Command output limit mode applied when collecting workflow evidence.
+/// Truncation policy label surfaced in results so callers know output past the
+/// limit is dropped rather than streamed.
 pub const command_output_limit_mode = "truncate_on_limit";
 
 /// Carries owned argv data across use case and port boundaries.
@@ -187,7 +190,10 @@ pub const VersionOutcome = union(enum) {
     }
 };
 
-/// Carries argv builder data across use case and port boundaries.
+/// Accumulates an owned argv vector one segment at a time. Commands are always
+/// assembled as explicit argv (never a shell string), so user-supplied values
+/// like file paths and extra args become individual arguments and are never
+/// interpreted by a shell. Each appended segment is duped into `allocator`.
 const ArgvBuilder = struct {
     allocator: std.mem.Allocator,
     items: std.ArrayList([]const u8) = .empty,
@@ -462,7 +468,12 @@ const ResolveOutcome = union(enum) {
     err: WorkspaceFailure,
 };
 
-/// Resolves resolve workspace path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
+/// Resolves a user-supplied path through the workspace store before it is used
+/// as a command argument, enforcing the sandbox boundary. A rejection (empty or
+/// outside-workspace path) is returned as a structured `WorkspaceFailure` so the
+/// caller reports it instead of executing the command. The unused `[]const u8`
+/// parameter is the tool name, kept for call-site symmetry. `path` stays
+/// caller-owned; the returned ok result owns its resolved path.
 fn resolveWorkspacePath(
     allocator: std.mem.Allocator,
     context: app_context.CoreCommandContext,
@@ -492,7 +503,8 @@ pub fn timeoutFor(context: app_context.CoreCommandContext, requested: ?i64) i64 
     return normalizeTimeout(requested orelse context.timeouts.command_ms);
 }
 
-/// Normalizes timeout data into the representation consumed by this workflow.
+/// Clamps a requested timeout to [1 ms, 1 hour] so a caller cannot disable the
+/// timeout (<= 0) or pin a subprocess open indefinitely with a huge value.
 pub fn normalizeTimeout(timeout_ms: i64) i64 {
     return @max(1, @min(timeout_ms, 60 * 60 * 1000));
 }

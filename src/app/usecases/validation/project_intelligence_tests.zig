@@ -1,3 +1,7 @@
+//! Pins the project-intelligence use cases through a stub runtime: next-action
+//! routing, patch guarding of generated/out-of-sandbox paths, validate-patch and
+//! semantic impact, profiles/memory/decision records with apply gating, and the
+//! validation plan/run/history projections.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

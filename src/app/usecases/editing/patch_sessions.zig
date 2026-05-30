@@ -1,3 +1,9 @@
+//! Patch-session source mutation: preview, apply, and revert with rollback
+//! history. Writes are gated on `apply=true`; every apply re-reads and
+//! re-verifies each file against its expected preimage before touching it, and
+//! all paths flow through the workspace store so they resolve under the
+//! sandbox. Preimage bytes are archived before each write so revert can restore
+//! the exact prior state.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");
@@ -115,7 +121,12 @@ pub const ReplacementRequest = struct {
     session_id: []const u8,
     goal: ?[]const u8 = null,
     replacements: []const Replacement,
+    /// Optional caller-supplied preimage identities. When `apply` is set, each
+    /// replacement's freshly read bytes must match the matching entry here or
+    /// the apply is refused, so concurrently edited files are never overwritten.
     expected_preimages: []const ExpectedPreimage = &.{},
+    /// Write gate: previews report intent only; writes happen exclusively when
+    /// this is true and every file passes policy and expected-preimage checks.
     apply: bool,
 };
 
@@ -285,7 +296,8 @@ pub const RevertOutcome = union(enum) {
     }
 };
 
-/// Implements classify path workflow logic using caller-owned inputs.
+/// Classifies a workspace-relative path against the edit policy (generated,
+/// cache, vendored, etc.) so callers can refuse direct edits to derived files.
 pub fn classifyPath(path: []const u8) PathPolicy {
     return path_policy.classify(path);
 }
@@ -300,7 +312,10 @@ fn hasDuplicateReplacementFile(replacements: []const Replacement) bool {
     return false;
 }
 
-/// Implements create workflow logic using caller-owned inputs.
+/// Opens a session: snapshots each requested path and records its preimage
+/// identity so later applies can detect drift. `safe_to_edit` is false if any
+/// path is unreadable or blocked by edit policy. Never writes the workspace.
+/// Caller owns the returned result and must deinit it.
 pub fn create(allocator: std.mem.Allocator, context: app_context.EditingContext, request: CreateRequest) !CreateResult {
     var files = std.ArrayList(CreateFile).empty;
     errdefer {
@@ -461,6 +476,9 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
         // Write from the verified snapshots only.
         for (snapshots.items, request.replacements, 0..) |snapshot, replacement, index| {
             if (!snapshot.exists or !std.mem.eql(u8, snapshot.bytes, replacement.content)) {
+                // Archive the preimage before overwriting the source so revert
+                // can restore the exact prior bytes even if a later write or the
+                // process itself fails partway through the apply.
                 const artifact_path = try session_domain.preimageArtifactPath(allocator, request.session_id, index, snapshot.file);
                 defer allocator.free(artifact_path);
                 _ = try context.workspace_store.write(.{
@@ -487,7 +505,12 @@ pub fn replacementSession(allocator: std.mem.Allocator, context: app_context.Edi
     return replacementResultFromParts(allocator, request, request.apply, !request.apply, safe, changed_count, false, &files, &expected);
 }
 
-/// Implements revert workflow logic using caller-owned inputs.
+/// Reverts a recorded session back to its archived preimages. Previews unless
+/// `request.apply` is set, and only applies when every file still matches the
+/// session's own output (so a revert never clobbers edits made after the
+/// session). Files the session created are deleted; others are restored from
+/// the archived preimage. Returns `.err = .not_found` when the session id is
+/// absent from history. Caller owns the outcome and must deinit it.
 pub fn revert(allocator: std.mem.Allocator, context: app_context.EditingContext, request: RevertRequest) !RevertOutcome {
     var record = loadSessionRecord(allocator, context, request) catch |err| switch (err) {
         error.SessionNotFound => return .{ .err = .not_found },
@@ -857,7 +880,8 @@ fn recordFromValueIfMatch(allocator: std.mem.Allocator, value: std.json.Value, s
     };
 }
 
-/// Serializes history file from fields into an allocator-owned JSON value; allocation failures propagate.
+/// Decodes one history file record from a persisted JSON object into an
+/// allocator-owned HistoryFileRecord; malformed objects yield InvalidArguments.
 fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !HistoryFileRecord {
     const obj = switch (value) {
         .object => |object| object,
@@ -879,7 +903,9 @@ fn historyFileFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Hi
     };
 }
 
-/// Serializes identity from fields into an allocator-owned JSON value; allocation failures propagate.
+/// Decodes a preimage Identity from a persisted history JSON object. A negative
+/// `bytes` count (corrupt or hostile history) is clamped to 0 so the unsigned
+/// cast cannot trap. The sha256 string is duped into allocator-owned storage.
 fn identityFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Identity {
     const obj = switch (value) {
         .object => |object| object,
@@ -928,9 +954,13 @@ fn revertFilePreview(allocator: std.mem.Allocator, context: app_context.EditingC
     };
 }
 
-/// Implements apply revert file workflow logic using caller-owned inputs.
+/// Restores one recorded file to its preimage: deletes it if the session
+/// created it (no prior preimage), otherwise rewrites the archived bytes. All
+/// IO goes through the workspace store, so the path stays inside the sandbox.
 fn applyRevertFile(allocator: std.mem.Allocator, context: app_context.EditingContext, record_file: HistoryFileRecord) !void {
     if (!record_file.preimage_identity.exists) {
+        // Session created this file, so reverting means removing it; missing_ok
+        // keeps revert idempotent if the file was already deleted by hand.
         _ = try context.workspace_store.delete(.{
             .path = record_file.file,
             .missing_ok = true,

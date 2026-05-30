@@ -1,3 +1,6 @@
+//! Pins source_summary behavior: text summaries delegate to domain analysis and keep
+//! their advisory-tier wording, workspace reads flow through the port with the shared
+//! provenance, and generated-cache paths are rejected before any read.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

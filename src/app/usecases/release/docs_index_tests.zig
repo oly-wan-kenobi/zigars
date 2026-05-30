@@ -1,3 +1,7 @@
+//! Pins the docs-index use case to its ports: workspace/std/langref scans and
+//! reads go through faked ports, toolchain-version and source drift drive
+//! builtin docs, unreadable sources are skipped, and every entrypoint cleans up
+//! staged results when allocation fails.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

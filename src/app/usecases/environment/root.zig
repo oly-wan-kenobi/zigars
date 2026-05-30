@@ -1,3 +1,6 @@
+//! Aggregates the environment use-case modules (adoption, backend catalog,
+//! trust reporting, and the profile/backend workflows) and pulls their tests
+//! into the build so the subsystem is exercised as a unit.
 pub const adoption = @import("adoption.zig");
 pub const backend_catalog = @import("backend_catalog.zig");
 pub const trust = @import("trust.zig");

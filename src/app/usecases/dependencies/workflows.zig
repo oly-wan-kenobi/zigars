@@ -67,6 +67,9 @@ pub fn zigZonDepSync(a: *App, allocator: std.mem.Allocator, args: ?std.json.Valu
     defer command_result.deinit(allocator);
 
     const fetched_hash = extractFetchedHash(command_result.stdout) orelse extractFetchedHash(command_result.stderr);
+    // Only rewrite the hash when fetch both succeeded and yielded a hash; a
+    // failed or hash-less fetch returns a no-mutation failure result instead of
+    // writing an unverified value into build.zig.zon.
     if (fetched_hash == null or !command_result.succeeded()) {
         return syncCommandFailure(allocator, a, input.path, dependency, url, &argv, timeout_ms, command_result, fetched_hash);
     }
@@ -229,6 +232,9 @@ const MutationExtra = struct {
     url: ?[]const u8 = null,
 };
 
+/// Shared add/remove/upgrade path: reads the manifest, applies the text-preserving
+/// zon edit for `op`, and hands the before/after pair to `mutationResult` for
+/// apply-gated previewing. `.sync` is unreachable here (it has its own fetch path).
 fn directMutation(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, op: Operation) !Result {
     var input = readManifest(a, allocator, args, op.toolName()) catch |err| return dependencyError(allocator, op.toolName(), "read_manifest", err);
     defer input.deinit(allocator);
@@ -248,6 +254,11 @@ fn directMutation(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, 
     return mutationResult(allocator, a.context, args, op, input.path, input.bytes, updated, dependency, model, .{ .url = support.argString(args, "url") });
 }
 
+/// Renders the preview/apply result for a manifest mutation. The actual write
+/// is delegated to a patch session, so the apply gate, expected-preimage check,
+/// and rollback history all come from that path rather than being re-implemented
+/// here. `apply` defaults to false, so omitting it yields a preview. Returns an
+/// allocator-owned structured Result.
 fn mutationResult(
     allocator: std.mem.Allocator,
     context: app_context.ReleaseWorkflowContext,
@@ -267,6 +278,8 @@ fn mutationResult(
     const editing_context = app_context.EditingContext{
         .workspace = context.workspace,
         .workspace_store = context.workspace_store,
+        // Patch sessions need a clock for history timestamps; if none is wired,
+        // fail closed rather than mutate source without a rollback record.
         .clock_and_ids = context.clock_and_ids orelse return dependencyError(allocator, op.toolName(), "patch_session", error.Unavailable),
         .observability = context.observability,
     };
@@ -306,9 +319,16 @@ fn mutationResult(
     return support.structured(allocator, .{ .object = obj });
 }
 
+/// Resolves the manifest to operate on. A `manifest` arg that looks like manifest
+/// source (contains a newline or `.dependencies`) is treated as inline bytes and
+/// is NOT read from disk; otherwise it is a path read through the workspace store
+/// (sandbox-enforced) and capped at `manifest_read_limit`. `.owned` is set only
+/// when the read result owns its bytes, so deinit frees exactly what was alloc'd.
 fn readManifest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, provenance_tool: []const u8) !ManifestInput {
     const manifest_arg = support.argString(args, "manifest");
     if (manifest_arg) |value| {
+        // Heuristic: real manifest text spans lines or names .dependencies, so
+        // treat it as inline content rather than a filesystem path to read.
         if (std.mem.indexOf(u8, value, "\n") != null or std.mem.indexOf(u8, value, ".dependencies") != null) {
             return .{ .path = support.argString(args, "manifest_path") orelse default_manifest_path, .bytes = value, .is_inline = true };
         }
@@ -322,6 +342,11 @@ fn readManifest(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value, pr
     return .{ .path = path, .bytes = read.bytes, .owned = if (read.owns_bytes) @constCast(read.bytes) else null };
 }
 
+/// Builds the expected-preimage guard for the apply pass. Previews need no
+/// guard, so it returns empty when `!apply`. Otherwise the guard defaults to the
+/// just-read `before` bytes; a caller may instead pin an explicit
+/// `expected_preimage_sha256`/`_bytes` so the apply is refused unless the file
+/// on disk still matches what the caller reviewed. Result is caller-owned.
 fn expectedPreimages(allocator: std.mem.Allocator, args: ?std.json.Value, file: []const u8, before: []const u8, apply: bool) ![]patch_sessions.ExpectedPreimage {
     if (!apply) return &.{};
     var identity = try patch_domain.identityFromBytes(allocator, true, before);
@@ -337,6 +362,9 @@ fn expectedPreimages(allocator: std.mem.Allocator, args: ?std.json.Value, file: 
     return out;
 }
 
+/// Scans `zig fetch` output for the package hash, accepting both the bare
+/// `hash: <value>` stdout form and a `.hash = "<value>"` manifest-style line.
+/// Returns a borrowed slice into `text`, or null when no hash line is present.
 fn extractFetchedHash(text: []const u8) ?[]const u8 {
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |line| {

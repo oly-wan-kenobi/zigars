@@ -764,6 +764,8 @@ pub fn zigStaticFusion(
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
     const query_text = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_static_fusion", "query", "symbol or lint subject");
+    // Reject malformed optional findings up front so fusion never runs against
+    // half-parsed evidence; a present-but-valid value falls through unchanged.
     if (try validateFindingsArgument(allocator, args, "zlint_findings")) |argument_error| return argument_error;
     if (try validateFindingsArgument(allocator, args, "zwanzig_findings")) |argument_error| return argument_error;
 
@@ -827,7 +829,10 @@ fn semanticIndexResult(
     return mcp_result.structured(allocator, value);
 }
 
-/// Returns the MCP tool result for static value.
+/// Finishes a use case that already produced a JSON value (or error): on success
+/// it stamps contract metadata and wraps it; on error it maps to a structured
+/// static tool error. `context` is accepted only to keep one call shape across
+/// handlers and is intentionally unused here.
 fn staticValueResult(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -1342,7 +1347,10 @@ fn exportError(
     };
 }
 
-/// Validates the findings argument before invoking the use case.
+/// Pre-validates an optional findings JSON argument, returning a ready argument
+/// error result when it is present but unparseable, or null when it is absent,
+/// blank, or valid. Returning the error as a value (not a thrown error) lets the
+/// caller short-circuit with `if (... ) |err| return err` before doing real work.
 fn validateFindingsArgument(allocator: std.mem.Allocator, args: ?std.json.Value, field: []const u8) mcp.tools.ToolError!?mcp.tools.ToolResult {
     const text = argString(args, field) orelse return null;
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return null;
@@ -1446,7 +1454,9 @@ fn argHas(args: ?std.json.Value, name: []const u8) bool {
     };
 }
 
-/// Clamps requested timeout to the supported command timeout range.
+/// Clamps a requested timeout to [1ms, 1 hour], defaulting to the configured
+/// command timeout. The upper bound caps backend-invoking analyses (lint,
+/// compiler-backed layout probes) so a single call cannot run unbounded.
 fn timeoutMs(context: app_context.StaticAnalysisContext, args: ?std.json.Value) ?u64 {
     const raw = mcp.tools.getInteger(args, "timeout_ms") orelse context.timeouts.command_ms;
     return @intCast(@max(1, @min(raw, 60 * 60 * 1000)));
@@ -1466,7 +1476,11 @@ fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value 
     return .{ .string = try allocator.dupe(u8, value) };
 }
 
-/// Parses split args from MCP JSON arguments.
+/// Splits one shell-like argument string into argv tokens (single/double quotes
+/// and backslash escapes honored). Tokens are forwarded to optional lint/graph
+/// backends, never run through a shell. Returns error.InvalidArguments on an
+/// unterminated quote or trailing escape, which the caller turns into a
+/// structured argument error. Tokens and the slice are owned by `allocator`.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -1651,7 +1665,11 @@ const contracts = [_]Contract{
     .{ .tool = "zig_analysis_graphs", .analysis_kind = "optional_zwanzig_analysis_graph", .capability_tier = "zwanzig_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig graph mode"} },
 };
 
-/// Adds structured contract metadata fields to a result object.
+/// Stamps the tool's evidence-contract fields (analysis kind, capability tier,
+/// confidence, limitations, cross-checks) onto a result object so every static
+/// result self-describes how much to trust it. Invariant: every tool routed
+/// through this adapter must have a `contracts` entry, hence the `unreachable`
+/// when one is missing -- a registration/contract drift bug, not a user error.
 fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
     const contract = contractFor(tool_name) orelse unreachable;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });

@@ -1,3 +1,7 @@
+//! Serializes the pure-domain backend catalog (Zig plus optional ZLS/ZLint/
+//! zwanzig/zflame/diff-folded) into an allocator-owned JSON value for setup and
+//! adoption surfaces. Reporting only: zigars ships metadata and probe argv but
+//! never installs optional backends.
 const std = @import("std");
 const domain_catalog = @import("../../../domain/zig/backend_catalog.zig");
 
@@ -40,7 +44,9 @@ fn backendValue(allocator: std.mem.Allocator, backend: Backend, paths: Paths, in
     return .{ .object = obj };
 }
 
-/// Implements path for workflow logic using caller-owned inputs.
+/// Maps a backend name to its configured executable path. Falls through to the
+/// diff-folded path for any unmatched name, which is safe because callers only
+/// pass names drawn from the fixed `backends` table.
 fn pathFor(name: []const u8, paths: Paths) []const u8 {
     if (std.mem.eql(u8, name, "zig")) return paths.zig_path;
     if (std.mem.eql(u8, name, "zls")) return paths.zls_path;
@@ -57,7 +63,9 @@ fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !s
     return .{ .array = array };
 }
 
-/// Serializes probe argv fields into an allocator-owned JSON value; allocation failures propagate.
+/// Serializes the probe argv, substituting the configured executable path for
+/// the catalog's placeholder argv[0] so the reported command matches what would
+/// actually run. Allocation failures propagate.
 fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, configured_path: []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (probe_argv, 0..) |item, index| {

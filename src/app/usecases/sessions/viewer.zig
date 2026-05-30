@@ -10,7 +10,11 @@ pub const ViewRequest = struct {
     id: []const u8,
 };
 
-/// Builds a public, read-only view over the shared session JSONL store.
+/// Builds the public `zigars_session_view` result: it wraps `envelope.view` and
+/// adds read-only/lifecycle-scope metadata plus stated confidence and
+/// limitations. Inspect-only by contract; resume/close/cancel/cleanup and any
+/// source mutation stay owned by each workflow-specific tool. The inner session
+/// value is embedded directly, so the whole result is owned by `allocator`.
 pub fn viewValue(
     allocator: std.mem.Allocator,
     context: app_context.ArtifactContext,

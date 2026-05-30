@@ -58,7 +58,10 @@ pub const EvidencePack = release_model.EvidencePack;
 /// Shared evidence pointer result type used by this workflow module.
 pub const EvidencePointer = release_model.EvidencePointer;
 
-/// Implements plan workflow logic using caller-owned inputs.
+/// Builds a release readiness plan over the seven fixed evidence categories,
+/// pairing each caller-supplied fragment (or its absence) with the command that
+/// would verify it. Unprovided categories are reported as missing, never as
+/// passed. Returns an allocator-owned ReleasePlan the caller must deinit.
 pub fn plan(allocator: std.mem.Allocator, request: ReleasePlanRequest) !ReleasePlan {
     return release_model.buildReleasePlan(allocator, &.{
         .{ .name = "validation", .text = request.validation, .verify_with = "zigars_validation_run or zig build test" },
@@ -71,12 +74,18 @@ pub fn plan(allocator: std.mem.Allocator, request: ReleasePlanRequest) !ReleaseP
     });
 }
 
-/// Implements suggest semver workflow logic using caller-owned inputs.
+/// Suggests a conservative semver bump from textual API-diff/changelog/notes
+/// evidence. Advisory only: it classifies supplied text and does not inspect
+/// real code or make the release decision. Borrows the request strings; the
+/// returned suggestion does not allocate.
 pub fn suggestSemver(request: SemverRequest) SemverSuggestion {
     return release_model.suggestSemver(request.api_diff, request.changelog, request.release_notes);
 }
 
-/// Implements draft notes workflow logic using caller-owned inputs.
+/// Drafts editable release notes from supplied evidence fragments, emitting one
+/// section per non-empty input. An omitted section means no evidence was given,
+/// not that nothing changed; the draft always flags requires_review. Returns an
+/// allocator-owned ReleaseNotesDraft the caller must deinit.
 pub fn draftNotes(allocator: std.mem.Allocator, request: ReleaseNotesRequest) !ReleaseNotesDraft {
     return release_model.draftReleaseNotes(allocator, request.version, &.{
         .{ .title = "Changes", .text = request.changes },
@@ -88,7 +97,10 @@ pub fn draftNotes(allocator: std.mem.Allocator, request: ReleaseNotesRequest) !R
     });
 }
 
-/// Implements evidence pack workflow logic using caller-owned inputs.
+/// Assembles a release evidence pack of seven pointer slots from caller-supplied
+/// report fragments. It stores pointers and provided/absent flags only; it does
+/// not execute any release gate. Returns an allocator-owned EvidencePack the
+/// caller must deinit.
 pub fn evidencePack(allocator: std.mem.Allocator, request: EvidencePackRequest) !EvidencePack {
     return release_model.buildEvidencePack(allocator, &.{
         .{ .name = "validation", .text = request.validation },

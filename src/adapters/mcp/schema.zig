@@ -4,7 +4,10 @@ const mcp = @import("mcp");
 
 const tooling = @import("../../manifest/tooling.zig");
 
-/// Converts manifest schema fields into MCP inputSchema properties/required arrays.
+/// Converts manifest schema fields into MCP inputSchema properties/required
+/// arrays. The whole returned schema is owned by `allocator`; the `*_owned`
+/// guards free every partially built map if any `put`/`append` fails midway.
+/// `required` is null (omitted) when no field is required.
 pub fn buildInputSchema(allocator: std.mem.Allocator, spec: tooling.SchemaSpec) !mcp.types.InputSchema {
     var properties = std.json.ObjectMap.empty;
     var required = std.ArrayList([]const u8).empty;
@@ -91,6 +94,8 @@ fn applyFieldHint(
     } else if (hint.default_string) |value| {
         try property.put(allocator, "default", .{ .string = value });
     }
+    // Non-standard "x-" extension key: advertises which arguments are workspace
+    // paths so clients can prompt appropriately without changing JSON-schema type.
     if (hint.path_kind) |value| try property.put(allocator, "x-zigars-path-kind", .{ .string = value });
     if (hint.minimum) |value| try property.put(allocator, "minimum", .{ .integer = value });
     if (hint.maximum) |value| try property.put(allocator, "maximum", .{ .integer = value });
@@ -104,6 +109,8 @@ fn applyFieldHint(
     }
 }
 
+/// One projected outputSchema property: JSON name, type, requiredness, and the
+/// client-facing description.
 const OutputField = struct {
     name: []const u8,
     type: []const u8,
@@ -111,7 +118,9 @@ const OutputField = struct {
     description: []const u8,
 };
 
-/// Returns the compact shared output fields for an envelope shape.
+/// Returns the compact shared output fields for an envelope shape. Tools share a
+/// few envelope shapes rather than each declaring a bespoke outputSchema, so the
+/// advertised result contract stays small and uniform across the catalog.
 fn outputFields(shape: tooling.OutputSchemaShape) []const OutputField {
     return switch (shape) {
         .error_envelope => &.{

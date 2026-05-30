@@ -1,4 +1,8 @@
-//! Thin CLI adapter over existing app use cases.
+//! Thin, read-only CLI adapter over existing app use cases, selected by
+//! `zigars cli ...`. Only non-mutating reporting commands are exposed and every
+//! command requires `--json`; successful output is minified JSON on stdout while
+//! diagnostics and help go to stderr. It reuses the same structuredContent
+//! builders as the MCP adapter so both surfaces report identical shapes.
 const std = @import("std");
 
 const app_context = @import("../../app/context.zig");
@@ -54,7 +58,8 @@ pub const Invocation = struct {
     probe_backends: bool = false,
     shared: SharedOptions = .{},
 
-    /// Returns the doctor backend-probe timeout with the same clamp as the MCP adapter.
+    /// Doctor backend-probe timeout in ms, clamped to 1..10000 (default 1000) to
+    /// match the MCP adapter so both surfaces bound probes identically.
     pub fn doctorProbeTimeoutMs(self: Invocation) i64 {
         return @max(1, @min(self.shared.timeout_ms orelse 1_000, 10_000));
     }
@@ -76,7 +81,12 @@ pub fn isInvocation(raw_args: []const []const u8) bool {
     return raw_args.len > 1 and std.mem.eql(u8, raw_args[1], "cli");
 }
 
-/// Parses `zigars cli <command> ...` arguments without taking ownership.
+/// Parses `zigars cli <command> ...` into an Invocation, borrowing argv slices.
+///
+/// `--json` is mandatory and checked last, so a syntactically valid but
+/// non-JSON invocation still fails with `MissingJsonFlag`. `--probe-backends`
+/// is only accepted for `doctor`; any other unrecognized flag is rejected. `-h`
+/// / `--help` short-circuits to `HelpRequested`.
 pub fn parse(raw_args: []const []const u8) ParseError!Invocation {
     if (!isInvocation(raw_args)) return ParseError.UnknownArgument;
     if (raw_args.len <= 2) return ParseError.MissingCommand;
@@ -129,7 +139,10 @@ pub fn parse(raw_args: []const []const u8) ParseError!Invocation {
     return invocation;
 }
 
-/// Builds a Config-compatible argv slice for the shared bootstrap parser.
+/// Re-emits the parsed shared options as a synthetic argv (leading "zigars"
+/// program slot included) so the shared bootstrap Config parser can consume CLI
+/// flags through the same path as the MCP server, avoiding a second config
+/// surface. Only options the client actually supplied are appended.
 pub fn appendConfigArgs(allocator: std.mem.Allocator, out: *std.ArrayList([]const u8), invocation: Invocation) !void {
     try out.append(allocator, "zigars");
     try appendOptional(out, allocator, "--workspace", invocation.shared.workspace);
@@ -188,6 +201,8 @@ pub fn writeParseDiagnostic(io: std.Io, err: ParseError) !void {
     try stderrPrint(io, "zigars cli: {s}\n\n{s}", .{ parseErrorMessage(err), usage() });
 }
 
+/// Maps a parse error to its process exit code: an explicit help request exits
+/// success; every other parse failure is an invalid-arguments exit.
 pub fn parseErrorExitCode(err: ParseError) ExitCode {
     return switch (err) {
         ParseError.HelpRequested => .success,

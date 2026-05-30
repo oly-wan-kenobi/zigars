@@ -1,5 +1,10 @@
-//! Project-intelligence MCP adapters for context packs, validation planning,
-//! event history, memory, and capability guidance.
+//! Project-intelligence MCP adapters for context packs, validation
+//! planning/run, build/test event history, project memory, and capability
+//! guidance. Handlers project arguments onto validation/project-intelligence
+//! use cases and shape owned results or structured errors. Client sampling
+//! (failure-fusion summaries) is always optional: when it is unrequested or
+//! unavailable the deterministic evidence is returned and the result records
+//! why no sampled summary was produced.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -297,7 +302,9 @@ pub const ParsedValidationRunRequest = struct {
     }
 };
 
-/// Parses MCP JSON arguments into the typed request used by `validation_plan_request_from_args` helpers.
+/// Parses MCP arguments into a validation PlanRequest. The changed-path list is
+/// derived from `changed_files` plus `diff` and is owned by the returned struct;
+/// the caller must deinit it. The request borrows that list's backing storage.
 pub fn validationPlanRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value) !ParsedValidationPlanRequest {
     const changed_paths = try pi.pathListFromTextAndPatch(allocator, argString(args, "changed_files"), argString(args, "diff"));
     return .{
@@ -311,7 +318,9 @@ pub fn validationPlanRequestFromArgs(allocator: std.mem.Allocator, args: ?std.js
     };
 }
 
-/// Parses MCP JSON arguments into the typed request used by `validation_run_request_from_args` helpers.
+/// Parses MCP arguments into a validation RunRequest wrapping the parsed plan.
+/// `timeout_ms` is already adapter-clamped and is floored to at least 1ms here.
+/// The returned struct owns the embedded plan request; the caller must deinit.
 pub fn validationRunRequestFromArgs(allocator: std.mem.Allocator, args: ?std.json.Value, timeout_ms: i64) !ParsedValidationRunRequest {
     var plan_request = try validationPlanRequestFromArgs(allocator, args);
     errdefer plan_request.deinit(allocator);
@@ -327,7 +336,8 @@ pub fn validationRunRequestFromArgs(allocator: std.mem.Allocator, args: ?std.jso
     };
 }
 
-/// Serializes `validation_run_value` data into the stable JSON object returned by adapter tests and tools.
+/// Re-exports the use-case run-report JSON builder so adapter tests and callers
+/// share one stable result shape. Value owned by `allocator`.
 pub fn validationRunValue(allocator: std.mem.Allocator, report: workflows.RunReport) !std.json.Value {
     return pi.validationRunValue(allocator, report);
 }
@@ -345,7 +355,10 @@ pub fn contextSetupError(allocator: std.mem.Allocator, tool_name: []const u8, er
     }, err);
 }
 
-/// Wraps a JSON value as a structured MCP tool result.
+/// Central success/error fork for most handlers: on a thrown use-case error it
+/// returns a structured tool error tagged with `tool_name`/`phase`; otherwise it
+/// wraps the value as a structured result. The top-level container is freed here
+/// after structured() copies what it needs.
 fn structured(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, value_or_error: anyerror!std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var value = value_or_error catch |err| return workflowError(allocator, tool_name, phase, err);
     defer deinitTopLevel(allocator, &value);
@@ -497,7 +510,8 @@ fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []c
     }, err);
 }
 
-/// Reads an actual argument when it is present with the expected type.
+/// Placeholder "actual value" for invalid-command errors. The triggering error
+/// carries no captured argument text, so a constant marker is reported.
 fn argActual(_: anyerror) []const u8 {
     return "invalid";
 }
@@ -511,7 +525,9 @@ fn splitArgsError(allocator: std.mem.Allocator, tool_name: []const u8, err: anye
     };
 }
 
-/// Converts backend capability data to structured environment output.
+/// Flattens the static tool manifest into CapabilityEntry records (name, group,
+/// risk/write flags, plan kind) for goal-to-tool matching. Slice owned by
+/// `allocator`; the entry fields borrow manifest-owned static strings.
 fn capabilityEntries(allocator: std.mem.Allocator) ![]pi.CapabilityEntry {
     var entries = try allocator.alloc(pi.CapabilityEntry, manifest.entries.len);
     for (manifest.entries, 0..) |entry, index| {
@@ -559,7 +575,10 @@ fn timeoutMs(context: app_context.ProjectIntelligenceContext, args: ?std.json.Va
     return @max(1, @min(argInt(args, "timeout_ms", context.timeouts.command_ms), 60 * 60 * 1000));
 }
 
-/// Parses split tool args from MCP JSON arguments.
+/// Tokenizes an optional shell-style argument string into an owned argv slice,
+/// honoring single/double quotes and backslash escapes; null yields an empty
+/// slice. Returns error.InvalidArguments on a dangling escape or unterminated
+/// quote. Caller frees via freeStringList.
 fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const []const u8 {
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
@@ -616,7 +635,7 @@ fn splitToolArgs(allocator: std.mem.Allocator, text_value: ?[]const u8) ![]const
     return list.toOwnedSlice(allocator);
 }
 
-/// Parses finish arg from MCP JSON arguments.
+/// Flushes the in-progress token buffer as one owned argv entry and resets it.
 fn finishArg(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8), current: *std.ArrayList(u8)) !void {
     const arg = try current.toOwnedSlice(allocator);
     errdefer allocator.free(arg);

@@ -85,7 +85,11 @@ pub const Result = union(enum) {
     }
 };
 
-/// Executes this workflow with caller-owned inputs; command and allocation failures propagate.
+/// Resolves the input/output paths under the workspace sandbox, then delegates to the
+/// flamegraph backend run. This is the thin facade over `flamegraph.run` that owns path
+/// resolution and surfaces resolution failures as `workspace_path_failed` (with
+/// `for_output` marking which side failed). On success the returned artifact owns the
+/// resolved absolute paths and the backend artifact; the caller must `deinit` it.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     const input_abs = resolvePath(allocator, context, request.input, false) catch |err| return .{ .err = .{ .workspace_path_failed = .{
         .err = err,

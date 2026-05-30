@@ -38,9 +38,13 @@ pub fn fromError(allocator: std.mem.Allocator, spec: Spec, err: anyerror) mcp.to
     return mcp_result.structuredError(allocator, err_value);
 }
 
-/// Builds the JSON error object; strings borrow from `spec`.
+/// Builds the JSON error object owned by `allocator`; the string fields borrow
+/// from `spec`, so `spec` must outlive the returned value. The fixed `ok:false`
+/// field lets clients branch on success without parsing the error envelope.
 pub fn value(allocator: std.mem.Allocator, spec: Spec) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
+    // Free the partial object on any early `put` failure; cleared once the fully
+    // built object is handed to the caller.
     var obj_in_result = false;
     defer if (!obj_in_result) obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = spec.kind });
@@ -141,6 +145,10 @@ fn deinitTopLevel(allocator: std.mem.Allocator, result_value: *std.json.Value) v
 }
 
 /// Maps workspace path-policy failures into a stable MCP error envelope.
+/// Distinguishes an empty path (rejected during validation) from a path that
+/// escapes the sandbox (rejected at the boundary) so clients can tell a typo
+/// from an attempted traversal; the resolved `workspace` root is echoed back to
+/// orient the caller. Every other anyerror is treated as a boundary rejection.
 pub fn workspacePath(
     allocator: std.mem.Allocator,
     tool_name: []const u8,
@@ -165,7 +173,10 @@ pub fn workspacePath(
     });
 }
 
-/// Coarsens Zig errors into protocol-stable categories for clients.
+/// Coarsens any Zig error into one of a small set of protocol-stable category
+/// strings. Clients should branch on these rather than on raw `@errorName`,
+/// which can change as std and backend error sets evolve. Unmapped errors fall
+/// back to "execution_failed".
 pub fn kindForError(err: anyerror) []const u8 {
     return switch (err) {
         error.RequestTimeout, error.Timeout => "timeout",

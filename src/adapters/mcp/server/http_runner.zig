@@ -58,6 +58,9 @@ pub fn serve(server: anytype, io: std.Io, allocator: std.mem.Allocator, config: 
     }
 }
 
+/// Serves one HTTP connection: requires POST, enforces the loopback Origin/Host
+/// gate (DNS-rebinding defense), then dispatches the body as one JSON-RPC message.
+/// A client closing mid-handshake is treated as a normal end, not an error.
 fn serveConnection(server: anytype, io: std.Io, allocator: std.mem.Allocator, stream: std.Io.net.Stream) !void {
     defer stream.close(io);
 
@@ -149,6 +152,11 @@ fn isLoopbackHost(host: []const u8) bool {
         std.ascii.eqlIgnoreCase(host, "localhost");
 }
 
+/// Reads the JSON-RPC POST body (a `Content-Length` within `max_body_size` is
+/// required) and runs it through the server. For the duration of the call the
+/// server's transport is swapped to a one-shot `HttpRequestTransport` that
+/// captures the single response, which is then returned as the HTTP body; a
+/// request that produces no response (e.g. a notification) yields 204 No Content.
 fn handleJsonRpcRequest(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: *http.Server.Request) !void {
     const content_length = request.head.content_length orelse {
         try request.respond("Content-Length required", .{

@@ -6,7 +6,8 @@ const app_errors = @import("../../errors.zig");
 const ports = @import("../../ports.zig");
 const flamegraph_model = @import("../../../domain/profiling/flamegraph.zig");
 
-/// Command output limit applied when collecting workflow evidence.
+/// Per-stream cap (bytes) on captured zflame stdout/stderr; the rendered SVG is
+/// the stdout body, so this also bounds the largest flamegraph this tool emits.
 pub const command_output_limit: usize = 1024 * 1024;
 /// Shared zflame format type used by this workflow module.
 pub const ZflameFormat = flamegraph_model.ZflameFormat;
@@ -142,6 +143,12 @@ pub const Result = union(enum) {
 };
 
 /// Renders a profiler input through zflame, writes the SVG artifact, and returns render metadata.
+///
+/// Both `request.input` and `request.output` are workspace-relative and reach the
+/// backend only as their already-resolved `*_abs` forms, keeping the run inside the
+/// sandbox. Failure arms keep argv/cwd/stdout evidence so a caller can reproduce a
+/// bad render. On success the returned `Result.ok` owns the cloned argv and SHA-256
+/// digest; the caller must `deinit` it. Only Zig errors (e.g. OOM) escape as `!`.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
     if (request.input.len == 0) return .{ .err = .{ .workspace_input_read_failed = .{
         .error_info = app_errors.missingArgument("input", "workspace-relative profiler input path"),

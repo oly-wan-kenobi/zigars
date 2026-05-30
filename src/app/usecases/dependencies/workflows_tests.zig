@@ -1,3 +1,7 @@
+//! Pins the dependency workflow contract against fake ports: add previews are
+//! apply-gated and write nothing, zon-sync issues the exact `zig fetch` argv and
+//! previews the hash replacement, and an unsupported registry provider returns a
+//! structured "unavailable" result rather than reaching the network.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

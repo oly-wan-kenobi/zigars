@@ -1,3 +1,7 @@
+//! Pins crash-evidence extraction: sanitizer fusion yields the right
+//! classification, a prefixed crash identity, and frame counts bounded by the
+//! limit; panic analysis keeps the "unknown panic" fallback; and crash-repro
+//! planning classifies the failure kind.
 const std = @import("std");
 
 const crash = @import("../../../domain/diagnostics/crash.zig");

@@ -111,7 +111,11 @@ pub fn appendDeclarations(
     }
 }
 
-/// Runs standalone compiler probes and returns structured evidence.
+/// Runs standalone `zig build-obj` layout probes and returns structured evidence.
+/// Fails closed to an empty, non-measured result when no command runner is bound
+/// or the toolchain is not Zig 0.16.0, caps work at `max_measured_declarations`,
+/// and skips declarations that need project context (see `unsupportedReason`).
+/// Returns an allocator-owned result object.
 pub fn compilerEvidenceValue(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -295,6 +299,8 @@ fn runDeclarationProbe(
 
     const cache_path = try cacheDir(allocator, context);
     defer allocator.free(cache_path);
+    // The probe uses @compileLog, so build-obj is expected to exit non-zero after
+    // printing the measurements; evidence is parsed from stderr regardless of exit.
     const argv = &.{ context.tool_paths.zig, "build-obj", path, "-target", target, "-fno-emit-bin", "--cache-dir", cache_path };
     var result = try command_runner.run(allocator, .{
         .argv = argv,
@@ -317,6 +323,10 @@ fn runDeclarationProbe(
     return measurement;
 }
 
+/// Builds a self-contained probe source: the copied declaration plus a `comptime`
+/// block of `@compileLog` calls for @sizeOf/@alignOf and, for structs, per-field
+/// @offsetOf/@bitOffsetOf. No project imports and no build.zig, so the compiler
+/// only evaluates the declaration itself. Returns an allocator-owned buffer.
 pub fn buildProbeSource(allocator: std.mem.Allocator, declaration: LayoutDeclaration) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);

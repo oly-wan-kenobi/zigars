@@ -1,5 +1,11 @@
 //! Adapter for result-shape contract tools; converts typed app-layer contract
 //! structs into JSON objects with stable field names for MCP clients.
+//!
+//! These two tools are pure projections of `app/result_contracts.zig`: they take
+//! no workspace input and run no commands, so the only failure mode is OOM. The
+//! value builders use an `*_owned` flag flipped to false just before returning,
+//! so a failure mid-build still frees the half-built object via `defer` while a
+//! success hands ownership to the returned JSON value.
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -7,7 +13,10 @@ const result_contracts = @import("../../../app/result_contracts.zig");
 const mcp_errors = @import("../errors.zig");
 const mcp_result = @import("../result.zig");
 
-/// Handles MCP `zigars_result_shape` requests by delegating to app logic and shaping owned results/errors.
+/// Describes the JSON result shape clients should expect for a given output
+/// `mode` (compact/standard/deep). An unparseable `mode` returns an
+/// invalid-arguments error naming the supported values; an absent `mode`
+/// defaults to standard.
 pub fn zigarsResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
@@ -29,7 +38,9 @@ pub fn zigarsResultShape(allocator: std.mem.Allocator, args: ?std.json.Value) mc
     return mcp_result.structured(allocator, value);
 }
 
-/// Handles MCP `zigars_output_budget_plan` requests by delegating to app logic and shaping owned results/errors.
+/// Plans a token budget for an output `mode`, optionally clamped to a caller
+/// `token_budget` and labeled with the target `tool`. Same argument contract as
+/// zigarsResultShape: invalid mode errors, omitted mode defaults to standard.
 pub fn zigarsOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const mode = parseModeArg(args) catch {
         const actual = argString(args, "mode") orelse "";
@@ -55,7 +66,8 @@ pub fn zigarsOutputBudgetPlan(allocator: std.mem.Allocator, args: ?std.json.Valu
     return mcp_result.structured(allocator, value);
 }
 
-/// Parses mode arg, returning null when the field is absent.
+/// Parses the `mode` argument, defaulting to standard when absent and returning
+/// error.InvalidMode for an unrecognized value.
 fn parseModeArg(args: ?std.json.Value) error{InvalidMode}!result_contracts.OutputMode {
     // The adapter defaults mode to standard so omitted arguments keep normal output size.
     const raw = argString(args, "mode") orelse result_contracts.OutputMode.standard.name();

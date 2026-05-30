@@ -1171,6 +1171,8 @@ fn writeAndRegisterArtifact(a: *App, allocator: std.mem.Allocator, path: []const
     defer a.workspace.allocator.free(artifact_abs);
     const identity = try artifacts.identityFromBytes(allocator, path, artifact_abs, bytes);
     defer allocator.free(identity.sha256);
+    // Registry indexing is best-effort provenance; the file is already written,
+    // so a record failure must not fail the apply.
     support.recordWrittenArtifact(a, allocator, .{
         .identity = identity,
         .provenance = .{
@@ -1292,7 +1294,10 @@ fn projectVersionHintsValue(allocator: std.mem.Allocator, a: *App) !std.json.Val
     return .{ .array = hints };
 }
 
-/// Implements try append version hint workflow logic using caller-owned inputs.
+/// Appends a single-value version hint read from `path` (e.g. .zigversion).
+/// Best-effort: a missing/unreadable file or any allocation failure is silently
+/// skipped so version-hint collection never fails the calling workflow. The
+/// reads stay inside the workspace sandbox and are size-bounded.
 fn tryAppendVersionHint(allocator: std.mem.Allocator, hints: *std.json.Array, a: *App, path: []const u8, tool: []const u8, source: []const u8) void {
     const bytes = a.workspace.readFileAlloc(a.io, path, 128 * 1024) catch return;
     defer allocator.free(bytes);
@@ -1368,7 +1373,9 @@ fn tryAppendBuildZonMinimumHint(allocator: std.mem.Allocator, hints: *std.json.A
     }
 }
 
-/// Parses version prefix input using caller-provided storage; malformed input and allocation failures propagate.
+/// Parses the leading major.minor from a version string, returning null on any
+/// malformed input. Uses checked arithmetic so an oversized numeric component
+/// yields null instead of an integer-overflow panic in ReleaseSafe.
 fn parseVersionPrefix(value: []const u8) ?[2]u32 {
     var major: u32 = 0;
     var minor: u32 = 0;

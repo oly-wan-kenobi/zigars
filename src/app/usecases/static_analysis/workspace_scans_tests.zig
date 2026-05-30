@@ -1,3 +1,6 @@
+//! Pins workspace_scans behavior: import-graph and test-discovery scans flow through
+//! the scanner and workspace ports, unreadable files are recorded as skipped rather
+//! than failing the scan, and the import-graph text keeps its advisory-tier header.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

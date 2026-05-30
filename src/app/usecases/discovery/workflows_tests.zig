@@ -1,3 +1,8 @@
+//! Tests for the discovery workflows. Pin that catalog text, doctor checks,
+//! Zig version preflight, toolchain resolution, and command/tool planning all
+//! flow through the typed catalog/manifest/workspace/command ports, that user
+//! file and path operands are resolved through the workspace sandbox, and that
+//! version hints are classified into the documented status vocabulary.
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

@@ -3,8 +3,13 @@ const std = @import("std");
 
 /// Parsed pagination params with cursor start, clamped limit, and opt-in flag.
 pub const Pagination = struct {
+    /// Zero-based index of the first item to include (decoded cursor offset).
     start: usize = 0,
+    /// Max items in the page; defaults to "unbounded" so an unpaginated request
+    /// returns every item. `fromParams` clamps an explicit limit to 1..500.
     limit: usize = std.math.maxInt(usize),
+    /// Whether the client supplied a cursor or limit. Gates `nextCursor`: an
+    /// unpaginated request must not grow a cursor field it never asked for.
     requested: bool = false,
 };
 
@@ -14,7 +19,12 @@ pub const ParseError = error{
 
 pub const invalid_cursor_message = "Pagination cursor must be a non-negative decimal offset";
 
-/// Parses optional params.cursor and params.limit values from JSON-RPC params.
+/// Parses optional `cursor` and `limit` from JSON-RPC params into a Pagination.
+///
+/// Absent or non-object params yield the default (unpaginated) page. The cursor
+/// is treated as an opaque decimal offset but tolerates both string and integer
+/// JSON forms; a malformed or negative cursor is `error.InvalidCursor`. A
+/// non-integer `limit` is ignored rather than rejected.
 pub fn fromParams(params: ?std.json.Value) ParseError!Pagination {
     var page: Pagination = .{};
     const obj = switch (params orelse .null) {

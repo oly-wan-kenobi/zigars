@@ -1,3 +1,5 @@
+//! Pins backend-catalog serialization: the rendered value carries the expected
+//! kind and includes configured executable paths when requested.
 const std = @import("std");
 
 const backend_catalog = @import("backend_catalog.zig");

@@ -16,10 +16,15 @@ pub const default_timeout_ms: u64 = 30_000;
 
 /// Stable classifications for protocol-helper peer responses.
 pub const ResponseStatus = enum {
+    /// Client affirmatively answered (elicitation accept / sampling content).
     accepted,
+    /// Client refused, or accepted an elicitation with `confirm: false`.
     declined,
+    /// Client explicitly cancelled the request.
     cancelled,
+    /// Response was present but did not match the expected shape.
     malformed,
+    /// No usable response before the deadline or transport close.
     timeout,
 };
 
@@ -29,6 +34,9 @@ pub fn classifyElicitationResponse(response: ?std.json.Value) ResponseStatus {
     if (value != .object) return .malformed;
     const action = value.object.get("action") orelse return .malformed;
     if (action != .string) return .malformed;
+    // Accept multiple spellings since clients differ. An explicit
+    // `content.confirm: false` inside an accept is a negative confirmation, so
+    // it is treated as declined rather than a true acceptance.
     if (std.mem.eql(u8, action.string, "accept") or std.mem.eql(u8, action.string, "accepted")) {
         if (value.object.get("content")) |content| {
             if (content == .object) {
@@ -63,7 +71,11 @@ pub fn supportsSampling(server: anytype) bool {
     return server.client_capabilities != null and server.client_capabilities.?.sampling != null;
 }
 
-/// Sends elicitation/create when supported; otherwise returns a structured fallback.
+/// Fire-and-return-handle elicitation/create. When the client advertised
+/// elicitation, sends the request and returns a descriptor with the outbound
+/// `request_id` (the reply is not awaited here); otherwise returns a structured
+/// "unsupported" fallback. Use `requestClientProtocol` for a synchronous,
+/// deadline-bounded round trip.
 pub fn tryElicitationCreate(server: anytype, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
     if (!supportsElicitation(server)) {
         return fallbackValue(allocator, "elicitation", "elicitation/create");
@@ -71,7 +83,8 @@ pub fn tryElicitationCreate(server: anytype, io: std.Io, allocator: std.mem.Allo
     return sendClientRequestValue(server, io, allocator, "elicitation", "elicitation/create", params);
 }
 
-/// Sends sampling/createMessage when supported; otherwise returns a structured fallback.
+/// Fire-and-return-handle sampling/createMessage; see `tryElicitationCreate`.
+/// Returns a request descriptor when supported, else an "unsupported" fallback.
 pub fn trySamplingCreateMessage(server: anytype, io: std.Io, allocator: std.mem.Allocator, params: std.json.Value) !std.json.Value {
     if (!supportsSampling(server)) {
         return fallbackValue(allocator, "sampling", "sampling/createMessage");
@@ -79,7 +92,15 @@ pub fn trySamplingCreateMessage(server: anytype, io: std.Io, allocator: std.mem.
     return sendClientRequestValue(server, io, allocator, "sampling", "sampling/createMessage", params);
 }
 
-/// Sends a protocol helper request to the active client and waits for its matching JSON-RPC response.
+/// Sends a server→client protocol helper request and blocks for its matching
+/// reply, returning a structured outcome instead of erroring on declines/timeouts.
+///
+/// Returns early (status `unsupported`) when the feature was not advertised or
+/// no transport is attached. Otherwise it allocates an outbound id, sends, and
+/// drains the serial transport against a deadline: frames not matching this id
+/// are dispatched normally (peer responses cleared, notifications handled) and
+/// nested inbound requests are rejected, so it neither deadlocks nor mis-binds a
+/// stray frame. An accepted result is cloned into `allocator` (`owns_result`).
 pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: app_ports.ProtocolRequest) !app_ports.ProtocolResponse {
     if (!supportsProtocolFeature(server, request.feature)) {
         return .{
@@ -191,6 +212,8 @@ pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.All
     }
 }
 
+/// Refuses an inbound request that arrives while we are blocked awaiting a
+/// client protocol reply; re-entrant dispatch on the serial transport is unsafe.
 fn rejectNestedRequest(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
     const error_response = jsonrpc.createErrorResponse(
         request.id,
@@ -299,6 +322,9 @@ fn fallbackValue(allocator: std.mem.Allocator, feature: []const u8, method: []co
     return .{ .object = obj };
 }
 
+/// Sends one server→client request and returns a descriptor of it (feature,
+/// method, outbound `request_id`) without awaiting the reply. The id is recorded
+/// in `pending_requests` so a later response is recognized by the main loop.
 fn sendClientRequestValue(server: anytype, io: std.Io, allocator: std.mem.Allocator, feature: []const u8, method: []const u8, params: std.json.Value) !std.json.Value {
     const id = server.next_request_id;
     server.next_request_id += 1;

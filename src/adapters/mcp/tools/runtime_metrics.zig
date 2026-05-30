@@ -1,5 +1,11 @@
 //! Observability MCP adapters that project in-process counters and bounded rings
 //! into stable JSON read models.
+//!
+//! All numbers here are process-local: counters and rings live in the running
+//! server and reset on restart, so the projections describe "what this process
+//! has seen", never durable history. Value builders use an `errdefer
+//! obj.deinit()` so a mid-build allocation failure frees the partial object
+//! instead of leaking it (exercised by the failing-allocator test below).
 const std = @import("std");
 const mcp = @import("mcp");
 
@@ -10,6 +16,11 @@ const mcp_result = @import("../result.zig");
 const values = @import("runtime_metrics_values.zig");
 
 /// Returns the full metrics v2 object assembled from runtime counters.
+///
+/// The report and every nested JSON value are built in a scratch arena; only
+/// the final structured result is copied onto `allocator`, so the arena is
+/// freed on return. Snapshotting the report once keeps all sub-views internally
+/// consistent for this single response.
 pub fn zigarsMetricsV2(
     allocator: std.mem.Allocator,
     context: app_context.ObservabilityContext,
@@ -185,7 +196,8 @@ fn startupTimingsValue(allocator: std.mem.Allocator, snapshot: ports.Observabili
     return .{ .object = obj };
 }
 
-/// Builds audit logging runtime state.
+/// Projects audit-logging state, including the redaction mode so a client can
+/// tell how much of each MCP payload is persisted before relying on the log.
 fn auditLoggingValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -200,7 +212,9 @@ fn auditLoggingValue(allocator: std.mem.Allocator, snapshot: ports.Observability
     return .{ .object = obj };
 }
 
-/// Builds request cancellation counters and recent outcomes.
+/// Projects cooperative-cancellation counters and recent outcomes. Cancellation
+/// is best-effort and process-local: `uncancellable`/`unknown` reflect requests
+/// the sequential dispatcher could not interrupt, not protocol errors.
 fn cancellationValue(allocator: std.mem.Allocator, snapshot: ports.ObservabilitySnapshot) !std.json.Value {
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
@@ -326,6 +340,8 @@ fn zlsEventsValue(
 ) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
+    // No transitions recorded yet: synthesize one row from the current base
+    // status so the timeline is never empty and clients can render a state.
     if (snapshot.zls_event_count == 0) {
         var obj = std.json.ObjectMap.empty;
         errdefer obj.deinit(allocator);

@@ -1,5 +1,9 @@
-//! JSON-building helpers for response shape metadata and token budget plans.
-//! Returned values are allocator-owned unless a function documents borrowing.
+//! JSON-building helpers for response shape metadata and token budget plans:
+//! the transport-facing projection of the result-shape policy that adapters
+//! serialize directly. Mirrors the typed contract in `result_contracts.zig`
+//! (same schema_version, mode set, budgets, and omission vocabulary); keep both
+//! in lockstep. Returned values are allocator-owned unless a function documents
+//! borrowing.
 const std = @import("std");
 
 /// Version for JSON result-shape metadata emitted by these helpers.
@@ -217,7 +221,7 @@ fn allocationValue(allocator: std.mem.Allocator, mode: ResultShapeMode, effectiv
     return .{ .object = obj };
 }
 
-/// Implements stable machine fields workflow logic using caller-owned inputs.
+/// Returns the static list of machine fields guaranteed present in this mode.
 fn stableMachineFields(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "kind", "ok", "mode", "result_shape", "omitted_sections", "resolution" },
@@ -226,7 +230,7 @@ fn stableMachineFields(mode: ResultShapeMode) []const []const u8 {
     };
 }
 
-/// Implements included sections workflow logic using caller-owned inputs.
+/// Returns the static list of response sections this mode includes.
 fn includedSections(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "machine_fields", "short_summary", "omission_metadata" },
@@ -235,7 +239,8 @@ fn includedSections(mode: ResultShapeMode) []const []const u8 {
     };
 }
 
-/// Implements omitted by default workflow logic using caller-owned inputs.
+/// Returns the static list of sections this mode drops by default, which callers
+/// must echo into omitted_sections to honor the omission contract.
 fn omittedByDefault(mode: ResultShapeMode) []const []const u8 {
     return switch (mode) {
         .compact => &.{ "raw_backend_output", "large_collections", "source_snippets", "debug_trace" },

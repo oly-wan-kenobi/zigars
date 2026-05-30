@@ -212,7 +212,10 @@ fn invokeTrust(
     return finish(allocator, tool_name, "trust_workflow", func(&app, allocator, args));
 }
 
-/// Converts workflow Result values into MCP ToolResult ownership contracts.
+/// Converts a workflow Result into an MCP ToolResult. On the error path the
+/// owned value is copied into a structured error and then freed here; on the
+/// success path structuredOwned takes ownership, so the value must not be
+/// double-freed across the two branches.
 fn finish(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, maybe_result: anyerror!environment.Result) mcp.tools.ToolError!mcp.tools.ToolResult {
     const result = maybe_result catch |err| return usecaseError(allocator, tool_name, operation, err);
     if (result.is_error) {

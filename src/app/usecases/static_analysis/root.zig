@@ -1,3 +1,6 @@
+//! Facade for the static-analysis use cases: re-exports the source-summary, lint,
+//! semantic-index, workspace-scan, project-value, agent-ergonomics, developer-pain,
+//! and layout-probe modules, and aggregates their tests. Membership only; no logic.
 pub const source_summary = @import("source_summary.zig");
 pub const lint_intelligence = @import("lint_intelligence.zig");
 pub const semantic_index = @import("semantic_index.zig");

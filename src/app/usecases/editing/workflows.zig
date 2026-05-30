@@ -43,7 +43,9 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
     return .{ .object = obj };
 }
 
-/// Serializes edit policy check fields into an allocator-owned JSON value; allocation failures propagate.
+/// Classifies each path against edit policy and reports which are blocked for
+/// direct editing, as an allocator-owned JSON value. `allow_direct_edit` is
+/// true only when every path is editable; mutating tools still require apply=true.
 pub fn editPolicyCheckValue(allocator: std.mem.Allocator, paths: []const []const u8) !std.json.Value {
     var checked = std.json.Array.init(allocator);
     var blocked = std.json.Array.init(allocator);
@@ -175,7 +177,10 @@ pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.V
     return .{ .object = obj };
 }
 
-/// Serializes format fields into an allocator-owned JSON value; allocation failures propagate.
+/// Formats `file` (or supplied `content`) and returns the diff as an
+/// allocator-owned JSON value. `zig fmt` runs against a throwaway cache copy,
+/// never the live file, so formatting has no write side effect on its own; the
+/// real source is rewritten only when `apply` is set and edit policy allows it.
 pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: ?[]const u8, apply: bool, timeout_ms: i64) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.format" });
     defer resolved.deinit(allocator);
@@ -190,6 +195,9 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
         });
     defer source.deinit(allocator);
 
+    // Format an isolated copy under the cache rather than the live file: zig fmt
+    // rewrites in place, and the source path is content-hashed so concurrent
+    // format previews never share a preview file. The copy is deleted on return.
     const preview_name = try std.fmt.allocPrint(allocator, "{x:0>16}.zig", .{std.hash.Wyhash.hash(std.hash.Wyhash.hash(0, rel), source.bytes)});
     defer allocator.free(preview_name);
     const preview_path = try std.fs.path.join(allocator, &.{ ".zigars-cache", "format-preview", preview_name });
@@ -222,6 +230,9 @@ pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreComman
     defer formatted.deinit(allocator);
     const diff = try session_domain.unifiedDiff(allocator, rel, source.bytes, formatted.bytes);
     const policy = classifyPath(rel);
+    // Apply gate: write the formatted bytes back only when the caller asked to
+    // apply AND policy permits direct edits to this path (e.g. not vendored or
+    // generated). Either condition false leaves the live file untouched.
     const applied = apply and policy.direct_edit_allowed;
     if (applied) _ = try context.workspace_store.write(.{
         .path = rel,
@@ -266,7 +277,10 @@ pub fn formatCheckValue(allocator: std.mem.Allocator, context: app_context.CoreC
     return commandResultValue(allocator, "zig fmt --check", &argv, context.workspace.root, timeout_ms, result);
 }
 
-/// Serializes patch preview fields into an allocator-owned JSON value; allocation failures propagate.
+/// Diffs `content` against the resolved source file and returns the preview as
+/// an allocator-owned JSON value. Replaces the whole file with `content` only
+/// when `apply` is set and edit policy allows the path; otherwise it is
+/// preview-only and the source is left untouched.
 pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: []const u8, apply: bool) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.patch_preview.resolve" });
     defer resolved.deinit(allocator);
@@ -279,6 +293,8 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     defer source.deinit(allocator);
     const diff = try session_domain.unifiedDiff(allocator, rel, source.bytes, content);
     const policy = classifyPath(rel);
+    // Apply gate: both the caller's apply flag and edit policy must agree before
+    // the live file is overwritten with arbitrary caller content.
     const applied = apply and policy.direct_edit_allowed;
     if (applied) _ = try context.workspace_store.write(.{
         .path = rel,
@@ -305,7 +321,10 @@ pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.Core
     return .{ .object = obj };
 }
 
-/// Serializes replacement session fields into an allocator-owned JSON value; allocation failures propagate.
+/// Builds the preview/apply result for a multi-file text replacement as an
+/// allocator-owned JSON value. Each file is classified; writes happen only when
+/// `apply` is set and every file is policy-safe (`apply and safe`), so one
+/// blocked path suppresses the whole apply.
 fn replacementSessionValue(allocator: std.mem.Allocator, context: app_context.EditingContext, tool_name: []const u8, replacements: []const Replacement, apply: bool, goal: []const u8, limitation: []const u8) !std.json.Value {
     var files = std.json.Array.init(allocator);
     var safe = true;
@@ -616,7 +635,10 @@ fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, text) };
 }
 
-/// Implements workspace relative workflow logic using caller-owned inputs.
+/// Strips the workspace root prefix from an already-resolved absolute path so
+/// results and policy classification use a stable workspace-relative form.
+/// Returns `path` unchanged if it is not under `root` (kept for display only;
+/// the workspace store, not this helper, enforces the sandbox boundary).
 fn workspaceRelative(root: []const u8, path: []const u8) []const u8 {
     if (std.mem.startsWith(u8, path, root)) {
         var rel = path[root.len..];

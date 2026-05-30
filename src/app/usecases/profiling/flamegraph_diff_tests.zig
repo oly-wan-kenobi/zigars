@@ -1,3 +1,7 @@
+//! Pins the flamegraph-diff pipeline's late-stage failure handling: a per-input read
+//! probe, the intermediate-parent ensureDir step, and a render failure surfacing after
+//! both diff-folded and zflame have run. Asserts the exact two-stage argv and the
+//! ordered workspace/command port calls. (Path-resolution cases live in flamegraph_diff.zig.)
 const std = @import("std");
 
 const app_context = @import("../../context.zig");

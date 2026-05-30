@@ -1,3 +1,7 @@
+//! Pins the context narrowing contract: a default Context is transport-free and
+//! exposes no effect ports, each narrowing accessor surfaces required ports and
+//! rejects a missing one with ContextError.MissingPort, optional ports stay
+//! optional, and borrowed config snapshots project through unchanged.
 const std = @import("std");
 
 const app_context = @import("context.zig");

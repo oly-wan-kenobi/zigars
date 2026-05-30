@@ -1,3 +1,7 @@
+//! Pins the transport-neutral AppError contract: each builder fills its fixed
+//! category/operation/phase/code, error slices stay borrowed (ownsMemory false),
+//! and the Result(T) union routes typed data or a typed error without leaking
+//! any MCP/JSON-RPC transport type into the app layer.
 const std = @import("std");
 
 const errors = @import("errors.zig");

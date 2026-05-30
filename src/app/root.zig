@@ -1,5 +1,7 @@
-//! App-layer public surface that re-exports context, ports, error contracts,
-//! and usecases for composition by transports and adapters.
+//! App-layer public surface: the single import seam transports and adapters use
+//! to reach context, ports, error contracts, result contracts, and usecases.
+//! `result_shape` is JSON-builder helper code consumed by adapters directly, so
+//! it is only pulled in here for test aggregation, not re-exported.
 pub const context = @import("context.zig");
 pub const errors = @import("errors.zig");
 pub const ports = @import("ports.zig");

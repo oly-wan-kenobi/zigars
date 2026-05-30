@@ -1,3 +1,6 @@
+//! Pins the release-intelligence contracts: the plan keeps its seven required
+//! evidence checks in order, draft notes apply public section labels, and the
+//! evidence pack preserves its seven provided/absent pointer slots.
 const std = @import("std");
 
 const release_intelligence = @import("release_intelligence.zig");
