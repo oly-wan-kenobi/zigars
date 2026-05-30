@@ -98,6 +98,7 @@ pub const State = struct {
 
 /// Projects a concrete runtime job into the protocol-facing borrowed view.
 fn jobView(job: anytype) JobView {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = job.id.slice(),
         .label = job.label.slice(),
@@ -127,6 +128,7 @@ pub fn handleGet(server: anytype, io: std.Io, allocator: std.mem.Allocator, requ
 
 /// Handles tasks/result with task metadata and retained stdout/stderr tails.
 pub fn handleResult(server: anytype, io: std.Io, allocator: std.mem.Allocator, request: jsonrpc.Request) !void {
+    // Translate internal outcomes into protocol-facing responses without leaking internal details.
     const state = server.task_state orelse return server.sendInvalidParams(io, allocator, request.id, "Tasks are not enabled");
     const task_id = taskIdFromParams(request.params) orelse return server.sendInvalidParams(io, allocator, request.id, "tasks/result requires params.taskId");
     const job = state.jobById(task_id) orelse return server.sendInvalidParams(io, allocator, request.id, "Task not found");
@@ -185,6 +187,7 @@ fn sendTask(server: anytype, io: std.Io, allocator: std.mem.Allocator, id: mcp.t
 
 /// Reads `task_id` from JSON-RPC task params when present and string-typed.
 fn taskIdFromParams(params: ?std.json.Value) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (params orelse .null) {
         .object => |o| o,
         else => return null,
@@ -200,6 +203,7 @@ fn taskIdFromParams(params: ?std.json.Value) ?[]const u8 {
 /// jobs are tracked by monotonic sequence, keeping output deterministic.
 /// `pollInterval` is a fixed client hint (ms) and `ttl` is left null (no expiry).
 fn taskValue(allocator: std.mem.Allocator, job: JobView) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj: std.json.ObjectMap = .empty;
     try obj.put(allocator, "taskId", .{ .string = job.id });
     try obj.put(allocator, "status", .{ .string = taskStatusText(job.status) });
