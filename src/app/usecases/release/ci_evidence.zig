@@ -64,6 +64,7 @@ pub const AnnotationParseSummary = struct {
 
 /// Executes the zig ci annotations workflow and returns an allocator-owned structured result.
 pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return missingArgumentResult(allocator, "zig_ci_annotations", "file", "workspace-relative Zig source path");
     const resolved = a.workspace.resolve(file) catch |err| return workspacePathErrorResult(a, allocator, "zig_ci_annotations", file, err);
     defer allocator.free(resolved);
@@ -109,6 +110,7 @@ pub fn zigCiAnnotations(a: *App, allocator: std.mem.Allocator, args: ?std.json.V
 /// detail (source/caret excerpt) to the most recent annotation. `default_file`
 /// labels diagnostics that parsed without an explicit path.
 pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.Array, default_file: []const u8, stderr: []const u8) !AnnotationParseSummary {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var summary: AnnotationParseSummary = .{};
     var last_annotation: ?usize = null;
     var lines = std.mem.splitScalar(u8, stderr, '\n');
@@ -135,6 +137,7 @@ pub fn tryParseAnnotations(allocator: std.mem.Allocator, annotations: *std.json.
 
 /// Serializes annotation fields into an allocator-owned JSON value; allocation failures propagate.
 fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parsed: support.CompilerLine) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const located = parsed.path != null and parsed.line != null and parsed.column != null;
     const start_column = parsed.column orelse 1;
     const end_column = if (start_column == std.math.maxInt(i64)) start_column else start_column + 1;
@@ -162,6 +165,7 @@ fn annotationValue(allocator: std.mem.Allocator, default_file: []const u8, parse
 
 /// Appends annotation detail data into caller-provided storage, propagating allocation failures.
 fn appendAnnotationDetail(allocator: std.mem.Allocator, annotation: *std.json.Value, detail: []const u8) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     switch (annotation.*) {
         .object => |*obj| {
             const details_value = obj.getPtr("details") orelse return;
@@ -185,6 +189,7 @@ fn annotationLevel(severity: []const u8) []const u8 {
 
 /// Serializes annotation parse summary fields into an allocator-owned JSON value; allocation failures propagate.
 fn annotationParseSummaryValue(allocator: std.mem.Allocator, summary: AnnotationParseSummary) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -200,6 +205,7 @@ fn annotationParseSummaryValue(allocator: std.mem.Allocator, summary: Annotation
 
 /// Escapes text for inclusion in XML output.
 pub fn xmlEscape(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out: std.ArrayList(u8) = .empty;
     var out_owned = true;
     defer if (out_owned) out.deinit(allocator);
@@ -227,6 +233,7 @@ fn isXmlChar(c: u8) bool {
 
 /// Executes the zig junit workflow and returns an allocator-owned structured result.
 pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
     var resolved_file: ?[]const u8 = null;
@@ -285,6 +292,7 @@ pub fn zigJunit(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !R
 
 /// Implements junit xml for command workflow logic using caller-owned inputs.
 pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8, result: command.RunResult) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const command_text = try commandString(allocator, argv);
     defer allocator.free(command_text);
     const command_xml = try xmlEscape(allocator, command_text);
@@ -328,6 +336,7 @@ pub fn junitXmlForCommand(allocator: std.mem.Allocator, argv: []const []const u8
 
 /// Executes the zig matrix check workflow and returns an allocator-owned structured result.
 pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Value) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const paths_text = argString(args, "zig_paths") orelse a.config.zig_path;
     var paths = std.mem.tokenizeAny(u8, paths_text, ", \t\r\n");
     var results = std.json.Array.init(allocator);
@@ -376,6 +385,7 @@ pub fn zigMatrixCheck(a: *App, allocator: std.mem.Allocator, args: ?std.json.Val
 
 /// Serializes matrix run entry fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: command.RunResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const insights = try compilerInsightsValue(allocator, result.stdout, result.stderr, argv);
     var item = std.json.ObjectMap.empty;
     var item_owned = true;
@@ -393,6 +403,7 @@ pub fn matrixRunEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, a
 
 /// Serializes matrix command error entry fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn matrixCommandErrorEntryValue(allocator: std.mem.Allocator, zig_path: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, err: anyerror) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var item = std.json.ObjectMap.empty;
     var item_owned = true;
     defer if (item_owned) item.deinit(allocator);
