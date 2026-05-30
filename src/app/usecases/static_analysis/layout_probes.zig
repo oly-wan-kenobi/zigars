@@ -79,6 +79,7 @@ pub fn appendDeclarations(
     limit: usize,
     abi_only: bool,
 ) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     var offset: usize = 0;
     var line_no: usize = 1;
     while (offset < bytes.len and out.items.len < limit) {
@@ -122,6 +123,7 @@ pub fn compilerEvidenceValue(
     declarations: []const LayoutDeclaration,
     options: ProbeOptions,
 ) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const requested_targets = options.targets orelse if (options.compare_targets) default_abi_targets else default_memory_targets;
     const targets = try parseTargets(allocator, requested_targets);
     defer targets.deinit(allocator);
@@ -222,6 +224,7 @@ fn runZigVersionValue(
     command_runner: ports.CommandRunner,
     timeout_ms: u64,
 ) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var result = try command_runner.run(allocator, .{
         .argv = &.{ context.tool_paths.zig, "version" },
         .cwd = context.workspace.root,
@@ -245,6 +248,7 @@ fn targetMetadataValues(
     targets: []const []const u8,
     timeout_ms: u64,
 ) ports.PortError!std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (targets) |target| {
         const argv = &.{ context.tool_paths.zig, "build-exe", "--show-builtin", "-target", target };
@@ -364,6 +368,7 @@ fn measurementFromCompileLog(
     target: []const u8,
     stderr: []const u8,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "declaration", try declarationValue(allocator, declaration));
     try obj.put(allocator, "target", try ownedString(allocator, target));
@@ -398,6 +403,7 @@ fn fieldsMeasurementValue(
     stderr: []const u8,
     declaration: LayoutDeclaration,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var fields = std.json.Array.init(allocator);
     if (!std.mem.endsWith(u8, declaration.kind, "struct")) return .{ .array = fields };
     for (declaration.fields) |field| {
@@ -419,6 +425,7 @@ fn fieldsMeasurementValue(
 }
 
 fn layoutDifferencesValue(allocator: std.mem.Allocator, measurements: []const std.json.Value, want_changed: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var out = std.json.Array.init(allocator);
     for (measurements, 0..) |measurement, index| {
         if (measurement != .object) continue;
@@ -472,6 +479,7 @@ fn parseFieldMetric(stderr: []const u8, name: []const u8, field: []const u8, met
 }
 
 pub fn parseCompileLogValue(stderr: []const u8, label: []const u8) ?u64 {
+    // Normalize input here so downstream paths can rely on validated shape.
     var lines = std.mem.splitScalar(u8, stderr, '\n');
     while (lines.next()) |line| {
         if (std.mem.indexOf(u8, line, label) == null) continue;
@@ -493,6 +501,7 @@ fn unsupportedReason(declaration: LayoutDeclaration, allow_project_comptime: boo
 }
 
 fn unsupportedValue(allocator: std.mem.Allocator, declaration: LayoutDeclaration, reason: []const u8, allow_project_comptime: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "declaration", try declarationValue(allocator, declaration));
     try obj.put(allocator, "status", .{ .string = "unsupported" });
@@ -505,6 +514,7 @@ fn unsupportedValue(allocator: std.mem.Allocator, declaration: LayoutDeclaration
 }
 
 fn commandFailureValue(allocator: std.mem.Allocator, declaration: LayoutDeclaration, target: []const u8, err: ports.PortError) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "declaration", try declarationValue(allocator, declaration));
     try obj.put(allocator, "target", try ownedString(allocator, target));
@@ -532,6 +542,7 @@ fn commandResultValue(
     max_stderr_bytes: usize,
     result: ports.CommandResult,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "argv", try dynamicStringArrayValue(allocator, argv));
     try obj.put(allocator, "cwd", try ownedString(allocator, cwd));
@@ -548,6 +559,7 @@ fn commandResultValue(
 }
 
 fn executionRiskValue(allocator: std.mem.Allocator, allow_project_comptime: bool) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "executes_backend", .{ .bool = true });
     try obj.put(allocator, "imports_project_modules", .{ .bool = false });
@@ -559,6 +571,7 @@ fn executionRiskValue(allocator: std.mem.Allocator, allow_project_comptime: bool
 }
 
 fn parseTargets(allocator: std.mem.Allocator, raw: []const u8) !TargetList {
+    // Normalize input here so downstream paths can rely on validated shape.
     var values: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (values.items) |value| allocator.free(value);
@@ -584,6 +597,7 @@ fn validTargetToken(target: []const u8) bool {
 }
 
 fn probePath(allocator: std.mem.Allocator, declaration: LayoutDeclaration, target: []const u8, probe_source: []const u8) ![]u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     var hasher = std.hash.Wyhash.init(0);
     hasher.update(declaration.file);
     hasher.update(declaration.name);
@@ -606,6 +620,7 @@ fn sanitizePathToken(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
 }
 
 fn cacheDir(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (context.workspace.cache_root.len == 0) return allocator.dupe(u8, ".zigars-cache/abi-layout/cache");
     if (context.workspace.root.len > 0 and std.mem.startsWith(u8, context.workspace.cache_root, context.workspace.root)) {
         var relative = context.workspace.cache_root[context.workspace.root.len..];
@@ -623,6 +638,7 @@ fn versionStringFromValue(value: std.json.Value) ?[]const u8 {
 }
 
 fn extractDeclarationSource(bytes: []const u8, start: usize) ?[]const u8 {
+    // Start from the first body brace so signatures with nested type expressions still resolve.
     const first_brace = std.mem.indexOfScalarPos(u8, bytes, start, '{') orelse return null;
     var depth: usize = 0;
     var index = first_brace;
@@ -633,6 +649,7 @@ fn extractDeclarationSource(bytes: []const u8, start: usize) ?[]const u8 {
                 if (depth == 0) return null;
                 depth -= 1;
                 if (depth == 0) {
+                    // Probe generation expects a semicolon-terminated declaration slice.
                     const semi = std.mem.indexOfScalarPos(u8, bytes, index, ';') orelse return null;
                     return bytes[start .. semi + 1];
                 }
