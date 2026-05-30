@@ -12,6 +12,7 @@ pub const RequestId = union(enum) {
     /// Parse a JSON token into a RequestId; integers are parsed first, strings
     /// that look numeric are stored as string variants to preserve their type.
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !RequestId {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         _ = allocator;
         _ = options;
         const token = try source.next();
@@ -34,6 +35,7 @@ pub const RequestId = union(enum) {
 
     /// Compares JSON-RPC identifiers by tag and payload.
     pub fn eql(a: RequestId, b: RequestId) bool {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return switch (a) {
             .integer => |ai| switch (b) {
                 .integer => |bi| ai == bi,
@@ -85,6 +87,7 @@ pub const ErrorCode = struct {
 /// Serialize a success response `{"jsonrpc":"2.0","id":...,"result":...}`.
 /// Returns an allocator-owned slice; the caller frees it.
 pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytype) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
@@ -109,6 +112,7 @@ pub fn writeResponse(allocator: std.mem.Allocator, id: RequestId, result: anytyp
 /// `id` may be null when the error occurs before the request ID can be parsed.
 /// Returns an allocator-owned slice; the caller frees it.
 pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, message: []const u8) ![]const u8 {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
@@ -141,6 +145,7 @@ pub fn writeError(allocator: std.mem.Allocator, id: ?RequestId, code: i64, messa
 /// Serialize a notification `{"jsonrpc":"2.0","method":...,"params":...}` (no id field).
 /// Returns an allocator-owned slice; the caller frees it.
 pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, params: anytype) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
@@ -164,6 +169,7 @@ pub fn writeNotification(allocator: std.mem.Allocator, method: []const u8, param
 /// Serialize a request `{"jsonrpc":"2.0","id":...,"method":...,"params":...}`.
 /// Returns an allocator-owned slice; the caller frees it.
 pub fn writeRequest(allocator: std.mem.Allocator, id: RequestId, method: []const u8, params: anytype) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var aw: std.Io.Writer.Allocating = .init(allocator);
     var aw_owned = true;
     defer if (aw_owned) aw.deinit();
