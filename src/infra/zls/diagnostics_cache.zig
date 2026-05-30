@@ -56,6 +56,7 @@ pub const DiagnosticsCache = struct {
 
     /// Frees all retained notification payloads and map keys.
     pub fn deinit(self: *DiagnosticsCache) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -83,6 +84,7 @@ pub const DiagnosticsCache = struct {
     /// if the budget is exceeded. A payload larger than max_bytes alone is dropped
     /// (dropped_oversized is incremented) without displacing existing entries.
     pub fn storeNotification(self: *DiagnosticsCache, obj: std.json.ObjectMap, data: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const params = switch (obj.get("params") orelse return) {
             .object => |o| o,
             else => return,
@@ -131,6 +133,7 @@ pub const DiagnosticsCache = struct {
     /// Return all retained payloads sorted by insertion sequence (oldest first).
     /// The outer slice and each inner slice are allocator-owned; the caller frees both.
     pub fn snapshot(self: *DiagnosticsCache, allocator: std.mem.Allocator) ![]const []const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -166,6 +169,7 @@ pub const DiagnosticsCache = struct {
 
     /// Return a snapshot of cache size and eviction counters; no allocation.
     pub fn status(self: *DiagnosticsCache) Status {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -201,6 +205,7 @@ pub const DiagnosticsCache = struct {
     /// Remove the entry with the smallest sequence number. Returns false when the cache is empty.
     /// Linear scan is acceptable because the expected file count is small (< hundreds).
     fn evictOldestLocked(self: *DiagnosticsCache) bool {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         var oldest_key: ?[]const u8 = null;
         var oldest_sequence: u64 = 0;
 
