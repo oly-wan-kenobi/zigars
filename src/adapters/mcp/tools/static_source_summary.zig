@@ -26,6 +26,7 @@ pub fn zigDeclSummary(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_decl_summary", args, err);
     defer source.deinit(allocator);
     const output = source_summary_usecase.textSummary(allocator, .decl_summary, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -39,6 +40,7 @@ pub fn zigDeclSummaryJson(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_decl_summary_json", args, err);
     defer source.deinit(allocator);
     var declarations = source_summary_usecase.heuristicDeclarations(allocator, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -54,6 +56,7 @@ pub fn zigAstImports(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_ast_imports", args, err);
     defer source.deinit(allocator);
     var summary = source_summary_usecase.parserSummary(allocator, .{ .file = source.file, .contents = source.bytes }) catch |err| return analysisToolError(allocator, "zig_ast_imports", "parse_ast_imports", err);
@@ -71,6 +74,7 @@ pub fn zigAstDeclSummary(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_ast_decl_summary", args, err);
     defer source.deinit(allocator);
     var summary = source_summary_usecase.parserSummary(allocator, .{ .file = source.file, .contents = source.bytes }) catch |err| return analysisToolError(allocator, "zig_ast_decl_summary", "parse_ast_declarations", err);
@@ -86,6 +90,7 @@ pub fn zigAllocations(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_allocations", args, err);
     defer source.deinit(allocator);
     const output = source_summary_usecase.textSummary(allocator, .allocations, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -99,6 +104,7 @@ pub fn zigErrorSets(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_error_sets", args, err);
     defer source.deinit(allocator);
     const output = source_summary_usecase.textSummary(allocator, .error_sets, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -112,6 +118,7 @@ pub fn zigPublicApi(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_public_api", args, err);
     defer source.deinit(allocator);
     const output = source_summary_usecase.textSummary(allocator, .public_api, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -125,6 +132,7 @@ pub fn zigDeadDeclCandidates(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_dead_decl_candidates", args, err);
     defer source.deinit(allocator);
     const output = source_summary_usecase.textSummary(allocator, .dead_decl_candidates, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
@@ -138,6 +146,7 @@ pub fn zigAstTests(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_ast_tests", args, err);
     defer source.deinit(allocator);
     var summary = source_summary_usecase.parserSummary(allocator, .{ .file = source.file, .contents = source.bytes }) catch |err| return analysisToolError(allocator, "zig_ast_tests", "parse_ast_tests", err);
@@ -167,6 +176,7 @@ pub fn staticTextValue(
     tool_name: []const u8,
     body: []const u8,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = tool_name });
@@ -181,6 +191,7 @@ pub fn declSummaryValue(
     file: []const u8,
     declarations: zig_analysis.DeclarationList,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var decls = std.json.Array.init(allocator);
     for (declarations.items) |decl| {
         var item = std.json.ObjectMap.empty;
@@ -205,6 +216,7 @@ pub fn astImportsValue(
     file: []const u8,
     summary: zig_analysis.SourceSummary,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var imports = std.json.Array.init(allocator);
     for (summary.imports) |import_item| {
         var item = std.json.ObjectMap.empty;
@@ -234,6 +246,7 @@ pub fn astDeclSummaryValue(
     file: []const u8,
     summary: zig_analysis.SourceSummary,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var declarations = std.json.Array.init(allocator);
     for (summary.declarations) |decl| {
         var item = std.json.ObjectMap.empty;
@@ -265,6 +278,7 @@ pub fn astTestsValue(
     file: []const u8,
     summary: zig_analysis.SourceSummary,
 ) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var tests = std.json.Array.init(allocator);
     for (summary.tests) |test_item| {
         var item = std.json.ObjectMap.empty;
@@ -297,6 +311,7 @@ fn putParseMetadata(
     obj: *std.json.ObjectMap,
     parse: zig_analysis.ParseMetadata,
 ) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try obj.put(allocator, "parse_status", .{ .string = zig_analysis.parseStatusName(parse.status) });
     try obj.put(allocator, "partial_result", .{ .bool = parse.partial_result });
     try obj.put(allocator, "result_complete", .{ .bool = parse.result_complete });
@@ -305,6 +320,7 @@ fn putParseMetadata(
 
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = args orelse return null;
     if (value != .object) return null;
     const field = value.object.get(key) orelse return null;
@@ -327,6 +343,7 @@ fn readSourceArgError(
     args: ?std.json.Value,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.InvalidArguments, error.MissingFile => mcp_errors.missingArgument(allocator, tool_name, "file", "workspace-relative Zig source path"),
         error.PathOutsideWorkspace, error.EmptyPath => if (argString(args, "file")) |file|
@@ -349,6 +366,7 @@ fn analysisToolError(
     operation: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
@@ -367,6 +385,7 @@ fn workspaceFileError(
     err: anyerror,
     resolution: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = "read_workspace_file",
@@ -384,6 +403,7 @@ fn staticTextResult(
     tool_name: []const u8,
     body: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     return mcp_result.structured(allocator, staticTextValue(arena.allocator(), tool_name, body) catch return error.OutOfMemory);
@@ -517,6 +537,7 @@ test "static source summary value builders clean up partial allocations" {
 
 /// Exercises static summary value builders coverage with test fixture storage.
 fn exerciseStaticSummaryValueBuilders(backing_allocator: std.mem.Allocator) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(backing_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -550,6 +571,7 @@ fn exerciseStaticSummaryValueBuilders(backing_allocator: std.mem.Allocator) !voi
 
 /// Exercises ast value builder fixed buffer failures coverage with test fixture storage.
 fn exerciseAstValueBuilderFixedBufferFailures() !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var imports = [_]zig_analysis.Import{
         .{ .file = "src/main.zig", .line = 1, .import = "std", .alias = "std", .declaration = "const std = @import(\"std\");" },
     };
@@ -583,6 +605,7 @@ fn exerciseAstValueBuilderFixedBufferFailures() !void {
 
 /// Creates static summary context from the ports required by the adapter.
 fn staticSummaryContext(workspace_store: ports.WorkspaceStore, workspace_scanner: ports.WorkspaceScanner) app_context.StaticAnalysisContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{
             .root = "/repo",
