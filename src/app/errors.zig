@@ -68,6 +68,7 @@ pub fn Result(comptime T: type) type {
 
 /// Builds a borrowed invalid-argument error for request validation failures.
 pub fn invalidArgument(field: []const u8, expected: []const u8, actual: []const u8, resolution: []const u8) AppError {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .category = .argument,
         .operation = "parse_request",
@@ -82,6 +83,7 @@ pub fn invalidArgument(field: []const u8, expected: []const u8, actual: []const 
 
 /// Builds a borrowed missing-argument error for required request fields.
 pub fn missingArgument(field: []const u8, expected: []const u8) AppError {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .category = .argument,
         .operation = "parse_request",
@@ -96,6 +98,7 @@ pub fn missingArgument(field: []const u8, expected: []const u8) AppError {
 
 /// Builds a borrowed workspace-boundary rejection error.
 pub fn workspacePathRejected(path: []const u8, workspace: []const u8, code: []const u8, cause: []const u8, resolution: []const u8) AppError {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     return .{
         .category = .workspace_path,
         .operation = "resolve_workspace_path",
@@ -110,6 +113,7 @@ pub fn workspacePathRejected(path: []const u8, workspace: []const u8, code: []co
 
 /// Builds a retryable borrowed backend-unavailable error.
 pub fn backendUnavailable(backend: []const u8, cause: []const u8, resolution: []const u8) AppError {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .category = .backend,
         .operation = "check_backend",
@@ -124,6 +128,7 @@ pub fn backendUnavailable(backend: []const u8, cause: []const u8, resolution: []
 
 /// Builds a borrowed tool failure error for non-argument failures.
 pub fn toolFailure(operation: []const u8, phase: []const u8, code: []const u8, cause: []const u8, resolution: []const u8) AppError {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .category = .tool,
         .operation = operation,
