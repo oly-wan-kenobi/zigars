@@ -21,6 +21,7 @@ pub const ToolCallResult = struct {
     json: []u8,
     is_error: bool,
 
+    /// Releases the decoded JSON payload owned by this result.
     pub fn deinit(self: ToolCallResult, allocator: std.mem.Allocator) void {
         allocator.free(self.json);
     }

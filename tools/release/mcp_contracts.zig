@@ -92,10 +92,12 @@ fn checkAbsent(allocator: Allocator, io: Io, label: []const u8, path: []const u8
     return ok;
 }
 
+/// Reads a repository-relative file with a byte limit.
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

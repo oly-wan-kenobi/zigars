@@ -20,8 +20,9 @@ const stdoutWrite = cli_io.stdoutWrite;
 const unexpectedArgument = cli_io.unexpectedArgument;
 const valueAt = smoke.valueAt;
 
-// Owns transport-level HTTP assertions; tool-result contract checks live in
-// focused sibling modules so this entrypoint stays readable.
+/// Parsed options for the HTTP smoke driver.
+/// Transport-level assertions live here; tool-result contract checks are
+/// delegated to focused sibling modules so this entrypoint stays readable.
 const HttpSmokeOptions = struct {
     binary: []const u8 = "zig-out/bin/zigars",
     workspace: []const u8 = ".",

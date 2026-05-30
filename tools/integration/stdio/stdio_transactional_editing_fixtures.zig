@@ -99,9 +99,7 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     try client.expectPathString(batch, "error_kind", "unavailable");
 }
 
-// Builds the JSON argument object for zigars_patch_session_preview. The edits
-// array is embedded as a JSON string field so callers work with a typed slice
-// rather than a raw format string.
+/// Builds the JSON argument object for patch-session preview calls.
 fn argsWithEdits(allocator: std.mem.Allocator, edits: []const u8) ![]u8 {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -109,9 +107,7 @@ fn argsWithEdits(allocator: std.mem.Allocator, edits: []const u8) ![]u8 {
     return cli_io.jsonStringifyAlloc(allocator, .{ .object = obj }, .{ .whitespace = .minified });
 }
 
-// Builds the JSON argument object for zigars_patch_session_apply. The
-// expected_preimages field is captured from the preview result so the apply
-// can verify that file content has not changed since the preview was issued.
+/// Builds the JSON argument object for patch-session apply calls.
 fn patchApplyArgs(allocator: std.mem.Allocator, session_id: []const u8, edits: []const u8, expected: []const u8, apply: bool) ![]u8 {
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -122,9 +118,7 @@ fn patchApplyArgs(allocator: std.mem.Allocator, session_id: []const u8, edits: [
     return cli_io.jsonStringifyAlloc(allocator, .{ .object = obj }, .{ .whitespace = .minified });
 }
 
-// Reads a workspace-relative file and asserts it contains `needle`. Used to
-// verify on-disk state after apply and revert without loading the full file
-// into an assertion message.
+/// Reads a workspace-relative file and asserts it contains `needle`.
 fn expectFileContains(client: anytype, workspace: []const u8, rel: []const u8, needle: []const u8) !void {
     const path = try std.fmt.allocPrint(client.allocator, "{s}/{s}", .{ workspace, rel });
     defer client.allocator.free(path);

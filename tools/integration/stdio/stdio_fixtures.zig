@@ -25,8 +25,8 @@ const unexpectedArgument = cli_io.unexpectedArgument;
 const valueAt = smoke.valueAt;
 const writeFile = cli_io.writeFile;
 
-// Owns stdio protocol lifecycle fixtures and delegates larger tool families to sibling modules.
-// Fields match the CLI flags accepted by the zigars_tools dispatcher entry point.
+/// Parsed options for the stdio smoke driver.
+/// Fields match the CLI flags accepted by the `zigars_tools` dispatcher.
 const StdioOptions = struct {
     binary: []const u8 = "zig-out/bin/zigars",
     zig_path: []const u8 = "zig",
@@ -101,6 +101,8 @@ pub fn run(allocator: std.mem.Allocator, io: Io, self_arg0: []const u8, args: []
     try stdoutWrite(io, "stdio fixtures ok\n");
 }
 
+/// Builds the server argv slice, prepending kcov when server-side coverage is
+/// requested and wiring fake optional backends for deterministic fixtures.
 fn stdioServerArgv(
     allocator: std.mem.Allocator,
     options: StdioOptions,
@@ -147,8 +149,7 @@ fn stdioServerArgv(
     return argv;
 }
 
-// Returns true only when the server exited with status 0; any other
-// termination variant (signal, stop) is treated as a fixture failure.
+/// Returns true only when the server exited with status 0.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -156,9 +157,7 @@ fn termOk(term: std.process.Child.Term) bool {
     };
 }
 
-// Creates a timestamped temporary workspace under .zig-cache/ for this run.
-// The path is allocated and returned to the caller, which owns cleanup.
-// Using the real-clock nanosecond stamp ensures unique paths for parallel runs.
+/// Creates a timestamped temporary workspace and returns its allocated path.
 fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     const ns = smoke.nowNs(io);
     const path = try std.fmt.allocPrint(allocator, ".zig-cache/zigars-fixtures-{d}", .{ns});
@@ -167,13 +166,14 @@ fn makeFixtureWorkspace(allocator: std.mem.Allocator, io: Io) ![]u8 {
     return path;
 }
 
-// Best-effort workspace removal at the end of each run. Errors are reported
-// to stderr rather than silently ignored so flaky cleanup is visible in CI
-// without masking the overall fixture result.
+/// Removes the fixture workspace and reports cleanup errors without masking
+/// the primary fixture result.
 fn cleanupFixtureWorkspace(io: Io, rel: []const u8) void {
     Io.Dir.cwd().deleteTree(io, rel) catch |err| stderrPrint(io, "stdio-fixtures: failed to remove temporary workspace {s}: {s}\n", .{ rel, @errorName(err) }) catch return;
 }
 
+/// Writes the source, folded-stack, and output directories used by stdio
+/// fixture assertions.
 fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     var src_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const src_dir = try std.fmt.bufPrint(&src_path_buf, "{s}/src", .{workspace});
@@ -203,15 +203,14 @@ fn writeFixtureFiles(io: Io, workspace: []const u8) !void {
     try Io.Dir.cwd().createDirPath(io, bin_dir);
 }
 
+/// Writes a workspace-relative file by joining `workspace` and `rel`.
 fn writeJoinedFile(io: Io, workspace: []const u8, rel: []const u8, data: []const u8) !void {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ workspace, rel });
     try writeFile(io, path, data);
 }
-// Installs a fake backend shim in workspace/bin/. On POSIX a small shell
-// script delegates to the zigars_tools dispatcher by name; on Windows the
-// binary is copied directly because the OS cannot execute shell scripts.
-// The returned absolute path is owned by the caller.
+/// Installs a fake backend shim in `workspace/bin` and returns its absolute
+/// path, owned by the caller.
 fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u8, tool_path: []const u8, name: []const u8) ![]u8 {
     const suffix = if (builtin.os.tag == .windows) ".exe" else "";
     const rel = try std.fmt.allocPrint(allocator, "{s}/bin/{s}{s}", .{ workspace, name, suffix });
@@ -228,6 +227,7 @@ fn installFakeBackend(allocator: std.mem.Allocator, io: Io, workspace: []const u
     return abs;
 }
 
+/// Minimal JSON-RPC client bound to the spawned stdio server process.
 const StdioClient = struct {
     allocator: std.mem.Allocator,
     io: Io,
@@ -235,6 +235,8 @@ const StdioClient = struct {
     next_id: i64,
     tool_calls: usize,
 
+    /// Drives initialization, resource/prompt checks, and the full stdio tool
+    /// assertion suite against the child server.
     fn runFixture(self: *StdioClient, workspace: []const u8) !void {
         const init = try self.request("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"zigars-stdio-fixtures\",\"version\":\"0\"}}");
         defer self.allocator.free(init);
@@ -480,6 +482,7 @@ const StdioClient = struct {
         }
     }
 
+    /// Sends a JSON-RPC notification with optional raw JSON params.
     fn notify(self: *StdioClient, method: []const u8, params: ?[]const u8) !void {
         const payload = if (params) |p|
             try std.fmt.allocPrint(self.allocator, "{{\"jsonrpc\":\"2.0\",\"method\":\"{s}\",\"params\":{s}}}\n", .{ method, p })
@@ -509,11 +512,13 @@ const StdioClient = struct {
         return self.allocator.dupe(u8, text);
     }
 
+    /// Writes one serialized JSON-RPC frame to the child stdin pipe.
     fn write(self: *StdioClient, bytes: []const u8) !void {
         const stdin = self.child.stdin orelse return error.MissingPipe;
         try stdin.writeStreamingAll(self.io, bytes);
     }
 
+    /// Reads one newline-delimited JSON-RPC frame from child stdout.
     fn readLine(self: *StdioClient) ![]u8 {
         const stdout = self.child.stdout orelse return error.MissingPipe;
         var out: std.ArrayList(u8) = .empty;
@@ -531,6 +536,7 @@ const StdioClient = struct {
         return out.toOwnedSlice(self.allocator);
     }
 
+    /// Asserts that `tools/list` output contains a tool with `name`.
     fn expectTool(self: *StdioClient, tools_json: []const u8, name: []const u8) !void {
         const parsed = try std.json.parseFromSlice(JsonValue, self.allocator, tools_json, .{});
         defer parsed.deinit();
@@ -573,8 +579,7 @@ const StdioClient = struct {
     }
 };
 
-// Removes a persisted session file before the bench-regression-gate fixture
-// so the test always starts from a clean state regardless of prior runs.
+/// Removes the persisted bench-gate session file so the fixture starts clean.
 fn removeFixtureSession(io: Io, session_id: []const u8) !void {
     var path_buf: [256]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buf, ".zigars-cache/sessions/bench_regression_gate/{s}.jsonl", .{session_id});

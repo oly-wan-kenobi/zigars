@@ -148,17 +148,14 @@ pub fn run(client: anytype, workspace: []const u8) !void {
     try expectFileStartsWith(client.allocator, client.io, workspace, "diff.svg", "<svg");
 }
 
-// Allocates a workspace-relative path, reads the file, frees the path, and
-// returns the file bytes. The caller owns the returned slice.
+/// Reads a workspace-relative file and returns caller-owned bytes.
 fn joinedRead(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8) ![]u8 {
     const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workspace, rel });
     defer allocator.free(path);
     return readFileAlloc(allocator, io, path, 1024 * 1024);
 }
 
-// Reads a workspace-relative file and asserts it starts with `prefix`.
-// Used to verify that server-generated output files (SVG, DOT) have the
-// correct format without loading the entire file into the assertion message.
+/// Reads a workspace-relative file and asserts it starts with `prefix`.
 fn expectFileStartsWith(allocator: std.mem.Allocator, io: Io, workspace: []const u8, rel: []const u8, prefix: []const u8) !void {
     const bytes = try joinedRead(allocator, io, workspace, rel);
     defer allocator.free(bytes);

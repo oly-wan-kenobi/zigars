@@ -246,10 +246,12 @@ fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []co
     return ok;
 }
 
+/// Reads a repository-relative docs file with a byte limit.
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, max_bytes: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_bytes));
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

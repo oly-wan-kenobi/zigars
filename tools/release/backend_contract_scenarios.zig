@@ -43,6 +43,7 @@ pub fn check(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Reads a contract artifact, reporting failures as aggregateable false checks.
 fn readContractFile(allocator: Allocator, io: Io, path: []const u8) !?[]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(4 * 1024 * 1024)) catch |err| {
         try cli_io.stderrPrint(io, "backend contract scenario check could not read {s}: {s}\n", .{ path, @errorName(err) });
@@ -50,6 +51,7 @@ fn readContractFile(allocator: Allocator, io: Io, path: []const u8) !?[]u8 {
     };
 }
 
+/// Checks scenario definitions in the backend conformance script.
 fn checkScenarioDefinitions(io: Io, script: []const u8) !bool {
     var ok = try checkScenarioTokens(io, "backend contract scenario definition", contract_script_path, script);
     // Count call-site occurrences as a secondary check: matching names is not
@@ -62,6 +64,7 @@ fn checkScenarioDefinitions(io: Io, script: []const u8) !bool {
     return ok;
 }
 
+/// Checks the smoke script's required-scenario tuple.
 fn checkSmokeRequiredTuple(io: Io, script: []const u8) !bool {
     const tuple = requiredScenarioTuple(script) orelse {
         try cli_io.stderrPrint(io, "backend contract smoke script is missing required_scenarios tuple\n", .{});
@@ -76,10 +79,12 @@ fn checkSmokeRequiredTuple(io: Io, script: []const u8) !bool {
     return ok;
 }
 
+/// Checks scenario documentation coverage.
 fn checkScenarioDocs(io: Io, docs: []const u8) !bool {
     return checkScenarioTokens(io, "backend contract scenario docs", docs_path, docs);
 }
 
+/// Verifies every manifest scenario name appears in `haystack`.
 fn checkScenarioTokens(io: Io, label: []const u8, path: []const u8, haystack: []const u8) !bool {
     var ok = true;
     for (scenario_manifest.all) |scenario| {
@@ -102,6 +107,7 @@ fn requiredScenarioTuple(script: []const u8) ?[]const u8 {
     return script[start..end];
 }
 
+/// Counts non-overlapping occurrences of `needle` in `text`.
 fn countOccurrences(text: []const u8, needle: []const u8) usize {
     var count: usize = 0;
     var start: usize = 0;

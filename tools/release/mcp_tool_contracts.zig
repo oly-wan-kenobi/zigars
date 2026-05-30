@@ -48,6 +48,7 @@ fn toolErrorHas(result: anytype, tool: []const u8, code: []const u8) bool {
     return stringField(obj, "kind", "argument_error") and stringField(obj, "tool", tool) and stringField(obj, "code", code);
 }
 
+/// Checks that an object field is the expected string value.
 fn stringField(obj: std.json.ObjectMap, name: []const u8, expected: []const u8) bool {
     const value = obj.get(name) orelse return false;
     return value == .string and std.mem.eql(u8, value.string, expected);
@@ -61,11 +62,13 @@ fn hasField(comptime entry: zigars.manifest.ToolEntry, name: []const u8) bool {
     return false;
 }
 
+/// Reports one missing per-tool contract field and returns `false`.
 fn missingTool(io: Io, tool: []const u8, missing: []const u8) !bool {
     try stderrPrint(io, "MCP tool contract missing for {s}: {s}\n", .{ tool, missing });
     return false;
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

@@ -17,6 +17,7 @@ const FieldValue = union(enum) {
     integer: i64,
 };
 
+/// Named argument field used to build dynamic JSON request bodies.
 const Field = struct {
     key: []const u8,
     value: FieldValue,

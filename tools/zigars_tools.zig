@@ -159,6 +159,7 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
+/// Prints the developer CLI usage text to stderr.
 fn usage(io: Io) !void {
     try stderrPrint(io,
         \\usage: zigars-tools <command> [options]
@@ -181,8 +182,8 @@ fn usage(io: Io) !void {
     , .{});
 }
 
-// Parses each path as JSON and discards the result; exits with an error on
-// any malformed file. Used by `zig build json-check` to verify generated JSON.
+/// Parses each path as JSON and discards the result.
+/// Used by `zig build json-check` to verify generated JSON.
 fn checkJson(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (args.len == 0) return failUsage(io, "check-json", "check-json <path>...", "expected at least one JSON path", .{});
     for (args) |path| {

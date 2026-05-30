@@ -45,6 +45,7 @@ pub const KcovInput = struct {
     floors_ok: bool,
 };
 
+/// Complete input model for the release coverage summary renderer.
 const CoverageSummaryInput = struct {
     ok: bool,
     zig_version: []const u8,
@@ -91,6 +92,7 @@ pub fn renderCoverageSummary(allocator: Allocator, io: Io, input: CoverageSummar
     return rendered;
 }
 
+/// Renders the coverage subsection of the summary JSON.
 fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
     try writer.writeAll("  \"coverage\": {\n");
     try writer.print("    \"measured\": {},\n", .{input.stats != null});
@@ -157,6 +159,7 @@ fn renderCoverageObject(writer: *Io.Writer, input: KcovInput) !void {
     try writer.writeAll("\n  }");
 }
 
+/// Renders one per-file coverage object.
 fn renderCoverageFile(writer: *Io.Writer, file: CoverageFileStats) !void {
     try writer.writeAll("      {\n        \"path\": ");
     try json_util.writeString(writer, file.path);
@@ -176,12 +179,12 @@ fn renderCoverageFile(writer: *Io.Writer, file: CoverageFileStats) !void {
     try writer.writeAll("]\n      }");
 }
 
-// Writes a basis-point value as a decimal percentage string (e.g. 9875 → "98.75").
+/// Writes a basis-point value as a decimal percentage string.
 fn writePercent(writer: *Io.Writer, value: u32) !void {
     try writer.print("{d}.{d:0>2}", .{ value / percent_scale, value % percent_scale });
 }
 
-// Writes a percentage or JSON `null` when no measurement is available.
+/// Writes a percentage or JSON null when no measurement is available.
 fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
     if (value) |bp| {
         try writer.print("{d}.{d:0>2}", .{ bp / percent_scale, bp % percent_scale });
@@ -190,6 +193,7 @@ fn writeOptionalPercent(writer: *Io.Writer, value: ?u32) !void {
     }
 }
 
+/// Renders one test executable result at the requested indentation level.
 fn renderTestResult(writer: *Io.Writer, result: TestResult, indent: []const u8) !void {
     try writer.print("{s}{{\n{s}  \"name\": ", .{ indent, indent });
     try json_util.writeString(writer, result.name);
@@ -210,10 +214,12 @@ fn renderTestResult(writer: *Io.Writer, result: TestResult, indent: []const u8) 
     , .{ indent, result.min_tests, indent, result.tests_ok, indent, result.stdout_bytes, indent, result.stderr_bytes, indent });
 }
 
+/// Checks a basis-point measurement against a configured floor.
 fn meetsFloor(actual: ?u32, minimum: u32) bool {
     return if (actual) |value| value >= minimum else false;
 }
 
+/// Traverses a JSON value by dot path for renderer tests.
 fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
     var current = value;
     var parts = std.mem.splitScalar(u8, path, '.');
@@ -232,6 +238,7 @@ fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
     return current;
 }
 
+/// Reports whether `text` is a non-empty ASCII decimal index.
 fn isDigits(text: []const u8) bool {
     if (text.len == 0) return false;
     for (text) |c| if (c < '0' or c > '9') return false;

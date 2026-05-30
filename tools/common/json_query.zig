@@ -28,8 +28,8 @@ pub fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
     return current;
 }
 
-// Returns true only when every byte is an ASCII digit, so that "0", "10" etc.
-// route to array indexing while "ok", "tools" etc. route to object lookup.
+/// Returns true only when every byte is an ASCII digit, so array indices and
+/// object keys can be distinguished during dot-path traversal.
 fn isDigits(text: []const u8) bool {
     if (text.len == 0) return false;
     for (text) |c| if (c < '0' or c > '9') return false;

@@ -12,6 +12,7 @@ const Io = std.Io;
 
 const max_file_bytes = 4 * 1024 * 1024;
 
+/// Parsed CLI options for inventory strictness.
 const Options = struct {
     // When true, any root Zig file outside `final_root_allowlist` is counted
     // as a violation; default is the strict/fail-closed mode.
@@ -34,6 +35,7 @@ const final_root_allowlist = [_][]const u8{
     "src/root.zig",
 };
 
+/// Aggregated architecture-inventory counters.
 const Inventory = struct {
     root_files: usize = 0,
     retired_tools_files: usize = 0,
@@ -41,6 +43,7 @@ const Inventory = struct {
     adapter_root_import_violations: usize = 0,
     strict_root_violations: usize = 0,
 
+    /// Reports whether all violation counters are zero.
     fn ok(self: Inventory) bool {
         return self.retired_tools_import_violations == 0 and
             self.adapter_root_import_violations == 0 and
@@ -58,6 +61,7 @@ pub fn run(allocator: Allocator, io: Io, args: []const []const u8) !void {
     if (!inventory.ok()) return error.HexArchitectureInventoryFailed;
 }
 
+/// Parses the inventory command flags.
 fn parseOptions(io: Io, args: []const []const u8) !Options {
     var options: Options = .{};
     for (args) |arg| {
@@ -80,6 +84,7 @@ pub fn scan(allocator: Allocator, io: Io, options: Options) !Inventory {
     return inventory;
 }
 
+/// Walks `src/` and updates inventory counters in place.
 fn scanSrcTree(allocator: Allocator, io: Io, options: Options, inventory: *Inventory) !void {
     var dir = Io.Dir.cwd().openDir(io, "src", .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return,
@@ -112,8 +117,7 @@ fn scanSrcTree(allocator: Allocator, io: Io, options: Options, inventory: *Inven
     }
 }
 
-// `@import("tools/…")` outside `src/adapters/mcp/` or `src/tools/` is a
-// retired import pattern — the canonical path is through app/domain ports.
+/// Counts retired `tools/` imports outside the MCP adapter exception.
 fn checkRetiredToolsImport(io: Io, source_path: []const u8, bytes: []const u8, inventory: *Inventory) !void {
     if (std.mem.indexOf(u8, bytes, "@import(\"tools/") == null) return;
     if (std.mem.startsWith(u8, source_path, "src/adapters/mcp/")) return;
@@ -122,6 +126,7 @@ fn checkRetiredToolsImport(io: Io, source_path: []const u8, bytes: []const u8, i
     inventory.retired_tools_import_violations += 1;
 }
 
+/// Counts MCP adapter imports that reach retired root-level surfaces.
 fn checkAdapterRootImports(io: Io, source_path: []const u8, bytes: []const u8, inventory: *Inventory) !void {
     if (!std.mem.startsWith(u8, source_path, "src/adapters/mcp/")) return;
     if (std.mem.startsWith(u8, source_path, "src/adapters/mcp/server.zig")) return;
@@ -134,6 +139,7 @@ fn checkAdapterRootImports(io: Io, source_path: []const u8, bytes: []const u8, i
     }
 }
 
+/// Writes the one-line inventory summary to stdout.
 fn printSummary(io: Io, inventory: Inventory, options: Options) !void {
     var buffer: [1024]u8 = undefined;
     var writer = Io.File.stdout().writer(io, &buffer);
@@ -153,12 +159,14 @@ fn printSummary(io: Io, inventory: Inventory, options: Options) !void {
     try writer.interface.flush();
 }
 
+/// Reports whether a path is directly under `src/`.
 fn isRootFile(path: []const u8) bool {
     if (!std.mem.startsWith(u8, path, "src/")) return false;
     const rest = path["src/".len..];
     return std.mem.indexOfScalar(u8, rest, '/') == null;
 }
 
+/// Checks whether `path` exactly matches one entry in a static path list.
 fn containsPath(comptime paths: []const []const u8, path: []const u8) bool {
     for (paths) |candidate| {
         if (std.mem.eql(u8, candidate, path)) return true;

@@ -81,6 +81,8 @@ pub fn main(init: std.process.Init.Minimal) void {
     }
 }
 
+/// Runs the Zig build-runner server protocol used for metadata queries,
+/// per-test execution, and fuzzing coordination.
 fn mainServer(init: std.process.Init.Minimal) !void {
     @disableInstrumentation();
     stdin_reader = .initStreaming(.stdin(), runner_threaded_io, &stdin_buffer);
@@ -261,6 +263,8 @@ fn mainServer(init: std.process.Init.Minimal) !void {
     }
 }
 
+/// Runs tests directly in terminal mode and prints the classic Zig test
+/// summary consumed by coverage tooling.
 fn mainTerminal(init: std.process.Init.Minimal) void {
     @disableInstrumentation();
     if (builtin.fuzz) @panic("fuzz test requires server");
@@ -494,6 +498,8 @@ var fuzz_runner: if (builtin.fuzz) struct {
         fuzz_runner.io.futexWake(u32, ptr, waiters);
     }
 
+    /// Converts fuzz input polling errors into cancellation or fatal runner
+    /// diagnostics.
     fn inputPoller() Io.Cancelable!void {
         @disableInstrumentation();
         switch (inputPollerInner()) {
@@ -506,6 +512,8 @@ var fuzz_runner: if (builtin.fuzz) struct {
         }
     }
 
+    /// Reads fuzz input messages from the build server and forwards them to
+    /// the fuzz ABI until cancellation is requested.
     fn inputPollerInner() (Io.Cancelable || Io.Reader.Error) {
         @disableInstrumentation();
         const server = fuzz_runner.server;
@@ -560,9 +568,12 @@ pub fn fuzz(
     // it can call for checking exactly one input. Inside this function we do
     // our standard unit test checks such as memory leaks, and interaction with
     // error logs.
+    // Local container used to hold caller-provided fuzz context for the C-callable shim.
     const global = struct {
         var ctx: @TypeOf(context) = undefined;
 
+        /// Adapts one fuzz input execution to the boolean callback expected by
+        /// the fuzz ABI.
         fn test_one() callconv(.c) bool {
             @disableInstrumentation();
             testing.allocator_instance = .{};

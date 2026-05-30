@@ -18,20 +18,24 @@ const renderCoverageSummary = coverage_summary.renderCoverageSummary;
 
 const percent_scale: u32 = 100;
 
+/// Writes user-facing command output to stdout.
 fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
 
+/// Replaces or creates `path` with `bytes` relative to the current directory.
 fn writeFile(io: Io, path: []const u8, bytes: []const u8) !void {
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes });
 }
 
+/// Returns the real-time clock in nanoseconds for summary metadata.
 fn nowNs(io: Io) i96 {
     return Io.Clock.now(.real, io).nanoseconds;
 }
 
-// All coverage thresholds default to the centrally maintained floors in
-// coverage_config.zig; flags let the CI job override them for local runs.
+/// Parsed command-line options for the coverage evidence generator.
+/// Thresholds default to the centrally maintained floors in
+/// `coverage_config.zig`; flags let CI override them for local runs.
 const CoverageOptions = struct {
     out_dir: []const u8 = "coverage",
     zig: []const u8 = "zig",
@@ -46,13 +50,14 @@ const CoverageOptions = struct {
     min_tools_line_coverage: u32 = coverage_config.min_tools_line_coverage_basis_points,
 };
 
-// A named kcov invocation. `name` is used to name the per-binary output
-// directory under `<out_dir>/kcov/`; `argv` is the test binary path plus any
-// extra arguments. All strings are heap-owned; call `deinit` to release them.
+/// A named kcov invocation with heap-owned command arguments.
+/// `name` selects the per-binary output directory under `<out_dir>/kcov/`;
+/// call `deinit` to release the duplicated strings.
 const KcovCommand = struct {
     name: []const u8,
     argv: []const []const u8,
 
+    /// Duplicates the command name and argument vector for deferred execution.
     fn init(allocator: Allocator, name: []const u8, argv: []const []const u8) !KcovCommand {
         var owned_argv = try allocator.alloc([]const u8, argv.len);
         errdefer allocator.free(owned_argv);
@@ -70,6 +75,7 @@ const KcovCommand = struct {
         };
     }
 
+    /// Frees the duplicated command name and argument vector.
     fn deinit(self: KcovCommand, allocator: Allocator) void {
         allocator.free(self.name);
         for (self.argv) |arg| allocator.free(arg);
@@ -215,6 +221,8 @@ pub fn run(allocator: Allocator, io: Io, self_path: []const u8, args: []const []
     if (!ok) return error.CoverageFailed;
 }
 
+/// Executes one installed test binary and converts its process result into
+/// the stable summary schema.
 fn runTestBinary(allocator: Allocator, io: Io, path: []const u8, binary: coverage_config.TestBinary) !TestResult {
     const result = try std.process.run(allocator, io, .{ .argv = &.{path} });
     defer allocator.free(result.stdout);
@@ -235,14 +243,14 @@ fn runTestBinary(allocator: Allocator, io: Io, path: []const u8, binary: coverag
     };
 }
 
+/// Releases heap-owned fields inside a `TestResult`.
 fn freeTestResult(allocator: Allocator, result: TestResult) void {
     allocator.free(result.name);
     allocator.free(result.path);
 }
 
-// Scans combined stdout+stderr for the Zig test runner's summary line
-// "All <N> tests passed." and extracts the count. Returns null when the
-// binary did not print that line (e.g. zero tests, or a runner failure).
+/// Scans combined stdout and stderr for the Zig test runner summary line and
+/// extracts the test count, returning null when no recognized summary exists.
 fn parseTestCount(text: []const u8) ?i64 {
     const prefix = "All ";
     var start: usize = 0;
@@ -258,6 +266,7 @@ fn parseTestCount(text: []const u8) ?i64 {
     return null;
 }
 
+/// Reports whether a child process exited successfully.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -265,6 +274,7 @@ fn termOk(term: std.process.Child.Term) bool {
     };
 }
 
+/// Converts process termination into the integer code stored in summaries.
 fn termExitCode(term: std.process.Child.Term) i64 {
     return switch (term) {
         .exited => |code| @intCast(code),
@@ -274,9 +284,8 @@ fn termExitCode(term: std.process.Child.Term) i64 {
     };
 }
 
-// Probes PATH for `name` by running `name --version`. Returns a heap-owned
-// copy of `name` when found and exit-0, or null when not found. The caller
-// must free the returned slice when non-null.
+/// Probes PATH for `name` and returns a heap-owned executable label when the
+/// backend is available; null means the executable could not be used.
 fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
     const result = std.process.run(allocator, io, .{ .argv = &.{ name, "--version" } }) catch |err| switch (err) {
         error.FileNotFound => return null,
@@ -288,6 +297,8 @@ fn findExecutable(allocator: Allocator, io: Io, name: []const u8) !?[]u8 {
     return try allocator.dupe(u8, name);
 }
 
+/// Runs all configured kcov jobs, optionally captures server-side smoke
+/// coverage, merges reports, and returns parsed coverage statistics.
 fn runKcov(
     allocator: Allocator,
     io: Io,
@@ -360,6 +371,8 @@ fn runKcov(
     return stats;
 }
 
+/// Runs HTTP and stdio smoke suites under kcov so server paths are included in
+/// the merged coverage report.
 fn runIntegrationKcov(
     allocator: Allocator,
     io: Io,
@@ -413,6 +426,7 @@ fn runIntegrationKcov(
     try result_dirs.append(allocator, stdio_dir);
 }
 
+/// Finds and reads the Cobertura XML report produced by kcov.
 fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 {
     const direct = try std.fmt.allocPrint(allocator, "{s}/cobertura.xml", .{report_dir});
     defer allocator.free(direct);
@@ -436,6 +450,8 @@ fn readCoberturaXml(allocator: Allocator, io: Io, report_dir: []const u8) ![]u8 
     return error.FileNotFound;
 }
 
+/// Captures the first failing command's compact diagnostic for the JSON
+/// summary without overwriting an earlier failure.
 fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase: []const u8, stdout: []const u8, stderr: []const u8) !void {
     if (error_message.* != null) return;
     const stderr_text = std.mem.trim(u8, stderr, " \t\r\n");
@@ -449,10 +465,8 @@ fn recordCommandFailure(allocator: Allocator, error_message: *?[]const u8, phase
     error_message.* = try std.fmt.allocPrint(allocator, "{s} exited unsuccessfully: {s}", .{ phase, detail[0..limit] });
 }
 
-// All five checks must pass: total, src, and tools line floors, zero
-// uncovered lines, and zero missing tracked files. When no kcov data is
-// available, the result depends on `require_kcov` — a missing kcov is only
-// a failure when the caller required it explicitly.
+/// Applies the coverage gates: total, src, tools floors, zero uncovered lines,
+/// and zero missing tracked files.
 fn coverageMeetsFloors(stats: ?CoverageStats, options: CoverageOptions) bool {
     const measured = stats orelse return !options.require_kcov;
     return meetsFloor(measured.lineRateBasisPoints(), options.min_line_coverage) and
@@ -462,10 +476,13 @@ fn coverageMeetsFloors(stats: ?CoverageStats, options: CoverageOptions) bool {
         measured.missingFileCount() == 0;
 }
 
+/// Checks a basis-point measurement against a configured floor.
 fn meetsFloor(actual: ?u32, minimum: u32) bool {
     return if (actual) |value| value >= minimum else false;
 }
 
+/// Builds the detailed failure string used when measured coverage misses a
+/// floor or completeness gate.
 fn coverageFailureMessage(allocator: Allocator, stats: ?CoverageStats, options: CoverageOptions) ![]u8 {
     const measured = stats orelse return coverageFloorMessage(allocator, options);
     return std.fmt.allocPrint(
@@ -484,6 +501,7 @@ fn coverageFailureMessage(allocator: Allocator, stats: ?CoverageStats, options: 
     );
 }
 
+/// Builds the generic floor failure message used when no measured data exists.
 fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
     return std.fmt.allocPrint(
         allocator,
@@ -499,6 +517,7 @@ fn coverageFloorMessage(allocator: Allocator, options: CoverageOptions) ![]u8 {
     );
 }
 
+/// Returns whether `path` is an openable directory.
 fn dirExists(io: Io, path: []const u8) bool {
     var dir = Io.Dir.cwd().openDir(io, path, .{}) catch return false;
     dir.close(io);

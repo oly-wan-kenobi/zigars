@@ -36,6 +36,7 @@ pub fn checkPublicClaimDocs(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies that required claim-governance text appears in one docs file.
 fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
     const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "public-claim docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
@@ -71,6 +72,7 @@ const overclaim_tokens = [_]OverclaimToken{
     .{ .path = "docs/backends.md", .token = "fully supports", .replacement = "cite the generated compatibility matrix" },
 };
 
+/// Checks all public docs overstatement tokens against their target files.
 fn checkOverclaimTokens(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (overclaim_tokens) |rule| {
@@ -88,10 +90,12 @@ fn checkOverclaimTokens(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Reads a repository-relative file with a byte limit.
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, max_bytes: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_bytes));
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

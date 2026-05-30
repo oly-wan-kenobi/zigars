@@ -14,6 +14,7 @@ const Io = std.Io;
 
 const import_prefix = "@import(\"";
 
+/// Stable identifiers for every architecture rule enforced by diagnostics.
 const RuleId = enum {
     domain_import_wall,
     domain_no_effects,
@@ -40,6 +41,7 @@ const RuleId = enum {
     import_cycle,
 };
 
+/// Coarse architectural layer assigned from a `src/` path.
 const Layer = enum {
     other,
     domain,
@@ -53,6 +55,7 @@ const Layer = enum {
     testing,
 };
 
+/// Explicit temporary exception shape for an architecture rule.
 const AllowlistEntry = struct {
     rule_id: RuleId,
     source_path: []const u8,
@@ -63,11 +66,13 @@ const AllowlistEntry = struct {
     verification_command: []const u8,
 };
 
+/// Text token that signals direct effect usage in a guarded layer.
 const EffectToken = struct {
     token: []const u8,
     reason: []const u8,
 };
 
+/// Mutable per-file scan state shared across line-level rule checks.
 const FileScan = struct {
     source_path: []const u8,
     layer: Layer,
@@ -201,6 +206,7 @@ const ModuleMap = struct {
         external,
     };
 
+    /// One named module binding discovered from build wiring.
     const Entry = struct {
         name: []const u8,
         resolution: Resolution,
@@ -209,14 +215,17 @@ const ModuleMap = struct {
     arena: std.heap.ArenaAllocator,
     entries: []Entry,
 
+    /// Creates an empty map when `build.zig` cannot be read or parsed.
     fn empty(allocator: Allocator) ModuleMap {
         return .{ .arena = std.heap.ArenaAllocator.init(allocator), .entries = &.{} };
     }
 
+    /// Releases all map storage.
     fn deinit(self: *ModuleMap) void {
         self.arena.deinit();
     }
 
+    /// Looks up a named module import target.
     fn lookup(self: *const ModuleMap, name: []const u8) ?Resolution {
         for (self.entries) |entry| {
             if (std.mem.eql(u8, entry.name, name)) return entry.resolution;
@@ -284,6 +293,7 @@ const ModuleMap = struct {
         return .{ .arena = arena, .entries = try entries.toOwnedSlice(a) };
     }
 
+    /// Reads and parses `build.zig`, falling back to an empty map on failure.
     fn fromBuildFile(allocator: Allocator, io: Io) ModuleMap {
         const bytes = cli_io.readFileAlloc(allocator, io, "build.zig", 8 * 1024 * 1024) catch return ModuleMap.empty(allocator);
         defer allocator.free(bytes);
@@ -291,6 +301,7 @@ const ModuleMap = struct {
     }
 };
 
+/// Duplicates a module resolution into the arena allocator.
 fn dupeResolution(a: Allocator, res: ModuleMap.Resolution) !ModuleMap.Resolution {
     return switch (res) {
         .src_path => |p| .{ .src_path = try a.dupe(u8, p) },
@@ -298,6 +309,7 @@ fn dupeResolution(a: Allocator, res: ModuleMap.Resolution) !ModuleMap.Resolution
     };
 }
 
+/// Appends a module binding after normalizing its raw build path.
 fn appendResolved(a: Allocator, list: *std.ArrayList(ModuleMap.Entry), name: []const u8, raw_path: []const u8) !void {
     const normalized = try normalizePath(a, raw_path);
     const resolution: ModuleMap.Resolution = if (std.mem.startsWith(u8, normalized, "src/"))
@@ -307,6 +319,7 @@ fn appendResolved(a: Allocator, list: *std.ArrayList(ModuleMap.Entry), name: []c
     try list.append(a, .{ .name = try a.dupe(u8, name), .resolution = resolution });
 }
 
+/// Looks up a module binding in a temporary parsed-entry slice.
 fn lookupEntry(entries: []const ModuleMap.Entry, name: []const u8) ?ModuleMap.Resolution {
     for (entries) |entry| {
         if (std.mem.eql(u8, entry.name, name)) return entry.resolution;
@@ -325,15 +338,18 @@ fn constBindingName(line: []const u8) ?[]const u8 {
     return name;
 }
 
+/// Reports whether a build line opens the project root module helper.
 fn lineDefinesZigarsModule(line: []const u8) bool {
     return std.mem.indexOf(u8, line, "addZigarsModule(") != null;
 }
 
+/// Reports whether a line opens a module construction call.
 fn lineOpensCreateOrAddModule(line: []const u8) bool {
     return std.mem.indexOf(u8, line, "b.createModule(") != null or
         std.mem.indexOf(u8, line, "b.addModule(") != null;
 }
 
+/// Reports whether trailing call text opens an inline module construction.
 fn lineOpensCreateOrAddModuleAfter(rest: []const u8) bool {
     return std.mem.indexOf(u8, rest, "b.createModule(") != null or
         std.mem.indexOf(u8, rest, "b.addModule(") != null;
@@ -419,14 +435,17 @@ const ImportGraph = struct {
     nodes: std.ArrayListUnmanaged([]const u8) = .empty,
     edges: std.ArrayListUnmanaged(std.ArrayListUnmanaged(usize)) = .empty,
 
+    /// Initializes an empty import graph.
     fn init(allocator: Allocator) ImportGraph {
         return .{ .allocator = allocator, .arena = std.heap.ArenaAllocator.init(allocator) };
     }
 
+    /// Releases graph nodes, edges, and lookup storage.
     fn deinit(self: *ImportGraph) void {
         self.arena.deinit();
     }
 
+    /// Returns the stable graph index for `path`, creating a node if needed.
     fn nodeIndex(self: *ImportGraph, path: []const u8) !usize {
         if (self.index_of.get(path)) |idx| return idx;
         const a = self.arena.allocator();
@@ -438,6 +457,7 @@ const ImportGraph = struct {
         return idx;
     }
 
+    /// Adds a directed import edge, ignoring self-edges and duplicates.
     fn addEdge(self: *ImportGraph, from: []const u8, to: []const u8) !void {
         if (std.mem.eql(u8, from, to)) return;
         const a = self.arena.allocator();
@@ -449,6 +469,7 @@ const ImportGraph = struct {
         try self.edges.items[from_idx].append(a, to_idx);
     }
 
+    /// DFS visitation state used by cycle detection.
     const DfsState = enum { unvisited, on_stack, done };
 
     /// DFS for a back edge; on the first cycle found, report the path and stop
@@ -468,6 +489,7 @@ const ImportGraph = struct {
         return true;
     }
 
+    /// Visits one graph node and reports the first back edge encountered.
     fn dfs(
         self: *ImportGraph,
         io: Io,
@@ -492,6 +514,7 @@ const ImportGraph = struct {
         return false;
     }
 
+    /// Emits a human-readable cycle path to stderr.
     fn reportCycle(self: *ImportGraph, io: Io, stack: []const usize, loop_start: usize) !void {
         var begin: usize = 0;
         for (stack, 0..) |idx, i| {
@@ -530,6 +553,7 @@ pub fn check(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies that any rule allowlist entry is fully owned and reviewable.
 fn checkAllowlistMetadata(io: Io) !bool {
     var ok = true;
     if (allowlist.len != 0) {
@@ -555,6 +579,7 @@ fn checkAllowlistMetadata(io: Io) !bool {
     return ok;
 }
 
+/// Walks `src/`, scans every Zig file, and then runs whole-graph cycle checks.
 fn scanSrcTree(allocator: Allocator, io: Io, module_map: *const ModuleMap) !bool {
     var dir = Io.Dir.cwd().openDir(io, "src", .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return true,
@@ -580,6 +605,7 @@ fn scanSrcTree(allocator: Allocator, io: Io, module_map: *const ModuleMap) !bool
     return ok;
 }
 
+/// Reads one source file and delegates to the in-memory scanner.
 fn checkFile(allocator: Allocator, io: Io, source_path: []const u8, module_map: *const ModuleMap, graph: *ImportGraph) !bool {
     const bytes = cli_io.readFileAlloc(allocator, io, source_path, 8 * 1024 * 1024) catch |err| {
         try cli_io.stderrPrint(io, "architecture guard could not read {s}: {s}\n", .{ source_path, @errorName(err) });
@@ -686,16 +712,20 @@ fn checkUnclassifiedLayer(io: Io, source_path: []const u8) !bool {
     return reportViolation(io, .unclassified_src_layer, source_path, 0, source_path, "src/ files must live under a known layer (domain, app, adapters, infra, bootstrap, manifest, testing); add the directory to a layer classifier before placing code here.");
 }
 
+/// Enforces the allowlist of Zig files that may live directly under `src/`.
 fn checkRootFilePath(io: Io, source_path: []const u8) !bool {
     if (!isRootZigFile(source_path) or rootFileAllowed(source_path)) return true;
     return reportViolation(io, .root_file_allowlist, source_path, 0, "root Zig file", "src root may contain only src/main.zig and src/root.zig.");
 }
 
+/// Fails files that live in retired source locations.
 fn checkRetiredSourcePath(io: Io, source_path: []const u8) !bool {
     if (!isRetiredSourcePath(source_path)) return true;
     return reportViolation(io, .retired_source_path, source_path, 0, "retired source path", "This retired source path must not gain production code; use the owning app/domain/adapter/infra package instead.");
 }
 
+/// Scans one comment-stripped line for imports, updates composition state, and
+/// applies import-wall checks.
 fn checkImportsInLine(allocator: Allocator, io: Io, scan: *FileScan, line: []const u8, line_no: usize, module_map: *const ModuleMap, graph: *ImportGraph, record_in_graph: bool) !bool {
     if (isMultilineStringLiteralLine(line)) return true;
     var ok = true;
@@ -728,8 +758,10 @@ const ImportScanner = struct {
     in_string: bool = false,
     escaped: bool = false,
 
+    /// One discovered import target plus the text after the string literal.
     const Found = struct { target: []const u8, suffix: []const u8 };
 
+    /// Returns the next import expression that appears in code context.
     fn next(self: *ImportScanner) ?Found {
         const line = self.line;
         const token = "@import(";
@@ -774,6 +806,7 @@ const ImportScanner = struct {
     }
 };
 
+/// Applies the layer-specific import wall to one normalized import target.
 fn checkImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, normalized: []const u8) !bool {
     var ok = true;
 
@@ -829,6 +862,7 @@ fn checkImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, n
     return ok;
 }
 
+/// Restricts `@import("zigars").member` access to approved root aliases.
 fn checkZigarsRootMemberImport(io: Io, scan: FileScan, line_no: usize, raw_import: []const u8, suffix: []const u8) !bool {
     if (!std.mem.eql(u8, raw_import, "zigars")) return true;
     const member = zigarsRootMemberName(suffix) orelse return true;
@@ -836,6 +870,7 @@ fn checkZigarsRootMemberImport(io: Io, scan: FileScan, line_no: usize, raw_impor
     return reportViolation(io, .root_public_alias, scan.source_path, line_no, member, "Only package-owner roots may be imported through zigars.<name>.");
 }
 
+/// Restricts public aliases exposed by `src/root.zig`.
 fn checkRootPublicAliasInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
     if (!std.mem.eql(u8, scan.source_path, "src/root.zig")) return true;
     const trimmed = std.mem.trim(u8, line, " \t");
@@ -847,6 +882,7 @@ fn checkRootPublicAliasInLine(io: Io, scan: FileScan, line: []const u8, line_no:
     return reportViolation(io, .root_public_alias, scan.source_path, line_no, name, "src/root.zig may expose only package-owner roots.");
 }
 
+/// Flags retired compatibility terminology in production-layer code.
 fn checkTransitionalSurfaceInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
     if (scan.is_test_file or !isTargetLayer(scan.layer)) return true;
     // Multiline-string content (`\\…`) is prose/data, never a retired code
@@ -899,6 +935,7 @@ fn containsTokenInCode(line: []const u8, token: []const u8) bool {
     return false;
 }
 
+/// Prevents lower layers from constructing public MCP tool-result values.
 fn checkMcpResultBoundaryInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
     if (isMultilineStringLiteralLine(line)) return true;
     if (std.mem.indexOf(u8, line, "mcp.tools.ToolResult") == null) return true;
@@ -912,6 +949,7 @@ fn checkMcpResultBoundaryInLine(io: Io, scan: FileScan, line: []const u8, line_n
     };
 }
 
+/// Applies direct-effect token walls to layers that must go through ports.
 fn checkEffectTokensInLine(io: Io, scan: FileScan, line: []const u8, line_no: usize) !bool {
     if (scan.is_test_file) return true;
     if (isMultilineStringLiteralLine(line)) return true;
@@ -937,6 +975,7 @@ fn checkEffectTokensInLine(io: Io, scan: FileScan, line: []const u8, line_no: us
     return ok;
 }
 
+/// Reports a forbidden import unless an exact allowlist entry exists.
 fn reportImportViolation(io: Io, rule_id: RuleId, source_path: []const u8, line_no: usize, raw_import: []const u8, normalized: []const u8, reason: []const u8) !bool {
     if (isAllowlisted(rule_id, source_path, normalized)) return true;
     try cli_io.stderrPrint(
@@ -947,6 +986,7 @@ fn reportImportViolation(io: Io, rule_id: RuleId, source_path: []const u8, line_
     return false;
 }
 
+/// Reports a non-import rule violation unless an exact allowlist entry exists.
 fn reportViolation(io: Io, rule_id: RuleId, source_path: []const u8, line_no: usize, pattern: []const u8, reason: []const u8) !bool {
     if (isAllowlisted(rule_id, source_path, pattern)) return true;
     if (line_no == 0) {
@@ -965,6 +1005,7 @@ fn reportViolation(io: Io, rule_id: RuleId, source_path: []const u8, line_no: us
     return false;
 }
 
+/// Reports malformed allowlist metadata.
 fn reportAllowlistViolation(io: Io, index: usize, reason: []const u8) !void {
     try cli_io.stderrPrint(
         io,
@@ -973,6 +1014,7 @@ fn reportAllowlistViolation(io: Io, index: usize, reason: []const u8) !void {
     );
 }
 
+/// Checks for an exact rule/path/pattern allowlist match.
 fn isAllowlisted(rule_id: RuleId, source_path: []const u8, pattern: []const u8) bool {
     for (allowlist) |entry| {
         if (entry.rule_id != rule_id) continue;
@@ -983,6 +1025,7 @@ fn isAllowlisted(rule_id: RuleId, source_path: []const u8, pattern: []const u8) 
     return false;
 }
 
+/// Normalizes an import target to a source path or external module name.
 fn normalizeImport(allocator: Allocator, source_path: []const u8, raw_import: []const u8, suffix: []const u8, module_map: *const ModuleMap) ![]u8 {
     if (std.mem.eql(u8, raw_import, "zigars")) {
         return allocator.dupe(u8, zigarsMemberPath(suffix) orelse "src/root.zig");
@@ -1006,6 +1049,7 @@ fn normalizeImport(allocator: Allocator, source_path: []const u8, raw_import: []
     return normalizePath(allocator, joined);
 }
 
+/// Collapses `.` and `..` path segments using `/` separators.
 fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     var parts: std.ArrayList([]const u8) = .empty;
     defer parts.deinit(allocator);
@@ -1022,6 +1066,7 @@ fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     return std.mem.join(allocator, "/", parts.items);
 }
 
+/// Resolves an approved `zigars.<member>` alias to its source file.
 fn zigarsMemberPath(suffix: []const u8) ?[]const u8 {
     const member = zigarsRootMemberName(suffix) orelse return null;
     if (std.mem.eql(u8, member, "adapters")) return "src/adapters/root.zig";
@@ -1033,6 +1078,7 @@ fn zigarsMemberPath(suffix: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Extracts the first member identifier from text following `@import("zigars")`.
 fn zigarsRootMemberName(suffix: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, suffix, ".")) return null;
     var end: usize = 1;
@@ -1044,15 +1090,18 @@ fn zigarsRootMemberName(suffix: []const u8) ?[]const u8 {
     return suffix[1..end];
 }
 
+/// Reports whether `src/root.zig` may expose `name`.
 fn rootPublicAliasAllowed(name: []const u8) bool {
     return containsPath(&allowed_root_public_aliases, name);
 }
 
+/// Tracks whether a production file imports both adapters and infra.
 fn updateCompositionScan(scan: *FileScan, normalized: []const u8) void {
     if (std.mem.startsWith(u8, normalized, "src/adapters/")) scan.imports_adapter = true;
     if (std.mem.startsWith(u8, normalized, "src/infra/")) scan.imports_infra = true;
 }
 
+/// Classifies a repository path into an architecture layer.
 fn layerForPath(path: []const u8) Layer {
     if (std.mem.startsWith(u8, path, "src/domain/")) return .domain;
     if (std.mem.startsWith(u8, path, "src/app/")) return .app;
@@ -1066,6 +1115,7 @@ fn layerForPath(path: []const u8) Layer {
     return .other;
 }
 
+/// Reports whether a layer is production code guarded by target-layer rules.
 fn isTargetLayer(layer: Layer) bool {
     return switch (layer) {
         .domain, .app, .adapter_mcp, .adapter_other, .infra, .bootstrap, .manifest, .testing_fakes => true,
@@ -1075,6 +1125,7 @@ fn isTargetLayer(layer: Layer) bool {
     };
 }
 
+/// Reports whether a path is test scaffolding for architecture-wall purposes.
 fn isTestFile(path: []const u8) bool {
     // `src/testing/**` (outside the effect-checked `fakes/` port doubles) is
     // test scaffolding: treat the whole subtree as test context so it is exempt
@@ -1084,16 +1135,19 @@ fn isTestFile(path: []const u8) bool {
     return std.mem.endsWith(u8, path, "_tests.zig") or std.mem.endsWith(u8, path, "_test.zig");
 }
 
+/// Reports whether a path is a Zig file directly under `src/`.
 fn isRootZigFile(path: []const u8) bool {
     if (!std.mem.startsWith(u8, path, "src/")) return false;
     const rest = path["src/".len..];
     return std.mem.endsWith(u8, rest, ".zig") and std.mem.indexOfScalar(u8, rest, '/') == null;
 }
 
+/// Checks the direct-`src/` file allowlist.
 fn rootFileAllowed(path: []const u8) bool {
     return containsPath(&allowed_root_zig_files, path);
 }
 
+/// Reports whether a path belongs to a retired source surface.
 fn isRetiredSourcePath(path: []const u8) bool {
     for (retired_source_paths) |retired_path| {
         if (std.mem.eql(u8, path, retired_path)) return true;
@@ -1137,6 +1191,7 @@ fn withoutLineComment(line: []const u8) []const u8 {
     return line;
 }
 
+/// Reports whether a line opens a top-level Zig `test` block.
 fn testBlockStarts(line: []const u8) bool {
     const trimmed = std.mem.trim(u8, line, " \t");
     return std.mem.startsWith(u8, trimmed, "test ") or std.mem.startsWith(u8, trimmed, "test{") or std.mem.startsWith(u8, trimmed, "test {");
@@ -1265,6 +1320,7 @@ fn identifierIsTestSupport(name: []const u8) bool {
     return false;
 }
 
+/// Reports whether a trimmed line declares a module-scope import binding.
 fn isModuleScopeImportDecl(trimmed: []const u8) bool {
     const is_const = std.mem.startsWith(u8, trimmed, "const ") or std.mem.startsWith(u8, trimmed, "pub const ");
     if (!is_const) return false;
@@ -1283,11 +1339,13 @@ fn isTrailingTestSupportImport(line: []const u8, line_no: usize, leading_end: us
     return isModuleScopeImportDecl(std.mem.trim(u8, line, " \t"));
 }
 
+/// Reports whether a line is content from a Zig multiline string literal.
 fn isMultilineStringLiteralLine(line: []const u8) bool {
     const trimmed = std.mem.trim(u8, line, " \t");
     return std.mem.startsWith(u8, trimmed, "\\\\");
 }
 
+/// Computes brace-depth delta for code outside strings and char literals.
 fn braceDelta(line: []const u8) isize {
     // Multiline-string content (`\\…`) is not code; its braces never nest.
     if (isMultilineStringLiteralLine(line)) return 0;
@@ -1327,51 +1385,63 @@ fn braceDelta(line: []const u8) isize {
     return delta;
 }
 
+/// Reports whether an import resolves to Zig's standard library.
 fn isStdImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "std");
 }
 
+/// Reports whether an import resolves under `src/domain/`.
 fn isDomainImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/domain/");
 }
 
+/// Reports whether an import resolves under `src/app/`.
 fn isAppImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/app/");
 }
 
+/// Reports whether an import resolves under `src/testing/fakes/`.
 fn isTestingFakesImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/testing/fakes/");
 }
 
+/// Reports whether an import resolves under `src/testing/`.
 fn isTestingImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/testing/");
 }
 
+/// Reports whether a source path belongs to test scaffolding.
 fn isTestingPath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/testing/");
 }
 
+/// Reports whether an app import is exactly the port contract file.
 fn isAppPortsImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/app/ports.zig");
 }
 
+/// Reports whether an import is the external MCP package.
 fn isMcpImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "mcp");
 }
 
+/// Reports whether an import reaches runtime composition state.
 fn isRuntimeImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/runtime.zig") or
         std.mem.eql(u8, path, "src/bootstrap/runtime_state.zig");
 }
 
+/// Reports whether an import targets retired shared helper modules.
 fn isRetiredCommonImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/tools/common.zig") or std.mem.eql(u8, path, "src/tools/shared_core.zig");
 }
 
+/// Reports whether an import targets retired public handler modules.
 fn isRetiredHandlerImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/tools/");
 }
 
+/// Reports whether an import targets a retired public handler implementation.
 fn isPublicHandlerImport(path: []const u8) bool {
     if (!std.mem.startsWith(u8, path, "src/tools/")) return false;
     if (isRetiredCommonImport(path)) return false;
@@ -1379,6 +1449,7 @@ fn isPublicHandlerImport(path: []const u8) bool {
     return true;
 }
 
+/// Reports whether an import targets retired manifest or dispatch surfaces.
 fn isRetiredManifestOrDispatchImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/tool_manifest.zig") or
         std.mem.startsWith(u8, path, "src/tool_manifest/") or
@@ -1389,6 +1460,7 @@ fn isRetiredManifestOrDispatchImport(path: []const u8) bool {
         std.mem.startsWith(u8, path, "src/mcp_server");
 }
 
+/// Reports whether an import targets a concrete effect implementation.
 fn isConcreteEffectImport(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/command.zig") or
         std.mem.eql(u8, path, "src/workspace.zig") or
@@ -1398,12 +1470,14 @@ fn isConcreteEffectImport(path: []const u8) bool {
         std.mem.startsWith(u8, path, "src/infra/zls/");
 }
 
+/// Reports whether an import targets public MCP result rendering helpers.
 fn isPublicMcpResultRenderer(path: []const u8) bool {
     return std.mem.eql(u8, path, "src/json_result.zig") or
         std.mem.eql(u8, path, "src/tool_errors.zig") or
         std.mem.eql(u8, path, "src/resource_errors.zig");
 }
 
+/// Reports imports forbidden from the MCP adapter layer.
 fn mcpAdapterForbiddenImport(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/infra/") or
         std.mem.startsWith(u8, path, "src/bootstrap/") or
@@ -1412,6 +1486,7 @@ fn mcpAdapterForbiddenImport(path: []const u8) bool {
         isRuntimeImport(path);
 }
 
+/// Reports MCP-facing imports forbidden from infra.
 fn infraMcpForbiddenImport(path: []const u8) bool {
     return isMcpImport(path) or
         std.mem.startsWith(u8, path, "src/adapters/") or
@@ -1420,6 +1495,7 @@ fn infraMcpForbiddenImport(path: []const u8) bool {
         isPublicMcpResultRenderer(path);
 }
 
+/// Reports whether a path belongs to the MCP adapter package.
 fn isMcpAdapterPath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/adapters/mcp/");
 }
@@ -1447,6 +1523,7 @@ fn adapterOtherForbiddenImport(path: []const u8) bool {
         isPublicMcpResultRenderer(path);
 }
 
+/// Reports imports forbidden from manifest metadata modules.
 fn manifestForbiddenImport(path: []const u8) bool {
     return isMcpImport(path) or
         isRuntimeImport(path) or
@@ -1459,12 +1536,14 @@ fn manifestForbiddenImport(path: []const u8) bool {
         isPublicMcpResultRenderer(path);
 }
 
+/// Reports whether a file may compose adapters with infra implementations.
 fn compositionAllowedPath(path: []const u8) bool {
     return std.mem.startsWith(u8, path, "src/bootstrap/") or
         std.mem.eql(u8, path, "src/main.zig") or
         std.mem.eql(u8, path, "src/root.zig");
 }
 
+/// Checks whether `path` exactly matches one entry in a static path list.
 fn containsPath(comptime paths: []const []const u8, path: []const u8) bool {
     for (paths) |candidate| {
         if (std.mem.eql(u8, candidate, path)) return true;
@@ -1472,6 +1551,7 @@ fn containsPath(comptime paths: []const []const u8, path: []const u8) bool {
     return false;
 }
 
+/// Converts a rule id to the kebab-case diagnostic name.
 fn ruleName(rule_id: RuleId) []const u8 {
     return switch (rule_id) {
         .domain_import_wall => "domain-import-wall",

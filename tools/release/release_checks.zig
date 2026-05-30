@@ -98,6 +98,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     if (!ok) return error.ArtifactHygieneFailed;
 }
 
+/// Reports whether git tracks `path`.
 fn isGitTracked(io: Io, path: []const u8) !bool {
     var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "ls-files", "--error-unmatch", path },
@@ -111,6 +112,7 @@ fn isGitTracked(io: Io, path: []const u8) !bool {
     };
 }
 
+/// Reports whether git ignore rules cover `path`.
 fn isGitIgnored(io: Io, path: []const u8) !bool {
     var child = try std.process.spawn(io, .{
         .argv = &.{ "git", "check-ignore", "-q", "--", path },
@@ -124,6 +126,7 @@ fn isGitIgnored(io: Io, path: []const u8) !bool {
     };
 }
 
+/// Reports whether `path` exists as an openable directory.
 fn pathExists(io: Io, path: []const u8) !bool {
     var dir = Io.Dir.cwd().openDir(io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
@@ -133,6 +136,7 @@ fn pathExists(io: Io, path: []const u8) !bool {
     return true;
 }
 
+/// Verifies required permissions blocks in release-related workflows.
 fn checkWorkflowPermissions(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (workflow_permission_rules) |rule| {
@@ -187,6 +191,7 @@ fn minLineBudgetHeadroom(max_lines: usize) usize {
     return @min(@as(usize, 50), @max(@as(usize, 10), max_lines / 10));
 }
 
+/// Checks repository files for high-risk forbidden text fragments.
 fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (forbidden_tokens) |rule| {
@@ -204,6 +209,7 @@ fn checkForbiddenTokens(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Runs stale-code and ignored-error hygiene token checks.
 fn checkCodeHygiene(allocator: Allocator, io: Io) !bool {
     var ok = true;
     ok = (try checkHygieneTokensAbsent(allocator, io, "stale-code", &code_hygiene_tokens)) and ok;
@@ -211,6 +217,7 @@ fn checkCodeHygiene(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Checks a named hygiene token table against its configured files.
 fn checkHygieneTokensAbsent(allocator: Allocator, io: Io, check_name: []const u8, rules: []const HygieneToken) !bool {
     var ok = true;
     for (rules) |rule| {
@@ -228,6 +235,7 @@ fn checkHygieneTokensAbsent(allocator: Allocator, io: Io, check_name: []const u8
     return ok;
 }
 
+/// Verifies source files do not bypass structured tool-error construction.
 fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (tool_error_contract_paths) |path| {
@@ -247,6 +255,7 @@ fn checkToolErrorContract(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies resource handlers use structured resource-error construction.
 fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (resource_error_contract_paths) |path| {
@@ -266,6 +275,7 @@ fn checkResourceErrorContract(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies CLI-facing paths use centralized error reporting helpers.
 fn checkCliErrorContract(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (cli_error_contract_paths) |path| {
@@ -285,6 +295,7 @@ fn checkCliErrorContract(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Enforces the no-standalone-Python policy in pure Zig roots.
 fn checkPureZigTrees(allocator: Allocator, io: Io) !bool {
     var ok = true;
     for (pure_zig_roots) |root| {
@@ -410,6 +421,7 @@ fn checkCatalogCommonIntentPreferences(allocator: Allocator, io: Io) !bool {
     return ok;
 }
 
+/// Verifies SECURITY.md contains required disclosure and response terms.
 fn checkSecurityPolicy(allocator: Allocator, io: Io) !bool {
     const path = "SECURITY.md";
     const bytes = readFileAlloc(allocator, io, path, 1024 * 1024) catch |err| {
@@ -453,6 +465,7 @@ pub fn checkNoExtensionInTree(allocator: Allocator, io: Io, root: []const u8, ex
     return ok;
 }
 
+/// Reads a repository-relative file with a byte limit.
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
 }
@@ -476,6 +489,7 @@ fn codeLineCount(bytes: []const u8) usize {
     return count;
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

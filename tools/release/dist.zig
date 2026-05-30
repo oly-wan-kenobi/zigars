@@ -10,12 +10,14 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
+/// One release package requested by the build pipeline.
 const PackageInput = struct {
     name: []const u8,
     exe_name: []const u8,
     binary_path: []const u8,
 };
 
+/// Repository file or directory copied into every release archive.
 const ReleaseItem = struct {
     path: []const u8,
     directory: bool = false,
@@ -32,11 +34,13 @@ const release_items = [_]ReleaseItem{
     .{ .path = "examples", .directory = true },
 };
 
+/// Parsed options for archive building.
 const DistOptions = struct {
     out_dir: []const u8 = "dist",
     version: []const u8 = zigars.manifest.version.string,
     packages: std.ArrayList(PackageInput) = .empty,
 
+    /// Releases package-list storage.
     fn deinit(self: *DistOptions, allocator: Allocator) void {
         self.packages.deinit(allocator);
     }
@@ -105,6 +109,7 @@ pub fn smoke(allocator: Allocator, io: Io, args: []const []const u8) !void {
     try stdoutPrint(io, "release asset smoke ok\n", .{});
 }
 
+/// Validates that package inputs exactly match the configured release targets.
 fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
     if (packages.len != release_targets.all.len) {
         if (io) |output| try stderrPrint(output, "dist expected {d} release packages, got {d}\n", .{ release_targets.all.len, packages.len });
@@ -130,6 +135,7 @@ fn validateReleasePackageInputs(io: ?Io, packages: []const PackageInput) !void {
     }
 }
 
+/// Parses archive-builder CLI flags into a `DistOptions` value.
 fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions {
     var options: DistOptions = .{};
     var i: usize = 0;
@@ -162,6 +168,7 @@ fn parseDistOptions(allocator: Allocator, args: []const []const u8) !DistOptions
     return options;
 }
 
+/// Stages one package directory with the binary and all release items.
 fn stagePackage(allocator: Allocator, io: Io, package_dir: []const u8, package: PackageInput) !void {
     const root = try std.fs.path.join(allocator, &.{ package_dir, package.name });
     defer allocator.free(root);
@@ -182,6 +189,7 @@ fn stagePackage(allocator: Allocator, io: Io, package_dir: []const u8, package: 
     }
 }
 
+/// Copies one repository-relative file to the staged package tree.
 fn copyFile(allocator: Allocator, io: Io, source: []const u8, dest: []const u8) !void {
     const abs_source = try absolutePath(allocator, io, source);
     defer allocator.free(abs_source);
@@ -190,6 +198,7 @@ fn copyFile(allocator: Allocator, io: Io, source: []const u8, dest: []const u8) 
     try Io.Dir.copyFileAbsolute(abs_source, abs_dest, io, .{ .replace = true, .make_path = true });
 }
 
+/// Recursively copies a repository-relative directory into the package tree.
 fn copyDirectory(allocator: Allocator, io: Io, source: []const u8, dest: []const u8) !void {
     var dir = try Io.Dir.cwd().openDir(io, source, .{ .iterate = true });
     defer dir.close(io);
@@ -215,6 +224,7 @@ fn copyDirectory(allocator: Allocator, io: Io, source: []const u8, dest: []const
     }
 }
 
+/// Writes one staged package directory as a compressed tar archive.
 fn archivePackage(allocator: Allocator, io: Io, package_dir: []const u8, assets_dir: []const u8, package: PackageInput) !void {
     const root = try std.fs.path.join(allocator, &.{ package_dir, package.name });
     defer allocator.free(root);
@@ -225,6 +235,7 @@ fn archivePackage(allocator: Allocator, io: Io, package_dir: []const u8, assets_
     try writeTarGzFromDirectory(allocator, io, root, package.name, package.exe_name, archive_path);
 }
 
+/// Streams a staged package directory into a deterministic gzip-compressed tar.
 fn writeTarGzFromDirectory(
     allocator: Allocator,
     io: Io,
@@ -288,6 +299,7 @@ fn writeTarFile(io: Io, tar_writer: *std.tar.Writer, source_path: []const u8, ar
     try tar_writer.writeFileStream(archive_path, size, &file_reader.interface, .{ .mode = mode, .mtime = 0 });
 }
 
+/// Writes the checksum manifest for all release archives.
 fn writeChecksums(allocator: Allocator, io: Io, assets_dir: []const u8, packages: []const PackageInput) !void {
     var out: Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
@@ -304,6 +316,7 @@ fn writeChecksums(allocator: Allocator, io: Io, assets_dir: []const u8, packages
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = checksums_path, .data = out.written() });
 }
 
+/// Verifies checksum count and content against the current release target set.
 fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
     const checksums_path = try std.fs.path.join(allocator, &.{ assets_dir, "zigars-checksums.txt" });
     defer allocator.free(checksums_path);
@@ -331,6 +344,7 @@ fn verifyChecksums(allocator: Allocator, io: Io, assets_dir: []const u8) !void {
     }
 }
 
+/// Verifies that one release archive contains the required package files.
 fn verifyArchiveList(allocator: Allocator, io: Io, assets_dir: []const u8, package: release_targets.Target) !void {
     const archive_name = try std.fmt.allocPrint(allocator, "{s}.tar.gz", .{package.package_name});
     defer allocator.free(archive_name);
@@ -394,6 +408,7 @@ fn runNativeArchive(allocator: Allocator, io: Io, assets_dir: []const u8, versio
     if (!std.mem.eql(u8, stderr, expected)) return error.NativeArchiveVersionMismatch;
 }
 
+/// Computes the lowercase hex SHA-256 digest for an archive file.
 fn archiveSha256(allocator: Allocator, io: Io, path: []const u8) ![Sha256.digest_length * 2]u8 {
     const bytes = try readFileAlloc(allocator, io, path, 1024 * 1024 * 1024);
     defer allocator.free(bytes);
@@ -413,6 +428,7 @@ fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     return normalized;
 }
 
+/// Resolves `path` to an absolute path using the current working directory.
 fn absolutePath(allocator: Allocator, io: Io, path: []const u8) ![]u8 {
     if (std.fs.path.isAbsolute(path)) return std.fs.path.resolve(allocator, &.{path});
     var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -420,16 +436,19 @@ fn absolutePath(allocator: Allocator, io: Io, path: []const u8) ![]u8 {
     return std.fs.path.resolve(allocator, &.{ cwd_buf[0..cwd_len], path });
 }
 
+/// Reads a repository-relative file with a byte limit.
 fn readFileAlloc(allocator: Allocator, io: Io, path: []const u8, limit: usize) ![]u8 {
     return Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(limit));
 }
 
+/// Returns whether `path` is an openable directory.
 fn dirExists(io: Io, path: []const u8) bool {
     var dir = Io.Dir.cwd().openDir(io, path, .{}) catch return false;
     dir.close(io);
     return true;
 }
 
+/// Reports whether `needle` appears as a complete line in `haystack`.
 fn containsLine(haystack: []const u8, needle: []const u8) bool {
     var lines = std.mem.splitScalar(u8, haystack, '\n');
     while (lines.next()) |line| {
@@ -438,6 +457,7 @@ fn containsLine(haystack: []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Counts non-empty lines after trimming whitespace.
 fn countNonEmptyLines(bytes: []const u8) usize {
     var count: usize = 0;
     var lines = std.mem.splitScalar(u8, bytes, '\n');
@@ -447,6 +467,7 @@ fn countNonEmptyLines(bytes: []const u8) usize {
     return count;
 }
 
+/// Reports whether a child process exited successfully.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,
@@ -454,10 +475,12 @@ fn termOk(term: std.process.Child.Term) bool {
     };
 }
 
+/// Sort predicate for deterministic archive entry ordering.
 fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
 
+/// Writes a formatted message to stdout.
 fn stdoutPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stdout().writer(io, &buffer);
@@ -465,6 +488,7 @@ fn stdoutPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     try writer.interface.flush();
 }
 
+/// Writes a formatted diagnostic to stderr.
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var writer = Io.File.stderr().writer(io, &buffer);

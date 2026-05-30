@@ -28,6 +28,7 @@ pub const CoverageStats = struct {
     /// populated by `addMissingTrackedFiles`.
     missing_files: []const []const u8 = &.{},
 
+    /// Releases per-file and missing-file allocations owned by this summary.
     pub fn deinit(self: *CoverageStats, allocator: Allocator) void {
         for (self.files) |*file| file.deinit(allocator);
         if (self.files.len > 0) allocator.free(self.files);
@@ -74,6 +75,7 @@ pub const CoverageFileStats = struct {
     /// 1-based line numbers of uninstrumented lines in this file.
     uncovered_lines: []u32 = &.{},
 
+    /// Releases the path and uncovered-line list owned by this file summary.
     pub fn deinit(self: *CoverageFileStats, allocator: Allocator) void {
         allocator.free(self.path);
         if (self.uncovered_lines.len > 0) allocator.free(self.uncovered_lines);
@@ -194,6 +196,7 @@ pub fn addMissingTrackedFiles(allocator: Allocator, io: Io, stats: *CoverageStat
     stats.missing_files = try missing.toOwnedSlice(allocator);
 }
 
+/// Returns tracked source files that should appear in coverage accounting.
 fn trackedCoverageFiles(allocator: Allocator, io: Io) ![]const []const u8 {
     const result = try std.process.run(allocator, io, .{ .argv = &.{ "git", "ls-files", "src", "tools" } });
     defer allocator.free(result.stdout);
@@ -214,6 +217,7 @@ fn trackedCoverageFiles(allocator: Allocator, io: Io) ![]const []const u8 {
     return try files.toOwnedSlice(allocator);
 }
 
+/// Finds the index of `path` in the parsed coverage file list.
 fn coverageFileIndex(files: []const CoverageFileStats, path: []const u8) ?usize {
     for (files, 0..) |file, i| {
         if (std.mem.eql(u8, file.path, path)) return i;
@@ -221,6 +225,8 @@ fn coverageFileIndex(files: []const CoverageFileStats, path: []const u8) ?usize 
     return null;
 }
 
+/// Converts kcov filenames to repository-relative `src/` or `tools/` paths,
+/// returning null for paths outside the measured source scopes.
 fn normalizeCoveragePath(allocator: Allocator, filename: []const u8) !?[]u8 {
     var normalized = try allocator.dupe(u8, filename);
     var normalized_owned = true;
@@ -249,11 +255,14 @@ fn normalizeCoveragePath(allocator: Allocator, filename: []const u8) !?[]u8 {
     return null;
 }
 
+/// Reports whether a tracked path should be required in coverage output.
 fn isTrackedCoverageFile(path: []const u8) bool {
     if (!std.mem.endsWith(u8, path, ".zig")) return false;
     return coverageScope(path) != .ignored and !isGeneratedCoveragePath(path);
 }
 
+/// Excludes generated, cache, distribution, and intentionally skipped files
+/// from missing-file coverage checks.
 fn isGeneratedCoveragePath(path: []const u8) bool {
     if (std.mem.eql(u8, path, "tools/fuzz_test_runner.zig")) return true;
     if (std.mem.eql(u8, path, "coverage") or std.mem.startsWith(u8, path, "coverage/")) return true;
@@ -270,12 +279,14 @@ fn isGeneratedCoveragePath(path: []const u8) bool {
     return false;
 }
 
+/// Classifies a normalized filename into the coverage threshold bucket.
 fn coverageScope(filename: []const u8) CoverageScope {
     if (isScopePath(filename, "src")) return .src;
     if (isScopePath(filename, "tools")) return .tools;
     return .ignored;
 }
 
+/// Reports whether `filename` belongs to the named top-level coverage scope.
 fn isScopePath(filename: []const u8, scope: []const u8) bool {
     if (std.mem.eql(u8, filename, scope)) return true;
     if (std.mem.startsWith(u8, filename, scope) and filename.len > scope.len and isPathSep(filename[scope.len])) return true;
@@ -283,14 +294,13 @@ fn isScopePath(filename: []const u8, scope: []const u8) bool {
     return std.mem.indexOf(u8, filename, needle) != null;
 }
 
+/// Treats Unix and Windows separators equivalently for coverage paths.
 fn isPathSep(byte: u8) bool {
     return byte == '/' or byte == '\\';
 }
 
-// Extracts the value of an XML attribute by name from a single tag string.
-// Requires the attribute to be preceded by whitespace or `<` (to avoid
-// false matches like "otherfilename" matching a search for "filename").
-// Handles both single- and double-quoted values. Returns null when not found.
+/// Extracts an XML attribute value from a single tag, avoiding substring
+/// matches and accepting either quote style.
 fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, tag, pos, name)) |idx| {
@@ -309,13 +319,14 @@ fn attributeValue(tag: []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
-// Converts a covered/total pair to basis points (0–10000). Returns null
-// when total is zero to distinguish "no data" from "zero coverage".
+/// Converts a covered/total pair to basis points, returning null when no
+/// instrumented lines were present.
 fn rateBasisPoints(covered: u64, total: u64) ?u32 {
     if (total == 0) return null;
     return @intCast((covered * 100 * percent_scale) / total);
 }
 
+/// Reports whether a child process exited successfully.
 fn termOk(term: std.process.Child.Term) bool {
     return switch (term) {
         .exited => |code| code == 0,

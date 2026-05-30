@@ -142,6 +142,7 @@ pub fn fakeDiffFolded(io: Io, args: []const []const u8) !void {
     try stdoutWrite(io, "wrote folded diff\n");
 }
 
+/// Maps a zwanzig graph flag to the contract mode name.
 fn zwanzigGraphModeName(flag: []const u8) ?[]const u8 {
     inline for (std.meta.tags(backend_contracts.ZwanzigGraphMode)) |mode| {
         if (std.mem.eql(u8, flag, mode.flag())) return mode.name();
@@ -149,6 +150,7 @@ fn zwanzigGraphModeName(flag: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Writes a minimal DOT graph for a fake zwanzig graph mode.
 fn writeFakeDot(io: Io, output_dir: []const u8, mode: []const u8) !void {
     try Io.Dir.cwd().createDirPath(io, output_dir);
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -165,6 +167,7 @@ fn fakeBackendUsageError(io: Io, message: []const u8) !void {
     return error.InvalidArguments;
 }
 
+/// Writes successful fake-backend output to stdout.
 fn stdoutWrite(io: Io, bytes: []const u8) !void {
     try Io.File.stdout().writeStreamingAll(io, bytes);
 }
