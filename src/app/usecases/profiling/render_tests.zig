@@ -60,6 +60,7 @@ test "profiling render frees input path when output resolution fails" {
 
 /// Implements profiling context workflow logic using caller-owned inputs.
 fn profilingContext(workspace: *fakes.FakeWorkspaceStore, command_runner: *fakes.FakeCommandRunner) app_context.ProfilingContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{},
