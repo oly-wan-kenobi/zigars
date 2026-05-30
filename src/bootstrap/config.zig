@@ -30,6 +30,7 @@ pub const Config = struct {
 
     /// Frees every owned string captured by parse or ownedDefaults.
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.workspace);
         allocator.free(self.zig_path);
         allocator.free(self.zls_path);
@@ -62,6 +63,7 @@ pub const ParseError = error{
 /// Parses argv-style startup flags into an owned Config.
 /// The returned config owns duplicated strings and must be deinitialized by the caller.
 pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const u8) !Config {
+    // Normalize input here so downstream paths can rely on validated shape.
     var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
     const cwd_len = try std.process.currentPath(io, &cwd_buf);
     const cwd = cwd_buf[0..cwd_len];
@@ -154,6 +156,7 @@ pub fn isLoopbackHttpHost(host: []const u8) bool {
 /// Allocates default config string values so every field is always allocator-owned.
 /// Uniform ownership allows Config.deinit to free all fields unconditionally.
 fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const workspace = try allocator.dupe(u8, cwd);
     errdefer allocator.free(workspace);
     const zig_path = try allocator.dupe(u8, "zig");
@@ -186,6 +189,7 @@ fn ownedDefaults(allocator: std.mem.Allocator, cwd: []const u8) !Config {
 /// Replaces an owned string field with the next argv value, freeing the old value.
 /// Empty values are rejected so path-like flags fail at startup rather than at first use.
 fn replaceOwned(allocator: std.mem.Allocator, field: *[]const u8, args: []const []const u8, index: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const value = try dupeNext(allocator, args, index);
     if (value.len == 0) {
         allocator.free(value);
@@ -204,6 +208,7 @@ fn dupeNext(allocator: std.mem.Allocator, args: []const []const u8, index: *usiz
 
 /// Static CLI help text; stdout remains reserved for MCP JSON-RPC.
 pub fn usage() []const u8 {
+    // Keep CLI help text in one place so option contracts stay aligned with tests.
     return
     \\zigars - deterministic Zig development MCP server
     \\
