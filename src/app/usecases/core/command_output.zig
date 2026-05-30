@@ -17,6 +17,7 @@ pub const SafeText = struct {
 /// `invalid_utf8` is set, and `encoding` is "utf-8-lossy". `byte_count` is
 /// always the original byte length. Caller owns and frees `.text`.
 pub fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (std.unicode.utf8ValidateSlice(bytes)) {
         return .{
             .text = try allocator.dupe(u8, bytes),
