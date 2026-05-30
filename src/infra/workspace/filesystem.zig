@@ -25,6 +25,7 @@ pub const Store = struct {
 
     /// Stores borrowed workspace pointer and default read options.
     pub fn init(workspace: *workspace_mod.Workspace, io: std.Io, options: Options) Self {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .workspace = workspace,
             .io = io,
@@ -43,6 +44,7 @@ pub const Store = struct {
 
     /// Exposes this store through the WorkspaceStore vtable.
     pub fn port(self: *Self) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -75,6 +77,7 @@ pub const Store = struct {
     /// Resolves a workspace path through the sandbox and returns an allocator-owned copy.
     /// Fails with PathOutsideWorkspace if the path escapes the workspace root.
     fn resolve(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)
             self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err)
@@ -107,6 +110,7 @@ pub const Store = struct {
 
     /// Writes bytes through this port implementation.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.isCancelled()) return error.Cancelled;
         self.workspace.writeFile(self.io, request.path, request.bytes) catch |err| return mapPortError(err);
@@ -118,6 +122,7 @@ pub const Store = struct {
 
     /// Deletes a path through this port implementation.
     fn delete(ptr: *anyopaque, request: ports.WorkspaceDeleteRequest) ports.PortError!ports.WorkspaceDeleteResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         if (self.isCancelled()) return error.Cancelled;
         const resolved = self.workspace.resolve(request.path) catch |err| return mapPortError(err);
@@ -184,6 +189,7 @@ pub const Store = struct {
 
     /// Scans a directory through this port implementation.
     fn scanDirectory(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const resolved = if (request.for_output)
             self.workspace.resolveOutput(request.path) catch |err| return mapPortError(err)
@@ -219,6 +225,7 @@ pub const Store = struct {
 /// Maps filesystem and workspace safety failures to WorkspaceStore port errors.
 /// Unrecognized errors collapse to Unavailable so callers see a stable surface.
 pub fn mapPortError(err: anyerror) ports.PortError {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
         error.FileNotFound => error.FileNotFound,
