@@ -16,6 +16,7 @@ const valueAt = smoke.valueAt;
 /// result paths against `expected`. `scenarios` is incremented once per
 /// successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenarios: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const crash = "thread 1 panic: reached unreachable code\\n#0 0x1 in parse src/main.zig:10\\n==1==ERROR: AddressSanitizer: heap-use-after-free\\n";
     const heaptrack = "peak heap memory: 1024 bytes\\nallocations: 7 allocations\\n";
     const valgrind = "definitely lost: 32 bytes in 1 blocks\\nERROR SUMMARY: 2 errors from 2 contexts\\n";
@@ -75,6 +76,7 @@ fn assertToolPaths(
     expected_key: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json_owned_or_static);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
