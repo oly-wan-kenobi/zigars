@@ -51,6 +51,7 @@ pub const FakeClockAndIds = struct {
 
     /// Exposes this fake through the ClockAndIds vtable.
     pub fn port(self: *Self) ports.ClockAndIds {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -67,6 +68,7 @@ pub const FakeClockAndIds = struct {
 
     /// Queues the next ID response and clones the expected prefix.
     pub fn expectId(self: *Self, request: ports.IdRequest, id: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const prefix = try common.dupString(self.allocator, request.prefix);
         var prefix_owned = true;
         defer if (prefix_owned) self.allocator.free(prefix);
@@ -109,6 +111,7 @@ pub const FakeClockAndIds = struct {
 
     /// Allocates the next deterministic identifier.
     fn nextId(ptr: *anyopaque, allocator: Allocator, request: ports.IdRequest) ports.PortError![]const u8 {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_request = try cloneIdRequest(self.allocator, request);
         var record_owned = false;
