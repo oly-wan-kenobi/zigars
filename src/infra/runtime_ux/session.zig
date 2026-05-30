@@ -20,6 +20,7 @@ pub const Session = struct {
 
     /// Exposes this session through the RuntimeSession vtable.
     pub fn port(self: *Self) ports.RuntimeSession {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -164,6 +165,7 @@ pub const Session = struct {
 /// All string fields are borrowed slices into fixed buffers inside State;
 /// they are valid only while State is alive and unmutated.
 fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = job.id.slice(),
         .label = job.label.slice(),
@@ -188,6 +190,7 @@ fn jobSnapshot(job: *const runtime_ux.JobRecord) ports.RuntimeJobSnapshot {
 /// Builds a snapshot of a runtime event from the internal ring record.
 /// String slices are borrowed from the fixed-size EventRecord buffer.
 fn eventSnapshot(event: *const runtime_ux.EventRecord) ports.RuntimeEventSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .sequence = event.sequence,
         .job_id = event.job_id.slice(),
@@ -211,6 +214,7 @@ fn subscriptionSnapshot(sub: *const runtime_ux.Subscription) ports.RuntimeSubscr
 
 /// Builds a snapshot of a workspace root from the internal record.
 fn rootSnapshot(root: *const runtime_ux.WorkspaceRoot) ports.RuntimeRootSnapshot {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .id = root.id.slice(),
         .path = root.path.slice(),
@@ -222,6 +226,7 @@ fn rootSnapshot(root: *const runtime_ux.WorkspaceRoot) ports.RuntimeRootSnapshot
 
 /// Maps internal runtime job status to the public status enum.
 fn statusFromRuntime(status: runtime_ux.JobStatus) ports.RuntimeJobStatus {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .queued => .queued,
         .running => .running,
@@ -233,6 +238,7 @@ fn statusFromRuntime(status: runtime_ux.JobStatus) ports.RuntimeJobStatus {
 
 /// Maps public runtime job status to the internal enum.
 fn statusToRuntime(status: ports.RuntimeJobStatus) runtime_ux.JobStatus {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .queued => .queued,
         .running => .running,
