@@ -17,6 +17,7 @@ const valueAt = smoke.valueAt;
 /// file before the gate tool call to ensure the assertion starts from a known
 /// state. `scenarios` is incremented once per successful assertion group.
 pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue, scenarios: *usize) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const coverage = "SF:src/main.zig\\nDA:1,1\\nDA:2,0\\nend_of_record\\n";
     const full_coverage = "SF:src/main.zig\\nDA:1,1\\nend_of_record\\n";
     const profile = "{\\\"threads\\\":[{\\\"name\\\":\\\"main\\\",\\\"samples\\\":{\\\"data\\\":[[0],[1]]},\\\"frameTable\\\":{\\\"length\\\":1}}]}";
@@ -96,6 +97,7 @@ fn assertToolPaths(
     expected_key: []const u8,
     scenario_count: *usize,
 ) !void {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const tool_json = try smoke.callHttpToolJson(allocator, io, port, id, tool_name, args_json_owned_or_static);
     defer allocator.free(tool_json);
     const parsed = try std.json.parseFromSlice(JsonValue, allocator, tool_json, .{});
