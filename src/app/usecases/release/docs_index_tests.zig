@@ -15,6 +15,7 @@ fn testContext(
     toolchain: *fakes.FakeToolchainEnv,
     scanner: *fakes.FakeDocsScanner,
 ) app_context.ReleaseDocsContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace" },
         .tool_paths = .{},
