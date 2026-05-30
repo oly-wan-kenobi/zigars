@@ -84,6 +84,7 @@ pub const OwnedEntry = struct {
 
     /// Frees every owned string in the loaded registry entry.
     pub fn deinit(self: *OwnedEntry, allocator: std.mem.Allocator) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         allocator.free(self.path);
         allocator.free(self.abs_path);
         allocator.free(self.sha256);
@@ -158,6 +159,7 @@ pub fn identityFromBytes(allocator: std.mem.Allocator, path: []const u8, abs_pat
 
 /// Converts a borrowed entry into a JSON object; nested JSON allocations use `allocator`.
 pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -176,6 +178,7 @@ pub fn entryValue(allocator: std.mem.Allocator, entry: RegistryEntry) !std.json.
 /// Converts an owned entry into the public registry JSON shape.
 /// Delegates to `entryValue` by constructing a borrowed view on the fly.
 pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return entryValue(allocator, .{
         .identity = .{
             .path = entry.path,
@@ -206,6 +209,7 @@ pub fn ownedEntryValue(allocator: std.mem.Allocator, entry: OwnedEntry) !std.jso
 
 /// Converts borrowed provenance metadata into a JSON object.
 pub fn provenanceValue(allocator: std.mem.Allocator, provenance: Provenance) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -267,6 +271,7 @@ pub fn loadRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path:
 /// If an existing entry with the same `path` is found its memory is freed and
 /// the slot is replaced in-place, preserving list order.
 pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: RegistryEntry) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var owned = try cloneEntry(allocator, entry);
     var owned_entry = true;
     defer if (owned_entry) owned.deinit(allocator);
@@ -286,6 +291,7 @@ pub fn upsert(registry: *Registry, allocator: std.mem.Allocator, entry: Registry
 /// Builds the full JSONL payload in a heap buffer, then commits it via an
 /// atomic file replace so a partial write cannot corrupt the registry.
 pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8, registry: Registry) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const parent = std.fs.path.dirname(registry_abs_path) orelse ".";
     try std.Io.Dir.cwd().createDirPath(io, parent);
     var out: std.Io.Writer.Allocating = .init(allocator);
@@ -314,6 +320,7 @@ pub fn writeRegistry(allocator: std.mem.Allocator, io: std.Io, registry_abs_path
 /// not exist, `exists` is false and `sha256` is null.  Caller must deinit the
 /// returned value.
 pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_path: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, registry_abs_path, allocator, .limited(16 * 1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return preimageValue(allocator, false, 0, ""),
         else => return err,
@@ -329,6 +336,7 @@ pub fn preimageIdentity(allocator: std.mem.Allocator, io: std.Io, registry_abs_p
 /// must match; a file that changed size without a hash change is still pruned.
 /// Unexpected read errors (not FileNotFound / StreamTooLong) are propagated.
 pub fn pruneStale(allocator: std.mem.Allocator, io: std.Io, registry: *Registry) !PruneSummary {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var kept: std.ArrayList(OwnedEntry) = .empty;
     var kept_owned = true;
     defer if (kept_owned) {
@@ -377,6 +385,7 @@ pub const PruneSummary = struct {
 
 /// Converts a prune summary into the public JSON shape.
 pub fn pruneSummaryValue(allocator: std.mem.Allocator, summary: PruneSummary) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -437,6 +446,7 @@ fn ownedEntryFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Own
 
 /// Clones entry into allocator-owned storage.
 fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var owned = emptyOwnedEntry();
     errdefer owned.deinit(allocator);
     owned.bytes = entry.identity.bytes;
@@ -464,6 +474,7 @@ fn cloneEntry(allocator: std.mem.Allocator, entry: RegistryEntry) !OwnedEntry {
 /// All string fields are set to "" (static literals) so deinit is safe to call
 /// even before individual fields have been allocated.
 fn emptyOwnedEntry() OwnedEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .path = "",
         .abs_path = "",
@@ -488,6 +499,7 @@ fn emptyOwnedEntry() OwnedEntry {
 
 /// Serializes a Toolchain struct into a JSON object.
 fn toolchainValue(allocator: std.mem.Allocator, toolchain: Toolchain) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
@@ -511,6 +523,7 @@ fn argvValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.V
 
 /// Builds the preimage JSON object; `sha256` is serialized as null when the file did not exist.
 fn preimageValue(allocator: std.mem.Allocator, exists: bool, bytes: usize, sha256: []const u8) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
     defer if (obj_owned) obj.deinit(allocator);
