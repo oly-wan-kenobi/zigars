@@ -164,6 +164,7 @@ pub const PortSet = struct {
 
     /// True when any side-effecting or state-reading capability is present.
     pub fn hasEffects(self: PortSet) bool {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return self.command_runner != null or
             self.workspace != null or
             self.workspace_scanner != null or
@@ -245,6 +246,7 @@ pub const ReleaseWorkflowContext = struct {
 
     /// Reuses release workflow dependencies for static analysis helpers.
     pub fn staticAnalysis(self: ReleaseWorkflowContext) StaticAnalysisContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -273,6 +275,7 @@ pub const EnvironmentContext = struct {
 
     /// Reuses environment dependencies for static analysis helpers.
     pub fn staticAnalysis(self: EnvironmentContext) StaticAnalysisContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -301,6 +304,7 @@ pub const AdoptionContext = struct {
 
     /// Reuses adoption dependencies for static analysis helpers.
     pub fn staticAnalysis(self: AdoptionContext) StaticAnalysisContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -460,6 +464,7 @@ pub const ProjectIntelligenceContext = struct {
 
     /// Reuses project intelligence dependencies for static analysis helpers.
     pub fn staticAnalysis(self: ProjectIntelligenceContext) StaticAnalysisContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -475,6 +480,7 @@ pub const ProjectIntelligenceContext = struct {
 
     /// Reuses project intelligence dependencies for validation helpers.
     pub fn validation(self: ProjectIntelligenceContext) ValidationContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -557,6 +563,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to profiling dependencies.
     pub fn profiling(self: Context) ContextError!ProfilingContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -573,6 +580,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to performance dependencies.
     pub fn performance(self: Context) ContextError!PerformanceContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -591,6 +599,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to diagnostics dependencies.
     pub fn diagnostics(self: Context) ContextError!DiagnosticsContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -608,6 +617,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to release workflow dependencies.
     pub fn releaseWorkflows(self: Context) ContextError!ReleaseWorkflowContext {
+        // Route through a single workflow path so policy checks run in a consistent order.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -624,6 +634,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to environment dependencies.
     pub fn environment(self: Context) ContextError!EnvironmentContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -641,6 +652,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to adoption dependencies.
     pub fn adoption(self: Context) ContextError!AdoptionContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -658,6 +670,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to trust dependencies.
     pub fn trust(self: Context) ContextError!TrustContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -674,6 +687,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to core command dependencies.
     pub fn coreCommands(self: Context) ContextError!CoreCommandContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -687,6 +701,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to validation dependencies.
     pub fn validation(self: Context) ContextError!ValidationContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -737,6 +752,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to release documentation dependencies.
     pub fn releaseDocs(self: Context) ContextError!ReleaseDocsContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -750,6 +766,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to ZLS dependencies.
     pub fn zls(self: Context) ContextError!ZlsContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -762,6 +779,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to runtime UX dependencies.
     pub fn runtimeUx(self: Context) ContextError!RuntimeUxContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
@@ -783,6 +801,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to observability dependencies.
     pub fn observability(self: Context) ContextError!ObservabilityContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .zls_state = self.zls_state,
@@ -796,6 +815,7 @@ pub const Context = struct {
 
     /// Narrows the top-level context to project intelligence dependencies.
     pub fn projectIntelligence(self: Context) ContextError!ProjectIntelligenceContext {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .workspace = self.workspace,
             .tool_paths = self.tool_paths,
