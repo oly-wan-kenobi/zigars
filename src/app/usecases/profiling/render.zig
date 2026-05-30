@@ -91,6 +91,7 @@ pub const Result = union(enum) {
 /// `for_output` marking which side failed). On success the returned artifact owns the
 /// resolved absolute paths and the backend artifact; the caller must `deinit` it.
 pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, request: Request) !Result {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const input_abs = resolvePath(allocator, context, request.input, false) catch |err| return .{ .err = .{ .workspace_path_failed = .{
         .err = err,
         .path = request.input,
@@ -148,6 +149,7 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
 
 /// Resolves resolve path from caller-provided inputs; borrowed data remains caller-owned and failures are propagated.
 fn resolvePath(allocator: std.mem.Allocator, context: app_context.ProfilingContext, path: []const u8, for_output: bool) ports.PortError![]const u8 {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     const resolved = try context.workspace_store.resolve(allocator, .{
         .path = path,
         .for_output = for_output,
