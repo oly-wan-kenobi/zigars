@@ -144,6 +144,7 @@ pub fn fromRuntime(runtime: *runtime_mod.App, port_bindings: app_context.PortSet
 
 /// Probe snapshots prevent app consumers from observing mutable backend probe internals directly.
 fn probeSnapshot(probe: anytype) app_context.CachedBackendProbe {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (probe) |value| return .{
         .probed = true,
         .ok = value.ok,
