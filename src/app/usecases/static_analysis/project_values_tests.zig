@@ -16,6 +16,7 @@ fn testContext(
     store_fake: *workspace_store_fake.FakeWorkspaceStore,
     scanner_fake: *workspace_scanner_fake.FakeWorkspaceScanner,
 ) app_context.StaticAnalysisContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .workspace_store = store_fake.port(),
