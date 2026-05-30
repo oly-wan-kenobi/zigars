@@ -24,6 +24,7 @@ const ScriptTransport = struct {
 
     /// Returns the transport vtable used by this test double.
     fn transport(self: *ScriptTransport) mcp.transport.Transport {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -135,6 +136,7 @@ const FixtureTaskState = struct {
 
 /// Builds a task-state facade backed by static fixture jobs.
 fn fixtureTaskState() FixtureTaskState {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .jobs = .{
             .{
