@@ -1,3 +1,5 @@
+//! Pins the public surface of the zls tool definitions: document metadata
+//! is present, and diagnostics tools advertise the pull-diagnostic LSP method.
 const std = @import("std");
 const subject = @import("zls.zig");
 const zig_document_open = subject.zig_document_open;

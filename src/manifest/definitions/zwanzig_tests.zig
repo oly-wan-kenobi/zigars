@@ -1,3 +1,5 @@
+//! Pins the public surface of the zwanzig tool definitions: every tool must
+//! carry a non-empty description and the expected group/risk metadata.
 const std = @import("std");
 const subject = @import("zwanzig.zig");
 const zig_lint = subject.zig_lint;

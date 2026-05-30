@@ -1,3 +1,5 @@
+//! Pins the contract that all four adoption tool definitions are exported and
+//! carry non-empty descriptions, group membership, and plan metadata.
 const std = @import("std");
 const subject = @import("adoption.zig");
 const zigars_adoption_pack = subject.zigars_adoption_pack;

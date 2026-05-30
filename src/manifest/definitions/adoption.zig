@@ -1,3 +1,7 @@
+//! Tool definitions for the `public_rollout` group: adoption evidence packs,
+//! client configuration generation, smoke planning, and conformance reporting.
+//! Source-mutating tools (config generate, conformance report) require apply=true
+//! and write only workspace-bound output paths.
 const types = @import("../types.zig");
 
 const fieldHint = types.fieldHint;
@@ -5,10 +9,12 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const group = types.ToolGroup.public_rollout;
 
-/// Client identity.
+/// Risk profile shared by tools that write provenance-tracked artifacts.
+/// preview_by_default keeps agents in read-only mode until apply=true is set.
 const artifact_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true };
 
-/// Client identity.
+/// Input schema for zigars_adoption_pack: all fields are optional filters that
+/// narrow which client, transport, backend, and pack depth the evidence targets.
 const adoption_schema = schemaWithHints(&.{
     .{ "client", "string", false },
     .{ "transport", "string", false },
@@ -21,7 +27,9 @@ const adoption_schema = schemaWithHints(&.{
     fieldHint("mode", .{ .description = "Pack depth.", .default_string = "standard", .enum_values = &.{ "compact", "standard", "deep" } }),
 });
 
-/// Client identity.
+/// Input schema for zigars_client_config_generate: client/transport select the
+/// target profile; kind chooses the config format; output and apply gate the
+/// write path; server_path is embedded verbatim into the generated config.
 const config_schema = schemaWithHints(&.{
     .{ "client", "string", false },
     .{ "transport", "string", false },
@@ -38,7 +46,9 @@ const config_schema = schemaWithHints(&.{
     fieldHint("apply", .{ .description = "Write and register the generated config artifact.", .default_bool = false }),
 });
 
-/// Client identity.
+/// Input schema for zigars_smoke_plan: identifies the target client, transport,
+/// backend, and platform. timeout_ms is the caller's budget hint, not a
+/// server-side limit — the tool builds a plan rather than executing checks.
 const smoke_schema = schemaWithHints(&.{
     .{ "client", "string", false },
     .{ "transport", "string", false },
@@ -53,7 +63,9 @@ const smoke_schema = schemaWithHints(&.{
     fieldHint("timeout_ms", .{ .description = "Caller smoke timeout budget in milliseconds.", .minimum = 1 }),
 });
 
-/// Workspace-relative conformance evidence JSON path.
+/// Input schema for zigars_conformance_report: evidence is supplied as a file
+/// path or inline JSON; backend scopes the claim filter; output and apply gate
+/// the artifact write. Exactly one of input/content should be provided.
 const report_schema = schemaWithHints(&.{
     .{ "input", "string", false },
     .{ "content", "string", false },

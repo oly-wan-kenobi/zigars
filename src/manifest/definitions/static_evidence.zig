@@ -1,14 +1,22 @@
+//! Tool definitions for the `static_analysis` group's evidence and lint
+//! sub-families: semantic index lifecycle, semantic query/refs/callers, static
+//! fusion, code-index export, ZLint integration (run/SARIF/rules/fix/compare),
+//! and lint workflow helpers (profile/gate/baseline/suppressions/trend).
+//! Export tools require apply=true; lint-fix is write-gated by apply=true.
 const types = @import("../types.zig");
 
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 
-/// Build a parser-backed workspace semantic index with declarations, imports, tests, and evidence-source metadata.
+// Shared plan strings: keeps tool descriptions consistent and avoids repeating
+// long policy sentences in every tool literal below.
+
+// Used by semantic index, query, and fusion tools (no backend execution).
 const static_plan = "Evidence-backed static workspace analysis; reads project files and reports source confidence without executing project code.";
-/// Build a parser-backed workspace semantic index with declarations, imports, tests, and evidence-source metadata.
+// Used by ZLint-backed tools (backend invocation required).
 const lint_plan = "Backend-backed lint workflow whose exact argv depends on configured optional backend paths and runtime arguments.";
-/// Build a parser-backed workspace semantic index with declarations, imports, tests, and evidence-source metadata.
+// Used by code-index and SCIP export tools (apply=true writes the artifact).
 const artifact_plan = "Preview-first workspace artifact export; writes only when apply=true and the output resolves inside the workspace.";
 
 /// Build a parser-backed workspace semantic index with declarations, imports, tests, and evidence-source metadata.

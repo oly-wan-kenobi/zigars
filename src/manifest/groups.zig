@@ -1,8 +1,16 @@
+//! Discovery keyword metadata for every tool group.
+//!
+//! Each `GroupSpec` pairs a `ToolGroup` value with a set of search keywords
+//! used by catalog rendering and client-side tool discovery. Every group must
+//! have exactly one entry; invariants_tests.zig verifies this at test time.
+
 const types = @import("types.zig");
 
 const GroupSpec = types.GroupSpec;
 
-/// Search keywords attached to each tool group for catalog discovery.
+/// Ordered keyword metadata for every `ToolGroup` value. Order matches the
+/// enum declaration in `types.zig`; add keywords liberally to aid discovery,
+/// but keep the entry count equal to `std.meta.fields(ToolGroup).len`.
 pub const group_specs = [_]GroupSpec{
     .{ .group = .discovery, .keywords = &.{ "capabilities", "tool index", "schema", "doctor", "health", "workspace", "backend setup", "backend catalog", "optional backends", "context pack", "agent guide", "next action", "toolchain", "version manager", "mise", "asdf", "zvm", "zigup", "fmt", "formatter", "formatting", "zig fmt" } },
     .{ .group = .agent_workflows, .keywords = &.{ "agent", "agent client", "mcp client", "codex", "claude", "gemini", "hermes", "context pack", "next action", "validate patch", "patch session", "transactional editing", "validation plan", "validation run", "build events", "test events", "validation history", "flake history", "failure history", "handoff", "project memory", "capability match", "tool sequence", "failure fusion", "impact analysis", "project profile", "patch guard", "done check", "readiness" } },

@@ -1,3 +1,6 @@
+//! Pins the contract that all runtime diagnostics tool definitions are exported
+//! and carry non-empty descriptions, confirming the public surface compiles
+//! cleanly after the diagnostics/diagnostics_schemas split.
 const std = @import("std");
 const subject = @import("diagnostics.zig");
 const zig_debug_plan = subject.zig_debug_plan;

@@ -1,4 +1,11 @@
-/// Core generated tool definitions used to derive ids and catalog entries.
+//! Facade that assembles the full `definition_groups` tuple consumed by the
+//! aggregation pipeline. The base set comes from `all_definitions.zig`;
+//! extension groups are appended here in stable order.
+//!
+//! `definition_groups` order is a public contract: the `ToolId` enum integer
+//! values derive from it. Append new groups; never reorder existing entries.
+
+/// Base tool definition namespace, aliased from `all_definitions.zig`.
 pub const definitions = @import("all_definitions.zig").definitions;
 /// Definition namespaces appended after the generated core set.
 ///

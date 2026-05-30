@@ -1,3 +1,6 @@
+//! Enriches the embedded tool_catalog.json with generated registry metadata.
+//! Output is intended for MCP tools/list projections and agent-side planning.
+//! Stdout is reserved for MCP JSON-RPC; diagnostics must go to stderr.
 const std = @import("std");
 
 const analysis_contract = @import("../domain/zig/static_analysis_contracts.zig");
@@ -16,8 +19,11 @@ const ToolMeta = aggregate.ToolMeta;
 const ToolEntry = aggregate.ToolEntry;
 
 /// Parses the embedded catalog and enriches it with generated registry metadata.
+/// The returned `Parsed` owns its arena; the caller must call `.deinit()`.
 pub fn parsed(allocator: std.mem.Allocator) !std.json.Parsed(std.json.Value) {
     var catalog = try std.json.parseFromSlice(std.json.Value, allocator, tooling.catalog_json, .{});
+    // catalog_owned guards against double-free: cleared just before a successful return
+    // so the defer only fires on the error paths.
     var catalog_owned = true;
     defer if (catalog_owned) catalog.deinit();
 
@@ -85,6 +91,7 @@ pub fn staticAnalysisContractsValue(allocator: std.mem.Allocator) !std.json.Valu
         try item.put(allocator, "source_coverage", .{ .string = contract.source_coverage });
         try item.put(allocator, "limitations", try stringArrayValue(allocator, contract.limitations));
         try item.put(allocator, "verify_with", try stringArrayValue(allocator, contract.verify_with));
+        // Promote the first verify_with entry as a convenient single-tool cross-check pointer.
         if (contract.verify_with.len > 0) try item.put(allocator, "recommended_cross_check", .{ .string = contract.verify_with[0] });
         try obj.put(allocator, contract.tool, .{ .object = item });
         item_owned = false;
@@ -121,6 +128,8 @@ fn backendValue(allocator: std.mem.Allocator, backend: backend_catalog.Backend, 
     try obj.put(allocator, "optional", .{ .bool = backend.optional });
     try obj.put(allocator, "path_flag", .{ .string = backend.path_flag });
     try obj.put(allocator, "default_path", .{ .string = backend.default_path });
+    // configured_path is omitted by default so the static catalog snapshot stays
+    // reproducible and does not embed machine-specific installation paths.
     if (include_configured_paths) try obj.put(allocator, "configured_path", .{ .string = configured_path });
     try obj.put(allocator, "purpose", .{ .string = backend.purpose });
     try obj.put(allocator, "compatibility", .{ .string = backend.compatibility });
@@ -139,6 +148,7 @@ fn backendPathFor(name: []const u8, paths: backend_catalog.Paths) []const u8 {
     if (std.mem.eql(u8, name, "zlint")) return paths.zlint_path;
     if (std.mem.eql(u8, name, "zwanzig")) return paths.zwanzig_path;
     if (std.mem.eql(u8, name, "zflame")) return paths.zflame_path;
+    // Assert catches new backends added to backend_catalog without updating this switch.
     std.debug.assert(std.mem.eql(u8, name, "diff-folded"));
     return paths.diff_folded_path;
 }
@@ -148,6 +158,8 @@ fn probeArgvValue(allocator: std.mem.Allocator, probe_argv: []const []const u8, 
     var array = std.json.Array.init(allocator);
     var array_owned = true;
     defer if (array_owned) array.deinit();
+    // Replace argv[0] with the runtime-configured path so agent probe hints
+    // reflect the actual executable location rather than a generic default.
     for (probe_argv, 0..) |item, index| {
         try array.append(.{ .string = if (index == 0) configured_path else item });
     }

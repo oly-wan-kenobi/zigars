@@ -1,3 +1,6 @@
+//! Verifies that `group_specs` provides exactly one entry per `ToolGroup`
+//! variant, each carrying at least one discovery keyword.
+
 const std = @import("std");
 const types = @import("types.zig");
 const subject = @import("groups.zig");

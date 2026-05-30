@@ -1,3 +1,10 @@
+//! Cross-cutting manifest invariant tests.
+//!
+//! Pins risk-flag consistency, apply-gate wire reachability, planning-policy
+//! alignment, and group keyword coverage across every registered tool entry.
+//! Each test documents a named finding from the review campaign so regressions
+//! are traceable.
+
 const std = @import("std");
 
 test "manifest schema hints target declared fields and matching types" {
@@ -133,7 +140,9 @@ test "tool group keyword metadata covers each group once" {
 const manifest = @import("mod.zig");
 const tooling = @import("tooling.zig");
 
-/// Finds a schema field by name and returns null when absent.
+/// Returns the first schema field with the given name, or null when absent.
+/// Used to probe optional schema slots (e.g. `apply`, `args`, `output`)
+/// without asserting their presence upfront.
 fn fieldByName(spec: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField {
     for (spec.fields) |field| {
         if (std.mem.eql(u8, field[0], name)) return field;
@@ -141,7 +150,9 @@ fn fieldByName(spec: tooling.SchemaSpec, name: []const u8) ?tooling.SchemaField 
     return null;
 }
 
-/// Returns whether a tool plan runs commands chosen from runtime arguments.
+/// Returns true when the tool's plan executes a command that may be shaped by
+/// runtime arguments, which implies the `args` field should be accompanied by
+/// an execution risk flag in the tool definition.
 fn runsFromRuntimeArguments(entry: manifest.ToolEntry) bool {
     return switch (entry.plan) {
         .exact_command, .dynamic_command, .workspace_artifact => true,
@@ -149,7 +160,9 @@ fn runsFromRuntimeArguments(entry: manifest.ToolEntry) bool {
     };
 }
 
-/// Asserts a manifest schema field has the expected type text.
+/// Asserts that a schema field's JSON type string matches `expected`.
+/// `tool_name` is accepted but unused; it remains in the signature so future
+/// diagnostics can include the tool name without a signature change.
 fn expectFieldType(tool_name: []const u8, field: tooling.SchemaField, expected: []const u8) !void {
     _ = tool_name;
     try std.testing.expectEqualStrings(expected, field[1]);

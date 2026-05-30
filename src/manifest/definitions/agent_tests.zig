@@ -1,3 +1,5 @@
+//! Pins the contract that all agent workflow tool definitions are exported and
+//! carry non-empty descriptions, confirming the public surface compiles cleanly.
 const std = @import("std");
 const subject = @import("agent.zig");
 const zigars_context_pack = subject.zigars_context_pack;

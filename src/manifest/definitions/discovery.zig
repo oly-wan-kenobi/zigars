@@ -1,3 +1,8 @@
+//! Tool definitions for the `discovery` group: capability indexes, schema
+//! discovery, backend catalog, server health, workspace info, command planning,
+//! and toolchain resolution. All pure-analysis tools avoid backend execution
+//! and never mutate workspace state; backend-probing tools (zigars_doctor,
+//! zig_toolchain_resolve) carry executes_backend risk but remain read-only.
 const types = @import("../types.zig");
 
 const schema = types.schema;

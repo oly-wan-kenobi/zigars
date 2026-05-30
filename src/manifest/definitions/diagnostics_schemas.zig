@@ -9,16 +9,22 @@ const fieldHint = types.fieldHint;
 const schema = types.schema;
 const schemaWithHints = types.schemaWithHints;
 
-/// Workspace-relative executable or test binary path.
+/// Read-only backend probe: runs a backend binary but does not mutate workspace
+/// state or write artifacts.
 pub const backend_read_risk = types.ToolRisk{ .executes_backend = true };
-/// Workspace-relative executable or test binary path.
+/// Apply-gated backend execution: preview_by_default keeps the tool read-only
+/// until apply=true; runs backend, project code, and user-supplied commands.
 pub const backend_apply_risk = types.ToolRisk{ .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
-/// Workspace-relative executable or test binary path.
+/// Apply-gated backend run that also writes an artifact: combines
+/// backend_apply_risk with writes_artifacts for tools that capture output files.
 pub const backend_run_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
-/// Workspace-relative executable or test binary path.
+/// Apply-gated user command run that writes an artifact but does not require a
+/// named backend binary (e.g. libFuzzer runs the caller-provided command directly).
 pub const command_run_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_project_code = true, .executes_user_command = true };
 
-/// Workspace-relative executable or test binary path.
+/// Shared input schema for tools that parse caller-supplied diagnostic evidence
+/// (text, inline content, workspace path, optional command rerun, target, and a
+/// result-count limit). No backend is invoked unless command is also set.
 pub const evidence_schema = schema(&.{
     .{ "text", "string", false },
     .{ "content", "string", false },
@@ -27,7 +33,9 @@ pub const evidence_schema = schema(&.{
     .{ "target", "string", false },
     .{ "limit", "integer", false },
 });
-/// Workspace-relative executable or test binary path.
+/// Input schema for LLDB-backed debug tools: binary and core identify the debug
+/// target; lldb_path overrides the configured LLDB for a single call;
+/// probe_backend runs an availability check before planning.
 pub const debug_schema = schemaWithHints(&.{
     .{ "binary", "string", false },
     .{ "core", "string", false },

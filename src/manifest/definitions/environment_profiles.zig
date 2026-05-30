@@ -1,3 +1,10 @@
+//! Tool definitions for the `environment_profiles` group: toolchain and backend
+//! setup guidance, project-profile lifecycle (bootstrap, validate, read, import,
+//! diff, write), ZVM version management, Zig/ZLS compatibility checking, toolchain
+//! pin files, backend verification, and dev-env artifact generation. Write-capable
+//! tools carry `writes_require_apply = true`; backend-probing tools carry
+//! `executes_backend = true`. Guidance tools are pure-analysis and never issue
+//! MCP protocol elicitation — they return advisory questions as data.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -5,11 +12,11 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
-/// Result shape depth or setup workflow mode.
+/// Shared field hint for result-shape depth or setup workflow mode.
 const mode_hint = fieldHint("mode", .{ .description = "Result shape depth or setup workflow mode.", .default_string = "standard", .enum_values = &.{ "compact", "standard", "deep" } });
-/// Backend selector.
+/// Shared field hint for selecting a backend; "all" covers all configured backends.
 const backend_hint = fieldHint("backend", .{ .description = "Backend selector.", .default_string = "all", .enum_values = &.{ "all", "zig", "zls", "zwanzig", "zflame", "diff-folded", "diff_folded" } });
-/// Generated development-environment artifact kind.
+/// Shared field hint for the generated dev-environment artifact format.
 const dev_env_kind_hint = fieldHint("kind", .{ .description = "Generated development-environment artifact kind.", .default_string = "mise", .enum_values = &.{ "mise", "asdf", "nix", "devcontainer", "github-actions" } });
 
 /// Return advisory setup questions for unresolved toolchain, profile, and backend ambiguity without mutating the workspace.
@@ -39,7 +46,10 @@ pub const zigars_backend_guidance = tool(.{
     .plan = .{ .pure_analysis = "Backend catalog/profile inspection only; does not probe, install backends, or issue MCP protocol elicitation." },
 });
 
-/// Compatibility alias for zigars_setup_guidance.
+// The three *_elicit aliases exist for backward compatibility with clients that
+// registered the old tool names before the *_guidance rename; their schemas and
+// plan fields are identical to the canonical *_guidance variants.
+/// Compatibility alias for zigars_setup_guidance; identical schema and behavior.
 pub const zigars_setup_elicit = tool(.{
     .description = "Compatibility alias for zigars_setup_guidance; returns advisory setup questions and does not issue MCP protocol elicitation.",
     .input_schema = schemaWithHints(&.{ .{ "topic", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),

@@ -1,17 +1,30 @@
+//! Comptime aggregation of all tool definitions into stable id enums and metadata tables.
+//!
+//! Iterates `definition_groups` from `definitions.zig` in declaration order,
+//! validates each entry against the manifest invariants, and materializes the
+//! `ToolId` enum, `entries` table, and `specs` slice consumed by adapters and
+//! catalog renderers. Group ordering is a stable public contract: append new
+//! groups; never reorder existing ones.
+
 const std = @import("std");
 
 const definitions_mod = @import("definitions.zig");
 const types = @import("types.zig");
 
-/// Raw definition namespace consumed by compile-time aggregation.
+/// Flattened definition namespace re-exported from `definitions.zig`; the
+/// source-of-truth for all tool field values consumed by the aggregation loop.
 pub const definitions = definitions_mod.definitions;
 const definition_groups = definitions_mod.definition_groups;
 const definition_count = countDefinitions();
 
-/// Exhaustive tool id enum generated from declaration names in definition groups.
+/// Exhaustive enum of every registered tool, generated from declaration names
+/// in `definition_groups`. Integer tag values match the entry index in
+/// `entries`, so `@intFromEnum(id)` is a direct table lookup.
 pub const ToolId = buildToolId();
 
-/// Public metadata exported to callers that do not need policy internals.
+/// Public metadata exported to adapter registration surfaces.
+/// Contains schema and read-only annotation but excludes routing, risk, and
+/// planning policy; callers that need those should use `ToolEntry` directly.
 pub const ToolMeta = struct {
     id: ToolId,
     name: []const u8,
@@ -21,7 +34,9 @@ pub const ToolMeta = struct {
     read_only: bool,
 };
 
-/// Full manifest entry including routing, risk, and planning policy.
+/// Full manifest entry consumed by the MCP adapter dispatcher and catalog
+/// renderers. Combines `ToolMeta` with risk flags, planning policy, and
+/// static-analysis tier so routing decisions can inspect all dimensions.
 pub const ToolEntry = struct {
     id: ToolId,
     name: []const u8,
@@ -32,16 +47,20 @@ pub const ToolEntry = struct {
     static_analysis_tier: ?types.StaticAnalysisTier,
 };
 
-/// Stable manifest entries ordered by declaration group iteration.
+/// Ordered table of all registered tool entries. Declaration order matches
+/// `ToolId` integer values; index with `@intFromEnum(id)` for O(1) lookup.
 pub const entries = buildEntries();
-/// Metadata-only view of entries for schema registration surfaces.
+/// Metadata-only projection of `entries`; passed to adapter registration
+/// when risk and planning policy are not needed by the caller.
 pub const specs = buildSpecs();
 
-/// Materializes definition declarations into runtime metadata tables at comptime.
+/// Iterates `definition_groups` in declaration order and produces the
+/// compile-time `entries` table. Also invokes `validateDefinition` on each
+/// tool, which raises `@compileError` for policy violations.
 fn buildEntries() [definition_count]ToolEntry {
-    // validateDefinition runs per tool and now scans each apply-gated schema for an
-    // `apply` boolean via byte-wise comptime string compares; raise the eval branch
-    // budget so the cumulative comptime work across every definition stays in bounds.
+    // validateDefinition scans each apply-gated schema for an `apply` boolean
+    // via comptime string compares; raise the eval branch budget so the
+    // cumulative comptime work across every definition stays in bounds.
     @setEvalBranchQuota(10_000);
     var result: [definition_count]ToolEntry = undefined;
     comptime var index: usize = 0;
@@ -74,7 +93,15 @@ fn buildEntries() [definition_count]ToolEntry {
     return result;
 }
 
-/// Enforces local declaration invariants while aggregating manifest definitions.
+/// Validates one tool definition against the manifest invariant rules, raising
+/// `@compileError` on violation. Called for every entry inside `buildEntries`.
+///
+/// Key invariants enforced here:
+/// - Source-writing tools must set `writes_require_apply` and `preview_by_default`.
+/// - Raw `read_only` must not coexist with `writes_source` or `executes_user_command`.
+/// - Apply-gated tools must declare an `apply: boolean` schema field.
+/// - Plan policy must agree with the corresponding risk flags.
+/// - Static-analysis tools must declare a capability tier; others must not.
 fn validateDefinition(comptime name: []const u8, comptime definition: types.ToolDefinition) void {
     if (definition.risk.writes_source and !definition.risk.writes_require_apply) {
         @compileError(name ++ ": source-writing tools must require apply=true");
@@ -147,10 +174,12 @@ fn validateDefinition(comptime name: []const u8, comptime definition: types.Tool
     }
 }
 
-/// Returns whether a schema declares an `apply` boolean field.
+/// Returns whether a schema declares an `apply: boolean` field.
 ///
-/// `SchemaField` is the tuple `(name, json_type, required)`; the apply gate is
-/// only reachable from a client when the schema exposes `apply` typed `boolean`.
+/// `SchemaField` is the tuple `(name, json_type, required)`. The apply gate
+/// is only reachable from a client when the schema explicitly exposes a field
+/// named `"apply"` typed `"boolean"`; any other type (string, integer) does
+/// not satisfy the contract.
 fn schemaHasApplyBoolean(comptime input_schema: types.tooling.SchemaSpec) bool {
     inline for (input_schema.fields) |field| {
         if (std.mem.eql(u8, field[0], "apply") and std.mem.eql(u8, field[1], "boolean")) return true;
@@ -158,22 +187,27 @@ fn schemaHasApplyBoolean(comptime input_schema: types.tooling.SchemaSpec) bool {
     return false;
 }
 
-/// Projects the full entry table into the public metadata table.
+/// Strips risk and plan fields from `entries`, producing the `ToolMeta`-only
+/// slice passed to schema registration surfaces.
 fn buildSpecs() [definition_count]ToolMeta {
     var result: [definition_count]ToolMeta = undefined;
     inline for (entries, 0..) |entry, index| result[index] = entry.meta;
     return result;
 }
 
-/// Counts declarations across all manifest definition groups.
+/// Returns the total number of tool declarations across all definition groups;
+/// used to size the comptime arrays before iterating.
 fn countDefinitions() comptime_int {
     comptime var count: usize = 0;
     inline for (definition_groups) |group| count += std.meta.declarations(group).len;
     return count;
 }
 
-/// Builds the enum tags from manifest declaration names.
+/// Produces the `ToolId` enum type, one tag per declaration in declaration
+/// order. The integer tag matches the corresponding `entries` index, so casts
+/// between the two are always safe at comptime and at runtime.
 fn buildToolId() type {
+    // Use the smallest integer type that fits the tool count to avoid padding.
     const IntTag = std.math.IntFittingRange(0, definition_count -| 1);
     comptime var names: [definition_count][]const u8 = undefined;
     comptime var values: [definition_count]IntTag = undefined;

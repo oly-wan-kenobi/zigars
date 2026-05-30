@@ -1,3 +1,4 @@
+//! Pins the version.zig contract: the build-injected version string is non-empty.
 const std = @import("std");
 const subject = @import("version.zig");
 const string = subject.string;

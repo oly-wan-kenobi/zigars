@@ -1,3 +1,8 @@
+//! Tool definitions for the `zwanzig` group: optional zwanzig backend for
+//! Zig static analysis with JSON and SARIF output, rule discovery, and DOT
+//! graph dump. All tools require the zwanzig binary; missing backends produce
+//! explicit not-found errors. Graph dump writes DOT files to an explicit
+//! workspace output directory — never modifies source files.
 const types = @import("../types.zig");
 
 const schema = types.schema;

@@ -1,3 +1,10 @@
+//! Tool definitions for the `performance_workflows` group: coverage (run, map,
+//! merge, diff, baseline, budget-check), benchmarking (discover, run, baseline,
+//! compare, history, regression gate, perf budget), and profiler integration
+//! (Samply record/summary/import/artifact, Tracy plan/probe/capture/artifact/hints,
+//! profile-open, profile-regression planner, performance evidence pack).
+//! Write-capable tools require apply=true; tools that execute project code or
+//! user-supplied commands carry the appropriate executes_* risk flags.
 const types = @import("../types.zig");
 
 const fieldHint = types.fieldHint;
@@ -6,11 +13,11 @@ const schemaWithHints = types.schemaWithHints;
 const tool = types.tool;
 const group = types.ToolGroup.performance_workflows;
 
-/// Risk policy reused by related tool definitions.
+/// Tools that write workspace artifacts only — no command execution.
 const artifact_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true };
-/// Risk policy reused by related tool definitions.
+/// Tools that execute a user/project command AND write artifacts (e.g. coverage run, bench run).
 const command_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_project_code = true, .executes_user_command = true };
-/// Risk policy reused by related tool definitions.
+/// Tools that invoke an optional backend (samply, tracy-capture) AND execute project code AND write artifacts.
 const backend_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
 
 /// Input schema reused by coverage input tool definitions.
@@ -77,9 +84,8 @@ const bench_run_schema = schema(&.{
     .{ "apply", "boolean", false },
     .{ "timeout_ms", "integer", false },
 });
-/// Input schema for benchmark comparison evidence and threshold settings. The
-/// handler reads only `current`/`baseline` evidence and the regression
-/// `threshold_pct`.
+/// Input schema for benchmark comparison: reads `current`/`baseline` evidence
+/// artifacts and optional `threshold_pct` to classify regressions.
 const bench_compare_schema = schema(&.{
     .{ "current", "string", false },
     .{ "baseline", "string", false },

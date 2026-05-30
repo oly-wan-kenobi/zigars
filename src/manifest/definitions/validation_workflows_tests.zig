@@ -1,3 +1,5 @@
+//! Pins the public surface of the validation_workflows tool definitions: every
+//! tool must carry a non-empty description and the expected group/risk metadata.
 const std = @import("std");
 const subject = @import("validation_workflows.zig");
 const zig_impact_semantic = subject.zig_impact_semantic;

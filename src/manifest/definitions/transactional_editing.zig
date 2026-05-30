@@ -1,3 +1,8 @@
+//! Tool definitions for patch-session transactional editing, generated-file
+//! policy, and heuristic refactor operations. Source-mutating tools require
+//! apply=true; revert and apply operations check preimage hashes to guard
+//! against clobbering concurrent edits. Every user-provided path resolves
+//! under the workspace sandbox before any read or write.
 const types = @import("../types.zig");
 
 const schema = types.schema;
@@ -6,13 +11,13 @@ const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
 
+// Shared plan strings reused across related tool families.
 const patch_session = "Preview-first transactional edit session; source writes require apply=true and matching preimage evidence.";
 const generated_policy = "Workspace path policy for generated, cache, derived, and vendored files.";
 const refactor_preview = "Preview-first refactor mutation; writes only when apply=true and returns per-file diffs and identities.";
 
-/// Write changes only when true.
+// Catalog hints shared by all apply-gated tools in this module.
 const apply_hint = fieldHint("apply", .{ .description = "Write changes only when true.", .default_bool = false });
-/// Validation depth.
 const mode_hint = fieldHint("mode", .{ .description = "Validation depth.", .default_string = "standard", .enum_values = &.{ "quick", "standard", "full" } });
 
 /// Create a patch-session identity with current file preimages, generated-file policy, and next action guidance.

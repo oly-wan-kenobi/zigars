@@ -1,3 +1,8 @@
+//! Tool definitions for the `ci_artifacts` group: CI annotation conversion,
+//! JUnit XML generation, and multi-binary matrix checks.
+//! All three tools execute backend commands and therefore carry executes_backend
+//! risk. zig_matrix_check also accepts user-supplied Zig binary paths
+//! (executes_user_command) — callers should validate those paths before use.
 const types = @import("../types.zig");
 
 const schema = types.schema;

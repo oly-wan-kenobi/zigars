@@ -1,3 +1,5 @@
+//! Pins the public surface of the static_evidence tool definitions: every
+//! tool must carry a non-empty description and the expected group/risk metadata.
 const std = @import("std");
 const subject = @import("static_evidence.zig");
 const zig_semantic_index_build = subject.zig_semantic_index_build;
