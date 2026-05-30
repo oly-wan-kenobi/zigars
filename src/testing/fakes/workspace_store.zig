@@ -176,6 +176,7 @@ pub const FakeWorkspaceStore = struct {
 
         /// Releases owned directory entries for successful scan outcomes.
         fn deinit(self: ExpectedDirectoryScanResult, allocator: Allocator) void {
+            // Only release owned state here to avoid invalidating borrowed data.
             switch (self) {
                 .ok => |entries| {
                     for (entries) |entry| allocator.free(entry.path);
@@ -193,6 +194,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Frees all expectations and recorded call snapshots.
     pub fn deinit(self: *Self) void {
+        // Only release owned state here to avoid invalidating borrowed data.
         for (self.expected_resolves.items) |expected| expected.deinit(self.allocator);
         self.expected_resolves.deinit(self.allocator);
 
@@ -239,6 +241,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Exposes this fake through the WorkspaceStore vtable.
     pub fn port(self: *Self) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -255,6 +258,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected resolve call, cloning request data and failing on allocation errors.
     pub fn expectResolve(self: *Self, request: ports.WorkspaceResolveRequest, path: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneResolveRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeResolveRequest(self.allocator, owned_request);
@@ -272,6 +276,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected resolve error call, cloning request data and failing on allocation errors.
     pub fn expectResolveError(self: *Self, request: ports.WorkspaceResolveRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneResolveRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeResolveRequest(self.allocator, owned_request);
@@ -284,6 +289,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected read call, cloning request data and failing on allocation errors.
     pub fn expectRead(self: *Self, request: ports.WorkspaceReadRequest, bytes: []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeReadRequest(self.allocator, owned_request);
@@ -301,6 +307,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected read error call, cloning request data and failing on allocation errors.
     pub fn expectReadError(self: *Self, request: ports.WorkspaceReadRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneReadRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeReadRequest(self.allocator, owned_request);
@@ -313,6 +320,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected write call, cloning request data and failing on allocation errors.
     pub fn expectWrite(self: *Self, request: ports.WorkspaceWriteRequest, result: ports.WorkspaceWriteResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeWriteRequest(self.allocator, owned_request);
@@ -325,6 +333,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected write error call, cloning request data and failing on allocation errors.
     pub fn expectWriteError(self: *Self, request: ports.WorkspaceWriteRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneWriteRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeWriteRequest(self.allocator, owned_request);
@@ -337,6 +346,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected delete call, cloning request data and failing on allocation errors.
     pub fn expectDelete(self: *Self, request: ports.WorkspaceDeleteRequest, result: ports.WorkspaceDeleteResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneDeleteRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeDeleteRequest(self.allocator, owned_request);
@@ -349,6 +359,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected delete error call, cloning request data and failing on allocation errors.
     pub fn expectDeleteError(self: *Self, request: ports.WorkspaceDeleteRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneDeleteRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeDeleteRequest(self.allocator, owned_request);
@@ -361,6 +372,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected exists call, cloning request data and failing on allocation errors.
     pub fn expectExists(self: *Self, request: ports.WorkspaceExistsRequest, result: ports.WorkspaceExistsResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneExistsRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeExistsRequest(self.allocator, owned_request);
@@ -373,6 +385,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected exists error call, cloning request data and failing on allocation errors.
     pub fn expectExistsError(self: *Self, request: ports.WorkspaceExistsRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneExistsRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeExistsRequest(self.allocator, owned_request);
@@ -385,6 +398,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected ensure dir call, cloning request data and failing on allocation errors.
     pub fn expectEnsureDir(self: *Self, request: ports.WorkspaceEnsureDirRequest, result: ports.WorkspaceEnsureDirResult) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneEnsureDirRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeEnsureDirRequest(self.allocator, owned_request);
@@ -397,6 +411,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected ensure dir error call, cloning request data and failing on allocation errors.
     pub fn expectEnsureDirError(self: *Self, request: ports.WorkspaceEnsureDirRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneEnsureDirRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeEnsureDirRequest(self.allocator, owned_request);
@@ -409,6 +424,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected scan directory call, cloning request data and failing on allocation errors.
     pub fn expectScanDirectory(self: *Self, request: ports.WorkspaceDirectoryScanRequest, paths: []const []const u8) !void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const owned_request = try cloneDirectoryScanRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeDirectoryScanRequest(self.allocator, owned_request);
@@ -428,6 +444,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Records an expected scan directory error call, cloning request data and failing on allocation errors.
     pub fn expectScanDirectoryError(self: *Self, request: ports.WorkspaceDirectoryScanRequest, err: ports.PortError) !void {
+        // Preserve a single error-shaping path so callers receive consistent metadata.
         const owned_request = try cloneDirectoryScanRequest(self.allocator, request);
         var request_owned = true;
         defer if (request_owned) freeDirectoryScanRequest(self.allocator, owned_request);
@@ -475,6 +492,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Verifies that all queued expectations were consumed, returning the first missing-call error.
     pub fn verify(self: *const Self) ports.PortError!void {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         if (self.next_resolve != self.expected_resolves.items.len) return error.MissingExpectedCall;
         if (self.next_read != self.expected_reads.items.len) return error.MissingExpectedCall;
         if (self.next_write != self.expected_writes.items.len) return error.MissingWrite;
@@ -486,6 +504,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Matches a resolve request against the next expectation and returns the queued path.
     fn resolve(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceResolveRequest) ports.PortError!ports.WorkspaceResolveResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneResolveRequest(self.allocator, request);
         var record_owned = true;
@@ -508,6 +527,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Reads stored data through this port implementation.
     fn read(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceReadRequest) ports.PortError!ports.WorkspaceReadResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneReadRequest(self.allocator, request);
         var record_owned = true;
@@ -530,6 +550,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Writes bytes through this port implementation.
     fn write(ptr: *anyopaque, request: ports.WorkspaceWriteRequest) ports.PortError!ports.WorkspaceWriteResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneWriteRequest(self.allocator, request);
         var record_owned = true;
@@ -549,6 +570,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Deletes a path through this port implementation.
     fn delete(ptr: *anyopaque, request: ports.WorkspaceDeleteRequest) ports.PortError!ports.WorkspaceDeleteResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneDeleteRequest(self.allocator, request);
         var record_owned = true;
@@ -568,6 +590,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Checks path existence through this port implementation.
     fn exists(ptr: *anyopaque, _: Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneExistsRequest(self.allocator, request);
         var record_owned = true;
@@ -587,6 +610,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Ensures a directory exists through this port implementation.
     fn ensureDir(ptr: *anyopaque, request: ports.WorkspaceEnsureDirRequest) ports.PortError!ports.WorkspaceEnsureDirResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneEnsureDirRequest(self.allocator, request);
         var record_owned = true;
@@ -606,6 +630,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Scans a directory through this port implementation.
     fn scanDirectory(ptr: *anyopaque, allocator: Allocator, request: ports.WorkspaceDirectoryScanRequest) ports.PortError!ports.WorkspaceDirectoryScanResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const owned_call = try cloneDirectoryScanRequest(self.allocator, request);
         var record_owned = true;
@@ -634,6 +659,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones resolve request into allocator-owned storage.
     fn cloneResolveRequest(allocator: Allocator, request: ports.WorkspaceResolveRequest) !ports.WorkspaceResolveRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -657,6 +683,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones read request into allocator-owned storage.
     fn cloneReadRequest(allocator: Allocator, request: ports.WorkspaceReadRequest) !ports.WorkspaceReadRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -681,6 +708,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones write request into allocator-owned storage.
     fn cloneWriteRequest(allocator: Allocator, request: ports.WorkspaceWriteRequest) !ports.WorkspaceWriteRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -711,6 +739,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones delete request into allocator-owned storage.
     fn cloneDeleteRequest(allocator: Allocator, request: ports.WorkspaceDeleteRequest) !ports.WorkspaceDeleteRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -734,6 +763,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones exists request into allocator-owned storage.
     fn cloneExistsRequest(allocator: Allocator, request: ports.WorkspaceExistsRequest) !ports.WorkspaceExistsRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -757,6 +787,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones ensure dir request into allocator-owned storage.
     fn cloneEnsureDirRequest(allocator: Allocator, request: ports.WorkspaceEnsureDirRequest) !ports.WorkspaceEnsureDirRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
@@ -779,6 +810,7 @@ pub const FakeWorkspaceStore = struct {
 
     /// Clones directory scan request into allocator-owned storage.
     fn cloneDirectoryScanRequest(allocator: Allocator, request: ports.WorkspaceDirectoryScanRequest) !ports.WorkspaceDirectoryScanRequest {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const path = try common.dupString(allocator, request.path);
         var path_owned = true;
         defer if (path_owned) allocator.free(path);
