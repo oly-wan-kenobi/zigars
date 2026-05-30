@@ -41,6 +41,7 @@ pub const Runner = struct {
 
     /// Captures defaults and counter pointers; the caller keeps all referenced storage alive.
     pub fn init(options: Options) Self {
+        // Capture all required dependencies up front so later calls can stay predictable.
         return .{
             .io = options.io,
             .default_cwd = options.default_cwd,
@@ -69,6 +70,7 @@ pub const Runner = struct {
     /// an allocator-owned CommandResult. stdout and stderr slices are owned by
     /// the caller; call result.deinit(allocator) to free them.
     fn run(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *Self = @ptrCast(@alignCast(ptr));
         const cwd = request.cwd orelse self.default_cwd;
         const timeout_ms = if (request.timeout_ms) |value| saturatingI64(value) else self.default_timeout_ms;
@@ -111,6 +113,7 @@ pub const Runner = struct {
 
 /// Normalizes process/filesystem failures into the app port error surface.
 pub fn mapPortError(err: anyerror) ports.PortError {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
         error.FileNotFound => error.FileNotFound,
