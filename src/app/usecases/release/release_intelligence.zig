@@ -63,6 +63,7 @@ pub const EvidencePointer = release_model.EvidencePointer;
 /// would verify it. Unprovided categories are reported as missing, never as
 /// passed. Returns an allocator-owned ReleasePlan the caller must deinit.
 pub fn plan(allocator: std.mem.Allocator, request: ReleasePlanRequest) !ReleasePlan {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return release_model.buildReleasePlan(allocator, &.{
         .{ .name = "validation", .text = request.validation, .verify_with = "zigars_validation_run or zig build test" },
         .{ .name = "ci", .text = request.ci, .verify_with = "zig_ci_ingest plus local repro plan" },
@@ -87,6 +88,7 @@ pub fn suggestSemver(request: SemverRequest) SemverSuggestion {
 /// not that nothing changed; the draft always flags requires_review. Returns an
 /// allocator-owned ReleaseNotesDraft the caller must deinit.
 pub fn draftNotes(allocator: std.mem.Allocator, request: ReleaseNotesRequest) !ReleaseNotesDraft {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return release_model.draftReleaseNotes(allocator, request.version, &.{
         .{ .title = "Changes", .text = request.changes },
         .{ .title = "API", .text = request.api_diff },
@@ -102,6 +104,7 @@ pub fn draftNotes(allocator: std.mem.Allocator, request: ReleaseNotesRequest) !R
 /// not execute any release gate. Returns an allocator-owned EvidencePack the
 /// caller must deinit.
 pub fn evidencePack(allocator: std.mem.Allocator, request: EvidencePackRequest) !EvidencePack {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return release_model.buildEvidencePack(allocator, &.{
         .{ .name = "validation", .text = request.validation },
         .{ .name = "ci", .text = request.ci },
