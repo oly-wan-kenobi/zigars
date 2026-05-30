@@ -16,6 +16,7 @@ const StaticManifest = struct {
 
     /// Returns the fixture port table used by this test context.
     fn port(self: *StaticManifest) ports.ToolManifestCatalog {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
