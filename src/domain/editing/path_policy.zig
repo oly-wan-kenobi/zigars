@@ -113,6 +113,7 @@ fn isGeneratedName(path: []const u8) bool {
 
 /// Workspace-level skip policy shared with analysis for generated dependency trees.
 fn skipWorkspacePath(path: []const u8) bool {
+    // Normalize and constrain path handling here before any downstream filesystem action.
     return std.mem.startsWith(u8, path, ".zig-cache") or
         std.mem.startsWith(u8, path, ".zigars-cache") or
         std.mem.startsWith(u8, path, "zig-out") or
