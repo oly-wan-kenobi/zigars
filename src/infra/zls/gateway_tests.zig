@@ -19,6 +19,7 @@ fn testWorkspace() Workspace {
 
 /// Creates a minimal ZLS session configuration for tests.
 fn testConfig() zls_session.Config {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .allocator = std.testing.allocator,
         .io = std.testing.io,
