@@ -11,6 +11,7 @@ const JsonValue = std.json.Value;
 /// Returns `null` for any missing key, out-of-bounds index, or type mismatch.
 /// An empty segment (consecutive dots) also yields `null`.
 pub fn valueAt(value: JsonValue, path: []const u8) ?JsonValue {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var current = value;
     var parts = std.mem.splitScalar(u8, path, '.');
     while (parts.next()) |part| {
