@@ -8,6 +8,7 @@ const ports = @import("../app/ports.zig");
 pub const Catalog = struct {
     /// Exposes manifest metadata through an app-defined vtable to keep bootstrap->app dependency one-way.
     pub fn port(self: *Catalog) ports.ToolManifestCatalog {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -38,6 +39,7 @@ pub const Catalog = struct {
 
 /// Narrows manifest internals to the stable tool-manifest contract used outside bootstrap.
 fn mapEntry(entry: manifest.ToolEntry) ports.ToolManifestEntry {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .name = entry.name,
         .description = entry.meta.description,
@@ -61,6 +63,7 @@ fn mapEntry(entry: manifest.ToolEntry) ports.ToolManifestEntry {
 
 /// Converts manifest plan policy to the stable app-facing PlanPolicy without allocation.
 fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (plan) {
         .exact_command => |command| .{ .exact_command = mapCommandPlan(command) },
         .dynamic_command => |reason| .{ .dynamic_command = reason },
@@ -79,6 +82,7 @@ fn mapPlan(plan: manifest.PlanPolicy) ports.PlanPolicy {
 
 /// Converts manifest command plan variants to the stable app-facing CommandPlan without allocation.
 fn mapCommandPlan(plan: manifest.CommandPlan) ports.CommandPlan {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (plan) {
         .argv => |argv| .{ .argv = argv },
         .optional_file => |file_plan| .{ .optional_file = .{
