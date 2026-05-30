@@ -15,6 +15,7 @@ const backend_contracts = zigars.domain.zig.backend_contracts;
 /// between graph and lint invocation forms.  Returns `error.InvalidArguments`
 /// for bad usage; caller does not own any allocations from this function.
 pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake zwanzig help\n--format json|sarif\n--dump-cfg <dir> <file>\n--dump-exploded-graph <dir> <file>\n--dump-annotated-cfg <dir> <file>\n--dump-path-trace <dir> <file>\n");
         return;
@@ -61,6 +62,7 @@ pub fn fakeZwanzig(io: Io, args: []const []const u8) !void {
 /// Returns a minimal well-formed JSON response on success.  Bad argument
 /// sequences return `error.InvalidArguments`.
 pub fn fakeZlint(io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake ZLint help\n--format json\n--rules --format json\n--print-ast <file>\n--fix\n--fix-dangerously\n");
         return;
@@ -128,6 +130,7 @@ pub fn fakeZflame(io: Io, args: []const []const u8) !void {
 /// stack sample to the output file.  Any other argument shape returns
 /// `error.InvalidArguments`.
 pub fn fakeDiffFolded(io: Io, args: []const []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (args.len == 1 and std.mem.eql(u8, args[0], "--help")) {
         try stdoutWrite(io, "fake diff-folded help\nusage: diff-folded --output=<path> before.folded after.folded\n");
         return;
