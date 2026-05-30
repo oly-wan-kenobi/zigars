@@ -29,6 +29,7 @@ const StubRuntime = struct {
 
     /// Returns a typed context backed by this fixture or runtime state.
     fn context(self: *StubRuntime) app_context.ProjectIntelligenceContext {
+        // Derive context values from one source so audit and response metadata do not diverge.
         return .{
             .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
             .tool_paths = .{ .zig = "zig" },
@@ -48,6 +49,7 @@ const StubRuntime = struct {
 
     /// Returns the fixture port table used by this test context.
     fn workspacePort(self: *StubRuntime) ports.WorkspaceStore {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         return .{
             .ptr = self,
             .vtable = &.{
@@ -71,6 +73,7 @@ const StubRuntime = struct {
 
     /// Invokes command run with caller-owned inputs; command and allocation failures propagate.
     fn commandRun(ptr: *anyopaque, allocator: std.mem.Allocator, request: ports.CommandRequest) ports.PortError!ports.CommandResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const self: *StubRuntime = @ptrCast(@alignCast(ptr));
         self.command_runs += 1;
         const joined = try std.mem.join(allocator, " ", request.argv);
@@ -153,6 +156,7 @@ const StubRuntime = struct {
 
     /// Reports whether the requested workspace path exists.
     fn workspaceExists(_: *anyopaque, _: std.mem.Allocator, request: ports.WorkspaceExistsRequest) ports.PortError!ports.WorkspaceExistsResult {
+        // Keep this logic centralized so callers observe one consistent behavior path.
         const exists = std.mem.eql(u8, request.path, "build.zig") or
             std.mem.eql(u8, request.path, "build.zig.zon") or
             std.mem.eql(u8, request.path, "src") or
