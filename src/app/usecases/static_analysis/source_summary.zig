@@ -52,6 +52,7 @@ pub const SourceRead = struct {
 /// matching domain analyzer. `request.contents` is borrowed; the returned text
 /// is allocator-owned and the caller frees it.
 pub fn textSummary(allocator: std.mem.Allocator, kind: SourceTextKind, request: SourceRequest) ![]u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (kind) {
         .decl_summary => zig_analysis.declarationSummaryText(allocator, request.file, request.contents),
         .allocations => zig_analysis.allocationSummaryText(allocator, request.file, request.contents),
@@ -79,6 +80,7 @@ pub fn heuristicDeclarations(allocator: std.mem.Allocator, request: SourceReques
 /// returned SourceRead may borrow or own its bytes (see `owns_bytes`); the
 /// caller must `deinit` it.
 pub fn readSource(allocator: std.mem.Allocator, context: app_context.StaticAnalysisContext, request: WorkspaceSourceRequest) SourceError!SourceRead {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (zig_analysis.skipWorkspacePath(request.file)) return error.SkippedWorkspacePath;
     const read = try context.workspace_store.read(allocator, .{
         .path = request.file,
