@@ -1,3 +1,6 @@
+//! Behavioral tests for release_model: evidence-check blocking, semver suggestion
+//! heuristics, release-note drafting, evidence pack assembly, and allocation-failure cleanup.
+
 const std = @import("std");
 
 const release_model = @import("release_model.zig");

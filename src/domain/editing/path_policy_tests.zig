@@ -1,3 +1,6 @@
+//! Pins the path classification policy: source paths are editable; cache,
+//! artifact, vendor, and generated paths are blocked with the correct reason token.
+
 const std = @import("std");
 
 const path_policy = @import("path_policy.zig");

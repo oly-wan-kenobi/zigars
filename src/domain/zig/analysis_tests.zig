@@ -1,3 +1,6 @@
+//! Fixture-driven tests for analysis.zig: parser-backed source summaries,
+//! malformed-source partial results, heuristic advisory scanners, and the
+//! workspace path-skip policy.
 const std = @import("std");
 
 const analysis = @import("analysis.zig");

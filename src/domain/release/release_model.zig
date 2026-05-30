@@ -1,6 +1,11 @@
+//! Release readiness domain: evidence-check plans, semver suggestion, release-note
+//! drafting, and evidence pack assembly. No I/O occurs here; callers supply all
+//! text evidence and receive owned result structs that they must deinit.
+
 const std = @import("std");
 
 /// Caller-provided evidence check and command used to verify it.
+/// `text` is nil when the evidence was not supplied; an empty string is treated as missing.
 pub const EvidenceCheckInput = struct {
     name: []const u8,
     text: ?[]const u8,
@@ -8,6 +13,7 @@ pub const EvidenceCheckInput = struct {
 };
 
 /// One release-readiness check with an owned optional summary.
+/// `summary` is allocator-owned when non-nil and must be freed via deinit.
 pub const EvidenceCheck = struct {
     name: []const u8,
     observed: bool,
@@ -23,6 +29,8 @@ pub const EvidenceCheck = struct {
 };
 
 /// Owned release plan summarizing evidence checks and block status.
+/// `release_blocked` is true when any check has observed=false; callers should
+/// treat a blocked plan as a hard gate, not a suggestion.
 pub const ReleasePlan = struct {
     checks: std.ArrayList(EvidenceCheck) = .empty,
     release_blocked: bool = true,
@@ -35,7 +43,7 @@ pub const ReleasePlan = struct {
     }
 };
 
-/// Suggested semantic-version bump class.
+/// Suggested semantic-version bump class derived from keyword evidence.
 pub const SemverBump = enum {
     major,
     minor,
@@ -133,6 +141,8 @@ pub fn buildReleasePlan(allocator: std.mem.Allocator, inputs: []const EvidenceCh
 }
 
 /// Suggests a semver bump from explicit breaking/additive wording.
+/// All three text inputs are scanned case-insensitively; the highest applicable bump wins.
+/// No ownership is taken; the returned SemverSuggestion borrows string literals only.
 pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes: []const u8) SemverSuggestion {
     const bump: SemverBump = if (containsAnyIgnoreCase(&.{ api_diff, changelog, release_notes }, &.{ "breaking_change_risk\":true", "breaking change", "removed", "incompatible" }))
         .major
@@ -152,6 +162,9 @@ pub fn suggestSemver(api_diff: []const u8, changelog: []const u8, release_notes:
 }
 
 /// Builds an owned markdown release-note draft from non-empty sections.
+/// Sections whose text is nil or entirely whitespace are silently skipped.
+/// Body text is capped at 1200 bytes with a trailing ellipsis on truncation.
+/// `requires_review` is always true; the draft must not be published without human review.
 pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inputs: []const ReleaseNoteInput) !ReleaseNotesDraft {
     var sections: std.ArrayList(ReleaseNoteSection) = .empty;
     errdefer {
@@ -180,6 +193,8 @@ pub fn draftReleaseNotes(allocator: std.mem.Allocator, version: ?[]const u8, inp
 }
 
 /// Builds an owned evidence pack and marks it reviewable when non-empty.
+/// `ready_for_release_review` is false only when no inputs were supplied.
+/// Empty-text inputs are recorded as not-provided but still appear in the evidence list.
 pub fn buildEvidencePack(allocator: std.mem.Allocator, inputs: []const EvidencePointerInput) !EvidencePack {
     var pack = EvidencePack{};
     errdefer pack.deinit(allocator);

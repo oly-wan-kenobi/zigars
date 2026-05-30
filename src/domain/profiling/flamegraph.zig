@@ -1,3 +1,7 @@
+//! Flamegraph rendering model: argv construction for zflame and diff-folded.
+//! zigars builds profiler command arguments and validates SVG output; it does not
+//! execute captures or own profiler permissions. External tools own sampling.
+
 const std = @import("std");
 
 /// Boundary statement: zigars renders profiler data but does not capture it.
@@ -38,6 +42,8 @@ pub const zflame_format_names = [_][]const u8{
 };
 
 /// Parses a zflame format name exactly.
+/// Case-sensitive; returns null for any name not in ZflameFormat.
+/// Callers should surface a validation error with supportedZflameFormatsText.
 pub fn parseZflameFormat(raw: []const u8) ?ZflameFormat {
     inline for (std.meta.tags(ZflameFormat)) |tag| {
         if (std.mem.eql(u8, raw, @tagName(tag))) return tag;
@@ -108,6 +114,8 @@ pub const DiffFoldedSpec = struct {
 };
 
 /// Built argv plus owned argument strings that must be deinitialized.
+/// argv holds all argument slices (some borrowed, some owned); owned_args holds
+/// only the heap-allocated fragments so deinit can free exactly those.
 pub const BuiltArgv = struct {
     argv: std.ArrayList([]const u8) = .empty,
     owned_args: std.ArrayList([]const u8) = .empty,
@@ -120,8 +128,11 @@ pub const BuiltArgv = struct {
     }
 
     /// Adds an allocator-owned argument to both ownership and argv lists.
+    /// Takes ownership of arg; on error the caller's arg is freed so the
+    /// caller must not free it afterward when this returns an error.
     pub fn appendOwned(self: *BuiltArgv, allocator: std.mem.Allocator, arg: []const u8) !void {
         var owned_by_list = false;
+        // Ensure arg is freed on error before owned_args owns it.
         defer if (!owned_by_list) allocator.free(arg);
         try self.owned_args.append(allocator, arg);
         owned_by_list = true;
@@ -130,6 +141,9 @@ pub const BuiltArgv = struct {
 };
 
 /// Builds zflame argv with owned strings for formatted options.
+/// Borrows executable, format name, and input from spec; allocates flag strings
+/// like "--title=..." for each present option. The caller must deinit the result.
+/// On error, all partially built allocations are freed before returning.
 pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !BuiltArgv {
     var built: BuiltArgv = .{};
     var built_owned = true;
@@ -147,6 +161,8 @@ pub fn buildZflameArgv(allocator: std.mem.Allocator, spec: ZflameRenderSpec) !Bu
 }
 
 /// Builds diff-folded argv with an owned --output argument.
+/// Borrows executable, before, and after from spec; allocates the "--output=..."
+/// flag string. The caller must deinit the result.
 pub fn buildDiffFoldedArgv(allocator: std.mem.Allocator, spec: DiffFoldedSpec) !BuiltArgv {
     var built: BuiltArgv = .{};
     var built_owned = true;
@@ -159,6 +175,9 @@ pub fn buildDiffFoldedArgv(allocator: std.mem.Allocator, spec: DiffFoldedSpec) !
 }
 
 /// Cheaply validates that renderer output starts like SVG or XML-wrapped SVG.
+/// Used to detect obviously wrong backend output (empty, plain text, error
+/// messages) without a full XML parse. Accepts both bare <svg and
+/// <?xml...><svg wrappers that zflame may emit.
 pub fn looksLikeSvg(bytes: []const u8) bool {
     const trimmed = std.mem.trim(u8, bytes, " \t\r\n");
     if (std.mem.startsWith(u8, trimmed, "<svg")) return true;

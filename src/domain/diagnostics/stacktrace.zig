@@ -1,3 +1,7 @@
+//! Stacktrace parser: extracts structured frame data from raw crash transcripts.
+//! Frame text slices borrow from the original transcript; only the frames slice itself
+//! is owned — call ParsedFrames.deinit to release it.
+
 const std = @import("std");
 
 /// Borrowed stack frame slices extracted from a crash transcript line.
@@ -26,9 +30,14 @@ pub const ParsedFrames = struct {
     }
 };
 
-/// Parses up to limit frames while counting all frame-looking lines.
+/// Parses up to `limit` frames from `text` and returns a ParsedFrames whose
+/// `frames` slice is caller-owned (free via deinit) and whose `count` reflects
+/// all frame-like lines seen, even those beyond the limit.
+/// Symbol and location slices borrow from `text` and must outlive the result.
 pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize) !ParsedFrames {
     var frames = std.ArrayList(Frame).empty;
+    // frames_owned guards the deferred cleanup: flipped to false once ownership
+    // is transferred via toOwnedSlice so the defer becomes a no-op.
     var frames_owned = true;
     defer if (frames_owned) frames.deinit(allocator);
 
@@ -53,6 +62,8 @@ pub fn parseFrames(allocator: std.mem.Allocator, text: []const u8, limit: usize)
 }
 
 /// Heuristically detects common Zig, LLDB, and symbolized frame lines.
+/// Matches: GDB-style `#N`, LLDB `frame #N`, ` in ` / ` at ` presence, and `:0x` addresses.
+/// This is a best-effort heuristic; false positives are possible on unusual output.
 pub fn looksLikeFrame(line: []const u8) bool {
     if (line.len == 0) return false;
     return std.mem.startsWith(u8, line, "#") or
@@ -63,6 +74,8 @@ pub fn looksLikeFrame(line: []const u8) bool {
 }
 
 /// Extracts the best-effort symbol name from a frame line.
+/// Returns a borrowed slice of `line`; returns "unknown" when no known pattern matches.
+/// Prefers ` in <name>` (GDB/sanitizer output) over backtick-quoted LLDB symbols.
 pub fn frameSymbol(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, " in ")) |idx| {
         const rest = line[idx + 4 ..];
@@ -78,6 +91,9 @@ pub fn frameSymbol(line: []const u8) []const u8 {
 }
 
 /// Extracts the best-effort source or binary location from a frame line.
+/// Returns the text after ` at ` when present, or the segment before the last
+/// colon as a binary-address fallback. Returns "" when neither pattern matches.
+/// Result is a borrowed slice of `line`.
 pub fn frameLocation(line: []const u8) []const u8 {
     if (std.mem.indexOf(u8, line, " at ")) |idx| return std.mem.trim(u8, line[idx + 4 ..], " \t");
     if (std.mem.lastIndexOfScalar(u8, line, ':')) |idx| if (idx > 0) return std.mem.trim(u8, line[0..idx], " \t");

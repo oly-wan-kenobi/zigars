@@ -464,6 +464,9 @@ fn astStringLiteral(allocator: std.mem.Allocator, tree: std.zig.Ast, node: std.z
 
 /// Finds the local alias for an import node and returns owned text when present.
 fn astImportAlias(allocator: std.mem.Allocator, tree: std.zig.Ast, import_node: std.zig.Ast.Node.Index) !?[]const u8 {
+    // Walk all nodes to find the var-decl whose init_node equals import_node.
+    // There is no parent-pointer in std.zig.Ast, so a linear scan is required;
+    // this is acceptable because the AST is small for the files being summarized.
     for (0..tree.nodes.len) |node_i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(@as(u32, @intCast(node_i)));
         switch (tree.nodeTag(node)) {

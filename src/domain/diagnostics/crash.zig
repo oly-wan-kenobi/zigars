@@ -1,3 +1,7 @@
+//! Crash-triage helpers: classify sanitizer family and failure kind from raw
+//! crash transcript text, and extract the first panic message when present.
+//! All functions are pure text scanners; they do not allocate.
+
 const std = @import("std");
 
 /// Sanitizer family detected from crash or test output.
@@ -40,6 +44,8 @@ pub fn classifySanitizer(text: []const u8) Sanitizer {
 }
 
 /// Classifies a crash transcript into the highest-priority known failure kind.
+/// Priority order is fixed: use_after_free > bounds > data_race > panic > leak > segfault.
+/// Returns .unknown when no recognized marker is found.
 pub fn classifyFailure(text: []const u8) FailureKind {
     if (containsAny(text, &.{ "heap-use-after-free", "use after free" })) return .use_after_free;
     if (containsAny(text, &.{ "stack-buffer-overflow", "heap-buffer-overflow", "index out of bounds" })) return .bounds;
@@ -51,6 +57,8 @@ pub fn classifyFailure(text: []const u8) FailureKind {
 }
 
 /// Extracts a panic message line from Zig-style crash text when present.
+/// Returns a borrowed slice into `text`; the caller must not free it.
+/// Returns null when no "panic:" or "thread ... panic" line is found.
 pub fn panicMessage(text: []const u8) ?[]const u8 {
     var lines = std.mem.splitScalar(u8, text, '\n');
     while (lines.next()) |raw| {

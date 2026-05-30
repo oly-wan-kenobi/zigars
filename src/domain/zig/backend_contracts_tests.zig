@@ -1,3 +1,6 @@
+//! Contract-fidelity tests for backend_contracts.zig: graph mode flags,
+//! zflame format parsing, backend identity stability, and capability table
+//! completeness for optional backend tool handlers.
 const std = @import("std");
 
 const backend_contracts = @import("backend_contracts.zig");

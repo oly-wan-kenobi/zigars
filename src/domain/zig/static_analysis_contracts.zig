@@ -1,3 +1,7 @@
+//! Static-analysis evidence contracts: per-tool tier, confidence, classification,
+//! coverage text, limitations, and cross-check recommendations surfaced in MCP
+//! tool results. The `contracts` table and `forTool` lookup must stay in sync;
+//! a comptime assertion enforces this at build time.
 const std = @import("std");
 
 /// Static-analysis capability source advertised to clients.
@@ -50,63 +54,63 @@ const lint_evidence_coverage = "Caller-supplied normalized lint JSON or optional
 const zlint_output_coverage = "Optional ZLint backend output for the requested workspace path, normalized into zigars lint findings.";
 const zlint_fix_coverage = "Optional ZLint --fix or --fix-dangerously over a workspace-local path, previewed unless apply=true.";
 
-/// Limit value used by text scans operations.
+// Shared limitation text for heuristic text-scan tools.
 const text_scan_limits = &.{
     "Advisory source-text scan; does not perform Zig parsing or semantic analysis.",
     "Comptime-generated declarations, conditional code, and aliasing can be missed.",
 };
 
-/// Limit value used by workspace scans operations.
+// Shared limitation text for workspace-walk text-scan tools.
 const workspace_scan_limits = &.{
     "Advisory workspace text scan; does not perform Zig parsing or semantic analysis.",
     "Walks readable workspace Zig files up to the requested limit.",
     "Ignores generated/cache paths and reports unreadable files separately when supported.",
 };
 
-/// Limit value used by build scans operations.
+// Shared limitation text for build-file text-scan tools.
 const build_scan_limits = &.{
     "Advisory build-file text scan; does not execute or semantically evaluate build.zig.",
     "Custom helper functions, loops, or comptime build logic can hide modules, artifacts, and options.",
 };
 
-/// Limit value used by test scans operations.
+// Shared limitation text for heuristic test-discovery tools.
 const test_scan_limits = &.{
     "Advisory text scan for test declarations and likely symbol names.",
     "Recommended commands are impact hints, not proof that unaffected tests can be skipped.",
 };
 
-/// Limit value used by api diffs operations.
+// Shared limitation text for public-API diff tools.
 const api_diff_limits = &.{
     "Compares public declaration lines by name and signature text.",
     "Does not prove ABI or behavioral compatibility and can miss generated or re-exported API changes.",
 };
 
-/// Limit value used by parsers operations.
+// Shared limitation text for parser-backed tools.
 const parser_limits = &.{
     "Parser-backed syntax view only; does not resolve imports, aliases, conditional compilation, or semantic references.",
     "Parse errors are reported and can make the result partial until `zig ast-check` succeeds.",
 };
 
-/// Limit value used by compiler outputs operations.
+// Shared limitation text for compiler/test-output triage tools.
 const compiler_output_limits = &.{
     "Backed by compiler/test output when a command is run, or by caller-supplied transcript text.",
     "Custom test runners or truncated output can hide failures.",
 };
 
-/// Limit value used by zwanzigs operations.
+// Shared limitation text for optional zwanzig-backed tools.
 const zwanzig_limits = &.{
     "Requires an optional configured zwanzig executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and graph support depend on the installed zwanzig version and configuration.",
 };
 
-/// Limit value used by semantic indexs operations.
+// Shared limitation text for parser-backed semantic index tools.
 const semantic_index_limits = &.{
     "Parser-backed syntax view plus source-scan evidence; it does not resolve comptime execution, aliases, or conditional imports.",
     "Parse errors are reported through parser metadata when available and can make file-level evidence partial.",
     "Workspace walks are bounded by the requested limit and skip generated/cache paths.",
 };
 
-/// Limit value used by semantic impacts operations.
+// Shared limitation text for parser-backed semantic impact tools.
 const semantic_impact_limits = &.{
     "Advisory impact and test-selection evidence; it does not prove that unselected tests can be skipped.",
     "Parse errors are reported through parser metadata when available and can make file-level impact evidence partial.",
@@ -114,26 +118,26 @@ const semantic_impact_limits = &.{
     "Release decisions still require compiler-backed validation such as zig build test or project CI.",
 };
 
-/// Limit value used by semantic refss operations.
+// Shared limitation text for ZLint-confirmed reference-scan tools.
 const semantic_refs_limits = &.{
     "ZLint symbol-reference evidence is used when the configured backend exposes --print-ast; otherwise results fall back to source scans.",
     "Locations are still reported from matching source lines and can include textual matches that require review.",
     "Does not execute comptime code or prove cross-module alias resolution.",
 };
 
-/// Limit value used by lint intelligences operations.
+// Shared limitation text for lint-intelligence comparison and gate tools.
 const lint_intelligence_limits = &.{
     "Compares normalized lint evidence by stable rule/path/line fingerprints and cannot prove semantic correctness by itself.",
     "Gate and trend outputs are policy decisions over observed findings, not compiler or runtime proof.",
 };
 
-/// Limit value used by zlints operations.
+// Shared limitation text for optional ZLint-backed tools.
 const zlint_limits = &.{
     "Requires an optional configured ZLint executable; zigars does not bundle or require the backend.",
     "Rule coverage, false positives, and output shape depend on the installed ZLint version and configuration.",
 };
 
-/// Limit value used by zlint fixs operations.
+// Shared limitation text for the apply-gated ZLint fix tool.
 const zlint_fix_limits = &.{
     "Requires an optional configured ZLint executable with --fix support; zigars does not implement the edits itself.",
     "Runs only when apply=true and the selected path resolves inside the workspace.",
@@ -212,7 +216,7 @@ pub const contracts = [_]Contract{
     .{ .tool = "zig_analysis_graphs", .analysis_kind = "optional_zwanzig_analysis_graph", .tier = .zwanzig_backed, .confidence = .high, .classification = .advisory, .source_coverage = zwanzig_output_coverage, .limitations = zwanzig_limits, .verify_with = &.{"configured zwanzig graph mode"} },
 };
 
-/// Looks up the evidence contract for a tool by exact name.
+/// Returns the evidence contract for `tool_name`, or null when not registered.
 pub fn forTool(tool_name: []const u8) ?Contract {
     for (contracts) |contract| {
         if (std.mem.eql(u8, contract.tool, tool_name)) return contract;
@@ -255,7 +259,8 @@ pub fn classificationName(classification: Classification) []const u8 {
     return @tagName(classification);
 }
 
-/// Builds a JSON string array from borrowed string slices.
+/// Allocates a JSON string array whose string values borrow from `values`.
+/// The returned array is owned by the caller via the parent ObjectMap.
 fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     errdefer array.deinit();
@@ -372,12 +377,12 @@ test "every dispatched static-analysis tool name resolves to a contract" {
     }
 }
 
-/// Returns whether any string in a slice equals the needle.
+// Substring check; named `contains` to match the call-site intent.
 fn contains(haystack: []const u8, needle: []const u8) bool {
     return std.mem.indexOf(u8, haystack, needle) != null;
 }
 
-/// Returns whether any haystack contains any supplied needle.
+// Returns true when any string in `values` contains `needle` as a substring.
 fn anyContains(values: []const []const u8, needle: []const u8) bool {
     for (values) |value| {
         if (contains(value, needle)) return true;

@@ -1,3 +1,6 @@
+//! Pins the sanitizer classifier, failure classifier, panic-message extractor,
+//! and containsAny helper against their recognized output markers.
+
 const std = @import("std");
 
 const crash = @import("crash.zig");

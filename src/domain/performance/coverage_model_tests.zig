@@ -1,3 +1,6 @@
+//! Tests for coverage_model: LCOV and JSON parsing, merge semantics, changed-file
+//! filtering, overflow safety for huge counts, and integer-field coercion.
+
 const std = @import("std");
 
 const coverage_model = @import("coverage_model.zig");

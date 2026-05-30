@@ -1,3 +1,6 @@
+//! Behavioral tests for evidence.zig: severity counting, JSON builder correctness,
+//! and allocation-failure cleanup for the full evidence/finding/fingerprint chain.
+
 const std = @import("std");
 
 const evidence = @import("evidence.zig");
