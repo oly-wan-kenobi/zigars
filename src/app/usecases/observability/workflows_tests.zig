@@ -24,6 +24,7 @@ test "metrics report combines counters, cache state, artifacts, and observed rin
 
         /// Implements snapshot workflow logic using caller-owned inputs.
         fn snapshot(_: *anyopaque, _: std.mem.Allocator) ports.PortError!ports.ObservabilitySnapshot {
+            // Keep this logic centralized so callers observe one consistent behavior path.
             return .{
                 .tool_stats = tool_stats[0..],
                 .command_events = commands[0..],
