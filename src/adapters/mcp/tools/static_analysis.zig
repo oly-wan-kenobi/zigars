@@ -21,6 +21,7 @@ pub fn zigImportGraph(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var graph = workspace_scans.importGraph(allocator, context, .{ .limit = argInt(args, "limit") orelse workspace_scans.default_scan_limit }) catch |err| return staticToolError(allocator, "zig_import_graph", "scan_import_graph", "scan_workspace", err);
     defer graph.deinit(allocator);
     const output = workspace_scans.importGraphText(allocator, graph) catch return error.OutOfMemory;
@@ -34,6 +35,7 @@ pub fn zigImportGraphJson(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var graph = workspace_scans.importGraph(allocator, context, .{ .limit = argInt(args, "limit") orelse workspace_scans.default_scan_limit }) catch |err| return staticToolError(allocator, "zig_import_graph_json", "scan_import_graph_json", "scan_workspace", err);
     defer graph.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -47,6 +49,7 @@ pub fn zigImportCycles(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_import_cycles", agent_ergonomics.importCyclesValue(allocator, context, .{
         .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
     }));
@@ -85,6 +88,7 @@ pub fn zigFileOwner(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_file_owner", "file", "workspace-relative Zig file path");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -99,6 +103,7 @@ pub fn zigImportResolve(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const import_name = argString(args, "import") orelse return mcp_errors.missingArgument(allocator, "zig_import_resolve", "import", "Zig import name");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -114,6 +119,7 @@ pub fn zigTestDiscover(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var tests = workspace_scans.testDiscover(allocator, context, .{ .limit = argInt(args, "limit") orelse 500 }) catch |err| return staticToolError(allocator, "zig_test_discover", "scan_test_declarations", "scan_workspace", err);
     defer tests.deinit(allocator);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -127,6 +133,7 @@ pub fn zigTestNameResolve(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_test_name_resolve", agent_ergonomics.testNameResolveValue(allocator, context, .{
         .filters = argString(args, "filters") orelse argString(args, "filter"),
         .limit = argInt(args, "limit") orelse 500,
@@ -139,6 +146,7 @@ pub fn zigTestFixtureInventory(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_test_fixture_inventory", agent_ergonomics.testFixtureInventoryValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
@@ -151,6 +159,7 @@ pub fn zigSafetySiteCatalog(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_safety_site_catalog", agent_ergonomics.safetySiteCatalogValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
@@ -163,6 +172,7 @@ pub fn zigTestForSymbol(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const symbol = argString(args, "symbol") orelse return mcp_errors.missingArgument(allocator, "zig_test_for_symbol", "symbol", "symbol name");
     return staticValueResult(allocator, context, "zig_test_for_symbol", agent_ergonomics.testForSymbolValue(allocator, context, .{
         .symbol = symbol,
@@ -176,6 +186,7 @@ pub fn zigModuleSurface(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_module_surface", agent_ergonomics.moduleSurfaceValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse agent_ergonomics.default_limit,
@@ -188,6 +199,7 @@ pub fn zigSymbolDossier(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const symbol = argString(args, "symbol") orelse return mcp_errors.missingArgument(allocator, "zig_symbol_dossier", "symbol", "symbol name");
     return staticValueResult(allocator, context, "zig_symbol_dossier", agent_ergonomics.symbolDossierValue(allocator, context, .{
         .symbol = symbol,
@@ -201,6 +213,7 @@ pub fn zigChangeRiskAudit(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_change_risk_audit", agent_ergonomics.changeRiskAuditValue(allocator, context, .{
         .files = argString(args, "files"),
         .symbols = argString(args, "symbols"),
@@ -215,6 +228,7 @@ pub fn zigInsertionSites(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const topic = argString(args, "topic") orelse argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_insertion_sites", "topic", "topic or feature name");
     return staticValueResult(allocator, context, "zig_insertion_sites", agent_ergonomics.insertionSitesValue(allocator, context, .{
         .topic = topic,
@@ -229,6 +243,7 @@ pub fn zigIoMigrationScan(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_io_migration_scan", developer_pain.ioMigrationScanValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse developer_pain.default_limit,
@@ -241,6 +256,7 @@ pub fn zigLeakTriage(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_leak_triage", developer_pain.leakTriageValue(allocator, context, .{
         .text = argString(args, "text"),
         .path = argString(args, "path"),
@@ -254,6 +270,7 @@ pub fn zigComptimeDiagnose(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_comptime_diagnose", developer_pain.comptimeDiagnoseValue(allocator, context, .{
         .text = argString(args, "text"),
         .path = argString(args, "path"),
@@ -268,6 +285,7 @@ pub fn zigMemoryLayout(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_memory_layout", developer_pain.memoryLayoutValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse developer_pain.default_limit,
@@ -284,6 +302,7 @@ pub fn zigUnsafeOperationsAudit(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_unsafe_operations_audit", developer_pain.unsafeOperationsAuditValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse developer_pain.default_limit,
@@ -296,6 +315,7 @@ pub fn zigAbiLayoutDiff(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return staticValueResult(allocator, context, "zig_abi_layout_diff", developer_pain.abiLayoutDiffValue(allocator, context, .{
         .path = argString(args, "path"),
         .limit = argInt(args, "limit") orelse developer_pain.default_limit,
@@ -321,6 +341,7 @@ pub fn zigDependencyInspect(
     context: app_context.StaticAnalysisContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -334,6 +355,7 @@ pub fn zigTargetMatrixPlan(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -347,6 +369,7 @@ pub fn zigTestFailureTriage(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -406,6 +429,7 @@ pub fn zigPublicApiDiff(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -443,6 +467,7 @@ pub fn zigZlintRules(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -458,6 +483,7 @@ pub fn zigZlintFix(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -483,6 +509,7 @@ pub fn zigLintCompare(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -498,6 +525,7 @@ pub fn zigLintProfile(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -511,6 +539,7 @@ pub fn zigLintGate(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const text = argString(args, "findings") orelse return mcp_errors.missingArgument(allocator, "zig_lint_gate", "findings", "valid JSON findings");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -530,6 +559,7 @@ pub fn zigLintFixPlan(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const text = argString(args, "findings") orelse return mcp_errors.missingArgument(allocator, "zig_lint_fix_plan", "findings", "valid JSON findings");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -545,6 +575,7 @@ pub fn zigLintBaseline(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const text = argString(args, "findings") orelse return mcp_errors.missingArgument(allocator, "zig_lint_baseline", "findings", "valid JSON findings");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -562,6 +593,7 @@ pub fn zigLintSuppressions(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const text = argString(args, "findings") orelse return mcp_errors.missingArgument(allocator, "zig_lint_suppressions", "findings", "valid JSON findings");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -577,6 +609,7 @@ pub fn zigLintTrend(
     _: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const before_text = argString(args, "before") orelse return mcp_errors.missingArgument(allocator, "zig_lint_trend", "before", "valid JSON findings");
     const after_text = argString(args, "after") orelse return mcp_errors.missingArgument(allocator, "zig_lint_trend", "after", "valid JSON findings");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -612,6 +645,7 @@ pub fn zigLintRules(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -625,6 +659,7 @@ pub fn zigAnalysisGraphs(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const mode_raw = argString(args, "mode") orelse return mcp_errors.missingArgument(allocator, "zig_analysis_graphs", "mode", backend_contracts.supportedZwanzigGraphModesText());
     const mode = backend_contracts.parseZwanzigGraphMode(mode_raw) orelse return mcp_errors.invalidArgument(
         allocator,
@@ -679,6 +714,7 @@ pub fn zigSemanticIndexStatus(
     context: app_context.StaticAnalysisContext,
     _: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const cache = semantic_index.status(context) catch |err| return semanticToolError(allocator, "zig_semantic_index_status", "cache_status", "read_cache_status", err);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -702,6 +738,7 @@ pub fn zigSemanticQuery(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_semantic_query", "query", "symbol, import, test, or file substring");
     const limit_arg = argInt(args, "limit");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -723,6 +760,7 @@ pub fn zigSemanticDecl(
     context: app_context.StaticAnalysisContext,
     args: ?std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const symbol = argString(args, "symbol") orelse return mcp_errors.missingArgument(allocator, "zig_semantic_decl", "symbol", "declaration name");
     const limit_arg = argInt(args, "limit");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -809,6 +847,7 @@ fn semanticIndexResult(
     tool_name: []const u8,
     force_refresh: bool,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -839,6 +878,7 @@ fn staticValueResult(
     tool_name: []const u8,
     result: anyerror!std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     _ = context;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -854,6 +894,7 @@ fn staticStructuredValue(
     tool_name: []const u8,
     value: std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var mutable = value;
     switch (mutable) {
         .object => |*obj| try putMetadata(scratch, obj, tool_name),
@@ -864,6 +905,7 @@ fn staticStructuredValue(
 
 /// Returns the MCP tool result for static text.
 fn staticTextResult(allocator: std.mem.Allocator, tool_name: []const u8, body: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -876,6 +918,7 @@ fn staticTextResult(allocator: std.mem.Allocator, tool_name: []const u8, body: [
 
 /// Returns an allocator-owned JSON value for import graph JSON.
 fn importGraphJsonValue(allocator: std.mem.Allocator, graph: workspace_scans.ImportGraphResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     for (graph.files) |file| {
         var imports = std.json.Array.init(allocator);
@@ -905,6 +948,7 @@ fn importGraphJsonValue(allocator: std.mem.Allocator, graph: workspace_scans.Imp
 
 /// Returns an allocator-owned JSON value for test discovery JSON.
 fn testDiscoverJsonValue(allocator: std.mem.Allocator, result: workspace_scans.TestDiscoverResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var tests = std.json.Array.init(allocator);
     for (result.tests) |test_item| {
         var item = std.json.ObjectMap.empty;
@@ -938,6 +982,7 @@ fn staticToolError(
     phase: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -958,6 +1003,7 @@ fn staticPathError(
     path: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.PathOutsideWorkspace, error.EmptyPath => mcp_errors.workspacePath(allocator, tool_name, path, context.workspace.root, err),
         else => staticToolError(allocator, tool_name, "resolve_workspace_path", "workspace_path", err),
@@ -966,6 +1012,7 @@ fn staticPathError(
 
 /// Maps static error code failures to structured MCP errors.
 fn staticErrorCode(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "missing_command_runner",
         error.PathOutsideWorkspace, error.EmptyPath => "workspace_path",
@@ -978,6 +1025,7 @@ fn staticErrorCode(err: anyerror) []const u8 {
 
 /// Maps static error category failures to structured MCP errors.
 fn staticErrorCategory(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "configuration",
         error.PathOutsideWorkspace, error.EmptyPath => "workspace_path",
@@ -998,6 +1046,7 @@ fn staticErrorRetryable(err: anyerror) bool {
 
 /// Maps static error resolution failures to structured MCP errors.
 fn staticErrorResolution(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "Run this tool through a runtime that supplies the command runner port.",
         error.PathOutsideWorkspace, error.EmptyPath => "Retry with a non-empty workspace-relative path inside the configured workspace.",
@@ -1016,6 +1065,7 @@ fn sourceRefsResult(
     symbol: []const u8,
     calls_only: bool,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -1037,6 +1087,7 @@ fn exportIndexResult(
     format: []const u8,
     default_output: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const output = argString(args, "output") orelse default_output;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -1055,6 +1106,7 @@ fn exportIndexResult(
 
 /// Adds cache export metadata to a structured semantic-index result.
 fn addExportMetadata(allocator: std.mem.Allocator, value: *std.json.Value, tool_name: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (value.*) {
         .object => |*obj| {
             try putMetadata(allocator, obj, tool_name);
@@ -1080,6 +1132,7 @@ fn structuredSemanticValue(
     tool_name: []const u8,
     value: std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var mutable = value;
     switch (mutable) {
         .object => |*obj| try putMetadata(scratch, obj, tool_name),
@@ -1095,6 +1148,7 @@ fn structuredLintValue(
     tool_name: []const u8,
     value: std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var mutable = value;
     switch (mutable) {
         .object => |*obj| {
@@ -1114,6 +1168,7 @@ fn structuredZwanzigValue(
     tool_name: []const u8,
     value: std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var mutable = value;
     switch (mutable) {
         .object => |*obj| {
@@ -1133,6 +1188,7 @@ fn structuredGraphValue(
     scratch: std.mem.Allocator,
     value: std.json.Value,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var mutable = value;
     switch (mutable) {
         .object => |*obj| {
@@ -1153,6 +1209,7 @@ fn zlintDiagnosticsResult(
     tool_name: []const u8,
     sarif: bool,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -1180,6 +1237,7 @@ fn zwanzigLintResult(
     format: backend_contracts.ZwanzigLintFormat,
     tool_name: []const u8,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const raw_extra_args = argString(args, "args") orelse "";
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -1208,6 +1266,7 @@ fn semanticToolError(
     phase: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
@@ -1230,6 +1289,7 @@ fn lintToolError(
     phase: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return switch (err) {
         error.PathOutsideWorkspace, error.EmptyPath => mcp_errors.workspacePath(allocator, tool_name, path, context.workspace.root, err),
@@ -1261,6 +1321,7 @@ fn splitToolArgsError(
     actual: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     return switch (err) {
         error.InvalidArguments => mcp_errors.invalidArgument(
             allocator,
@@ -1288,6 +1349,7 @@ fn splitToolArgsError(
 
 /// Maps lint error code failures to structured MCP errors.
 fn lintErrorCode(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "missing_command_runner",
         error.PathOutsideWorkspace, error.EmptyPath => "workspace_path",
@@ -1301,6 +1363,7 @@ fn lintErrorCode(err: anyerror) []const u8 {
 
 /// Maps lint error category failures to structured MCP errors.
 fn lintErrorCategory(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "configuration",
         error.PathOutsideWorkspace, error.EmptyPath => "workspace_path",
@@ -1322,6 +1385,7 @@ fn lintErrorRetryable(err: anyerror) bool {
 
 /// Maps lint error resolution failures to structured MCP errors.
 fn lintErrorResolution(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCommandRunner => "Run this tool through a runtime that supplies the command runner port.",
         error.PathOutsideWorkspace, error.EmptyPath => "Retry with a non-empty workspace-relative path inside the configured workspace.",
@@ -1340,6 +1404,7 @@ fn exportError(
     output: []const u8,
     err: anyerror,
 ) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return switch (err) {
         error.PathOutsideWorkspace, error.EmptyPath => mcp_errors.workspacePath(allocator, tool_name, output, context.workspace.root, err),
@@ -1352,6 +1417,7 @@ fn exportError(
 /// blank, or valid. Returning the error as a value (not a thrown error) lets the
 /// caller short-circuit with `if (... ) |err| return err` before doing real work.
 fn validateFindingsArgument(allocator: std.mem.Allocator, args: ?std.json.Value, field: []const u8) mcp.tools.ToolError!?mcp.tools.ToolResult {
+    // Reject incompatible inputs early so callers get a precise failure reason.
     const text = argString(args, field) orelse return null;
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return null;
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, text, .{}) catch {
@@ -1363,6 +1429,7 @@ fn validateFindingsArgument(allocator: std.mem.Allocator, args: ?std.json.Value,
 
 /// Maps semantic error code failures to structured MCP errors.
 fn semanticErrorCode(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCachePort => "missing_cache_port",
         error.MissingCommandRunner => "missing_command_runner",
@@ -1377,6 +1444,7 @@ fn semanticErrorCode(err: anyerror) []const u8 {
 
 /// Maps semantic error category failures to structured MCP errors.
 fn semanticErrorCategory(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCachePort, error.MissingCommandRunner => "configuration",
         error.InvalidCache => "cache",
@@ -1398,6 +1466,7 @@ fn semanticErrorRetryable(err: anyerror) bool {
 
 /// Maps semantic error resolution failures to structured MCP errors.
 fn semanticErrorResolution(err: anyerror) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (err) {
         error.MissingCachePort => "Run this tool through a runtime that supplies the semantic-index StaticCache port.",
         error.MissingCommandRunner => "Run this tool through a runtime that supplies the command runner port, or retry without ZLint-backed reference confirmation.",
@@ -1482,6 +1551,7 @@ fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value 
 /// unterminated quote or trailing escape, which the caller turns into a
 /// structured argument error. Tokens and the slice are owned by `allocator`.
 fn splitArgs(allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var list: std.ArrayList([]const u8) = .empty;
     var current: std.ArrayList(u8) = .empty;
     errdefer {
@@ -1671,6 +1741,7 @@ const contracts = [_]Contract{
 /// through this adapter must have a `contracts` entry, hence the `unreachable`
 /// when one is missing -- a registration/contract drift bug, not a user error.
 fn putMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, tool_name: []const u8) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const contract = contractFor(tool_name) orelse unreachable;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
     try obj.put(allocator, "capability_tier", .{ .string = contract.capability_tier });
@@ -1692,6 +1763,7 @@ fn contractFor(tool_name: []const u8) ?Contract {
 
 /// Returns an allocator-owned JSON value for evidence basis.
 fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "analysis_kind", .{ .string = contract.analysis_kind });
     try obj.put(allocator, "capability_tier", .{ .string = contract.capability_tier });
@@ -1704,6 +1776,7 @@ fn evidenceBasisValue(allocator: std.mem.Allocator, contract: Contract) !std.jso
 
 /// Returns an allocator-owned JSON value for cross check.
 fn crossCheckValue(allocator: std.mem.Allocator, contract: Contract) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "required_for_release_gate", .{ .bool = false });
     if (contract.verify_with.len > 0) {
@@ -2256,6 +2329,7 @@ fn testStaticAdapterContext(
     scanner: *workspace_scanner_fake.FakeWorkspaceScanner,
     cache: *static_cache_fake.FakeStaticCache,
 ) app_context.StaticAnalysisContext {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/workspace", .cache_root = "/workspace/.zigars-cache" },
         .tool_paths = .{ .zig = "zig-test", .zlint = "zlint-test", .zwanzig = "zwanzig-test" },
@@ -2325,6 +2399,7 @@ fn expectBuildGraphReads(store: *workspace_store_fake.FakeWorkspaceStore) !void 
 
 /// Asserts build options read in adapter tests.
 fn expectBuildOptionsRead(store: *workspace_store_fake.FakeWorkspaceStore) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     try store.expectRead(.{ .path = "build.zig", .max_bytes = project_values.default_build_read_limit, .provenance = "static_analysis.build_options" },
         \\const target = b.standardTargetOptions(.{});
         \\const optimize = b.standardOptimizeOption(.{});
