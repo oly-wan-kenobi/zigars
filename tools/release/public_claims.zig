@@ -12,6 +12,7 @@ const Allocator = std.mem.Allocator;
 /// Failures are reported to stderr; `false` is returned to allow the caller
 /// to collect all failures before aborting the release check.
 pub fn checkPublicClaimDocs(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     ok = (try checkDocNeedles(allocator, io, "README.md", &.{
         "Public feature claims use evidence labels",
@@ -38,6 +39,7 @@ pub fn checkPublicClaimDocs(allocator: Allocator, io: Io) !bool {
 
 /// Verifies that required claim-governance text appears in one docs file.
 fn checkDocNeedles(allocator: Allocator, io: Io, path: []const u8, needles: []const []const u8) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     const bytes = readFileAlloc(allocator, io, path, 8 * 1024 * 1024) catch |err| {
         try stderrPrint(io, "public-claim docs check could not read {s}: {s}\n", .{ path, @errorName(err) });
         return false;
@@ -74,6 +76,7 @@ const overclaim_tokens = [_]OverclaimToken{
 
 /// Checks all public docs overstatement tokens against their target files.
 fn checkOverclaimTokens(allocator: Allocator, io: Io) !bool {
+    // Fail fast on the first mismatch to keep diagnostics deterministic.
     var ok = true;
     for (overclaim_tokens) |rule| {
         const bytes = readFileAlloc(allocator, io, rule.path, 1024 * 1024) catch |err| {
