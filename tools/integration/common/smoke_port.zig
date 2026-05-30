@@ -11,6 +11,7 @@ const Io = std.Io;
 /// Loopback-only smoke port search window. Bounded so concurrent runs converge
 /// quickly while staying clear of well-known service ports.
 pub const port_base: u16 = 41000;
+/// Number of loopback ports available to deterministic smoke-test selection.
 pub const port_window: u16 = 8000;
 
 /// Returns the current real-clock time in nanoseconds. Used by fixture runners
