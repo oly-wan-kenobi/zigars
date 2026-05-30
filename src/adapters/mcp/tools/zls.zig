@@ -35,6 +35,7 @@ pub fn zigFormatCheck(allocator: std.mem.Allocator, context: app_context.Context
 
 /// Previews or applies caller-supplied replacement content through editing policy.
 pub fn zigPatchPreview(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_patch_preview", "file", "string");
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, "zig_patch_preview", "content", "string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -56,6 +57,7 @@ pub fn zigDocumentChange(allocator: std.mem.Allocator, context: app_context.Cont
 
 /// Reports document closure as an idempotent no-op for stateless gateway clients.
 pub fn zigDocumentClose(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_document_close", "file", "string");
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
@@ -110,6 +112,7 @@ pub fn zigDocumentSymbols(allocator: std.mem.Allocator, context: app_context.Con
 
 /// Handles MCP `zig_workspace_symbols` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigWorkspaceSymbols(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_workspace_symbols", "query", "string");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_workspace_symbols", "zls_context", err);
     var outcome = code_intel.workspaceSymbols(allocator, zls_ctx, .{ .query = query }) catch return error.OutOfMemory;
@@ -194,6 +197,7 @@ pub fn zigDiagnosticsAll(allocator: std.mem.Allocator, context: app_context.Cont
 
 /// Handles MCP `zig_diagnostics_workspace` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_context.Context, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     if (!context.zls_state.running) return structuredText(allocator, "zig_diagnostics_workspace", "ZLS session is unavailable; no workspace diagnostics cache exists.");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, "zig_diagnostics_workspace", "zls_context", err);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -205,6 +209,7 @@ pub fn zigDiagnosticsWorkspace(allocator: std.mem.Allocator, context: app_contex
 
 /// Validates document sync arguments and forwards them to the ZLS workflow.
 fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
     const content = argString(args, "content") orelse return mcp_errors.missingArgument(allocator, tool_name, "content", "string");
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
@@ -217,6 +222,7 @@ fn documentSync(allocator: std.mem.Allocator, context: app_context.Context, args
 
 /// Validates file/position arguments and invokes a positional ZLS request.
 fn positionTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
     const line = argIntRequired(args, "line") orelse return mcp_errors.missingArgument(allocator, tool_name, "line", "integer");
     const character = argIntRequired(args, "character") orelse return mcp_errors.missingArgument(allocator, tool_name, "character", "integer");
@@ -238,6 +244,7 @@ fn positionTool(allocator: std.mem.Allocator, context: app_context.Context, args
 
 /// Validates the file/range arguments and invokes a range-scoped ZLS request.
 fn rangeTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, tool_name, "file", "string");
     const start_line = argIntRequired(args, "start_line") orelse return mcp_errors.missingArgument(allocator, tool_name, "start_line", "integer");
     const start_char = argIntRequired(args, "start_char") orelse return mcp_errors.missingArgument(allocator, tool_name, "start_char", "integer");
@@ -262,6 +269,7 @@ fn rangeTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?
 
 /// Validates the file argument and invokes a file-scoped ZLS request.
 fn fileOnlyTool(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value, tool_name: []const u8, method: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const zls_ctx = context.zls() catch |err| return contextError(allocator, tool_name, "zls_context", err);
     var outcome = code_intel.fileOnly(allocator, zls_ctx, .{
         .method = method,
@@ -281,6 +289,7 @@ fn fileOnlyTool(allocator: std.mem.Allocator, context: app_context.Context, args
 /// Keeping this exhaustive over the Failure union forces every new failure mode
 /// to get an explicit client-facing shape.
 fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: ?[]const u8, failure: code_intel.Failure) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (failure) {
         .unavailable => zlsUnavailable(allocator, context),
         .unsupported_capability => |capability| unsupportedCapability(allocator, method, capability),
@@ -297,6 +306,7 @@ fn zlsFailureResult(allocator: std.mem.Allocator, context: app_context.Context, 
 /// workspace-path error shape (they all stem from the file/content argument);
 /// everything else becomes a generic retryable zls_request_failed error.
 fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool_name: []const u8, method: []const u8, file: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.Unavailable) return zlsUnavailable(allocator, context);
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath or err == error.DocumentTooLarge or err == error.OpenDocumentLimitExceeded or err == error.RetainedContentLimitExceeded) {
         return mcp_errors.workspacePath(allocator, tool_name, file, context.workspace.root, err);
@@ -317,6 +327,7 @@ fn zlsPortError(allocator: std.mem.Allocator, context: app_context.Context, tool
 /// non-object payload is passed through under `raw` with ok=false rather than
 /// being dropped, so unexpected backend shapes stay inspectable.
 fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch |err| return mcp_errors.fromError(allocator, .{
         .tool = method,
         .operation = method,
@@ -349,6 +360,7 @@ fn lspStructuredTool(allocator: std.mem.Allocator, method: []const u8, response:
 
 /// Returns a structured result for a ZLS capability the server does not expose.
 fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capability: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -364,6 +376,7 @@ fn unsupportedCapability(allocator: std.mem.Allocator, method: []const u8, capab
 
 /// Returns a structured result for an out-of-range code-action selection.
 fn invalidCodeActionIndex(allocator: std.mem.Allocator, index: i64, count: usize) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "ok", .{ .bool = false });
@@ -377,6 +390,7 @@ fn invalidCodeActionIndex(allocator: std.mem.Allocator, index: i64, count: usize
 
 /// Returns a structured result for a malformed ZLS payload.
 fn invalidZlsResponse(allocator: std.mem.Allocator, tool_name: []const u8, method: []const u8, message: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = method,
@@ -389,6 +403,7 @@ fn invalidZlsResponse(allocator: std.mem.Allocator, tool_name: []const u8, metho
 
 /// Returns a structured result describing the configured ZLS backend status.
 fn zlsUnavailable(allocator: std.mem.Allocator, context: app_context.Context) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -416,6 +431,7 @@ fn structuredText(allocator: std.mem.Allocator, kind: []const u8, text: []const 
 
 /// Maps workflow failures to structured MCP tool errors.
 fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, path: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath) return mcp_errors.workspacePath(allocator, tool_name, path, "", err);
     return mcp_errors.fromError(allocator, .{
@@ -430,6 +446,7 @@ fn workflowError(allocator: std.mem.Allocator, tool_name: []const u8, operation:
 
 /// Maps format workflow failures to structured MCP tool errors.
 fn formatError(allocator: std.mem.Allocator, file: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath) return mcp_errors.workspacePath(allocator, "zig_format", file, "", err);
     return mcp_errors.fromError(allocator, .{
@@ -445,6 +462,7 @@ fn formatError(allocator: std.mem.Allocator, file: []const u8, err: anyerror) mc
 
 /// Maps runtime context construction failures to structured MCP tool errors.
 fn contextError(allocator: std.mem.Allocator, tool_name: []const u8, operation: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Derive context values from one source so audit and response metadata do not diverge.
     return mcp_errors.fromError(allocator, .{
         .tool = tool_name,
         .operation = operation,
@@ -462,6 +480,7 @@ fn toolTimeout(context: app_context.Context, args: ?std.json.Value) i64 {
 
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return null) {
         .object => |o| o,
         else => return null,
@@ -474,6 +493,7 @@ fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
 
 /// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return default) {
         .object => |o| o,
         else => return default,
@@ -486,6 +506,7 @@ fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
 
 /// Reads an int argument when it is present with the expected type.
 fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return default) {
         .object => |o| o,
         else => return default,
@@ -498,6 +519,7 @@ fn argInt(args: ?std.json.Value, name: []const u8, default: i64) i64 {
 
 /// Reads an int argument only when present with the expected type.
 fn argIntRequired(args: ?std.json.Value, name: []const u8) ?i64 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const obj = switch (args orelse return null) {
         .object => |o| o,
         else => return null,
@@ -510,6 +532,7 @@ fn argIntRequired(args: ?std.json.Value, name: []const u8) ?i64 {
 
 /// Creates zls adapter test context from the ports required by the adapter.
 fn zlsAdapterTestContext(gateway: ports.ZlsGateway) app_context.Context {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache", .transport = "test" },
         .tool_paths = .{ .zig = "zig", .zls = "zls-test" },
