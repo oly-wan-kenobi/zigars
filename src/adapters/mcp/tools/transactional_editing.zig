@@ -27,6 +27,7 @@ const elicitation_apply_fallback_reason = "MCP elicitation was unavailable; appl
 
 /// Handles MCP `zigars_patch_session_create` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsPatchSessionCreate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -57,6 +58,7 @@ pub fn zigarsPatchSessionApply(allocator: std.mem.Allocator, context: app_contex
 
 /// Handles MCP `zigars_patch_session_validate` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsPatchSessionValidate(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -81,6 +83,7 @@ pub fn zigarsPatchSessionValidate(allocator: std.mem.Allocator, context: app_con
 
 /// Handles MCP `zigars_patch_session_revert` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsPatchSessionRevert(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const session_id = argString(args, "session_id") orelse return mcp_errors.missingArgument(allocator, "zigars_patch_session_revert", "session_id", "recorded patch session id");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -109,6 +112,7 @@ pub fn zigGeneratedFileTrace(allocator: std.mem.Allocator, context: app_context.
 
 /// Handles MCP `zigars_edit_policy_check` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsEditPolicyCheck(allocator: std.mem.Allocator, _: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
@@ -139,6 +143,7 @@ pub fn zigOrganizeImports(allocator: std.mem.Allocator, context: app_context.Con
 
 /// Handles MCP `zig_update_imports` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigUpdateImports(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const old_import = argString(args, "old_import") orelse return mcp_errors.missingArgument(allocator, "zig_update_imports", "old_import", "existing @import string");
     const new_import = argString(args, "new_import") orelse return mcp_errors.missingArgument(allocator, "zig_update_imports", "new_import", "replacement @import string");
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -154,6 +159,7 @@ pub fn zigUpdateImports(allocator: std.mem.Allocator, context: app_context.Conte
 
 /// Handles MCP `zig_move_decl` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigMoveDecl(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const source_file = argString(args, "source_file") orelse return mcp_errors.missingArgument(allocator, "zig_move_decl", "source_file", "workspace-relative source file");
     const target_file = argString(args, "target_file") orelse return mcp_errors.missingArgument(allocator, "zig_move_decl", "target_file", "workspace-relative target file");
     const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_move_decl", "name", "top-level declaration name");
@@ -165,6 +171,7 @@ pub fn zigMoveDecl(allocator: std.mem.Allocator, context: app_context.Context, a
 
 /// Handles MCP `zig_extract_decl` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigExtractDecl(allocator: std.mem.Allocator, context: app_context.Context, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const file = argString(args, "file") orelse return mcp_errors.missingArgument(allocator, "zig_extract_decl", "file", "workspace-relative source file");
     const target_file = argString(args, "target_file") orelse return mcp_errors.missingArgument(allocator, "zig_extract_decl", "target_file", "workspace-relative target file");
     const start_line = argInt(args, "start_line", 0);
@@ -229,6 +236,7 @@ fn patchSessionReplacementTool(allocator: std.mem.Allocator, context: app_contex
 
 /// Returns an allocator-owned JSON value for patch session create.
 fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     for (result.files) |file| {
         try files.append(switch (file) {
@@ -252,6 +260,7 @@ fn patchSessionCreateValue(allocator: std.mem.Allocator, result: editing.CreateR
 
 /// Returns an allocator-owned JSON value for patch session replacement.
 fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.ReplacementResult, elicitation_response: ?ports.ProtocolResponse) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try replacementFileValue(allocator, file));
     if (result.blocked) return applyBlockedValue(allocator, result.session_id, files, result.expected_preimages, elicitation_response);
@@ -274,6 +283,7 @@ fn patchSessionReplacementValue(allocator: std.mem.Allocator, result: editing.Re
 
 /// Returns an allocator-owned JSON value for patch session revert.
 fn patchSessionRevertValue(allocator: std.mem.Allocator, result: editing.RevertResult) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     for (result.files) |file| try files.append(try revertFileValue(allocator, file));
     var obj = std.json.ObjectMap.empty;
@@ -300,6 +310,7 @@ fn sessionFileStateValue(allocator: std.mem.Allocator, state: editing.SessionFil
 
 /// Returns an allocator-owned JSON value for replacement file.
 fn replacementFileValue(allocator: std.mem.Allocator, file: editing.ReplacementFile) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file.file));
     try obj.put(allocator, "changed", .{ .bool = file.changed });
@@ -313,6 +324,7 @@ fn replacementFileValue(allocator: std.mem.Allocator, file: editing.ReplacementF
 
 /// Returns an allocator-owned JSON value for revert file.
 fn revertFileValue(allocator: std.mem.Allocator, file: editing.RevertFile) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "file", try ownedString(allocator, file.file));
     try obj.put(allocator, "safe_to_revert", .{ .bool = file.safe_to_revert });
@@ -327,6 +339,7 @@ fn revertFileValue(allocator: std.mem.Allocator, file: editing.RevertFile) !std.
 
 /// Returns an allocator-owned JSON value for session record.
 fn sessionRecordValue(allocator: std.mem.Allocator, record: editing.SessionRecord) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var files = std.json.Array.init(allocator);
     for (record.files) |file| {
         var item = std.json.ObjectMap.empty;
@@ -357,6 +370,7 @@ fn identityValue(allocator: std.mem.Allocator, identity: editing.Identity) !std.
 
 /// Returns an allocator-owned JSON value for expected preimages.
 fn expectedPreimagesValue(allocator: std.mem.Allocator, expected: []const editing.ExpectedPreimage) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var array = std.json.Array.init(allocator);
     for (expected) |item| {
         var obj = std.json.ObjectMap.empty;
@@ -371,6 +385,7 @@ fn expectedPreimagesValue(allocator: std.mem.Allocator, expected: []const editin
 
 /// Returns an allocator-owned JSON value for policy.
 fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "classification", try ownedString(allocator, policy.classification));
     try obj.put(allocator, "direct_edit_allowed", .{ .bool = policy.direct_edit_allowed });
@@ -384,6 +399,7 @@ fn policyValue(allocator: std.mem.Allocator, policy: editing.PathPolicy) !std.js
 
 /// Returns an allocator-owned JSON value for apply blocked.
 fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files: std.json.Array, expected_preimages: []const editing.ExpectedPreimage, elicitation_response: ?ports.ProtocolResponse) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_apply" });
     try obj.put(allocator, "schema_version", .{ .integer = editing.schema_version });
@@ -399,6 +415,7 @@ fn applyBlockedValue(allocator: std.mem.Allocator, session_id: []const u8, files
 
 /// Returns a non-applied patch-session result when client elicitation blocks the source write.
 fn applyDeclinedValue(allocator: std.mem.Allocator, session_id: []const u8, expected_preimages: []const editing.ExpectedPreimage, response: ports.ProtocolResponse) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const files = std.json.Array.init(allocator);
     var obj = std.json.ObjectMap.empty;
     try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_apply" });
@@ -429,6 +446,7 @@ fn elicitationBlocksApply(response: ports.ProtocolResponse) bool {
 /// request returns a `malformed` response, which blocks the apply: confirmation
 /// failures fail closed rather than silently proceeding with the write.
 fn requestApplyElicitation(allocator: std.mem.Allocator, client: ?ports.ProtocolClient, session_id: []const u8, file_count: usize) ports.ProtocolResponse {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const protocol_client = client orelse return .{
         .supported = false,
         .used = false,
@@ -480,6 +498,7 @@ fn protocolFailureResponse() ports.ProtocolResponse {
 
 /// Adds elicitation status metadata to apply outputs.
 fn putElicitationMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, response: ?ports.ProtocolResponse) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     const protocol_response = response orelse ports.ProtocolResponse{
         .supported = false,
         .used = false,
@@ -495,6 +514,7 @@ fn putElicitationMetadata(allocator: std.mem.Allocator, obj: *std.json.ObjectMap
 
 /// Stable JSON spelling for protocol helper status.
 fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return switch (status) {
         .accepted => "accepted",
         .declined => "declined",
@@ -510,6 +530,7 @@ fn protocolStatusName(status: ports.ProtocolResponseStatus) []const u8 {
 /// used to detect drift before apply. Absent input yields an empty slice;
 /// anything that is not an array of objects is rejected as InvalidArguments.
 fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]const editing.ExpectedPreimage {
+    // Normalize input here so downstream paths can rely on validated shape.
     const text = raw orelse return &.{};
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, text, .{});
     defer parsed.deinit();
@@ -540,6 +561,7 @@ fn parseExpectedPreimages(allocator: std.mem.Allocator, raw: ?[]const u8) ![]con
 
 /// Collects replacements into the caller-provided output list.
 fn collectReplacements(allocator: std.mem.Allocator, replacements: *std.ArrayList(editing.Replacement), value: std.json.Value) !void {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     switch (value) {
         .array => |array| for (array.items) |item| try appendReplacement(allocator, replacements, item),
         .object => |obj| {
@@ -557,6 +579,7 @@ fn collectReplacements(allocator: std.mem.Allocator, replacements: *std.ArrayLis
 
 /// Appends replacement to the caller-provided output list.
 fn appendReplacement(allocator: std.mem.Allocator, replacements: *std.ArrayList(editing.Replacement), value: std.json.Value) !void {
+    // Append in deterministic order so completion and snapshot output remain stable.
     const obj = switch (value) {
         .object => |o| o,
         else => return error.InvalidArguments,
@@ -569,6 +592,7 @@ fn appendReplacement(allocator: std.mem.Allocator, replacements: *std.ArrayList(
 
 /// Copies validation-related fields from session arguments into a new JSON object.
 fn validationArgsFromSessionArgs(allocator: std.mem.Allocator, args: ?std.json.Value) !std.json.Value {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     inline for (.{ "mode", "changed_files", "diff", "goal", "output" }) |field| {
         if (argString(args, field)) |value| try obj.put(allocator, field, try ownedString(allocator, value));
@@ -625,6 +649,7 @@ fn appendUniqueString(allocator: std.mem.Allocator, values: *std.ArrayList([]con
 /// inputs, so an unchanged request yields the same id across calls without the
 /// server retaining session state. Used only when the caller omits session_id.
 fn sessionId(allocator: std.mem.Allocator, prefix: []const u8, goal: ?[]const u8, a: ?[]const u8, b: ?[]const u8, c: ?[]const u8) ![]const u8 {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var seed = std.ArrayList(u8).empty;
     defer seed.deinit(allocator);
     try seed.appendSlice(allocator, prefix);
@@ -644,6 +669,7 @@ fn structuredScratch(allocator: std.mem.Allocator, scratch: std.mem.Allocator, v
 
 /// Maps transactional error failures to structured MCP errors.
 fn transactionalError(allocator: std.mem.Allocator, tool_name: []const u8, phase: []const u8, err: anyerror) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Preserve a single error-shaping path so callers receive consistent metadata.
     if (err == error.OutOfMemory) return error.OutOfMemory;
     if (err == error.InvalidArguments) return mcp_errors.invalidArgument(allocator, tool_name, null, "valid transactional editing arguments", "invalid", "Inspect the tool inputSchema and retry with supported arguments.");
     if (err == error.PathOutsideWorkspace or err == error.EmptyPath) return mcp_errors.workspacePath(allocator, tool_name, "", "", err);
@@ -659,6 +685,7 @@ fn transactionalError(allocator: std.mem.Allocator, tool_name: []const u8, phase
 
 /// Returns the MCP tool result for backend unavailable.
 fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, configured_path: []const u8, status: []const u8, resolution: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "backend_error" });
@@ -675,6 +702,7 @@ fn backendUnavailableResult(allocator: std.mem.Allocator, backend_name: []const 
 
 /// Returns a structured not-found response for an unknown patch session id.
 fn sessionNotFound(allocator: std.mem.Allocator, session_id: []const u8) mcp.tools.ToolError!mcp.tools.ToolResult {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     var obj = std.json.ObjectMap.empty;
     defer obj.deinit(allocator);
     try obj.put(allocator, "kind", .{ .string = "zigars_patch_session_revert" });
@@ -946,6 +974,7 @@ fn transactionalTestContext(
     workspace_store: *fakes.FakeWorkspaceStore,
     clock_and_ids: *fakes.FakeClockAndIds,
 ) app_context.Context {
+    // Keep this logic centralized so callers observe one consistent behavior path.
     return .{
         .workspace = .{ .root = "/repo", .cache_root = "/repo/.zigars-cache" },
         .tool_paths = .{ .zig = "zig" },
