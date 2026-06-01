@@ -1,5 +1,7 @@
 # zigars
 
+![Humanoid androids smoking cigars](assets/heading.jpg)
+
 [![CI](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml?query=branch%3Amain)
 [![Release](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release.yml)
 [![Release Readiness](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release-readiness.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release-readiness.yml)
