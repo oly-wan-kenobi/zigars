@@ -1,5 +1,14 @@
 # @zigars/mcp
 
+[![Package](https://img.shields.io/badge/package-%40zigars%2Fmcp-cc3534?logo=npm)](https://github.com/oly-wan-kenobi/zigars/tree/main/packages/@zigars/mcp)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![Node >=18](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Bun supported](https://img.shields.io/badge/bun-supported-000000?logo=bun&logoColor=white)](https://bun.sh/)
+[![MCP stdio](https://img.shields.io/badge/MCP-stdio-5b5bd6)](https://modelcontextprotocol.io/)
+[![Checksums](https://img.shields.io/badge/release_checksums-SHA--256-2ea44f)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![License: MIT](https://img.shields.io/github/license/oly-wan-kenobi/zigars)](https://github.com/oly-wan-kenobi/zigars/blob/main/LICENSE)
+[![CI](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml?query=branch%3Amain)
+
 `@zigars/mcp` is the npm entry point for `zigars`, a deterministic local MCP
 server for Zig development.
 

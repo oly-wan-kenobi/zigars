@@ -1,5 +1,24 @@
 # zigars
 
+[![CI](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release.yml)
+[![Release Readiness](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release-readiness.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release-readiness.yml)
+[![Backend Conformance](https://github.com/oly-wan-kenobi/zigars/actions/workflows/backend-conformance.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/backend-conformance.yml)
+[![ZLS Conformance](https://github.com/oly-wan-kenobi/zigars/actions/workflows/zls-conformance.yml/badge.svg)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/zls-conformance.yml)
+
+[![GitHub Release](https://img.shields.io/github/v/release/oly-wan-kenobi/zigars?sort=semver)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![Release Date](https://img.shields.io/github/release-date/oly-wan-kenobi/zigars)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![License: MIT](https://img.shields.io/github/license/oly-wan-kenobi/zigars)](https://github.com/oly-wan-kenobi/zigars/blob/main/LICENSE)
+[![Language](https://img.shields.io/github/languages/top/oly-wan-kenobi/zigars)](https://github.com/oly-wan-kenobi/zigars)
+[![Zig 0.16.0](https://img.shields.io/badge/Zig-0.16.0-f7a41d?logo=zig&logoColor=white)](https://ziglang.org/)
+
+[![MCP Server](https://img.shields.io/badge/MCP-server-5b5bd6)](https://modelcontextprotocol.io/)
+[![Coverage: KCov](https://img.shields.io/badge/coverage-kcov-4c1)](https://github.com/SimonKagstrom/kcov)
+[![Provenance](https://img.shields.io/badge/provenance-attested-2ea44f)](https://github.com/oly-wan-kenobi/zigars/actions/workflows/release.yml)
+[![Checksums](https://img.shields.io/badge/checksums-SHA--256-2ea44f)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![Workspace](https://img.shields.io/badge/workspace-sandboxed-2ea44f)](https://github.com/oly-wan-kenobi/zigars)
+[![Writes](https://img.shields.io/badge/source_writes-apply%3Dtrue-2ea44f)](https://github.com/oly-wan-kenobi/zigars)
+
 `zigars` is a deterministic Zig MCP workbench, not an AI code generator. It
 gives MCP-capable agents such as Codex, Claude, Gemini CLI, and Hermes
 structured Zig evidence: compiler commands, formatting, ZLS code intelligence,

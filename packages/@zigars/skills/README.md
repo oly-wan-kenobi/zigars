@@ -1,5 +1,13 @@
 # @zigars/skills
 
+[![Package](https://img.shields.io/badge/package-%40zigars%2Fskills-cc3534?logo=npm)](https://github.com/oly-wan-kenobi/zigars/tree/main/packages/@zigars/skills)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/oly-wan-kenobi/zigars/releases)
+[![Node >=18](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Codex](https://img.shields.io/badge/Codex-skills-111827)](https://github.com/openai/codex)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-d97757)](https://docs.anthropic.com/)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-extension-4285f4)](https://github.com/google-gemini/gemini-cli)
+[![License: MIT](https://img.shields.io/github/license/oly-wan-kenobi/zigars)](https://github.com/oly-wan-kenobi/zigars/blob/main/LICENSE)
+
 `@zigars/skills` ships client-consumable skills for zigars-aware development
 workflows. It is separate from `@zigars/mcp`: the MCP package starts the local
 zigars server, while this package distributes agent instructions that tell clients
