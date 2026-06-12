@@ -179,8 +179,8 @@ test "start replays an existing document state and restart records startup failu
 
     var observed = observability.State{};
     // `/bin/false` exits immediately, so the restart failure is a race: the
-    // initialize write can hit the dead pipe (BrokenPipe/EndOfStream/
-    // NotConnected) or the 1ms response wait can expire first (NoResponse).
+    // initialize write can hit the dead pipe (BrokenPipe/NotConnected) or the
+    // 1ms response wait can expire first (NoResponse/RequestTimeout).
     if (restart(&state, .{ .process = &proc_slot, .client = &client_slot, .documents = &docs_slot }, .{
         .allocator = allocator,
         .io = io,
@@ -191,7 +191,7 @@ test "start replays an existing document state and restart records startup failu
     })) {
         return error.TestExpectedError;
     } else |err| switch (err) {
-        error.NoResponse, error.BrokenPipe, error.EndOfStream, error.NotConnected => {},
+        error.NoResponse, error.BrokenPipe, error.RequestTimeout, error.NotConnected => {},
         else => return err,
     }
     try testing.expect(state.last_failure != null);
