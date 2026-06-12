@@ -198,7 +198,9 @@ pub const Store = struct {
 /// paths, and path traversal sequences.
 fn artifactPath(allocator: std.mem.Allocator, namespace: []const u8, name: []const u8) ![]u8 {
     if (!safeRelativeComponent(namespace) or !safeRelativeComponent(name)) return error.InvalidArguments;
-    return std.fs.path.join(allocator, &.{ artifact_root, namespace, name });
+    // Artifact ids are canonical `/`-separated workspace-relative paths on
+    // every platform; std.fs.path.join would mint `\`-separated ids on Windows.
+    return std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{ artifact_root, namespace, name });
 }
 
 /// Validates that an artifact identifier is safe for read paths.

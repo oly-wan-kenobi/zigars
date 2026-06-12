@@ -1242,7 +1242,11 @@ pub fn unixMs(app: anytype) i64 {
 fn relativeFromAbs(root: []const u8, abs_path: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, root, abs_path)) return ".";
     if (!std.mem.startsWith(u8, abs_path, root)) return null;
-    if (abs_path.len <= root.len or abs_path[root.len] != std.fs.path.sep) return null;
+    if (abs_path.len <= root.len) return null;
+    // Accept both separators: on Windows resolved paths may carry either, and
+    // `/`-separated absolute paths are valid inputs on every platform.
+    const boundary = abs_path[root.len];
+    if (boundary != '/' and boundary != '\\') return null;
     return abs_path[root.len + 1 ..];
 }
 

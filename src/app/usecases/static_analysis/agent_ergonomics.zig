@@ -674,10 +674,12 @@ fn workspaceImportIndex(allocator: std.mem.Allocator, files: []const workspace_s
     // Keep this logic centralized so callers observe one consistent behavior path.
     if (!std.mem.endsWith(u8, import_name, ".zig")) return null;
     const dir = std.fs.path.dirname(from_file) orelse "";
+    // Workspace-relative logical paths stay `/`-separated on every platform;
+    // std.fs.path.join would insert `\` on Windows and never match scan paths.
     const candidate = if (dir.len == 0)
         try allocator.dupe(u8, import_name)
     else
-        try std.fs.path.join(allocator, &.{ dir, import_name });
+        try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, import_name });
     defer allocator.free(candidate);
     for (files, 0..) |file, index| {
         if (std.mem.eql(u8, file.file, candidate)) return index;

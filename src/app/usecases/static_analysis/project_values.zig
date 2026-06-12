@@ -576,7 +576,9 @@ pub fn findModuleOrDependency(allocator: std.mem.Allocator, obj: *std.json.Objec
 /// Implements relative import candidate workflow logic using caller-owned inputs.
 pub fn relativeImportCandidate(allocator: std.mem.Allocator, from: ?[]const u8, import_name: []const u8) ![]u8 {
     if (from) |from_file| {
-        if (std.fs.path.dirname(from_file)) |dir| return std.fs.path.join(allocator, &.{ dir, import_name });
+        // Workspace-relative logical paths stay `/`-separated on every
+        // platform; std.fs.path.join would insert `\` on Windows.
+        if (std.fs.path.dirname(from_file)) |dir| return std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, import_name });
     }
     return allocator.dupe(u8, import_name);
 }

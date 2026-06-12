@@ -1060,18 +1060,21 @@ fn normalizeImport(allocator: Allocator, source_path: []const u8, raw_import: []
     }
 
     const base_dir = std.fs.path.dirname(source_path) orelse ".";
-    const joined = try std.fs.path.join(allocator, &.{ base_dir, raw_import });
+    // Guard paths are repo-relative logical paths, so join with `/` directly:
+    // std.fs.path.join would insert `\` on Windows and defeat normalizePath.
+    const joined = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ base_dir, raw_import });
     defer allocator.free(joined);
     return normalizePath(allocator, joined);
 }
 
-/// Collapses `.` and `..` path segments using `/` separators.
+/// Collapses `.` and `..` path segments into a `/`-separated logical path.
+/// Accepts both separators so Windows-walked source paths normalize the same.
 fn normalizePath(allocator: Allocator, path: []const u8) ![]u8 {
     // Normalize and constrain path handling here before any downstream filesystem action.
     var parts: std.ArrayList([]const u8) = .empty;
     defer parts.deinit(allocator);
 
-    var it = std.mem.tokenizeScalar(u8, path, '/');
+    var it = std.mem.tokenizeAny(u8, path, "/\\");
     while (it.next()) |part| {
         if (std.mem.eql(u8, part, ".")) continue;
         if (std.mem.eql(u8, part, "..")) {
