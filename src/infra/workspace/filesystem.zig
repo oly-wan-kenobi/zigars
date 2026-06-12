@@ -213,6 +213,10 @@ pub const Store = struct {
             const path = allocator.dupe(u8, entry.path) catch return error.OutOfMemory;
             var path_owned = true;
             defer if (path_owned) allocator.free(path);
+            // Walker entries use the OS separator; scan results are
+            // workspace-relative logical paths, so normalize Windows `\` to
+            // `/` for a stable cross-platform port contract.
+            if (comptime std.fs.path.sep == '\\') std.mem.replaceScalar(u8, path, '\\', '/');
             try entries.append(allocator, .{ .path = path });
             path_owned = false;
         }

@@ -567,7 +567,9 @@ fn relativeEntryPath(allocator: std.mem.Allocator, root: []const u8, entry_path:
     if (root.len == 0 or std.mem.eql(u8, root, ".")) {
         return allocator.dupe(u8, entry_path) catch return error.OutOfMemory;
     }
-    return std.fs.path.join(allocator, &.{ root, entry_path }) catch return error.OutOfMemory;
+    // Workspace-relative logical paths stay `/`-separated on every platform;
+    // std.fs.path.join would insert `\` on Windows.
+    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ root, entry_path }) catch return error.OutOfMemory;
 }
 
 /// Byte-order comparator used to sort scanned paths for deterministic output.

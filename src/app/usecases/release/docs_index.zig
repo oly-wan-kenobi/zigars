@@ -124,7 +124,9 @@ pub fn langrefSearch(allocator: std.mem.Allocator, context: app_context.ReleaseD
     var probe: docs_domain.LangrefProbe = .{};
     for (docs_domain.langref_candidates) |rel| {
         probe.candidates_checked += 1;
-        const path = std.fs.path.join(allocator, &.{ lib_dir.value, rel }) catch return error.OutOfMemory;
+        // Docs-scanner port paths are `/`-separated on every platform;
+        // std.fs.path.join would insert `\` on Windows.
+        const path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ lib_dir.value, rel }) catch return error.OutOfMemory;
         defer allocator.free(path);
         const read = context.docs_scanner.readAbsolute(allocator, .{
             .path = path,
@@ -229,7 +231,8 @@ fn builtinIndexInput(allocator: std.mem.Allocator, context: app_context.ReleaseD
     var source_path: ?[]u8 = null;
     var source_bytes: ?[]const u8 = null;
     if (std_dir) |dir| {
-        source_path = std.fs.path.join(allocator, &.{ dir.value, "zig/BuiltinFn.zig" }) catch return error.OutOfMemory;
+        // Docs-scanner port paths are `/`-separated on every platform.
+        source_path = std.fmt.allocPrint(allocator, "{s}/zig/BuiltinFn.zig", .{dir.value}) catch return error.OutOfMemory;
         if (source_path) |path| {
             defer allocator.free(path);
             const read = context.docs_scanner.readAbsolute(allocator, .{
@@ -289,7 +292,8 @@ fn collectStdFiles(allocator: std.mem.Allocator, context: app_context.ReleaseDoc
     }
     var skipped: usize = 0;
     for (scan.paths) |entry| {
-        const source_path = std.fs.path.join(allocator, &.{ std_dir, entry.path }) catch return error.OutOfMemory;
+        // Docs-scanner port paths are `/`-separated on every platform.
+        const source_path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ std_dir, entry.path }) catch return error.OutOfMemory;
         const read = context.docs_scanner.readAbsolute(allocator, .{
             .path = source_path,
             .max_bytes = docs_domain.std_source_read_limit,

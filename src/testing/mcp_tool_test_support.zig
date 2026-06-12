@@ -12,15 +12,17 @@ const workspace_mod = zigars.infra.workspace.workspace;
 
 pub const App = zigars.bootstrap.runtime_state.App;
 
-/// Returns an App wired to /tmp with a synthetic zig path suitable for
-/// command-planning tool fixtures that do not invoke real Zig builds.
-/// Caller owns the returned App and must call deinit when done.
+/// Returns an App wired to the test process cwd with a synthetic zig path
+/// suitable for command-planning tool fixtures that do not invoke real Zig
+/// builds or touch workspace files. The cwd always exists on every platform
+/// ("/tmp" does not exist on Windows). Caller owns the returned App and must
+/// call deinit when done.
 pub fn appForCommandPlanning(allocator: std.mem.Allocator) !App {
     return .{
         .allocator = allocator,
         .io = std.testing.io,
-        .config = .{ .workspace = "/tmp", .zig_path = "zig" },
-        .workspace = try workspace_mod.Workspace.init(allocator, std.testing.io, "/tmp", null),
+        .config = .{ .workspace = ".", .zig_path = "zig" },
+        .workspace = try workspace_mod.Workspace.init(allocator, std.testing.io, ".", null),
     };
 }
 
