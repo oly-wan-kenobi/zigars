@@ -262,6 +262,15 @@ const ContainedTarget = struct {
     /// following a final-component symlink, so a swap to an outside-pointing
     /// symlink after canonicalization is rejected at open time.
     fn openFileNoFollow(self: ContainedTarget, io: std.Io) !std.Io.File {
+        if (builtin.os.tag == .windows) {
+            // Zig 0.16's no-follow open on Windows yields a handle whose
+            // async flag the std file readers cannot service: reads panic
+            // with `.PENDING => unreachable` in readFilePositionalWindows.
+            // Use the default open there. Windows symlink creation requires
+            // elevation or developer mode, and containment is still enforced
+            // against the canonical pinned parent directory handle.
+            return self.parent.openFile(io, self.name, .{});
+        }
         return self.parent.openFile(io, self.name, .{
             .follow_symlinks = false,
             // Belt-and-suspenders on operating systems that enforce it

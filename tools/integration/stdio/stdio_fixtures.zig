@@ -315,9 +315,14 @@ const StdioClient = struct {
 
         const resource_read = try self.request("resources/read", "{\"uri\":\"zigars://workspace\"}");
         defer self.allocator.free(resource_read);
-        // The response is JSON, which escapes `\` — match the escaped form so
-        // Windows workspace paths are found inside the JSON string value.
-        const json_escaped_workspace = try std.mem.replaceOwned(u8, self.allocator, workspace, "\\", "\\\\");
+        // The server reports the canonical absolute workspace path, which on
+        // Windows uses `\` separators while this fixture's relative workspace
+        // uses `/`. Normalize the needle to the platform separator, then match
+        // the JSON-escaped form (JSON escapes `\` inside string values).
+        const native_sep_workspace = try self.allocator.dupe(u8, workspace);
+        defer self.allocator.free(native_sep_workspace);
+        if (comptime std.fs.path.sep == '\\') std.mem.replaceScalar(u8, native_sep_workspace, '/', '\\');
+        const json_escaped_workspace = try std.mem.replaceOwned(u8, self.allocator, native_sep_workspace, "\\", "\\\\");
         defer self.allocator.free(json_escaped_workspace);
         if (std.mem.indexOf(u8, resource_read, json_escaped_workspace) == null) return error.AssertionFailed;
 
