@@ -1170,11 +1170,6 @@
     "applied": false,
     "backend_status.backend": "afl-fuzz"
   },
-  "afl_run_paths_windows": {
-    "kind": "backend_error",
-    "error_kind": "unsupported_platform",
-    "backend": "afl-fuzz"
-  },
   "libfuzzer_run_paths": {
     "kind": "zig_libfuzzer_run",
     "applied": false,

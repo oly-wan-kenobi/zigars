@@ -47,9 +47,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 203, "zig_valgrind_memcheck", "{\"command\":\"zig --version\",\"apply\":false}", expected, "valgrind_memcheck_paths", scenarios);
     try assertToolPaths(allocator, io, port, 204, "zig_callgrind_report", callgrind_args, expected, "callgrind_report_paths", scenarios);
     try assertToolPaths(allocator, io, port, 205, "zig_fuzz_plan", "{\"target\":\"native\",\"command\":\"zig build test\"}", expected, "fuzz_plan_paths", scenarios);
-    // AFL++ execution is intentionally unsupported on Windows; see above.
-    const afl_run_key = if (builtin.os.tag == .windows) "afl_run_paths_windows" else "afl_run_paths";
-    try assertToolPaths(allocator, io, port, 206, "zig_afl_run", "{\"command\":\"zig --version\",\"corpus\":\"tests/fixtures/static-analysis\",\"apply\":false}", expected, afl_run_key, scenarios);
+    // zig_afl_run previews on apply=false before its Windows gate, so the
+    // plan expectation holds on every platform.
+    try assertToolPaths(allocator, io, port, 206, "zig_afl_run", "{\"command\":\"zig --version\",\"corpus\":\"tests/fixtures/static-analysis\",\"apply\":false}", expected, "afl_run_paths", scenarios);
     try assertToolPaths(allocator, io, port, 207, "zig_libfuzzer_run", "{\"command\":\"zig --version\",\"apply\":false}", expected, "libfuzzer_run_paths", scenarios);
     try assertToolPaths(allocator, io, port, 208, "zig_fuzz_crash_minimize", crash_args, expected, "fuzz_minimize_paths", scenarios);
     try assertToolPaths(allocator, io, port, 209, "zig_fuzz_corpus_summary", "{\"path\":\"tests/fixtures/static-analysis\",\"limit\":3}", expected, "fuzz_corpus_paths", scenarios);
