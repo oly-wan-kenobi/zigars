@@ -180,7 +180,9 @@ test "langref search falls back for installed read failure and missing candidate
 
     try toolchain.expectGet(.{ .key = "lib_dir", .provenance = "release_docs.langref" }, "/zig/lib");
     for (docs_domain.langref_candidates) |rel| {
-        const path = try std.fs.path.join(allocator, &.{ "/zig/lib", rel });
+        // Mirror the production '/'-join: docs-scanner port paths stay
+        // `/`-separated on every platform.
+        const path = try std.fmt.allocPrint(allocator, "/zig/lib/{s}", .{rel});
         defer allocator.free(path);
         try scanner.expectReadError(.{
             .path = path,
@@ -427,7 +429,9 @@ test "release docs use cases propagate allocation failures without leaking stage
 
             try toolchain.expectGet(.{ .key = "lib_dir", .provenance = "release_docs.langref" }, "/zig/lib");
             for (docs_domain.langref_candidates) |rel| {
-                const path = try std.fs.path.join(std.testing.allocator, &.{ "/zig/lib", rel });
+                // Mirror the production '/'-join: docs-scanner port paths
+                // stay `/`-separated on every platform.
+                const path = try std.fmt.allocPrint(std.testing.allocator, "/zig/lib/{s}", .{rel});
                 defer std.testing.allocator.free(path);
                 try scanner.expectReadError(.{
                     .path = path,
