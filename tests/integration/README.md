@@ -1,8 +1,8 @@
 # Integration Scenario Manifests
 
-This directory contains build-enforced integration scenario manifests. Executable
-HTTP and stdio integration harnesses live under `tools/integration/` and are
-dispatched through the existing `zigars-tools` helper binary.
+This directory contains build-enforced integration scenario manifests.
+Executable HTTP and stdio integration harnesses live under `tools/integration/`
+and are dispatched through the existing `zigars-tools` helper binary.
 
 Current contents:
 
@@ -11,7 +11,7 @@ Current contents:
 - `backend-contract/SCENARIOS.md` is the human-readable companion checked for
   drift against the manifest and backend conformance scripts.
 
-Related gates:
+Related build gates:
 
 - `zig build integration` runs the default transport integration gates:
   `zig build smoke` and `zig build stdio-fixtures`.
@@ -27,7 +27,7 @@ HTTP smoke and stdio fixture floors are owned by
 `tools/coverage/coverage_config.zig`; avoid duplicating numeric floor values in
 this README.
 
-Rules:
+Maintenance rules:
 
 - Keep executable HTTP and stdio fixture code under `tools/integration/` unless
   the build topology changes.

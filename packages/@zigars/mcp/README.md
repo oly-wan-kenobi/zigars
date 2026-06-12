@@ -12,10 +12,10 @@
 `@zigars/mcp` is the npm entry point for `zigars`, a deterministic local MCP
 server for Zig development.
 
-It is a small TypeScript launcher: it downloads the matching `zigars` binary from
-GitHub Releases, verifies the archive checksum, caches the binary locally, and
-runs it as a stdio MCP server. The package name is `@zigars/mcp`; the project,
-server, and downloaded binary are still named `zigars`.
+The package is a small TypeScript launcher. It downloads the matching `zigars`
+binary from GitHub Releases, verifies the archive checksum, caches the binary
+locally, and runs it as a stdio MCP server. The package name is `@zigars/mcp`;
+the project, server, and downloaded binary are still named `zigars`.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ yarn dlx -p @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/proje
 pnpm dlx --package @zigars/mcp@0.2.0 zigars-mcp --workspace /absolute/path/to/zig/project
 ```
 
-Use the same command in any MCP client that can launch a stdio server:
+Use the same command shape in any MCP client that can launch a stdio server:
 
 ```json
 {
@@ -83,8 +83,8 @@ changes in Zig workspaces. Source writes require explicit `apply=true`.
 | Release and adoption | `zigars_schema`, `zigars_doctor`, `zigars_client_config_generate`, `zigars_release_claim_check`, `zigars_smoke_plan` | Helps clients discover capabilities and package setup evidence. |
 
 Protocol features are additive. Clients that understand `outputSchema`,
-`resource_link`, MCP elicitation, or MCP sampling get richer integration;
-clients that do not still receive normal text plus `structuredContent` results.
+`resource_link`, MCP elicitation, or MCP sampling get richer integration.
+Clients that do not still receive normal text plus `structuredContent` results.
 Patch-session writes remain `apply=true` and stale-preimage gated, and
 `zigars_failure_fusion summarize=true` falls back to deterministic evidence when
 sampling is unavailable.
@@ -287,8 +287,8 @@ Claude Desktop can use manual JSON configuration today:
 }
 ```
 
-MCPB packages are the polished Claude Desktop install path for mainstream
-desktop platforms:
+MCPB packages are the direct Claude Desktop install path for mainstream desktop
+platforms:
 
 ```text
 zigars-darwin-universal.mcpb
@@ -522,8 +522,8 @@ npm exec --yes --package ./zigars-mcp-0.2.0.tgz -- \
 ```
 
 The final command contacts GitHub unless the selected binary is already cached.
-Confirm the matching `v0.2.0` GitHub release assets exist before using this as
-a publish gate.
+Confirm the matching `v0.2.0` GitHub release assets exist before using this as a
+publish gate.
 
 </details>
 

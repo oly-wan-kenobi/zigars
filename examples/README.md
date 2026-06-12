@@ -1,7 +1,7 @@
 # Examples
 
-This directory contains client configuration shapes and a small JSONL set of
-tool calls. Replace absolute paths before using any config.
+This directory contains MCP client configuration examples and a small JSONL set
+of representative tool calls. Replace absolute paths before using any config.
 
 ## Files
 
@@ -33,8 +33,8 @@ zig_format {"file":"src/main.zig","apply":false}
 zigars_trust_report
 ```
 
-The sequence proves the served workspace, basic health without optional backend
-probes, one parser-backed read-only insight, the preview-first source-write
-gate, and the process trust posture. After that, use
+This sequence verifies the served workspace, basic health without optional
+backend probes, one parser-backed read-only insight, the preview-first
+source-write gate, and the process trust posture. After that, use
 [docs/tool-index.generated.md](../docs/tool-index.generated.md) for the full
 tool catalog.

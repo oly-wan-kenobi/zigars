@@ -23,16 +23,16 @@
 
 `zigars` is a deterministic Zig MCP workbench, not an AI code generator. It
 gives MCP-capable agents such as Codex, Claude, Gemini CLI, and Hermes
-structured Zig evidence: compiler commands, formatting, ZLS code intelligence,
-parser-backed facts, local docs lookup, static-analysis summaries,
-transactional edit/refactor previews, optional backend evidence, and
+structured evidence for Zig projects: compiler commands, formatting, ZLS code
+intelligence, parser-backed facts, local docs lookup, static-analysis
+summaries, transactional edit/refactor previews, optional backend evidence, and
 runtime/test/performance workflow helpers.
 
-Shell can run `zig build`. zigars adds structured diagnostics, command metadata,
-parser-backed facts, ZLS-backed code intelligence, preview diffs, confidence
-labels, and next verification steps so agents do not have to infer everything
-from shell text. Shell, the Zig compiler, project tests, CI, and external
-backends remain the source of truth for the behavior they execute. See
+Shell already runs `zig build`. zigars adds structured diagnostics, command
+metadata, parser-backed facts, ZLS-backed code intelligence, preview diffs,
+confidence labels, and next verification steps so agents do not have to infer
+everything from shell text. Shell, the Zig compiler, project tests, CI, and
+external backends remain the source of truth for the behavior they execute. See
 [docs/why-zigars.md](docs/why-zigars.md).
 
 ## Quickstart
@@ -108,10 +108,10 @@ zigars_trust_report
 resources/read {"uri":"zigars://trust/manifest"}
 ```
 
-This verifies the served workspace, basic server health without optional backend
-probes, one parser-backed read-only insight, the preview-first source-write
-gate, the process trust posture, and the connection-time trust manifest linked
-from MCP `initialize`. The guided walkthrough is
+This sequence verifies the served workspace, basic server health without
+optional backend probes, one parser-backed read-only insight, the preview-first
+source-write gate, the process trust posture, and the connection-time trust
+manifest linked from MCP `initialize`. The guided walkthrough is
 [docs/getting-started.md](docs/getting-started.md).
 
 ## Thin CLI Mode
@@ -179,7 +179,7 @@ npx -y @zigars/skills@0.2.0 path zigars-development
 The first maintained skill is `zigars-development`, which dogfoods zigars while
 developing this repo. See [docs/dogfooding.md](docs/dogfooding.md).
 
-## Quickstart with Claude Desktop MCPB
+## Claude Desktop MCPB
 
 Claude Desktop users can install a release `.mcpb` bundle and choose the Zig
 workspace directory during installation. Download the bundle for your platform

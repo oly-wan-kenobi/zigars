@@ -1,4 +1,4 @@
-# zigars MCPB release package
+# zigars MCPB Release Package
 
 This package stages and packs release-grade MCPB artifacts for Claude Desktop.
 It consumes the ReleaseSafe archives produced by `zig build dist` and writes
@@ -10,7 +10,7 @@ tooling was added. The TypeScript build script shells through npm or Bun to run
 `@anthropic-ai/mcpb@2.1.2`, so maintainers do not need a global MCPB CLI
 install.
 
-## Artifact strategy
+## Artifact Strategy
 
 The release ships true binary MCPB bundles, not a Node dispatcher. MCPB platform
 compatibility currently supports OS selectors (`darwin`, `win32`, `linux`) and
@@ -24,8 +24,8 @@ architecture policy:
 | `zigars-windows-x64.mcpb` | `zigars-x86_64-windows-gnu` | `win32` |
 
 Linux arm64 and Windows arm64 users should use `@zigars/mcp` or the direct
-release archive until MCPB consumers have an architecture-selectable package flow or
-those bundles are separately smoke-tested.
+release archive until MCPB consumers have an architecture-selectable package
+flow or those bundles are separately smoke-tested.
 
 ## Commands
 

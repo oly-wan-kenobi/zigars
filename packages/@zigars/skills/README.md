@@ -10,8 +10,8 @@
 
 `@zigars/skills` ships client-consumable skills for zigars-aware development
 workflows. It is separate from `@zigars/mcp`: the MCP package starts the local
-zigars server, while this package distributes agent instructions that tell clients
-how to use zigars effectively.
+zigars server, while this package distributes agent instructions that tell
+clients how to use zigars effectively.
 
 The package has no install side effects. It does not configure an MCP client,
 copy files into a user profile, or claim that skills are part of the base MCP
