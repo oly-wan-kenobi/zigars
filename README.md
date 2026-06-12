@@ -347,9 +347,10 @@ zig build dist release-asset-smoke
 binary results, per-suite floors, Cobertura-derived line coverage, per-file
 uncovered lines, tracked files missing from Cobertura, and the configured
 coverage floors. The default local release gate fails when kcov cannot measure
-project source coverage, any tracked `src/` or `tools/` Zig file is missing from
-the report, or total, `src/`, or `tools/` coverage drops below the configured
-floors in `tools/coverage_config.zig`.
+project source coverage or when total, `src/`, or `tools/` coverage drops below
+the raise-only ratchet floors in `tools/coverage/coverage_config.zig`. Uncovered
+lines and missing tracked files are reported as diagnostics; kcov cannot observe
+comptime-only Zig files, so those counts do not gate.
 
 `zig build dist` creates ReleaseSafe archives and `zigars-checksums.txt` under
 `dist/assets`. `zig build release-asset-smoke` verifies checksums, archive

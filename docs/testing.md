@@ -149,15 +149,22 @@ floors, uncovered lines, missing tracked files, and per-floor pass/fail fields.
 The floors are defined in `tools/coverage/coverage_config.zig`: total tests at least
 500, library tests at least 480, executable tests at least 1, tools tests at
 least 26, fuzz tests at least 2, and total/`src`/`tools` line coverage at
-100.00%. Use `zig-out/bin/zigars-tools coverage --min-tests <count>` after
+96.50%/96.50%/96.00%. The line-coverage floors follow a raise-only ratchet:
+they are set from measured CI coverage with a margin for run-to-run seed
+variance, may only be raised as coverage improves, and lowering one requires
+changing both the constant and its pinned test in the same reviewed commit.
+Use `zig-out/bin/zigars-tools coverage --min-tests <count>` after
 `zig build install-test-bins` to override only the aggregate test-count floor.
 
 The coverage helper writes per-binary reports under `coverage/kcov/`, merges
 them, parses Cobertura XML, and fails when kcov is unavailable, produces no
 project-source report, or total, `src/`, or `tools` line coverage falls below the
 configured floors. It also emits per-file line coverage, uncovered line numbers,
-and tracked `src/**/*.zig` or `tools/**/*.zig` files missing from Cobertura; the
-strict gate fails unless uncovered-line and missing-file counts are both zero.
+and tracked `src/**/*.zig` or `tools/**/*.zig` files missing from Cobertura.
+Uncovered-line and missing-file counts are diagnostics, not gates: kcov sees no
+executable lines in comptime-only Zig files (for example the manifest definition
+tables), so those files always appear in `missing_files` and a zero-missing gate
+would be unsatisfiable.
 `src/testing/coverage_imports.zig` is the explicit coverage-only import list for
 metadata and contract modules that otherwise have no direct unit-test entrypoint;
 adding a file there should be a conscious coverage decision, not a substitute
