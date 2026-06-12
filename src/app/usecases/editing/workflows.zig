@@ -29,7 +29,8 @@ pub fn generatedFileTraceValue(allocator: std.mem.Allocator, context: app_contex
     // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_file_trace" });
     defer resolved.deinit(allocator);
-    const rel = workspaceRelative(context.workspace.root, resolved.path);
+    const rel = try workspaceRelative(allocator, context.workspace.root, resolved.path);
+    defer allocator.free(rel);
     const policy = classifyPath(rel);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -82,7 +83,8 @@ pub fn generatedRouteValue(allocator: std.mem.Allocator, context: app_context.Ed
     // Keep this logic centralized so callers observe one consistent behavior path.
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = path, .for_output = true, .provenance = "editing.generated_route" });
     defer resolved.deinit(allocator);
-    const rel = workspaceRelative(context.workspace.root, resolved.path);
+    const rel = try workspaceRelative(allocator, context.workspace.root, resolved.path);
+    defer allocator.free(rel);
     const policy = classifyPath(rel);
     var obj = std.json.ObjectMap.empty;
     var obj_owned = true;
@@ -191,7 +193,8 @@ pub fn codeActionBatchUnavailableValue(allocator: std.mem.Allocator) !std.json.V
 pub fn formatValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: ?[]const u8, apply: bool, timeout_ms: i64) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.format" });
     defer resolved.deinit(allocator);
-    const rel = workspaceRelative(context.workspace.root, resolved.path);
+    const rel = try workspaceRelative(allocator, context.workspace.root, resolved.path);
+    defer allocator.free(rel);
     const source = if (content) |bytes|
         ports.WorkspaceReadResult{ .bytes = bytes, .owns_bytes = false }
     else
@@ -292,7 +295,8 @@ pub fn formatCheckValue(allocator: std.mem.Allocator, context: app_context.CoreC
 pub fn patchPreviewValue(allocator: std.mem.Allocator, context: app_context.CoreCommandContext, file: []const u8, content: []const u8, apply: bool) !std.json.Value {
     const resolved = try context.workspace_store.resolve(allocator, .{ .path = file, .provenance = "editing.patch_preview.resolve" });
     defer resolved.deinit(allocator);
-    const rel = workspaceRelative(context.workspace.root, resolved.path);
+    const rel = try workspaceRelative(allocator, context.workspace.root, resolved.path);
+    defer allocator.free(rel);
     const source = try context.workspace_store.read(allocator, .{
         .path = rel,
         .max_bytes = max_session_file_bytes,
@@ -672,13 +676,19 @@ fn ownedString(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
 /// results and policy classification use a stable workspace-relative form.
 /// Returns `path` unchanged if it is not under `root` (kept for display only;
 /// the workspace store, not this helper, enforces the sandbox boundary).
-fn workspaceRelative(root: []const u8, path: []const u8) []const u8 {
+/// Returns the workspace-relative form of `path` as an allocator-owned,
+/// `/`-separated logical path. Windows resolved paths carry `\`, which would
+/// miss the `/`-keyed generated-path policy table and leak platform
+/// separators into the public result contract.
+fn workspaceRelative(allocator: std.mem.Allocator, root: []const u8, path: []const u8) ![]u8 {
+    var rel: []const u8 = path;
     if (std.mem.startsWith(u8, path, root)) {
-        var rel = path[root.len..];
+        rel = path[root.len..];
         while (rel.len > 0 and (rel[0] == '/' or rel[0] == '\\')) rel = rel[1..];
-        return rel;
     }
-    return path;
+    const owned = try allocator.dupe(u8, rel);
+    std.mem.replaceScalar(u8, owned, '\\', '/');
+    return owned;
 }
 
 const fakes = @import("../../../testing/fakes/root.zig");
