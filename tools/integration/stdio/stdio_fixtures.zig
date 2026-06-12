@@ -315,7 +315,11 @@ const StdioClient = struct {
 
         const resource_read = try self.request("resources/read", "{\"uri\":\"zigars://workspace\"}");
         defer self.allocator.free(resource_read);
-        if (std.mem.indexOf(u8, resource_read, workspace) == null) return error.AssertionFailed;
+        // The response is JSON, which escapes `\` — match the escaped form so
+        // Windows workspace paths are found inside the JSON string value.
+        const json_escaped_workspace = try std.mem.replaceOwned(u8, self.allocator, workspace, "\\", "\\\\");
+        defer self.allocator.free(json_escaped_workspace);
+        if (std.mem.indexOf(u8, resource_read, json_escaped_workspace) == null) return error.AssertionFailed;
 
         const prompts = try self.request("prompts/list", null);
         defer self.allocator.free(prompts);

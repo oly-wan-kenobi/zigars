@@ -247,10 +247,13 @@ fn startHttpServer(allocator: std.mem.Allocator, io: Io, options: HttpSmokeOptio
         const port_text = try std.fmt.bufPrint(&port_buf, "{d}", .{port});
         var server_argv = try httpServerArgv(allocator, options, port_text);
         defer server_argv.deinit(allocator);
+        // stderr is inherited so a server that dies at startup prints its
+        // failure directly into the smoke output (a piped stderr would stay
+        // unread on the success path and could block a chatty child).
         var child = try std.process.spawn(io, .{
             .argv = server_argv.items,
             .stdout = .ignore,
-            .stderr = .ignore,
+            .stderr = .inherit,
         });
         // Run the full initialize handshake + assertions (serverInfo, trust
         // manifest URI). On a non-terminal attempt a startup failure (e.g. the
