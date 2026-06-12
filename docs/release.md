@@ -239,7 +239,13 @@ provide CPU architecture selectors.
    validation status. If the manual backend conformance script or workflow did
    not run, say `not run` instead of implying coverage.
 12. Confirm the tag and GitHub release do not already exist.
-13. Tag the release:
+13. Confirm the `NPM_TOKEN` repository secret is configured: a granular npm
+   automation token with publish access to the `@zigars` scope. The tag
+   workflow uses it to publish `@zigars/mcp` and `@zigars/skills`. npm
+   provenance requires a public repository; while the repository is private
+   the workflow skips npm publishing and the packages must not be claimed as
+   installable.
+14. Tag the release:
 
 ```sh
 version="$(zig build version)"
@@ -247,12 +253,16 @@ git tag -a "v${version}" -m "zigars ${version}"
 git push origin "v${version}"
 ```
 
-The normal tag workflow reruns `zig build release-check`, runs
-`zig build dist release-asset-smoke`, builds MCPB bundles, publishes Linux,
-macOS, and Windows archives, publishes `zigars-checksums.txt`,
-`zigars-mcpb-checksums.txt`, and the `.mcpb` files, and creates GitHub provenance
-attestations from the checksum file when GitHub supports attestations for the
-repository. User-owned private repositories cannot persist GitHub attestations,
+The normal tag workflow first verifies the tag version against
+`zig build version` and both npm package manifests, reruns
+`zig build release-check`, runs `zig build dist release-asset-smoke`, builds
+MCPB bundles, publishes Linux, macOS, and Windows archives, publishes
+`zigars-checksums.txt`, `zigars-mcpb-checksums.txt`, and the `.mcpb` files, and
+creates GitHub provenance attestations from the checksum file when GitHub
+supports attestations for the repository. After the GitHub release upload it
+runs the npm package tests and publishes `@zigars/mcp` and `@zigars/skills`
+with npm provenance (`npm publish --provenance --access public`), in that
+order, so release assets exist before any npm version becomes installable. User-owned private repositories cannot persist GitHub attestations,
 so the workflow skips that step there and the release notes must not claim
 provenance attestations. GitHub Actions are pinned to commit SHAs in the
 workflow; update the adjacent tag comments when bumping an action.

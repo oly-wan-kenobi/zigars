@@ -29,6 +29,22 @@ jobs:
       - name: Install kcov
         run: bash .github/scripts/install-kcov.sh
 
+      - name: Verify tag matches release versions
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          zig_version="$(zig build version)"
+          if [ "${zig_version}" != "${tag_version}" ]; then
+            echo "::error::build.zig.zon version ${zig_version} does not match tag ${tag_version}"
+            exit 1
+          fi
+          for pkg in packages/@zigars/mcp packages/@zigars/skills; do
+            pkg_version="$(node -p "require('./${pkg}/package.json').version")"
+            if [ "${pkg_version}" != "${tag_version}" ]; then
+              echo "::error::${pkg} version ${pkg_version} does not match tag ${tag_version}"
+              exit 1
+            fi
+          done
+
       - name: Release gate
         run: zig build release-check
 
@@ -62,3 +78,27 @@ jobs:
             dist/assets/*.mcpb
             dist/assets/zigars-checksums.txt
             dist/assets/zigars-mcpb-checksums.txt
+
+      # npm publishing runs after the GitHub release upload so the shim's
+      # download target (release archives + zigars-checksums.txt) exists the
+      # moment the package version becomes installable. Requires the NPM_TOKEN
+      # repository secret (granular automation token with publish access to the
+      # @zigars scope). npm provenance needs a public repository, so publishing
+      # is skipped while the repository is private, like attestation above.
+      - name: Setup Node for npm publish
+        if: ${{ !github.event.repository.private }}
+        # actions/setup-node@v4.1.0
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish npm packages
+        if: ${{ !github.event.repository.private }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          (cd packages/@zigars/mcp && npm install && npm run test:node)
+          (cd packages/@zigars/skills && npm test)
+          (cd packages/@zigars/mcp && npm publish --provenance --access public)
+          (cd packages/@zigars/skills && npm publish --provenance --access public)

@@ -1,8 +1,10 @@
 //! Internal server tests covering rollback, transport error handling, cancellation,
 //! and lifecycle state transitions.
-//! Pins that: OOM during addResource/addPrompt rolls back; transport read errors
-//! are skipped rather than fatal; cancellation tokens fire only for cancellable
-//! requests; and notifications/initialized only advances state from .initializing.
+//! Pins that: OOM during addResource/addPrompt rolls back; per-message receive
+//! errors (e.g. MessageTooLarge) are skipped while stream-level errors
+//! (ReadError, ConnectionClosed) shut the server down instead of busy-looping;
+//! cancellation tokens fire only for cancellable requests; and
+//! notifications/initialized only advances state from .initializing.
 
 const std = @import("std");
 const mcp = @import("mcp");
@@ -39,6 +41,7 @@ test "server rollback and transport error branches" {
 
     const ErrorReceiveTransport = struct {
         calls: usize = 0,
+        first_error: transport_mod.Transport.ReceiveError,
 
         fn transport(self: *@This()) transport_mod.Transport {
             return .{ .ptr = self, .vtable = &.{ .send = send, .receive = receive, .close = close } };
@@ -49,20 +52,32 @@ test "server rollback and transport error branches" {
         fn receive(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) transport_mod.Transport.ReceiveError!?[]const u8 {
             const self: *@This() = @ptrCast(@alignCast(ptr));
             self.calls += 1;
-            if (self.calls == 1) return error.ReadError;
+            if (self.calls == 1) return self.first_error;
             return error.EndOfStream;
         }
 
         fn close(_: *anyopaque) void {}
     };
 
-    var receive_transport: ErrorReceiveTransport = .{};
-    var receive_server = Server.init(std.testing.allocator, .{ .name = "receive", .version = "1" });
-    defer receive_server.deinit();
-    try receive_server.runWithTransport(std.testing.io, std.testing.allocator, receive_transport.transport());
-    try std.testing.expectEqual(@as(usize, 2), receive_transport.calls);
-    try receive_transport.transport().send(std.testing.io, std.testing.allocator, "{}");
-    receive_transport.transport().close();
+    // MessageTooLarge consumes input before failing, so the loop skips the
+    // message and keeps serving: a second receive call observes EndOfStream.
+    var skip_transport: ErrorReceiveTransport = .{ .first_error = error.MessageTooLarge };
+    var skip_server = Server.init(std.testing.allocator, .{ .name = "receive", .version = "1" });
+    defer skip_server.deinit();
+    try skip_server.runWithTransport(std.testing.io, std.testing.allocator, skip_transport.transport());
+    try std.testing.expectEqual(@as(usize, 2), skip_transport.calls);
+    try skip_transport.transport().send(std.testing.io, std.testing.allocator, "{}");
+    skip_transport.transport().close();
+
+    // Stream-level errors mean no further message can ever arrive; the server
+    // must shut down after the first call instead of retrying in a hot loop.
+    for ([_]transport_mod.Transport.ReceiveError{ error.ReadError, error.ConnectionClosed }) |fatal_error| {
+        var fatal_transport: ErrorReceiveTransport = .{ .first_error = fatal_error };
+        var fatal_server = Server.init(std.testing.allocator, .{ .name = "receive-fatal", .version = "1" });
+        defer fatal_server.deinit();
+        try fatal_server.runWithTransport(std.testing.io, std.testing.allocator, fatal_transport.transport());
+        try std.testing.expectEqual(@as(usize, 1), fatal_transport.calls);
+    }
 
     const ErrorSendTransport = struct {
         fn transport(self: *@This()) transport_mod.Transport {

@@ -365,7 +365,12 @@ pub const Server = struct {
         while (self.state != .stopped and self.state != .shutting_down) {
             const message_data = self.transport.?.receive(io, allocator) catch |err| {
                 switch (err) {
-                    error.EndOfStream => {
+                    // EndOfStream is the clean client shutdown. ReadError and
+                    // ConnectionClosed mean the stream is unusable — Zig 0.16
+                    // surfaces a closed stdin as a read error through the
+                    // upstream transport — so retrying would spin hot without
+                    // ever yielding another message.
+                    error.EndOfStream, error.ReadError, error.ConnectionClosed => {
                         self.state = .shutting_down;
                         break;
                     },

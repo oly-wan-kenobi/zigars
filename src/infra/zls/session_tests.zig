@@ -178,14 +178,23 @@ test "start replays an existing document state and restart records startup failu
     try testing.expect(state.documents != null);
 
     var observed = observability.State{};
-    try testing.expectError(error.NoResponse, restart(&state, .{ .process = &proc_slot, .client = &client_slot, .documents = &docs_slot }, .{
+    // `/bin/false` exits immediately, so the restart failure is a race: the
+    // initialize write can hit the dead pipe (BrokenPipe/EndOfStream/
+    // NotConnected) or the 1ms response wait can expire first (NoResponse).
+    if (restart(&state, .{ .process = &proc_slot, .client = &client_slot, .documents = &docs_slot }, .{
         .allocator = allocator,
         .io = io,
         .workspace_root = root,
         .zls_path = false_path,
         .zls_timeout_ms = 1,
         .observability = &observed,
-    }));
+    })) {
+        return error.TestExpectedError;
+    } else |err| switch (err) {
+        error.NoResponse, error.BrokenPipe, error.EndOfStream, error.NotConnected => {},
+        else => return err,
+    }
+    try testing.expect(state.last_failure != null);
 }
 
 test "findExecutable reports SkipZigTest when no candidate exists" {
