@@ -4,6 +4,7 @@
 //! against expectations stored in the shared fixture JSON.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
 
@@ -57,14 +58,19 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 194, "zigars_session_view", "{\"kind\":\"bench_regression_gate\",\"id\":\"smoke-gate\"}", expected, "session_view_paths", scenarios);
     try assertToolPaths(allocator, io, port, 182, "zig_perf_budget_check", perf_budget_args, expected, "perf_budget_paths", scenarios);
     try assertToolPaths(allocator, io, port, 183, "zig_profile_regression", profile_regression_args, expected, "profile_regression_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 184, "zig_samply_record", "{\"command\":\"zig build test\",\"apply\":false}", expected, "samply_record_paths", scenarios);
+    // Samply recording is intentionally unsupported on Windows; expect the
+    // structured unsupported-platform result there instead of a record plan.
+    const samply_record_key = if (builtin.os.tag == .windows) "samply_record_paths_windows" else "samply_record_paths";
+    try assertToolPaths(allocator, io, port, 184, "zig_samply_record", "{\"command\":\"zig build test\",\"apply\":false}", expected, samply_record_key, scenarios);
     try assertToolPaths(allocator, io, port, 185, "zig_samply_summary", samply_summary_args, expected, "samply_summary_paths", scenarios);
     try assertToolPaths(allocator, io, port, 186, "zig_samply_import", samply_import_args, expected, "samply_import_paths", scenarios);
     try assertToolPaths(allocator, io, port, 187, "zig_samply_artifact", "{\"path\":\"tests/fixtures/http-smoke.expect.json\",\"apply\":false}", expected, "samply_artifact_paths", scenarios);
     try assertToolPaths(allocator, io, port, 187, "zig_profile_open", "{\"path\":\"tests/fixtures/http-smoke.expect.json\"}", expected, "profile_open_paths", scenarios);
     try assertToolPaths(allocator, io, port, 188, "zig_tracy_plan", "{\"limit\":5}", expected, "tracy_plan_paths", scenarios);
     try assertToolPaths(allocator, io, port, 189, "zig_tracy_probe", "{\"probe_backend\":false}", expected, "tracy_probe_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 190, "zig_tracy_capture", "{\"apply\":false}", expected, "tracy_capture_paths", scenarios);
+    // Tracy capture is intentionally unsupported on Windows; see samply above.
+    const tracy_capture_key = if (builtin.os.tag == .windows) "tracy_capture_paths_windows" else "tracy_capture_paths";
+    try assertToolPaths(allocator, io, port, 190, "zig_tracy_capture", "{\"apply\":false}", expected, tracy_capture_key, scenarios);
     try assertToolPaths(allocator, io, port, 191, "zig_tracy_artifacts", "{\"path\":\"tests/fixtures/http-smoke.expect.json\",\"apply\":false}", expected, "tracy_artifacts_paths", scenarios);
     try assertToolPaths(allocator, io, port, 192, "zig_tracy_hints", "{}", expected, "tracy_hints_paths", scenarios);
     try assertToolPaths(allocator, io, port, 193, "zig_perf_evidence_pack", "{\"coverage\":\"inline\",\"benchmarks\":\"inline\",\"apply\":false}", expected, "perf_evidence_pack_paths", scenarios);

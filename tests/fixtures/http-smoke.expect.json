@@ -1046,6 +1046,11 @@
     "backend_status.status": "not_probed",
     "applied": false
   },
+  "samply_record_paths_windows": {
+    "kind": "backend_error",
+    "error_kind": "unsupported_platform",
+    "backend": "samply"
+  },
   "samply_summary_paths": {
     "kind": "zig_samply_summary",
     "thread_count": 1,
@@ -1077,6 +1082,11 @@
     "backend_status.status": "not_probed",
     "applied": false
   },
+  "tracy_capture_paths_windows": {
+    "kind": "backend_error",
+    "error_kind": "unsupported_platform",
+    "backend": "tracy-capture"
+  },
   "tracy_artifacts_paths": {
     "kind": "zig_tracy_artifacts",
     "applied": false,
@@ -1101,9 +1111,19 @@
     "requires_apply": true,
     "backend_status.backend": "lldb"
   },
+  "lldb_backtrace_paths_windows": {
+    "kind": "backend_error",
+    "error_kind": "unsupported_platform",
+    "backend": "lldb"
+  },
   "core_inspect_paths": {
     "kind": "zig_core_inspect",
     "applied": false
+  },
+  "core_inspect_paths_windows": {
+    "kind": "backend_error",
+    "error_kind": "unsupported_platform",
+    "backend": "lldb"
   },
   "debug_frame_paths": {
     "kind": "zig_debug_frame_summary",
@@ -1149,6 +1169,11 @@
     "kind": "zig_afl_run",
     "applied": false,
     "backend_status.backend": "afl-fuzz"
+  },
+  "afl_run_paths_windows": {
+    "kind": "backend_error",
+    "error_kind": "unsupported_platform",
+    "backend": "afl-fuzz"
   },
   "libfuzzer_run_paths": {
     "kind": "zig_libfuzzer_run",

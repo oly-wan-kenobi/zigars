@@ -4,6 +4,7 @@
 //! JSON paths returned by the live HTTP server against the shared fixture JSON.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const cli_io = @import("../../common/cli_io.zig");
 const smoke = @import("../smoke_support.zig");
 
@@ -31,8 +32,12 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     defer allocator.free(callgrind_args);
 
     try assertToolPaths(allocator, io, port, 194, "zig_debug_plan", "{\"binary\":\"build.zig\",\"probe_backend\":false}", expected, "debug_plan_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 195, "zig_lldb_backtrace", "{\"binary\":\"build.zig\",\"apply\":false}", expected, "lldb_backtrace_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 196, "zig_core_inspect", "{\"binary\":\"build.zig\",\"core\":\"build.zig\",\"apply\":false}", expected, "core_inspect_paths", scenarios);
+    // LLDB backtrace and core inspection are intentionally unsupported on
+    // Windows; expect the structured unsupported-platform result there.
+    const lldb_backtrace_key = if (builtin.os.tag == .windows) "lldb_backtrace_paths_windows" else "lldb_backtrace_paths";
+    const core_inspect_key = if (builtin.os.tag == .windows) "core_inspect_paths_windows" else "core_inspect_paths";
+    try assertToolPaths(allocator, io, port, 195, "zig_lldb_backtrace", "{\"binary\":\"build.zig\",\"apply\":false}", expected, lldb_backtrace_key, scenarios);
+    try assertToolPaths(allocator, io, port, 196, "zig_core_inspect", "{\"binary\":\"build.zig\",\"core\":\"build.zig\",\"apply\":false}", expected, core_inspect_key, scenarios);
     try assertToolPaths(allocator, io, port, 197, "zig_debug_frame_summary", crash_args, expected, "debug_frame_paths", scenarios);
     try assertToolPaths(allocator, io, port, 198, "zig_sanitizer_fusion", crash_args, expected, "sanitizer_fusion_paths", scenarios);
     try assertToolPaths(allocator, io, port, 199, "zig_panic_trace_analyze", crash_args, expected, "panic_trace_paths", scenarios);
@@ -42,7 +47,9 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     try assertToolPaths(allocator, io, port, 203, "zig_valgrind_memcheck", "{\"command\":\"zig --version\",\"apply\":false}", expected, "valgrind_memcheck_paths", scenarios);
     try assertToolPaths(allocator, io, port, 204, "zig_callgrind_report", callgrind_args, expected, "callgrind_report_paths", scenarios);
     try assertToolPaths(allocator, io, port, 205, "zig_fuzz_plan", "{\"target\":\"native\",\"command\":\"zig build test\"}", expected, "fuzz_plan_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 206, "zig_afl_run", "{\"command\":\"zig --version\",\"corpus\":\"tests/fixtures/static-analysis\",\"apply\":false}", expected, "afl_run_paths", scenarios);
+    // AFL++ execution is intentionally unsupported on Windows; see above.
+    const afl_run_key = if (builtin.os.tag == .windows) "afl_run_paths_windows" else "afl_run_paths";
+    try assertToolPaths(allocator, io, port, 206, "zig_afl_run", "{\"command\":\"zig --version\",\"corpus\":\"tests/fixtures/static-analysis\",\"apply\":false}", expected, afl_run_key, scenarios);
     try assertToolPaths(allocator, io, port, 207, "zig_libfuzzer_run", "{\"command\":\"zig --version\",\"apply\":false}", expected, "libfuzzer_run_paths", scenarios);
     try assertToolPaths(allocator, io, port, 208, "zig_fuzz_crash_minimize", crash_args, expected, "fuzz_minimize_paths", scenarios);
     try assertToolPaths(allocator, io, port, 209, "zig_fuzz_corpus_summary", "{\"path\":\"tests/fixtures/static-analysis\",\"limit\":3}", expected, "fuzz_corpus_paths", scenarios);
