@@ -373,14 +373,30 @@ test "refreshClientRoots queries the client and ingests declared roots" {
 /// Cancellable test tool: blocks until its cancellation token flips, then
 /// returns "cancelled". If no token is wired it returns "no_token", so a test
 /// can prove the worker-path token wiring AND the cancel flip end to end.
-fn blockUntilCancelledHandler(_: ?*anyopaque, server: *Server, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+fn blockUntilCancelledHandler(_: ?*anyopaque, server: *Server, io: std.Io, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     const token = server.currentCancellationToken() orelse
         return .{ .content = &.{.{ .text = .{ .text = "no_token" } }} };
-    while (!token.isCancelled()) std.atomic.spinLoopHint();
-    return .{ .content = &.{.{ .text = .{ .text = "cancelled" } }} };
+    // Yield (not busy-spin) so the message-loop thread is free to read the
+    // cancel and flip the token; busy-spinning starves the loop thread under
+    // ptrace-based coverage (kcov). A wall-clock bound guarantees the worker
+    // returns even in a pathological scheduler, so the run can never hang (a
+    // hang truncates the whole kcov measurement); the assertion below then
+    // fails loudly instead.
+    const start_ns = std.Io.Clock.now(.real, io).nanoseconds;
+    while (!token.isCancelled()) {
+        std.Thread.yield() catch {};
+        if (std.Io.Clock.now(.real, io).nanoseconds - start_ns > 30 * std.time.ns_per_s) {
+            return .{ .content = &.{.{ .text = .{ .text = "timed_out" } }} };
+        }
+    }
+    return .{ .content = &.{.{ .text = .{ .text = "observed_cancel" } }} };
 }
 
 test "cancellable tools/call worker is interrupted by notifications/cancelled" {
+    // Worker-thread + spawned-thread tests skip on Windows (consistent with the
+    // command-level cancellation tests); the platform-agnostic dispatch flow is
+    // covered on Linux/macOS here and by the integration fixtures on Windows.
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
     const allocator = std.testing.allocator;
     var server = Server.init(allocator, .{ .name = "cancel", .version = "1" });
     defer server.deinit();
@@ -406,8 +422,9 @@ test "cancellable tools/call worker is interrupted by notifications/cancelled" {
 
     const sent = try joinedSent(allocator, &transport);
     defer allocator.free(sent);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "cancelled") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "observed_cancel") != null);
     try std.testing.expect(std.mem.indexOf(u8, sent, "no_token") == null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "timed_out") == null);
 }
 
 test "refreshClientRoots is inert when the client does not advertise roots" {

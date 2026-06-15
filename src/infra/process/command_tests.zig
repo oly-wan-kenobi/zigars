@@ -82,8 +82,11 @@ test "run cancels a running subprocess via the cooperative poll" {
     // ensures the deadline never fires first.
     const Flipper = struct {
         fn run(s: *cancellation.State) void {
-            var i: u64 = 0;
-            while (i < 20_000_000) : (i += 1) std.atomic.spinLoopHint();
+            // Yield a bounded number of times so the subprocess is spawned and the
+            // wait loop is polling before the flip — without a long busy-spin,
+            // which is pathologically slow and can stall under coverage (kcov).
+            var i: usize = 0;
+            while (i < 200) : (i += 1) std.Thread.yield() catch {};
             s.request("user requested cancellation");
         }
     };
