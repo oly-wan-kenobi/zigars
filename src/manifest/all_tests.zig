@@ -28,6 +28,7 @@ test {
     _ = @import("groups_tests.zig");
     _ = @import("invariants_tests.zig");
     _ = @import("mod_tests.zig");
+    _ = @import("profiles_tests.zig");
     _ = @import("tool_catalog_render_tests.zig");
     _ = @import("tooling_tests.zig");
     _ = @import("types_tests.zig");

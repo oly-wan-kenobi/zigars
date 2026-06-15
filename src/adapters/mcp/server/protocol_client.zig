@@ -71,6 +71,22 @@ pub fn supportsSampling(server: anytype) bool {
     return server.client_capabilities != null and server.client_capabilities.?.sampling != null;
 }
 
+/// Returns whether the initialized client advertised roots support.
+pub fn supportsRoots(server: anytype) bool {
+    return server.client_capabilities != null and server.client_capabilities.?.roots != null;
+}
+
+/// Classifies a roots/list response without mutating server state. Accepted iff
+/// the result carries a `roots` array (possibly empty, which is a valid "no
+/// roots" answer); anything else is malformed, and a null result is a timeout.
+pub fn classifyRootsResponse(response: ?std.json.Value) ResponseStatus {
+    const value = response orelse return .timeout;
+    if (value != .object) return .malformed;
+    const roots = value.object.get("roots") orelse return .malformed;
+    if (roots != .array) return .malformed;
+    return .accepted;
+}
+
 /// Fire-and-return-handle elicitation/create. When the client advertised
 /// elicitation, sends the request and returns a descriptor with the outbound
 /// `request_id` (the reply is not awaited here); otherwise returns a structured
@@ -108,6 +124,18 @@ pub fn requestClientProtocol(server: anytype, io: std.Io, allocator: std.mem.All
             .used = false,
             .status = .unsupported,
             .unavailable_reason = unsupportedProtocolReason(request.feature),
+        };
+    }
+    // While this tool runs on a cancellation worker thread, the message loop owns
+    // the transport reader; a worker must not also read it (two readers on one
+    // serial stream would race/deadlock). Fall back gracefully — apply-gated tools
+    // still enforce their apply=true gate without the interactive round trip.
+    if (server.worker_active.load(.acquire)) {
+        return .{
+            .supported = true,
+            .used = false,
+            .status = .unsupported,
+            .unavailable_reason = "client protocol requests are unavailable while this tool runs as a cancellable background task",
         };
     }
     if (server.transport == null) {
@@ -256,6 +284,7 @@ fn supportsProtocolFeature(server: anytype, feature: app_ports.ProtocolFeature) 
     return switch (feature) {
         .elicitation => supportsElicitation(server),
         .sampling => supportsSampling(server),
+        .roots => supportsRoots(server),
     };
 }
 
@@ -263,6 +292,7 @@ fn classifyProtocolResponse(feature: app_ports.ProtocolFeature, response: ?std.j
     return switch (feature) {
         .elicitation => classifyElicitationResponse(response),
         .sampling => classifySamplingResponse(response),
+        .roots => classifyRootsResponse(response),
     };
 }
 
@@ -281,6 +311,7 @@ fn unsupportedProtocolReason(feature: app_ports.ProtocolFeature) []const u8 {
     return switch (feature) {
         .elicitation => "client did not advertise MCP elicitation support",
         .sampling => "client did not advertise MCP sampling support",
+        .roots => "client did not advertise MCP roots support",
     };
 }
 

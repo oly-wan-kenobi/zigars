@@ -5,6 +5,11 @@ const cancellation = @import("cancellation");
 
 /// Default byte cap for stdout and stderr capture.
 pub const output_limit: usize = 1024 * 1024;
+/// When a cancellation token is present, the output wait is capped to this many
+/// milliseconds so a silent (no-output) subprocess still lets the loop re-check
+/// cancellation roughly this often, instead of blocking until the child exits or
+/// the full command deadline elapses. Bounds worst-case cancellation latency.
+const cancellation_poll_interval_ms: i64 = 50;
 /// Stable label describing output-limit behavior in result contracts.
 pub const output_limit_mode = "truncate_on_limit";
 
@@ -83,6 +88,24 @@ pub fn runWithOutputLimitCancellable(
     stderr_limit: usize,
     token: ?cancellation.Token,
 ) !RunResult {
+    return runWithOutputLimitCancellableEnv(allocator, io, cwd, argv, timeout_ms, stdout_limit, stderr_limit, token, null);
+}
+
+/// Runs argv as `runWithOutputLimitCancellable`, additionally replacing the
+/// child environment when `environ_map` is non-null. A null map preserves the
+/// default behavior of inheriting the parent environment; a non-null map (built
+/// by the caller from an allowlist) becomes the child's complete environment.
+pub fn runWithOutputLimitCancellableEnv(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    cwd: []const u8,
+    argv: []const []const u8,
+    timeout_ms: i64,
+    stdout_limit: usize,
+    stderr_limit: usize,
+    token: ?cancellation.Token,
+    environ_map: ?*const std.process.Environ.Map,
+) !RunResult {
     if (isCancelled(token)) return error.Cancelled;
     // Spawn argv may be rewritten to honor script shebang interpreters on POSIX.
     var spawn_arena = std.heap.ArenaAllocator.init(allocator);
@@ -92,6 +115,7 @@ pub fn runWithOutputLimitCancellable(
     var child = try std.process.spawn(io, .{
         .argv = spawn_argv,
         .cwd = .{ .path = cwd },
+        .environ_map = environ_map,
         .stdin = .ignore,
         .stdout = .pipe,
         .stderr = .pipe,
@@ -119,9 +143,16 @@ pub fn runWithOutputLimitCancellable(
             return error.Cancelled;
         }
         const remaining_ms = deadline.remainingMs(io) orelse return error.Timeout;
-        const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(@max(1, remaining_ms)) } };
+        // With a cancellation token, cap the wait to the poll interval so a quiet
+        // subprocess still wakes the loop to observe a cancellation; otherwise wait
+        // out the whole remaining deadline as before.
+        const wait_ms = if (token != null) @min(remaining_ms, cancellation_poll_interval_ms) else remaining_ms;
+        const timeout = std.Io.Timeout{ .duration = .{ .clock = .awake, .raw = std.Io.Duration.fromMilliseconds(@max(1, wait_ms)) } };
         multi_reader.fill(64, timeout) catch |err| switch (err) {
             error.EndOfStream => break,
+            // Poll-interval timeout with a quiet child: loop back to re-check
+            // cancellation and the real deadline (enforced at the loop top).
+            error.Timeout => continue,
             else => |e| return e,
         };
         if (stdout_reader.buffered().len > stdout_limit) stdout_truncated = true;

@@ -29,6 +29,12 @@ test "process command runner maps output limits counters and provenance" {
     try std.testing.expectEqualStrings("infra-test", result.provenance);
 }
 
+// NOTE: env-scrub behavior is unit-tested in command_runner.zig (scrubbedEnv)
+// without spawning a child, and verified end to end by the manual cancellation /
+// profiler checks. Spawning a child with a scrubbed (near-empty) environment
+// under kcov corrupts ptrace child-tracking on Linux and drops coverage for
+// later tests, so it is deliberately not exercised here.
+
 test "process command runner maps timeout to port timeout error" {
     if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
 

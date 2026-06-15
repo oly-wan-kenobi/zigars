@@ -182,8 +182,6 @@ test "registered tool validation errors include correlation metadata" {
     });
     defer server.deinit();
     server.state = .ready;
-    var schema_arena = std.heap.ArenaAllocator.init(allocator);
-    defer schema_arena.deinit();
 
     const TestRuntime = struct {
         calls: usize = 0,
@@ -207,7 +205,7 @@ test "registered tool validation errors include correlation metadata" {
     var runtime = TestRuntime{};
     try tool_registry.addTool(
         &server,
-        schema_arena.allocator(),
+        allocator,
         &runtime,
         manifest.entryFor(.zig_check).meta,
         TestHandler.handler,
@@ -243,6 +241,59 @@ test "registered tool validation errors include correlation metadata" {
     const request_id = corr.get("mcp_request_id").?.object;
     try std.testing.expectEqualStrings("string", request_id.get("type").?.string);
     try std.testing.expectEqualStrings("req-validation", request_id.get("value").?.string);
+}
+
+test "Server deinit frees registry-owned tool schemas" {
+    const allocator = std.testing.allocator;
+    var server: Server = .init(allocator, .{
+        .name = "schema-owner-server",
+        .version = "1.0.0",
+    });
+    defer server.deinit();
+
+    const TestRuntime = struct { calls: usize = 0 };
+    const TestHandler = struct {
+        fn handler(runtime: *TestRuntime, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+            runtime.calls += 1;
+            return .{ .content = &.{.{ .text = .{ .text = "ok" } }} };
+        }
+
+        fn record(_: *TestRuntime, _: []const u8, _: u64, _: bool, _: anytype) void {}
+    };
+    var runtime = TestRuntime{};
+
+    // Together these specs exercise every schema allocation kind the registry
+    // produces: required input fields plus an outputSchema with its own
+    // required slice (regression gate), and an enum-hint array nested inside a
+    // property map (compile error index). std.testing.allocator fails this
+    // test if Server.deinit stops releasing any of them.
+    try tool_registry.addTool(
+        &server,
+        allocator,
+        &runtime,
+        manifest.entryFor(.zig_bench_regression_gate).meta,
+        TestHandler.handler,
+        TestHandler.record,
+    );
+    try tool_registry.addTool(
+        &server,
+        allocator,
+        &runtime,
+        manifest.entryFor(.zig_compile_error_index).meta,
+        TestHandler.handler,
+        TestHandler.record,
+    );
+
+    const gate_tool = server.tools.get("zig_bench_regression_gate").?;
+    try std.testing.expect(gate_tool.schema_allocator != null);
+    try std.testing.expect(gate_tool.inputSchema.?.required != null);
+    try std.testing.expect(gate_tool.outputSchema.?.required != null);
+
+    // The registry derives Tool.cancellable from manifest risk: a backend/
+    // project-code executor is worker-dispatched (cancellable); an artifact-only
+    // gate is not.
+    try std.testing.expect(server.tools.get("zig_compile_error_index").?.cancellable);
+    try std.testing.expect(!gate_tool.cancellable);
 }
 
 test "Server add resource" {

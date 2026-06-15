@@ -44,6 +44,10 @@ pub const App = struct {
     runtime_ux: runtime_ux.State = .{},
     protocol_client: ?app_ports.ProtocolClient = null,
     active_cancellation: ?app_ports.CancellationToken = null,
+    /// Borrowed parent environment (from `std.process.Init`), used to build the
+    /// scrubbed child env for allowlist-policy commands. Null in tests that do
+    /// not wire it, where an allowlist policy then yields an empty child env.
+    environ_map: ?*const std.process.Environ.Map = null,
     temp_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
 
     /// Releases runtime-owned caches, ZLS state, and parsed configuration.

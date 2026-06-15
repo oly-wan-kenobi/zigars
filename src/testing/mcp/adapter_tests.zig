@@ -135,6 +135,15 @@ test "catalog groups match tool registry" {
     try std.testing.expectEqual(manifest_metadata.specs.len, grouped_count);
 }
 
+// NOTE: the registration-time profile filter is covered by the `groupInProfile`
+// predicate unit tests (src/manifest/profiles_tests.zig) and verified end to end
+// by the `--profile core` integration check. It is deliberately NOT exercised by
+// calling registerTools here: registerTools with a test-only record_call forces a
+// second full instantiation of all ~317 tool handlers, which bloats the test
+// binary enough to shift global inlining (inflating kcov's instrumented-line
+// totals and dropping measured coverage). The cancellable-flag wiring is asserted
+// against a single registered tool in src/testing/mcp/server_tests.zig.
+
 test "registry catalog arguments can be derived from tool registry" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

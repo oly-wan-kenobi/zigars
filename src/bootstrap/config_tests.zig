@@ -4,6 +4,7 @@ const std = @import("std");
 const subject = @import("config.zig");
 const Transport = subject.Transport;
 const Config = subject.Config;
+const ToolProfile = subject.ToolProfile;
 const ParseError = subject.ParseError;
 const parse = subject.parse;
 const isLoopbackHttpHost = subject.isLoopbackHttpHost;
@@ -92,6 +93,37 @@ test "parse audit log defaults to metadata and rejects invalid audit inputs" {
         "full",
     });
     try std.testing.expectEqual(.full, full.audit_log_mode);
+}
+test "parse selects tool profile and defaults to full" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const default_cfg = try parse(arena.allocator(), std.testing.io, &.{"zigars"});
+    try std.testing.expectEqual(ToolProfile.full, default_cfg.profile);
+
+    const core_cfg = try parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--profile",
+        "core",
+    });
+    try std.testing.expectEqual(ToolProfile.core, core_cfg.profile);
+
+    const full_cfg = try parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--profile",
+        "full",
+    });
+    try std.testing.expectEqual(ToolProfile.full, full_cfg.profile);
+
+    try std.testing.expectError(ParseError.InvalidProfile, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--profile",
+        "bogus",
+    }));
+    try std.testing.expectError(ParseError.MissingValue, parse(arena.allocator(), std.testing.io, &.{
+        "zigars",
+        "--profile",
+    }));
 }
 test "parse rejects empty path-like flag values" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

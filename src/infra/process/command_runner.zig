@@ -21,6 +21,11 @@ pub const Options = struct {
     count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
+    /// Borrowed parent environment used to satisfy `EnvPolicy.allowlist`; the
+    /// scrubbed child env copies allowlisted names from here. Null means no
+    /// parent env is available, so an allowlist policy yields an empty child
+    /// environment (fail-closed).
+    environ_map: ?*const std.process.Environ.Map = null,
 };
 
 /// CommandRunner port implementation backed by real child processes.
@@ -36,6 +41,7 @@ pub const Runner = struct {
     count_command_calls: bool = true,
     non_exited_exit_code: i32 = -1,
     record_observability: bool = false,
+    environ_map: ?*const std.process.Environ.Map = null,
 
     const Self = @This();
 
@@ -53,6 +59,7 @@ pub const Runner = struct {
             .count_command_calls = options.count_command_calls,
             .non_exited_exit_code = options.non_exited_exit_code,
             .record_observability = options.record_observability,
+            .environ_map = options.environ_map,
         };
     }
 
@@ -81,7 +88,13 @@ pub const Runner = struct {
             if (self.command_calls) |counter| counter.* += 1;
         }
         const started_ns = std.Io.Clock.now(.real, self.io).nanoseconds;
-        const result = command.runWithOutputLimitCancellable(allocator, self.io, cwd, request.argv, timeout_ms, stdout_limit, stderr_limit, self.cancellation_token) catch |err| {
+        // Resolve the child environment policy. `.inherit` leaves environ_map
+        // null (the child inherits the parent); `.allowlist` builds a fresh map
+        // holding only the allowlisted names copied from the parent env.
+        var scrubbed_env = self.scrubbedEnv(allocator, request.env) catch return error.OutOfMemory;
+        defer if (scrubbed_env) |*map| map.deinit();
+        const environ_map: ?*const std.process.Environ.Map = if (scrubbed_env) |*map| map else null;
+        const result = command.runWithOutputLimitCancellableEnv(allocator, self.io, cwd, request.argv, timeout_ms, stdout_limit, stderr_limit, self.cancellation_token, environ_map) catch |err| {
             self.recordCommand(title, request.argv, elapsedMs(self.io, started_ns), false, @errorName(err));
             if (self.record_observability) {
                 if (self.tool_errors) |counter| counter.* += 1;
@@ -101,6 +114,28 @@ pub const Runner = struct {
             .provenance = request.provenance,
             .owns_stdout = true,
             .owns_stderr = true,
+        };
+    }
+
+    /// Builds the child environment for a command request. Returns null for the
+    /// `inherit` policy (the child keeps the parent environment). For `allowlist`
+    /// it returns an owned map containing only the allowlisted names that exist
+    /// in the parent env; the caller must `deinit` it. With no parent env
+    /// available the returned map is empty (fail-closed: the child gets no env
+    /// rather than inheriting everything).
+    fn scrubbedEnv(self: *Self, allocator: std.mem.Allocator, policy: ports.EnvPolicy) !?std.process.Environ.Map {
+        return switch (policy) {
+            .inherit => null,
+            .allowlist => |names| blk: {
+                var map = std.process.Environ.Map.init(allocator);
+                errdefer map.deinit();
+                if (self.environ_map) |parent| {
+                    for (names) |name| {
+                        if (parent.get(name)) |value| try map.put(name, value);
+                    }
+                }
+                break :blk map;
+            },
         };
     }
 
@@ -164,4 +199,40 @@ fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     const duration_ns = std.Io.Clock.now(.real, io).nanoseconds - started_ns;
     if (duration_ns <= 0) return 0;
     return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
+}
+
+test "scrubbedEnv filters the child environment to the allowlist" {
+    // Tests the env-scrub map directly, without spawning a child: a subprocess
+    // with a scrubbed (near-empty) environment under ptrace-based coverage
+    // (kcov) corrupts child tracking on Linux and loses coverage for later
+    // tests. The full scrub-and-spawn path is covered by the manual check.
+    const allocator = std.testing.allocator;
+
+    var parent = std.process.Environ.Map.init(allocator);
+    defer parent.deinit();
+    try parent.put("SECRET", "leak-me");
+    try parent.put("ALLOWED", "kept-value");
+
+    var runner = Runner.init(.{
+        .io = std.testing.io,
+        .default_cwd = ".",
+        .default_timeout_ms = 1000,
+        .environ_map = &parent,
+    });
+
+    // inherit -> null: the child keeps the parent environment unchanged.
+    try std.testing.expect((try runner.scrubbedEnv(allocator, .inherit)) == null);
+
+    // allowlist -> only allowlisted names are copied from the parent.
+    var scrubbed = (try runner.scrubbedEnv(allocator, .{ .allowlist = &.{"ALLOWED"} })).?;
+    defer scrubbed.deinit();
+    try std.testing.expectEqualStrings("kept-value", scrubbed.get("ALLOWED").?);
+    try std.testing.expect(scrubbed.get("SECRET") == null);
+
+    // allowlist with no parent env -> empty map (fail-closed).
+    var no_parent = Runner.init(.{ .io = std.testing.io, .default_cwd = ".", .default_timeout_ms = 1000 });
+    var empty = (try no_parent.scrubbedEnv(allocator, .{ .allowlist = &.{"ALLOWED"} })).?;
+    defer empty.deinit();
+    try std.testing.expect(empty.get("ALLOWED") == null);
+    try std.testing.expectEqual(@as(usize, 0), empty.count());
 }

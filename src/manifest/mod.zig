@@ -41,6 +41,10 @@ pub const ToolEntry = aggregate.ToolEntry;
 pub const definitions = aggregate.definitions;
 /// Group keyword metadata used by search and catalog output.
 pub const group_specs = groups_mod.group_specs;
+/// Named tool-surface profiles selectable at startup to shrink the catalog.
+pub const profiles = @import("profiles.zig");
+/// Tool-surface profile enum exposed to config parsing and registration.
+pub const ToolProfile = profiles.ToolProfile;
 const group_keywords = buildGroupKeywords();
 
 /// Ordered manifest entries indexed by `ToolId`.
@@ -72,6 +76,12 @@ pub fn findEntry(name: []const u8) ?ToolEntry {
 /// Returns the manifest group assigned to a tool id.
 pub fn groupFor(id: ToolId) ToolGroup {
     return entryFor(id).group;
+}
+
+/// Returns whether a tool id's group is registered under the given profile.
+/// Registration skips tools for which this returns false.
+pub fn idInProfile(id: ToolId, profile: ToolProfile) bool {
+    return profiles.groupInProfile(groupFor(id), profile);
 }
 
 /// Returns the serialized manifest group name.

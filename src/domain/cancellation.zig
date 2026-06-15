@@ -36,8 +36,14 @@ pub const Token = struct {
 /// Mutable backing state for one request-scoped cancellation token.
 /// Allocated on the stack by the request handler; the token() projection is passed
 /// to workers. reason_buf is fixed-size to avoid allocation on the cancellation path.
+///
+/// `requested` is atomic so a flip on one thread (e.g. the message loop reading a
+/// `notifications/cancelled` while a tool runs on a worker thread) is observed by
+/// the cooperative poll on the other thread. The reason bytes are written before
+/// the release-store of `requested`; a reader that sees `requested == true` via an
+/// acquire-load therefore also sees the reason, so they need no separate sync.
 pub const State = struct {
-    requested: bool = false,
+    requested: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     // 160 bytes covers typical MCP cancellation reason strings without heap allocation.
     reason_buf: [160]u8 = [_]u8{0} ** 160,
     reason_len: usize = 0,
@@ -59,15 +65,17 @@ pub const State = struct {
     /// Excess bytes beyond reason_buf capacity are silently truncated.
     /// Once requested, the flag is never cleared; cancellation is one-way.
     pub fn request(self: *State, value: []const u8) void {
-        self.requested = true;
         const copy_len = @min(value.len, self.reason_buf.len);
         @memcpy(self.reason_buf[0..copy_len], value[0..copy_len]);
         self.reason_len = copy_len;
+        // Release so the reason write above is visible to any thread that later
+        // observes `requested == true` with an acquire-load.
+        self.requested.store(true, .release);
     }
 
     fn isCancelled(ptr: *anyopaque) bool {
         const self: *State = @ptrCast(@alignCast(ptr));
-        return self.requested;
+        return self.requested.load(.acquire);
     }
 
     fn reason(ptr: *anyopaque) []const u8 {

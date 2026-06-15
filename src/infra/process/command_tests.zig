@@ -71,6 +71,12 @@ test "classifies command errors" {
     try std.testing.expect(isTimeoutError(error.Timeout));
 }
 
+// NOTE: the in-loop cooperative-cancellation poll (flipping a token while a
+// subprocess runs) is exercised end-to-end by the server integration fixtures
+// and the manual cancellation check, not by a unit test here: a thread that
+// flips the token mid-run would break ptrace-based coverage (kcov) on Linux.
+// The pre-spawn check below covers the token path without a thread.
+
 test "run observes cancellation before spawning" {
     var state = cancellation.State{};
     state.request("test cancellation");
