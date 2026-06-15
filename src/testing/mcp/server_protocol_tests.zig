@@ -293,3 +293,142 @@ test "client protocol request returns unsupported and transport timeout metadata
     try std.testing.expectEqual(app_ports.ProtocolResponseStatus.timeout, timeout.status);
     try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
 }
+
+/// Records the most recent roots text handed to the runtime roots sink so a test
+/// can assert what `refreshClientRoots` ingested. Duck-typed to the `syncRoots`
+/// shape the real runtime_ux state exposes.
+const FakeRootsState = struct {
+    buf: [256]u8 = undefined,
+    len: usize = 0,
+    calls: usize = 0,
+
+    pub fn syncRoots(self: *FakeRootsState, workspace_root: []const u8, roots_text: []const u8, apply: bool) void {
+        _ = workspace_root;
+        _ = apply;
+        self.calls += 1;
+        const n = @min(roots_text.len, self.buf.len);
+        @memcpy(self.buf[0..n], roots_text[0..n]);
+        self.len = n;
+    }
+
+    fn text(self: *const FakeRootsState) []const u8 {
+        return self.buf[0..self.len];
+    }
+};
+
+test "roots response classifier and capability gating" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // An empty roots array is a valid "no roots" answer.
+    var empty_roots = std.json.ObjectMap.empty;
+    try empty_roots.put(allocator, "roots", .{ .array = std.json.Array.init(allocator) });
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.accepted, Server.classifyRootsResponse(.{ .object = empty_roots }));
+
+    // Missing roots, or a non-array roots, is malformed; a null result is a timeout.
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.malformed, Server.classifyRootsResponse(.{ .object = std.json.ObjectMap.empty }));
+    var bad = std.json.ObjectMap.empty;
+    try bad.put(allocator, "roots", .{ .string = "nope" });
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.malformed, Server.classifyRootsResponse(.{ .object = bad }));
+    try std.testing.expectEqual(Server.ProtocolResponseStatus.timeout, Server.classifyRootsResponse(null));
+
+    var server = Server.init(allocator, .{ .name = "roots", .version = "1" });
+    defer server.deinit();
+    try std.testing.expect(!server.supportsRoots());
+    server.client_capabilities = .{ .roots = .{ .listChanged = true } };
+    try std.testing.expect(server.supportsRoots());
+}
+
+test "refreshClientRoots queries the client and ingests declared roots" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "roots", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+    server.client_capabilities = .{ .roots = .{ .listChanged = true } };
+
+    var fake = FakeRootsState{};
+    server.enableRootsSync(&fake, "/workspace");
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":1,"result":{"roots":[{"uri":"file:///client/a","name":"A"},{"uri":"file:///client/b","name":"B"}]}}
+        ,
+    };
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+
+    server.refreshClientRoots(std.testing.io, allocator);
+
+    // The client's roots were pulled and handed to the runtime sink verbatim
+    // (the sink strips file:// itself); the outbound roots/list was sent.
+    try std.testing.expectEqual(@as(usize, 1), fake.calls);
+    try std.testing.expectEqualStrings("file:///client/a\nfile:///client/b", fake.text());
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "roots/list") != null);
+    try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
+}
+
+/// Cancellable test tool: blocks until its cancellation token flips, then
+/// returns "cancelled". If no token is wired it returns "no_token", so a test
+/// can prove the worker-path token wiring AND the cancel flip end to end.
+fn blockUntilCancelledHandler(_: ?*anyopaque, server: *Server, _: std.Io, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const token = server.currentCancellationToken() orelse
+        return .{ .content = &.{.{ .text = .{ .text = "no_token" } }} };
+    while (!token.isCancelled()) std.atomic.spinLoopHint();
+    return .{ .content = &.{.{ .text = .{ .text = "cancelled" } }} };
+}
+
+test "cancellable tools/call worker is interrupted by notifications/cancelled" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "cancel", .version = "1" });
+    defer server.deinit();
+    try server.addTool(.{ .name = "block_tool", .handler = blockUntilCancelledHandler, .cancellable = true });
+
+    const messages = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"t","version":"1"}}}
+        ,
+        \\{"jsonrpc":"2.0","method":"notifications/initialized"}
+        ,
+        \\{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"block_tool","arguments":{}}}
+        ,
+        \\{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2,"reason":"stop"}}
+        ,
+    };
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+
+    // The tool runs on a worker; the loop reads the cancel and flips the token,
+    // which the worker observes and returns. Without the worker dispatch this
+    // would deadlock (the loop would block in the tool, never reading the cancel).
+    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "cancelled") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "no_token") == null);
+}
+
+test "refreshClientRoots is inert when the client does not advertise roots" {
+    const allocator = std.testing.allocator;
+    var server = Server.init(allocator, .{ .name = "roots", .version = "1" });
+    defer server.deinit();
+    server.state = .ready;
+    // No client_capabilities.roots advertised.
+
+    var fake = FakeRootsState{};
+    server.enableRootsSync(&fake, "/workspace");
+
+    const messages = [_][]const u8{};
+    var transport = ScriptTransport{ .messages = &messages };
+    defer transport.deinit(allocator);
+    server.transport = transport.transport();
+
+    server.refreshClientRoots(std.testing.io, allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), fake.calls);
+    const sent = try joinedSent(allocator, &transport);
+    defer allocator.free(sent);
+    try std.testing.expect(std.mem.indexOf(u8, sent, "roots/list") == null);
+}

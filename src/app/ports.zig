@@ -45,6 +45,7 @@ pub const PortError = error{
 pub const ProtocolFeature = enum {
     elicitation,
     sampling,
+    roots,
 };
 
 /// Normalized response status for server-to-client protocol helper requests.
@@ -117,6 +118,17 @@ pub const max_observability_startup_phases = 24;
 /// Maximum cancellation event rows returned by a bounded observability snapshot.
 pub const max_observability_cancellation_events = 32;
 
+/// Environment policy for a spawned child process.
+/// `inherit` keeps the parent process environment unchanged (the default for
+/// trusted internal commands). `allowlist` starts from an empty environment and
+/// copies only the named variables from the parent, dropping everything else so
+/// that secrets in the server's environment never reach the child. Names absent
+/// from the parent are simply skipped.
+pub const EnvPolicy = union(enum) {
+    inherit,
+    allowlist: []const []const u8,
+};
+
 /// Command invocation requested by app use cases.
 /// Slices are borrowed; adapters decide whether returned output is owned.
 pub const CommandRequest = struct {
@@ -126,6 +138,10 @@ pub const CommandRequest = struct {
     max_stdout_bytes: ?usize = null,
     max_stderr_bytes: ?usize = null,
     provenance: []const u8 = "",
+    /// Child-process environment policy. Defaults to full inheritance so every
+    /// existing internal command caller is unchanged; only callers running an
+    /// untrusted user command opt into an allowlist scrub.
+    env: EnvPolicy = .inherit,
 };
 
 /// Normalized process termination kind.

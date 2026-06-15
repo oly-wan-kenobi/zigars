@@ -350,7 +350,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_profile_open`: required `path: string`; optional `viewer: string`
 - `zig_profile_plan`: optional `binary: string`, `platform: string`, `output_prefix: string`
 - `zig_profile_regression`: optional `comparison: string`, `backend: string`, `command: string`, `threshold_pct: integer`
-- `zig_profile_run`: required `command: string`; optional `timeout_ms: integer`
+- `zig_profile_run`: required `command: string`; optional `apply: boolean`, `timeout_ms: integer`
 - `zig_project_docs_query`: required `query: string`; optional `scope: string`, `autodoc: string`, `limit: integer`
 - `zig_public_api`: required `file: string`
 - `zig_public_api_diff`: optional `file: string`, `before: string`, `after: string`, `baseline_ref: string`
@@ -655,7 +655,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_profile_open`: `pure_analysis` read-only analysis
 - `zig_profile_plan`: `pure_analysis` read-only analysis
 - `zig_profile_regression`: `pure_analysis` read-only analysis
-- `zig_profile_run`: `dynamic_command` runtime-dependent backend plan
+- `zig_profile_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_project_docs_query`: `pure_analysis` read-only analysis
 - `zig_public_api`: `pure_analysis` read-only analysis
 - `zig_public_api_diff`: `dynamic_command` runtime-dependent backend plan

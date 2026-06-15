@@ -39,6 +39,13 @@ pub fn addTool(
         .title = spec.name,
         .inputSchema = schema_value,
         .outputSchema = output_schema_value,
+        .schema_allocator = allocator,
+        // Tools that spawn a subprocess/backend can run long enough to be worth
+        // cancelling; dispatch them on a worker so the loop can honor
+        // notifications/cancelled mid-run. Pure in-memory tools stay inline.
+        .cancellable = manifest.riskFor(spec.id).executes_user_command or
+            manifest.riskFor(spec.id).executes_project_code or
+            manifest.riskFor(spec.id).executes_backend,
         .annotations = .{
             .readOnlyHint = manifest.readOnlyHintFor(spec),
             .idempotentHint = manifest.idempotentHintFor(spec),
@@ -79,20 +86,24 @@ fn mcpHandler(
                 return validation_error;
             }
             // Expose this call's protocol client and cancellation token on the
-            // runtime only for the handler's duration, then restore the prior
-            // value. The save/restore keeps the binding request-scoped so a
-            // handler that itself re-enters the server does not leak its token.
+            // runtime for the handler's duration, then clear them. The defers
+            // MUST sit at function scope (not inside the comptime `if` blocks):
+            // a defer declared inside a block runs at that block's end, which
+            // would revert the binding before `handler` runs and leave the
+            // handler with a null token — defeating cancellation entirely.
             var protocol_adapter = mcp_server.ProtocolClientAdapter.init(server, io);
             if (comptime runtimeHasProtocolClient(RuntimePtr)) {
-                const previous_protocol_client = runtime.protocol_client;
                 runtime.protocol_client = protocol_adapter.port();
-                defer runtime.protocol_client = previous_protocol_client;
             }
+            defer if (comptime runtimeHasProtocolClient(RuntimePtr)) {
+                runtime.protocol_client = null;
+            };
             if (comptime runtimeHasActiveCancellation(RuntimePtr)) {
-                const previous_cancellation = runtime.active_cancellation;
                 runtime.active_cancellation = server.currentCancellationToken();
-                defer runtime.active_cancellation = previous_cancellation;
             }
+            defer if (comptime runtimeHasActiveCancellation(RuntimePtr)) {
+                runtime.active_cancellation = null;
+            };
             const result = handler(runtime, allocator, args) catch |err| {
                 record_call(runtime, spec.name, elapsedMs(io, started_ns), true, server.active_correlation);
                 return err;

@@ -26,13 +26,16 @@ pub const zig_profile_plan = tool(.{
     .plan = .{ .pure_analysis = "Profiling workflow planner; returns structured external capture suggestions and rendering next steps without running profilers." },
 });
 /// Run an explicit user-provided profiler command in the workspace after splitting argv without a shell.
+/// Apply-gated: without apply=true it previews the resolved argv and env policy
+/// instead of executing. The child environment is scrubbed to an allowlist so
+/// secrets in the server's environment never reach the agent-chosen command.
 pub const zig_profile_run = tool(.{
-    .description = "Run an explicit user-provided profiler command in the workspace after splitting argv without a shell.",
-    .input_schema = schema(&.{ .{ "command", "string", true }, .{ "timeout_ms", "integer", false } }),
+    .description = "Run an explicit user-provided profiler command in the workspace after splitting argv without a shell. Previews unless apply=true; the child environment is scrubbed to a minimal allowlist.",
+    .input_schema = schema(&.{ .{ "command", "string", true }, .{ "apply", "boolean", false }, .{ "timeout_ms", "integer", false } }),
     .read_only = false,
     .group = .profiling,
-    .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true },
-    .plan = .{ .dynamic_command = "Backend-backed workflow whose exact argv depends on runtime arguments, workspace state, or configured helper paths." },
+    .risk = .{ .writes_artifacts = true, .executes_project_code = true, .executes_user_command = true, .writes_require_apply = true, .preview_by_default = true },
+    .plan = .{ .apply_gated_mutation = "Runs the explicit user profiler argv only when apply=true; otherwise previews the resolved argv and the environment allowlist without executing." },
 });
 /// Render captured profiler output to SVG through zflame with explicit format and auditable artifact metadata.
 pub const zig_flamegraph = tool(.{

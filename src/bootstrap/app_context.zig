@@ -40,6 +40,7 @@ pub const runtime_field_inventory = [_]RuntimeFieldRecord{
     .{ .name = "runtime_ux", .concern = .bootstrap, .migration_note = "server task/job state remains runtime/bootstrap state" },
     .{ .name = "protocol_client", .concern = .bootstrap, .migration_note = "per-call MCP protocol helper port injected by the server adapter and projected into app context" },
     .{ .name = "active_cancellation", .concern = .bootstrap, .migration_note = "per-call cooperative cancellation token projected into infra ports during active MCP dispatch" },
+    .{ .name = "environ_map", .concern = .bootstrap, .migration_note = "borrowed parent environment from process bootstrap; the command runner uses it to scrub the child env to an allowlist" },
     .{ .name = "temp_counter", .concern = .infra_state, .migration_note = "temporary id state; app code should use ClockAndIds" },
 };
 

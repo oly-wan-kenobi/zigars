@@ -7,6 +7,28 @@ const ports = @import("../../ports.zig");
 /// Per-stream cap (bytes) on captured stdout/stderr from the explicit profiler command.
 pub const command_output_limit: usize = 1024 * 1024;
 
+/// Environment variables the profiler child may inherit from the parent. Every
+/// other variable — API tokens, cloud credentials, SSH agent vars, etc. — is
+/// dropped so secrets in the MCP server's environment never reach the
+/// agent-chosen profiler command. Names absent from the parent are skipped.
+pub const profiler_env_allowlist = [_][]const u8{
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "ZIG_LIB_DIR",
+    "ZIG_GLOBAL_CACHE_DIR",
+    "ZIG_LOCAL_CACHE_DIR",
+};
+
 /// Carries request data across use case and port boundaries.
 pub const Request = struct {
     argv: []const []const u8,
@@ -68,6 +90,9 @@ pub fn run(allocator: std.mem.Allocator, context: app_context.ProfilingContext, 
         .max_stdout_bytes = command_output_limit,
         .max_stderr_bytes = command_output_limit,
         .provenance = request.title,
+        // Untrusted agent-chosen command: scrub the child environment to the
+        // allowlist so the server's secrets are never inherited.
+        .env = .{ .allowlist = &profiler_env_allowlist },
     }) catch |err| {
         var owned_argv = try cloneArgv(allocator, request.argv);
         errdefer owned_argv.deinit(allocator);

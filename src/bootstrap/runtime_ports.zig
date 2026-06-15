@@ -56,6 +56,7 @@ pub const RuntimePorts = struct {
                 .count_command_calls = options.count_command_calls,
                 .non_exited_exit_code = options.non_exited_exit_code,
                 .record_observability = options.record_command_observability,
+                .environ_map = app.environ_map,
             }),
             .workspace_store = infra.workspace.filesystem.Store.init(&app.workspace, app.io, .{
                 .default_read_limit = options.default_read_limit,

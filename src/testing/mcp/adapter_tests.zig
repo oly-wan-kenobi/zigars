@@ -135,6 +135,47 @@ test "catalog groups match tool registry" {
     try std.testing.expectEqual(manifest_metadata.specs.len, grouped_count);
 }
 
+test "registerTools honors the active tool profile" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const registration = zigars.adapters.mcp.registration;
+    const runtime_ports = zigars.bootstrap.runtime_ports;
+    const Server = zigars.adapters.mcp.server.Server;
+    const NoopRecord = struct {
+        fn record(_: *App, _: []const u8, _: u64, _: bool, _: anytype) void {}
+    };
+
+    // Full profile (default) registers the complete catalog.
+    var full_app = try testAppForCommandPlanning(allocator);
+    defer full_app.workspace.deinit();
+    full_app.config.profile = .full;
+    var full_server = Server.init(allocator, .{ .name = "test", .version = "0" });
+    defer full_server.deinit();
+    try registration.registerTools(&full_server, &full_app, runtime_ports.RuntimePorts, runtime_ports.Options, NoopRecord.record);
+    try std.testing.expectEqual(manifest_metadata.specs.len, full_server.tools.count());
+
+    // Core profile registers a strict, non-empty subset: a core tool stays,
+    // a non-core tool is absent from both the map and (therefore) tools/call.
+    var core_app = try testAppForCommandPlanning(allocator);
+    defer core_app.workspace.deinit();
+    core_app.config.profile = .core;
+    var core_server = Server.init(allocator, .{ .name = "test", .version = "0" });
+    defer core_server.deinit();
+    try registration.registerTools(&core_server, &core_app, runtime_ports.RuntimePorts, runtime_ports.Options, NoopRecord.record);
+    try std.testing.expect(core_server.tools.count() > 0);
+    try std.testing.expect(core_server.tools.count() < full_server.tools.count());
+    try std.testing.expect(core_server.tools.contains("zig_check")); // core_zig group
+    try std.testing.expect(!core_server.tools.contains("zig_profile_run")); // profiling group
+
+    // Subprocess/backend-executing tools register as cancellable (worker-dispatched);
+    // pure metadata tools do not.
+    try std.testing.expect(full_server.tools.get("zig_profile_run").?.cancellable); // executes_user_command
+    try std.testing.expect(full_server.tools.get("zig_build").?.cancellable); // executes_project_code/backend
+    try std.testing.expect(!full_server.tools.get("zigars_capabilities").?.cancellable); // pure discovery
+}
+
 test "registry catalog arguments can be derived from tool registry" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

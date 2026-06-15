@@ -49,6 +49,15 @@ pub fn zigProfileRun(
     defer freeArgList(allocator, split);
     if (split.len == 0) return mcp_errors.invalidArgument(allocator, "zig_profile_run", "command", "non-empty command string", cmd, "Pass the executable and arguments to run under the profiler.");
 
+    // Apply gate: without apply=true, preview the resolved argv and the env
+    // policy instead of executing an arbitrary agent-chosen command.
+    if (!argBool(args, "apply", false)) {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const value = commandPreviewValue(arena.allocator(), split, context.workspace.root, toolTimeout(context, args)) catch return error.OutOfMemory;
+        return mcp_result.structured(allocator, value);
+    }
+
     var result = run_usecase.run(allocator, context, .{
         .argv = split,
         .timeout_ms = toolTimeout(context, args),
@@ -605,6 +614,39 @@ fn commandRunErrorResult(allocator: std.mem.Allocator, tool: []const u8, operati
     }, failure.err);
 }
 
+/// Returns an allocator-owned JSON preview value for an unapplied profiler run.
+/// Mirrors the executed-command shape's argv/cwd/timeout fields while making the
+/// apply gate and the environment scrub explicit, so an agent sees exactly what
+/// `apply=true` would execute and with which environment.
+fn commandPreviewValue(allocator: std.mem.Allocator, argv: []const []const u8, cwd: []const u8, timeout_ms: i64) !std.json.Value {
+    var obj = std.json.ObjectMap.empty;
+    var obj_owned = true;
+    defer if (obj_owned) obj.deinit(allocator);
+    try obj.put(allocator, "kind", .{ .string = "command_preview" });
+    try obj.put(allocator, "tool", .{ .string = "zig_profile_run" });
+    try obj.put(allocator, "ok", .{ .bool = true });
+    try obj.put(allocator, "applied", .{ .bool = false });
+    try obj.put(allocator, "requires_apply", .{ .bool = true });
+    try obj.put(allocator, "title", .{ .string = "explicit user profiler command preview (argv split without shell)" });
+    try obj.put(allocator, "argv", try argvValue(allocator, argv));
+    try obj.put(allocator, "cwd", .{ .string = cwd });
+    try obj.put(allocator, "timeout_ms", .{ .integer = timeout_ms });
+    try obj.put(allocator, "env_policy", .{ .string = "allowlist" });
+    try obj.put(allocator, "env_allowlist", try envAllowlistValue(allocator));
+    try obj.put(allocator, "warning", .{ .string = "Runs an arbitrary user-supplied command. Re-invoke with apply=true to execute. The child environment is scrubbed to the listed variables; all others (tokens, credentials, agent vars) are dropped." });
+    try obj.put(allocator, "resolution", .{ .string = "Re-run zig_profile_run with apply=true to execute the previewed command." });
+    obj_owned = false;
+    return .{ .object = obj };
+}
+
+/// Returns an allocator-owned JSON array of the profiler env allowlist names.
+fn envAllowlistValue(allocator: std.mem.Allocator) !std.json.Value {
+    var arr = std.json.Array.init(allocator);
+    errdefer arr.deinit();
+    for (run_usecase.profiler_env_allowlist) |name| try arr.append(.{ .string = name });
+    return .{ .array = arr };
+}
+
 /// Returns an allocator-owned JSON value for command result.
 fn commandResultValue(allocator: std.mem.Allocator, title: []const u8, argv: []const []const u8, cwd: []const u8, timeout_ms: i64, result: ports.CommandResult) !std.json.Value {
     // Keep this logic centralized so callers observe one consistent behavior path.
@@ -956,7 +998,7 @@ test "profiling adapters execute profile commands and render flamegraph artifact
         .max_stderr_bytes = run_usecase.command_output_limit,
         .provenance = "explicit user profiler command (argv split without shell)",
     }, .{ .stdout = "ok\n", .stderr = &[_]u8{0xff}, .duration_ms = 8, .stderr_truncated = true });
-    const run_ok = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig build test\",\"timeout_ms\":222}"));
+    const run_ok = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig build test\",\"timeout_ms\":222,\"apply\":true}"));
     defer mcp_result.deinitToolResult(allocator, run_ok);
     try expectProfilingKind(run_ok, "command");
     try std.testing.expect(run_ok.structuredContent.?.object.get("stderr_invalid_utf8").?.bool);
@@ -969,7 +1011,7 @@ test "profiling adapters execute profile commands and render flamegraph artifact
         .max_stderr_bytes = run_usecase.command_output_limit,
         .provenance = "explicit user profiler command (argv split without shell)",
     }, .{ .exit_code = 2, .stdout = "failed\n", .stderr = "bad\n", .duration_ms = 3 });
-    const run_failed_exit = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig run fail\",\"timeout_ms\":0}"));
+    const run_failed_exit = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"zig run fail\",\"timeout_ms\":0,\"apply\":true}"));
     defer mcp_result.deinitToolResult(allocator, run_failed_exit);
     try expectProfilingKind(run_failed_exit, "command");
     try std.testing.expect(!run_failed_exit.structuredContent.?.object.get("ok").?.bool);
@@ -983,7 +1025,7 @@ test "profiling adapters execute profile commands and render flamegraph artifact
         .max_stderr_bytes = run_usecase.command_output_limit,
         .provenance = "explicit user profiler command (argv split without shell)",
     }, error.FileNotFound);
-    const run_err = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"missing-profiler\"}"));
+    const run_err = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"missing-profiler\",\"apply\":true}"));
     defer mcp_result.deinitToolResult(allocator, run_err);
     try std.testing.expect(run_err.is_error);
 
@@ -1055,6 +1097,43 @@ test "profiling adapters validate malformed tool arguments" {
     defer mcp_result.deinitToolResult(allocator, invalid_diff_min_width);
     try expectToolErrorCode(invalid_diff_min_width, "invalid_argument");
 
+    try commands.verify();
+    try workspace.verify();
+}
+
+test "profiling adapter previews profiler command without apply and never executes" {
+    const backing_allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(backing_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var commands = fakes.FakeCommandRunner.init(backing_allocator);
+    defer commands.deinit();
+    var workspace = fakes.FakeWorkspaceStore.init(backing_allocator);
+    defer workspace.deinit();
+    const context = testProfilingContext(&commands, &workspace);
+
+    // No apply flag: the command is previewed, not executed. The fake runner has
+    // no expectations queued, so commands.verify() would fail if it were called.
+    const preview = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"perf record ./zig-out/bin/app\",\"timeout_ms\":1000}"));
+    defer mcp_result.deinitToolResult(allocator, preview);
+    const structured = preview.structuredContent.?.object;
+    try std.testing.expect(!preview.is_error);
+    try std.testing.expectEqualStrings("command_preview", structured.get("kind").?.string);
+    try std.testing.expect(!structured.get("applied").?.bool);
+    try std.testing.expect(structured.get("requires_apply").?.bool);
+    try std.testing.expectEqualStrings("allowlist", structured.get("env_policy").?.string);
+    const argv = structured.get("argv").?.array;
+    try std.testing.expectEqual(@as(usize, 3), argv.items.len);
+    try std.testing.expectEqualStrings("perf", argv.items[0].string);
+    try std.testing.expect(structured.get("env_allowlist").?.array.items.len > 0);
+
+    // apply=false is explicit-equivalent to omitting it: still a preview.
+    const explicit_false = try zigProfileRun(allocator, context, try profilingTestArgs(allocator, "{\"command\":\"perf stat true\",\"apply\":false}"));
+    defer mcp_result.deinitToolResult(allocator, explicit_false);
+    try std.testing.expectEqualStrings("command_preview", explicit_false.structuredContent.?.object.get("kind").?.string);
+
+    // Nothing was executed.
     try commands.verify();
     try workspace.verify();
 }

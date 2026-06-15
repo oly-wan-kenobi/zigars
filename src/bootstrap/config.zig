@@ -2,6 +2,10 @@
 //! All string fields are heap-allocated; callers must release them via Config.deinit.
 const std = @import("std");
 const audit = @import("../infra/observability/audit.zig");
+const profiles = @import("../manifest/profiles.zig");
+
+/// Tool-surface profile selected at startup; drives registration-time filtering.
+pub const ToolProfile = profiles.ToolProfile;
 
 /// Startup transport selected for the MCP server process.
 pub const Transport = enum {
@@ -27,6 +31,9 @@ pub const Config = struct {
     audit_log_mode: audit.Mode = .metadata,
     timeout_ms: i64 = 30_000,
     zls_timeout_ms: i64 = 30_000,
+    /// Tool-surface profile; `full` (default) registers every tool, `core`
+    /// registers a curated subset. Plain enum — no allocation, untouched by deinit.
+    profile: ToolProfile = .full,
 
     /// Frees every owned string captured by parse or ownedDefaults.
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
@@ -56,6 +63,7 @@ pub const ParseError = error{
     InvalidTransport,
     InvalidAuditLogMode,
     InvalidAuditLogPath,
+    InvalidProfile,
     EmptyFlagValue,
     UnsafeHttpHost,
 };
@@ -112,6 +120,10 @@ pub fn parse(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const
             const value = try dupeNext(allocator, raw_args, &i);
             defer allocator.free(value);
             result.audit_log_mode = audit.parseMode(value) orelse return ParseError.InvalidAuditLogMode;
+        } else if (std.mem.eql(u8, arg, "--profile")) {
+            const value = try dupeNext(allocator, raw_args, &i);
+            defer allocator.free(value);
+            result.profile = profiles.parseProfile(value) orelse return ParseError.InvalidProfile;
         } else if (std.mem.eql(u8, arg, "--transport")) {
             const value = try dupeNext(allocator, raw_args, &i);
             defer allocator.free(value);
@@ -219,6 +231,7 @@ pub fn usage() []const u8 {
     \\        [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port 8080]
     \\        [--cache-dir <path>] [--timeout-ms <n>] [--zls-timeout-ms <n>]
     \\        [--audit-log <workspace-path>] [--audit-log-mode metadata|redacted|full]
+    \\        [--profile full|core]
     \\  zigars cli workspace-info --workspace <path> --json
     \\  zigars cli doctor --workspace <path> --probe-backends=false --json
     \\

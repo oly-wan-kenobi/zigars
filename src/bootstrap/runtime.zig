@@ -68,6 +68,9 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
         .logger = logger,
         .config = cfg,
         .workspace = ws,
+        // Borrow the parent environment so allowlist-policy commands (e.g.
+        // zig_profile_run) can scrub the child env instead of inheriting secrets.
+        .environ_map = init.environ_map,
         .zls_slots = .{
             .process = &zls_proc,
             .client = &lsp_client,
@@ -151,6 +154,7 @@ pub fn run(init: std.process.Init) !cli_adapter.ExitCode {
     server.enableCompletions();
     server.enableResourceSubscriptions();
     server.enableTasks(&runtime.runtime_ux);
+    server.enableRootsSync(&runtime.runtime_ux, runtime.workspace.root);
     startup.end("server_ready", capability_started);
     runtime.observability.recordStartupPhase("server_ready", startup.lastStartMs(), startup.lastDurationMs());
 
@@ -232,6 +236,7 @@ fn cliConfigExitCode(err: anyerror) cli_adapter.ExitCode {
         error.InvalidTransport,
         error.InvalidAuditLogMode,
         error.InvalidAuditLogPath,
+        error.InvalidProfile,
         error.EmptyFlagValue,
         error.UnsafeHttpHost,
         => .invalid_args,

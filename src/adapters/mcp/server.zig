@@ -13,6 +13,7 @@ const resources_mod = mcp.resources;
 const completion_ext = @import("server/completion.zig");
 const http_runner = @import("server/http_runner.zig");
 const json_helpers = @import("server/json_helpers.zig");
+const mcp_result = @import("result.zig");
 const pagination = @import("server/pagination.zig");
 const protocol_client = @import("server/protocol_client.zig");
 const resource_subscriptions = @import("server/resource_subscriptions.zig");
@@ -42,6 +43,14 @@ pub const Tool = struct {
     handler: *const fn (user_data: ?*anyopaque, server: *Server, io: std.Io, allocator: std.mem.Allocator, arguments: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult,
     deinit_result: ?ToolResultDeinit = null,
     user_data: ?*anyopaque = null,
+    /// When set, `Server.deinit` frees the schema containers (property maps,
+    /// enum arrays) and required-name slices with this allocator; schema
+    /// strings stay borrowed. Leave null when the schemas are borrowed/static.
+    schema_allocator: ?std.mem.Allocator = null,
+    /// When true, a tools/call for this tool is dispatched on a worker thread so
+    /// the message loop can read `notifications/cancelled` and cooperatively stop
+    /// the in-flight work. Set for tools that spawn subprocesses or backends.
+    cancellable: bool = false,
 };
 
 /// Callback for template-backed resource URIs that are resolved at read time.
@@ -76,6 +85,58 @@ pub const ServerState = enum {
     stopped,
 };
 
+/// Minimal lock-guarded allocator wrapper. The message loop and a tools/call
+/// worker thread allocate from the same parent allocator concurrently; this
+/// serializes those calls. This Zig std has no ThreadSafeAllocator wrapper, and
+/// `std.Io.Mutex.lock` needs an `io` the allocator vtable cannot supply, so a
+/// small io-free spinlock guards the short allocation critical sections. The
+/// production parent (`std.process.Init.gpa`) is itself thread-safe, so this is
+/// defensive — it keeps the worker path correct under any parent allocator.
+const ThreadSafeAllocator = struct {
+    child_allocator: std.mem.Allocator,
+    locked: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    fn allocator(self: *ThreadSafeAllocator) std.mem.Allocator {
+        return .{ .ptr = self, .vtable = &.{ .alloc = alloc, .resize = resize, .remap = remap, .free = free } };
+    }
+
+    fn lock(self: *ThreadSafeAllocator) void {
+        while (self.locked.cmpxchgWeak(false, true, .acquire, .monotonic) != null) std.atomic.spinLoopHint();
+    }
+
+    fn unlock(self: *ThreadSafeAllocator) void {
+        self.locked.store(false, .release);
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        const self: *ThreadSafeAllocator = @ptrCast(@alignCast(ctx));
+        self.lock();
+        defer self.unlock();
+        return self.child_allocator.rawAlloc(len, alignment, ret_addr);
+    }
+
+    fn resize(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+        const self: *ThreadSafeAllocator = @ptrCast(@alignCast(ctx));
+        self.lock();
+        defer self.unlock();
+        return self.child_allocator.rawResize(memory, alignment, new_len, ret_addr);
+    }
+
+    fn remap(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        const self: *ThreadSafeAllocator = @ptrCast(@alignCast(ctx));
+        self.lock();
+        defer self.unlock();
+        return self.child_allocator.rawRemap(memory, alignment, new_len, ret_addr);
+    }
+
+    fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+        const self: *ThreadSafeAllocator = @ptrCast(@alignCast(ctx));
+        self.lock();
+        defer self.unlock();
+        self.child_allocator.rawFree(memory, alignment, ret_addr);
+    }
+};
+
 /// MCP Server that handles client connections and routes requests
 pub const Server = struct {
     allocator: std.mem.Allocator,
@@ -91,6 +152,9 @@ pub const Server = struct {
     dynamic_resource_deinit: ?ResourceContentDeinit = null,
     dynamic_resource_user_data: ?*anyopaque = null,
     task_state: ?tasks_ext.State = null,
+    /// Sink that ingests client-declared roots into the runtime roots snapshot.
+    /// Wired by `enableRootsSync`; null leaves the roots query inert.
+    roots_sync: ?RootsSync = null,
     capabilities: types.ServerCapabilities = .{},
     client_info: ?types.Implementation = null,
     client_capabilities: ?types.ClientCapabilities = null,
@@ -102,6 +166,14 @@ pub const Server = struct {
     active_correlation: ?*const correlation.Context = null,
     /// Inbound request currently executing, carrying its cancellation token.
     active_request: ?ActiveRequest = null,
+    /// True while a tools/call runs on a worker thread. Read by the protocol
+    /// helper path so client round-trips (elicitation/sampling) fall back instead
+    /// of reading the transport, which the message loop owns during that window.
+    worker_active: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    /// Set by the message loop before spawning a worker so the worker's
+    /// `handleRequest` adopts this main-loop-owned cancellation state (whose flip
+    /// the loop controls) instead of a request-local one. Null on the inline path.
+    worker_cancellation: ?*cancellation.State = null,
     /// Fixed-size ring of recently completed request ids. Lets a late
     /// `notifications/cancelled` be classified as `completed_late` rather than
     /// `unknown`; oldest entries are overwritten once full.
@@ -190,6 +262,11 @@ pub const Server = struct {
         return protocol_client.classifySamplingResponse(response);
     }
 
+    /// Classifies a roots/list response without mutating server state.
+    pub fn classifyRootsResponse(response: ?std.json.Value) ProtocolResponseStatus {
+        return protocol_client.classifyRootsResponse(response);
+    }
+
     /// Initialize a new MCP Server
     pub fn init(allocator: std.mem.Allocator, config: ServerConfig) Self {
         // Capture all required dependencies up front so later calls can stay predictable.
@@ -214,6 +291,11 @@ pub const Server = struct {
             self.allocator.destroy(stdio);
             self.stdio_transport = null;
         }
+        for (self.tools.values()) |tool| {
+            const schema_allocator = tool.schema_allocator orelse continue;
+            if (tool.inputSchema) |schema| deinitOwnedSchema(schema_allocator, schema);
+            if (tool.outputSchema) |schema| deinitOwnedSchema(schema_allocator, schema);
+        }
         self.tools.deinit(self.allocator);
         self.resources.deinit(self.allocator);
         self.resource_content_deinits.deinit();
@@ -221,6 +303,14 @@ pub const Server = struct {
         self.prompts.deinit(self.allocator);
         self.prompt_message_deinits.deinit();
         self.pending_requests.deinit();
+    }
+
+    /// Frees the owned containers of a registered tool schema: nested property
+    /// maps, enum arrays, and the required-name slice. Schema strings are
+    /// borrowed manifest data and stay untouched.
+    fn deinitOwnedSchema(allocator: std.mem.Allocator, schema: anytype) void {
+        if (schema.properties) |properties| json_helpers.deinitBorrowedJsonContainers(allocator, properties);
+        if (schema.required) |required| allocator.free(required);
     }
 
     /// Add a tool to the server
@@ -293,6 +383,47 @@ pub const Server = struct {
         };
     }
 
+    /// Runtime-owned sink that ingests client-declared roots into the roots
+    /// snapshot. Mirrors the `task_state` bridge: the backing state stays
+    /// runtime-owned and is reached only through this duck-typed callback, so
+    /// the adapter never imports the concrete infra state.
+    pub const RootsSync = struct {
+        ptr: *anyopaque,
+        /// Workspace root passed through as the fallback when the client reports
+        /// no roots; borrowed for the process lifetime.
+        workspace_root: []const u8,
+        sync_fn: *const fn (*anyopaque, workspace_root: []const u8, roots_text: []const u8) void,
+
+        /// Wraps a runtime roots store exposing `syncRoots(workspace_root, text, apply)`.
+        pub fn init(backing: anytype, workspace_root: []const u8) RootsSync {
+            const BackingPtr = @TypeOf(backing);
+            return .{
+                .ptr = backing,
+                .workspace_root = workspace_root,
+                .sync_fn = struct {
+                    /// Bridges the typed runtime call into the type-erased callback.
+                    fn call(ptr: *anyopaque, root: []const u8, text: []const u8) void {
+                        const state: BackingPtr = @ptrCast(@alignCast(ptr));
+                        state.syncRoots(root, text, true);
+                    }
+                }.call,
+            };
+        }
+
+        /// Replaces the runtime roots snapshot with the supplied newline-joined text.
+        fn sync(self: RootsSync, roots_text: []const u8) void {
+            self.sync_fn(self.ptr, self.workspace_root, roots_text);
+        }
+    };
+
+    /// Wires the runtime roots store so `roots/list` results can be ingested.
+    /// Without this, `refreshClientRoots` is inert even when the client supports
+    /// roots. `workspace_root` is the configured `--workspace` path used as the
+    /// fallback when the client reports no roots.
+    pub fn enableRootsSync(self: *Self, state: anytype, workspace_root: []const u8) void {
+        self.roots_sync = RootsSync.init(state, workspace_root);
+    }
+
     /// Register a fallback resource handler for template-backed dynamic URIs.
     pub fn setDynamicResourceHandler(self: *Self, handler: DynamicResourceHandler, user_data: ?*anyopaque, deinit_content: ?ResourceContentDeinit) void {
         self.dynamic_resource_handler = handler;
@@ -360,8 +491,13 @@ pub const Server = struct {
     }
 
     /// Main message processing loop
-    fn messageLoop(self: *Self, io: std.Io, allocator: std.mem.Allocator) !void {
-        // Keep this logic centralized so callers observe one consistent behavior path.
+    fn messageLoop(self: *Self, io: std.Io, base_allocator: std.mem.Allocator) !void {
+        // A cancellable tools/call runs on a worker thread while this loop keeps
+        // reading the transport. Both threads then allocate, so wrap the request
+        // allocator in a thread-safe one. The wrapper is a thin per-allocation
+        // mutex over the parent; the inline (no-worker) path is unaffected.
+        var thread_safe = ThreadSafeAllocator{ .child_allocator = base_allocator };
+        const allocator = thread_safe.allocator();
         while (self.state != .stopped and self.state != .shutting_down) {
             const message_data = self.transport.?.receive(io, allocator) catch |err| {
                 switch (err) {
@@ -382,11 +518,146 @@ pub const Server = struct {
             };
 
             if (message_data) |data| {
-                try self.handleMessage(io, allocator, data);
+                try self.dispatchFrame(io, allocator, data);
             }
         }
 
         self.state = .stopped;
+    }
+
+    /// State shared with a tools/call worker thread. Lives on the dispatching
+    /// loop frame, which joins the worker before the frame returns, so all
+    /// borrowed fields outlive the thread.
+    const WorkerContext = struct {
+        server: *Self,
+        io: std.Io,
+        allocator: std.mem.Allocator,
+        data: []const u8,
+        done: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    };
+
+    /// Worker-thread entry point: handles the request and signals completion.
+    fn runWorker(ctx: *WorkerContext) void {
+        ctx.server.handleMessage(ctx.io, ctx.allocator, ctx.data) catch {
+            ctx.server.logError(ctx.io, "Worker request handling failed");
+        };
+        ctx.done.store(true, .release);
+    }
+
+    /// Routes one received frame. A tools/call for a cancellable tool runs on a
+    /// worker thread (so this loop can keep reading the transport and honor a
+    /// notifications/cancelled); every other frame is handled inline.
+    fn dispatchFrame(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8) !void {
+        if (self.transport != null and !self.worker_active.load(.acquire)) {
+            if (jsonrpc.parseMessage(allocator, data)) |parsed| {
+                defer parsed.deinit();
+                if (parsed.message == .request) {
+                    const request = parsed.message.request;
+                    if (std.mem.eql(u8, request.method, "tools/call")) {
+                        if (mcp.tools.getString(request.params, "name")) |tool_name| {
+                            if (self.tools.get(tool_name)) |tool| {
+                                if (tool.cancellable) {
+                                    // request_id borrows from `parsed`, which stays
+                                    // alive (defer below) for the whole dispatch.
+                                    const request_id = correlation.RequestId.from(request.id);
+                                    return self.dispatchCancellable(io, allocator, data, request_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else |_| {}
+        }
+        try self.handleMessage(io, allocator, data);
+    }
+
+    /// Runs a cancellable tools/call on a worker thread while this loop thread
+    /// keeps reading the transport. A matching notifications/cancelled flips the
+    /// shared cancellation state (cooperatively stopping subprocess work); any
+    /// other frame is buffered and processed after the worker joins, preserving
+    /// serial request ordering. The worker is the sole transport writer and this
+    /// loop the sole reader for the duration, so no output lock is needed.
+    fn dispatchCancellable(self: *Self, io: std.Io, allocator: std.mem.Allocator, data: []const u8, request_id: correlation.RequestId) !void {
+        // The worker re-parses its own stable copy of the frame; the loop's `data`
+        // is never shared with the worker.
+        const worker_data = try allocator.dupe(u8, data);
+        defer allocator.free(worker_data);
+
+        var state: cancellation.State = .{};
+        self.worker_cancellation = &state;
+        self.worker_active.store(true, .release);
+
+        var ctx: WorkerContext = .{ .server = self, .io = io, .allocator = allocator, .data = worker_data };
+        var thread = std.Thread.spawn(.{}, runWorker, .{&ctx}) catch {
+            // Spawn failed: serve the request inline so it is still answered
+            // (just not cancellable this time).
+            self.worker_active.store(false, .release);
+            self.worker_cancellation = null;
+            try self.handleMessage(io, allocator, data);
+            return;
+        };
+
+        // Received frames are not freed here: their ownership follows the same
+        // (transport-defined) contract as the inline messageLoop, which also does
+        // not free them. Only the worker_data dup, which this function owns, is
+        // freed (above).
+        var buffer: std.ArrayList([]const u8) = .empty;
+        defer buffer.deinit(allocator);
+        var reason_buf: [160]u8 = undefined;
+        var cancelled = false;
+
+        while (!ctx.done.load(.acquire)) {
+            const message_data = self.transport.?.receive(io, allocator) catch |err| switch (err) {
+                // Transport gone: stop reading, but still let the worker finish.
+                error.EndOfStream, error.ReadError, error.ConnectionClosed => break,
+                else => continue,
+            };
+            const frame = message_data orelse continue;
+            if (self.cancelReasonFor(allocator, frame, request_id, &reason_buf)) |reason_len| {
+                state.request(reason_buf[0..reason_len]);
+                cancelled = true;
+            } else {
+                buffer.append(allocator, frame) catch {};
+            }
+        }
+
+        thread.join();
+        // The worker has stopped; clear the worker markers before draining so a
+        // buffered cancellable call can itself re-dispatch on a fresh worker.
+        self.worker_active.store(false, .release);
+        self.worker_cancellation = null;
+
+        // Record the cancellation only now that the worker has stopped touching
+        // observability state, avoiding a concurrent-write race on it.
+        if (cancelled) self.recordCancellationEvent("requested_active", request_id, "tools/call");
+
+        // Drain buffered frames in arrival order. They run inline via
+        // handleMessage (a buffered cancellable call is therefore not itself
+        // cancellable — an acceptable edge case, since buffering only happens
+        // when a client sends frames while a prior worker is still running).
+        for (buffer.items) |frame| {
+            self.handleMessage(io, allocator, frame) catch self.logError(io, "Buffered frame handling failed");
+        }
+    }
+
+    /// Returns the reason length written into `reason_buf` when `frame` is a
+    /// notifications/cancelled targeting `request_id`; null otherwise. The reason
+    /// is copied out before the transient parse is freed.
+    fn cancelReasonFor(self: *Self, allocator: std.mem.Allocator, frame: []const u8, request_id: correlation.RequestId, reason_buf: []u8) ?usize {
+        _ = self;
+        const parsed = jsonrpc.parseMessage(allocator, frame) catch return null;
+        defer parsed.deinit();
+        const notification = switch (parsed.message) {
+            .notification => |n| n,
+            else => return null,
+        };
+        if (!std.mem.eql(u8, notification.method, "notifications/cancelled")) return null;
+        const target = cancellationTargetId(notification.params) orelse return null;
+        if (!requestIdEqual(target, request_id)) return null;
+        const reason = cancellationReason(notification.params) orelse "client requested cancellation";
+        const copy_len = @min(reason.len, reason_buf.len);
+        @memcpy(reason_buf[0..copy_len], reason[0..copy_len]);
+        return copy_len;
     }
 
     /// Parses one framed JSON-RPC message and routes it by kind. A parse failure
@@ -435,13 +706,17 @@ pub const Server = struct {
         self.active_correlation = &request_correlation;
         defer self.active_correlation = previous_correlation;
 
+        // On the worker path the message loop pre-owns the cancellation state and
+        // controls its flip; adopt it so the cooperative poll observes a cancel.
+        // Inline requests use a request-local state and are not cancellable.
         var cancellation_state: cancellation.State = .{};
+        const state_ptr = self.worker_cancellation orelse &cancellation_state;
         const previous_active = self.active_request;
         self.active_request = .{
             .request_id = request_correlation.request_id,
             .method = request.method,
-            .cancellable = isCancellableMethod(request.method),
-            .state = &cancellation_state,
+            .cancellable = self.worker_cancellation != null,
+            .state = state_ptr,
         };
         defer self.active_request = previous_active;
 
@@ -1263,6 +1538,9 @@ pub const Server = struct {
             if (self.state == .initializing) {
                 self.state = .ready;
                 self.logWithCorrelation(io, &notification_correlation, "Server initialized and ready");
+                // Pull the client's declared roots once the handshake completes so
+                // the runtime snapshot reflects them from the start (advisory only).
+                self.refreshClientRoots(io, self.allocator);
             } else {
                 self.logWithCorrelation(io, &notification_correlation, "Ignoring notifications/initialized outside initializing state");
             }
@@ -1271,6 +1549,9 @@ pub const Server = struct {
             self.logWithCorrelation(io, &notification_correlation, "Cancellation notification received");
         } else if (std.mem.eql(u8, notification.method, "notifications/roots/list_changed")) {
             self.logWithCorrelation(io, &notification_correlation, "Roots list changed");
+            // React to the change by re-querying the client's roots instead of
+            // only logging, keeping the runtime snapshot current.
+            self.refreshClientRoots(io, self.allocator);
         }
     }
 
@@ -1360,6 +1641,72 @@ pub const Server = struct {
     /// Sends a protocol helper request to the active client and waits for its matching JSON-RPC response.
     pub fn requestClientProtocol(self: *Self, io: std.Io, allocator: std.mem.Allocator, request: app_ports.ProtocolRequest) !app_ports.ProtocolResponse {
         return protocol_client.requestClientProtocol(self, io, allocator, request);
+    }
+
+    /// Returns whether the initialized client advertised roots support.
+    pub fn supportsRoots(self: *Self) bool {
+        return protocol_client.supportsRoots(self);
+    }
+
+    /// Bounded deadline for the advisory roots/list query. Kept short so the
+    /// startup pull cannot stall the serial loop the way the 30s helper default
+    /// would; roots are advisory, so a slow client simply yields no roots.
+    const roots_query_timeout_ms: u64 = 3_000;
+
+    /// Queries the client's declared roots via `roots/list` and feeds them into
+    /// the runtime roots snapshot so zigars surfaces the client's actual roots
+    /// (in the `zigars://workspace/roots` resource and `zigars_workspace_map`).
+    /// Advisory only: the `--workspace` path stays the sole enforced file
+    /// boundary; client roots never widen or narrow path access. No-op when the
+    /// client did not advertise roots, no transport is attached, or no roots
+    /// sink was wired via `enableRootsSync`.
+    pub fn refreshClientRoots(self: *Self, io: std.Io, allocator: std.mem.Allocator) void {
+        const sink = self.roots_sync orelse return;
+        if (!self.supportsRoots() or self.transport == null) return;
+
+        const response = self.requestClientProtocol(io, allocator, .{
+            .feature = .roots,
+            .method = "roots/list",
+            .params = .{ .object = .empty },
+            .timeout_ms = roots_query_timeout_ms,
+        }) catch return; // Advisory refresh: an OOM here is skipped, not fatal.
+        defer if (response.owns_result) {
+            if (response.result) |result| mcp_result.deinitOwnedValue(allocator, result);
+        };
+
+        if (response.status != .accepted) {
+            self.logError(io, "Client roots/list request returned no roots");
+            return;
+        }
+        const text = clientRootsText(allocator, response.result) catch return;
+        defer allocator.free(text);
+        sink.sync(text);
+    }
+
+    /// Builds a newline-joined list of client root URIs from a roots/list result.
+    /// Non-object entries and entries without a string `uri` are skipped. The
+    /// runtime root sink strips any `file://` prefix when ingesting the text.
+    fn clientRootsText(allocator: std.mem.Allocator, result: ?std.json.Value) ![]const u8 {
+        // Always returns an allocator-owned slice (empty when there are no usable
+        // roots) so the caller can free it unconditionally.
+        var buf: std.ArrayList(u8) = .empty;
+        errdefer buf.deinit(allocator);
+        if (result) |value| {
+            if (value == .object) {
+                if (value.object.get("roots")) |roots| {
+                    if (roots == .array) {
+                        for (roots.array.items) |item| {
+                            if (item != .object) continue;
+                            const uri = item.object.get("uri") orelse continue;
+                            if (uri != .string) continue;
+                            if (buf.items.len > 0) try buf.append(allocator, '\n');
+                            try buf.appendSlice(allocator, uri.string);
+                        }
+                    }
+                }
+            }
+        }
+        return buf.toOwnedSlice(allocator);
     }
 
     /// Emits the tools changed notification through the active transport.
