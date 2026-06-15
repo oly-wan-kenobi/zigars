@@ -200,3 +200,39 @@ fn elapsedMs(io: std.Io, started_ns: anytype) i64 {
     if (duration_ns <= 0) return 0;
     return @intCast(@divTrunc(duration_ns, std.time.ns_per_ms));
 }
+
+test "scrubbedEnv filters the child environment to the allowlist" {
+    // Tests the env-scrub map directly, without spawning a child: a subprocess
+    // with a scrubbed (near-empty) environment under ptrace-based coverage
+    // (kcov) corrupts child tracking on Linux and loses coverage for later
+    // tests. The full scrub-and-spawn path is covered by the manual check.
+    const allocator = std.testing.allocator;
+
+    var parent = std.process.Environ.Map.init(allocator);
+    defer parent.deinit();
+    try parent.put("SECRET", "leak-me");
+    try parent.put("ALLOWED", "kept-value");
+
+    var runner = Runner.init(.{
+        .io = std.testing.io,
+        .default_cwd = ".",
+        .default_timeout_ms = 1000,
+        .environ_map = &parent,
+    });
+
+    // inherit -> null: the child keeps the parent environment unchanged.
+    try std.testing.expect((try runner.scrubbedEnv(allocator, .inherit)) == null);
+
+    // allowlist -> only allowlisted names are copied from the parent.
+    var scrubbed = (try runner.scrubbedEnv(allocator, .{ .allowlist = &.{"ALLOWED"} })).?;
+    defer scrubbed.deinit();
+    try std.testing.expectEqualStrings("kept-value", scrubbed.get("ALLOWED").?);
+    try std.testing.expect(scrubbed.get("SECRET") == null);
+
+    // allowlist with no parent env -> empty map (fail-closed).
+    var no_parent = Runner.init(.{ .io = std.testing.io, .default_cwd = ".", .default_timeout_ms = 1000 });
+    var empty = (try no_parent.scrubbedEnv(allocator, .{ .allowlist = &.{"ALLOWED"} })).?;
+    defer empty.deinit();
+    try std.testing.expect(empty.get("ALLOWED") == null);
+    try std.testing.expectEqual(@as(usize, 0), empty.count());
+}

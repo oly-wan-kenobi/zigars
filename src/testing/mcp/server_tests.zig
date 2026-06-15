@@ -288,6 +288,12 @@ test "Server deinit frees registry-owned tool schemas" {
     try std.testing.expect(gate_tool.schema_allocator != null);
     try std.testing.expect(gate_tool.inputSchema.?.required != null);
     try std.testing.expect(gate_tool.outputSchema.?.required != null);
+
+    // The registry derives Tool.cancellable from manifest risk: a backend/
+    // project-code executor is worker-dispatched (cancellable); an artifact-only
+    // gate is not.
+    try std.testing.expect(server.tools.get("zig_compile_error_index").?.cancellable);
+    try std.testing.expect(!gate_tool.cancellable);
 }
 
 test "Server add resource" {

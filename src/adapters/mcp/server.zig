@@ -224,6 +224,13 @@ pub const Server = struct {
         pub fn requestCanObserveCancellation(method: []const u8) bool {
             return isCancellableMethod(method);
         }
+
+        /// Exposes the cancel-frame matcher so the worker-dispatch cancel path
+        /// can be unit-tested without spawning a thread (threads in the test
+        /// binary break ptrace-based coverage on Linux).
+        pub fn cancelReasonFor(server: *Self, allocator: std.mem.Allocator, frame: []const u8, request_id: correlation.RequestId, reason_buf: []u8) ?usize {
+            return server.cancelReasonFor(allocator, frame, request_id, reason_buf);
+        }
     };
 
     /// Outbound request bookkeeping for responses from the peer.

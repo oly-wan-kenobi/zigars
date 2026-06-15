@@ -9,6 +9,7 @@ const mcp = @import("mcp");
 const server_mod = @import("../../adapters/mcp/server.zig");
 const app_ports = @import("../../app/ports.zig");
 const mcp_result = @import("../../adapters/mcp/result.zig");
+const correlation = @import("../../adapters/mcp/correlation.zig");
 
 const Server = server_mod.Server;
 
@@ -370,61 +371,43 @@ test "refreshClientRoots queries the client and ingests declared roots" {
     try std.testing.expectEqual(@as(usize, 0), server.pending_requests.count());
 }
 
-/// Cancellable test tool: blocks until its cancellation token flips, then
-/// returns "cancelled". If no token is wired it returns "no_token", so a test
-/// can prove the worker-path token wiring AND the cancel flip end to end.
-fn blockUntilCancelledHandler(_: ?*anyopaque, server: *Server, io: std.Io, _: std.mem.Allocator, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    const token = server.currentCancellationToken() orelse
-        return .{ .content = &.{.{ .text = .{ .text = "no_token" } }} };
-    // Yield (not busy-spin) so the message-loop thread is free to read the
-    // cancel and flip the token; busy-spinning starves the loop thread under
-    // ptrace-based coverage (kcov). A wall-clock bound guarantees the worker
-    // returns even in a pathological scheduler, so the run can never hang (a
-    // hang truncates the whole kcov measurement); the assertion below then
-    // fails loudly instead.
-    const start_ns = std.Io.Clock.now(.real, io).nanoseconds;
-    while (!token.isCancelled()) {
-        std.Thread.yield() catch {};
-        if (std.Io.Clock.now(.real, io).nanoseconds - start_ns > 30 * std.time.ns_per_s) {
-            return .{ .content = &.{.{ .text = .{ .text = "timed_out" } }} };
-        }
-    }
-    return .{ .content = &.{.{ .text = .{ .text = "observed_cancel" } }} };
-}
-
-test "cancellable tools/call worker is interrupted by notifications/cancelled" {
-    // Worker-thread + spawned-thread tests skip on Windows (consistent with the
-    // command-level cancellation tests); the platform-agnostic dispatch flow is
-    // covered on Linux/macOS here and by the integration fixtures on Windows.
-    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+test "cancelReasonFor matches a cancel notification by request id" {
+    // The worker-dispatch cancel match is unit-tested here without a thread; the
+    // full worker flow (spawn -> flip -> observe) is exercised by the server
+    // integration fixtures and the manual cancellation check. A thread in this
+    // (kcov-measured) binary would break ptrace-based coverage on Linux.
     const allocator = std.testing.allocator;
     var server = Server.init(allocator, .{ .name = "cancel", .version = "1" });
     defer server.deinit();
-    try server.addTool(.{ .name = "block_tool", .handler = blockUntilCancelledHandler, .cancellable = true });
+    const request_id = correlation.RequestId.from(.{ .integer = 2 });
+    var reason_buf: [160]u8 = undefined;
 
-    const messages = [_][]const u8{
-        \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"t","version":"1"}}}
-        ,
-        \\{"jsonrpc":"2.0","method":"notifications/initialized"}
-        ,
-        \\{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"block_tool","arguments":{}}}
-        ,
-        \\{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2,"reason":"stop"}}
-        ,
-    };
-    var transport = ScriptTransport{ .messages = &messages };
-    defer transport.deinit(allocator);
+    // Matching cancel for id 2 carries its reason back.
+    const matched = Server.TestAccess.cancelReasonFor(&server, allocator,
+        \\{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2,"reason":"stop now"}}
+    , request_id, &reason_buf);
+    try std.testing.expect(matched != null);
+    try std.testing.expectEqualStrings("stop now", reason_buf[0..matched.?]);
 
-    // The tool runs on a worker; the loop reads the cancel and flips the token,
-    // which the worker observes and returns. Without the worker dispatch this
-    // would deadlock (the loop would block in the tool, never reading the cancel).
-    try server.runWithTransport(std.testing.io, allocator, transport.transport());
+    // A matching cancel without a reason falls back to the default reason.
+    const defaulted = Server.TestAccess.cancelReasonFor(&server, allocator,
+        \\{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2}}
+    , request_id, &reason_buf);
+    try std.testing.expect(defaulted != null);
+    try std.testing.expectEqualStrings("client requested cancellation", reason_buf[0..defaulted.?]);
 
-    const sent = try joinedSent(allocator, &transport);
-    defer allocator.free(sent);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "observed_cancel") != null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "no_token") == null);
-    try std.testing.expect(std.mem.indexOf(u8, sent, "timed_out") == null);
+    // Non-matching id, non-cancel notification, a request frame, and malformed
+    // JSON all return null (and never crash).
+    try std.testing.expect(Server.TestAccess.cancelReasonFor(&server, allocator,
+        \\{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":99}}
+    , request_id, &reason_buf) == null);
+    try std.testing.expect(Server.TestAccess.cancelReasonFor(&server, allocator,
+        \\{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"p","progress":1}}
+    , request_id, &reason_buf) == null);
+    try std.testing.expect(Server.TestAccess.cancelReasonFor(&server, allocator,
+        \\{"jsonrpc":"2.0","id":5,"method":"ping"}
+    , request_id, &reason_buf) == null);
+    try std.testing.expect(Server.TestAccess.cancelReasonFor(&server, allocator, "{ not json", request_id, &reason_buf) == null);
 }
 
 test "refreshClientRoots is inert when the client does not advertise roots" {
