@@ -190,13 +190,13 @@ requests = [
         "jsonrpc": "2.0",
         "id": 6,
         "method": "tools/call",
-        "params": {"name": "zig_diagnostics", "arguments": {"file": "src/main.zig", "content": main_source, "wait_ms": 500}},
+        "params": {"name": "zig_diagnostics", "arguments": {"file": "src/main.zig", "content": main_source}},
     },
     {
         "jsonrpc": "2.0",
         "id": 7,
         "method": "tools/call",
-        "params": {"name": "zig_diagnostics_all", "arguments": {"file": "src/main.zig", "content": main_source, "wait_ms": 500, "timeout_ms": backend_timeout_ms}},
+        "params": {"name": "zig_diagnostics_all", "arguments": {"file": "src/main.zig", "content": main_source}},
     },
     {
         "jsonrpc": "2.0",
