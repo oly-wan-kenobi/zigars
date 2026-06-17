@@ -214,7 +214,7 @@ requests = [
         "jsonrpc": "2.0",
         "id": 10,
         "method": "tools/call",
-        "params": {"name": "zig_rename", "arguments": {"file": "src/main.zig", "content": formatted_source, "line": 2, "character": 10, "new_name": "RenamedThing", "apply": False}},
+        "params": {"name": "zig_rename", "arguments": {"file": "src/main.zig", "content": formatted_source, "line": 2, "character": 10, "new_name": "RenamedThing"}},
     },
     {
         "jsonrpc": "2.0",
@@ -354,7 +354,14 @@ for response_id, name, marker in [
     status = "passed"
     if response_id in (10, 11) and ("unsupported_capability" in text or "zls_unavailable" in text):
         status = "unsupported"
-    elif marker not in text and response_id not in (3, 6, 9):
+    # Some scenarios are not pure ZLS-method calls and so do not echo an LSP
+    # method marker: ids 6/7 (zig_diagnostics, zig_diagnostics_all) share one
+    # ZLS/ast-check fallback path and answer via textDocument/diagnostic with
+    # real ZLS present; ids 8/9 (zig_format preview/apply) are zig-fmt-backed
+    # apply-gated mutations, not textDocument/formatting. payload() still fails
+    # the scenario on isError and the apply step is verified by the formatted
+    # source-content check below, so a genuine failure is not masked.
+    elif marker not in text and response_id not in (3, 6, 7, 8, 9):
         fail(f"{name} did not include expected marker {marker!r}")
     scenario_results.append({
         "name": name,
