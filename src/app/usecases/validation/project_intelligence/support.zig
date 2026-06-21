@@ -218,3 +218,22 @@ pub fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
     const hex = std.fmt.bytesToHex(digest, .lower);
     return allocator.dupe(u8, &hex);
 }
+
+/// Reports whether `contents` references `target` by basename or full path.
+pub fn importsTarget(contents: []const u8, target: []const u8) bool {
+    const base = std.fs.path.basename(target);
+    return std.mem.indexOf(u8, contents, base) != null or std.mem.indexOf(u8, contents, target) != null;
+}
+
+/// Reports whether file stem matches the caller-provided data.
+pub fn referencesFileStem(contents: []const u8, target: []const u8) bool {
+    const base = std.fs.path.basename(target);
+    const dot = std.mem.lastIndexOfScalar(u8, base, '.') orelse base.len;
+    if (dot == 0) return false;
+    return std.mem.indexOf(u8, contents, base[0..dot]) != null;
+}
+
+/// Reports whether like test file matches the caller-provided data.
+pub fn looksLikeTestFile(path: []const u8) bool {
+    return std.mem.indexOf(u8, path, "test") != null or std.mem.endsWith(u8, path, "_test.zig");
+}
