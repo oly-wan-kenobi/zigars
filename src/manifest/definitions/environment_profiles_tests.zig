@@ -3,9 +3,6 @@
 //! expected apply-gate risk metadata.
 const std = @import("std");
 const subject = @import("environment_profiles.zig");
-const zigars_setup_elicit = subject.zigars_setup_elicit;
-const zigars_profile_elicit = subject.zigars_profile_elicit;
-const zigars_backend_elicit = subject.zigars_backend_elicit;
 const zigars_project_profile_v2 = subject.zigars_project_profile_v2;
 const zigars_profile_validate = subject.zigars_profile_validate;
 const zigars_profile_read = subject.zigars_profile_read;
@@ -27,5 +24,5 @@ const zigars_backend_conformance = subject.zigars_backend_conformance;
 const zigars_backend_evidence_pack = subject.zigars_backend_evidence_pack;
 
 test "environment profile definitions expose setup metadata" {
-    try @import("std").testing.expect(zigars_setup_elicit.description.len > 0);
+    try @import("std").testing.expect(zigars_project_profile_v2.description.len > 0);
 }

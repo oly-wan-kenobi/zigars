@@ -26,21 +26,6 @@ pub fn zigarsBackendGuidance(allocator: std.mem.Allocator, context: app_context.
     return invokeEnvironment(allocator, context, args, "zigars_backend_guidance", environment.zigarsBackendGuidance);
 }
 
-/// Handles MCP `zigars_setup_elicit` compatibility requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarsSetupElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeEnvironment(allocator, context, args, "zigars_setup_elicit", environment.zigarsSetupElicit);
-}
-
-/// Handles MCP `zigars_profile_elicit` compatibility requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarsProfileElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeEnvironment(allocator, context, args, "zigars_profile_elicit", environment.zigarsProfileElicit);
-}
-
-/// Handles MCP `zigars_backend_elicit` compatibility requests by delegating to app logic and shaping owned results/errors.
-pub fn zigarsBackendElicit(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invokeEnvironment(allocator, context, args, "zigars_backend_elicit", environment.zigarsBackendElicit);
-}
-
 /// Handles MCP `zigars_project_profile_v2` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigarsProjectProfileV2(allocator: std.mem.Allocator, context: app_context.EnvironmentContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invokeEnvironment(allocator, context, args, "zigars_project_profile_v2", environment.zigarsProjectProfileV2);
@@ -245,7 +230,7 @@ fn usecaseError(allocator: std.mem.Allocator, tool_name: []const u8, operation: 
 const fakes = @import("../../../testing/fakes/root.zig");
 const manifest_catalog = @import("../../../bootstrap/manifest_catalog.zig");
 
-test "environment adapter covers elicit and structured error wrappers" {
+test "environment adapter covers guidance and structured error wrappers" {
     const test_allocator = std.testing.allocator;
     var arena = std.heap.ArenaAllocator.init(test_allocator);
     defer arena.deinit();
@@ -260,9 +245,6 @@ test "environment adapter covers elicit and structured error wrappers" {
     try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
     try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
     try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
-    try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
-    try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
-    try workspace.expectExists(.{ .path = ".zigars/profile.json", .for_output = false, .provenance = "arch111-workflow-exists" }, .{ .exists = false });
     const context = testEnvironmentContext(commands.port(), workspace.port(), scanner.port());
 
     const setup_guidance = try zigarsSetupGuidance(allocator, context, null);
@@ -270,25 +252,13 @@ test "environment adapter covers elicit and structured error wrappers" {
     try std.testing.expectEqualStrings("zigars_setup_guidance", setup_guidance.structuredContent.?.object.get("kind").?.string);
     try std.testing.expectEqual(false, setup_guidance.structuredContent.?.object.get("elicitation_used").?.bool);
 
-    const setup = try zigarsSetupElicit(allocator, context, null);
-    defer mcp_result.deinitToolResult(allocator, setup);
-    try std.testing.expectEqualStrings("zigars_setup_elicit", setup.structuredContent.?.object.get("kind").?.string);
-
     const profile_guidance = try zigarsProfileGuidance(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, profile_guidance);
     try std.testing.expectEqualStrings("zigars_profile_guidance", profile_guidance.structuredContent.?.object.get("kind").?.string);
 
-    const profile = try zigarsProfileElicit(allocator, context, null);
-    defer mcp_result.deinitToolResult(allocator, profile);
-    try std.testing.expectEqualStrings("zigars_profile_elicit", profile.structuredContent.?.object.get("kind").?.string);
-
     const backend_guidance = try zigarsBackendGuidance(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, backend_guidance);
     try std.testing.expectEqualStrings("zigars_backend_guidance", backend_guidance.structuredContent.?.object.get("kind").?.string);
-
-    const backend = try zigarsBackendElicit(allocator, context, null);
-    defer mcp_result.deinitToolResult(allocator, backend);
-    try std.testing.expectEqualStrings("zigars_backend_elicit", backend.structuredContent.?.object.get("kind").?.string);
 
     const missing_import = try zigarsProfileImport(allocator, context, null);
     defer mcp_result.deinitToolResult(allocator, missing_import);

@@ -100,7 +100,7 @@ Keywords: `docs drift`, `release claims`, `tool index`, `generated docs`, `publi
 
 ### environment_profiles
 
-Tools: `zigars_setup_guidance`, `zigars_profile_guidance`, `zigars_backend_guidance`, `zigars_setup_elicit`, `zigars_profile_elicit`, `zigars_backend_elicit`, `zigars_project_profile_v2`, `zigars_profile_validate`, `zigars_profile_read`, `zigars_profile_bootstrap`, `zigars_profile_import`, `zigars_profile_diff`, `zigars_env_pack`, `zigars_env_export`, `zigars_zvm_probe`, `zigars_zvm_install_plan`, `zigars_zvm_switch_plan`, `zig_zls_match_check`, `zig_toolchain_pin`, `zig_toolchain_pin_check`, `zigars_backend_install_plan`, `zigars_backend_verify`, `zigars_dev_env_generate`, `zigars_backend_conformance`, `zigars_backend_evidence_pack`
+Tools: `zigars_setup_guidance`, `zigars_profile_guidance`, `zigars_backend_guidance`, `zigars_project_profile_v2`, `zigars_profile_validate`, `zigars_profile_read`, `zigars_profile_bootstrap`, `zigars_profile_import`, `zigars_profile_diff`, `zigars_env_pack`, `zigars_env_export`, `zigars_zvm_probe`, `zigars_zvm_install_plan`, `zigars_zvm_switch_plan`, `zig_zls_match_check`, `zig_toolchain_pin`, `zig_toolchain_pin_check`, `zigars_backend_install_plan`, `zigars_backend_verify`, `zigars_dev_env_generate`, `zigars_backend_conformance`, `zigars_backend_evidence_pack`
 
 Keywords: `profile v2`, `project profile`, `bootstrap`, `environment pack`, `toolchain pin`, `zvm`, `zls compatibility`, `dev environment`, `backend conformance`, `setup guidance`, `elicitation compatibility`
 
@@ -430,7 +430,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_artifact_read`: required `path: string`; optional `max_bytes: integer`, `mode: string`
 - `zigars_backend_catalog`: optional `include_configured_paths: boolean`
 - `zigars_backend_conformance`: optional `backend: string`, `probe_backends: boolean`, `timeout_ms: integer`
-- `zigars_backend_elicit`: optional `backend: string`, `mode: string`
 - `zigars_backend_evidence_pack`: optional `input: string`, `output: string`, `apply: boolean`
 - `zigars_backend_guidance`: optional `backend: string`, `mode: string`
 - `zigars_backend_install_plan`: optional `backend: string`, `manager: string`
@@ -468,7 +467,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_patch_session_validate`: optional `session_id: string`, `changed_files: string`, `diff: string`, `edits: string`, `goal: string`, `mode: string`, `include_semantic: boolean`, `stop_on_failure: boolean`, `apply: boolean`, `output: string`, `timeout_ms: integer`
 - `zigars_profile_bootstrap`: optional `mode: string`
 - `zigars_profile_diff`: optional `content: string`, `path: string`
-- `zigars_profile_elicit`: optional `content: string`, `mode: string`
 - `zigars_profile_guidance`: optional `content: string`, `mode: string`
 - `zigars_profile_import`: required `content: string`; optional `apply: boolean`
 - `zigars_profile_read`: optional `path: string`
@@ -489,7 +487,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_run_stream`: required `command: string`; optional `file: string`, `args: string`, `timeout_ms: integer`, `mode: string`
 - `zigars_session_snapshot`: optional `goal: string`, `changed_files: string`, `diff: string`, `validation: string`, `last_error: string`
 - `zigars_session_view`: required `kind: string`, `id: string`
-- `zigars_setup_elicit`: optional `topic: string`, `mode: string`
 - `zigars_setup_guidance`: optional `topic: string`, `mode: string`
 - `zigars_smoke_plan`: optional `client: string`, `transport: string`, `backend: string`, `platform: string`, `timeout_ms: integer`
 - `zigars_tool_index_check`: optional `mode: string`
@@ -738,7 +735,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_artifact_read`: `pure_analysis` read-only analysis
 - `zigars_backend_catalog`: `pure_analysis` read-only analysis
 - `zigars_backend_conformance`: `dynamic_command` runtime-dependent backend plan
-- `zigars_backend_elicit`: `pure_analysis` read-only analysis
 - `zigars_backend_evidence_pack`: `apply_gated_mutation` preview/apply mutation
 - `zigars_backend_guidance`: `pure_analysis` read-only analysis
 - `zigars_backend_health_history`: `pure_analysis` read-only analysis
@@ -781,7 +777,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_patch_session_validate`: `dynamic_command` runtime-dependent backend plan
 - `zigars_profile_bootstrap`: `pure_analysis` read-only analysis
 - `zigars_profile_diff`: `pure_analysis` read-only analysis
-- `zigars_profile_elicit`: `pure_analysis` read-only analysis
 - `zigars_profile_guidance`: `pure_analysis` read-only analysis
 - `zigars_profile_import`: `apply_gated_mutation` preview/apply mutation
 - `zigars_profile_read`: `pure_analysis` read-only analysis
@@ -803,7 +798,6 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zigars_schema`: `pure_analysis` read-only analysis
 - `zigars_session_snapshot`: `pure_analysis` read-only analysis
 - `zigars_session_view`: `pure_analysis` read-only analysis
-- `zigars_setup_elicit`: `pure_analysis` read-only analysis
 - `zigars_setup_guidance`: `pure_analysis` read-only analysis
 - `zigars_smoke_plan`: `pure_analysis` read-only analysis
 - `zigars_tool_index`: `pure_analysis` read-only analysis
