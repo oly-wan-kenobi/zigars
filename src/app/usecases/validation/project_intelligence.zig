@@ -7,147 +7,55 @@ const zig_analysis = @import("../../../domain/zig/analysis.zig");
 const project_values = @import("../static_analysis/project_values.zig");
 const semantic_usecase = @import("../static_analysis/semantic_index.zig");
 const workflows = @import("workflows.zig");
+const support = @import("project_intelligence/support.zig");
 
-/// Schema version written into this module's structured payloads.
-pub const schema_version: i64 = 1;
-/// Default semantic limit used when the caller omits an explicit value.
-pub const semantic_limit_default: usize = 500;
-/// Default memory path used when the caller omits an explicit value.
-pub const memory_path_default = ".zigars/project-memory.jsonl";
-/// Default profile path used when the caller omits an explicit value.
-pub const profile_path_default = ".zigars/profile.json";
+// Shared leaf helpers extracted to project_intelligence/support.zig. Re-aliased
+// here so every existing call site and white-box test in this file is unchanged.
+const SafeText = support.SafeText;
+const argvOwnedValue = support.argvOwnedValue;
+const commandTermValue = support.commandTermValue;
+const safeTextAlloc = support.safeTextAlloc;
+const putStreamFields = support.putStreamFields;
+const commandErrorKind = support.commandErrorKind;
+const backendErrorValue = support.backendErrorValue;
+const isOutputLimitError = support.isOutputLimitError;
+const isTimeoutError = support.isTimeoutError;
+const stringListContains = support.stringListContains;
+const freeStringList = support.freeStringList;
+const jsonArrayLen = support.jsonArrayLen;
+const boolField = support.boolField;
+const stringField = support.stringField;
+const integerField = support.integerField;
+const ownedString = support.ownedString;
+const stringArrayValue = support.stringArrayValue;
+const cloneValue = support.cloneValue;
+const serializeValue = support.serializeValue;
+const jsonLineForRecord = support.jsonLineForRecord;
+const sha256Hex = support.sha256Hex;
 
-/// Carries path list data across use case and port boundaries.
-pub const PathList = struct {
-    items: []const []const u8,
-
-    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
-    pub fn deinit(self: *PathList, allocator: std.mem.Allocator) void {
-        freeStringList(allocator, self.items);
-        allocator.free(self.items);
-        self.* = undefined;
-    }
-};
-
-/// Carries context pack request data across use case and port boundaries.
-pub const ContextPackRequest = struct {
-    mode: []const u8 = "standard",
-    token_budget: i64 = 4000,
-};
-
-/// Carries validate patch request data across use case and port boundaries.
-pub const ValidatePatchRequest = struct {
-    mode: []const u8 = "standard",
-    changed_files: ?[]const u8 = null,
-    timeout_ms: i64,
-    stop_on_failure: bool = false,
-};
-
-/// Carries failure fusion request data across use case and port boundaries.
-pub const FailureFusionRequest = struct {
-    text: ?[]const u8 = null,
-    command: ?[]const u8 = null,
-    file: ?[]const u8 = null,
-    filter: ?[]const u8 = null,
-    extra_args: []const []const u8 = &.{},
-    timeout_ms: i64,
-};
-
-/// Carries impact request data across use case and port boundaries.
-pub const ImpactRequest = struct {
-    files: ?[]const u8 = null,
-    symbols: ?[]const u8 = null,
-    limit: usize = 300,
-};
-
-/// Carries project profile request data across use case and port boundaries.
-pub const ProjectProfileRequest = struct {
-    content: ?[]const u8 = null,
-    apply: bool = false,
-};
-
-/// Carries patch guard request data across use case and port boundaries.
-pub const PatchGuardRequest = struct {
-    files: ?[]const u8 = null,
-    patch: ?[]const u8 = null,
-};
-
-/// Carries semantic impact request data across use case and port boundaries.
-pub const SemanticImpactRequest = struct {
-    files: ?[]const u8 = null,
-    diff: ?[]const u8 = null,
-    symbols: ?[]const u8 = null,
-    limit: usize = semantic_limit_default,
-};
-
-/// Defines the allowed event command kind variants accepted by this workflow.
-pub const EventCommandKind = enum { build, test_cmd };
-
-/// Carries command events request data across use case and port boundaries.
-pub const CommandEventsRequest = struct {
-    text: ?[]const u8 = null,
-    command: ?[]const u8 = null,
-    file: ?[]const u8 = null,
-    filter: ?[]const u8 = null,
-    extra_args: []const []const u8 = &.{},
-    timeout_ms: i64,
-    kind: EventCommandKind,
-};
-
-/// Carries session snapshot request data across use case and port boundaries.
-pub const SessionSnapshotRequest = struct {
-    kind: []const u8,
-    goal: ?[]const u8 = null,
-    changed_files: ?[]const u8 = null,
-    diff: ?[]const u8 = null,
-    validation: ?[]const u8 = null,
-    last_error: ?[]const u8 = null,
-};
-
-/// Carries decision record request data across use case and port boundaries.
-pub const DecisionRecordRequest = struct {
-    title: []const u8,
-    decision: []const u8,
-    rationale: ?[]const u8 = null,
-    category: []const u8 = "architecture",
-    path: []const u8 = memory_path_default,
-    apply: bool = false,
-};
-
-/// Carries project memory request data across use case and port boundaries.
-pub const ProjectMemoryRequest = struct {
-    content: ?[]const u8 = null,
-    path: []const u8 = memory_path_default,
-    query: ?[]const u8 = null,
-    category: ?[]const u8 = null,
-    limit: usize = 100,
-    include_builtins: bool = false,
-    tool_name: []const u8,
-};
-
-/// Carries tool risk data across use case and port boundaries.
-pub const ToolRisk = struct {
-    level: []const u8,
-    mcp_read_only_hint: bool,
-    writes_source: bool,
-    writes_artifacts: bool,
-    writes_require_apply: bool,
-    preview_by_default: bool,
-    mutates_lsp_state: bool,
-    executes_project_code: bool,
-    executes_user_command: bool,
-    executes_backend: bool,
-};
-
-/// Carries capability entry data across use case and port boundaries.
-pub const CapabilityEntry = struct {
-    name: []const u8,
-    description: []const u8,
-    group: []const u8,
-    group_keywords: []const []const u8,
-    risk: ToolRisk,
-    plan_kind: []const u8,
-};
+// Shared request/value types and defaults extracted to project_intelligence/types.zig.
+// Re-exported so the module's public surface and every in-file call site are unchanged.
+const types = @import("project_intelligence/types.zig");
+pub const schema_version = types.schema_version;
+pub const semantic_limit_default = types.semantic_limit_default;
+pub const memory_path_default = types.memory_path_default;
+pub const profile_path_default = types.profile_path_default;
+pub const PathList = types.PathList;
+pub const ContextPackRequest = types.ContextPackRequest;
+pub const ValidatePatchRequest = types.ValidatePatchRequest;
+pub const FailureFusionRequest = types.FailureFusionRequest;
+pub const ImpactRequest = types.ImpactRequest;
+pub const ProjectProfileRequest = types.ProjectProfileRequest;
+pub const PatchGuardRequest = types.PatchGuardRequest;
+pub const SemanticImpactRequest = types.SemanticImpactRequest;
+pub const EventCommandKind = types.EventCommandKind;
+pub const CommandEventsRequest = types.CommandEventsRequest;
+pub const SessionSnapshotRequest = types.SessionSnapshotRequest;
+pub const DecisionRecordRequest = types.DecisionRecordRequest;
+pub const ProjectMemoryRequest = types.ProjectMemoryRequest;
+pub const ToolRisk = types.ToolRisk;
+pub const CapabilityEntry = types.CapabilityEntry;
+const ArgvList = types.ArgvList;
 
 /// Serializes context pack fields into an allocator-owned JSON value; allocation failures propagate.
 pub fn contextPackValue(
@@ -1756,18 +1664,6 @@ fn buildEventArgv(allocator: std.mem.Allocator, context: app_context.ProjectInte
     return buildZigArgv(allocator, context, command_name, request.file, request.filter, request.extra_args);
 }
 
-/// Carries argv list data across use case and port boundaries.
-const ArgvList = struct {
-    items: []const []const u8,
-
-    /// Releases allocations owned by this value; callers must not use owned slices after this returns.
-    fn deinit(self: *ArgvList, allocator: std.mem.Allocator) void {
-        freeStringList(allocator, self.items);
-        allocator.free(self.items);
-        self.* = undefined;
-    }
-};
-
 /// Constructs zig argv data from caller-owned inputs, propagating allocation failures.
 fn buildZigArgv(
     allocator: std.mem.Allocator,
@@ -2618,219 +2514,6 @@ fn workspacePathExists(allocator: std.mem.Allocator, context: app_context.Projec
         .provenance = "project_intelligence.workspace_path_exists",
     }) catch return false;
     return result.exists;
-}
-
-/// Serializes argv owned fields into an allocator-owned JSON value; allocation failures propagate.
-fn argvOwnedValue(allocator: std.mem.Allocator, argv: []const []const u8) !std.json.Value {
-    var array = std.json.Array.init(allocator);
-    for (argv) |arg| try array.append(try ownedString(allocator, arg));
-    return .{ .array = array };
-}
-
-/// Serializes command term fields into an allocator-owned JSON value; allocation failures propagate.
-fn commandTermValue(allocator: std.mem.Allocator, term: ports.CommandTerm) !std.json.Value {
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = term.name() });
-    if (term.exitCode()) |code| try obj.put(allocator, "code", .{ .integer = code });
-    return .{ .object = obj };
-}
-
-/// Carries safe text data across use case and port boundaries.
-const SafeText = struct {
-    text: []const u8,
-    invalid_utf8: bool,
-    encoding: []const u8,
-    byte_count: usize,
-};
-
-/// Copies bounded text into allocator-owned storage for result payloads.
-fn safeTextAlloc(allocator: std.mem.Allocator, bytes: []const u8) !SafeText {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    if (std.unicode.utf8ValidateSlice(bytes)) {
-        return .{
-            .text = try allocator.dupe(u8, bytes),
-            .invalid_utf8 = false,
-            .encoding = "utf-8",
-            .byte_count = bytes.len,
-        };
-    }
-    var out: std.ArrayList(u8) = .empty;
-    errdefer out.deinit(allocator);
-    var index: usize = 0;
-    while (index < bytes.len) {
-        const len = std.unicode.utf8ByteSequenceLength(bytes[index]) catch {
-            try out.appendSlice(allocator, &std.unicode.replacement_character_utf8);
-            index += 1;
-            continue;
-        };
-        if (index + len <= bytes.len and std.unicode.utf8ValidateSlice(bytes[index .. index + len])) {
-            try out.appendSlice(allocator, bytes[index .. index + len]);
-            index += len;
-        } else {
-            try out.appendSlice(allocator, &std.unicode.replacement_character_utf8);
-            index += 1;
-        }
-    }
-    return .{
-        .text = try out.toOwnedSlice(allocator),
-        .invalid_utf8 = true,
-        .encoding = "utf-8-lossy",
-        .byte_count = bytes.len,
-    };
-}
-
-/// Implements put stream fields workflow logic using caller-owned inputs.
-fn putStreamFields(allocator: std.mem.Allocator, obj: *std.json.ObjectMap, name: []const u8, safe: SafeText) !void {
-    try obj.put(allocator, name, .{ .string = safe.text });
-    try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_invalid_utf8", .{name}), .{ .bool = safe.invalid_utf8 });
-    try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_encoding", .{name}), .{ .string = safe.encoding });
-    try obj.put(allocator, try std.fmt.allocPrint(allocator, "{s}_byte_count", .{name}), .{ .integer = @intCast(safe.byte_count) });
-}
-
-/// Classifies command failures into stable result categories.
-fn commandErrorKind(err: anyerror) []const u8 {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    return switch (err) {
-        error.Timeout, error.RequestTimeout => "timeout",
-        error.StreamTooLong, error.OutputLimitExceeded => "output_limit",
-        error.FileNotFound, error.NotFound => "executable_not_found",
-        error.AccessDenied, error.PermissionDenied => "permission",
-        error.EndOfStream, error.BrokenPipe, error.Unavailable, error.NoResponse => "unavailable",
-        error.PathOutsideWorkspace, error.EmptyPath => "workspace_path",
-        else => "execution",
-    };
-}
-
-/// Serializes backend error fields into an allocator-owned JSON value; allocation failures propagate.
-fn backendErrorValue(allocator: std.mem.Allocator, backend_name: []const u8, operation: []const u8, err: anyerror, resolution: []const u8) !std.json.Value {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    var obj = std.json.ObjectMap.empty;
-    errdefer obj.deinit(allocator);
-    try obj.put(allocator, "kind", .{ .string = "backend_error" });
-    try obj.put(allocator, "ok", .{ .bool = false });
-    try obj.put(allocator, "backend", .{ .string = backend_name });
-    try obj.put(allocator, "operation", .{ .string = operation });
-    try obj.put(allocator, "error", .{ .string = @errorName(err) });
-    try obj.put(allocator, "error_kind", .{ .string = commandErrorKind(err) });
-    try obj.put(allocator, "resolution", .{ .string = resolution });
-    return .{ .object = obj };
-}
-
-/// Reports whether output limit error matches the caller-provided data.
-fn isOutputLimitError(err: anyerror) bool {
-    return err == error.StreamTooLong or err == error.OutputLimitExceeded;
-}
-
-/// Reports whether timeout error matches the caller-provided data.
-fn isTimeoutError(err: anyerror) bool {
-    return err == error.Timeout or err == error.RequestTimeout;
-}
-
-/// Reports whether `value` is present in `list` (exact string equality).
-fn stringListContains(list: []const []const u8, value: []const u8) bool {
-    for (list) |item| {
-        if (std.mem.eql(u8, item, value)) return true;
-    }
-    return false;
-}
-
-/// Releases string list allocations; callers must not reuse freed items.
-fn freeStringList(allocator: std.mem.Allocator, list: []const []const u8) void {
-    for (list) |item| allocator.free(item);
-}
-
-/// Extracts json array len data from JSON input without taking ownership of borrowed values.
-fn jsonArrayLen(value: std.json.Value) usize {
-    return switch (value) {
-        .array => |a| a.items.len,
-        else => 0,
-    };
-}
-
-/// Extracts bool field data from JSON input without taking ownership of borrowed values.
-fn boolField(obj: std.json.ObjectMap, field: []const u8) ?bool {
-    return switch (obj.get(field) orelse .null) {
-        .bool => |b| b,
-        else => null,
-    };
-}
-
-/// Extracts string field data from JSON input without taking ownership of borrowed values.
-fn stringField(obj: std.json.ObjectMap, field: []const u8) ?[]const u8 {
-    return switch (obj.get(field) orelse .null) {
-        .string => |s| s,
-        else => null,
-    };
-}
-
-/// Extracts integer field data from JSON input without taking ownership of borrowed values.
-fn integerField(obj: std.json.ObjectMap, field: []const u8) ?i64 {
-    return switch (obj.get(field) orelse .null) {
-        .integer => |i| i,
-        .number_string => |s| std.fmt.parseInt(i64, s, 10) catch null,
-        else => null,
-    };
-}
-
-/// Copies the provided string into allocator-owned storage.
-fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
-    return .{ .string = try allocator.dupe(u8, value) };
-}
-
-/// Serializes string array fields into an allocator-owned JSON value; allocation failures propagate.
-fn stringArrayValue(allocator: std.mem.Allocator, values: []const []const u8) !std.json.Value {
-    var array = std.json.Array.init(allocator);
-    for (values) |value| try array.append(try ownedString(allocator, value));
-    return .{ .array = array };
-}
-
-/// Serializes clone fields into an allocator-owned JSON value; allocation failures propagate.
-fn cloneValue(allocator: std.mem.Allocator, value: std.json.Value) !std.json.Value {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    return switch (value) {
-        .null => .null,
-        .bool => |b| .{ .bool = b },
-        .integer => |i| .{ .integer = i },
-        .float => |f| .{ .float = f },
-        .number_string => |s| .{ .number_string = try allocator.dupe(u8, s) },
-        .string => |s| .{ .string = try allocator.dupe(u8, s) },
-        .array => |array| blk: {
-            var cloned = std.json.Array.init(allocator);
-            for (array.items) |item| try cloned.append(try cloneValue(allocator, item));
-            break :blk .{ .array = cloned };
-        },
-        .object => |object| blk: {
-            var cloned = std.json.ObjectMap.empty;
-            var it = object.iterator();
-            while (it.next()) |entry| {
-                const key = try allocator.dupe(u8, entry.key_ptr.*);
-                try cloned.put(allocator, key, try cloneValue(allocator, entry.value_ptr.*));
-            }
-            break :blk .{ .object = cloned };
-        },
-    };
-}
-
-/// Serializes serialize fields into an allocator-owned JSON value; allocation failures propagate.
-fn serializeValue(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
-    var out: std.Io.Writer.Allocating = .init(allocator);
-    errdefer out.deinit();
-    try std.json.Stringify.value(value, .{}, &out.writer);
-    return out.toOwnedSlice();
-}
-
-/// Extracts json line for record data from JSON input without taking ownership of borrowed values.
-fn jsonLineForRecord(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
-    return serializeValue(allocator, value);
-}
-
-/// Computes a lowercase SHA-256 hex digest in allocator-owned storage.
-fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
-    const hex = std.fmt.bytesToHex(digest, .lower);
-    return allocator.dupe(u8, &hex);
 }
 
 test "project intelligence private helpers cover fallback edge cases" {
