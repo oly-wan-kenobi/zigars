@@ -130,7 +130,7 @@ Keywords: `dependency update`, `dependency fetch`, `lock audit`, `sbom`, `cyclon
 
 ### performance_workflows
 
-Tools: `zig_coverage_run`, `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`, `zig_coverage_baseline`, `zig_coverage_budget_check`, `zig_bench_discover`, `zig_bench_run`, `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`, `zig_bench_regression_gate`, `zig_perf_budget_check`, `zig_profile_regression`, `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`, `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`, `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`, `zig_tracy_hints`, `zig_perf_evidence_pack`
+Tools: `zig_coverage_run`, `zig_coverage`, `zig_coverage_merge`, `zig_coverage_baseline`, `zig_bench_discover`, `zig_bench_run`, `zig_bench_baseline`, `zig_benchmark_history`, `zig_bench_compare`, `zig_bench_regression_gate`, `zig_perf_budget_check`, `zig_profile_regression`, `zig_samply_record`, `zig_samply_summary`, `zig_samply_import`, `zig_samply_artifact`, `zig_profile_open`, `zig_tracy_plan`, `zig_tracy_probe`, `zig_tracy_capture`, `zig_tracy_artifacts`, `zig_tracy_hints`, `zig_perf_evidence_pack`
 
 Keywords: `coverage`, `coverage baseline`, `coverage budget`, `benchmark`, `bench baseline`, `performance budget`, `profile regression`, `samply`, `tracy`, `profile artifact`, `performance evidence`
 
@@ -191,7 +191,7 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - lint Zig code: prefer `zig_zlint, zig_zlint_fix, zig_lint, zig_lint_compare`
 - plan profiling capture: prefer `zig_profile_plan`
 - make a flamegraph: prefer `zig_flamegraph`
-- normalize coverage evidence: prefer `zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check`
+- normalize coverage evidence: prefer `zig_coverage`
 - run and compare benchmarks: prefer `zig_bench_discover, zig_bench_run, zig_bench_compare, zig_bench_regression_gate, zig_perf_budget_check`
 - record profiler evidence: prefer `zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack`
 - debug runtime crashes: prefer `zig_debug_plan, zig_lldb_backtrace, zig_core_inspect, zig_sanitizer_fusion, zig_panic_trace_analyze, zig_crash_repro_plan`
@@ -251,10 +251,8 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_completion`: required `file: string`, `line: integer`, `character: integer`; optional `content: string`
 - `zig_comptime_diagnose`: optional `text: string`, `path: string`, `diagnostic: string`, `limit: integer`
 - `zig_core_inspect`: optional `binary: string`, `core: string`, `command: string`, `target: string`, `lldb_path: string`, `apply: boolean`, `timeout_ms: integer`, `probe_backend: boolean`
+- `zig_coverage`: optional `mode: string`, `coverage: string`, `path: string`, `content: string`, `format: string`, `current: string`, `baseline: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`, `limit: integer`
 - `zig_coverage_baseline`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `baseline_id: string`, `output: string`, `apply: boolean`, `limit: integer`
-- `zig_coverage_budget_check`: optional `coverage: string`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
-- `zig_coverage_diff`: optional `current: string`, `baseline: string`
-- `zig_coverage_map`: optional `coverage: string`, `path: string`, `content: string`, `format: string`, `limit: integer`
 - `zig_coverage_merge`: optional `current: string`, `baseline: string`, `left: string`, `right: string`, `output: string`, `apply: boolean`, `min_line_rate_bp: integer`, `min_changed_line_rate_bp: integer`, `changed_files: string`
 - `zig_coverage_run`: required `command: string`; optional `output: string`, `apply: boolean`, `timeout_ms: integer`, `target: string`, `coverage_backend: string`, `coverage_artifacts: string`
 - `zig_crash_repro_plan`: optional `text: string`, `content: string`, `path: string`, `command: string`, `target: string`, `limit: integer`
@@ -543,10 +541,8 @@ Keywords: `adoption`, `client config`, `mcp config`, `codex`, `claude`, `gemini`
 - `zig_completion`: `zls_request` `textDocument/completion`
 - `zig_comptime_diagnose`: `pure_analysis` read-only analysis
 - `zig_core_inspect`: `apply_gated_mutation` preview/apply mutation
+- `zig_coverage`: `pure_analysis` read-only analysis
 - `zig_coverage_baseline`: `apply_gated_mutation` preview/apply mutation
-- `zig_coverage_budget_check`: `pure_analysis` read-only analysis
-- `zig_coverage_diff`: `pure_analysis` read-only analysis
-- `zig_coverage_map`: `pure_analysis` read-only analysis
 - `zig_coverage_merge`: `apply_gated_mutation` preview/apply mutation
 - `zig_coverage_run`: `apply_gated_mutation` preview/apply mutation
 - `zig_crash_repro_plan`: `pure_analysis` read-only analysis

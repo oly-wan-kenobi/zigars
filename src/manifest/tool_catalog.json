@@ -54,7 +54,7 @@
     {"intent": "lint Zig code", "prefer": "zig_zlint, zig_zlint_fix, zig_lint, zig_lint_compare", "keywords": ["zlint", "zwanzig", "lint", "linter", "lint compare", "lint gate", "sarif", "fix lint"]},
     {"intent": "plan profiling capture", "prefer": "zig_profile_plan", "keywords": ["profile plan", "external capture", "perf", "xctrace", "sample", "dtrace", "vtune"]},
     {"intent": "make a flamegraph", "prefer": "zig_flamegraph", "keywords": ["zflame", "profile", "perf", "flamegraph"]},
-    {"intent": "normalize coverage evidence", "prefer": "zig_coverage_map, zig_coverage_diff, zig_coverage_budget_check", "keywords": ["coverage", "lcov", "coverage budget", "coverage baseline"]},
+    {"intent": "normalize coverage evidence", "prefer": "zig_coverage", "keywords": ["coverage", "lcov", "coverage budget", "coverage baseline"]},
     {"intent": "run and compare benchmarks", "prefer": "zig_bench_discover, zig_bench_run, zig_bench_compare, zig_bench_regression_gate, zig_perf_budget_check", "keywords": ["benchmark", "bench", "baseline", "performance budget", "regression", "regression gate", "session"]},
     {"intent": "record profiler evidence", "prefer": "zig_samply_record, zig_tracy_capture, zig_perf_evidence_pack", "keywords": ["samply", "tracy", "profile artifact", "performance evidence"]},
     {"intent": "debug runtime crashes", "prefer": "zig_debug_plan, zig_lldb_backtrace, zig_core_inspect, zig_sanitizer_fusion, zig_panic_trace_analyze, zig_crash_repro_plan", "keywords": ["debug", "lldb", "core dump", "sanitizer", "panic", "crash repro"]},

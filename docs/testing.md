@@ -221,9 +221,9 @@ changing parser, classifier, path-policy, coverage-parser, or command-argument
 logic.
 
 The MCP coverage workflow is separate from the `zig build coverage` release
-gate. `zig_coverage_map`, `zig_coverage_merge`, `zig_coverage_diff`,
-`zig_coverage_baseline`, and `zig_coverage_budget_check` consume supplied LCOV
-or zigars JSON evidence; `zig_coverage_run` runs a caller-provided coverage
+gate. The read-only `zig_coverage` tool (`mode` = `map`, `diff`, or `budget`),
+`zig_coverage_merge`, and `zig_coverage_baseline` consume supplied LCOV or
+zigars JSON evidence; `zig_coverage_run` runs a caller-provided coverage
 command only with `apply=true` and records artifact provenance.
 
 ## Release Assets

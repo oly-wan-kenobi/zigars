@@ -18,7 +18,7 @@ without overstating what a benchmark, coverage map, or profiler capture proves.
    environment, workload, baseline identity, current result identity, and
    threshold.
 3. Use zigars performance tools according to the evidence needed:
-   `zig_coverage_map`, `zig_coverage_diff`, `zig_coverage_budget_check`,
+   `zig_coverage` (mode=map/diff/budget),
    `zig_bench_discover`, `zig_bench_run`, `zig_bench_compare`,
    `zig_bench_regression_gate`, `zig_perf_budget_check`,
    `zig_profile_regression`, and `zig_perf_evidence_pack`.

@@ -16,9 +16,14 @@ pub fn zigCoverageRun(allocator: std.mem.Allocator, context: app_context.Perform
     return invoke(allocator, context, args, "zig_coverage_run", workflows.zigCoverageRun);
 }
 
-/// Handles MCP `zig_coverage_map` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigCoverageMap(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invoke(allocator, context, args, "zig_coverage_map", workflows.zigCoverageMap);
+/// Handles MCP `zig_coverage` requests, dispatching the read-only coverage
+/// operation selected by `mode` (map, diff, or budget) to the matching use case.
+pub fn zigCoverage(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+    const mode = mcp.tools.getString(args, "mode") orelse "map";
+    if (std.mem.eql(u8, mode, "map")) return invoke(allocator, context, args, "zig_coverage", workflows.zigCoverageMap);
+    if (std.mem.eql(u8, mode, "diff")) return invoke(allocator, context, args, "zig_coverage", workflows.zigCoverageDiff);
+    if (std.mem.eql(u8, mode, "budget")) return invoke(allocator, context, args, "zig_coverage", workflows.zigCoverageBudgetCheck);
+    return mcp_errors.invalidArgument(allocator, "zig_coverage", "mode", "map, diff, or budget", mode, "Set mode to map (normalize evidence), diff (compare to baseline), or budget (threshold check).");
 }
 
 /// Handles MCP `zig_coverage_merge` requests by delegating to app logic and shaping owned results/errors.
@@ -26,19 +31,9 @@ pub fn zigCoverageMerge(allocator: std.mem.Allocator, context: app_context.Perfo
     return invoke(allocator, context, args, "zig_coverage_merge", workflows.zigCoverageMerge);
 }
 
-/// Handles MCP `zig_coverage_diff` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigCoverageDiff(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invoke(allocator, context, args, "zig_coverage_diff", workflows.zigCoverageDiff);
-}
-
 /// Handles MCP `zig_coverage_baseline` requests by delegating to app logic and shaping owned results/errors.
 pub fn zigCoverageBaseline(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     return invoke(allocator, context, args, "zig_coverage_baseline", workflows.zigCoverageBaseline);
-}
-
-/// Handles MCP `zig_coverage_budget_check` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigCoverageBudgetCheck(allocator: std.mem.Allocator, context: app_context.PerformanceContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    return invoke(allocator, context, args, "zig_coverage_budget_check", workflows.zigCoverageBudgetCheck);
 }
 
 /// Handles MCP `zig_bench_discover` requests by delegating to app logic and shaping owned results/errors.
