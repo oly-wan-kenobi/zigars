@@ -52,6 +52,10 @@ pub const Config = struct {
     zls_timeout_ms: i64,
     logger: logging.Logger = .disabled(),
     observability: ?*observability.State = null,
+    /// Consecutive restart failures tolerated before the session gives up and
+    /// returns `error.ZlsRestartLimitReached` rather than respawning again. A
+    /// value of 0 disables the cap (unbounded retries, the pre-guard behavior).
+    max_consecutive_failures: usize = 5,
 };
 
 /// Borrowed pointers to the live ZLS process, client, and document state.
@@ -64,6 +68,12 @@ pub const State = struct {
     initialize_response: ?[]const u8 = null,
     last_failure: ?[]const u8 = null,
     restart_attempts: usize = 0,
+    /// Restart failures since the last successful start. Reset to zero on a
+    /// successful `start`, so a session that recovers clears its failure budget;
+    /// once it reaches `Config.max_consecutive_failures` the session stops
+    /// respawning and `restart`/`ensureReady` return a deterministic
+    /// `error.ZlsRestartLimitReached` instead of thrashing the child process.
+    consecutive_failures: usize = 0,
 
     /// Frees the retained initialize response and resets pointers/status.
     pub fn deinit(self: *State, allocator: Allocator) void {
@@ -130,6 +140,7 @@ pub fn start(state: *State, slots: Slots, config: Config) !void {
     state.client = &(required_slots.client.*.?);
     state.documents = &(required_slots.documents.*.?);
     state.status = "connected";
+    state.consecutive_failures = 0;
     recordStatus(state, config);
 
     if (replay_existing_documents) {
@@ -143,6 +154,18 @@ pub fn restart(state: *State, slots: Slots, config: Config) !void {
     // Keep this logic centralized so callers observe one consistent behavior path.
     const required_slots = try slots.require();
 
+    // Stop respawning once the consecutive-failure budget is exhausted. This
+    // turns a persistently broken ZLS (bad binary, unwritable workspace) into a
+    // deterministic terminal error instead of an unbounded restart storm that
+    // races concurrent readiness checks. A successful start in `start` clears
+    // the counter, so transient failures still self-heal.
+    if (config.max_consecutive_failures > 0 and state.consecutive_failures >= config.max_consecutive_failures) {
+        state.status = "restart limit reached";
+        state.last_failure = "restart limit reached";
+        recordStatus(state, config);
+        return error.ZlsRestartLimitReached;
+    }
+
     if (required_slots.client.*) |*client| client.deinit();
     required_slots.client.* = null;
     if (required_slots.process.*) |*proc| proc.deinit();
@@ -153,6 +176,7 @@ pub fn restart(state: *State, slots: Slots, config: Config) !void {
     state.restart_attempts += 1;
     recordStatus(state, config);
     start(state, slots, config) catch |err| {
+        state.consecutive_failures += 1;
         state.status = @errorName(err);
         state.last_failure = @errorName(err);
         recordStatus(state, config);
