@@ -608,6 +608,12 @@ fn scanSrcTree(allocator: Allocator, io: Io, module_map: *const ModuleMap) !bool
         if (!std.mem.endsWith(u8, entry.path, ".zig")) continue;
         const source_path = try std.fmt.allocPrint(allocator, "src/{s}", .{entry.path});
         defer allocator.free(source_path);
+        // The directory walker yields native path separators, so on Windows
+        // `entry.path` is backslash-delimited. Normalize to '/' before any
+        // logical-path rule (root allowlist, layer classification, retired
+        // paths) runs, so the guard classifies subdirectories the same way it
+        // does on POSIX. Forward slashes also open correctly on Windows.
+        std.mem.replaceScalar(u8, source_path, '\\', '/');
         ok = (try checkFile(allocator, io, source_path, module_map, &graph)) and ok;
     }
     ok = (try graph.reportCycles(io)) and ok;
