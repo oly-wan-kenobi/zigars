@@ -227,12 +227,12 @@ Performance workflow tools share a stable evidence envelope: `evidence_basis`,
 appear where they apply. Preview results must not imply skipped execution or
 validation ran.
 
-Coverage tools parse LCOV and zigars JSON evidence. `zig_coverage_map` normalizes
-file totals and line-rate records, `zig_coverage_merge` combines two maps,
-`zig_coverage_diff` compares current and baseline evidence, and
-`zig_coverage_budget_check` evaluates configured line-rate and changed-file
-budgets. `zig_coverage_baseline` previews or writes a baseline artifact only
-with `apply=true`. `zig_coverage_run` runs a caller-supplied coverage command
+Coverage tools parse LCOV and zigars JSON evidence. The read-only `zig_coverage`
+tool selects its operation with `mode`: `map` normalizes file totals and
+line-rate records, `diff` compares current and baseline evidence, and `budget`
+evaluates configured line-rate and changed-file budgets. `zig_coverage_merge`
+combines two maps. `zig_coverage_baseline` previews or writes a baseline artifact
+only with `apply=true`. `zig_coverage_run` runs a caller-supplied coverage command
 only with `apply=true`; preview returns argv, output path, preimage identity,
 and skipped validation instead of executing project code.
 
@@ -566,8 +566,8 @@ and curated fallback status. Stdlib and installed language-reference hits also
 include result-level `source_path` for the exact local file behind the match.
 Text docs tools are human-readable projections of the same contract, and the
 `_json` companions
-(`zig_builtin_doc_json`, `zig_std_search_json`, `zig_std_item_json`,
-`zig_lang_ref_search_json`) are the preferred interface for agents that need
+(`zig_builtin_doc`, `zig_std_search`, `zig_std_item`,
+`zig_lang_ref_search`) are the preferred interface for agents that need
 stable result metadata.
 
 High-signal discovery keywords include:

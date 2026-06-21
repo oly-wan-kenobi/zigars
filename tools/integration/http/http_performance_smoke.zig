@@ -23,15 +23,15 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     const full_coverage = "SF:src/main.zig\\nDA:1,1\\nend_of_record\\n";
     const profile = "{\\\"threads\\\":[{\\\"name\\\":\\\"main\\\",\\\"samples\\\":{\\\"data\\\":[[0],[1]]},\\\"frameTable\\\":{\\\"length\\\":1}}]}";
     const comparison = "{\\\"regressions\\\":[{\\\"name\\\":\\\"parse\\\",\\\"delta_pct\\\":20}],\\\"worst_regression_pct\\\":20}";
-    const coverage_map_args = try std.fmt.allocPrint(allocator, "{{\"content\":\"{s}\"}}", .{coverage});
+    const coverage_map_args = try std.fmt.allocPrint(allocator, "{{\"mode\":\"map\",\"content\":\"{s}\"}}", .{coverage});
     defer allocator.free(coverage_map_args);
     const coverage_merge_args = try std.fmt.allocPrint(allocator, "{{\"left\":\"{s}\",\"right\":\"{s}\",\"apply\":false}}", .{ coverage, full_coverage });
     defer allocator.free(coverage_merge_args);
-    const coverage_diff_args = try std.fmt.allocPrint(allocator, "{{\"current\":\"{s}\",\"baseline\":\"{s}\"}}", .{ coverage, full_coverage });
+    const coverage_diff_args = try std.fmt.allocPrint(allocator, "{{\"mode\":\"diff\",\"current\":\"{s}\",\"baseline\":\"{s}\"}}", .{ coverage, full_coverage });
     defer allocator.free(coverage_diff_args);
     const coverage_baseline_args = try std.fmt.allocPrint(allocator, "{{\"content\":\"{s}\",\"apply\":false}}", .{coverage});
     defer allocator.free(coverage_baseline_args);
-    const coverage_budget_args = try std.fmt.allocPrint(allocator, "{{\"coverage\":\"{s}\",\"min_line_rate_bp\":4000}}", .{coverage});
+    const coverage_budget_args = try std.fmt.allocPrint(allocator, "{{\"mode\":\"budget\",\"coverage\":\"{s}\",\"min_line_rate_bp\":4000}}", .{coverage});
     defer allocator.free(coverage_budget_args);
     const perf_budget_args = try std.fmt.allocPrint(allocator, "{{\"comparison\":\"{s}\",\"max_regression_pct\":5}}", .{comparison});
     defer allocator.free(perf_budget_args);
@@ -43,11 +43,11 @@ pub fn run(allocator: std.mem.Allocator, io: Io, port: u16, expected: JsonValue,
     defer allocator.free(samply_import_args);
 
     try assertToolPaths(allocator, io, port, 170, "zig_coverage_run", "{\"command\":\"zig build test\",\"apply\":false}", expected, "coverage_run_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 171, "zig_coverage_map", coverage_map_args, expected, "coverage_map_paths", scenarios);
+    try assertToolPaths(allocator, io, port, 171, "zig_coverage", coverage_map_args, expected, "coverage_map_paths", scenarios);
     try assertToolPaths(allocator, io, port, 172, "zig_coverage_merge", coverage_merge_args, expected, "coverage_merge_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 173, "zig_coverage_diff", coverage_diff_args, expected, "coverage_diff_paths", scenarios);
+    try assertToolPaths(allocator, io, port, 173, "zig_coverage", coverage_diff_args, expected, "coverage_diff_paths", scenarios);
     try assertToolPaths(allocator, io, port, 174, "zig_coverage_baseline", coverage_baseline_args, expected, "coverage_baseline_paths", scenarios);
-    try assertToolPaths(allocator, io, port, 175, "zig_coverage_budget_check", coverage_budget_args, expected, "coverage_budget_paths", scenarios);
+    try assertToolPaths(allocator, io, port, 175, "zig_coverage", coverage_budget_args, expected, "coverage_budget_paths", scenarios);
     try assertToolPaths(allocator, io, port, 176, "zig_bench_discover", "{\"limit\":5}", expected, "bench_discover_paths", scenarios);
     try assertToolPaths(allocator, io, port, 177, "zig_bench_run", "{\"command\":\"zig build bench\",\"apply\":false}", expected, "bench_run_paths", scenarios);
     try assertToolPaths(allocator, io, port, 178, "zig_bench_baseline", "{\"results\":\"parse: 100 ns\\n\",\"apply\":false}", expected, "bench_baseline_paths", scenarios);

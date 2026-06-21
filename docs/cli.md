@@ -47,7 +47,7 @@ Each must reuse an existing use case and keep stdout as JSON.
 |---|---|---|---|
 | `ci-ingest` | `zig_ci_ingest` | CI parser result with format, failures, evidence basis, and limitations. | Exit 0 for parsed reports, even when failures are present; exit 2/3/70 for CLI, path, or internal errors. |
 | `junit` | `zig_junit` | Command-level JUnit result with `junit_xml`, command metadata, and stdout/stderr evidence. | Exit 0 when the report was produced; test failures stay in JSON. |
-| `coverage-budget` | `zig_coverage_budget_check` | Coverage budget result with line-rate fields, thresholds, and pass/fail booleans. | Exit 0 when evaluated; budget misses stay in JSON unless a later contract opts into gate-style exits. |
+| `coverage-budget` | `zig_coverage` (mode=budget) | Coverage budget result with line-rate fields, thresholds, and pass/fail booleans. | Exit 0 when evaluated; budget misses stay in JSON unless a later contract opts into gate-style exits. |
 | `docs-drift` | `zigars_docs_drift_check` | Docs drift report with checked surfaces and drift findings. | Exit 0 when the report was produced; drift findings stay in JSON. |
 | `release-evidence-pack` | `zig_release_evidence_pack` | Release evidence bundle summary from supplied report fragments. | Exit 0 when packaged; missing/invalid inputs use argument or workspace errors. |
 | `artifact-index` | `zigars_artifact_index` | Artifact registry index with paths, kinds, provenance, and optional hashes. | Exit 0 for successful listing; missing registry paths use workspace/path errors. |

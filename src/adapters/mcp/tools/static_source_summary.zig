@@ -18,9 +18,9 @@ pub const ReadSourceError = source_summary_usecase.SourceError || error{
     MissingFile,
 };
 
-/// Returns a human-readable, heuristic declaration summary as `text`. This is
-/// the line-scan family (text output); the `_json` variant below is parser-backed
-/// and machine-shaped. Reads `file` through the workspace sandbox.
+/// Returns a heuristic declaration summary. Defaults to human-readable `text`
+/// (the line-scan family); with `output_format=json` it returns the machine
+/// shaped declaration payload. Reads `file` through the workspace sandbox.
 pub fn zigDeclSummary(
     allocator: std.mem.Allocator,
     context: app_context.StaticAnalysisContext,
@@ -29,25 +29,16 @@ pub fn zigDeclSummary(
     // Keep this logic centralized so callers observe one consistent behavior path.
     const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_decl_summary", args, err);
     defer source.deinit(allocator);
+    if (wantsJson(args)) {
+        var declarations = source_summary_usecase.heuristicDeclarations(allocator, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
+        defer declarations.deinit(allocator);
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        return mcp_result.structured(allocator, declSummaryValue(arena.allocator(), source.file, declarations) catch return error.OutOfMemory);
+    }
     const output = source_summary_usecase.textSummary(allocator, .decl_summary, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
     defer allocator.free(output);
     return staticTextResult(allocator, "zig_decl_summary", output);
-}
-
-/// Handles MCP `zig_decl_summary_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigDeclSummaryJson(
-    allocator: std.mem.Allocator,
-    context: app_context.StaticAnalysisContext,
-    args: ?std.json.Value,
-) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    const source = readSourceFromArgs(allocator, context, args) catch |err| return readSourceArgError(allocator, context, "zig_decl_summary_json", args, err);
-    defer source.deinit(allocator);
-    var declarations = source_summary_usecase.heuristicDeclarations(allocator, .{ .file = source.file, .contents = source.bytes }) catch return error.OutOfMemory;
-    defer declarations.deinit(allocator);
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    return mcp_result.structured(allocator, declSummaryValue(arena.allocator(), source.file, declarations) catch return error.OutOfMemory);
 }
 
 /// Handles MCP `zig_ast_imports` requests by delegating to app logic and shaping owned results/errors.
@@ -205,7 +196,7 @@ pub fn declSummaryValue(
     var obj = std.json.ObjectMap.empty;
     errdefer obj.deinit(allocator);
     try obj.put(allocator, "file", try ownedString(allocator, file));
-    try analysis_contract.putMetadata(allocator, &obj, "zig_decl_summary_json");
+    try analysis_contract.putMetadata(allocator, &obj, "zig_decl_summary");
     try obj.put(allocator, "declarations", .{ .array = decls });
     return .{ .object = obj };
 }
@@ -330,6 +321,13 @@ fn argString(args: ?std.json.Value, key: []const u8) ?[]const u8 {
     };
 }
 
+/// True when the caller requested the structured JSON payload via
+/// `output_format=json`; folds the former `zig_decl_summary_json` twin in.
+fn wantsJson(args: ?std.json.Value) bool {
+    const fmt = argString(args, "output_format") orelse return false;
+    return std.mem.eql(u8, fmt, "json");
+}
+
 /// Copies text into an allocator-owned JSON string value.
 fn ownedString(allocator: std.mem.Allocator, value: []const u8) !std.json.Value {
     return .{ .string = try allocator.dupe(u8, value) };
@@ -437,7 +435,7 @@ test "static source summary adapters read workspace source and return structured
 
     inline for (.{
         "zig_decl_summary",
-        "zig_decl_summary_json",
+        "zig_decl_summary",
         "zig_ast_imports",
         "zig_ast_decl_summary",
         "zig_allocations",
@@ -453,7 +451,8 @@ test "static source summary adapters read workspace source and return structured
     try expectStructuredKind(decl_text, "zig_decl_summary");
     try std.testing.expect(std.mem.indexOf(u8, decl_text.structuredContent.?.object.get("text").?.string, "Thing") != null);
 
-    const decl_json = try zigDeclSummaryJson(allocator, context, args.value);
+    const decl_json_args = try std.json.parseFromSlice(std.json.Value, allocator, "{\"file\":\"src/main.zig\",\"output_format\":\"json\"}", .{});
+    const decl_json = try zigDeclSummary(allocator, context, decl_json_args.value);
     try std.testing.expectEqualStrings("src/main.zig", decl_json.structuredContent.?.object.get("file").?.string);
     try std.testing.expect(decl_json.structuredContent.?.object.get("declarations").?.array.items.len > 0);
 

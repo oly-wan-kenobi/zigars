@@ -26,11 +26,11 @@ concerns route to their own skills so this one stays sharp.
    - `build.zig.zon` hash mismatch — switch to `zigars-zon-hash-sync`.
 3. For `build.zig` API changes (build steps, options, package definitions,
    install/output declarations), check the active version's docs with
-   `zig_lang_ref_search_json`, `zig_langref_item`, and `zig_std_signature`
+   `zig_lang_ref_search`, `zig_langref_item`, and `zig_std_signature`
    before editing.
 4. For non-IO stdlib re-paths (e.g. `std.fmt`, `std.heap`, `std.debug`
-   reorganizations across releases), use `zig_std_search_json` and
-   `zig_std_item_json` to confirm the new path before updating call sites.
+   reorganizations across releases), use `zig_std_search` and
+   `zig_std_item` to confirm the new path before updating call sites.
 5. For README, snippet, and docs example drift after a version bump,
    validate with `zig_doc_example_check`, `zig_snippet_check`, and
    `zig_readme_command_check`.

@@ -195,6 +195,7 @@ fn mapZlsError(err: anyerror) ports.PortError {
         error.EndOfStream => error.EndOfStream,
         error.BrokenPipe => error.BrokenPipe,
         error.Cancelled => error.Cancelled,
+        error.ZlsRestartLimitReached => error.Unavailable,
         else => error.Unavailable,
     };
 }

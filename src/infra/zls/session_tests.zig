@@ -200,3 +200,53 @@ test "start replays an existing document state and restart records startup failu
 test "findExecutable reports SkipZigTest when no candidate exists" {
     try testing.expectError(error.SkipZigTest, findExecutable(testing.io, &.{"/definitely/not/a/zigars-test-binary"}));
 }
+
+test "restart stops respawning after the consecutive-failure budget is exhausted" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+
+    const allocator = testing.allocator;
+    var threaded: Io.Threaded = .init(heap.smp_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const false_path = try findExecutable(io, &.{ "/bin/false", "/usr/bin/false" });
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "root");
+    const root = try tmpRoot(allocator, io, tmp.sub_path[0..]);
+    defer allocator.free(root);
+
+    var proc_slot: ?ZlsProcess = null;
+    var client_slot: ?LspClient = null;
+    var docs_slot: ?DocumentState = null;
+    defer {
+        if (docs_slot) |*slot_docs| slot_docs.deinit();
+        if (client_slot) |*client| client.deinit();
+        if (proc_slot) |*proc| proc.deinit();
+    }
+
+    var state = State{};
+    defer state.deinit(allocator);
+    const config = Config{
+        .allocator = allocator,
+        .io = io,
+        .workspace_root = root,
+        .zls_path = false_path,
+        .zls_timeout_ms = 1,
+        .max_consecutive_failures = 2,
+    };
+    const slots = session.Slots{ .process = &proc_slot, .client = &client_slot, .documents = &docs_slot };
+
+    // `/bin/false` exits immediately, so each restart fails and burns one unit of
+    // the failure budget; two failures exhaust the configured cap of 2.
+    var attempts: usize = 0;
+    while (attempts < 2) : (attempts += 1) {
+        restart(&state, slots, config) catch {};
+    }
+    try testing.expectEqual(@as(usize, 2), state.consecutive_failures);
+
+    // The next restart must refuse to respawn and return the deterministic
+    // terminal error instead of thrashing the child process again.
+    try testing.expectError(error.ZlsRestartLimitReached, restart(&state, slots, config));
+    try testing.expectEqualStrings("restart limit reached", state.status);
+}

@@ -35,6 +35,9 @@ everything from shell text. Shell, the Zig compiler, project tests, CI, and
 external backends remain the source of truth for the behavior they execute. See
 [docs/why-zigars.md](docs/why-zigars.md).
 
+> **New here?** Read [QUICKSTART.md](QUICKSTART.md) for install and first calls,
+> or browse the [documentation index](docs/INDEX.md) for a topic-by-topic map.
+
 ## Quickstart
 
 The fastest MCP client path is the npm shim. Bun is the preferred launcher:
@@ -173,11 +176,14 @@ workflow guidance for using zigars effectively.
 
 ```sh
 npx -y @zigars/skills@0.2.0 list
-npx -y @zigars/skills@0.2.0 path zigars-development
+npx -y @zigars/skills@0.2.0 path zigars-compile-error-triage
 ```
 
-The first maintained skill is `zigars-development`, which dogfoods zigars while
-developing this repo. See [docs/dogfooding.md](docs/dogfooding.md).
+The package ships 19 domain-specific skills covering compile-error triage,
+comptime diagnosis, runtime/memory forensics, performance regressions,
+dependency and toolchain stewardship, CI forensics, release-claim auditing, and
+session handoff. See the full inventory in [docs/skills.md](docs/skills.md), and
+[docs/dogfooding.md](docs/dogfooding.md) for developing zigars with zigars.
 
 ## Claude Desktop MCPB
 

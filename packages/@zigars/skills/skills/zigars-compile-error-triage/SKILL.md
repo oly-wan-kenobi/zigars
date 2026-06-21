@@ -25,9 +25,9 @@ keeps the apply gate intact while a fix is hypothesized and verified.
 4. Route by error class:
    - comptime evaluation issues — switch to `zigars-comptime-diagnose`;
    - `build.zig.zon` hash mismatch — switch to `zigars-zon-hash-sync`;
-   - undefined-symbol or linker errors — use `zig_linker_error_decode` when
+   - undefined-symbol or linker errors — use `zig_explain_errors` when
      available, otherwise inspect via `zig_module_surface` and `build.zig`.
-5. Inspect the offending source with `zls_definition`, `zls_references`, or
+5. Inspect the offending source with `zig_definition`, `zig_references`, or
    `zig_symbol_dossier` before editing.
 6. Apply fixes preview-first (`zig_format`, `zig_move_decl`, `zig_extract_decl`,
    or a `zigars_patch_session_*` flow). Mutation requires `apply=true`.

@@ -102,6 +102,9 @@ fn scanSrcTree(allocator: Allocator, io: Io, options: Options, inventory: *Inven
         if (!std.mem.endsWith(u8, entry.path, ".zig")) continue;
         const source_path = try std.fmt.allocPrint(allocator, "src/{s}", .{entry.path});
         defer allocator.free(source_path);
+        // The walker yields native separators; normalize to '/' so root-file
+        // and layer classification behave identically on Windows and POSIX.
+        std.mem.replaceScalar(u8, source_path, '\\', '/');
 
         if (isRootFile(source_path)) {
             inventory.root_files += 1;

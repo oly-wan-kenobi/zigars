@@ -79,6 +79,18 @@ jobs:
             dist/assets/zigars-checksums.txt
             dist/assets/zigars-mcpb-checksums.txt
 
+      # Gate npm publish on the release actually being installable: confirm the
+      # uploaded GitHub release exposes every archive the shim resolves for each
+      # supported host target and that each archive matches zigars-checksums.txt.
+      # This closes the window where the package version is publishable but its
+      # download targets are missing or corrupt. Runs only when public, since the
+      # check fetches the release assets over unauthenticated HTTPS.
+      - name: Verify published release assets
+        if: ${{ !github.event.repository.private }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node .github/scripts/verify-release-assets.mjs
+
       # npm publishing runs after the GitHub release upload so the shim's
       # download target (release archives + zigars-checksums.txt) exists the
       # moment the package version becomes installable. Requires the NPM_TOKEN

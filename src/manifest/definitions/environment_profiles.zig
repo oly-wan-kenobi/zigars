@@ -46,36 +46,6 @@ pub const zigars_backend_guidance = tool(.{
     .plan = .{ .pure_analysis = "Backend catalog/profile inspection only; does not probe, install backends, or issue MCP protocol elicitation." },
 });
 
-// The three *_elicit aliases exist for backward compatibility with clients that
-// registered the old tool names before the *_guidance rename; their schemas and
-// plan fields are identical to the canonical *_guidance variants.
-/// Compatibility alias for zigars_setup_guidance; identical schema and behavior.
-pub const zigars_setup_elicit = tool(.{
-    .description = "Compatibility alias for zigars_setup_guidance; returns advisory setup questions and does not issue MCP protocol elicitation.",
-    .input_schema = schemaWithHints(&.{ .{ "topic", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
-    .read_only = true,
-    .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Compatibility alias for zigars_setup_guidance; workspace/profile inspection only." },
-});
-
-/// Compatibility alias for zigars_profile_guidance.
-pub const zigars_profile_elicit = tool(.{
-    .description = "Compatibility alias for zigars_profile_guidance; returns advisory profile questions and does not issue MCP protocol elicitation.",
-    .input_schema = schemaWithHints(&.{ .{ "content", "string", false }, .{ "mode", "string", false } }, &.{mode_hint}),
-    .read_only = true,
-    .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Compatibility alias for zigars_profile_guidance; profile validation and workspace inspection only." },
-});
-
-/// Compatibility alias for zigars_backend_guidance.
-pub const zigars_backend_elicit = tool(.{
-    .description = "Compatibility alias for zigars_backend_guidance; returns advisory backend questions and does not issue MCP protocol elicitation.",
-    .input_schema = schemaWithHints(&.{ .{ "backend", "string", false }, .{ "mode", "string", false } }, &.{ backend_hint, mode_hint }),
-    .read_only = true,
-    .group = .environment_profiles,
-    .plan = .{ .pure_analysis = "Compatibility alias for zigars_backend_guidance; backend catalog/profile inspection only." },
-});
-
 /// Generate or explicitly write `.zigars/profile.json` when apply=true.
 pub const zigars_project_profile_v2 = tool(.{
     .description = "Generate or explicitly write a deterministic project profile v2 at .zigars/profile.json.",

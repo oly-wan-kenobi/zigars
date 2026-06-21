@@ -186,13 +186,14 @@ test "advertised filter is honored on test-event tools and failure fusion" {
 }
 
 test "advertised coverage cross-fields match the handler reads" {
-    // zig_coverage_diff reads current/baseline only.
-    try std.testing.expect(try advertisedArgAccepted("zig_coverage_diff", "current", .{ .string = "{}" }));
-    try std.testing.expect(try advertisedArgAccepted("zig_coverage_diff", "baseline", .{ .string = "{}" }));
-    // zig_coverage_budget_check reads coverage + thresholds + changed_files only.
-    try std.testing.expect(try advertisedArgAccepted("zig_coverage_budget_check", "coverage", .{ .string = "{}" }));
-    try std.testing.expect(try advertisedArgAccepted("zig_coverage_budget_check", "min_line_rate_bp", .{ .integer = 8000 }));
-    try std.testing.expect(try advertisedArgAccepted("zig_coverage_budget_check", "changed_files", .{ .string = "src/main.zig" }));
+    // zig_coverage advertises the union of its map/diff/budget operations; the
+    // `mode` argument selects which fields the handler actually reads.
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "mode", .{ .string = "diff" }));
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "current", .{ .string = "{}" }));
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "baseline", .{ .string = "{}" }));
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "coverage", .{ .string = "{}" }));
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "min_line_rate_bp", .{ .integer = 8000 }));
+    try std.testing.expect(try advertisedArgAccepted("zig_coverage", "changed_files", .{ .string = "src/main.zig" }));
 }
 
 test "advertised bench compare fields match the handler reads" {
@@ -210,10 +211,9 @@ test "advertised corpus is honored on the AFL fuzz tool" {
 test "removed and inapplicable arguments are rejected as unknown" {
     // M2: these arguments were advertised but never read; they must now be rejected.
     try std.testing.expect(try unknownArgRejected("zigars_context_pack", "include", .{ .string = "build" }));
-    try std.testing.expect(try unknownArgRejected("zig_coverage_diff", "coverage", .{ .string = "{}" }));
-    try std.testing.expect(try unknownArgRejected("zig_coverage_diff", "min_line_rate_bp", .{ .integer = 8000 }));
-    try std.testing.expect(try unknownArgRejected("zig_coverage_budget_check", "current", .{ .string = "{}" }));
-    try std.testing.expect(try unknownArgRejected("zig_coverage_budget_check", "baseline", .{ .string = "{}" }));
+    // zig_coverage advertises the map/diff/budget field union, so a field outside
+    // that union (not any operation's input) must still be rejected.
+    try std.testing.expect(try unknownArgRejected("zig_coverage", "bogus_field", .{ .string = "{}" }));
     try std.testing.expect(try unknownArgRejected("zig_bench_compare", "results", .{ .string = "{}" }));
     try std.testing.expect(try unknownArgRejected("zig_bench_compare", "limit", .{ .integer = 10 }));
     // libFuzzer takes its corpus inside the command; AFL-specific args are not advertised.

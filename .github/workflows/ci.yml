@@ -76,13 +76,9 @@ jobs:
           name: zigars-coverage
           path: coverage
 
-  cross-platform:
-    name: ${{ matrix.os }} smoke
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
+  macos:
+    name: macOS smoke
+    runs-on: macos-latest
 
     steps:
       - name: Checkout
@@ -103,6 +99,39 @@ jobs:
 
       - name: ReleaseSafe build
         run: zig build release-safe
+
+      - name: Transport smoke
+        run: zig build smoke stdio-fixtures
+
+  windows:
+    # Windows has been the source of repeated platform-only regressions (path
+    # separators, default file open, fixture matching), so it runs the deepest
+    # gate the platform supports: every pure-Zig constituent of `release-check`.
+    # The two release-check substeps it omits are Linux-bound -- the kcov
+    # coverage floor (`coverage --require-kcov`) and the bash backend-conformance
+    # contract smoke -- and stay covered by the Ubuntu `zig`/`coverage` jobs.
+    name: Windows release gate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        # actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Zig
+        # mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+
+      - name: Contract and docs gates
+        run: zig build fmt-check docs-check json-check backend-contract-scenarios public-contracts
+
+      - name: Architecture gates
+        run: zig build artifact-hygiene architecture-guard hex-architecture-inventory
+
+      - name: Build and test
+        run: zig build test release-safe
 
       - name: Transport smoke
         run: zig build smoke stdio-fixtures

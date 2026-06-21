@@ -20,14 +20,24 @@ const command_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_a
 /// Tools that invoke an optional backend (samply, tracy-capture) AND execute project code AND write artifacts.
 const backend_risk = types.ToolRisk{ .writes_artifacts = true, .writes_require_apply = true, .preview_by_default = true, .executes_backend = true, .executes_project_code = true, .executes_user_command = true };
 
-/// Input schema reused by coverage input tool definitions.
-const coverage_input_schema = schema(&.{
+/// Enum hint selecting the pure-analysis coverage operation for `zig_coverage`.
+const coverage_mode_hint = fieldHint("mode", .{ .description = "Coverage operation: \"map\" normalizes evidence into file/line records, \"diff\" compares current vs baseline rates, \"budget\" checks line-rate and changed-file budgets.", .default_string = "map", .enum_values = &.{ "map", "diff", "budget" } });
+/// Union input schema for the merged read-only `zig_coverage` tool; each mode
+/// reads only the subset it needs (map: coverage/path/content/format; diff:
+/// current/baseline; budget: coverage plus thresholds and changed_files).
+const coverage_modes_schema = schemaWithHints(&.{
+    .{ "mode", "string", false },
     .{ "coverage", "string", false },
     .{ "path", "string", false },
     .{ "content", "string", false },
     .{ "format", "string", false },
+    .{ "current", "string", false },
+    .{ "baseline", "string", false },
+    .{ "min_line_rate_bp", "integer", false },
+    .{ "min_changed_line_rate_bp", "integer", false },
+    .{ "changed_files", "string", false },
     .{ "limit", "integer", false },
-});
+}, &.{coverage_mode_hint});
 /// Input schema reused by coverage artifact tool definitions.
 const coverage_artifact_schema = schema(&.{
     .{ "coverage", "string", false },
@@ -47,19 +57,6 @@ const coverage_merge_schema = schema(&.{
     .{ "right", "string", false },
     .{ "output", "string", false },
     .{ "apply", "boolean", false },
-    .{ "min_line_rate_bp", "integer", false },
-    .{ "min_changed_line_rate_bp", "integer", false },
-    .{ "changed_files", "string", false },
-});
-/// Input schema for coverage diff: only `current`/`baseline` evidence are read.
-const coverage_diff_schema = schema(&.{
-    .{ "current", "string", false },
-    .{ "baseline", "string", false },
-});
-/// Input schema for coverage budget check: only `coverage` evidence plus budget
-/// thresholds and changed-file scope are read.
-const coverage_budget_schema = schema(&.{
-    .{ "coverage", "string", false },
     .{ "min_line_rate_bp", "integer", false },
     .{ "min_changed_line_rate_bp", "integer", false },
     .{ "changed_files", "string", false },
@@ -151,16 +148,12 @@ const tracy_hints_schema = schema(&.{
 
 /// Run a caller-supplied coverage command and optionally write a coverage run artifact.
 pub const zig_coverage_run = tool(.{ .description = "Run a caller-supplied coverage command and optionally write a coverage run artifact.", .input_schema = schema(&.{ .{ "command", "string", true }, .{ "output", "string", false }, .{ "apply", "boolean", false }, .{ "timeout_ms", "integer", false }, .{ "target", "string", false }, .{ "coverage_backend", "string", false }, .{ "coverage_artifacts", "string", false } }), .read_only = false, .group = group, .risk = command_risk, .plan = .{ .apply_gated_mutation = "Runs a user command and writes a provenance-tracked coverage run artifact only with apply=true." } });
-/// Map LCOV or zigars coverage evidence into normalized file and line-rate records.
-pub const zig_coverage_map = tool(.{ .description = "Map LCOV or zigars coverage evidence into normalized file and line-rate records.", .input_schema = coverage_input_schema, .group = group, .plan = .{ .pure_analysis = "Parses supplied coverage content or a workspace coverage file." } });
+/// Pure-analysis coverage evidence interpreter; the `mode` argument selects map (normalize), diff (compare to baseline), or budget (threshold check).
+pub const zig_coverage = tool(.{ .description = "Interpret supplied coverage evidence without running tests. mode=map normalizes LCOV/zigars coverage into file and line-rate records; mode=diff compares current vs baseline rates; mode=budget evaluates line-rate and changed-file budgets.", .input_schema = coverage_modes_schema, .group = group, .plan = .{ .pure_analysis = "Parses or compares supplied coverage evidence against caller thresholds without running tests." } });
 /// Merge two coverage evidence maps into one normalized coverage map.
 pub const zig_coverage_merge = tool(.{ .description = "Merge two coverage evidence maps into one normalized coverage map.", .input_schema = coverage_merge_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes merged coverage artifacts only with apply=true." } });
-/// Compare current coverage against a baseline and report rate deltas.
-pub const zig_coverage_diff = tool(.{ .description = "Compare current coverage against a baseline and report rate deltas.", .input_schema = coverage_diff_schema, .group = group, .plan = .{ .pure_analysis = "Compares supplied coverage evidence without running tests." } });
 /// Create or preview a coverage baseline artifact with identity metadata.
 pub const zig_coverage_baseline = tool(.{ .description = "Create or preview a coverage baseline artifact with identity metadata.", .input_schema = coverage_artifact_schema, .read_only = false, .group = group, .risk = artifact_risk, .plan = .{ .apply_gated_mutation = "Writes coverage baseline artifacts only with apply=true." } });
-/// Evaluate line-rate and changed-file coverage budgets from normalized coverage evidence.
-pub const zig_coverage_budget_check = tool(.{ .description = "Evaluate line-rate and changed-file coverage budgets from normalized coverage evidence.", .input_schema = coverage_budget_schema, .group = group, .plan = .{ .pure_analysis = "Checks supplied coverage evidence against caller thresholds." } });
 /// Discover likely benchmark suites and runnable commands in the workspace.
 pub const zig_bench_discover = tool(.{ .description = "Discover likely benchmark suites and runnable commands in the workspace.", .input_schema = schema(&.{.{ "limit", "integer", false }}), .group = group, .plan = .{ .pure_analysis = "Scans workspace files for benchmark conventions." } });
 /// Run or preview a benchmark command and normalize timing output.

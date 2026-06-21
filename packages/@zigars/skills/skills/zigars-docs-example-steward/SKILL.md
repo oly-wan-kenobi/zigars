@@ -16,8 +16,8 @@ prose.
 1. Identify the docs claim: API behavior, stdlib or language rule, setup command,
    example snippet, release note, migration note, or README workflow.
 2. Query local project and Zig documentation with `zig_docs_index_build`,
-   `zig_docs_query`, `zig_project_docs_query`, `zig_std_search_json`,
-   `zig_std_item_json`, `zig_std_signature`, `zig_lang_ref_search_json`,
+   `zig_docs_query`, `zig_project_docs_query`, `zig_std_search`,
+   `zig_std_item`, `zig_std_signature`, `zig_lang_ref_search`,
    `zig_langref_item`, and `zig_autodoc_ingest` when available.
 3. Check examples with `zig_doc_example_check` and `zig_snippet_check`. Parse
    README commands with `zig_readme_command_check`; do not execute extracted

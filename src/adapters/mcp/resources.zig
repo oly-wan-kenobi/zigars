@@ -105,7 +105,7 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
     try server.addResourceTemplate(.{
         .uriTemplate = "zigars://file/{path}/symbols",
         .name = "File Symbols",
-        .description = "Use zig_document_symbols or zig_decl_summary_json for the given workspace file.",
+        .description = "Use zig_document_symbols or zig_decl_summary (output_format=json) for the given workspace file.",
         .mimeType = "application/json",
     });
     try server.addResourceTemplate(.{
@@ -117,7 +117,7 @@ pub fn registerResources(server: anytype, context_provider: anytype) !void {
     try server.addResourceTemplate(.{
         .uriTemplate = "zigars://file/{path}/imports",
         .name = "File Imports",
-        .description = "Use zig_import_graph_json and filter by path for import data.",
+        .description = "Use zig_import_graph (output_format=json) and filter by path for import data.",
         .mimeType = "application/json",
     });
 }
@@ -202,7 +202,7 @@ fn importGraphResource(allocator: std.mem.Allocator, context: app_context.Runtim
         .phase = "scan_import_graph",
         .code = "import_graph_failed",
         .category = "analysis",
-        .resolution = "Run zig_import_graph_json for structured diagnostics, check workspace readability, then retry zigars://workspace/import-graph.",
+        .resolution = "Run zig_import_graph (output_format=json) for structured diagnostics, check workspace readability, then retry zigars://workspace/import-graph.",
         .details = &.{.{ .key = "workspace", .value = .{ .string = context.workspace.root } }},
     }, err);
     return .{ .uri = uri, .mimeType = "text/plain", .text = body };
