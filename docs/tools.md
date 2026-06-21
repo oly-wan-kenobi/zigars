@@ -566,8 +566,8 @@ and curated fallback status. Stdlib and installed language-reference hits also
 include result-level `source_path` for the exact local file behind the match.
 Text docs tools are human-readable projections of the same contract, and the
 `_json` companions
-(`zig_builtin_doc_json`, `zig_std_search_json`, `zig_std_item_json`,
-`zig_lang_ref_search_json`) are the preferred interface for agents that need
+(`zig_builtin_doc`, `zig_std_search`, `zig_std_item`,
+`zig_lang_ref_search`) are the preferred interface for agents that need
 stable result metadata.
 
 High-signal discovery keywords include:

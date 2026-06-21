@@ -101,23 +101,17 @@ pub fn zigarsToolIndexCheck(allocator: std.mem.Allocator, context: app_context.R
 }
 
 /// Handles MCP `zig_builtin_list` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigBuiltinList(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
+pub fn zigBuiltinList(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const scratch = arena.allocator();
     const result = docs_usecases.builtinList(scratch, context) catch |err| return docsBackendError(allocator, "zig_builtin_list", "builtin_list", err, "");
+    if (wantsJson(args)) {
+        const value = builtinListValue(scratch, result) catch return error.OutOfMemory;
+        return mcp_result.structured(allocator, value);
+    }
     const output = builtinListText(scratch, result) catch return error.OutOfMemory;
     return structuredText(allocator, "zig_builtin_list", output);
-}
-
-/// Handles MCP `zig_builtin_list_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigBuiltinListJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, _: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const scratch = arena.allocator();
-    const result = docs_usecases.builtinList(scratch, context) catch |err| return docsBackendError(allocator, "zig_builtin_list_json", "builtin_list", err, "");
-    const value = builtinListValue(scratch, result) catch return error.OutOfMemory;
-    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zig_builtin_doc` requests by delegating to app logic and shaping owned results/errors.
@@ -128,20 +122,12 @@ pub fn zigBuiltinDoc(allocator: std.mem.Allocator, context: app_context.ReleaseD
     defer arena.deinit();
     const scratch = arena.allocator();
     const result = docs_usecases.builtinDoc(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsBackendError(allocator, "zig_builtin_doc", "builtin_doc", err, query);
+    if (wantsJson(args)) {
+        const value = builtinDocValue(scratch, result) catch return error.OutOfMemory;
+        return mcp_result.structured(allocator, value);
+    }
     const output = builtinDocText(scratch, result) catch return error.OutOfMemory;
     return structuredText(allocator, "zig_builtin_doc", output);
-}
-
-/// Handles MCP `zig_builtin_doc_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigBuiltinDocJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_builtin_doc_json", "query", "string");
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const scratch = arena.allocator();
-    const result = docs_usecases.builtinDoc(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsBackendError(allocator, "zig_builtin_doc_json", "builtin_doc", err, query);
-    const value = builtinDocValue(scratch, result) catch return error.OutOfMemory;
-    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zig_std_search` requests by delegating to app logic and shaping owned results/errors.
@@ -153,20 +139,9 @@ pub fn zigStdSearch(allocator: std.mem.Allocator, context: app_context.ReleaseDo
     const scratch = arena.allocator();
     const result = docs_usecases.stdSearch(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_std_search", "search_std", "scan_std_sources", "search_failed", err, query, "Confirm the Zig standard-library directory is readable, then retry with a narrower query if needed.");
     const value = stdSearchValue(scratch, result) catch return error.OutOfMemory;
+    if (wantsJson(args)) return mcp_result.structured(allocator, value);
     const output = stdSearchTextFromValue(scratch, value) catch return error.OutOfMemory;
     return structuredText(allocator, "zig_std_search", output);
-}
-
-/// Handles MCP `zig_std_search_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigStdSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_std_search_json", "query", "string");
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const scratch = arena.allocator();
-    const result = docs_usecases.stdSearch(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_std_search_json", "search_std_json", "scan_std_sources", "search_failed", err, query, "Confirm the Zig standard-library directory exists and is readable.");
-    const value = stdSearchValue(scratch, result) catch return error.OutOfMemory;
-    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zig_std_item` requests by delegating to app logic and shaping owned results/errors.
@@ -178,20 +153,9 @@ pub fn zigStdItem(allocator: std.mem.Allocator, context: app_context.ReleaseDocs
     const scratch = arena.allocator();
     const result = docs_usecases.stdItem(scratch, context, name, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_std_item", "std_item", "scan_std_sources", "search_failed", err, name, "Confirm the Zig standard-library directory is readable, then retry with a fully qualified std item.");
     const value = stdItemValue(scratch, result) catch return error.OutOfMemory;
+    if (wantsJson(args)) return mcp_result.structured(allocator, value);
     const output = stdItemTextFromValue(scratch, value) catch return error.OutOfMemory;
     return structuredText(allocator, "zig_std_item", output);
-}
-
-/// Handles MCP `zig_std_item_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigStdItemJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    const name = argString(args, "name") orelse return mcp_errors.missingArgument(allocator, "zig_std_item_json", "name", "string");
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const scratch = arena.allocator();
-    const result = docs_usecases.stdItem(scratch, context, name, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_std_item_json", "std_item_json", "scan_std_sources", "search_failed", err, name, "Confirm the Zig standard-library directory is readable, then retry with a fully qualified std item.");
-    const value = stdItemValue(scratch, result) catch return error.OutOfMemory;
-    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zig_lang_ref_search` requests by delegating to app logic and shaping owned results/errors.
@@ -203,20 +167,9 @@ pub fn zigLangRefSearch(allocator: std.mem.Allocator, context: app_context.Relea
     const scratch = arena.allocator();
     const result = docs_usecases.langrefSearch(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_lang_ref_search", "search_langref", "scan_langref", "search_failed", err, query, "Confirm the Zig language reference is readable, then retry with a narrower query if needed.");
     const value = langrefValue(scratch, result) catch return error.OutOfMemory;
+    if (wantsJson(args)) return mcp_result.structured(allocator, value);
     const output = langrefTextFromValue(scratch, value) catch return error.OutOfMemory;
     return structuredText(allocator, "zig_lang_ref_search", output);
-}
-
-/// Handles MCP `zig_lang_ref_search_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigLangRefSearchJson(allocator: std.mem.Allocator, context: app_context.ReleaseDocsContext, args: ?std.json.Value) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    const query = argString(args, "query") orelse return mcp_errors.missingArgument(allocator, "zig_lang_ref_search_json", "query", "string");
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    const scratch = arena.allocator();
-    const result = docs_usecases.langrefSearch(scratch, context, query, normalizedLimit(args, "limit", docs_usecases.default_std_limit)) catch |err| return docsError(allocator, "zig_lang_ref_search_json", "search_langref_json", "scan_langref", "search_failed", err, query, "Confirm the Zig language reference is readable, then retry with a narrower query if needed.");
-    const value = langrefValue(scratch, result) catch return error.OutOfMemory;
-    return mcp_result.structured(allocator, value);
 }
 
 /// Handles MCP `zig_docs_index_build` requests by delegating to app logic and shaping owned results/errors.
@@ -1089,6 +1042,14 @@ fn evidenceRequest(args: ?std.json.Value, provenance: []const u8, require: bool,
 /// Reads a string argument when it is present with the expected type.
 fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
+}
+
+/// True when the caller requested the structured JSON payload via
+/// `output_format=json`; the default and any other value select the text
+/// summary. Replaces the former dedicated `*_json` docs tools.
+fn wantsJson(args: ?std.json.Value) bool {
+    const fmt = argString(args, "output_format") orelse return false;
+    return std.mem.eql(u8, fmt, "json");
 }
 
 /// Reads an int argument when it is present with the expected type.

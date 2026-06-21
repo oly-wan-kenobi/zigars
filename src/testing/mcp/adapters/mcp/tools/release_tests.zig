@@ -75,8 +75,11 @@ test "release docs adapters exercise public wrappers through ports" {
     try expectStructuredKind(builtin_list, "zig_builtin_list");
     try std.testing.expect(std.mem.indexOf(u8, builtin_list.structuredContent.?.object.get("text").?.string, "@import") != null);
 
+    var builtin_list_json_args = std.json.ObjectMap.empty;
+    defer builtin_list_json_args.deinit(allocator);
+    try builtin_list_json_args.put(allocator, "output_format", .{ .string = "json" });
     try expectNoBuiltinEnv(&toolchain);
-    const builtin_list_json = try release.zigBuiltinListJson(allocator, context, null);
+    const builtin_list_json = try release.zigBuiltinList(allocator, context, .{ .object = builtin_list_json_args });
     defer mcp_result.deinitToolResult(allocator, builtin_list_json);
     try std.testing.expect(builtin_list_json.structuredContent.?.object.get("builtins").?.array.items.len > 0);
 
@@ -92,8 +95,9 @@ test "release docs adapters exercise public wrappers through ports" {
     var builtin_json_args = std.json.ObjectMap.empty;
     defer builtin_json_args.deinit(allocator);
     try builtin_json_args.put(allocator, "query", .{ .string = "missing_builtin" });
+    try builtin_json_args.put(allocator, "output_format", .{ .string = "json" });
     try expectNoBuiltinEnv(&toolchain);
-    const builtin_doc_json = try release.zigBuiltinDocJson(allocator, context, .{ .object = builtin_json_args });
+    const builtin_doc_json = try release.zigBuiltinDoc(allocator, context, .{ .object = builtin_json_args });
     defer mcp_result.deinitToolResult(allocator, builtin_doc_json);
     try std.testing.expectEqualStrings("no_builtin_match", builtin_doc_json.structuredContent.?.object.get("no_result_reason").?.string);
 
@@ -116,8 +120,9 @@ test "release docs adapters exercise public wrappers through ports" {
     var std_search_json_args = std.json.ObjectMap.empty;
     defer std_search_json_args.deinit(allocator);
     try std_search_json_args.put(allocator, "query", .{ .string = "nope" });
+    try std_search_json_args.put(allocator, "output_format", .{ .string = "json" });
     try expectStdScan(&toolchain, &scanner, "release_docs.std_search", std_source);
-    const std_search_json = try release.zigStdSearchJson(allocator, context, .{ .object = std_search_json_args });
+    const std_search_json = try release.zigStdSearch(allocator, context, .{ .object = std_search_json_args });
     defer mcp_result.deinitToolResult(allocator, std_search_json);
     try std.testing.expectEqualStrings("no_std_source_match", std_search_json.structuredContent.?.object.get("no_result_reason").?.string);
 
@@ -132,8 +137,9 @@ test "release docs adapters exercise public wrappers through ports" {
     var std_item_json_args = std.json.ObjectMap.empty;
     defer std_item_json_args.deinit(allocator);
     try std_item_json_args.put(allocator, "name", .{ .string = "std.mem.Allocator" });
+    try std_item_json_args.put(allocator, "output_format", .{ .string = "json" });
     try expectStdScan(&toolchain, &scanner, "release_docs.std_item", std_source);
-    const std_item_json = try release.zigStdItemJson(allocator, context, .{ .object = std_item_json_args });
+    const std_item_json = try release.zigStdItem(allocator, context, .{ .object = std_item_json_args });
     defer mcp_result.deinitToolResult(allocator, std_item_json);
     try std.testing.expectEqualStrings("Allocator", std_item_json.structuredContent.?.object.get("decl_name").?.string);
 
@@ -160,8 +166,9 @@ test "release docs adapters exercise public wrappers through ports" {
     var langref_json_args = std.json.ObjectMap.empty;
     defer langref_json_args.deinit(allocator);
     try langref_json_args.put(allocator, "query", .{ .string = "Pointer" });
+    try langref_json_args.put(allocator, "output_format", .{ .string = "json" });
     try expectLangref(&toolchain, &scanner, langref_probe, langref_html);
-    const langref_json = try release.zigLangRefSearchJson(allocator, context, .{ .object = langref_json_args });
+    const langref_json = try release.zigLangRefSearch(allocator, context, .{ .object = langref_json_args });
     defer mcp_result.deinitToolResult(allocator, langref_json);
     try std.testing.expectEqualStrings("installed_html_heading_scan", langref_json.structuredContent.?.object.get("index_metadata").?.object.get("index_strategy").?.string);
 

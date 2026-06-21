@@ -24,23 +24,14 @@ pub fn zigImportGraph(
     // Keep this logic centralized so callers observe one consistent behavior path.
     var graph = workspace_scans.importGraph(allocator, context, .{ .limit = argInt(args, "limit") orelse workspace_scans.default_scan_limit }) catch |err| return staticToolError(allocator, "zig_import_graph", "scan_import_graph", "scan_workspace", err);
     defer graph.deinit(allocator);
+    if (wantsJson(args)) {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        return staticStructuredValue(allocator, arena.allocator(), "zig_import_graph", try importGraphJsonValue(arena.allocator(), graph));
+    }
     const output = workspace_scans.importGraphText(allocator, graph) catch return error.OutOfMemory;
     defer allocator.free(output);
     return staticTextResult(allocator, "zig_import_graph", output);
-}
-
-/// Handles MCP `zig_import_graph_json` requests by delegating to app logic and shaping owned results/errors.
-pub fn zigImportGraphJson(
-    allocator: std.mem.Allocator,
-    context: app_context.StaticAnalysisContext,
-    args: ?std.json.Value,
-) mcp.tools.ToolError!mcp.tools.ToolResult {
-    // Keep this logic centralized so callers observe one consistent behavior path.
-    var graph = workspace_scans.importGraph(allocator, context, .{ .limit = argInt(args, "limit") orelse workspace_scans.default_scan_limit }) catch |err| return staticToolError(allocator, "zig_import_graph_json", "scan_import_graph_json", "scan_workspace", err);
-    defer graph.deinit(allocator);
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-    return staticStructuredValue(allocator, arena.allocator(), "zig_import_graph_json", try importGraphJsonValue(arena.allocator(), graph));
 }
 
 /// Handles MCP `zig_import_cycles` requests by post-processing the import graph into SCCs.
@@ -1498,6 +1489,13 @@ fn argString(args: ?std.json.Value, name: []const u8) ?[]const u8 {
     return mcp.tools.getString(args, name);
 }
 
+/// True when the caller requested the structured JSON payload via
+/// `output_format=json`; folds the former `*_json` twin tools into one tool.
+fn wantsJson(args: ?std.json.Value) bool {
+    const fmt = argString(args, "output_format") orelse return false;
+    return std.mem.eql(u8, fmt, "json");
+}
+
 /// Reads a bool argument when it is present with the expected type.
 fn argBool(args: ?std.json.Value, name: []const u8, default: bool) bool {
     return mcp.tools.getBoolean(args, name) orelse default;
@@ -1677,8 +1675,7 @@ const zwanzig_limits = &.{
 /// Static contract table mapping tool names to structured evidence metadata.
 const contracts = [_]Contract{
     .{ .tool = "zig_import_graph", .analysis_kind = "heuristic_import_graph", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
-    .{ .tool = "zig_import_graph_json", .analysis_kind = "heuristic_import_graph_json", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit.", .limitations = &.{"String-literal import scan; it does not resolve conditional imports, aliases, or comptime logic."}, .verify_with = &.{ "zig ast-check", "ZLS references" } },
-    .{ .tool = "zig_import_cycles", .analysis_kind = "architecture_neutral_import_cycle_scc", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, post-processed from the heuristic import graph.", .limitations = &.{"Cycle detection only follows workspace-relative string-literal .zig imports; comptime imports, build module aliases, and package imports require compiler/ZLS verification."}, .verify_with = &.{ "zig_import_graph_json", "zig build test", "ZLS references" } },
+    .{ .tool = "zig_import_cycles", .analysis_kind = "architecture_neutral_import_cycle_scc", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit, post-processed from the heuristic import graph.", .limitations = &.{"Cycle detection only follows workspace-relative string-literal .zig imports; comptime imports, build module aliases, and package imports require compiler/ZLS verification."}, .verify_with = &.{ "zig_import_graph", "zig build test", "ZLS references" } },
     .{ .tool = "zig_test_name_resolve", .analysis_kind = "parser_backed_test_name_resolution", .capability_tier = "parser_backed", .confidence = "high", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit; test declarations are parsed with std.zig.Ast when possible.", .limitations = &.{"Matches declared test names and declarations; custom build test routing and runtime-generated cases are outside the evidence."}, .verify_with = &.{ "zig_ast_tests", "zig test --test-filter", "zig build test" } },
     .{ .tool = "zig_test_fixture_inventory", .analysis_kind = "parser_backed_test_fixture_inventory", .capability_tier = "parser_backed", .confidence = "medium", .confidence_class = "orientation_only", .source_coverage = "Readable workspace Zig files up to the requested limit; helper classification uses parser declarations plus path/name hints.", .limitations = &.{"Fixture/helper labels are heuristic and usage counts are source-text occurrences, not semantic references."}, .verify_with = &.{ "ZLS references", "zig build test" } },
     .{ .tool = "zig_safety_site_catalog", .analysis_kind = "safety_keyword_site_catalog", .capability_tier = "advisory_orientation", .confidence = "medium", .confidence_class = "advisory", .source_coverage = "Readable workspace Zig files up to the requested limit with line-level masking for obvious comments and string literals.", .limitations = &.{"Safety sites are review prompts, not proof of unsafety; full semantic intent requires code review and compiler-backed validation."}, .verify_with = &.{ "code review", "zig build test", "configured linters" } },
@@ -1849,7 +1846,7 @@ test "static analysis adapters exercise scanner and project value wrappers" {
     try store.expectRead(.{ .path = "src/lib.zig", .max_bytes = workspace_scans.default_source_read_limit, .provenance = "static_analysis.import_graph" },
         \\const std = @import("std");
     );
-    const graph_json = try zigImportGraphJson(allocator, context, try testArgs(arena.allocator(), "{\"limit\":1}"));
+    const graph_json = try zigImportGraph(allocator, context, try testArgs(arena.allocator(), "{\"limit\":1,\"output_format\":\"json\"}"));
     defer mcp_result.deinitToolResult(allocator, graph_json);
     try expectResultHasMetadata(graph_json);
 

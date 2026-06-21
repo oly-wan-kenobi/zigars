@@ -11,19 +11,13 @@ const schemaWithHints = types.schemaWithHints;
 const outputSchema = types.outputSchema;
 const tool = types.tool;
 const fieldHint = types.fieldHint;
+/// Shared enum hint folding the former `*_json` twins into one tool: text
+/// summary by default, JSON-native payload when `output_format=json`.
+const output_format_hint = fieldHint("output_format", .{ .description = "Result format: \"text\" summary (default) or structured \"json\" payload.", .default_string = "text", .enum_values = &.{ "text", "json" } });
 /// Build a heuristic import graph from workspace Zig files.
 pub const zig_import_graph = tool(.{
-    .description = "Build a heuristic import graph from workspace Zig files.",
-    .input_schema = schema(&.{.{ "limit", "integer", false }}),
-    .read_only = true,
-    .group = .static_analysis,
-    .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
-    .static_analysis_tier = .advisory_orientation,
-});
-/// Build a JSON-native heuristic import graph from workspace Zig files.
-pub const zig_import_graph_json = tool(.{
-    .description = "Build a JSON-native heuristic import graph from workspace Zig files.",
-    .input_schema = schema(&.{.{ "limit", "integer", false }}),
+    .description = "Build a heuristic import graph from workspace Zig files. Set output_format=json for the JSON-native graph payload.",
+    .input_schema = schemaWithHints(&.{ .{ "limit", "integer", false }, .{ "output_format", "string", false } }, &.{output_format_hint}),
     .output_schema = outputSchema(.analysis_result),
     .read_only = true,
     .group = .static_analysis,
@@ -44,17 +38,8 @@ pub const zig_import_cycles = tool(.{
 pub const zig_ast_imports = tool(.{ .description = "Return parser-backed @import calls for a Zig file using std.zig.Ast tokens.", .input_schema = schema(&.{.{ "file", "string", true }}), .read_only = true, .group = .static_analysis, .plan = .{ .pure_analysis = "Parser-backed source analysis; parses one Zig file with std.zig.Ast without executing compiler semantic analysis." }, .static_analysis_tier = .parser_backed });
 /// Heuristically summarize declarations in a Zig file.
 pub const zig_decl_summary = tool(.{
-    .description = "Heuristically summarize declarations in a Zig file.",
-    .input_schema = schema(&.{.{ "file", "string", true }}),
-    .read_only = true,
-    .group = .static_analysis,
-    .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },
-    .static_analysis_tier = .advisory_orientation,
-});
-/// Return a JSON-native heuristic declaration summary for a Zig file.
-pub const zig_decl_summary_json = tool(.{
-    .description = "Return a JSON-native heuristic declaration summary for a Zig file.",
-    .input_schema = schema(&.{.{ "file", "string", true }}),
+    .description = "Heuristically summarize declarations in a Zig file. Set output_format=json for the JSON-native declaration summary.",
+    .input_schema = schemaWithHints(&.{ .{ "file", "string", true }, .{ "output_format", "string", false } }, &.{output_format_hint}),
     .read_only = true,
     .group = .static_analysis,
     .plan = .{ .pure_analysis = "Static workspace analysis; reads project files and returns deterministic guidance without executing backends." },

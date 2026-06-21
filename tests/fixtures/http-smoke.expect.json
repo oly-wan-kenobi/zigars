@@ -1,6 +1,6 @@
 {
   "required_tools": [
-    "zigars_schema", "zigars_backend_catalog", "zig_format", "zigars_doctor", "zigars_context_pack", "zigars_next_action", "zigars_validate_patch", "zigars_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc_json", "zig_std_item_json", "zig_lang_ref_search_json", "zigars_artifact_index", "zigars_artifact_read", "zigars_session_view", "zigars_artifact_prune", "zigars_metrics_v2", "zigars_backend_health_history", "zigars_zls_timeline", "zigars_tool_latency", "zigars_trust_report", "zigars_command_provenance", "zigars_risk_audit", "zigars_clean_tree_gate", "zigars_result_shape", "zigars_output_budget_plan", "zigars_docs_drift_check", "zigars_release_claim_check", "zigars_tool_index_check",
+    "zigars_schema", "zigars_backend_catalog", "zig_format", "zigars_doctor", "zigars_context_pack", "zigars_next_action", "zigars_validate_patch", "zigars_impact", "zig_toolchain_resolve", "zig_compile_error_index", "zig_changed_files_plan", "zig_patch_preview", "zig_test_select", "zig_public_api_diff", "zig_builtin_doc", "zig_std_item", "zig_lang_ref_search", "zigars_artifact_index", "zigars_artifact_read", "zigars_session_view", "zigars_artifact_prune", "zigars_metrics_v2", "zigars_backend_health_history", "zigars_zls_timeline", "zigars_tool_latency", "zigars_trust_report", "zigars_command_provenance", "zigars_risk_audit", "zigars_clean_tree_gate", "zigars_result_shape", "zigars_output_budget_plan", "zigars_docs_drift_check", "zigars_release_claim_check", "zigars_tool_index_check",
     "zigars_project_profile_v2", "zigars_profile_validate", "zigars_profile_read", "zigars_profile_bootstrap", "zigars_profile_import", "zigars_profile_diff", "zigars_env_pack", "zigars_env_export", "zigars_zvm_probe", "zigars_zvm_install_plan", "zigars_zvm_switch_plan", "zig_zls_match_check", "zig_toolchain_pin", "zig_toolchain_pin_check", "zigars_backend_install_plan", "zigars_backend_verify", "zigars_dev_env_generate", "zigars_backend_conformance", "zigars_backend_evidence_pack",
     "zigars_job_start", "zigars_job_status", "zigars_job_result", "zigars_job_cancel", "zigars_cancel_status", "zigars_run_stream", "zigars_run_events", "zigars_resource_query", "zigars_resource_subscribe", "zigars_resource_unsubscribe", "zigars_roots_sync", "zigars_workspace_map", "zigars_workspace_select", "zigars_agent_guide_v2", "zigars_client_guide", "zigars_prompt_pack",
     "zig_semantic_index_build", "zig_semantic_index_status", "zig_semantic_index_refresh", "zig_semantic_query", "zig_semantic_refs", "zig_semantic_decl", "zig_semantic_callers", "zig_static_fusion", "zig_code_index_export", "zig_scip_export", "zig_import_cycles", "zig_test_name_resolve", "zig_test_fixture_inventory", "zig_safety_site_catalog", "zig_test_for_symbol", "zig_module_surface", "zig_symbol_dossier", "zig_change_risk_audit", "zig_insertion_sites", "zig_io_migration_scan", "zig_leak_triage", "zig_comptime_diagnose", "zig_memory_layout", "zig_unsafe_operations_audit", "zig_abi_layout_diff", "zig_zlint", "zig_zlint_sarif", "zig_zlint_rules", "zig_zlint_fix", "zig_lint_compare", "zig_lint_profile", "zig_lint_gate", "zig_lint_fix_plan", "zig_lint_baseline", "zig_lint_suppressions", "zig_lint_trend",
@@ -37,12 +37,12 @@
       "inputSchema.properties.client.enum.2": "gemini",
       "inputSchema.properties.client.enum.3": "hermes"
     },
-    "zig_builtin_doc_json": {
+    "zig_builtin_doc": {
       "inputSchema.properties.query.type": "string",
       "inputSchema.properties.limit.minimum": 1,
       "inputSchema.required.0": "query"
     },
-    "zig_lang_ref_search_json": {
+    "zig_lang_ref_search": {
       "inputSchema.properties.query.type": "string",
       "inputSchema.properties.limit.type": "integer",
       "inputSchema.properties.limit.minimum": 1
@@ -315,9 +315,9 @@
     "backend_setup.backends.1.path_flag": "--zls-path",
     "registry_tool_arguments.zig_toolchain_resolve.optional.probe_managers": "boolean",
     "registry_tool_arguments.zig_compile_error_index.optional.text": "string",
-    "registry_tool_arguments.zig_builtin_doc_json.required.query": "string",
-    "registry_tool_arguments.zig_std_item_json.required.name": "string",
-    "registry_tool_arguments.zig_lang_ref_search_json.required.query": "string",
+    "registry_tool_arguments.zig_builtin_doc.required.query": "string",
+    "registry_tool_arguments.zig_std_item.required.name": "string",
+    "registry_tool_arguments.zig_lang_ref_search.required.query": "string",
     "registry_tool_arguments.zigars_validate_patch.risk.executes_project_code": true,
     "registry_tool_arguments.zigars_validate_patch.risk.writes_artifacts": true,
     "registry_tool_arguments.zig_test_failure_triage.risk.executes_project_code": true,

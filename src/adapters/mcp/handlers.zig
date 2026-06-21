@@ -360,7 +360,6 @@ const migrated_phase6 = struct {
 /// Manifest lookup table for migrated static-analysis handlers.
 const migrated_static_analysis = struct {
     pub const zigImportGraph = mcp_tools.static_analysis.zigImportGraph;
-    pub const zigImportGraphJson = mcp_tools.static_analysis.zigImportGraphJson;
     pub const zigImportCycles = mcp_tools.static_analysis.zigImportCycles;
     pub const zigBuildGraph = mcp_tools.static_analysis.zigBuildGraph;
     pub const zigBuildTargets = mcp_tools.static_analysis.zigBuildTargets;
@@ -392,7 +391,6 @@ const migrated_static_analysis = struct {
     pub const zigTestSelect = mcp_tools.static_analysis.zigTestSelect;
     pub const zigPublicApiDiff = mcp_tools.static_analysis.zigPublicApiDiff;
     pub const zigDeclSummary = mcp_tools.static_source_summary.zigDeclSummary;
-    pub const zigDeclSummaryJson = mcp_tools.static_source_summary.zigDeclSummaryJson;
     pub const zigAstImports = mcp_tools.static_source_summary.zigAstImports;
     pub const zigAstDeclSummary = mcp_tools.static_source_summary.zigAstDeclSummary;
     pub const zigAllocations = mcp_tools.static_source_summary.zigAllocations;
