@@ -11,6 +11,7 @@ const public_claims = @import("public_claims.zig");
 const backend_docs = @import("backend_docs.zig");
 const fake_backends = @import("fake_backends.zig");
 const release_rules = @import("release_rules.zig");
+const skill_checks = @import("skill_checks.zig");
 
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -78,6 +79,7 @@ pub fn artifactHygiene(allocator: Allocator, io: Io, args: []const []const u8) !
     ok = (try checkPureZigTrees(allocator, io)) and ok;
     ok = (try checkStaticAnalysisContracts(io)) and ok;
     ok = (try checkCatalogCommonIntentPreferences(allocator, io)) and ok;
+    ok = (try skill_checks.checkSkillToolReferences(allocator, io)) and ok;
     ok = (try checkWorkflowPermissions(allocator, io)) and ok;
     ok = (try release_docs.checkStaticAnalysisDocs(allocator, io)) and ok;
     ok = (try backend_docs.checkOptionalBackendContracts(allocator, io)) and ok;

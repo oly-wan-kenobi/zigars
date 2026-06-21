@@ -78,6 +78,7 @@ backend, or CI evidence as described in [docs/evidence-tiers.md](evidence-tiers.
 ## Keeping skills in sync
 
 Skills reference zigars tool ids. When tool ids change, update the affected
-skill directories so the guidance keeps pointing at live tools. The
-`skill-drift-check` release gate flags skills that reference tool ids absent from
-`src/manifest/tool_catalog.json`.
+skill directories so the guidance keeps pointing at live tools. The skill
+drift check in `zig build artifact-hygiene` (part of `zig build release-check`)
+fails the build when a skill references a backtick-quoted `zig_*`/`zigars_*`
+tool id that is not registered in the compiled tool manifest.

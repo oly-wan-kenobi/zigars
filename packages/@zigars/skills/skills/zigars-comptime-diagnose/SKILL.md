@@ -24,11 +24,11 @@ compiler can verify.
    prong, `@call` modifier, etc.), `runtime_operands[]` with each operand's
    inferred reason, `likely_fixes[]`, `confidence`, and `limitations`.
 4. For `evaluation exceeded N backwards branches`, run
-   `zig_comptime_quota_probe` to find the smallest passing quota and per-call-
+   `zig_comptime_diagnose` to find the smallest passing quota and per-call-
    site evidence on top consumers; treat the result as a search, not a
    profiler.
 5. For deeper context on a flagged operand, use `zig_ast_imports`,
-   `zig_ast_declarations`, `zig_symbol_dossier`, or `zls_definition`.
+   `zig_ast_decl_summary`, `zig_symbol_dossier`, or `zig_definition`.
 6. Apply the chosen fix preview-first; validate with `zigars_validate_patch` in
    `quick` mode so `zig ast-check` confirms the comptime path is now resolvable
    before any broader test run.
